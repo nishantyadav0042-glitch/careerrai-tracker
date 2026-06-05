@@ -16,41 +16,46 @@ export function CATTestWidget({ userId }: CATTestWidgetProps) {
   const supabase = createClient();
   const [results, setResults] = useState<TestResult[]>([]);
   const [activeTest, setActiveTest] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from('test_results')
-        .select('*')
-        .eq('student_id', userId)
-        .eq('test_type', 'cat-readiness')
-        .order('attempt_date', { ascending: false })
-        .limit(5);
-      setResults((data ?? []) as TestResult[]);
-      setLoading(false);
+      try {
+        const { data } = await supabase
+          .from('test_results')
+          .select('*')
+          .eq('student_id', userId)
+          .eq('test_type', 'cat-readiness')
+          .order('attempt_date', { ascending: false })
+          .limit(5);
+        setResults((data ?? []) as TestResult[]);
+      } catch (error) {
+        console.error('Error loading test results:', error);
+      } finally {
+        setIsLoading(false);
+      }
     }
     load();
   }, [userId, supabase]);
 
   async function saveResult(result: Omit<TestResult, 'id' | 'student_id' | 'created_at'>) {
-    const { data } = await supabase
-      .from('test_results')
-      .insert({ ...result, student_id: userId })
-      .select()
-      .single();
-    if (data) {
-      setResults((prev) => [data as TestResult, ...prev]);
-      setActiveTest(false);
+    try {
+      const { data } = await supabase
+        .from('test_results')
+        .insert({ ...result, student_id: userId })
+        .select()
+        .single();
+      if (data) {
+        setResults((prev) => [data as TestResult, ...prev]);
+        setActiveTest(false);
+      }
+    } catch (error) {
+      console.error('Error saving test result:', error);
     }
   }
 
   const last = results[0];
   const totalAttempts = results.length;
-
-  if (loading) {
-    return null;
-  }
 
   return (
     <>
@@ -65,7 +70,11 @@ export function CATTestWidget({ userId }: CATTestWidgetProps) {
           </div>
         </div>
 
-        {last ? (
+        {isLoading ? (
+          <div className="bg-stone-100 rounded-xl p-3 mb-3 text-center">
+            <p className="text-xs text-stone-600">Loading test data...</p>
+          </div>
+        ) : last ? (
           <div className="bg-white rounded-xl p-3 mb-3 border border-orange-100">
             <div className="flex items-center justify-between">
               <div>
@@ -94,12 +103,13 @@ export function CATTestWidget({ userId }: CATTestWidgetProps) {
         <button
           type="button"
           onClick={() => setActiveTest(true)}
+          disabled={isLoading}
           className={cn(
             'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-[0.98]',
-            'bg-orange-600 text-white hover:bg-orange-700'
+            isLoading ? 'bg-stone-300 text-stone-500 cursor-not-allowed' : 'bg-orange-600 text-white hover:bg-orange-700'
           )}
         >
-          {last ? 'Retake Test' : 'Start Test'} <ArrowRight className="w-4 h-4" />
+          {isLoading ? 'Loading...' : last ? 'Retake Test' : 'Start Test'} {!isLoading && <ArrowRight className="w-4 h-4" />}
         </button>
 
         <p className="text-[10px] text-stone-500 text-center mt-2">
