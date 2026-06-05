@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/utils';
 import type { TestResult } from '@/types';
 import { Brain, ArrowRight, Award, X, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CATResult } from './cat-result';
 
 const TESTS = [
   { id: 'cat-readiness', name: 'CAT Readiness Test', desc: '10 questions · ~5 min · Percentile mapping', color: 'orange' as const },
@@ -155,30 +156,28 @@ function TestRunner({ testId, testName, onComplete, onClose }: {
   }
 
   if (result) {
+    // Convert questions to category scores for detailed feedback
+    const categoryScores: Record<string, number> = {};
+    questions.forEach((q) => {
+      const answer = answers[q.id] || 0;
+      categoryScores[q.category] = (categoryScores[q.category] || 0) + answer;
+    });
+
     return (
-      <div className="fixed inset-0 bg-stone-900/95 z-50 flex items-center justify-center p-6">
-        <Card className="w-full max-w-md p-8 text-center">
-          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Award className="w-8 h-8 text-orange-600" />
-          </div>
-          <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Test complete</h2>
-          <div className="my-6">
-            <div className="text-6xl font-bold text-stone-900 font-mono">{result.score}</div>
-            <div className="text-sm text-stone-600 mt-1">out of 100</div>
-          </div>
-          <div className="bg-stone-50 rounded-xl p-3 mb-6">
-            <div className="text-xs uppercase tracking-wider text-stone-500 font-semibold">Percentile</div>
-            <div className="text-2xl font-bold text-stone-900 font-mono mt-1">Top {100 - result.percentile}%</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onComplete({ test_type: testId, test_name: testName, attempt_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), score: result.score, percentile: result.percentile, breakdown: null })}
-            className="w-full py-3 bg-orange-600 text-white rounded-xl font-medium hover:bg-orange-700 transition-all"
-          >
-            Save & continue
-          </button>
-        </Card>
-      </div>
+      <CATResult
+        score={result.score * 3} // Scale from /100 to /300 for CAT
+        categories={categoryScores}
+        onComplete={() =>
+          onComplete({
+            test_type: testId,
+            test_name: testName,
+            attempt_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+            score: result.score,
+            percentile: result.percentile,
+            breakdown: null
+          })
+        }
+      />
     );
   }
 

@@ -1,25 +1,29 @@
 import { cn } from '@/lib/utils';
 
-type BadgeColor = 'stone' | 'green' | 'red' | 'amber' | 'orange' | 'teal';
-
-const colors: Record<BadgeColor, string> = {
-  stone: 'bg-stone-100 text-stone-700 border-stone-200',
-  green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  red: 'bg-rose-50 text-rose-700 border-rose-200',
-  amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  orange: 'bg-orange-50 text-orange-700 border-orange-200',
-  teal: 'bg-teal-50 text-teal-700 border-teal-200',
-};
-
-export function Badge({
-  children,
-  color = 'stone',
-}: {
+interface BadgeProps {
   children: React.ReactNode;
-  color?: BadgeColor;
-}) {
+  color?: 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'stone';
+  className?: string;
+}
+
+export function Badge({ children, color = 'stone', className }: BadgeProps) {
+  const colors = {
+    blue: 'bg-blue-100 text-blue-700',
+    green: 'bg-green-100 text-green-700',
+    orange: 'bg-orange-100 text-orange-700',
+    red: 'bg-red-100 text-red-700',
+    purple: 'bg-purple-100 text-purple-700',
+    stone: 'bg-stone-100 text-stone-700',
+  };
+
   return (
-    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full border', colors[color])}>
+    <span
+      className={cn(
+        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+        colors[color],
+        className
+      )}
+    >
       {children}
     </span>
   );
