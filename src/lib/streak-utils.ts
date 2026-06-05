@@ -3,7 +3,7 @@
  * Handles streak tracking, milestone detection, and streak guard logic
  */
 
-import { supabase } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 
 export interface StreakData {
   current_streak: number;
@@ -86,6 +86,7 @@ export function getFlameState(days: number) {
  * Called when student submits a daily report
  */
 export async function updateStreakAfterLog(studentId: string) {
+  const supabase = createClient();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayString = today.toISOString().split('T')[0];
@@ -172,6 +173,7 @@ export async function updateStreakAfterLog(studentId: string) {
  * Called after streak update
  */
 export async function checkAndCreateMilestones(studentId: string, buddyId: string) {
+  const supabase = createClient();
   try {
     const { data: streakData, error: fetchError } = await supabase
       .from('streak_data')

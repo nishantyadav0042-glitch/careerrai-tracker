@@ -6,10 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { TrendIcon } from '@/components/trend-icon';
 import { CATTestWidget } from './cat-test-widget';
 import { StudentHomeClient } from './home-client';
-import { computeSummary, computeStreak, getHeatmapData } from '@/lib/analytics';
+import { StreakHero } from './streak-hero';
+import { BuddySignalCard } from './buddy-signal-card';
+import { CATContextCard } from './cat-context-card';
+import { HeatmapCard } from './heatmap-card';
+import { computeSummary, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import type { DailyReport } from '@/types';
-import { ArrowRight, CheckCircle2, Clock, Flame } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default async function StudentHomePage() {
@@ -35,9 +39,7 @@ export default async function StudentHomePage() {
   const allReports = (reports ?? []) as DailyReport[];
   const last7 = allReports.slice(0, 7);
   const submittedToday = allReports.some((r) => r.report_date === today);
-  const streak = computeStreak(allReports);
   const summary = computeSummary(last7, 7);
-  const heatmap = getHeatmapData(allReports, 14);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Friend';
 
@@ -52,10 +54,20 @@ export default async function StudentHomePage() {
         </h1>
       </div>
 
-      {/* CAT Readiness Test Widget */}
+      {/* PHASE 3: NEW HOME PAGE REDESIGN */}
+      {/* 1. STREAK HERO - Primary retention driver */}
+      <StreakHero userId={user.id} />
+
+      {/* 2. BUDDY SIGNAL - Shows relationship is real */}
+      <BuddySignalCard userId={user.id} />
+
+      {/* 3. DAYS TO CAT - Context for urgency */}
+      <CATContextCard />
+
+      {/* 4. CAT READINESS TEST (kept for prominence) */}
       <CATTestWidget userId={user.id} />
 
-      {/* Today status */}
+      {/* 5. TODAY STATUS */}
       <div className={cn('p-5 rounded-2xl border-2', submittedToday ? 'border-emerald-200 bg-emerald-50/40 bg-white' : 'border-orange-200 bg-orange-50/40 bg-white')}>
         <div className="flex items-center justify-between">
           <div>
@@ -88,22 +100,9 @@ export default async function StudentHomePage() {
         </div>
       </div>
 
-      {/* Streak */}
-      {streak > 0 && (
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-600 to-orange-700 text-white">
-          <div className="flex items-center gap-3">
-            <Flame className="w-7 h-7" />
-            <div>
-              <div className="text-2xl font-bold leading-none">{streak} {streak === 1 ? 'day' : 'days'}</div>
-              <div className="text-xs opacity-80 mt-0.5">Tracking streak — keep it alive</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Quick stats */}
+      {/* 6. QUICK STATS FROM LAST 7 DAYS */}
       <div>
-        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Last 7 days</h2>
+        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Your progress</h2>
         <div className="grid grid-cols-2 gap-3">
           <Card className="p-4">
             <div className="text-xs text-stone-500 font-medium uppercase tracking-wide">Avg study/day</div>
@@ -139,35 +138,8 @@ export default async function StudentHomePage() {
         </div>
       </div>
 
-      {/* Heatmap */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Last 14 days</h2>
-          <Link href="/student/reports" className="text-[10px] text-stone-500 hover:text-stone-900">View all →</Link>
-        </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {heatmap.map((d, i) => {
-            const intensity = d.hours === 0 ? 0 : Math.min(4, Math.floor(d.hours / 2));
-            const colors = ['bg-stone-100', 'bg-orange-100', 'bg-orange-300', 'bg-orange-500', 'bg-orange-700'];
-            return (
-              <div
-                key={i}
-                className={cn('aspect-square rounded-md', colors[intensity])}
-                title={`${d.date}: ${d.hours.toFixed(1)} hrs`}
-              />
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-2 mt-3 text-[10px] text-stone-500">
-          <span>Less</span>
-          <div className="flex gap-1">
-            {['bg-stone-100', 'bg-orange-100', 'bg-orange-300', 'bg-orange-500', 'bg-orange-700'].map((c) => (
-              <div key={c} className={cn('w-3 h-3 rounded-sm', c)} />
-            ))}
-          </div>
-          <span>More</span>
-        </div>
-      </Card>
+      {/* 7-Day Heatmap (14-day moved to Reports page) */}
+      <HeatmapCard daysData={getHeatmapData(allReports, 7)} days={7} />
 
       <Link
         href="/student/reports"

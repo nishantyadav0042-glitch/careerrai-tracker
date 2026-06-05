@@ -7,7 +7,9 @@ import { updateStreakAfterLog, checkAndCreateMilestones } from '@/lib/streak-uti
 import { cn } from '@/lib/utils';
 
 interface ScreenLogDayOneProps {
-  onNext: (data?: any) => void;
+  onNext: (data?: any) => Promise<void>;
+  onBack: () => void;
+  canGoBack: boolean;
   isLoading: boolean;
 }
 
@@ -19,7 +21,7 @@ const FEELING_OPTIONS = [
 ];
 const HOURS_OPTIONS = [0, 1, 2, 3, '4+'];
 
-export default function ScreenLogDayOne({ onNext, isLoading }: ScreenLogDayOneProps) {
+export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }: ScreenLogDayOneProps) {
   const supabase = createClient();
   const [showConfetti, setShowConfetti] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -109,7 +111,6 @@ export default function ScreenLogDayOne({ onNext, isLoading }: ScreenLogDayOnePr
 
       // Show confetti animation
       setShowConfetti(true);
-      triggerConfetti();
 
       // Wait for animation then complete
       setTimeout(() => {

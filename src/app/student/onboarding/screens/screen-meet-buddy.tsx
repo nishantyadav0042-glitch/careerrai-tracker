@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import { Play, Pause, Volume2 } from 'lucide-react';
 
 interface ScreenMeetBuddyProps {
-  onNext: () => void;
+  onNext: (data?: any) => Promise<void>;
+  onBack: () => void;
+  canGoBack: boolean;
   isLoading: boolean;
 }
 
@@ -17,7 +19,7 @@ interface BuddyInfo {
   buddy_bio: string | null;
 }
 
-export default function ScreenMeetBuddy({ onNext, isLoading }: ScreenMeetBuddyProps) {
+export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }: ScreenMeetBuddyProps) {
   const supabase = createClient();
   const [buddy, setBuddy] = useState<BuddyInfo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);

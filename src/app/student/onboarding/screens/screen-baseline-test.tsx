@@ -6,11 +6,13 @@ import { Zap, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface ScreenBaselineTestProps {
-  onNext: () => void;
+  onNext: (data?: any) => Promise<void>;
+  onBack: () => void;
+  canGoBack: boolean;
   isLoading: boolean;
 }
 
-export default function ScreenBaselineTest({ onNext, isLoading }: ScreenBaselineTestProps) {
+export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoading }: ScreenBaselineTestProps) {
   const supabase = createClient();
   const [hasTest, setHasTest] = useState(false);
   const [testScore, setTestScore] = useState<number | null>(null);

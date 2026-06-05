@@ -5,7 +5,9 @@ import { Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ScreenDailyCommitmentProps {
-  onNext: (data?: any) => void;
+  onNext: (data?: any) => Promise<void>;
+  onBack: () => void;
+  canGoBack: boolean;
   isLoading: boolean;
 }
 
@@ -18,7 +20,7 @@ const COMMITMENT_OPTIONS = [
   { label: '5+ hours', value: 5, description: 'Full-time' }
 ];
 
-export default function ScreenDailyCommitment({ onNext, isLoading }: ScreenDailyCommitmentProps) {
+export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoading }: ScreenDailyCommitmentProps) {
   const [selected, setSelected] = useState<number>(2); // Default 2 hours
 
   return (
