@@ -91,8 +91,9 @@ export function QuickLogSheet({ isOpen, onClose, userId }: QuickLogSheetProps) {
         report_date: todayString,
         study_duration: hours,
         topics_covered: selectedTopics,
-        confidence_level: feelingOption.confidence,
-        stress_level: feelingOption.stress
+        confidence: feelingOption.confidence,
+        stress: feelingOption.stress,
+        quality_focus: 3
       });
 
       if (reportError) throw reportError;
