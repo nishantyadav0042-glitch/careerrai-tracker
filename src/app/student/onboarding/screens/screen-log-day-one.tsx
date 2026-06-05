@@ -154,7 +154,12 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
             {HOURS_OPTIONS.map((option) => (
               <button
                 key={option}
-                onClick={() => setHours(option)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setHours(option);
+                }}
+                type="button"
                 className={cn(
                   'py-3 rounded-lg font-medium transition-all text-sm',
                   hours === option
@@ -175,7 +180,12 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
             {TOPICS.map((topic) => (
               <button
                 key={topic}
-                onClick={() => toggleTopic(topic)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleTopic(topic);
+                }}
+                type="button"
                 className={cn(
                   'px-3 py-2 rounded-lg text-sm font-medium transition-all',
                   selectedTopics.includes(topic)
@@ -196,7 +206,12 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
             {FEELING_OPTIONS.map((option) => (
               <button
                 key={option.value}
-                onClick={() => setFeeling(option.value)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFeeling(option.value);
+                }}
+                type="button"
                 className={cn(
                   'flex flex-col items-center gap-1 p-3 rounded-xl transition-all',
                   feeling === option.value
@@ -219,12 +234,17 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
 
       {/* Submit Button */}
       <button
-        onClick={handleSubmit}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleSubmit();
+        }}
         disabled={!canSubmit || isSubmitting || isLoading}
+        type="button"
         className={cn(
           'w-full py-3 rounded-xl font-medium transition-all active:scale-[0.98]',
           canSubmit
-            ? 'bg-orange-600 text-white hover:bg-orange-700'
+            ? 'bg-orange-600 text-white hover:bg-orange-700 cursor-pointer'
             : 'bg-stone-200 text-stone-400 cursor-not-allowed'
         )}
       >

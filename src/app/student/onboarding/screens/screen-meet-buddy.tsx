@@ -168,8 +168,13 @@ export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }
 
             {/* Play Button */}
             <button
-              onClick={handlePlayClick}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:shadow-lg transition-all active:scale-[0.98]"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handlePlayClick();
+              }}
+              type="button"
+              className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:shadow-lg transition-all active:scale-[0.98] cursor-pointer"
             >
               {isPlaying ? (
                 <>

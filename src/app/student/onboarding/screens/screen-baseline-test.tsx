@@ -86,9 +86,14 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
             </p>
 
             <button
-              onClick={onNext}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onNext();
+              }}
               disabled={isLoading}
-              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-all disabled:opacity-50"
+              type="button"
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-all disabled:opacity-50 cursor-pointer"
             >
               Continue
             </button>
@@ -122,8 +127,13 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
 
             {/* Alternative */}
             <button
-              onClick={onNext}
-              className="w-full py-3 bg-white text-stone-900 border-2 border-stone-200 rounded-xl font-medium hover:bg-stone-50 transition-all"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onNext();
+              }}
+              type="button"
+              className="w-full py-3 bg-white text-stone-900 border-2 border-stone-200 rounded-xl font-medium hover:bg-stone-50 transition-all cursor-pointer"
             >
               I'll do this later
             </button>

@@ -111,9 +111,14 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               {screens[currentScreen].title}
             </h2>
             <button
-              onClick={handleCompleteWithoutUpdate}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCompleteWithoutUpdate();
+              }}
               disabled={isLoading}
-              className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50"
+              type="button"
+              className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
@@ -157,18 +162,28 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
           {currentScreen > 0 && (
             <button
-              onClick={handleBack}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleBack();
+              }}
               disabled={isLoading}
-              className="flex-1 py-3 px-4 border border-stone-300 text-stone-900 rounded-xl font-medium hover:bg-stone-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              className="flex-1 py-3 px-4 border border-stone-300 text-stone-900 rounded-xl font-medium hover:bg-stone-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               Back
             </button>
           )}
           <button
-            onClick={() => handleNext()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleNext();
+            }}
             disabled={isLoading}
+            type="button"
             className={cn(
-              'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-[0.98]',
+              'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-[0.98] cursor-pointer',
               currentScreen === screens.length - 1
                 ? 'bg-orange-600 text-white hover:bg-orange-700'
                 : 'bg-orange-600 text-white hover:bg-orange-700',

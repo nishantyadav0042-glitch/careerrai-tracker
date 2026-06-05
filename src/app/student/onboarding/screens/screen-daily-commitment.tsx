@@ -46,7 +46,12 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
         {COMMITMENT_OPTIONS.map((option) => (
           <button
             key={option.value}
-            onClick={() => setSelected(option.value)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setSelected(option.value);
+            }}
+            type="button"
             className={cn(
               'p-4 rounded-xl transition-all border-2 text-center',
               selected === option.value
@@ -80,9 +85,14 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
 
       {/* Submit Button */}
       <button
-        onClick={() => onNext({ studyTargetHours: selected })}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onNext({ studyTargetHours: selected });
+        }}
         disabled={isLoading}
-        className="w-full py-3 bg-orange-600 text-white rounded-xl font-medium hover:bg-orange-700 transition-all disabled:opacity-50 active:scale-[0.98]"
+        type="button"
+        className="w-full py-3 bg-orange-600 text-white rounded-xl font-medium hover:bg-orange-700 transition-all disabled:opacity-50 active:scale-[0.98] cursor-pointer"
       >
         This is my commitment
       </button>
