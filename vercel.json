@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-reminder",
+      "schedule": "30 14 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/check-red-flags",
+      "schedule": "0 15 * * *"
+    }
+  ]
+}
