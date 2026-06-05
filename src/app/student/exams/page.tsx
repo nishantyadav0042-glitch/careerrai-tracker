@@ -9,30 +9,65 @@ import { cn } from '@/lib/utils';
 import { CATResult } from './cat-result';
 
 const TESTS = [
-  { id: 'cat-readiness', name: 'CAT Readiness Test', desc: '10 questions · ~5 min · Percentile mapping', color: 'orange' as const },
+  { id: 'cat-readiness', name: 'CAT Readiness Test', desc: '35 questions · ~15 min · Complete diagnostic', color: 'orange' as const },
 ];
 
 function generateQuestions(testId: string) {
   const baseQs = [
-    { category: 'Mock Frequency', question: 'How many full-length mocks have you taken in the last 30 days?' },
-    { category: 'Quant', question: 'How comfortable are you with Number Systems & Arithmetic?' },
-    { category: 'VARC', question: 'How quickly can you read & summarise a 600-word passage?' },
-    { category: 'LRDI', question: 'How confident are you solving a tough caselet under 12 minutes?' },
-    { category: 'Time Management', question: 'How disciplined are you with section-wise time allocation?' },
-    { category: 'Strategy', question: 'Do you have a clear question-selection strategy for each section?' },
-    { category: 'Accuracy', question: 'What is your typical mock test accuracy?' },
-    { category: 'Revision', question: 'How often do you analyse your mock mistakes?' },
-    { category: 'Stamina', question: 'Can you stay sharp through a full 2-hour mock without losing focus?' },
-    { category: 'Confidence', question: 'How confident do you feel about cracking 95+ percentile?' },
+    // Quantitative Ability (7 questions)
+    { category: 'Quantitative Ability', question: 'How comfortable are you with Number Systems & Arithmetic?' },
+    { category: 'Quantitative Ability', question: 'Rate your proficiency in Algebra & Polynomials' },
+    { category: 'Quantitative Ability', question: 'How confident are you with Geometry & Mensuration?' },
+    { category: 'Quantitative Ability', question: 'Rate your speed in solving Profit/Loss & Percentage problems' },
+    { category: 'Quantitative Ability', question: 'How comfortable are you with Permutation & Combination?' },
+    { category: 'Quantitative Ability', question: 'Rate your proficiency in Probability concepts' },
+    { category: 'Quantitative Ability', question: 'How confident are you in completing Quant section within time limits?' },
+
+    // VARC (7 questions)
+    { category: 'VARC', question: 'How quickly can you read & understand a 600-word passage?' },
+    { category: 'VARC', question: 'Rate your accuracy in Reading Comprehension questions' },
+    { category: 'VARC', question: 'How comfortable are you with Verbal Reasoning & Grammar?' },
+    { category: 'VARC', question: 'Rate your speed in Para Jumble & Para Completion' },
+    { category: 'VARC', question: 'How confident are you in identifying Critical Reasoning fallacies?' },
+    { category: 'VARC', question: 'Rate your vocabulary strength (understand difficult passages)' },
+    { category: 'VARC', question: 'How confident are you in completing VARC section within time limits?' },
+
+    // LRDI (7 questions)
+    { category: 'LRDI', question: 'How confident are you solving Logic Puzzles within time limits?' },
+    { category: 'LRDI', question: 'Rate your proficiency in Data Interpretation & Analysis' },
+    { category: 'LRDI', question: 'How comfortable are you with Set Theory & Venn Diagrams?' },
+    { category: 'LRDI', question: 'Rate your speed in solving case lets under 12 minutes' },
+    { category: 'LRDI', question: 'How confident are you with Arrangements & Grouping problems?' },
+    { category: 'LRDI', question: 'Rate your ability to handle complex multi-part DI sets' },
+    { category: 'LRDI', question: 'How confident are you in completing LRDI within time limits?' },
+
+    // Mock Management & Strategy (7 questions)
+    { category: 'Mock Strategy', question: 'How many full-length mocks have you taken in the last 30 days?' },
+    { category: 'Mock Strategy', question: 'Do you have a clear question-selection strategy for each section?' },
+    { category: 'Mock Strategy', question: 'How often do you analyse your mock mistakes in detail?' },
+    { category: 'Mock Strategy', question: 'How disciplined are you with sectional time allocation?' },
+    { category: 'Mock Strategy', question: 'Rate your consistency across mock tests (score variation)' },
+    { category: 'Mock Strategy', question: 'How well do you track & improve weak question types?' },
+    { category: 'Mock Strategy', question: 'How confident do you feel about your overall CAT strategy?' },
+
+    // Physical & Mental Wellness (7 questions)
+    { category: 'Wellness & Stamina', question: 'Can you stay mentally sharp through a full 2-hour mock?' },
+    { category: 'Wellness & Stamina', question: 'How many hours of quality study can you do daily?' },
+    { category: 'Wellness & Stamina', question: 'Rate your sleep quality (avg 7-8 hours/night)' },
+    { category: 'Wellness & Stamina', question: 'How consistent is your daily preparation routine?' },
+    { category: 'Wellness & Stamina', question: 'How well do you manage stress & pressure during exams?' },
+    { category: 'Wellness & Stamina', question: 'Rate your physical fitness & health (exercise frequency)' },
+    { category: 'Wellness & Stamina', question: 'How confident do you feel about cracking 95+ percentile?' },
   ];
+
   return baseQs.map((q, i) => ({
     id: `q${i}`,
     ...q,
     options: [
-      { label: 'Not at all / Very weak', value: 1 },
-      { label: 'Below average', value: 2 },
-      { label: 'Decent / Mid', value: 3 },
-      { label: 'Strong / Confident', value: 4 },
+      { label: 'Not at all / Very weak (1)', value: 1 },
+      { label: 'Below average (2)', value: 2 },
+      { label: 'Decent / Mid (3)', value: 3 },
+      { label: 'Strong / Confident (4)', value: 4 },
     ],
   }));
 }

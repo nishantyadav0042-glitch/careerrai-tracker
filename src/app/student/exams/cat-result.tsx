@@ -114,6 +114,34 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
             </div>
           </Card>
 
+          {/* Category Breakdown */}
+          {feedback.categories && Object.keys(feedback.categories).length > 0 && (
+            <Card className="p-4 mb-6 bg-indigo-50 border-indigo-200">
+              <div className="text-xs font-semibold uppercase text-indigo-700 mb-4">Category Performance</div>
+              <div className="space-y-3">
+                {Object.entries(feedback.categories).map(([category, data]: [string, any]) => (
+                  <div key={category} className="pb-3 border-b border-indigo-200 last:border-b-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-indigo-900">{category}</span>
+                      <span className="text-sm font-bold text-indigo-700">{data.score}%</span>
+                    </div>
+                    <div className="w-full bg-indigo-200 rounded-full h-2 mb-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          data.score >= 75 ? 'bg-emerald-500' :
+                          data.score >= 50 ? 'bg-amber-500' :
+                          'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.min(data.score, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-indigo-800">{data.action}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {/* Next Steps */}
           <Card className="p-4 mb-6 bg-amber-50 border-amber-200">
             <div className="flex items-center gap-2 mb-3">

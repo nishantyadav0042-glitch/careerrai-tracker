@@ -128,10 +128,18 @@ function getBenchmark(score: number): string {
 }
 
 /**
- * Get detailed feedback for test performance
+ * Get detailed feedback for test performance with category breakdown
  */
 export function getDetailedFeedback(score: number, categories: Record<string, number>) {
   const percentileData = getCATPercentile(score);
+
+  // Normalize category scores
+  const normalizedCategories = Object.fromEntries(
+    Object.entries(categories).map(([key, value]) => [
+      key,
+      Math.round((value / 28) * 100) // Max 7 questions * 4 points = 28 per category
+    ])
+  );
 
   return {
     overall: {
@@ -142,6 +150,7 @@ export function getDetailedFeedback(score: number, categories: Record<string, nu
       target_colleges: percentileData.typical_colleges.slice(0, 3),
       success_rate: percentileData.success_rate,
     },
+    categories: getCategoryBreakdown(normalizedCategories),
     comparison: {
       vs_90_percentile: score < 200 ? `You need +${Math.ceil((200 - score) / 5)} more points for 90+ percentile` : 'You are in 90+ percentile range',
       vs_99_percentile: score < 280 ? `You need +${Math.ceil((280 - score) / 5)} more points for 99 percentile` : 'You are in elite range',
@@ -149,6 +158,49 @@ export function getDetailedFeedback(score: number, categories: Record<string, nu
     next_steps: getNextSteps(score, categories),
     motivation: getMotivationalMessage(score, percentileData.percentile),
   };
+}
+
+/**
+ * Get breakdown of performance by category with detailed feedback
+ */
+function getCategoryBreakdown(categories: Record<string, number>) {
+  const feedback: Record<string, { score: number; status: string; action: string }> = {};
+
+  const categoryActions: Record<string, { strong: string; weak: string }> = {
+    'Quantitative Ability': {
+      strong: '💪 Quant is your strength! Maintain this momentum and tackle harder problems.',
+      weak: '⚠️ Quant needs attention. Focus on fundamentals and practice regularly.'
+    },
+    'VARC': {
+      strong: '✨ Your reading skills are excellent! Keep refining your comprehension speed.',
+      weak: '⚠️ Reading needs improvement. Practice daily with news articles and editorials.'
+    },
+    'LRDI': {
+      strong: '🧠 Logical reasoning is solid! Practice complex caselets to master this section.',
+      weak: '⚠️ LRDI requires focused practice. Start with simpler puzzles and build up.'
+    },
+    'Mock Strategy': {
+      strong: '📊 Your mock strategy is strong! Consistency will pay off in the real exam.',
+      weak: '📉 Increase mock frequency and analyze mistakes more deeply.'
+    },
+    'Wellness & Stamina': {
+      strong: '⚡ Your wellness routine is excellent! This will help sustained performance.',
+      weak: '🏃 Work on stamina and routine. Sleep and exercise are key to success.'
+    },
+  };
+
+  for (const [category, score] of Object.entries(categories)) {
+    const isStrong = score >= 75;
+    const actions = categoryActions[category] || { strong: 'Great!', weak: 'Improve this.' };
+
+    feedback[category] = {
+      score,
+      status: isStrong ? '✓' : '⚠',
+      action: isStrong ? actions.strong : actions.weak,
+    };
+  }
+
+  return feedback;
 }
 
 function getNextSteps(score: number, categories: Record<string, number>): string[] {
