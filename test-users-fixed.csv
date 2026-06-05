@@ -4,5 +4,5 @@ Test Student 2,teststudent2@careerrai.com,+91-9000000002,student,CAT,testbuddy1@
 Test Student 3,teststudent3@careerrai.com,+91-9000000003,student,CAT,testbuddy2@careerrai.com,teststudent3,Test@3456
 Test Student 4,teststudent4@careerrai.com,+91-9000000004,student,CAT,testbuddy2@careerrai.com,teststudent4,Test@4567
 Test Student 5,teststudent5@careerrai.com,+91-9000000005,student,CAT,,teststudent5,Test@5678
-Test Buddy 1,testbuddy1@careerrai.com,+91-9000000010,buddy,,testbuddy1,Test@buddy1
-Test Buddy 2,testbuddy2@careerrai.com,+91-9000000011,buddy,,testbuddy2,Test@buddy2
+Test Buddy 1,testbuddy1@careerrai.com,+91-9000000010,buddy,,,testbuddy1,Test@buddy1
+Test Buddy 2,testbuddy2@careerrai.com,+91-9000000011,buddy,,,testbuddy2,Test@buddy2
