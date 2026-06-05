@@ -102,8 +102,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 pointer-events-auto">
+      <div className="w-full max-w-md max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden pointer-events-auto">
         {/* Header with Progress */}
         <div className="bg-white border-b border-stone-200 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -138,28 +138,38 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         </div>
 
         {/* Screen Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 pointer-events-auto">
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               {error}
             </div>
           )}
 
-          <CurrentScreen
-            onNext={handleNext}
-            onBack={handleBack}
-            canGoBack={currentScreen > 0}
-            isLoading={isLoading}
-          />
+          {userId ? (
+            <CurrentScreen
+              onNext={handleNext}
+              onBack={handleBack}
+              canGoBack={currentScreen > 0}
+              isLoading={isLoading}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-orange-100 rounded-full mx-auto mb-3 animate-pulse" />
+                <p className="text-sm text-stone-600">Loading...</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Navigation Buttons */}
-        <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
+        <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3 pointer-events-auto">
           {currentScreen > 0 && (
             <button
               onClick={handleBack}
               disabled={isLoading}
-              className="flex-1 py-3 px-4 border border-stone-300 text-stone-900 rounded-xl font-medium hover:bg-stone-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              className="flex-1 py-3 px-4 border border-stone-300 text-stone-900 rounded-xl font-medium hover:bg-stone-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               Back
             </button>
@@ -167,8 +177,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           <button
             onClick={() => handleNext()}
             disabled={isLoading}
+            type="button"
             className={cn(
-              'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-[0.98]',
+              'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-95',
               currentScreen === screens.length - 1
                 ? 'bg-orange-600 text-white hover:bg-orange-700'
                 : 'bg-orange-600 text-white hover:bg-orange-700',

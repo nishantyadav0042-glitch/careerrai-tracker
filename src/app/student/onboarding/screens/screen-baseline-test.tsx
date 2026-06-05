@@ -88,7 +88,8 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
             <button
               onClick={onNext}
               disabled={isLoading}
-              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-all disabled:opacity-50"
+              type="button"
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-all disabled:opacity-50 cursor-pointer"
             >
               Continue
             </button>
@@ -115,7 +116,7 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
             {/* Test Button */}
             <Link
               href="/student/exams"
-              className="block w-full py-3 bg-orange-600 text-white text-center rounded-xl font-medium hover:bg-orange-700 transition-all active:scale-[0.98]"
+              className="block w-full py-3 bg-orange-600 text-white text-center rounded-xl font-medium hover:bg-orange-700 transition-all active:scale-[0.98] cursor-pointer"
             >
               Take the 5-Minute Test
             </Link>
@@ -123,7 +124,8 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
             {/* Alternative */}
             <button
               onClick={onNext}
-              className="w-full py-3 bg-white text-stone-900 border-2 border-stone-200 rounded-xl font-medium hover:bg-stone-50 transition-all"
+              type="button"
+              className="w-full py-3 bg-white text-stone-900 border-2 border-stone-200 rounded-xl font-medium hover:bg-stone-50 transition-all cursor-pointer"
             >
               I'll do this later
             </button>
