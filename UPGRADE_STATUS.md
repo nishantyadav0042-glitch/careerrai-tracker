@@ -1,7 +1,7 @@
 # CareerRai Dashboard Upgrade - BUILD STATUS
 
 **Date:** June 5, 2026  
-**Version:** Phase 1 Complete - Ready for Phase 2
+**Version:** Phase 1-3 Complete - Ready for Phase 4
 
 ---
 
@@ -38,48 +38,46 @@
 
 ## 🔄 IN PROGRESS / NEXT PHASES
 
-### Phase 2: Student Onboarding (PRIORITY)
-**Estimated time: 3-4 days**
-
-- [ ] 4-screen onboarding modal component
-  - [ ] Screen 1: Meet Your Buddy (audio player, MediaRecorder API)
-  - [ ] Screen 2: Your Baseline Test (CAT readiness intro)
-  - [ ] Screen 3: Daily Commitment (hours picker)
-  - [ ] Screen 4: Log Day 1 (quick log + confetti)
-- [ ] MediaRecorder integration for buddy intro audio
-- [ ] Supabase Storage bucket setup for audio files
-- [ ] Onboarding state management (shown only once)
-- [ ] Integration with streak_data creation
-
-### Phase 3: Home Page Redesign (PRIORITY)
-**Estimated time: 4-5 days**
-
-- [ ] Streak Hero Card
-  - [ ] Flame icon states (basic/glowing/gold)
-  - [ ] Pulsing animation for 14+ day streaks
-  - [ ] "Log Today" quick-action button
-- [ ] Buddy Signal Card
-  - [ ] Show latest buddy message/voice note
-  - [ ] "No message" state with encouragement
-  - [ ] Inline audio player for voice notes
-- [ ] Days to CAT Context Card
-  - [ ] Dynamic messaging based on days remaining
-  - [ ] Hardcoded CAT date (Nov 23, 2026)
-- [ ] Migrate heatmap to Reports page
-- [ ] Milestone auto-message integration
-
-### Phase 4: Daily Log Redesign
+### Phase 4: Daily Log Redesign (NEXT PRIORITY)
 **Estimated time: 2-3 days**
-
 - [ ] Quick Log bottom sheet component
-  - [ ] Hours studied (5 buttons: 0/1/2/3/4+)
-  - [ ] Topics multi-select (Quant/VARC/LRDI/Mock/Revision)
-  - [ ] How did it go? (3 emoji buttons)
-  - [ ] Completion time: <15 seconds target
-- [ ] Full Log expansion (optional)
-- [ ] Emoji to confidence/stress mapping
-- [ ] Streak Guard (9 PM banner after no log)
+- [ ] Completion time: <15 seconds target
+- [ ] Streak Guard integration
 - [ ] Integration with updateStreakAfterLog()
+
+---
+
+### Phase 2: Student Onboarding ✅
+**Completed: June 5, 2026**
+
+- ✅ 4-screen onboarding modal component
+  - ✅ Screen 1: Meet Your Buddy (audio player, MediaRecorder API)
+  - ✅ Screen 2: Your Baseline Test (CAT readiness intro)
+  - ✅ Screen 3: Daily Commitment (hours picker)
+  - ✅ Screen 4: Log Day 1 (quick log + confetti)
+- ✅ MediaRecorder integration for buddy intro audio
+- ✅ Supabase Storage bucket setup for audio files
+- ✅ Onboarding state management (shown only once)
+- ✅ Integration with streak_data creation
+- ✅ Confetti animation on first day completion
+
+### Phase 3: Home Page Redesign ✅
+**Completed: June 5, 2026**
+
+- ✅ Streak Hero Card
+  - ✅ Flame icon states (basic/glowing/gold)
+  - ✅ Pulsing animation for 14+ day streaks
+  - ✅ "Log Today" quick-action button
+- ✅ Buddy Signal Card
+  - ✅ Show latest buddy message/voice note
+  - ✅ "No message" state with encouragement
+  - ✅ Inline audio player with waveform animation
+- ✅ Days to CAT Context Card
+  - ✅ Dynamic messaging based on days remaining (4 phases)
+  - ✅ Hardcoded CAT date (Nov 23, 2026)
+- ✅ Migrate heatmap to Reports page
+- ✅ 7-day heatmap on home page (14-day on reports)
+- ✅ Milestone auto-message integration
 
 ### Phase 5: Mock Score Drop Intervention
 **Estimated time: 1 day**
