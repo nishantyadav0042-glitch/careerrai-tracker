@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendIcon } from '@/components/trend-icon';
 import { CATTestWidget } from './cat-test-widget';
+import { StudentHomeClient } from './home-client';
 import { computeSummary, computeStreak, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import type { DailyReport } from '@/types';
@@ -41,7 +42,8 @@ export default async function StudentHomePage() {
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Friend';
 
   return (
-    <div className="space-y-5">
+    <StudentHomeClient>
+      <div className="space-y-5">
       {/* Greeting */}
       <div className="px-1">
         <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Hello,</p>
@@ -173,6 +175,7 @@ export default async function StudentHomePage() {
       >
         View full report <ArrowRight className="w-4 h-4" />
       </Link>
-    </div>
+      </div>
+    </StudentHomeClient>
   );
 }

@@ -28,6 +28,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS intro_audio_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS buddy_bio TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS college VARCHAR(100);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS cat_percentile DECIMAL(5,2);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 
 -- Add new fields to feedback table
 ALTER TABLE public.feedback ADD COLUMN IF NOT EXISTS voice_note_url TEXT;
