@@ -95,7 +95,7 @@ export function AdminDataImport() {
   const downloadTemplate = () => {
     const csv = `full_name,email,phone,role,exam_target,buddy_email,username,password
 Aarav Sharma,aarav@careerrai.com,+91-9876543210,student,CAT,,aarav_sharma,Secure@Aarav123
-Priya Kapoor,priya@careerrai.com,+91-9876543211,student,CUET,,priya_kapoor,Secure@Priya123
+Priya Kapoor,priya@careerrai.com,+91-9876543211,student,CAT,,priya_kapoor,Secure@Priya123
 Rohan Patel,rohan@careerrai.com,+91-9876543212,student,CAT,,rohan_patel,Secure@Rohan123
 Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@Nishant123`;
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -130,7 +130,7 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@N
             <p className="text-xs text-stone-500 mt-1">
               Required: full_name, email, phone, role (student/buddy)
               <br />
-              Optional: exam_target (CAT/CUET), buddy_email, username, password
+              Optional: exam_target (CAT), buddy_email, username, password
             </p>
           </div>
 
@@ -275,11 +275,11 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@N
         <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
           <li><strong>Role:</strong> Must be "student" or "buddy"</li>
           <li><strong>Email:</strong> Must be unique (not already in system)</li>
-          <li><strong>Exam Target:</strong> Required for students (CAT/CUET), leave blank for buddies</li>
+          <li><strong>Exam Target:</strong> Required for students (CAT only), leave blank for buddies</li>
           <li><strong>Buddy Email:</strong> Optional. If provided, must match a buddy email in the same import</li>
           <li><strong>Username:</strong> Optional. For display purposes. Can be any text</li>
           <li><strong>Password:</strong> Optional. If provided, must be 8+ characters. If blank, auto-generated</li>
-          <li><strong>Login:</strong> Users log in with email + password (not username)</li>
+          <li><strong>Login:</strong> Users log in with username + password</li>
         </ul>
       </Card>
     </div>

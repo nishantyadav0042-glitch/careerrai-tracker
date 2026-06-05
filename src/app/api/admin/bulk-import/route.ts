@@ -76,7 +76,7 @@ function validateRow(row: ImportRow, rowNum: number): string | null {
   if (!row.email || !row.email.includes('@')) return `Row ${rowNum}: Invalid email`;
   if (!row.phone) return `Row ${rowNum}: Missing phone`;
   if (!['student', 'buddy'].includes(row.role)) return `Row ${rowNum}: Role must be 'student' or 'buddy'`;
-  if (row.role === 'student' && !row.exam_target) return `Row ${rowNum}: Students must have exam_target (CAT/CUET)`;
+  if (row.role === 'student' && !row.exam_target) return `Row ${rowNum}: Students must have exam_target (CAT)`;
   if (row.password && row.password.length < 8) return `Row ${rowNum}: Password must be at least 8 characters`;
   return null;
 }

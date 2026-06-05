@@ -9,12 +9,10 @@ import { cn } from '@/lib/utils';
 
 const TESTS = [
   { id: 'cat-readiness', name: 'CAT Readiness Test', desc: '10 questions · ~5 min · Percentile mapping', color: 'orange' as const },
-  { id: 'cuet-readiness', name: 'CUET Readiness Test', desc: '10 questions · ~5 min · 16-tier percentile', color: 'teal' as const },
 ];
 
 function generateQuestions(testId: string) {
-  const isCAT = testId === 'cat-readiness';
-  const baseQs = isCAT ? [
+  const baseQs = [
     { category: 'Mock Frequency', question: 'How many full-length mocks have you taken in the last 30 days?' },
     { category: 'Quant', question: 'How comfortable are you with Number Systems & Arithmetic?' },
     { category: 'VARC', question: 'How quickly can you read & summarise a 600-word passage?' },
@@ -25,17 +23,6 @@ function generateQuestions(testId: string) {
     { category: 'Revision', question: 'How often do you analyse your mock mistakes?' },
     { category: 'Stamina', question: 'Can you stay sharp through a full 2-hour mock without losing focus?' },
     { category: 'Confidence', question: 'How confident do you feel about cracking 95+ percentile?' },
-  ] : [
-    { category: 'Subject Coverage', question: 'How many subjects from the CUET syllabus have you completed?' },
-    { category: 'Language', question: 'How strong is your reading comprehension in English?' },
-    { category: 'General Test', question: 'How confident are you with current affairs & GK?' },
-    { category: 'Quantitative', question: 'How comfortable are you with basic mathematics & reasoning?' },
-    { category: 'Mocks', question: 'How many CUET mocks have you attempted?' },
-    { category: 'Revision', question: 'How frequently do you revise NCERT chapters?' },
-    { category: 'Speed', question: 'Can you finish a section within the allotted time?' },
-    { category: 'Subject Strength', question: 'How strong is your strongest domain subject?' },
-    { category: 'Strategy', question: 'Do you have a college shortlist based on your target score?' },
-    { category: 'Confidence', question: 'How confident are you about getting into a top DU college?' },
   ];
   return baseQs.map((q, i) => ({
     id: `q${i}`,
