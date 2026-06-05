@@ -1,7 +1,7 @@
 # CareerRai Dashboard Upgrade - BUILD STATUS
 
 **Date:** June 5-6, 2026  
-**Version:** Phase 1-5 COMPLETE & TESTED - Production Ready ✅
+**Version:** Phase 1-6 COMPLETE - Production Ready ✅
 
 ---
 
@@ -69,14 +69,12 @@
 
 ## 🔄 COMPLETED PHASES
 
-### Phase 5: Mock Score Drop Intervention (NEXT PRIORITY)
-**Estimated time: 1 day**
-- [ ] Drop detection logic (>8 percentile drop)
-- [ ] Intervention overlay UI with explanation
-- [ ] Visual comparison (May pool vs October pool)
-- [ ] Buddy alert insertion
-
----
+### Phase 1: Core Infrastructure ✅
+**Completed: June 5, 2026**
+- ✅ Streak utilities: 7/7 functions
+- ✅ Database tables: streak_data, mock_drop_alerts
+- ✅ RLS policies: Configured
+- ✅ Claude API integration: Ready
 
 ### Phase 2: Student Onboarding ✅
 **Completed: June 5, 2026**
@@ -126,20 +124,34 @@
 - ✅ Database integration (daily_reports creation)
 - ✅ Streak update and milestone checking
 
-### Phase 6: Buddy Dashboard Enhancements
-**Estimated time: 3-4 days**
+### Phase 5: Mock Score Drop Intervention ✅
+**Completed: June 6, 2026**
 
-- [ ] Buddy intro audio recording (/buddy/setup)
-  - [ ] MediaRecorder for 45-second intro
-  - [ ] Playback before saving
-  - [ ] Supabase Storage upload
-- [ ] Triage Home View
-  - [ ] Urgency score algorithm (0-100)
-  - [ ] Red/Amber/Green card layout
-  - [ ] Quick-action buttons (Voice/Message/Feedback)
-  - [ ] Buddy engagement alerts
+- ✅ Drop detection logic (>8 percentile threshold)
+- ✅ Intervention modal UI with color-coded severity
+- ✅ Percentile comparison display
+- ✅ Buddy alert insertion with feedback creation
+- ✅ useMockDropCheck hook for integration
+- ✅ Database schema enhancement for drop tracking
 
-### Phase 7: Voice Notes (Highest Impact)
+### Phase 6: Buddy Dashboard Enhancements ✅
+**Completed: June 6, 2026**
+
+- ✅ Buddy intro audio recording (/buddy/setup)
+  - ✅ MediaRecorder API for 45-second intro
+  - ✅ Real-time recording with countdown timer
+  - ✅ Playback preview with play/pause
+  - ✅ Supabase Storage upload to buddy-intros bucket
+  - ✅ Profile update on successful upload
+- ✅ Triage Home View (/buddy/home)
+  - ✅ Urgency score algorithm (0-100)
+  - ✅ Color-coded cards: Red/Amber/Green
+  - ✅ Summary metrics: Critical, Warning, Total
+  - ✅ Filter buttons: All/Critical/Warning
+  - ✅ Quick-action buttons: Message, Feedback, Call
+  - ✅ Student status indicators: streak, drops, feedback gap
+
+### Phase 7: Voice Notes (NEXT PRIORITY)
 **Estimated time: 2-3 days**
 
 - [ ] Voice note recorder component
