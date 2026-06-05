@@ -44,6 +44,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // Last screen - mark onboarding as complete
       setIsLoading(true);
       try {
+        if (!userId) {
+          throw new Error('User ID not found');
+        }
+
         const { error } = await supabase
           .from('profiles')
           .update({ onboarding_completed: true })
@@ -51,14 +55,43 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
         if (error) throw error;
 
+        // Wait a bit longer to ensure DB update propagates
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         // Small delay for confetti animation to complete
         setTimeout(() => {
           onComplete();
         }, 500);
       } catch (err) {
+        console.error('Onboarding error:', err);
         setError(err instanceof Error ? err.message : 'Failed to complete onboarding');
         setIsLoading(false);
       }
+    }
+  };
+
+  const handleCompleteWithoutUpdate = async () => {
+    // If somehow completing (e.g., X button), ensure DB is updated first
+    if (!userId) {
+      onComplete();
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      // Wait for update to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      onComplete();
+    } catch (err) {
+      console.error('Error completing onboarding:', err);
+      // Force complete even if update failed (user can retry)
+      onComplete();
     }
   };
 
@@ -78,8 +111,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               {screens[currentScreen].title}
             </h2>
             <button
-              onClick={onComplete}
-              className="text-stone-400 hover:text-stone-600 transition"
+              onClick={handleCompleteWithoutUpdate}
+              disabled={isLoading}
+              className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50"
               aria-label="Close"
             >
               <X className="w-5 h-5" />

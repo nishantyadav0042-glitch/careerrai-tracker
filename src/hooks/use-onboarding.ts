@@ -20,14 +20,21 @@ export function useOnboarding() {
           return;
         }
 
-        const { data: profile } = await supabase
+        // Add cache busting with timestamp to force fresh data
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('onboarding_completed')
           .eq('id', user.id)
           .single();
 
-        // Show onboarding if not completed or field doesn't exist
-        setNeedsOnboarding(!profile?.onboarding_completed);
+        if (error) {
+          console.error('Error fetching profile:', error);
+          setNeedsOnboarding(true);
+        } else {
+          // Explicitly check for true value (not just truthy)
+          const isCompleted = profile?.onboarding_completed === true;
+          setNeedsOnboarding(!isCompleted);
+        }
       } catch (error) {
         console.error('Error checking onboarding:', error);
         // Default to showing onboarding if we can't check
