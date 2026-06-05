@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MoodChart } from './student-charts';
 import { FeedbackList } from './feedback-form';
+import { BuddyStudentViewClient } from './buddy-student-view-client';
 import type { DailyReport, BuddyFeedback } from '@/types';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -204,6 +205,14 @@ export default async function BuddyStudentDetailPage({
 
       {/* Feedback list + form (client component - manages optimistic updates) */}
       <FeedbackList initial={feedback} studentId={id} studentFirstName={firstName} />
+
+      {/* Voice note recorder (client component) */}
+      <BuddyStudentViewClient
+        studentId={id}
+        studentName={student.full_name}
+        studentPercentile={student.cat_percentile}
+        buddyId={user.id}
+      />
     </div>
   );
 }

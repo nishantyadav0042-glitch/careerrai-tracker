@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
+import { VoiceNotePlayer } from '@/components/voice-note-player';
 import { MessageCircle, Volume2, Play, Pause, ChevronRight } from 'lucide-react';
 
 interface BuddySignalCardProps {
@@ -28,8 +29,6 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
   const [feedback, setFeedback] = useState<BuddyFeedback | null>(null);
   const [buddy, setBuddy] = useState<BuddyProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     async function loadBuddySignal() {
@@ -66,26 +65,6 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
 
     loadBuddySignal();
   }, [supabase, userId]);
-
-  const handlePlayClick = async () => {
-    if (!audioRef.current) return;
-
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      try {
-        await audioRef.current.play();
-        setIsPlaying(true);
-      } catch (error) {
-        console.error('Error playing audio:', error);
-      }
-    }
-  };
-
-  const handleAudioEnd = () => {
-    setIsPlaying(false);
-  };
 
   if (isLoading) {
     return (
@@ -156,51 +135,11 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
 
         {/* Voice Note Player */}
         {feedback.voice_note_url ? (
-          <div className="space-y-2">
-            <audio
-              ref={audioRef}
-              src={feedback.voice_note_url}
-              onEnded={handleAudioEnd}
-            />
-
-            <button
-              onClick={handlePlayClick}
-              className="w-full flex items-center gap-3 p-3 bg-teal-100 hover:bg-teal-200 rounded-lg transition-colors"
-            >
-              {isPlaying ? (
-                <Pause className="w-4 h-4 text-teal-700" />
-              ) : (
-                <Play className="w-4 h-4 text-teal-700" />
-              )}
-              <span className="text-xs font-medium text-teal-900">
-                {isPlaying ? 'Playing...' : 'Listen to voice note'}
-              </span>
-            </button>
-
-            {/* Waveform Placeholder */}
-            {isPlaying && (
-              <div className="flex items-center justify-center gap-1 py-2">
-                {[...Array(12)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-0.5 bg-teal-500 rounded-full"
-                    style={{
-                      height: `${Math.random() * 16 + 4}px`,
-                      animation: `wave 0.6s ease-in-out infinite`,
-                      animationDelay: `${i * 0.05}s`
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            <style>{`
-              @keyframes wave {
-                0%, 100% { opacity: 0.4; }
-                50% { opacity: 1; }
-              }
-            `}</style>
-          </div>
+          <VoiceNotePlayer
+            audioUrl={feedback.voice_note_url}
+            buddyName={buddy.full_name}
+            createdAt={feedback.created_at}
+          />
         ) : (
           /* Text Feedback Preview */
           <div className="space-y-2">
