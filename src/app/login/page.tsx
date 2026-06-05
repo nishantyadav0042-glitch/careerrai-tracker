@@ -6,22 +6,22 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 const DEMO_ACCOUNTS = [
-  { label: 'Student (Aarav)', email: 'aarav@careerrai.com', password: 'CareerRai2026!' },
-  { label: 'Student (Priya)', email: 'priya@careerrai.com', password: 'CareerRai2026!' },
-  { label: 'Buddy (Nishant)', email: 'nishant@careerrai.com', password: 'CareerRai2026!' },
-  { label: 'Admin', email: 'admin@careerrai.com', password: 'CareerRai2026!' },
+  { label: 'Student (Aarav)', username: 'aarav', password: 'CareerRai2026!' },
+  { label: 'Student (Priya)', username: 'priya', password: 'CareerRai2026!' },
+  { label: 'Buddy (Nishant)', username: 'nishant', password: 'CareerRai2026!' },
+  { label: 'Admin', username: 'admin', password: 'CareerRai2026!' },
 ];
 
 function LoginForm() {
   const params = useSearchParams();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
 
   const hasError = params.get('error') === '1';
 
   function fillDemo(acc: typeof DEMO_ACCOUNTS[0]) {
-    setEmail(acc.email);
+    setUsername(acc.username);
     setPassword(acc.password);
   }
 
@@ -58,13 +58,13 @@ function LoginForm() {
           {/* Native form POST — browser handles cookies + redirect, no JS in the auth flow */}
           <form action="/api/auth/login" method="POST" className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-stone-800 mb-1.5">Email</label>
+              <label className="block text-sm font-medium text-stone-800 mb-1.5">Username</label>
               <input
-                type="email"
-                name="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
+                type="text"
+                name="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="your username"
                 required
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
               />
@@ -92,7 +92,7 @@ function LoginForm() {
             </div>
 
             {hasError && (
-              <p className="text-xs text-rose-600">Email or password incorrect. Try a demo account below.</p>
+              <p className="text-xs text-rose-600">Username or password incorrect. Try a demo account below.</p>
             )}
 
             <button
@@ -111,7 +111,7 @@ function LoginForm() {
             <div className="grid grid-cols-2 gap-2">
               {DEMO_ACCOUNTS.map((acc) => (
                 <button
-                  key={acc.email}
+                  key={acc.username}
                   type="button"
                   onClick={() => fillDemo(acc)}
                   className="text-xs py-2 px-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl text-stone-700 font-medium transition-colors text-left"

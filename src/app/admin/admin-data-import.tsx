@@ -23,6 +23,23 @@ export function AdminDataImport() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<any>(null);
+
+  async function testAPI() {
+    console.log('[TEST] Testing API...');
+    try {
+      const response = await fetch('/api/admin/test', { method: 'POST' });
+      const data = await response.json();
+      console.log('[TEST] Response:', data);
+      setTestResult(data);
+      if (!response.ok) {
+        setError(`Test failed: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('[TEST] Error:', err);
+      setError(`Test error: ${String(err)}`);
+    }
+  }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -33,36 +50,54 @@ export function AdminDataImport() {
     setResult(null);
 
     try {
+      console.log('[ADMIN_IMPORT] Starting upload...', file.name, file.size);
       const formData = new FormData();
       formData.append('file', file);
 
+      console.log('[ADMIN_IMPORT] Sending request to /api/admin/bulk-import');
       const response = await fetch('/api/admin/bulk-import', {
         method: 'POST',
         body: formData,
       });
 
-      const data = await response.json();
+      console.log('[ADMIN_IMPORT] Response status:', response.status);
 
-      if (!response.ok) {
-        setError(data.error || 'Import failed');
+      let data;
+      try {
+        data = await response.json();
+        console.log('[ADMIN_IMPORT] Response data:', data);
+      } catch (parseErr) {
+        console.error('[ADMIN_IMPORT] Failed to parse response JSON:', parseErr);
+        console.log('[ADMIN_IMPORT] Response text:', await response.text());
+        setError('Server error - invalid response. Check browser console.');
         return;
       }
 
+      if (!response.ok) {
+        const errorMsg = data.error || `HTTP ${response.status}`;
+        console.error('[ADMIN_IMPORT] Error response:', errorMsg);
+        setError(errorMsg);
+        return;
+      }
+
+      console.log('[ADMIN_IMPORT] Success!');
       setResult(data);
       setFile(null);
     } catch (err) {
-      setError(`Error: ${String(err)}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[ADMIN_IMPORT] Catch error:', err);
+      setError(`Error: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
   }
 
   const downloadTemplate = () => {
-    const csv = `full_name,email,phone,role,exam_target,buddy_email
-Aarav Sharma,aarav@careerrai.com,+91-9876543210,student,CAT,
-Priya Kapoor,priya@careerrai.com,+91-9876543211,student,CUET,
-Rohan Patel,rohan@careerrai.com,+91-9876543212,student,CAT,
-Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,`;
+    const csv = `full_name,email,phone,role,exam_target,buddy_email,username,password
+Aarav Sharma,aarav@careerrai.com,+91-9876543210,student,CAT,,aarav_sharma,Secure@Aarav123
+Priya Kapoor,priya@careerrai.com,+91-9876543211,student,CUET,,priya_kapoor,Secure@Priya123
+Rohan Patel,rohan@careerrai.com,+91-9876543212,student,CAT,,rohan_patel,Secure@Rohan123
+Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@Nishant123`;
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -83,7 +118,7 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,`;
         <form onSubmit={handleUpload} className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-stone-700 mb-2">
-              CSV File (full_name, email, phone, role, exam_target, buddy_email)
+              CSV File
             </label>
             <input
               type="file"
@@ -93,7 +128,9 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,`;
               className="block w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
             />
             <p className="text-xs text-stone-500 mt-1">
-              Supports: full_name, email, phone, role (student/buddy), exam_target (CAT/CUET), buddy_email
+              Required: full_name, email, phone, role (student/buddy)
+              <br />
+              Optional: exam_target (CAT/CUET), buddy_email, username, password
             </p>
           </div>
 
@@ -119,9 +156,26 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,`;
               <Download className="w-4 h-4" />
               Template
             </button>
+            <button
+              type="button"
+              onClick={testAPI}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-100 text-blue-900 hover:bg-blue-200 transition"
+            >
+              🧪 Test API
+            </button>
           </div>
         </form>
       </Card>
+
+      {/* Test result */}
+      {testResult && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="text-xs font-mono text-blue-900">
+            <div className="font-semibold mb-1">API Test Result:</div>
+            <pre className="overflow-auto text-[11px]">{JSON.stringify(testResult, null, 2)}</pre>
+          </div>
+        </Card>
+      )}
 
       {/* Error message */}
       {error && (
@@ -129,7 +183,7 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,`;
           <div className="flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-semibold text-rose-900">Import Error</div>
+              <div className="text-sm font-semibold text-rose-900">Error</div>
               <p className="text-sm text-rose-800 mt-1">{error}</p>
             </div>
           </div>
@@ -223,7 +277,9 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,`;
           <li><strong>Email:</strong> Must be unique (not already in system)</li>
           <li><strong>Exam Target:</strong> Required for students (CAT/CUET), leave blank for buddies</li>
           <li><strong>Buddy Email:</strong> Optional. If provided, must match a buddy email in the same import</li>
-          <li><strong>Password:</strong> Auto-generated temporarily. Users should reset on first login</li>
+          <li><strong>Username:</strong> Optional. For display purposes. Can be any text</li>
+          <li><strong>Password:</strong> Optional. If provided, must be 8+ characters. If blank, auto-generated</li>
+          <li><strong>Login:</strong> Users log in with email + password (not username)</li>
         </ul>
       </Card>
     </div>

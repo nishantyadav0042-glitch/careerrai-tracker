@@ -1,8 +1,8 @@
-full_name,email,phone,role,exam_target,buddy_email
-Aarav Sharma,aarav@careerrai.com,+91-9876543210,student,CAT,
-Priya Kapoor,priya@careerrai.com,+91-9876543211,student,CUET,
-Rohan Patel,rohan@careerrai.com,+91-9876543212,student,CAT,
-Meera Singh,meera@careerrai.com,+91-9876543213,student,CUET,
-Arjun Reddy,arjun@careerrai.com,+91-9876543214,student,CAT,
-Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,
-Priya Mentors,mentor2@careerrai.com,+91-9876543216,buddy,,
+full_name,email,phone,role,exam_target,buddy_email,username,password
+Aarav Sharma,aarav@careerrai.com,+91-9876543210,student,CAT,,aarav_sharma,Secure@Aarav123
+Priya Kapoor,priya@careerrai.com,+91-9876543211,student,CUET,,priya_kapoor,Secure@Priya123
+Rohan Patel,rohan@careerrai.com,+91-9876543212,student,CAT,,rohan_patel,Secure@Rohan123
+Meera Singh,meera@careerrai.com,+91-9876543213,student,CUET,,meera_singh,Secure@Meera123
+Arjun Reddy,arjun@careerrai.com,+91-9876543214,student,CAT,,arjun_reddy,Secure@Arjun123
+Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@Nishant123
+Priya Mentors,mentor2@careerrai.com,+91-9876543216,buddy,,priya_mentors,Secure@Priya123

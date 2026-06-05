@@ -4,19 +4,36 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   // Support both JSON (fetch) and form-encoded (native form POST)
-  let email = '';
+  let username = '';
   let password = '';
   const contentType = request.headers.get('content-type') ?? '';
 
   if (contentType.includes('application/json')) {
     const body = await request.json();
-    email = body.email;
+    username = body.username;
     password = body.password;
   } else {
     const form = await request.formData();
-    email = form.get('email') as string;
+    username = form.get('username') as string;
     password = form.get('password') as string;
   }
+
+  const origin = request.nextUrl.origin;
+
+  // Look up email from username (case-insensitive)
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .select('id, email, role')
+    .ilike('username', username) // ilike = case-insensitive
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    console.error('[LOGIN] Profile lookup error:', profileError?.message);
+    return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
+  }
+
+  const email = profile.email;
 
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
 
@@ -35,24 +52,15 @@ export async function POST(request: NextRequest) {
     }
   );
 
+  // Authenticate with email + password
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  const origin = request.nextUrl.origin;
-
   if (error) {
-    // Redirect back to login with error flag
+    console.error('[LOGIN] Auth error:', error.message);
     return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user!.id)
-    .single();
-
-  const role = profile?.role ?? 'student';
+  const role = profile.role ?? 'student';
   const dest = role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/home';
 
   // Return a redirect — browser follows it and sends the Set-Cookie cookies with the next request

@@ -1,0 +1,6 @@
+full_name,email,phone,role,exam_target,buddy_email
+Rajesh Kumar,rajesh@testdata.com,+91-9999999001,student,CAT,priya@testdata.com
+Sophia Desai,sophia@testdata.com,+91-9999999002,student,CUET,priya@testdata.com
+Vikram Singh,vikram@testdata.com,+91-9999999003,student,CAT,anil@testdata.com
+Priya Sharma,priya@testdata.com,+91-9999999004,buddy,,
+Anil Verma,anil@testdata.com,+91-9999999005,buddy,,

@@ -9,6 +9,8 @@ interface ImportRow {
   role: 'student' | 'buddy';
   exam_target?: string;
   buddy_email?: string;
+  username?: string;
+  password?: string;
 }
 
 interface ImportResult {
@@ -38,17 +40,32 @@ function parseCSV(text: string): ImportRow[] {
 
   const rows: ImportRow[] = [];
   for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue; // skip empty lines
+    if (!lines[i].trim()) continue;
 
     const values = lines[i].split(',').map(v => v.trim());
-    const row: ImportRow = {
-      full_name: values[headers.indexOf('full_name')] || '',
-      email: values[headers.indexOf('email')] || '',
-      phone: values[headers.indexOf('phone')] || '',
-      role: (values[headers.indexOf('role')] || '').toLowerCase() as 'student' | 'buddy',
-      exam_target: values[headers.indexOf('exam_target')] || undefined,
-      buddy_email: values[headers.indexOf('buddy_email')] || undefined,
+
+    // Helper to safely get value from headers
+    const getValue = (colName: string) => {
+      const idx = headers.indexOf(colName);
+      return idx >= 0 ? values[idx] : undefined;
     };
+
+    const row: ImportRow = {
+      full_name: getValue('full_name') || '',
+      email: getValue('email') || '',
+      phone: getValue('phone') || '',
+      role: (getValue('role') || '').toLowerCase() as 'student' | 'buddy',
+      exam_target: getValue('exam_target') || undefined,
+      buddy_email: getValue('buddy_email') || undefined,
+      username: getValue('username') || undefined,
+      password: getValue('password') || undefined,
+    };
+
+    // Debug logging
+    if (row.username) {
+      console.log(`[CSV_PARSE] Row ${i}: email=${row.email}, username=${row.username}, password=${row.password ? '***' : 'empty'}`);
+    }
+
     rows.push(row);
   }
   return rows;
@@ -60,40 +77,60 @@ function validateRow(row: ImportRow, rowNum: number): string | null {
   if (!row.phone) return `Row ${rowNum}: Missing phone`;
   if (!['student', 'buddy'].includes(row.role)) return `Row ${rowNum}: Role must be 'student' or 'buddy'`;
   if (row.role === 'student' && !row.exam_target) return `Row ${rowNum}: Students must have exam_target (CAT/CUET)`;
+  if (row.password && row.password.length < 8) return `Row ${rowNum}: Password must be at least 8 characters`;
   return null;
 }
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[BULK_IMPORT] Starting import...');
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
     );
 
-    // Auth check
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      console.log('[BULK_IMPORT] No user authenticated');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // Admin check
     const admin = createAdminClient();
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { data: profile, error: profileError } = await admin.from('profiles').select('role').eq('id', user.id).single();
 
-    // Parse request
+    if (profileError) {
+      console.log('[BULK_IMPORT] Profile fetch error:', profileError.message);
+      return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 403 });
+    }
+
+    if (profile?.role !== 'admin') {
+      console.log('[BULK_IMPORT] User is not admin, role:', profile?.role);
+      return NextResponse.json({ error: 'Forbidden - not an admin' }, { status: 403 });
+    }
+
+    console.log('[BULK_IMPORT] Admin verified');
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!file) {
+      console.log('[BULK_IMPORT] No file provided');
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
 
+    console.log('[BULK_IMPORT] File received:', file.name, 'size:', file.size);
     const text = await file.text();
+
     const rows = parseCSV(text);
+    console.log('[BULK_IMPORT] Parsed rows:', rows.length);
 
     // Validate all rows first
     const errors: Array<{ row: number; email: string; error: string }> = [];
     const validRows: ImportRow[] = [];
 
     for (let i = 0; i < rows.length; i++) {
-      const err = validateRow(rows[i], i + 2); // +2 because header is row 1, data starts at row 2
+      const err = validateRow(rows[i], i + 2);
       if (err) {
         errors.push({ row: i + 2, email: rows[i].email, error: err });
       } else {
@@ -101,7 +138,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check for duplicate emails
+    // Check for duplicate emails in CSV
     const emails = validRows.map(r => r.email);
     const uniqueEmails = new Set(emails);
     if (emails.length !== uniqueEmails.size) {
@@ -112,65 +149,86 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check emails don't already exist in Supabase
-    const { data: existingProfiles } = await admin
-      .from('profiles')
-      .select('email')
-      .in('email', validRows.map(r => r.email));
-
-    if ((existingProfiles?.length ?? 0) > 0) {
-      const existing = existingProfiles!.map(p => p.email).join(', ');
-      return NextResponse.json(
-        { error: `These emails already exist: ${existing}` },
-        { status: 400 }
-      );
-    }
-
-    // Create users and profiles
     const created: Array<{ email: string; role: string; full_name: string }> = [];
-    const buddyMap = new Map<string, string>(); // email -> id
+    const buddyMap = new Map<string, string>();
 
-    // First pass: Create all users and profiles, collect buddy IDs
+    // First pass: Create auth users OR update passwords
     for (const row of validRows) {
       try {
-        // Generate temp password
-        const tempPassword = `CareerRai${Math.random().toString(36).slice(2, 10)}!`;
-
-        // Create auth user
-        const { data: { user: newUser }, error: authError } = await admin.auth.admin.createUser({
-          email: row.email,
-          password: tempPassword,
-          email_confirm: true, // auto-confirm email
-          user_metadata: { full_name: row.full_name, phone: row.phone },
-        });
-
-        if (authError) {
-          errors.push({ row: 0, email: row.email, error: `Auth error: ${authError.message}` });
-          continue;
-        }
-
-        if (!newUser) {
-          errors.push({ row: 0, email: row.email, error: 'Failed to create user' });
-          continue;
-        }
-
-        // Create profile
-        const { error: profileError } = await admin
+        // Check if profile already exists
+        const { data: existingProfile } = await admin
           .from('profiles')
-          .insert({
-            id: newUser.id,
+          .select('id')
+          .eq('email', row.email)
+          .maybeSingle();
+
+        let userId: string;
+
+        if (existingProfile) {
+          // User exists
+          userId = existingProfile.id;
+          console.log(`[BULK_IMPORT] User exists for ${row.email}, ID: ${userId}`);
+
+          // If password provided in CSV, update it
+          if (row.password) {
+            console.log(`[BULK_IMPORT] Updating password for ${row.email}`);
+            const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
+              password: row.password,
+            });
+
+            if (updateError) {
+              console.warn(`[BULK_IMPORT] Password update warning for ${row.email}:`, updateError.message);
+              errors.push({ row: 0, email: row.email, error: `Password update failed: ${updateError.message}` });
+              continue;
+            }
+
+            console.log(`[BULK_IMPORT] Password updated for ${row.email}`);
+          }
+        } else {
+          // New user - create auth account
+          // Use password from CSV if provided, otherwise generate temp password
+          const userPassword = row.password || `CareerRai${Math.random().toString(36).slice(2, 10)}!`;
+
+          const { data: { user: newUser }, error: authError } = await admin.auth.admin.createUser({
             email: row.email,
-            full_name: row.full_name,
-            phone: row.phone,
-            role: row.role,
-            exam_target: row.exam_target || null,
-            created_at: new Date().toISOString(),
+            password: userPassword,
+            email_confirm: true,
+            user_metadata: { full_name: row.full_name, phone: row.phone },
           });
 
-        if (profileError) {
-          // Rollback: delete auth user
-          await admin.auth.admin.deleteUser(newUser.id);
-          errors.push({ row: 0, email: row.email, error: `Profile error: ${profileError.message}` });
+          if (authError) {
+            errors.push({ row: 0, email: row.email, error: `Auth error: ${authError.message}` });
+            continue;
+          }
+
+          if (!newUser) {
+            errors.push({ row: 0, email: row.email, error: 'Failed to create user' });
+            continue;
+          }
+
+          userId = newUser.id;
+          console.log(`[BULK_IMPORT] Created new auth user for ${row.email}`);
+        }
+
+        // UPSERT profile (create if new, update if exists)
+        const { error: upsertError } = await admin
+          .from('profiles')
+          .upsert(
+            {
+              id: userId,
+              email: row.email,
+              full_name: row.full_name,
+              phone: row.phone,
+              username: row.username || null,
+              role: row.role,
+              exam_target: row.exam_target || null,
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: 'id' }
+          );
+
+        if (upsertError) {
+          errors.push({ row: 0, email: row.email, error: `Profile error: ${upsertError.message}` });
           continue;
         }
 
@@ -181,7 +239,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (row.role === 'buddy') {
-          buddyMap.set(row.email, newUser.id);
+          buddyMap.set(row.email, userId);
         }
       } catch (err) {
         errors.push({ row: 0, email: row.email, error: String(err) });
@@ -199,10 +257,6 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // Find student ID from created list
-          const studentProfile = created.find(c => c.email === row.email);
-          if (!studentProfile) continue;
-
           const { data: studentData } = await admin
             .from('profiles')
             .select('id')
@@ -210,7 +264,7 @@ export async function POST(request: NextRequest) {
             .single();
 
           if (!studentData) {
-            buddyErrors.push({ email: row.email, error: 'Could not find created student record' });
+            buddyErrors.push({ email: row.email, error: 'Could not find student record' });
             continue;
           }
 
@@ -240,11 +294,14 @@ export async function POST(request: NextRequest) {
       buddyErrors,
     };
 
+    console.log('[BULK_IMPORT] Import complete:', result.summary);
     return NextResponse.json(result);
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error('[BULK_IMPORT] Error:', errorMsg, err);
     return NextResponse.json(
-      { error: `Import failed: ${String(err)}` },
-      { status: 400 }
+      { error: `Import failed: ${errorMsg}` },
+      { status: 500 }
     );
   }
 }
