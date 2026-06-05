@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendIcon } from '@/components/trend-icon';
+import { CATTestWidget } from './cat-test-widget';
 import { computeSummary, computeStreak, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import type { DailyReport } from '@/types';
@@ -48,6 +49,9 @@ export default async function StudentHomePage() {
           {firstName}
         </h1>
       </div>
+
+      {/* CAT Readiness Test Widget */}
+      <CATTestWidget userId={user.id} />
 
       {/* Today status */}
       <div className={cn('p-5 rounded-2xl border-2', submittedToday ? 'border-emerald-200 bg-emerald-50/40 bg-white' : 'border-orange-200 bg-orange-50/40 bg-white')}>
