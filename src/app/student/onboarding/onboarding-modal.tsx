@@ -48,23 +48,26 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           throw new Error('User ID not found');
         }
 
-        const { error } = await supabase
+        console.log('Updating onboarding_completed for user:', userId);
+
+        const { data: updateResult, error } = await supabase
           .from('profiles')
           .update({ onboarding_completed: true })
-          .eq('id', userId);
+          .eq('id', userId)
+          .select();
+
+        console.log('Update result:', updateResult, 'Error:', error);
 
         if (error) throw error;
 
-        // Wait a bit longer to ensure DB update propagates
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait 2 seconds to ensure DB update propagates
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Small delay for confetti animation to complete
-        setTimeout(() => {
-          onComplete();
-        }, 500);
+        console.log('Calling onComplete after DB update');
+        onComplete();
       } catch (err) {
         console.error('Onboarding error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to complete onboarding');
+        setError(err instanceof Error ? err.message : 'Failed to complete onboarding. Try closing and reopening.');
         setIsLoading(false);
       }
     }
@@ -110,19 +113,34 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
               {screens[currentScreen].title}
             </h2>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleCompleteWithoutUpdate();
-              }}
-              disabled={isLoading}
-              type="button"
-              className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCompleteWithoutUpdate();
+                }}
+                disabled={isLoading}
+                type="button"
+                className="text-xs px-2 py-1 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded transition disabled:opacity-50 cursor-pointer"
+                title="Skip onboarding"
+              >
+                Skip
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCompleteWithoutUpdate();
+                }}
+                disabled={isLoading}
+                type="button"
+                className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Progress Indicator */}
@@ -146,7 +164,17 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         <div className="flex-1 overflow-y-auto p-6">
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              {error}
+              <p>{error}</p>
+              <button
+                onClick={() => {
+                  console.log('Force skipping onboarding...');
+                  handleCompleteWithoutUpdate();
+                }}
+                type="button"
+                className="mt-2 text-xs underline hover:text-red-900 cursor-pointer"
+              >
+                Click here to skip
+              </button>
             </div>
           )}
 

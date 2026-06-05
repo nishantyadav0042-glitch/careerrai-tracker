@@ -16,16 +16,20 @@ export function useOnboarding() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
+          console.log('No user found');
           setIsLoading(false);
           return;
         }
 
-        // Add cache busting with timestamp to force fresh data
+        console.log('Checking onboarding status for user:', user.id);
+
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('onboarding_completed')
           .eq('id', user.id)
           .single();
+
+        console.log('Profile data:', profile, 'Error:', error);
 
         if (error) {
           console.error('Error fetching profile:', error);
@@ -33,6 +37,7 @@ export function useOnboarding() {
         } else {
           // Explicitly check for true value (not just truthy)
           const isCompleted = profile?.onboarding_completed === true;
+          console.log('Onboarding completed:', isCompleted, 'Value:', profile?.onboarding_completed);
           setNeedsOnboarding(!isCompleted);
         }
       } catch (error) {
