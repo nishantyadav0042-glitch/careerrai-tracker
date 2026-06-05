@@ -1,15 +1,42 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { useOnboarding } from '@/hooks/use-onboarding';
 import { OnboardingModal } from '../onboarding/onboarding-modal';
+import { QuickLogSheet } from './quick-log-sheet';
+import { StreakGuard } from './streak-guard';
 
 interface StudentHomeClientProps {
   children: ReactNode;
 }
 
 export function StudentHomeClient({ children }: StudentHomeClientProps) {
+  const supabase = createClient();
+  const searchParams = useSearchParams();
   const { isLoading, needsOnboarding } = useOnboarding();
+
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
+
+  useEffect(() => {
+    // Get user ID
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    }
+    getUser();
+  }, [supabase]);
+
+  useEffect(() => {
+    // Check if quick log should open
+    if (searchParams.get('openQuickLog') === 'true') {
+      setIsQuickLogOpen(true);
+      // Remove the query param
+      window.history.replaceState({}, '', '/student/home');
+    }
+  }, [searchParams]);
 
   if (isLoading) {
     return (
@@ -25,6 +52,21 @@ export function StudentHomeClient({ children }: StudentHomeClientProps) {
   return (
     <>
       {children}
+
+      {userId && (
+        <>
+          <QuickLogSheet
+            isOpen={isQuickLogOpen}
+            onClose={() => setIsQuickLogOpen(false)}
+            userId={userId}
+          />
+          <StreakGuard
+            userId={userId}
+            onLogClick={() => setIsQuickLogOpen(true)}
+          />
+        </>
+      )}
+
       {needsOnboarding && (
         <OnboardingModal
           onComplete={() => {
