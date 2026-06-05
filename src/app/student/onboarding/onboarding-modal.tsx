@@ -74,26 +74,39 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   };
 
   const handleCompleteWithoutUpdate = async () => {
-    // If somehow completing (e.g., X button), ensure DB is updated first
     if (!userId) {
       onComplete();
       return;
     }
 
     try {
+      console.log('Completing onboarding for user:', userId);
+
+      // Try to update database
       const { error } = await supabase
         .from('profiles')
         .update({ onboarding_completed: true })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('DB update failed:', error);
+      } else {
+        console.log('DB update successful');
+      }
+
+      // Set localStorage emergency bypass
+      localStorage.setItem(`onboarding_skip_${userId}`, 'true');
+      console.log('Set localStorage bypass for user:', userId);
 
       // Wait for update to propagate
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       onComplete();
     } catch (err) {
       console.error('Error completing onboarding:', err);
-      // Force complete even if update failed (user can retry)
+      // Set localStorage bypass even if DB failed
+      if (userId) {
+        localStorage.setItem(`onboarding_skip_${userId}`, 'true');
+      }
       onComplete();
     }
   };

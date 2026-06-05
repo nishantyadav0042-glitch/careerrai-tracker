@@ -23,6 +23,15 @@ export function useOnboarding() {
 
         console.log('Checking onboarding status for user:', user.id);
 
+        // First check localStorage for emergency bypass
+        const localBypass = localStorage.getItem(`onboarding_skip_${user.id}`);
+        if (localBypass === 'true') {
+          console.log('User skipped onboarding via emergency bypass');
+          setNeedsOnboarding(false);
+          setIsLoading(false);
+          return;
+        }
+
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('onboarding_completed')
@@ -33,7 +42,12 @@ export function useOnboarding() {
 
         if (error) {
           console.error('Error fetching profile:', error);
-          setNeedsOnboarding(true);
+          // If column doesn't exist, don't show onboarding
+          if (error.message.includes('no rows') || error.code === 'PGRST116') {
+            setNeedsOnboarding(false);
+          } else {
+            setNeedsOnboarding(true);
+          }
         } else {
           // Explicitly check for true value (not just truthy)
           const isCompleted = profile?.onboarding_completed === true;
@@ -42,8 +56,8 @@ export function useOnboarding() {
         }
       } catch (error) {
         console.error('Error checking onboarding:', error);
-        // Default to showing onboarding if we can't check
-        setNeedsOnboarding(true);
+        // Default to NOT showing onboarding if there's an error
+        setNeedsOnboarding(false);
       } finally {
         setIsLoading(false);
       }
