@@ -54,11 +54,11 @@ export default function TodayPage() {
     setSaving(true);
 
     try {
-      await supabase.from('daily_reports').insert({
+      const result = await supabase.from('daily_reports').insert({
         student_id: userId,
         report_date: today,
-        study_duration: studyDuration ? parseFloat(studyDuration) : null,
-        topics_covered: topicsCovered,
+        study_duration: studyDuration ? parseFloat(studyDuration) : 0,
+        topics_covered: topicsCovered || [],
         quality_focus: qualityFocus,
         difficulty: difficulty,
         mock_taken: mockTaken,
@@ -76,12 +76,20 @@ export default function TodayPage() {
         updated_at: new Date().toISOString(),
       });
 
+      if (result.error) {
+        console.error('Database error:', result.error);
+        setSaving(false);
+        alert('Failed to save report: ' + result.error.message);
+        return;
+      }
+
       setSaving(false);
       setSaved(true);
       setTimeout(() => router.push('/student/home'), 1500);
     } catch (error) {
       console.error('Error:', error);
       setSaving(false);
+      alert('Error submitting report: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
