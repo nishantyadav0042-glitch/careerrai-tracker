@@ -213,7 +213,7 @@ export default function TodayPage() {
         />
       </Section>
 
-      {/* PERFORMANCE SECTION - COMPLETELY REWRITTEN */}
+      {/* PERFORMANCE SECTION - FIXED */}
       <Section id="perf" icon={Target} title="Performance" subtitle="Mock tests & accuracy">
         <ToggleInput
           label="Did you take a mock test?"
@@ -221,70 +221,68 @@ export default function TodayPage() {
           onChange={setMockTaken}
         />
 
-        {mockTaken && (
-          <div className="space-y-4 pl-3 border-l-2 border-orange-300">
+        <div className={mockTaken ? "space-y-4 pl-3 border-l-2 border-orange-300" : "hidden"}>
+          <div>
+            <label className="block text-sm font-medium text-stone-800 mb-1.5">Test name</label>
+            <input
+              type="text"
+              value={mockName}
+              onChange={(e) => setMockName(e.target.value)}
+              placeholder="e.g. CAT Mock 21"
+              className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-stone-800 mb-1.5">Test name</label>
+              <label className="block text-sm font-medium text-stone-800 mb-1.5">Quant</label>
               <input
                 type="text"
-                value={mockName}
-                onChange={(e) => setMockName(e.target.value)}
-                placeholder="e.g. CAT Mock 21"
+                inputMode="numeric"
+                value={quantScore}
+                onChange={(e) => setQuantScore(e.target.value)}
+                placeholder="0"
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-stone-800 mb-1.5">Quant</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={quantScore}
-                  onChange={(e) => setQuantScore(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-800 mb-1.5">Verbal</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={verbalScore}
+                onChange={(e) => setVerbalScore(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-stone-800 mb-1.5">Verbal</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={verbalScore}
-                  onChange={(e) => setVerbalScore(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-800 mb-1.5">Logic Games</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={logicScore}
+                onChange={(e) => setLogicScore(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-stone-800 mb-1.5">Logic Games</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={logicScore}
-                  onChange={(e) => setLogicScore(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-stone-800 mb-1.5">Accuracy %</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={totalAccuracy}
-                  onChange={(e) => setTotalAccuracy(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-800 mb-1.5">Accuracy %</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={totalAccuracy}
+                onChange={(e) => setTotalAccuracy(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+              />
             </div>
           </div>
-        )}
+        </div>
       </Section>
 
       {/* MOOD SECTION */}
