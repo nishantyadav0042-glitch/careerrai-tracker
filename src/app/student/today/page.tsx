@@ -10,91 +10,139 @@ import { getTodayIST, formatDateLong, cn } from '@/lib/utils';
 
 const TOPICS = ['Quant', 'Verbal', 'Logic Games', 'Reading Comprehension', 'Mock Test', 'Revision'];
 
-const DEFAULT_STUDY = { duration: 4, topicsCovered: [] as string[], qualityFocus: 3, difficulty: 3 };
-const DEFAULT_PERF = { mockTaken: false, mockName: '', quantScore: 0, verbalScore: 0, logicScore: 0, totalAccuracy: 0 };
-const DEFAULT_MOOD = { confidence: 3, stress: 3, sleepQuality: 3, nutritionExercise: false, overallEnergy: 3, notes: '' };
-
 export default function TodayPage() {
   const router = useRouter();
   const supabase = createClient();
   const today = getTodayIST();
 
-  const [study, setStudy] = useState(DEFAULT_STUDY);
-  const [perf, setPerf] = useState(DEFAULT_PERF);
-  const [mood, setMood] = useState(DEFAULT_MOOD);
-  const [openSection, setOpenSection] = useState<'study' | 'perf' | 'mood'>('study');
+  // Simple state management
+  const [userId, setUserId] = useState<string>('');
+  const [existingId, setExistingId] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [existingId, setExistingId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<'study' | 'perf' | 'mood'>('study');
 
+  // Study Section
+  const [studyDuration, setStudyDuration] = useState('0');
+  const [topicsCovered, setTopicsCovered] = useState<string[]>([]);
+  const [qualityFocus, setQualityFocus] = useState(3);
+  const [difficulty, setDifficulty] = useState(3);
+
+  // Performance Section
+  const [mockTaken, setMockTaken] = useState(false);
+  const [mockName, setMockName] = useState('');
+  const [quantScore, setQuantScore] = useState('0');
+  const [verbalScore, setVerbalScore] = useState('0');
+  const [logicScore, setLogicScore] = useState('0');
+  const [totalAccuracy, setTotalAccuracy] = useState('0');
+
+  // Mood Section
+  const [confidence, setConfidence] = useState(3);
+  const [stress, setStress] = useState(3);
+  const [sleepQuality, setSleepQuality] = useState(3);
+  const [nutritionExercise, setNutritionExercise] = useState(false);
+  const [overallEnergy, setOverallEnergy] = useState(3);
+  const [notes, setNotes] = useState('');
+
+  // Load existing data on mount
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
+
       const { data } = await supabase
         .from('daily_reports')
         .select('*')
         .eq('student_id', user.id)
         .eq('report_date', today)
         .single();
+
       if (data) {
         setExistingId(data.id);
-        setStudy({ duration: data.study_duration, topicsCovered: data.topics_covered ?? [], qualityFocus: data.quality_focus, difficulty: data.difficulty });
-        setPerf({ mockTaken: data.mock_taken, mockName: data.mock_name ?? '', quantScore: data.quant_score ?? 0, verbalScore: data.verbal_score ?? 0, logicScore: data.logic_score ?? 0, totalAccuracy: data.total_accuracy ?? 0 });
-        setMood({ confidence: data.confidence, stress: data.stress, sleepQuality: data.sleep_quality, nutritionExercise: data.nutrition_exercise, overallEnergy: data.overall_energy, notes: data.notes ?? '' });
+        setStudyDuration(String(data.study_duration || 0));
+        setTopicsCovered(data.topics_covered || []);
+        setQualityFocus(data.quality_focus || 3);
+        setDifficulty(data.difficulty || 3);
+        setMockTaken(data.mock_taken || false);
+        setMockName(data.mock_name || '');
+        setQuantScore(String(data.quant_score || 0));
+        setVerbalScore(String(data.verbal_score || 0));
+        setLogicScore(String(data.logic_score || 0));
+        setTotalAccuracy(String(data.total_accuracy || 0));
+        setConfidence(data.confidence || 3);
+        setStress(data.stress || 3);
+        setSleepQuality(data.sleep_quality || 3);
+        setNutritionExercise(data.nutrition_exercise || false);
+        setOverallEnergy(data.overall_energy || 3);
+        setNotes(data.notes || '');
       }
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleTopic = (t: string) =>
-    setStudy((p) => ({ ...p, topicsCovered: p.topicsCovered.includes(t) ? p.topicsCovered.filter((x) => x !== t) : [...p.topicsCovered, t] }));
+  const toggleTopic = (topic: string) => {
+    setTopicsCovered(prev =>
+      prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
+    );
+  };
 
   async function handleSubmit() {
     if (!userId) return;
     setSaving(true);
+
     const payload = {
       student_id: userId,
       report_date: today,
-      study_duration: study.duration,
-      topics_covered: study.topicsCovered,
-      quality_focus: study.qualityFocus,
-      difficulty: study.difficulty,
-      mock_taken: perf.mockTaken,
-      mock_name: perf.mockTaken ? perf.mockName : null,
-      quant_score: perf.mockTaken ? perf.quantScore : null,
-      verbal_score: perf.mockTaken ? perf.verbalScore : null,
-      logic_score: perf.mockTaken ? perf.logicScore : null,
-      total_accuracy: perf.mockTaken ? perf.totalAccuracy : null,
-      confidence: mood.confidence,
-      stress: mood.stress,
-      sleep_quality: mood.sleepQuality,
-      nutrition_exercise: mood.nutritionExercise,
-      overall_energy: mood.overallEnergy,
-      notes: mood.notes || null,
+      study_duration: parseFloat(studyDuration) || 0,
+      topics_covered: topicsCovered,
+      quality_focus: qualityFocus,
+      difficulty: difficulty,
+      mock_taken: mockTaken,
+      mock_name: mockTaken ? mockName : null,
+      quant_score: mockTaken ? (parseFloat(quantScore) || null) : null,
+      verbal_score: mockTaken ? (parseFloat(verbalScore) || null) : null,
+      logic_score: mockTaken ? (parseFloat(logicScore) || null) : null,
+      total_accuracy: mockTaken ? (parseFloat(totalAccuracy) || null) : null,
+      confidence: confidence,
+      stress: stress,
+      sleep_quality: sleepQuality,
+      nutrition_exercise: nutritionExercise,
+      overall_energy: overallEnergy,
+      notes: notes || null,
       updated_at: new Date().toISOString(),
     };
 
-    if (existingId) {
-      await supabase.from('daily_reports').update(payload).eq('id', existingId);
-    } else {
-      await supabase.from('daily_reports').insert(payload);
-    }
+    try {
+      if (existingId) {
+        await supabase.from('daily_reports').update(payload).eq('id', existingId);
+      } else {
+        await supabase.from('daily_reports').insert(payload);
+      }
 
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => { setSaved(false); router.push('/student/home'); }, 1500);
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        router.push('/student/home');
+      }, 1500);
+    } catch (error) {
+      console.error('Error saving:', error);
+      setSaving(false);
+    }
   }
 
-  const Section = ({ id, icon: Icon, title, subtitle, children }: { id: typeof openSection; icon: React.ElementType; title: string; subtitle: string; children: React.ReactNode }) => {
+  const Section = ({ id, icon: Icon, title, subtitle, children }: any) => {
     const isOpen = openSection === id;
     const tileColor = id === 'study' ? 'bg-stone-900' : id === 'perf' ? 'bg-orange-600' : 'bg-teal-700';
     return (
       <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-        <button type="button" onClick={() => setOpenSection(id)} className="w-full flex items-center justify-between p-4 hover:bg-stone-50 transition-colors">
+        <button
+          type="button"
+          onClick={() => setOpenSection(id)}
+          className="w-full flex items-center justify-between p-4 hover:bg-stone-50 transition-colors"
+        >
           <div className="flex items-center gap-3">
             <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', tileColor)}>
               <Icon className="w-5 h-5 text-white" />
@@ -121,110 +169,176 @@ export default function TodayPage() {
         <p className="text-sm text-stone-600 mt-1">{formatDateLong(today)}</p>
       </div>
 
+      {/* STUDY SECTION */}
       <Section id="study" icon={BookOpen} title="Study Log" subtitle="What you worked on">
         <div>
-          <label className="block text-sm font-medium text-stone-800 mb-1.5">Study duration (hours)</label>
+          <label className="block text-sm font-medium text-stone-800 mb-2">Study duration (hours)</label>
           <input
             type="text"
             inputMode="decimal"
-            value={study.duration === 0 ? '' : String(study.duration || '')}
-            onChange={(e) => {
-              const rawValue = e.target.value;
-              if (rawValue === '') {
-                setStudy((p) => ({ ...p, duration: 0 }));
-              } else if (/^(\d+\.?\d*|\.\d+)$/.test(rawValue)) {
-                const num = parseFloat(rawValue);
-                if (num >= 0 && num <= 24) {
-                  setStudy((p) => ({ ...p, duration: num }));
-                }
-              }
-            }}
-            className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-            autoComplete="off"
+            value={studyDuration}
+            onChange={(e) => setStudyDuration(e.target.value)}
             placeholder="0"
+            className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
           />
         </div>
+
         <div>
           <label className="block text-sm font-medium text-stone-800 mb-2">Topics covered</label>
           <div className="flex flex-wrap gap-2">
             {TOPICS.map((t) => (
-              <TopicChip key={t} label={t} active={study.topicsCovered.includes(t)} onClick={() => toggleTopic(t)} />
+              <TopicChip
+                key={t}
+                label={t}
+                active={topicsCovered.includes(t)}
+                onClick={() => toggleTopic(t)}
+              />
             ))}
           </div>
         </div>
-        <SliderInput label="Quality of focus" value={study.qualityFocus} onChange={(v) => setStudy((p) => ({ ...p, qualityFocus: v }))} leftLabel="Distracted" rightLabel="Locked in" />
-        <SliderInput label="Difficulty of material" value={study.difficulty} onChange={(v) => setStudy((p) => ({ ...p, difficulty: v }))} leftLabel="Easy" rightLabel="Brutal" />
+
+        <SliderInput
+          label="Quality of focus"
+          value={qualityFocus}
+          onChange={setQualityFocus}
+          leftLabel="Distracted"
+          rightLabel="Locked in"
+        />
+        <SliderInput
+          label="Difficulty of material"
+          value={difficulty}
+          onChange={setDifficulty}
+          leftLabel="Easy"
+          rightLabel="Brutal"
+        />
       </Section>
 
+      {/* PERFORMANCE SECTION - COMPLETELY REWRITTEN */}
       <Section id="perf" icon={Target} title="Performance" subtitle="Mock tests & accuracy">
-        <ToggleInput label="Did you take a mock test?" value={perf.mockTaken} onChange={(v) => setPerf((p) => ({ ...p, mockTaken: v }))} />
-        {perf.mockTaken && (
+        <ToggleInput
+          label="Did you take a mock test?"
+          value={mockTaken}
+          onChange={setMockTaken}
+        />
+
+        {mockTaken && (
           <div className="space-y-4 pl-3 border-l-2 border-orange-300">
             <div>
               <label className="block text-sm font-medium text-stone-800 mb-1.5">Test name</label>
               <input
                 type="text"
-                value={perf.mockName || ''}
-                onChange={(e) => {
-                  setPerf((p) => ({ ...p, mockName: e.target.value }));
-                }}
-                onKeyDown={(e) => {
-                  // Prevent any key blocking
-                  e.currentTarget.style.display = 'inline-block';
-                }}
+                value={mockName}
+                onChange={(e) => setMockName(e.target.value)}
                 placeholder="e.g. CAT Mock 21"
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-                autoComplete="off"
-                spellCheck="false"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
-              {(['quant', 'verbal', 'logic', 'accuracy'] as const).map((field) => {
-                const keyMap = { quant: 'quantScore', verbal: 'verbalScore', logic: 'logicScore', accuracy: 'totalAccuracy' } as const;
-                const labelMap = { quant: 'Quant', verbal: 'Verbal', logic: 'Logic Games', accuracy: 'Accuracy %' };
-                const k = keyMap[field];
-                const displayValue = perf[k] === 0 ? '' : String(perf[k] || '');
-                return (
-                  <div key={field}>
-                    <label className="block text-sm font-medium text-stone-800 mb-1.5">{labelMap[field]}</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={displayValue}
-                      onChange={(e) => {
-                        const rawValue = e.target.value;
-                        // Convert to number, allow empty string or valid numbers
-                        if (rawValue === '') {
-                          setPerf((p) => ({ ...p, [k]: 0 }));
-                        } else if (/^\d+$/.test(rawValue)) {
-                          setPerf((p) => ({ ...p, [k]: parseInt(rawValue, 10) }));
-                        }
-                      }}
-                      className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
-                      autoComplete="off"
-                      placeholder="0"
-                    />
-                  </div>
-                );
-              })}
+              <div>
+                <label className="block text-sm font-medium text-stone-800 mb-1.5">Quant</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={quantScore}
+                  onChange={(e) => setQuantScore(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-stone-800 mb-1.5">Verbal</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={verbalScore}
+                  onChange={(e) => setVerbalScore(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-stone-800 mb-1.5">Logic Games</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={logicScore}
+                  onChange={(e) => setLogicScore(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-stone-800 mb-1.5">Accuracy %</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={totalAccuracy}
+                  onChange={(e) => setTotalAccuracy(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                />
+              </div>
             </div>
           </div>
         )}
       </Section>
 
+      {/* MOOD SECTION */}
       <Section id="mood" icon={Heart} title="Mood & Energy" subtitle="How you're holding up">
-        <SliderInput label="Confidence" value={mood.confidence} onChange={(v) => setMood((p) => ({ ...p, confidence: v }))} leftLabel="Shaky" rightLabel="Solid" color="teal" />
-        <SliderInput label="Stress" value={mood.stress} onChange={(v) => setMood((p) => ({ ...p, stress: v }))} leftLabel="Calm" rightLabel="Frazzled" color="rose" />
-        <SliderInput label="Sleep quality" value={mood.sleepQuality} onChange={(v) => setMood((p) => ({ ...p, sleepQuality: v }))} leftLabel="Poor" rightLabel="Great" color="teal" />
-        <ToggleInput label="Ate well + moved your body?" value={mood.nutritionExercise} onChange={(v) => setMood((p) => ({ ...p, nutritionExercise: v }))} />
-        <SliderInput label="Overall energy" value={mood.overallEnergy} onChange={(v) => setMood((p) => ({ ...p, overallEnergy: v }))} leftLabel="Drained" rightLabel="Charged" color="orange" />
+        <SliderInput
+          label="Confidence"
+          value={confidence}
+          onChange={setConfidence}
+          leftLabel="Shaky"
+          rightLabel="Solid"
+          color="teal"
+        />
+        <SliderInput
+          label="Stress"
+          value={stress}
+          onChange={setStress}
+          leftLabel="Calm"
+          rightLabel="Frazzled"
+          color="rose"
+        />
+        <SliderInput
+          label="Sleep quality"
+          value={sleepQuality}
+          onChange={setSleepQuality}
+          leftLabel="Poor"
+          rightLabel="Great"
+          color="teal"
+        />
+        <ToggleInput
+          label="Ate well + moved your body?"
+          value={nutritionExercise}
+          onChange={setNutritionExercise}
+        />
+        <SliderInput
+          label="Overall energy"
+          value={overallEnergy}
+          onChange={setOverallEnergy}
+          leftLabel="Drained"
+          rightLabel="Charged"
+          color="orange"
+        />
         <div>
           <label className="block text-sm font-medium text-stone-800 mb-1.5">Notes (optional)</label>
-          <textarea value={mood.notes} onChange={(e) => setMood((p) => ({ ...p, notes: e.target.value }))} placeholder="What's on your mind?" rows={3} className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 resize-none" />
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="What's on your mind?"
+            rows={3}
+            className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 resize-none"
+          />
         </div>
       </Section>
 
-      {/* Sticky submit */}
+      {/* Sticky submit button */}
       <div className="fixed bottom-20 left-0 right-0 px-4 z-30 max-w-2xl mx-auto">
         <button
           type="button"
@@ -232,7 +346,19 @@ export default function TodayPage() {
           disabled={saving || saved}
           className="w-full flex items-center justify-center gap-2 py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-xl shadow-lg shadow-orange-600/20 transition-all active:scale-[0.98] disabled:opacity-50"
         >
-          {saved ? <><CheckCircle2 className="w-4 h-4" />Saved!</> : saving ? 'Saving…' : <><Send className="w-4 h-4" />{existingId ? "Update today's report" : "Submit today's report"}</>}
+          {saved ? (
+            <>
+              <CheckCircle2 className="w-4 h-4" />
+              Saved!
+            </>
+          ) : saving ? (
+            'Saving…'
+          ) : (
+            <>
+              <Send className="w-4 h-4" />
+              {existingId ? "Update today's report" : "Submit today's report"}
+            </>
+          )}
         </button>
       </div>
     </div>
