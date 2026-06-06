@@ -280,8 +280,8 @@ export default function TodayPage() {
         </div>
       </div>
 
-      {/* SUBMIT BUTTON */}
-      <div style={{ position: 'fixed', bottom: '20px', left: '20px', right: '20px', maxWidth: '560px', margin: '0 auto' }}>
+      {/* SUBMIT BUTTON - positioned above bottom nav */}
+      <div style={{ position: 'fixed', bottom: '100px', left: '20px', right: '20px', maxWidth: '560px', margin: '0 auto' }}>
         <button
           onClick={handleSubmit}
           disabled={saving || saved}
