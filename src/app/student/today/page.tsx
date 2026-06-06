@@ -125,28 +125,17 @@ export default function TodayPage() {
         <div>
           <label className="block text-sm font-medium text-stone-800 mb-1.5">Study duration (hours)</label>
           <input
-            type="text"
-            inputMode="decimal"
-            pattern="[0-9.]*"
-            value={study.duration}
+            type="number"
+            min="0"
+            max="24"
+            step="0.5"
+            value={study.duration || 0}
             onChange={(e) => {
-              const val = e.target.value;
-              // Allow numeric input with single decimal point
-              if (val === '' || /^(\d+\.?\d*|\.\d+)$/.test(val)) {
-                const num = val === '' ? 0 : parseFloat(val);
-                if (num >= 0 && num <= 24) {
-                  setStudy((p) => ({ ...p, duration: num }));
-                }
-              }
-            }}
-            onBlur={(e) => {
-              // Ensure valid number on blur
-              const val = e.target.value;
-              if (val === '' || isNaN(parseFloat(val))) {
-                setStudy((p) => ({ ...p, duration: 0 }));
-              }
+              const num = parseFloat(e.target.value);
+              setStudy((p) => ({ ...p, duration: isNaN(num) ? 0 : num }));
             }}
             className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+            autoComplete="off"
           />
         </div>
         <div>
@@ -167,7 +156,16 @@ export default function TodayPage() {
           <div className="space-y-4 pl-3 border-l-2 border-orange-300">
             <div>
               <label className="block text-sm font-medium text-stone-800 mb-1.5">Test name</label>
-              <input type="text" value={perf.mockName} onChange={(e) => setPerf((p) => ({ ...p, mockName: e.target.value }))} placeholder="e.g. CAT Mock 21" className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900" />
+              <input
+                type="text"
+                value={perf.mockName || ''}
+                onChange={(e) => {
+                  setPerf((p) => ({ ...p, mockName: e.target.value }));
+                }}
+                placeholder="e.g. CAT Mock 21"
+                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                autoComplete="off"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               {(['quant', 'verbal', 'logic', 'accuracy'] as const).map((field) => {
@@ -178,25 +176,16 @@ export default function TodayPage() {
                   <div key={field}>
                     <label className="block text-sm font-medium text-stone-800 mb-1.5">{labelMap[field]}</label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={perf[k] || ''}
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={perf[k] || 0}
                       onChange={(e) => {
-                        const val = e.target.value;
-                        // Allow only numeric input
-                        if (val === '' || /^\d+$/.test(val)) {
-                          setPerf((p) => ({ ...p, [k]: val === '' ? 0 : parseInt(val, 10) }));
-                        }
-                      }}
-                      onBlur={(e) => {
-                        // Ensure a valid number on blur
-                        const val = e.target.value;
-                        if (val === '' || isNaN(parseInt(val, 10))) {
-                          setPerf((p) => ({ ...p, [k]: 0 }));
-                        }
+                        const num = parseInt(e.target.value, 10);
+                        setPerf((p) => ({ ...p, [k]: isNaN(num) ? 0 : num }));
                       }}
                       className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                      autoComplete="off"
                     />
                   </div>
                 );
