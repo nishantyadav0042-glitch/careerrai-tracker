@@ -125,12 +125,27 @@ export default function TodayPage() {
         <div>
           <label className="block text-sm font-medium text-stone-800 mb-1.5">Study duration (hours)</label>
           <input
-            type="number"
-            min={0}
-            max={24}
-            step={0.5}
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9.]*"
             value={study.duration}
-            onChange={(e) => setStudy((p) => ({ ...p, duration: Number(e.target.value) }))}
+            onChange={(e) => {
+              const val = e.target.value;
+              // Allow numeric input with single decimal point
+              if (val === '' || /^(\d+\.?\d*|\.\d+)$/.test(val)) {
+                const num = val === '' ? 0 : parseFloat(val);
+                if (num >= 0 && num <= 24) {
+                  setStudy((p) => ({ ...p, duration: num }));
+                }
+              }
+            }}
+            onBlur={(e) => {
+              // Ensure valid number on blur
+              const val = e.target.value;
+              if (val === '' || isNaN(parseFloat(val))) {
+                setStudy((p) => ({ ...p, duration: 0 }));
+              }
+            }}
             className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
           />
         </div>
@@ -162,7 +177,27 @@ export default function TodayPage() {
                 return (
                   <div key={field}>
                     <label className="block text-sm font-medium text-stone-800 mb-1.5">{labelMap[field]}</label>
-                    <input type="number" value={perf[k]} onChange={(e) => setPerf((p) => ({ ...p, [k]: Number(e.target.value) }))} className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={perf[k] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // Allow only numeric input
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setPerf((p) => ({ ...p, [k]: val === '' ? 0 : parseInt(val, 10) }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Ensure a valid number on blur
+                        const val = e.target.value;
+                        if (val === '' || isNaN(parseInt(val, 10))) {
+                          setPerf((p) => ({ ...p, [k]: 0 }));
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
+                    />
                   </div>
                 );
               })}
