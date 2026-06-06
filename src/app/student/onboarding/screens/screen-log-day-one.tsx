@@ -87,7 +87,7 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
         stress = 1;
       }
 
-      // Create daily report
+      // Create daily report with all fields to match database schema
       const { error: reportError } = await supabase.from('daily_reports').insert({
         student_id: userId,
         report_date: todayString,
@@ -96,10 +96,24 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
         confidence,
         stress,
         quality_focus: 3, // Default middle value
-        mock_taken: false
+        difficulty: 3, // Default middle value
+        mock_taken: false,
+        mock_name: null,
+        quant_score: null,
+        verbal_score: null,
+        logic_score: null,
+        total_accuracy: null,
+        sleep_quality: 3, // Default middle value
+        nutrition_exercise: false,
+        overall_energy: 3, // Default middle value
+        notes: null,
+        updated_at: new Date().toISOString()
       });
 
-      if (reportError) throw reportError;
+      if (reportError) {
+        console.error('Daily report insert error:', reportError);
+        throw reportError;
+      }
 
       // Update streak
       await updateStreakAfterLog(userId);
