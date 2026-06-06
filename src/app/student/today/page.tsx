@@ -125,17 +125,23 @@ export default function TodayPage() {
         <div>
           <label className="block text-sm font-medium text-stone-800 mb-1.5">Study duration (hours)</label>
           <input
-            type="number"
-            min="0"
-            max="24"
-            step="0.5"
-            value={study.duration || 0}
+            type="text"
+            inputMode="decimal"
+            value={study.duration === 0 ? '' : String(study.duration || '')}
             onChange={(e) => {
-              const num = parseFloat(e.target.value);
-              setStudy((p) => ({ ...p, duration: isNaN(num) ? 0 : num }));
+              const rawValue = e.target.value;
+              if (rawValue === '') {
+                setStudy((p) => ({ ...p, duration: 0 }));
+              } else if (/^(\d+\.?\d*|\.\d+)$/.test(rawValue)) {
+                const num = parseFloat(rawValue);
+                if (num >= 0 && num <= 24) {
+                  setStudy((p) => ({ ...p, duration: num }));
+                }
+              }
             }}
             className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
             autoComplete="off"
+            placeholder="0"
           />
         </div>
         <div>
@@ -162,9 +168,14 @@ export default function TodayPage() {
                 onChange={(e) => {
                   setPerf((p) => ({ ...p, mockName: e.target.value }));
                 }}
+                onKeyDown={(e) => {
+                  // Prevent any key blocking
+                  e.currentTarget.style.display = 'inline-block';
+                }}
                 placeholder="e.g. CAT Mock 21"
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
                 autoComplete="off"
+                spellCheck="false"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -172,20 +183,26 @@ export default function TodayPage() {
                 const keyMap = { quant: 'quantScore', verbal: 'verbalScore', logic: 'logicScore', accuracy: 'totalAccuracy' } as const;
                 const labelMap = { quant: 'Quant', verbal: 'Verbal', logic: 'Logic Games', accuracy: 'Accuracy %' };
                 const k = keyMap[field];
+                const displayValue = perf[k] === 0 ? '' : String(perf[k] || '');
                 return (
                   <div key={field}>
                     <label className="block text-sm font-medium text-stone-800 mb-1.5">{labelMap[field]}</label>
                     <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={perf[k] || 0}
+                      type="text"
+                      inputMode="numeric"
+                      value={displayValue}
                       onChange={(e) => {
-                        const num = parseInt(e.target.value, 10);
-                        setPerf((p) => ({ ...p, [k]: isNaN(num) ? 0 : num }));
+                        const rawValue = e.target.value;
+                        // Convert to number, allow empty string or valid numbers
+                        if (rawValue === '') {
+                          setPerf((p) => ({ ...p, [k]: 0 }));
+                        } else if (/^\d+$/.test(rawValue)) {
+                          setPerf((p) => ({ ...p, [k]: parseInt(rawValue, 10) }));
+                        }
                       }}
                       className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900"
                       autoComplete="off"
+                      placeholder="0"
                     />
                   </div>
                 );
