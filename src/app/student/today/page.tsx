@@ -58,68 +58,52 @@ export default function TodayPage() {
   };
 
   const handleSubmit = async () => {
-    console.log('=== FORM SUBMISSION START ===');
-    console.log('userId:', userId);
-    console.log('today:', today);
-
     if (!userId) {
-      console.error('CRITICAL: No userId found!');
-      alert('ERROR: Not authenticated. Please refresh and try again.');
+      alert('Error: Not authenticated');
       return;
     }
 
     setSaving(true);
 
     try {
-      const payload = {
-        student_id: userId,
-        report_date: today,
-        study_duration: studyDuration ? parseFloat(studyDuration) : 0,
-        topics_covered: topicsCovered || [],
-        quality_focus: qualityFocus,
-        difficulty: difficulty,
-        mock_taken: mockTaken,
-        mock_name: mockTaken && mockName ? mockName : null,
-        quant_score: mockTaken && quantScore ? parseFloat(quantScore) : null,
-        verbal_score: mockTaken && verbalScore ? parseFloat(verbalScore) : null,
-        logic_score: mockTaken && logicScore ? parseFloat(logicScore) : null,
-        total_accuracy: mockTaken && totalAccuracy ? parseFloat(totalAccuracy) : null,
-        confidence: confidence,
-        stress: stress,
-        sleep_quality: sleepQuality,
-        nutrition_exercise: nutritionExercise,
-        overall_energy: overallEnergy,
-        notes: notes || null,
-      };
-
-      console.log('Payload:', JSON.stringify(payload, null, 2));
-
-      // Use upsert to handle duplicate dates (update if exists, insert if new)
-      const { data, error } = await supabase.from('daily_reports').upsert([payload], {
-        onConflict: 'student_id,report_date'
-      }).select();
-
-      console.log('Response data:', data);
-      console.log('Response error:', error);
+      // Simple upsert: update if exists, insert if new
+      const { error } = await supabase.from('daily_reports').upsert(
+        {
+          student_id: userId,
+          report_date: today,
+          study_duration: studyDuration ? parseFloat(studyDuration) : 0,
+          topics_covered: topicsCovered || [],
+          quality_focus: qualityFocus,
+          difficulty: difficulty,
+          mock_taken: mockTaken,
+          mock_name: mockTaken && mockName ? mockName : null,
+          quant_score: mockTaken && quantScore ? parseFloat(quantScore) : null,
+          verbal_score: mockTaken && verbalScore ? parseFloat(verbalScore) : null,
+          logic_score: mockTaken && logicScore ? parseFloat(logicScore) : null,
+          total_accuracy: mockTaken && totalAccuracy ? parseFloat(totalAccuracy) : null,
+          confidence: confidence,
+          stress: stress,
+          sleep_quality: sleepQuality,
+          nutrition_exercise: nutritionExercise,
+          overall_energy: overallEnergy,
+          notes: notes || null,
+        },
+        { onConflict: 'student_id,report_date' }
+      );
 
       if (error) {
-        console.error('❌ Database error:', error.message, error.code, error.details);
         setSaving(false);
-        const errorMsg = error.details || error.message || 'Unknown database error';
-        alert('Failed to save report:\n\n' + errorMsg + '\n\nCode: ' + error.code);
+        alert('Error saving report:\n\n' + error.message);
         return;
       }
 
-      console.log('✅ Insert successful, data:', data);
-      setSaving(false);
       setSaved(true);
-      console.log('Redirecting to home in 1.5 seconds...');
-      setTimeout(() => router.push('/student/home'), 1500);
-    } catch (error) {
-      console.error('❌ EXCEPTION:', error);
+      setTimeout(() => {
+        router.push('/student/home');
+      }, 1500);
+    } catch (err) {
       setSaving(false);
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      alert('Exception submitting report:\n\n' + message);
+      alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
