@@ -94,29 +94,51 @@ export default function VoiceTestPage() {
       });
     }
 
-    // Test 3: Check storage bucket
+    // Test 3: Check storage bucket by attempting a test upload
     try {
-      // Try to access the bucket directly (works with anon key if bucket is public)
-      const { data: buckets, error: checkError } = await supabase.storage
-        .from('voice-notes')
-        .list('', { limit: 1 });
+      // Create a test blob
+      const testBlob = new Blob(['test'], { type: 'audio/webm' });
+      const testFileName = `diagnostic-test-${Date.now()}.webm`;
 
-      if (checkError && checkError.statusCode === 404) {
-        testResults.push({
-          name: '✗ Storage Bucket',
-          status: 'fail',
-          message: 'voice-notes bucket not found',
-          details: 'Create a public bucket named "voice-notes" in Supabase Storage',
-        });
-      } else if (checkError) {
-        // Could be a permission error or other issue
-        testResults.push({
-          name: '⚠ Storage Bucket',
-          status: 'warning',
-          message: 'Unable to verify bucket (may still exist and be accessible)',
-          details: checkError.message,
-        });
+      // Try to upload a test file
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('voice-notes')
+        .upload(testFileName, testBlob, { upsert: true });
+
+      if (uploadError) {
+        // Check error type
+        if (uploadError.statusCode === 404) {
+          testResults.push({
+            name: '✗ Storage Bucket',
+            status: 'fail',
+            message: 'voice-notes bucket not found',
+            details: 'Create a public bucket named "voice-notes" in Supabase Storage',
+          });
+        } else if (uploadError.message?.includes('permission')) {
+          testResults.push({
+            name: '⚠ Storage Bucket',
+            status: 'warning',
+            message: 'Bucket exists but permission denied',
+            details: uploadError.message,
+          });
+        } else {
+          testResults.push({
+            name: '✗ Storage Bucket',
+            status: 'fail',
+            message: uploadError.message || 'Unknown error',
+            details: `Status: ${uploadError.statusCode}`,
+          });
+        }
       } else {
+        // Upload successful - clean up test file
+        try {
+          await supabase.storage
+            .from('voice-notes')
+            .remove([testFileName]);
+        } catch {
+          // Cleanup error is not critical
+        }
+
         testResults.push({
           name: '✓ Storage Bucket',
           status: 'pass',
