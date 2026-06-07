@@ -49,6 +49,12 @@ export default function TodayPage() {
     );
   };
 
+  const parseValue = (value: string): number | null => {
+    if (!value || value.trim() === '') return null;
+    const num = parseFloat(value);
+    return isNaN(num) ? null : num;
+  };
+
   const handleSubmit = async () => {
     if (!userId) {
       setError('Not authenticated');
@@ -62,16 +68,16 @@ export default function TodayPage() {
       const { error: insertError } = await supabase.from('daily_reports').upsert({
         student_id: userId,
         report_date: today,
-        study_duration: studyDuration ? parseFloat(studyDuration) : 0,
+        study_duration: parseValue(studyDuration) ?? 0, // Ensure never null
         topics_covered: topicsCovered,
         quality_focus: qualityFocus,
         difficulty: difficulty,
         mock_taken: mockTaken,
         mock_name: mockTaken && mockName ? mockName : null,
-        quant_score: mockTaken && quantScore ? parseFloat(quantScore) : null,
-        verbal_score: mockTaken && verbalScore ? parseFloat(verbalScore) : null,
-        logic_score: mockTaken && logicScore ? parseFloat(logicScore) : null,
-        total_accuracy: mockTaken && totalAccuracy ? parseFloat(totalAccuracy) : null,
+        quant_score: mockTaken ? parseValue(quantScore) : null,
+        verbal_score: mockTaken ? parseValue(verbalScore) : null,
+        logic_score: mockTaken ? parseValue(logicScore) : null,
+        total_accuracy: mockTaken ? parseValue(totalAccuracy) : null,
         confidence,
         stress,
         sleep_quality: sleepQuality,
@@ -96,8 +102,8 @@ export default function TodayPage() {
       <h1>How was today?</h1>
       <p>{formatDateLong(today)}</p>
 
-      {error && <div style={{ color: 'red', padding: '10px', marginBottom: '20px' }}>{error}</div>}
-      {saved && <div style={{ color: 'green', padding: '10px', marginBottom: '20px' }}>✓ Saved!</div>}
+      {error && <div style={{ color: 'red', padding: '10px', marginBottom: '20px', backgroundColor: '#ffe0e0', borderRadius: '4px' }}>{error}</div>}
+      {saved && <div style={{ color: 'green', padding: '10px', marginBottom: '20px', backgroundColor: '#e0ffe0', borderRadius: '4px' }}>✓ Saved!</div>}
 
       {/* STUDY LOG */}
       <div style={{ marginBottom: '30px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}>
@@ -106,11 +112,11 @@ export default function TodayPage() {
         <div style={{ marginBottom: '15px' }}>
           <label>Study duration (hours)</label>
           <input
-            type="number"
+            type="text"
             value={studyDuration}
             onChange={(e) => setStudyDuration(e.target.value)}
             placeholder="0"
-            style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', fontSize: '16px' }}
           />
         </div>
 
@@ -128,6 +134,7 @@ export default function TodayPage() {
                   border: '1px solid #ccc',
                   borderRadius: '4px',
                   cursor: 'pointer',
+                  fontSize: '14px',
                 }}
               >
                 {t}
@@ -170,8 +177,9 @@ export default function TodayPage() {
             type="checkbox"
             checked={mockTaken}
             onChange={(e) => setMockTaken(e.target.checked)}
+            style={{ cursor: 'pointer' }}
           />
-          <label>Did you take a mock test?</label>
+          <label style={{ cursor: 'pointer' }}>Did you take a mock test?</label>
         </div>
 
         {mockTaken && (
@@ -183,7 +191,7 @@ export default function TodayPage() {
                 value={mockName}
                 onChange={(e) => setMockName(e.target.value)}
                 placeholder="e.g., CAT Mock 21"
-                style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', fontSize: '16px' }}
               />
             </div>
 
@@ -191,41 +199,41 @@ export default function TodayPage() {
               <div>
                 <label>Quant</label>
                 <input
-                  type="number"
+                  type="text"
                   value={quantScore}
                   onChange={(e) => setQuantScore(e.target.value)}
-                  placeholder="0"
-                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box' }}
+                  placeholder="0-100"
+                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', fontSize: '16px' }}
                 />
               </div>
               <div>
                 <label>Verbal</label>
                 <input
-                  type="number"
+                  type="text"
                   value={verbalScore}
                   onChange={(e) => setVerbalScore(e.target.value)}
-                  placeholder="0"
-                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box' }}
+                  placeholder="0-100"
+                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', fontSize: '16px' }}
                 />
               </div>
               <div>
                 <label>Logic Games</label>
                 <input
-                  type="number"
+                  type="text"
                   value={logicScore}
                   onChange={(e) => setLogicScore(e.target.value)}
-                  placeholder="0"
-                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box' }}
+                  placeholder="0-100"
+                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', fontSize: '16px' }}
                 />
               </div>
               <div>
                 <label>Accuracy %</label>
                 <input
-                  type="number"
+                  type="text"
                   value={totalAccuracy}
                   onChange={(e) => setTotalAccuracy(e.target.value)}
-                  placeholder="0"
-                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box' }}
+                  placeholder="0-100"
+                  style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', fontSize: '16px' }}
                 />
               </div>
             </div>
@@ -278,8 +286,9 @@ export default function TodayPage() {
             type="checkbox"
             checked={nutritionExercise}
             onChange={(e) => setNutritionExercise(e.target.checked)}
+            style={{ cursor: 'pointer' }}
           />
-          <label>Ate well + moved body?</label>
+          <label style={{ cursor: 'pointer' }}>Ate well + moved body?</label>
         </div>
 
         <div style={{ marginBottom: '15px' }}>
@@ -300,7 +309,7 @@ export default function TodayPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="What's on your mind?"
-            style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', minHeight: '80px' }}
+            style={{ width: '100%', padding: '10px', marginTop: '5px', boxSizing: 'border-box', minHeight: '80px', fontSize: '16px' }}
           />
         </div>
       </div>
