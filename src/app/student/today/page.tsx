@@ -94,7 +94,10 @@ export default function TodayPage() {
 
       console.log('Payload:', JSON.stringify(payload, null, 2));
 
-      const { data, error } = await supabase.from('daily_reports').insert([payload]).select();
+      // Use upsert to handle duplicate dates (update if exists, insert if new)
+      const { data, error } = await supabase.from('daily_reports').upsert([payload], {
+        onConflict: 'student_id,report_date'
+      }).select();
 
       console.log('Response data:', data);
       console.log('Response error:', error);
