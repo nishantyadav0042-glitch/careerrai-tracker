@@ -73,7 +73,6 @@ export default function TodayPage() {
         nutrition_exercise: nutritionExercise,
         overall_energy: overallEnergy,
         notes: notes || null,
-        updated_at: new Date().toISOString(),
       });
 
       if (result.error) {
