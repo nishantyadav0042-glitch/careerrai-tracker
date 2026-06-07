@@ -1,0 +1,148 @@
+🎙️ AUDIO AUTO-CLEANUP - QUICK SETUP (3 MINUTES)
+==============================================================
+
+STATUS: System ready, just need to enable it!
+
+CHOOSE ONE OPTION BELOW:
+
+==============================================================
+OPTION 1: VERCEL CRON (EASIEST) ⭐ RECOMMENDED
+==============================================================
+
+1. Open: vercel.json
+2. Find or add "crons" section:
+
+   {
+     "crons": [{
+       "path": "/api/admin/cleanup-voice-notes",
+       "schedule": "0 2 * * *"
+     }]
+   }
+
+3. Save file
+4. Push to GitHub (git add, git commit, git push)
+5. ✅ DONE! Vercel handles the rest
+
+Cleanup runs every day at 2 AM UTC automatically.
+
+==============================================================
+OPTION 2: GITHUB ACTIONS (FREE & RELIABLE)
+==============================================================
+
+1. Create folder: .github/workflows/
+
+2. Create file: .github/workflows/cleanup-voice-notes.yml
+
+3. Copy-paste this:
+
+   name: Daily Voice Notes Cleanup
+   on:
+     schedule:
+       - cron: '0 2 * * *'
+     workflow_dispatch:
+
+   jobs:
+     cleanup:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v3
+         - uses: actions/setup-node@v3
+           with:
+             node-version: '18'
+         - run: npm install @supabase/supabase-js
+         - env:
+             NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+             SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+           run: node scripts/cleanup-voice-notes.js
+
+4. Go to GitHub → Settings → Secrets and variables → Actions
+5. Add two secrets:
+   - Name: SUPABASE_URL
+     Value: https://pobhpszlsozeonejtzqy.supabase.co
+
+   - Name: SUPABASE_SERVICE_ROLE_KEY
+     Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvYmhwc3psc296ZW9uZWp0enF5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTg4MzE0MywiZXhwIjoyMDk1NDU5MTQzfQ.yYu29XedkJeUnyA5WGCE2cIjmS5hrbIVQK7LbTa4Zxg
+
+6. Push to GitHub
+7. ✅ DONE! GitHub Actions runs cleanup daily at 2 AM UTC
+
+==============================================================
+OPTION 3: MANUAL SCRIPT (ANY ENVIRONMENT)
+==============================================================
+
+Run anytime:
+
+   NEXT_PUBLIC_SUPABASE_URL=https://pobhpszlsozeonejtzqy.supabase.co \
+   SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvYmhwc3psc296ZW9uZWp0enF5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTg4MzE0MywiZXhwIjoyMDk1NDU5MTQzfQ.yYu29XedkJeUnyA5WGCE2cIjmS5hrbIVQK7LbTa4Zxg \
+   node scripts/cleanup-voice-notes.js
+
+Schedule with cron (Linux/Mac):
+
+   crontab -e
+   # Add: 0 2 * * * cd /path/to/careerrai && node scripts/cleanup-voice-notes.js
+
+Schedule with Task Scheduler (Windows):
+
+   1. Open Task Scheduler
+   2. Create Basic Task
+   3. Name: "Voice Cleanup"
+   4. Trigger: Daily at 2 AM
+   5. Action: Run node.exe
+      Arguments: C:\path\to\scripts\cleanup-voice-notes.js
+   6. Set env vars before running
+
+==============================================================
+WHAT THIS DOES
+==============================================================
+
+Every day at 2 AM UTC:
+  ✅ Finds audio files older than 10 days
+  ✅ Deletes them from storage (voice-notes bucket)
+  ✅ Removes records from database
+  ✅ Frees up storage space
+  ✅ Logs results for monitoring
+
+Example:
+  Before: 15 GB of audio files
+  After:  5 GB (old files deleted)
+  Saved:  10 GB = $0.60/month savings
+
+==============================================================
+TEST MANUALLY FIRST
+==============================================================
+
+Before enabling auto-cleanup, test it once:
+
+1. Check storage stats:
+
+   curl https://careerrai-daily.vercel.app/api/admin/cleanup-voice-notes \
+     -H "Authorization: Bearer {admin_token}"
+
+2. Trigger cleanup manually:
+
+   curl -X POST https://careerrai-daily.vercel.app/api/admin/cleanup-voice-notes \
+     -H "Authorization: Bearer {admin_token}"
+
+3. Verify results in Supabase Storage bucket
+
+4. Once satisfied, enable scheduled cleanup with one option above
+
+==============================================================
+THAT'S IT!
+==============================================================
+
+You now have automatic audio cleanup running!
+
+✅ Storage will stay lean
+✅ Costs will decrease
+✅ Performance will improve
+✅ No manual work needed
+
+Audio files will automatically delete after 10 days.
+This is safe - users get 10 days to save/listen to messages.
+
+Questions? See: AUDIO_CLEANUP_SETUP.md
+
+==============================================================
+ENABLE CLEANUP NOW! ⬆️
+==============================================================
