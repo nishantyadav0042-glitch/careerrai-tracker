@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     icon: '/careerrai-monogram.png',
     apple: '/careerrai-monogram.png',
   },
+  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {
