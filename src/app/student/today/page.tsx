@@ -36,12 +36,20 @@ export default function TodayPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        console.log('Auth user:', user?.id);
+        if (!user) {
+          console.error('No authenticated user found');
+          return;
+        }
+        setUserId(user.id);
+      } catch (err) {
+        console.error('Error getting user:', err);
+      }
     }
     load();
-  }, []);
+  }, [supabase]);
 
   const toggleTopic = (topic: string) => {
     setTopicsCovered(prev =>
@@ -50,11 +58,20 @@ export default function TodayPage() {
   };
 
   const handleSubmit = async () => {
-    if (!userId) return;
+    console.log('=== FORM SUBMISSION START ===');
+    console.log('userId:', userId);
+    console.log('today:', today);
+
+    if (!userId) {
+      console.error('CRITICAL: No userId found!');
+      alert('ERROR: Not authenticated. Please refresh and try again.');
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const result = await supabase.from('daily_reports').insert({
+      const payload = {
         student_id: userId,
         report_date: today,
         study_duration: studyDuration ? parseFloat(studyDuration) : 0,
@@ -73,22 +90,33 @@ export default function TodayPage() {
         nutrition_exercise: nutritionExercise,
         overall_energy: overallEnergy,
         notes: notes || null,
-      });
+      };
 
-      if (result.error) {
-        console.error('Database error:', result.error);
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+
+      const { data, error } = await supabase.from('daily_reports').insert([payload]).select();
+
+      console.log('Response data:', data);
+      console.log('Response error:', error);
+
+      if (error) {
+        console.error('❌ Database error:', error.message, error.code, error.details);
         setSaving(false);
-        alert('Failed to save report: ' + result.error.message);
+        const errorMsg = error.details || error.message || 'Unknown database error';
+        alert('Failed to save report:\n\n' + errorMsg + '\n\nCode: ' + error.code);
         return;
       }
 
+      console.log('✅ Insert successful, data:', data);
       setSaving(false);
       setSaved(true);
+      console.log('Redirecting to home in 1.5 seconds...');
       setTimeout(() => router.push('/student/home'), 1500);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('❌ EXCEPTION:', error);
       setSaving(false);
-      alert('Error submitting report: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert('Exception submitting report:\n\n' + message);
     }
   };
 
