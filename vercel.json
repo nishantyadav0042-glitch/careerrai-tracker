@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/check-red-flags",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/admin/cleanup-voice-notes",
+      "schedule": "0 2 * * *"
     }
   ]
 }
