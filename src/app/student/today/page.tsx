@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
+import { updateStreakAfterLog } from '@/lib/streak-utils';
 
 const TOPICS = ['Quant', 'Verbal', 'Logic Games', 'Reading Comprehension', 'Mock Test', 'Revision'];
 
@@ -177,6 +178,17 @@ export default function TodayPage() {
       }
 
       addLog('Success! Report saved', data[0]);
+
+      // Update streak after successful submission
+      try {
+        addLog('Updating streak...');
+        const streakResult = await updateStreakAfterLog(userId);
+        addLog('Streak updated', streakResult);
+      } catch (streakError) {
+        addLog('Warning: Failed to update streak', streakError instanceof Error ? streakError.message : 'Unknown error');
+        // Don't fail the whole submission if streak update fails
+      }
+
       setSaving(false);
       setSaved(true);
       setError('');
