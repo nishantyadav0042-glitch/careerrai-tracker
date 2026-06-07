@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { BuddyTriageView } from './buddy-triage-view';
+import { StudentVoiceNotesSection } from './student-voice-notes-section';
 import { Settings, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
@@ -67,6 +68,11 @@ export default async function BuddyHomePage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Student Voice Notes - Priority Action */}
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 mb-8 border-2 border-orange-200">
+          <StudentVoiceNotesSection buddyId={user.id} />
+        </div>
+
         {/* Introduction */}
         <div className="bg-white rounded-xl p-6 mb-8 border border-stone-200">
           <h2 className="text-lg font-semibold text-stone-900 mb-2">

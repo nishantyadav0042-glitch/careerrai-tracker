@@ -10,6 +10,8 @@ import { StreakHero } from './streak-hero';
 import { BuddySignalCard } from './buddy-signal-card';
 import { CATContextCard } from './cat-context-card';
 import { HeatmapCard } from './heatmap-card';
+import { BuddyFeedbackCard } from './buddy-feedback-card';
+import { StudentVoiceNotesCard } from './student-voice-notes-card';
 import { computeSummary, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import type { DailyReport } from '@/types';
@@ -23,7 +25,7 @@ export default async function StudentHomePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name')
+    .select('full_name, buddy_id')
     .eq('id', user.id)
     .single();
 
@@ -55,7 +57,17 @@ export default async function StudentHomePage() {
       </div>
 
       {/* PHASE 3: NEW HOME PAGE REDESIGN */}
-      {/* 1. STREAK HERO - Primary retention driver */}
+      {/* 1. BUDDY FEEDBACK - PRIORITY ACTION ITEM */}
+      <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-5 border-2 border-teal-200">
+        <BuddyFeedbackCard studentId={user.id} buddyId={profile?.buddy_id || ''} buddyName="Your Buddy" />
+      </div>
+
+      {/* 2. STUDENT VOICE NOTES - ACTION ITEM */}
+      <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-5 border-2 border-orange-200">
+        <StudentVoiceNotesCard studentId={user.id} buddyId={profile?.buddy_id || ''} />
+      </div>
+
+      {/* 3. STREAK HERO - Primary retention driver */}
       <StreakHero userId={user.id} />
 
       {/* 2. BUDDY SIGNAL - Shows relationship is real */}
