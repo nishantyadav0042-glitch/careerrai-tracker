@@ -146,13 +146,18 @@ export function VoiceNoteRecorder({
         .getPublicUrl(data.path);
 
       // Create feedback record with voice note URL
+      const today = new Date().toISOString().split('T')[0];
       const { error: feedbackError } = await supabase
-        .from('feedback')
+        .from('buddy_feedback')
         .insert({
           student_id: studentId,
           buddy_id: buddyId,
           voice_note_url: publicData.publicUrl,
-          feedback_type: 'voice_note'
+          feedback_type: 'voice_note',
+          feedback_date: today,
+          feedback_text: 'Voice message',
+          rating: 3,
+          period_covered: 'adhoc'
         });
 
       if (feedbackError) throw feedbackError;
