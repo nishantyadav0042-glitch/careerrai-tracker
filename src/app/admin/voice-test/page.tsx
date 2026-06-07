@@ -96,33 +96,31 @@ export default function VoiceTestPage() {
 
     // Test 3: Check storage bucket
     try {
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+      // Try to access the bucket directly (works with anon key if bucket is public)
+      const { data: buckets, error: checkError } = await supabase.storage
+        .from('voice-notes')
+        .list('', { limit: 1 });
 
-      if (bucketsError) throw bucketsError;
-
-      const voiceNotesBucket = buckets?.find((b) => b.name === 'voice-notes');
-
-      if (voiceNotesBucket) {
-        testResults.push({
-          name: '✓ Storage Bucket',
-          status: 'pass',
-          message: `voice-notes bucket exists (Public: ${voiceNotesBucket.public})`,
-        });
-
-        if (!voiceNotesBucket.public) {
-          testResults.push({
-            name: '⚠ Storage Bucket Public Access',
-            status: 'warning',
-            message: 'Bucket is NOT public - uploads may fail',
-            details: 'Set bucket visibility to PUBLIC in Supabase Storage settings',
-          });
-        }
-      } else {
+      if (checkError && checkError.statusCode === 404) {
         testResults.push({
           name: '✗ Storage Bucket',
           status: 'fail',
           message: 'voice-notes bucket not found',
           details: 'Create a public bucket named "voice-notes" in Supabase Storage',
+        });
+      } else if (checkError) {
+        // Could be a permission error or other issue
+        testResults.push({
+          name: '⚠ Storage Bucket',
+          status: 'warning',
+          message: 'Unable to verify bucket (may still exist and be accessible)',
+          details: checkError.message,
+        });
+      } else {
+        testResults.push({
+          name: '✓ Storage Bucket',
+          status: 'pass',
+          message: 'voice-notes bucket exists and is accessible',
         });
       }
     } catch (err) {
