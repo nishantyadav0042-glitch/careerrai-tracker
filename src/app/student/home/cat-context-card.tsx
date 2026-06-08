@@ -5,7 +5,7 @@ import { Calendar, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // CAT exam date (hardcoded)
-const CAT_EXAM_DATE = new Date(2026, 10, 23); // Nov 23, 2026
+const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29, 2026
 
 interface CATContextCardProps {
   className?: string;

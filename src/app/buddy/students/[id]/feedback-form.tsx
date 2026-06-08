@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Send, Star } from 'lucide-react';
+import { Send, Star, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 import type { BuddyFeedback } from '@/types';
 
 const NEXT_STEP_OPTIONS = [
@@ -117,7 +118,34 @@ export function FeedbackForm({
 }
 
 export function FeedbackList({ initial, studentId, studentFirstName }: { initial: BuddyFeedback[]; studentId: string; studentFirstName: string }) {
+  const supabase = createClient();
   const [feedbackList, setFeedbackList] = useState(initial);
+  const [studentResponses, setStudentResponses] = useState<BuddyFeedback[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch student responses to buddy feedback
+    const fetchResponses = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('buddy_feedback')
+          .select('*')
+          .eq('student_id', studentId)
+          .eq('feedback_type', 'student_response')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setStudentResponses(data as BuddyFeedback[]);
+        }
+      } catch (err) {
+        console.error('Error fetching student responses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResponses();
+  }, [studentId, supabase]);
 
   function onSuccess(fb: BuddyFeedback) {
     setFeedbackList((prev) => [fb, ...prev]);
@@ -125,9 +153,37 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
 
   return (
     <>
+      {/* Student Responses Section */}
+      {studentResponses.length > 0 && (
+        <div>
+          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">📝 {studentFirstName}'s responses</h2>
+          <div className="space-y-2 mb-4">
+            {studentResponses.map((resp) => (
+              <Card key={resp.id} className="p-4 bg-blue-50 border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-stone-600">Responded {new Date(resp.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                </div>
+                {/* Audio Player */}
+                {resp.voice_note_url && (
+                  <audio
+                    controls
+                    className="w-full mb-2 h-8"
+                    src={resp.voice_note_url}
+                  />
+                )}
+                {resp.feedback_text && (
+                  <p className="text-sm text-stone-800">{resp.feedback_text}</p>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Buddy Feedback Section */}
       {feedbackList.length > 0 && (
         <div>
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Previous feedback</h2>
+          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Your feedback</h2>
           <div className="space-y-2">
             {feedbackList.map((f) => (
               <Card key={f.id} className="p-4">
@@ -139,7 +195,20 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
                     ))}
                   </div>
                 </div>
-                <p className="text-sm text-stone-800">{f.feedback_text}</p>
+
+                {/* Display Voice Note if present */}
+                {f.voice_note_url && (
+                  <audio
+                    controls
+                    className="w-full mb-2 h-8"
+                    src={f.voice_note_url}
+                  />
+                )}
+
+                {f.feedback_text && (
+                  <p className="text-sm text-stone-800">{f.feedback_text}</p>
+                )}
+
                 {f.next_steps?.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {f.next_steps.map((s) => (
