@@ -53,7 +53,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
         `)
         .eq('student_id', studentId)
         .eq('buddy_id', buddyId)
-        .eq('feedback_type', 'buddy_feedback')
+        .in('feedback_type', ['buddy_feedback', 'text'])
         .neq('buddy_id', studentId)
         .order('created_at', { ascending: false })
         .limit(3);

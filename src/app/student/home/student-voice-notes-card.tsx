@@ -29,9 +29,30 @@ export function StudentVoiceNotesCard({ studentId, buddyId, onRecordNew }: Stude
 
   const fetchVoiceNotes = async () => {
     try {
-      // For now, we'll create a placeholder until voice notes table is created
-      // In production, fetch from a voice_notes table
-      setVoiceNotes([]);
+      // Fetch student's voice responses from buddy_feedback table
+      const { data, error } = await supabase
+        .from('buddy_feedback')
+        .select(`
+          id,
+          voice_note_url,
+          feedback_text,
+          created_at
+        `)
+        .eq('student_id', studentId)
+        .eq('feedback_type', 'student_response')
+        .not('voice_note_url', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const voiceNotes = data?.map((note) => ({
+        id: note.id,
+        voice_note_url: note.voice_note_url,
+        transcript: note.feedback_text,
+        created_at: note.created_at,
+      })) || [];
+
+      setVoiceNotes(voiceNotes);
     } catch (error) {
       console.error('Error fetching voice notes:', error);
     } finally {
@@ -81,6 +102,17 @@ export function StudentVoiceNotesCard({ studentId, buddyId, onRecordNew }: Stude
             {note.transcript && (
               <p className="text-sm text-stone-800 mb-3">{note.transcript}</p>
             )}
+
+            {/* Audio Player */}
+            {note.voice_note_url && (
+              <audio
+                key={`audio-${note.id}`}
+                controls
+                className="w-full mb-3 h-8"
+                src={note.voice_note_url}
+              />
+            )}
+
             <button
               onClick={() => setPlayingId(playingId === note.id ? null : note.id)}
               className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium text-sm"
