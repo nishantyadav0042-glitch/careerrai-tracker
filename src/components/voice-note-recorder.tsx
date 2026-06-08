@@ -12,6 +12,7 @@ interface VoiceNoteRecorderProps {
   onSendComplete?: () => void;
   isOpen: boolean;
   onClose: () => void;
+  feedbackType?: 'buddy_feedback' | 'student_response';
 }
 
 const MAX_DURATION = 90; // seconds
@@ -22,7 +23,8 @@ export function VoiceNoteRecorder({
   studentName,
   onSendComplete,
   isOpen,
-  onClose
+  onClose,
+  feedbackType = 'buddy_feedback'
 }: VoiceNoteRecorderProps) {
   const supabase = createClient();
   const [isRecording, setIsRecording] = useState(false);
@@ -153,7 +155,7 @@ export function VoiceNoteRecorder({
           student_id: studentId,
           buddy_id: buddyId,
           voice_note_url: publicData.publicUrl,
-          feedback_type: 'voice_note',
+          feedback_type: feedbackType,
           feedback_date: today,
           feedback_text: 'Voice message',
           rating: 3,

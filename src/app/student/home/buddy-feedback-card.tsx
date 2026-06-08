@@ -34,6 +34,13 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
 
   const fetchFeedbacks = async () => {
     try {
+      // Don't fetch if buddy is not set or is the student themselves
+      if (!buddyId || buddyId === studentId) {
+        setFeedbacks([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('buddy_feedback')
         .select(`
@@ -45,6 +52,9 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
           profiles!buddy_feedback_buddy_id_fkey(full_name, college)
         `)
         .eq('student_id', studentId)
+        .eq('buddy_id', buddyId)
+        .eq('feedback_type', 'buddy_feedback')
+        .neq('buddy_id', studentId)
         .order('created_at', { ascending: false })
         .limit(3);
 
@@ -161,6 +171,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
             setShowRecorder(false);
             fetchFeedbacks();
           }}
+          feedbackType="student_response"
         />
       )}
     </div>
