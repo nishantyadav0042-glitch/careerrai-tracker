@@ -107,7 +107,7 @@ export default function VoiceTestPage() {
 
       if (uploadError) {
         // Check error type
-        if (uploadError.statusCode === 404) {
+        if ((uploadError as any).statusCode === 404) {
           testResults.push({
             name: '✗ Storage Bucket',
             status: 'fail',
@@ -126,7 +126,7 @@ export default function VoiceTestPage() {
             name: '✗ Storage Bucket',
             status: 'fail',
             message: uploadError.message || 'Unknown error',
-            details: `Status: ${uploadError.statusCode}`,
+            details: `Status: ${(uploadError as any).statusCode}`,
           });
         }
       } else {

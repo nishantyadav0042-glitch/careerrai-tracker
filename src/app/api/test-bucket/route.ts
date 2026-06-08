@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     if (!bucketError) {
       bucketStatus = 'PASS';
-    } else if (bucketError.statusCode === 404) {
+    } else if ((bucketError as any).statusCode === 404) {
       bucketStatus = 'FAIL - Not Found';
     } else if (bucketError.message.includes('permission')) {
       bucketStatus = 'FAIL - Permission Denied';

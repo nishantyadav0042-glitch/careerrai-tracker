@@ -27,41 +27,14 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    if (createError && createError.statusCode !== 409) {
+    if (createError && (createError as any).statusCode !== 409) {
       // 409 means bucket already exists, which is fine
       throw new Error(`Failed to create bucket: ${createError.message}`);
     }
 
     console.log('✅ Bucket created or already exists');
 
-    // Step 2: Create storage policies (these might already exist)
-    console.log('Creating storage policies...');
-
-    // Policy 1: Allow authenticated users to upload
-    try {
-      await supabase.storage.createPolicy('voice-notes', {
-        definition: "((bucket_id = 'voice-notes'::text) AND (auth.role() = 'authenticated'::text))",
-        operation: 'INSERT',
-        name: 'Allow authenticated upload',
-      } as any);
-      console.log('✅ Upload policy created');
-    } catch (err) {
-      console.log('⚠️ Upload policy (may already exist)');
-    }
-
-    // Policy 2: Allow public read
-    try {
-      await supabase.storage.createPolicy('voice-notes', {
-        definition: "((bucket_id = 'voice-notes'::text))",
-        operation: 'SELECT',
-        name: 'Allow public reads',
-      } as any);
-      console.log('✅ Read policy created');
-    } catch (err) {
-      console.log('⚠️ Read policy (may already exist)');
-    }
-
-    // Step 3: Verify bucket is accessible
+    // Step 2: Verify bucket is accessible
     console.log('Verifying bucket access...');
     const { data: testUpload, error: testError } = await supabase.storage
       .from('voice-notes')

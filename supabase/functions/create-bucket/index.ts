@@ -15,7 +15,7 @@ serve(async (req) => {
       allowedMimeTypes: ["audio/webm", "audio/mpeg", "audio/wav", "audio/ogg"],
     })
 
-    if (error && error.statusCode !== 409) {
+    if (error && (error as any).statusCode !== 409) {
       throw error
     }
 
