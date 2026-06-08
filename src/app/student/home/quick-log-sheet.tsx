@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { X, Check } from 'lucide-react';
 import { updateStreakAfterLog, checkAndCreateMilestones } from '@/lib/streak-utils';
 import { cn } from '@/lib/utils';
+import { ALL_TOPICS, MAIN_CATEGORIES, TOPIC_EMOJIS } from '@/lib/topics-constants';
 
 interface QuickLogSheetProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ const HOURS_OPTIONS = [
   { label: '4+ hrs', value: 4 }
 ];
 
-const TOPICS = ['Quant', 'VARC', 'LRDI', 'Mock', 'Revision'];
+const TOPICS = MAIN_CATEGORIES;
 
 const FEELING_OPTIONS = [
   { emoji: '🙏', label: 'Tough', confidence: 2, stress: 4 },

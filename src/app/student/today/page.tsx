@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import { updateStreakAfterLog } from '@/lib/streak-utils';
+import { ALL_TOPICS, TOPIC_CATEGORIES, TOPIC_EMOJIS } from '@/lib/topics-constants';
 
-const TOPICS = ['Quant', 'Verbal', 'Logic Games', 'Reading Comprehension', 'Mock Test', 'Revision'];
+const TOPICS = ALL_TOPICS;
 
 interface DebugLog {
   timestamp: string;

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Flame, Sparkles } from 'lucide-react';
 import { updateStreakAfterLog, checkAndCreateMilestones } from '@/lib/streak-utils';
 import { cn } from '@/lib/utils';
+import { MAIN_CATEGORIES, TOPIC_EMOJIS } from '@/lib/topics-constants';
 
 interface ScreenLogDayOneProps {
   onNext: (data?: any) => Promise<void>;
@@ -13,7 +14,7 @@ interface ScreenLogDayOneProps {
   isLoading: boolean;
 }
 
-const TOPICS = ['Quant', 'VARC', 'LRDI', 'Mock', 'Revision'];
+const TOPICS = MAIN_CATEGORIES;
 const FEELING_OPTIONS = [
   { emoji: '🙏', label: 'Tough', value: 1 },
   { emoji: '💪', label: 'Solid', value: 2 },
