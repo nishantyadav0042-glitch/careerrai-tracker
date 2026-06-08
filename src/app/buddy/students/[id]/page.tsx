@@ -53,10 +53,12 @@ export default async function BuddyStudentDetailPage({
 
   const reports = (reportsRaw ?? []) as DailyReport[];
 
+  // Fetch buddy's feedback to student (not student responses)
   const { data: feedbackRaw } = await admin
     .from('buddy_feedback')
     .select('*')
     .eq('student_id', id)
+    .eq('feedback_type', 'buddy_feedback')
     .order('feedback_date', { ascending: false });
 
   const feedback = (feedbackRaw ?? []) as BuddyFeedback[];
