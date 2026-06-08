@@ -41,6 +41,7 @@ export function BuddyStudentViewClient({
           setIsRecorderOpen(false);
           // Could refresh feedback list here if needed
         }}
+        feedbackType="buddy_feedback"
       />
     </>
   );
