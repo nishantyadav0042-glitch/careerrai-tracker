@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CareerRai Audio Fix</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .status { padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .loading { background: #e3f2fd; color: #1976d2; }
+        .success { background: #e8f5e9; color: #388e3c; }
+        .error { background: #ffebee; color: #c62828; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>CareerRai Audio Fix</h1>
+    <div id="status" class="status loading">Initializing...</div>
+    <button onclick="executeFix()">Execute Fix Now</button>
+    <div id="results"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://posebhpszlsozeonejtzqy.supabase.co';
+        const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvYmhwc3psc296ZW9uZWp0enF5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTg4MzE0MywiZXhwIjoyMDk1NDU5MTQzfQ.yYu29XedkJeUnyA5WGCE2cIjmS5hrbIVQK7LbTa4Zxg';
+
+        function updateStatus(message, type = 'loading') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        function addResult(message) {
+            const results = document.getElementById('results');
+            results.innerHTML += `<p>${message}</p>`;
+        }
+
+        async function executeFix() {
+            try {
+                updateStatus('Starting audio fix cleanup...', 'loading');
+                document.querySelector('button').disabled = true;
+
+                // Step 1: Fetch all records
+                addResult('[*] Step 1: Fetching all buddy_feedback records...');
+                const getResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/buddy_feedback?select=id,student_id,buddy_id,feedback_type`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+                            'apikey': SERVICE_ROLE_KEY,
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                );
+
+                if (!getResponse.ok) {
+                    throw new Error(`Failed to fetch records: ${getResponse.status}`);
+                }
+
+                const records = await getResponse.json();
+                addResult(`[+] Found ${records.length} total records`);
+
+                // Step 2: Identify problematic records
+                const selfIds = records
+                    .filter(r => r.student_id === r.buddy_id)
+                    .map(r => r.id);
+
+                const invalidIds = records
+                    .filter(r => !r.feedback_type || !['buddy_feedback', 'student_response', 'text'].includes(r.feedback_type))
+                    .map(r => r.id);
+
+                addResult(`[*] Found ${selfIds.length} self-feedback records`);
+                addResult(`[*] Found ${invalidIds.length} invalid feedback_type records`);
+
+                let totalDeleted = 0;
+
+                // Step 3: Delete self-feedback
+                if (selfIds.length > 0) {
+                    addResult(`[*] Deleting ${selfIds.length} self-feedback records...`);
+                    const deleteResponse = await fetch(
+                        `${SUPABASE_URL}/rest/v1/buddy_feedback?id=in.(${selfIds.join(',')})`,
+                        {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+                                'apikey': SERVICE_ROLE_KEY,
+                                'Content-Type': 'application/json',
+                            },
+                        }
+                    );
+
+                    if (deleteResponse.ok) {
+                        totalDeleted += selfIds.length;
+                        addResult(`[+] Deleted ${selfIds.length} self-feedback records`);
+                    }
+                }
+
+                // Step 4: Delete invalid feedback_type
+                if (invalidIds.length > 0) {
+                    addResult(`[*] Deleting ${invalidIds.length} invalid records...`);
+                    const deleteResponse = await fetch(
+                        `${SUPABASE_URL}/rest/v1/buddy_feedback?id=in.(${invalidIds.join(',')})`,
+                        {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+                                'apikey': SERVICE_ROLE_KEY,
+                                'Content-Type': 'application/json',
+                            },
+                        }
+                    );
+
+                    if (deleteResponse.ok) {
+                        totalDeleted += invalidIds.length;
+                        addResult(`[+] Deleted ${invalidIds.length} invalid records`);
+                    }
+                }
+
+                // Step 5: Verify
+                addResult(`[*] Verifying cleanup...`);
+                const verifyResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/buddy_feedback?select=id,feedback_type`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+                            'apikey': SERVICE_ROLE_KEY,
+                            'Content-Type': 'application/json',
+                        },
+                    }
+                );
+
+                const finalRecords = await verifyResponse.json();
+
+                addResult(`<strong>CLEANUP COMPLETE!</strong>`);
+                addResult(`Before: ${records.length} records`);
+                addResult(`Deleted: ${totalDeleted} records`);
+                addResult(`After: ${finalRecords.length} records`);
+
+                updateStatus(`SUCCESS! Fixed audio attribution. Deleted ${totalDeleted} records.`, 'success');
+                addResult(`<strong>Next Step:</strong> Go to https://careerrai-daily.vercel.app and press Ctrl+Shift+R to refresh, then test both recording directions.`);
+
+            } catch (error) {
+                updateStatus(`ERROR: ${error.message}`, 'error');
+                addResult(`[!] ${error.message}`);
+                document.querySelector('button').disabled = false;
+            }
+        }
+
+        // Show initial message
+        updateStatus('Ready to execute audio fix. Click "Execute Fix Now" button.', 'loading');
+    </script>
+</body>
+</html>
