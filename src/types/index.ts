@@ -101,3 +101,24 @@ export interface AnalyticsSummary {
   band: 'On track' | 'Needs nudging' | 'Needs intervention';
   redFlags: string[];
 }
+
+export interface VideoSession {
+  id: string;
+  student_id: string;
+  buddy_id: string;
+  gmeet_link: string | null;
+  session_status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  session_type: 'session' | 'review' | 'doubt_solving' | 'mock_review';
+  duration_minutes: number;
+  scheduled_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  last_session_date: string | null;
+  days_since_last_session: number | null;
+  student_notified: boolean;
+  buddy_notified: boolean;
+  reminder_sent: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

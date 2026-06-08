@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { MoodChart } from './student-charts';
 import { FeedbackList } from './feedback-form';
 import { BuddyStudentViewClient } from './buddy-student-view-client';
+import { VideoSessionPromptClient } from './video-session-prompt-client';
 import type { DailyReport, BuddyFeedback } from '@/types';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -62,6 +63,19 @@ export default async function BuddyStudentDetailPage({
     .order('feedback_date', { ascending: false });
 
   const feedback = (feedbackRaw ?? []) as BuddyFeedback[];
+
+  // Fetch last video session for this student-buddy pair
+  const { data: lastVideoSession } = await admin
+    .from('video_sessions')
+    .select('ended_at')
+    .eq('student_id', id)
+    .eq('buddy_id', user.id)
+    .eq('session_status', 'completed')
+    .order('ended_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  const lastSessionDate = lastVideoSession?.ended_at ? new Date(lastVideoSession.ended_at) : null;
 
   const summary = computeSummary(reports, period);
 
@@ -204,6 +218,15 @@ export default async function BuddyStudentDetailPage({
           ))}
         </div>
       </div>
+
+      {/* Video Session Prompt - suggests video call if 10+ days since last session */}
+      <VideoSessionPromptClient
+        studentId={id}
+        studentName={student.full_name}
+        buddyId={user.id}
+        buddyName={user.user_metadata?.full_name || 'Buddy'}
+        lastSessionDate={lastSessionDate}
+      />
 
       {/* Feedback list + form (client component - manages optimistic updates) */}
       <FeedbackList initial={feedback} studentId={id} studentFirstName={firstName} />

@@ -187,7 +187,19 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
           <div className="space-y-2">
             {feedbackList.map((f) => (
               <Card key={f.id} className="p-4">
-                <div className="flex items-center justify-between mb-1">
+                {/* Audio Player on TOP */}
+                {f.voice_note_url && (
+                  <div className="mb-3">
+                    <audio
+                      controls
+                      className="w-full h-8"
+                      src={f.voice_note_url}
+                    />
+                  </div>
+                )}
+
+                {/* Date and Rating */}
+                <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-stone-600">{new Date(f.feedback_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((s) => (
@@ -196,21 +208,14 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
                   </div>
                 </div>
 
-                {/* Display Voice Note if present */}
-                {f.voice_note_url && (
-                  <audio
-                    controls
-                    className="w-full mb-2 h-8"
-                    src={f.voice_note_url}
-                  />
-                )}
-
+                {/* Feedback Text */}
                 {f.feedback_text && (
-                  <p className="text-sm text-stone-800">{f.feedback_text}</p>
+                  <p className="text-sm text-stone-800 mb-2">{f.feedback_text}</p>
                 )}
 
+                {/* Next Steps */}
                 {f.next_steps?.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1">
                     {f.next_steps.map((s) => (
                       <span key={s} className="text-[10px] px-2 py-0.5 bg-stone-100 rounded-full text-stone-600">{s}</span>
                     ))}
