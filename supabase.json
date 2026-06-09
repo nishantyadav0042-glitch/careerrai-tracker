@@ -1,0 +1,12 @@
+{
+  "project_id": "pobhpszlsozeonejtzqy",
+  "api": {
+    "port": 54321,
+    "schemas": ["public"],
+    "max_rows": 1000
+  },
+  "db": {
+    "port": 54322,
+    "major_version": 15
+  }
+}

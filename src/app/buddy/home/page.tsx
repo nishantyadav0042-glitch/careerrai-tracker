@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { BuddyTriageView } from './buddy-triage-view';
 import { StudentVoiceNotesSection } from './student-voice-notes-section';
+import { BuddyStudentResponses } from '@/components/buddy-student-responses';
+import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
+import { BuddyVideoSessionsDashboard } from '@/components/buddy-video-sessions-dashboard';
 import { Settings, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
@@ -68,6 +71,21 @@ export default async function BuddyHomePage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Student Voice Responses - ON TOP */}
+        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 mb-6 border-2 border-blue-200">
+          <BuddyStudentResponses buddyId={user.id} />
+        </div>
+
+        {/* Quick Voice Message - SEND FEEDBACK */}
+        <div className="bg-white rounded-xl p-6 mb-6 border border-orange-200">
+          <BuddyQuickVoiceMessage buddyId={user.id} buddyName={profile?.full_name || 'Buddy'} />
+        </div>
+
+        {/* Video Sessions */}
+        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-6 mb-6 border-2 border-teal-200">
+          <BuddyVideoSessionsDashboard buddyId={user.id} buddyName={profile?.full_name || 'Buddy'} />
+        </div>
+
         {/* Student Voice Notes - Priority Action */}
         <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 mb-8 border-2 border-orange-200">
           <StudentVoiceNotesSection buddyId={user.id} />
