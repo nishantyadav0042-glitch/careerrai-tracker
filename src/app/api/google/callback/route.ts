@@ -71,6 +71,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Set up automated reminders in the background
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/google/setup-reminders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // The setup-reminders endpoint will get the user from the auth context
+        },
+      });
+    } catch (remindersError) {
+      console.error('Warning: Failed to set up reminders:', remindersError);
+      // Don't fail the OAuth flow if reminders setup fails
+    }
+
     // Redirect back to settings with success
     return NextResponse.redirect(
       `${state || process.env.NEXT_PUBLIC_APP_URL}/settings?google_connected=true`
