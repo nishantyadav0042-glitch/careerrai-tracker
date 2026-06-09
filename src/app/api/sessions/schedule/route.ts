@@ -68,7 +68,10 @@ export async function POST(request: NextRequest) {
         duration_minutes: Math.round(
           (new Date(body.endTime).getTime() - new Date(body.startTime).getTime()) / 60000
         ),
+        session_status: 'scheduled',
+        session_type: 'session',
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
