@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
     // Generate Google Meet link
     const gmeet_link = generateGoogleMeetLink();
 
-    // Get last session date
-    const { data: lastSession } = await admin
+    // Get last session date (may not exist)
+    const { data: lastSession, error: lastSessionError } = await admin
       .from('video_sessions')
       .select('ended_at')
       .eq('student_id', student_id)
@@ -78,9 +78,9 @@ export async function POST(request: NextRequest) {
       .eq('session_status', 'completed')
       .order('ended_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    const days_since_last = lastSession
+    const days_since_last = lastSession && lastSession.ended_at
       ? daysSinceLastSession(new Date(lastSession.ended_at))
       : 0;
 
@@ -101,20 +101,32 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase insert error:', error);
+      throw new Error(`Failed to insert session: ${error.message}`);
+    }
 
-    // Log to history
-    await admin.from('video_session_history').insert({
-      session_id: data.id,
-      event_type: 'created',
-      event_data: { notes: 'Session created' },
-    });
+    if (!data) {
+      throw new Error('No data returned from insert');
+    }
+
+    // Log to history (don't fail if this fails)
+    try {
+      await admin.from('video_session_history').insert({
+        session_id: data.id,
+        event_type: 'created',
+        event_data: { notes: 'Session created' },
+      });
+    } catch (historyError) {
+      console.warn('Failed to log history:', historyError);
+    }
 
     return NextResponse.json({ session: data });
   } catch (error) {
-    console.error('Error creating video session:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error creating video session:', errorMessage);
     return NextResponse.json(
-      { error: 'Failed to create session' },
+      { error: errorMessage || 'Failed to create session' },
       { status: 500 }
     );
   }
