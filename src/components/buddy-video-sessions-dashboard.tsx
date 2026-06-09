@@ -116,9 +116,9 @@ export function BuddyVideoSessionsDashboard({
               </div>
 
               {/* Title */}
-              {(session as any).title && (
+              {session.title && (
                 <p className="font-semibold text-xs sm:text-sm text-stone-900 truncate">
-                  {(session as any).title}
+                  {session.title}
                 </p>
               )}
 

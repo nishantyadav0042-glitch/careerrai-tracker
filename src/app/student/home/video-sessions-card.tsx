@@ -64,8 +64,8 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
           >
             <div className="space-y-2">
               {/* Title */}
-              {(session as any).title && (
-                <p className="font-semibold text-sm text-stone-900">{(session as any).title}</p>
+              {session.title && (
+                <p className="font-semibold text-sm text-stone-900">{session.title}</p>
               )}
 
               {/* Date & Time */}
