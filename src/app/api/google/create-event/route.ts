@@ -74,12 +74,9 @@ export async function POST(request: NextRequest) {
           requestId: `careerrai-${user.id}-${Date.now()}`,
           conferenceSolutionKey: {
             key: 'hangoutsMeet',
-          } as any,
+          },
         },
       },
-      attendees: [
-        { email: 'noreply@careerrai.app' }, // Placeholder for attendees
-      ],
     } as any;
 
     // Call Google Calendar API
@@ -93,13 +90,27 @@ export async function POST(request: NextRequest) {
 
     const eventData = response.data;
 
-    // Extract Google Meet link
-    const meetLink = eventData.conferenceData?.entryPoints?.find(
-      (ep: any) => ep.entryPointType === 'video'
-    )?.uri || eventData.hangoutLink;
+    // Extract Google Meet link - check multiple possible locations
+    let meetLink: string | undefined;
 
+    // Try conferenceData entryPoints (primary location)
+    if (eventData.conferenceData?.entryPoints) {
+      const videoEntry = eventData.conferenceData.entryPoints.find(
+        (ep: any) => ep.entryPointType === 'video'
+      );
+      if (videoEntry?.uri) {
+        meetLink = videoEntry.uri;
+      }
+    }
+
+    // Fallback to hangoutLink (older API format)
+    if (!meetLink && eventData.hangoutLink) {
+      meetLink = eventData.hangoutLink;
+    }
+
+    // Log the full response for debugging if no link found
     if (!meetLink) {
-      console.warn('No Meet link generated for event:', eventData);
+      console.error('No Meet link generated. Full response:', JSON.stringify(eventData, null, 2));
     }
 
     return NextResponse.json({
