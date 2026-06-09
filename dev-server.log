@@ -1637,3 +1637,19 @@ AuthApiError: Request rate limit reached
  GET /login 200 in 911ms (next.js: 51ms, proxy.ts: 202ms, application-code: 657ms)
  GET /login 200 in 726ms (next.js: 34ms, proxy.ts: 130ms, application-code: 563ms)
  GET /login 200 in 874ms (next.js: 9ms, proxy.ts: 771ms, application-code: 94ms)
+  Reload env: .env.local
+✓ Compiled in 1006ms
+ GET /login 200 in 5.1s (next.js: 632ms, proxy.ts: 2.6s, application-code: 1784ms)
+ GET /login 200 in 863ms (next.js: 35ms, proxy.ts: 451ms, application-code: 377ms)
+ GET /login 200 in 827ms (next.js: 45ms, proxy.ts: 515ms, application-code: 267ms)
+ GET /login 200 in 1733ms (next.js: 662ms, proxy.ts: 324ms, application-code: 747ms)
+ GET /login 200 in 1087ms (next.js: 20ms, proxy.ts: 895ms, application-code: 172ms)
+[browser] Image with src "/careerrai-logo.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ POST /api/auth/login 200 in 3.6s (next.js: 1488ms, proxy.ts: 1421ms, application-code: 683ms)
+ POST /api/auth/login 302 in 1495ms (next.js: 130ms, proxy.ts: 660ms, application-code: 705ms)
+ GET /student/home 200 in 2.5s (next.js: 413ms, proxy.ts: 442ms, application-code: 1602ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+✓ Finished filesystem cache database compaction in 14.4s
+ GET /student/home 200 in 15.2s (next.js: 162ms, proxy.ts: 12.0s, application-code: 3.1s)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+✓ Compiled in 1876ms

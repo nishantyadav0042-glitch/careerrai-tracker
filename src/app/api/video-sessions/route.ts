@@ -1,5 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createMeetingLink, daysSinceLastSession } from '@/lib/meeting-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -79,41 +78,20 @@ export async function POST(request: NextRequest) {
       .eq('id', buddy_id)
       .single();
 
-    const studentName = student?.full_name || 'Student';
-    const buddyName = buddy?.full_name || 'Buddy';
+    // Note: Meeting links now created through Google Calendar integration
+    // See /api/sessions/schedule for Google Calendar event creation
 
-    // Create meeting link using Jitsi (free, no credentials needed)
-    const meeting = createMeetingLink(studentName, buddyName);
-    const gmeet_link = meeting.join_url; // Store in gmeet_link for backward compat
-
-    // Get last session date (may not exist)
-    const { data: lastSession, error: lastSessionError } = await admin
-      .from('video_sessions')
-      .select('ended_at')
-      .eq('student_id', student_id)
-      .eq('buddy_id', buddy_id)
-      .eq('session_status', 'completed')
-      .order('ended_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const days_since_last = lastSession && lastSession.ended_at
-      ? daysSinceLastSession(new Date(lastSession.ended_at))
-      : 0;
-
-    // Create session with meeting link
+    // Create session (meeting link created separately via Google Calendar)
     const { data, error } = await admin
       .from('video_sessions')
       .insert({
         student_id,
         buddy_id,
-        gmeet_link, // Jitsi meeting URL
         scheduled_at,
         session_type,
         duration_minutes,
         notes,
         session_status: 'scheduled',
-        days_since_last_session: days_since_last,
       })
       .select()
       .single();

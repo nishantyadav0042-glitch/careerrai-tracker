@@ -64,8 +64,8 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
           >
             <div className="space-y-2">
               {/* Title */}
-              {session.title && (
-                <p className="font-semibold text-sm text-stone-900">{session.title}</p>
+              {(session as any).title && (
+                <p className="font-semibold text-sm text-stone-900">{(session as any).title}</p>
               )}
 
               {/* Date & Time */}
@@ -92,10 +92,10 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
                 </div>
               )}
 
-              {/* Meet Link Button */}
-              {(session.gmeet_link || (session as any).google_meet_link) && (
+              {/* Google Meet Link Button */}
+              {((session as any).google_meet_link || session.gmeet_link) && (
                 <a
-                  href={session.gmeet_link || (session as any).google_meet_link}
+                  href={(session as any).google_meet_link || session.gmeet_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 py-2 px-3 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors"

@@ -9,7 +9,7 @@ import {
   SESSION_TOPICS,
   SESSION_DURATIONS,
   formatSessionTime,
-} from '@/lib/meeting-utils';
+} from '@/lib/gmeet-utils';
 import { cn } from '@/lib/utils';
 
 interface VideoSessionPromptProps {

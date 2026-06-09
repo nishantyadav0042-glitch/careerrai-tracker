@@ -1,34 +1,8 @@
 /**
- * Google Meet utilities for generating and managing video session links
- * Uses Google Meet's "Meet" function to generate new meeting links
+ * Google Meet utilities for managing video session scheduling
+ * Real Google Meet links are generated through Google Calendar API integration
+ * See /api/google/create-event for real meeting link generation
  */
-
-/**
- * Generate a unique Google Meet link
- * Format: https://meet.google.com/xxx-xxxx-xxx
- *
- * @returns Random Google Meet link
- */
-export function generateGoogleMeetLink(): string {
-  // Generate random segments matching Google Meet URL format
-  const segment1 = generateRandomString(3);
-  const segment2 = generateRandomString(4);
-  const segment3 = generateRandomString(3);
-
-  return `https://meet.google.com/${segment1}-${segment2}-${segment3}`;
-}
-
-/**
- * Generate random alphanumeric string
- */
-function generateRandomString(length: number): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
 
 /**
  * Check if it's time for a video session (10+ days since last session)
