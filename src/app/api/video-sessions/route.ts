@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createZoomMeeting, daysSinceLastSession } from '@/lib/zoom-utils';
+import { createMeetingLink, daysSinceLastSession } from '@/lib/meeting-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -66,29 +66,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get student name for Zoom meeting topic
+    // Get student and buddy names
     const { data: student } = await admin
       .from('profiles')
       .select('full_name')
       .eq('id', student_id)
       .single();
 
+    const { data: buddy } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', buddy_id)
+      .single();
+
     const studentName = student?.full_name || 'Student';
+    const buddyName = buddy?.full_name || 'Buddy';
 
-    // Create Zoom meeting (real meeting with actual join URL)
-    let zoom_link = '';
-    let zoom_meeting_id = '';
-
-    try {
-      const zoomMeeting = await createZoomMeeting(studentName, duration_minutes);
-      zoom_meeting_id = zoomMeeting.meeting_id;
-      zoom_link = zoomMeeting.join_url;
-    } catch (zoomError) {
-      console.error('Zoom meeting creation failed:', zoomError);
-      // Don't fail the entire request if Zoom fails
-      zoom_link = '';
-      zoom_meeting_id = '';
-    }
+    // Create meeting link using Jitsi (free, no credentials needed)
+    const meeting = createMeetingLink(studentName, buddyName);
+    const gmeet_link = meeting.join_url; // Store in gmeet_link for backward compat
 
     // Get last session date (may not exist)
     const { data: lastSession, error: lastSessionError } = await admin
@@ -105,15 +101,13 @@ export async function POST(request: NextRequest) {
       ? daysSinceLastSession(new Date(lastSession.ended_at))
       : 0;
 
-    // Create session with Zoom link
+    // Create session with meeting link
     const { data, error } = await admin
       .from('video_sessions')
       .insert({
         student_id,
         buddy_id,
-        gmeet_link: zoom_link, // Store Zoom link in gmeet_link column for backward compatibility
-        zoom_meeting_id: zoom_meeting_id || null,
-        zoom_link: zoom_link || null,
+        gmeet_link, // Jitsi meeting URL
         scheduled_at,
         session_type,
         duration_minutes,

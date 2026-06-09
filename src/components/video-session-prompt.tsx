@@ -9,7 +9,7 @@ import {
   SESSION_TOPICS,
   SESSION_DURATIONS,
   formatSessionTime,
-} from '@/lib/zoom-utils';
+} from '@/lib/meeting-utils';
 import { cn } from '@/lib/utils';
 
 interface VideoSessionPromptProps {
