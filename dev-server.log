@@ -209,3 +209,14 @@
  GET /student/home 200 in 324ms (next.js: 7ms, proxy.ts: 208ms, application-code: 109ms)
 ✓ Compiled in 583ms
  GET /student/home 200 in 656ms (next.js: 137ms, proxy.ts: 390ms, application-code: 128ms)
+ GET /student/home 200 in 1032ms (next.js: 110ms, proxy.ts: 788ms, application-code: 134ms)
+ GET /student/home 200 in 962ms (next.js: 7ms, proxy.ts: 183ms, application-code: 771ms)
+ GET /student/home 200 in 1679ms (next.js: 13ms, proxy.ts: 171ms, application-code: 1495ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+✓ Compiled in 1982ms
+⚠ Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /student/home 200 in 3.2s (next.js: 623ms, proxy.ts: 1523ms, application-code: 1080ms)
+ GET /student/home 200 in 1108ms (next.js: 6ms, proxy.ts: 928ms, application-code: 173ms)
+ GET /student/home 200 in 3.1s (next.js: 12ms, proxy.ts: 288ms, application-code: 2.8s)
+ GET /student/home 200 in 2.7s (next.js: 198ms, proxy.ts: 1275ms, application-code: 1202ms)
+ GET /student/home 200 in 4.6s (next.js: 4ms, proxy.ts: 666ms, application-code: 3.9s)

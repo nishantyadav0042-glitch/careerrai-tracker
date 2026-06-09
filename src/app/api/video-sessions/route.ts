@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateGoogleMeetLink, daysSinceLastSession } from '@/lib/gmeet-utils';
+import { createZoomMeeting, daysSinceLastSession } from '@/lib/zoom-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -66,8 +66,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate Google Meet link
-    const gmeet_link = generateGoogleMeetLink();
+    // Get student name for Zoom meeting topic
+    const { data: student } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', student_id)
+      .single();
+
+    const studentName = student?.full_name || 'Student';
+
+    // Create Zoom meeting (real meeting with actual join URL)
+    let zoom_link = '';
+    let zoom_meeting_id = '';
+
+    try {
+      const zoomMeeting = await createZoomMeeting(studentName, duration_minutes);
+      zoom_meeting_id = zoomMeeting.meeting_id;
+      zoom_link = zoomMeeting.join_url;
+    } catch (zoomError) {
+      console.error('Zoom meeting creation failed:', zoomError);
+      // Don't fail the entire request if Zoom fails
+      zoom_link = '';
+      zoom_meeting_id = '';
+    }
 
     // Get last session date (may not exist)
     const { data: lastSession, error: lastSessionError } = await admin
@@ -84,13 +105,15 @@ export async function POST(request: NextRequest) {
       ? daysSinceLastSession(new Date(lastSession.ended_at))
       : 0;
 
-    // Create session
+    // Create session with Zoom link
     const { data, error } = await admin
       .from('video_sessions')
       .insert({
         student_id,
         buddy_id,
-        gmeet_link,
+        gmeet_link: zoom_link, // Store Zoom link in gmeet_link column for backward compatibility
+        zoom_meeting_id: zoom_meeting_id || null,
+        zoom_link: zoom_link || null,
         scheduled_at,
         session_type,
         duration_minutes,
