@@ -49,11 +49,10 @@ export default async function StudentHomePage() {
   return (
     <StudentHomeClient>
       <div className="space-y-4 sm:space-y-5">
-      {/* Greeting */}
-      <div className="px-0.5 sm:px-1">
-        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Hello,</p>
-        <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-          {firstName}
+      {/* Greeting - COMPACT */}
+      <div className="px-0.5 sm:px-1 py-1">
+        <h1 className="text-lg sm:text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+          Hey {firstName}! 👋
         </h1>
       </div>
 
