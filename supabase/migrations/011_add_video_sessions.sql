@@ -43,6 +43,11 @@ CREATE INDEX IF NOT EXISTS idx_video_sessions_days_since ON public.video_session
 -- RLS Policies
 ALTER TABLE public.video_sessions ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Students view own video sessions" ON public.video_sessions;
+DROP POLICY IF EXISTS "Buddies manage video sessions" ON public.video_sessions;
+DROP POLICY IF EXISTS "Students update own video sessions" ON public.video_sessions;
+
 -- Students can view their own video sessions
 CREATE POLICY "Students view own video sessions"
   ON public.video_sessions
