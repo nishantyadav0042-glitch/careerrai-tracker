@@ -117,14 +117,57 @@ export function StreakHero({ userId }: StreakHeroProps) {
         )}
       </div>
 
-      {/* Streak Milestones */}
-      {streakStatus.days > 0 && streakStatus.days % 7 === 0 && (
-        <div className="mt-4 pt-4 border-t border-white/20">
-          <p className="text-xs font-semibold text-yellow-200">
-            🎉 Milestone reached! Your buddy has been notified.
+      {/* Rewards & Milestones */}
+      <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
+        {/* 30-Day Reward (Main CTA) */}
+        {streakStatus.days > 0 && streakStatus.days < 30 && (
+          <div className="bg-white/10 rounded-lg p-3">
+            <p className="text-xs font-semibold text-yellow-200 mb-2">
+              🎯 Next Big Goal: 30-Day Streak
+            </p>
+            <div className="space-y-2">
+              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-yellow-400 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, (streakStatus.days / 30) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-yellow-200">
+                {30 - streakStatus.days} days to unlock <strong>1 MONTH FREE EXTENSION</strong>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 30-Day Milestone Achieved */}
+        {streakStatus.days >= 30 && (
+          <div className="bg-yellow-400/20 border border-yellow-300/40 rounded-lg p-3 animate-pulse">
+            <p className="text-xs font-bold text-yellow-200 mb-1">
+              👑 30-DAY MASTER UNLOCKED!
+            </p>
+            <p className="text-xs text-yellow-100">
+              Congratulations! You've earned <strong>1 MONTH FREE EXTENSION</strong> on your CareerRai subscription.
+            </p>
+            <p className="text-xs text-yellow-200 mt-2 font-semibold">
+              ✓ Reward applied to your account
+            </p>
+          </div>
+        )}
+
+        {/* Generic Milestone Message */}
+        {streakStatus.days > 0 && streakStatus.days % 7 === 0 && streakStatus.days < 30 && (
+          <p className="text-xs font-semibold text-green-200">
+            ✅ {streakStatus.days}-day milestone! Your buddy has been notified.
           </p>
-        </div>
-      )}
+        )}
+
+        {/* Daily Log Reminder */}
+        {streakStatus.days > 0 && (
+          <p className="text-xs text-white/70">
+            💪 <strong>Log daily to keep your streak alive</strong> • Streak resets if you miss a day
+          </p>
+        )}
+      </div>
     </Card>
   );
 }
