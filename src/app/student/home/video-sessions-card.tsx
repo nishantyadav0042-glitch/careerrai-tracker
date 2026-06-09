@@ -28,8 +28,13 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
         .order('scheduled_at', { ascending: true })
         .limit(3);
 
-      if (!error && data) {
+      if (error) {
+        console.error('Supabase error fetching sessions:', error);
+      } else if (data) {
+        console.log('Fetched sessions:', data);
         setSessions(data as VideoSession[]);
+      } else {
+        console.warn('No session data returned');
       }
     } catch (err) {
       console.error('Error fetching sessions:', err);
