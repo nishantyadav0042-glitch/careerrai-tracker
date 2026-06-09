@@ -5,7 +5,7 @@ import { StudentVoiceNotesSection } from './student-voice-notes-section';
 import { BuddyAudioResponsesCompact } from '@/components/buddy-audio-responses-compact';
 import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
 import { BuddyVideoSessionsDashboard } from '@/components/buddy-video-sessions-dashboard';
-import { Settings, LogOut } from 'lucide-react';
+import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function BuddyHomePage() {
@@ -48,6 +48,14 @@ export default async function BuddyHomePage() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-3 ml-2 flex-shrink-0">
+            <Link
+              href="/buddy/schedule"
+              className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors text-xs sm:text-sm font-medium"
+            >
+              <Plus className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+              <span className="hidden sm:inline">Schedule</span>
+            </Link>
+
             <Link
               href="/buddy/settings"
               className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 text-stone-700 hover:bg-stone-100 rounded-lg transition-colors text-xs sm:text-sm"

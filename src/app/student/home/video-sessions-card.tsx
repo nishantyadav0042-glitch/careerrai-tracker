@@ -63,6 +63,11 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
             className="p-3 bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200"
           >
             <div className="space-y-2">
+              {/* Title */}
+              {session.title && (
+                <p className="font-semibold text-sm text-stone-900">{session.title}</p>
+              )}
+
               {/* Date & Time */}
               {session.scheduled_at && (
                 <div className="flex items-center justify-between gap-2">
@@ -88,9 +93,9 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
               )}
 
               {/* Meet Link Button */}
-              {session.gmeet_link && (
+              {(session.gmeet_link || (session as any).google_meet_link) && (
                 <a
-                  href={session.gmeet_link}
+                  href={session.gmeet_link || (session as any).google_meet_link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 py-2 px-3 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors"

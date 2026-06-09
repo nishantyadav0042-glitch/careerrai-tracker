@@ -115,12 +115,19 @@ export function BuddyVideoSessionsDashboard({
                 </span>
               </div>
 
+              {/* Title */}
+              {session.title && (
+                <p className="font-semibold text-xs sm:text-sm text-stone-900 truncate">
+                  {session.title}
+                </p>
+              )}
+
               {/* Meeting Links */}
-              {session.gmeet_link && (
+              {(session.gmeet_link || (session as any).google_meet_link) && (
                 <div className="space-y-1.5">
                   {/* For Buddy */}
                   <a
-                    href={session.gmeet_link}
+                    href={session.gmeet_link || (session as any).google_meet_link}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors"
@@ -131,7 +138,7 @@ export function BuddyVideoSessionsDashboard({
 
                   {/* Copy Link Option */}
                   <button
-                    onClick={() => copyMeetLink(session.gmeet_link || '', session.id)}
+                    onClick={() => copyMeetLink(session.gmeet_link || (session as any).google_meet_link || '', session.id)}
                     className="w-full flex items-center justify-center gap-2 py-1.5 px-3 bg-white/80 hover:bg-white text-xs text-stone-700 rounded-lg border border-stone-200 transition-colors"
                     title="Copy meeting link"
                   >

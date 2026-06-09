@@ -760,3 +760,880 @@
  GET /student/home 200 in 1588ms (next.js: 73ms, proxy.ts: 188ms, application-code: 1327ms)
  GET /student/home 200 in 1549ms (next.js: 20ms, proxy.ts: 621ms, application-code: 908ms)
  GET /student/home 200 in 1528ms (next.js: 483ms, proxy.ts: 600ms, application-code: 445ms)
+ GET /student/home 200 in 5.2s (next.js: 400ms, proxy.ts: 2.0s, application-code: 2.8s)
+ GET /student/home 200 in 2.0s (next.js: 182ms, proxy.ts: 1032ms, application-code: 810ms)
+ GET /student/home 200 in 759ms (next.js: 13ms, proxy.ts: 313ms, application-code: 433ms)
+ GET /student/home 200 in 814ms (next.js: 115ms, proxy.ts: 324ms, application-code: 375ms)
+ GET /student/home 200 in 818ms (next.js: 50ms, proxy.ts: 318ms, application-code: 450ms)
+ GET /student/home 200 in 1402ms (next.js: 5ms, proxy.ts: 186ms, application-code: 1211ms)
+ GET /student/home 200 in 768ms (next.js: 8ms, proxy.ts: 173ms, application-code: 586ms)
+ GET /student/home 200 in 745ms (next.js: 13ms, proxy.ts: 227ms, application-code: 506ms)
+ GET /student/home 200 in 719ms (next.js: 50ms, proxy.ts: 192ms, application-code: 477ms)
+ GET /student/home 200 in 1557ms (next.js: 135ms, proxy.ts: 1010ms, application-code: 412ms)
+ GET /student/home 200 in 1379ms (next.js: 103ms, proxy.ts: 319ms, application-code: 956ms)
+ GET /student/home 200 in 854ms (next.js: 4ms, proxy.ts: 179ms, application-code: 671ms)
+ GET /student/home 200 in 839ms (next.js: 13ms, proxy.ts: 206ms, application-code: 619ms)
+ GET /student/home 200 in 848ms (next.js: 66ms, proxy.ts: 191ms, application-code: 591ms)
+ GET /student/home 200 in 950ms (next.js: 127ms, proxy.ts: 221ms, application-code: 603ms)
+ GET /student/home 200 in 1716ms (next.js: 194ms, proxy.ts: 380ms, application-code: 1142ms)
+ GET /student/home 200 in 1281ms (next.js: 6ms, proxy.ts: 227ms, application-code: 1047ms)
+ GET /student/home 200 in 1176ms (next.js: 23ms, proxy.ts: 322ms, application-code: 830ms)
+ GET /student/home 200 in 1168ms (next.js: 88ms, proxy.ts: 312ms, application-code: 767ms)
+ GET /student/home 200 in 1240ms (next.js: 173ms, proxy.ts: 276ms, application-code: 791ms)
+ GET /student/home 200 in 1587ms (next.js: 86ms, proxy.ts: 506ms, application-code: 995ms)
+ GET /student/home 200 in 1378ms (next.js: 64ms, proxy.ts: 358ms, application-code: 956ms)
+ GET /student/home 200 in 1248ms (next.js: 53ms, proxy.ts: 586ms, application-code: 610ms)
+ GET /student/home 200 in 1491ms (next.js: 57ms, proxy.ts: 474ms, application-code: 960ms)
+ GET /student/home 200 in 1407ms (next.js: 11ms, proxy.ts: 488ms, application-code: 908ms)
+ GET /student/home 200 in 1059ms (next.js: 9ms, proxy.ts: 435ms, application-code: 614ms)
+ GET /student/home 200 in 1671ms (next.js: 114ms, proxy.ts: 623ms, application-code: 934ms)
+ GET /student/home 200 in 1090ms (next.js: 9ms, proxy.ts: 209ms, application-code: 872ms)
+ GET /student/home 200 in 1035ms (next.js: 46ms, proxy.ts: 240ms, application-code: 749ms)
+ GET /student/home 200 in 957ms (next.js: 9ms, proxy.ts: 267ms, application-code: 682ms)
+ GET /student/home 200 in 912ms (next.js: 68ms, proxy.ts: 216ms, application-code: 628ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 1628ms (next.js: 14ms, proxy.ts: 417ms, application-code: 1197ms)
+ GET /student/home 200 in 969ms (next.js: 200ms, proxy.ts: 496ms, application-code: 274ms)
+ GET /student/home 200 in 1654ms (next.js: 75ms, proxy.ts: 433ms, application-code: 1146ms)
+ GET /student/home 200 in 872ms (next.js: 176ms, proxy.ts: 489ms, application-code: 207ms)
+ GET /student/home 200 in 876ms (next.js: 150ms, proxy.ts: 571ms, application-code: 155ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 1913ms (next.js: 201ms, proxy.ts: 731ms, application-code: 981ms)
+ GET /student/home 200 in 914ms (next.js: 417ms, proxy.ts: 166ms, application-code: 332ms)
+ GET /student/home 200 in 900ms (next.js: 320ms, proxy.ts: 296ms, application-code: 285ms)
+ GET /student/home 200 in 871ms (next.js: 271ms, proxy.ts: 403ms, application-code: 197ms)
+ GET /student/home 200 in 900ms (next.js: 296ms, proxy.ts: 362ms, application-code: 242ms)
+ GET /student/home 200 in 910ms (next.js: 297ms, proxy.ts: 503ms, application-code: 110ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 1220ms (next.js: 385ms, proxy.ts: 162ms, application-code: 673ms)
+ GET /student/home 200 in 1219ms (next.js: 405ms, proxy.ts: 331ms, application-code: 483ms)
+ GET /student/home 200 in 1217ms (next.js: 473ms, proxy.ts: 220ms, application-code: 524ms)
+ GET /student/home 200 in 1186ms (next.js: 428ms, proxy.ts: 344ms, application-code: 414ms)
+ GET /student/home 200 in 1260ms (next.js: 449ms, proxy.ts: 514ms, application-code: 297ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 1888ms (next.js: 29ms, proxy.ts: 1104ms, application-code: 755ms)
+✓ Compiled in 671ms
+ GET /student/home 200 in 1104ms (next.js: 498ms, proxy.ts: 320ms, application-code: 286ms)
+ GET /student/home 200 in 1100ms (next.js: 530ms, proxy.ts: 224ms, application-code: 347ms)
+ GET /student/home 200 in 1048ms (next.js: 402ms, proxy.ts: 447ms, application-code: 199ms)
+ GET /student/home 200 in 1061ms (next.js: 341ms, proxy.ts: 561ms, application-code: 159ms)
+ GET /student/home 200 in 1099ms (next.js: 460ms, proxy.ts: 391ms, application-code: 248ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 805ms (next.js: 302ms, proxy.ts: 159ms, application-code: 343ms)
+ GET /student/home 200 in 805ms (next.js: 290ms, proxy.ts: 220ms, application-code: 296ms)
+ GET /student/home 200 in 809ms (next.js: 263ms, proxy.ts: 289ms, application-code: 257ms)
+ GET /student/home 200 in 809ms (next.js: 265ms, proxy.ts: 440ms, application-code: 103ms)
+ GET /student/home 200 in 766ms (next.js: 237ms, proxy.ts: 301ms, application-code: 228ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 907ms (next.js: 358ms, proxy.ts: 177ms, application-code: 372ms)
+ GET /student/home 200 in 2.2s (next.js: 317ms, proxy.ts: 810ms, application-code: 1041ms)
+ GET /student/home 200 in 887ms (next.js: 247ms, proxy.ts: 415ms, application-code: 224ms)
+ GET /student/home 200 in 902ms (next.js: 319ms, proxy.ts: 278ms, application-code: 305ms)
+ GET /student/home 200 in 901ms (next.js: 285ms, proxy.ts: 343ms, application-code: 273ms)
+ GET /student/home 200 in 1011ms (next.js: 283ms, proxy.ts: 492ms, application-code: 235ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 1028ms (next.js: 347ms, proxy.ts: 337ms, application-code: 343ms)
+ GET /student/home 200 in 1153ms (next.js: 381ms, proxy.ts: 374ms, application-code: 398ms)
+ GET /student/home 200 in 1150ms (next.js: 404ms, proxy.ts: 275ms, application-code: 471ms)
+ GET /student/home 200 in 1026ms (next.js: 327ms, proxy.ts: 412ms, application-code: 288ms)
+ GET /student/home 200 in 1053ms (next.js: 373ms, proxy.ts: 500ms, application-code: 181ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 2.2s (next.js: 434ms, proxy.ts: 655ms, application-code: 1074ms)
+ GET /student/home 200 in 996ms (next.js: 326ms, proxy.ts: 188ms, application-code: 482ms)
+ GET /student/home 200 in 982ms (next.js: 326ms, proxy.ts: 314ms, application-code: 342ms)
+ GET /student/home 200 in 951ms (next.js: 365ms, proxy.ts: 351ms, application-code: 234ms)
+ GET /student/home 200 in 993ms (next.js: 288ms, proxy.ts: 257ms, application-code: 448ms)
+ GET /student/home 200 in 980ms (next.js: 367ms, proxy.ts: 463ms, application-code: 151ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 956ms (next.js: 322ms, proxy.ts: 148ms, application-code: 485ms)
+ GET /student/home 200 in 953ms (next.js: 267ms, proxy.ts: 235ms, application-code: 452ms)
+ GET /student/home 200 in 957ms (next.js: 241ms, proxy.ts: 296ms, application-code: 420ms)
+ GET /student/home 200 in 1009ms (next.js: 250ms, proxy.ts: 371ms, application-code: 389ms)
+ GET /student/home 200 in 1152ms (next.js: 323ms, proxy.ts: 449ms, application-code: 380ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 807ms (next.js: 273ms, proxy.ts: 283ms, application-code: 251ms)
+ GET /student/home 200 in 776ms (next.js: 249ms, proxy.ts: 328ms, application-code: 199ms)
+ GET /student/home 200 in 778ms (next.js: 209ms, proxy.ts: 405ms, application-code: 164ms)
+ GET /student/home 200 in 627ms (next.js: 183ms, proxy.ts: 353ms, application-code: 91ms)
+ GET /student/home 200 in 1830ms (next.js: 21ms, proxy.ts: 839ms, application-code: 970ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 755ms (next.js: 327ms, proxy.ts: 179ms, application-code: 248ms)
+ GET /student/home 200 in 747ms (next.js: 284ms, proxy.ts: 245ms, application-code: 218ms)
+ GET /student/home 200 in 721ms (next.js: 233ms, proxy.ts: 302ms, application-code: 186ms)
+ GET /student/home 200 in 701ms (next.js: 195ms, proxy.ts: 350ms, application-code: 155ms)
+ GET /student/home 200 in 730ms (next.js: 230ms, proxy.ts: 446ms, application-code: 53ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+✓ Compiled in 476ms
+ GET /student/home 200 in 2.6s (next.js: 14ms, proxy.ts: 491ms, application-code: 2.1s)
+ GET /student/home 200 in 1610ms (next.js: 752ms, proxy.ts: 197ms, application-code: 661ms)
+ GET /student/home 200 in 1608ms (next.js: 705ms, proxy.ts: 323ms, application-code: 580ms)
+ GET /student/home 200 in 1592ms (next.js: 632ms, proxy.ts: 568ms, application-code: 392ms)
+ GET /student/home 200 in 1610ms (next.js: 733ms, proxy.ts: 436ms, application-code: 441ms)
+ GET /student/home 200 in 1562ms (next.js: 591ms, proxy.ts: 622ms, application-code: 348ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+✓ Compiled in 0ms
+ GET /student/home 200 in 2.7s (next.js: 574ms, proxy.ts: 483ms, application-code: 1692ms)
+ GET /student/home 200 in 2.7s (next.js: 536ms, proxy.ts: 657ms, application-code: 1529ms)
+ GET /student/home 200 in 2.7s (next.js: 657ms, proxy.ts: 835ms, application-code: 1200ms)
+ GET /student/home 200 in 2.7s (next.js: 725ms, proxy.ts: 967ms, application-code: 1028ms)
+ GET /student/home 200 in 2.7s (next.js: 584ms, proxy.ts: 770ms, application-code: 1379ms)
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+AuthApiError: Request rate limit reached
+    at ignore-listed frames {
+  __isAuthError: true,
+  status: 429,
+  code: 'over_request_rate_limit'
+}
+ GET /student/home 200 in 685ms (next.js: 67ms, proxy.ts: 31ms, application-code: 586ms)
+ GET /student/home 200 in 3.8s (next.js: 532ms, proxy.ts: 2.1s, application-code: 1139ms)
+ GET /student/home 200 in 714ms (next.js: 40ms, proxy.ts: 300ms, application-code: 374ms)
+ GET /student/home 200 in 421ms (next.js: 149ms, proxy.ts: 70ms, application-code: 202ms)
+ GET /student/home 200 in 1243ms (next.js: 117ms, proxy.ts: 501ms, application-code: 625ms)
+ GET /login 200 in 307ms (next.js: 129ms, proxy.ts: 103ms, application-code: 75ms)
+ GET /login 200 in 171ms (next.js: 9ms, proxy.ts: 99ms, application-code: 63ms)
+✓ Compiled in 411ms
+✓ Compiled in 535ms
+ GET /login 200 in 630ms (next.js: 110ms, proxy.ts: 386ms, application-code: 134ms)
+ GET /login 200 in 382ms (next.js: 6ms, proxy.ts: 130ms, application-code: 246ms)
+⚠ Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+⚠ Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /login 200 in 913ms (next.js: 59ms, proxy.ts: 198ms, application-code: 656ms)
+ GET /login 200 in 911ms (next.js: 51ms, proxy.ts: 202ms, application-code: 657ms)
+ GET /login 200 in 726ms (next.js: 34ms, proxy.ts: 130ms, application-code: 563ms)
+ GET /login 200 in 874ms (next.js: 9ms, proxy.ts: 771ms, application-code: 94ms)
