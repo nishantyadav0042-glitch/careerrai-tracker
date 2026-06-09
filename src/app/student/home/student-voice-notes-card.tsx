@@ -72,66 +72,51 @@ export function StudentVoiceNotesCard({ studentId, buddyId, onRecordNew }: Stude
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-3">
       {/* Header */}
-      <div className="px-1">
-        <div className="flex items-center gap-2 mb-1">
-          <Mic className="w-5 h-5 text-orange-600" />
-          <h2 className="text-sm font-bold uppercase tracking-widest text-stone-700">
+      <div className="px-0.5 sm:px-1">
+        <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+          <Mic className="w-4 sm:w-5 h-4 sm:h-5 text-orange-600 flex-shrink-0" />
+          <h2 className="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-700 truncate">
             Your Voice Notes
           </h2>
         </div>
-        <p className="text-xs text-stone-600 mt-1">Record your doubts and learning notes</p>
+        <p className="text-xs text-stone-600 mt-0.5 sm:mt-1">Record your doubts and insights</p>
       </div>
 
-      {/* Voice Notes List */}
-      {loading ? (
-        <div className="text-center py-8 text-stone-500">Loading notes...</div>
-      ) : voiceNotes.length === 0 ? (
-        <div className="bg-white border-2 border-orange-200 rounded-xl p-6 text-center">
-          <Mic className="w-8 h-8 text-orange-300 mx-auto mb-2" />
-          <p className="text-stone-600 text-sm font-medium">Start recording your voice notes</p>
-          <p className="text-stone-500 text-xs mt-1">Share your doubts and key insights with your buddy</p>
-        </div>
-      ) : (
-        voiceNotes.map((note) => (
-          <div key={note.id} className="bg-white border-2 border-orange-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-stone-600">{getTimeAgo(note.created_at)}</span>
+      {/* Voice Notes List - Compact */}
+      {loading ? null : voiceNotes.length === 0 ? null : (
+        <div className="space-y-1.5 sm:space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
+          {voiceNotes.slice(0, 3).map((note) => (
+            <div key={note.id} className="bg-white border border-orange-200 rounded-lg p-2 sm:p-3">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-xs text-stone-600 flex-shrink-0">{getTimeAgo(note.created_at)}</span>
+                {note.transcript && (
+                  <p className="text-xs text-stone-700 truncate flex-1">{note.transcript}</p>
+                )}
+              </div>
+
+              {/* Compact Audio Player */}
+              {note.voice_note_url && (
+                <audio
+                  key={`audio-${note.id}`}
+                  controls
+                  className="w-full h-6 rounded text-xs"
+                  src={note.voice_note_url}
+                />
+              )}
             </div>
-            {note.transcript && (
-              <p className="text-sm text-stone-800 mb-3">{note.transcript}</p>
-            )}
-
-            {/* Audio Player */}
-            {note.voice_note_url && (
-              <audio
-                key={`audio-${note.id}`}
-                controls
-                className="w-full mb-3 h-8"
-                src={note.voice_note_url}
-              />
-            )}
-
-            <button
-              onClick={() => setPlayingId(playingId === note.id ? null : note.id)}
-              className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium text-sm"
-            >
-              <Volume2 className="w-4 h-4" />
-              {playingId === note.id ? 'Stop' : 'Play'} recording
-            </button>
-          </div>
-        ))
+          ))}
+        </div>
       )}
 
-      {/* Record New Button */}
+      {/* Record New Button - Compact */}
       <button
         onClick={onRecordNew}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors text-sm"
+        className="w-full flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg sm:rounded-xl font-medium transition-colors text-xs sm:text-sm"
       >
-        <Plus className="w-4 h-4" />
-        <Mic className="w-4 h-4" />
-        Record new note
+        <Plus className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+        Record note
       </button>
     </div>
   );

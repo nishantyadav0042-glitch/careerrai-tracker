@@ -12,6 +12,7 @@ import { CATContextCard } from './cat-context-card';
 import { HeatmapCard } from './heatmap-card';
 import { BuddyFeedbackCard } from './buddy-feedback-card';
 import { StudentVoiceNotesCard } from './student-voice-notes-card';
+import { VideoSessionsCard } from './video-sessions-card';
 import { computeSummary, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import type { DailyReport } from '@/types';
@@ -47,11 +48,11 @@ export default async function StudentHomePage() {
 
   return (
     <StudentHomeClient>
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
       {/* Greeting */}
-      <div className="px-1">
+      <div className="px-0.5 sm:px-1">
         <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Hello,</p>
-        <h1 className="text-3xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
+        <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
           {firstName}
         </h1>
       </div>
@@ -60,26 +61,29 @@ export default async function StudentHomePage() {
       {/* 1. STREAK HERO - PRIMARY GAMIFICATION & RETENTION */}
       <StreakHero userId={user.id} />
 
-      {/* 2. BUDDY FEEDBACK - PRIORITY ACTION ITEM */}
+      {/* 2. VIDEO SESSIONS - Upcoming calls with buddy */}
+      <VideoSessionsCard userId={user.id} />
+
+      {/* 3. BUDDY FEEDBACK - PRIORITY ACTION ITEM */}
       <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-5 border-2 border-teal-200">
         <BuddyFeedbackCard studentId={user.id} buddyId={profile?.buddy_id || ''} buddyName="Your Buddy" />
       </div>
 
-      {/* 3. STUDENT VOICE NOTES - ACTION ITEM */}
+      {/* 4. STUDENT VOICE NOTES - ACTION ITEM */}
       <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-5 border-2 border-orange-200">
         <StudentVoiceNotesCard studentId={user.id} buddyId={profile?.buddy_id || ''} />
       </div>
 
-      {/* 4. BUDDY SIGNAL - Shows relationship is real */}
+      {/* 5. BUDDY SIGNAL - Shows relationship is real */}
       <BuddySignalCard userId={user.id} />
 
-      {/* 5. DAYS TO CAT - Context for urgency */}
+      {/* 6. DAYS TO CAT - Context for urgency */}
       <CATContextCard />
 
-      {/* 6. CAT READINESS TEST (kept for prominence) */}
+      {/* 7. CAT READINESS TEST (kept for prominence) */}
       <CATTestWidget userId={user.id} />
 
-      {/* 7. TODAY STATUS */}
+      {/* 8. TODAY STATUS */}
       <div className={cn('p-5 rounded-2xl border-2', submittedToday ? 'border-emerald-200 bg-emerald-50/40 bg-white' : 'border-orange-200 bg-orange-50/40 bg-white')}>
         <div className="flex items-center justify-between">
           <div>
@@ -112,7 +116,7 @@ export default async function StudentHomePage() {
         </div>
       </div>
 
-      {/* 8. QUICK STATS FROM LAST 7 DAYS */}
+      {/* 9. QUICK STATS FROM LAST 7 DAYS */}
       <div>
         <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Your progress</h2>
         <div className="grid grid-cols-2 gap-3">

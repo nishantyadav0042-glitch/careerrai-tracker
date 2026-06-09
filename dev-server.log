@@ -22,3 +22,181 @@
 [browser] Image with src "/careerrai-logo.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
 ✓ Compiled in 1562ms
 ✓ Compiled in 505ms
+ GET /login 200 in 6.1s (next.js: 783ms, proxy.ts: 2.7s, application-code: 2.6s)
+✓ Compiled in 3.6s
+ POST /api/auth/login 302 in 1255ms (next.js: 271ms, proxy.ts: 396ms, application-code: 588ms)
+○ Compiling /student/home ...
+ GET /student/home 200 in 6.0s (next.js: 4.9s, proxy.ts: 117ms, application-code: 972ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/home 200 in 709ms (next.js: 5ms, proxy.ts: 213ms, application-code: 491ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/today 200 in 1425ms (next.js: 856ms, proxy.ts: 528ms, application-code: 41ms)
+ GET /student/reports 200 in 2.8s (next.js: 2.7s, proxy.ts: 151ms, application-code: 35ms)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /student/exams 200 in 1029ms (next.js: 759ms, proxy.ts: 236ms, application-code: 34ms)
+ GET /student/exams 200 in 124ms (next.js: 3ms, proxy.ts: 92ms, application-code: 28ms)
+ GET /student/profile 200 in 1053ms (next.js: 605ms, proxy.ts: 87ms, application-code: 361ms)
+ GET /student/profile 200 in 416ms (next.js: 4ms, proxy.ts: 85ms, application-code: 327ms)
+[browser] Push toggle failed 
+    at toggle (src/components/push-toggle.tsx:42:15)
+  40 |       }
+  41 |     } catch {
+> 42 |       console.error('Push toggle failed');
+     |               ^
+  43 |     } finally {
+  44 |       setLoading(false);
+  45 |     } (src/components/push-toggle.tsx:42:15)
+ POST /api/push/subscribe 200 in 1034ms (next.js: 647ms, proxy.ts: 144ms, application-code: 243ms)
+ GET /student/today 200 in 1438ms (next.js: 107ms, proxy.ts: 1258ms, application-code: 72ms)
+ GET /student/home 200 in 1278ms (next.js: 93ms, proxy.ts: 174ms, application-code: 1012ms)
+ GET /student/home 200 in 196ms (next.js: 11ms, proxy.ts: 170ms, application-code: 14ms)
+ GET /student/home 200 in 714ms (next.js: 6ms, proxy.ts: 169ms, application-code: 540ms)
+ GET /student/reports 200 in 271ms (next.js: 20ms, proxy.ts: 220ms, application-code: 31ms)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /student/home 200 in 1273ms (next.js: 27ms, proxy.ts: 337ms, application-code: 909ms)
+ GET /student/home 200 in 200ms (next.js: 8ms, proxy.ts: 166ms, application-code: 27ms)
+ GET /student/home 200 in 679ms (next.js: 11ms, proxy.ts: 171ms, application-code: 497ms)
+ GET /student/home 200 in 943ms (next.js: 4ms, proxy.ts: 424ms, application-code: 516ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/home 200 in 1065ms (next.js: 11ms, proxy.ts: 494ms, application-code: 560ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/home 200 in 646ms (next.js: 5ms, proxy.ts: 173ms, application-code: 468ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/home 200 in 1596ms (next.js: 39ms, proxy.ts: 592ms, application-code: 966ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/home 200 in 2.0s (next.js: 85ms, proxy.ts: 645ms, application-code: 1275ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+ GET /student/today 200 in 594ms (next.js: 37ms, proxy.ts: 491ms, application-code: 66ms)
+ GET /student/home 200 in 1307ms (next.js: 15ms, proxy.ts: 456ms, application-code: 836ms)
+✓ Compiled in 602ms
+ GET /student/home 200 in 890ms (next.js: 409ms, proxy.ts: 246ms, application-code: 236ms)
+ GET /student/home 200 in 254ms (next.js: 5ms, proxy.ts: 190ms, application-code: 59ms)
+ GET /student/reports 200 in 886ms (next.js: 54ms, proxy.ts: 783ms, application-code: 49ms)
+ GET /student/reports 200 in 201ms (next.js: 5ms, proxy.ts: 172ms, application-code: 24ms)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /student/today 200 in 223ms (next.js: 28ms, proxy.ts: 162ms, application-code: 33ms)
+ GET /student/home 200 in 725ms (next.js: 6ms, proxy.ts: 165ms, application-code: 553ms)
+ GET /student/reports 200 in 254ms (next.js: 7ms, proxy.ts: 226ms, application-code: 21ms)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /student/exams 200 in 646ms (next.js: 60ms, proxy.ts: 546ms, application-code: 40ms)
+ GET /student/exams 200 in 213ms (next.js: 9ms, proxy.ts: 173ms, application-code: 30ms)
+ GET /student/profile 200 in 854ms (next.js: 59ms, proxy.ts: 168ms, application-code: 627ms)
+ GET /student/profile 200 in 732ms (next.js: 3ms, proxy.ts: 163ms, application-code: 566ms)
+ GET /student/home 200 in 3.2s (next.js: 176ms, proxy.ts: 1195ms, application-code: 1826ms)
+ GET /student/home 200 in 903ms (next.js: 16ms, proxy.ts: 277ms, application-code: 610ms)
+ GET /student/home 200 in 765ms (next.js: 12ms, proxy.ts: 179ms, application-code: 574ms)
+ GET /student/home 200 in 1306ms (next.js: 5ms, proxy.ts: 448ms, application-code: 854ms)
+[browser] Image with src "/careerrai-monogram.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio.
+✓ Compiled in 839ms
+✓ Compiled in 223ms
+✓ Compiled in 255ms
+✓ Compiled in 312ms
+ GET /student/home 200 in 1877ms (next.js: 314ms, proxy.ts: 1180ms, application-code: 383ms)
+ GET /student/home 200 in 271ms (next.js: 4ms, proxy.ts: 193ms, application-code: 73ms)
+ GET /student/home 200 in 566ms (next.js: 162ms, proxy.ts: 179ms, application-code: 224ms)
+ GET /student/home 200 in 468ms (next.js: 124ms, proxy.ts: 212ms, application-code: 131ms)
+ GET /student/home 200 in 296ms (next.js: 5ms, proxy.ts: 182ms, application-code: 110ms)
+ GET /student/home 200 in 330ms (next.js: 5ms, proxy.ts: 190ms, application-code: 135ms)
+ GET /student/home 200 in 358ms (next.js: 10ms, proxy.ts: 207ms, application-code: 140ms)
+ GET /student/home 200 in 408ms (next.js: 9ms, proxy.ts: 202ms, application-code: 197ms)
+✓ Compiled in 579ms
+✓ Compiled in 595ms
+✓ Compiled in 299ms
+ GET /student/home 200 in 1254ms (next.js: 257ms, proxy.ts: 773ms, application-code: 223ms)
+ GET /student/home 200 in 300ms (next.js: 8ms, proxy.ts: 202ms, application-code: 90ms)
+✓ Compiled in 600ms
+ GET /student/home 200 in 471ms (next.js: 115ms, proxy.ts: 258ms, application-code: 98ms)
+✓ Compiled in 269ms
+✓ Compiled in 141ms

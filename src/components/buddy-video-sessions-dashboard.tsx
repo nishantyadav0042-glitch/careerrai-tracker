@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Video, Copy, CheckCircle, Clock } from 'lucide-react';
+import { Video, Copy, CheckCircle, Clock, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import type { VideoSession } from '@/types';
@@ -71,64 +71,80 @@ export function BuddyVideoSessionsDashboard({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 px-1">
-        <Video className="w-4 h-4 text-teal-700" />
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-600">
-          Your Video Sessions
+    <div className="space-y-2.5 sm:space-y-3">
+      <div className="flex items-center gap-2 px-0.5 sm:px-1">
+        <Video className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-teal-700 flex-shrink-0" />
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-600 truncate">
+          Video Sessions
         </h3>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5 sm:space-y-2">
         {sessions.map((session) => (
-          <Card key={session.id} className={`p-3 border ${getStatusColor(session.session_status)}`}>
-            <div className="space-y-2">
+          <Card key={session.id} className={`p-2.5 sm:p-3 border ${getStatusColor(session.session_status)}`}>
+            <div className="space-y-1.5 sm:space-y-2">
               {/* Status & Time */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3 h-3 text-stone-500" />
-                  <span className="text-xs text-stone-600">
+              <div className="flex items-center justify-between gap-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <Clock className="w-3 h-3 text-stone-500 flex-shrink-0" />
+                  <span className="text-xs text-stone-600 truncate">
                     {session.scheduled_at
                       ? new Date(session.scheduled_at).toLocaleDateString('en-IN', {
                           day: 'numeric',
                           month: 'short',
+                        })
+                      : 'No date'}
+                  </span>
+                  <span className="text-xs text-stone-500">
+                    {session.scheduled_at
+                      ? new Date(session.scheduled_at).toLocaleTimeString('en-IN', {
                           hour: '2-digit',
                           minute: '2-digit',
                         })
-                      : 'No date set'}
+                      : ''}
                   </span>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 whitespace-nowrap ${
                   session.session_status === 'scheduled'
                     ? 'bg-blue-100 text-blue-800'
                     : session.session_status === 'active'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-stone-100 text-stone-800'
                 }`}>
-                  {session.session_status.charAt(0).toUpperCase() + session.session_status.slice(1)}
+                  {session.session_status === 'scheduled' ? 'Scheduled' : session.session_status === 'active' ? 'Active' : 'Done'}
                 </span>
               </div>
 
-              {/* Meeting Link */}
+              {/* Meeting Links */}
               {session.gmeet_link && (
-                <div className="flex items-center gap-2 bg-white/50 rounded-lg p-2">
+                <div className="space-y-1.5">
+                  {/* For Buddy */}
                   <a
                     href={session.gmeet_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 text-xs text-blue-600 hover:underline truncate"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors"
                   >
-                    📞 Join Meeting
+                    <Video className="w-3.5 h-3.5" />
+                    Join as Buddy
                   </a>
+
+                  {/* Copy Link Option */}
                   <button
                     onClick={() => copyMeetLink(session.gmeet_link || '', session.id)}
-                    className="p-1 hover:bg-stone-200 rounded transition-colors"
-                    title="Copy link"
+                    className="w-full flex items-center justify-center gap-2 py-1.5 px-3 bg-white/80 hover:bg-white text-xs text-stone-700 rounded-lg border border-stone-200 transition-colors"
+                    title="Copy meeting link"
                   >
                     {copiedId === session.id ? (
-                      <CheckCircle className="w-3 h-3 text-green-600" />
+                      <>
+                        <CheckCircle className="w-3 h-3 text-green-600" />
+                        <span>Link Copied!</span>
+                      </>
                     ) : (
-                      <Copy className="w-3 h-3 text-stone-500" />
+                      <>
+                        <Copy className="w-3 h-3 text-stone-500" />
+                        <span>Copy Link</span>
+                      </>
                     )}
                   </button>
                 </div>

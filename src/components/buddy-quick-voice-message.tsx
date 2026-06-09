@@ -74,19 +74,19 @@ export function BuddyQuickVoiceMessage({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 sm:space-y-3">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+          className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg sm:rounded-xl font-medium text-sm sm:text-base hover:shadow-lg transition-all"
         >
-          <Mic className="w-4 h-4" />
-          Send Quick Voice Message
+          <Mic className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+          Send Voice Message
         </button>
       ) : (
-        <Card className="p-4 space-y-3 bg-orange-50 border-orange-200">
+        <Card className="p-3 sm:p-4 space-y-2.5 sm:space-y-3 bg-orange-50 border-orange-200">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-stone-900">📢 Quick Voice Message</h3>
+            <h3 className="font-medium text-sm sm:text-base text-stone-900">📢 Voice Message</h3>
             <button
               onClick={() => {
                 setIsOpen(false);
@@ -99,7 +99,7 @@ export function BuddyQuickVoiceMessage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-2">
+            <label className="block text-xs font-medium text-stone-700 mb-1.5 sm:mb-2">
               Select Student
             </label>
             <select
@@ -108,7 +108,7 @@ export function BuddyQuickVoiceMessage({
                 const student = students.find((s) => s.id === e.target.value);
                 setSelectedStudent(student || null);
               }}
-              className="w-full px-3 py-2 text-sm border border-orange-300 rounded-lg focus:outline-none focus:border-orange-600 bg-white"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-orange-300 rounded-lg focus:outline-none focus:border-orange-600 bg-white"
             >
               {students.map((student) => (
                 <option key={student.id} value={student.id}>
@@ -121,9 +121,9 @@ export function BuddyQuickVoiceMessage({
           <button
             onClick={() => setIsRecording(true)}
             disabled={!selectedStudent}
-            className="w-full px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-orange-600 text-white rounded-lg font-medium text-xs sm:text-sm hover:bg-orange-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
           >
-            <Mic className="w-4 h-4" />
+            <Mic className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
             Record & Send
           </button>
         </Card>

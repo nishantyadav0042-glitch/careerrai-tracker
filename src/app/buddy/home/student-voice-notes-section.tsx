@@ -53,47 +53,42 @@ export function StudentVoiceNotesSection({ buddyId }: StudentVoiceNotesSectionPr
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-4">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 mb-2">
-          <Mic className="w-5 h-5 text-orange-600" />
-          <h2 className="text-lg font-bold text-stone-900">
-            Student Voice Notes & Doubts
+        <div className="flex items-center gap-2 mb-1 sm:mb-2">
+          <Mic className="w-4 sm:w-5 h-4 sm:h-5 text-orange-600 flex-shrink-0" />
+          <h2 className="text-sm sm:text-lg font-bold text-stone-900 truncate">
+            Student Voice Notes
           </h2>
         </div>
-        <p className="text-sm text-stone-600">
-          Listen to your students' concerns and provide voice feedback
+        <p className="text-xs sm:text-sm text-stone-600">
+          Check your students' concerns and respond
         </p>
       </div>
 
-      {/* Students List */}
-      {loading ? (
-        <div className="text-center py-8 text-stone-500">Loading students...</div>
-      ) : students.length === 0 ? (
-        <div className="bg-white border-2 border-stone-200 rounded-xl p-6 text-center">
-          <Mic className="w-8 h-8 text-stone-300 mx-auto mb-2" />
-          <p className="text-stone-600 text-sm">No students assigned yet</p>
-        </div>
-      ) : (
-        <div className="grid gap-3">
+      {/* Students List - Mobile Optimized */}
+      {loading ? null : students.length === 0 ? null : (
+        <div className="grid gap-1.5 sm:gap-2.5">
           {students.map((student) => (
             <Link
               key={student.student_id}
               href={`/buddy/students/${student.student_id}`}
-              className="bg-white border-2 border-orange-200 rounded-xl p-4 hover:border-orange-300 hover:bg-orange-50 transition-all group"
+              className="bg-white border border-orange-200 sm:border-2 rounded-lg sm:rounded-xl p-2.5 sm:p-3 hover:border-orange-300 hover:bg-orange-50 transition-all group"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-stone-900 group-hover:text-orange-700">{student.student_name}</p>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium sm:font-semibold text-xs sm:text-base text-stone-900 group-hover:text-orange-700 truncate">
+                    {student.student_name}
+                  </p>
                   {student.has_voice_note && (
-                    <div className="flex items-center gap-1.5 text-xs text-orange-600 mt-1">
-                      <Volume2 className="w-3 h-3" />
-                      <span>Has voice note</span>
+                    <div className="flex items-center gap-1 text-xs text-orange-600 mt-0.5">
+                      <Volume2 className="w-2.5 h-2.5 flex-shrink-0" />
+                      <span className="truncate">Voice note</span>
                     </div>
                   )}
                 </div>
-                <ArrowRight className="w-5 h-5 text-stone-400 group-hover:text-orange-600 transition-colors" />
+                <ArrowRight className="w-4 sm:w-5 h-4 sm:h-5 text-stone-400 group-hover:text-orange-600 transition-colors flex-shrink-0" />
               </div>
             </Link>
           ))}
