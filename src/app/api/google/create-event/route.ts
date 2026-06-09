@@ -79,14 +79,12 @@ export async function POST(request: NextRequest) {
       },
     } as any;
 
-    // Call Google Calendar API
-    const response = await calendar.events.insert(
-      {
-        calendarId: 'primary',
-        conferenceDataVersion: 1,
-        requestBody: event,
-      } as any
-    );
+    // Call Google Calendar API with proper parameters
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      conferenceDataVersion: 1,
+      resource: event,
+    } as any);
 
     const eventData = response.data;
 
