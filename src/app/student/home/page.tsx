@@ -57,29 +57,29 @@ export default async function StudentHomePage() {
       </div>
 
       {/* PHASE 3: NEW HOME PAGE REDESIGN */}
-      {/* 1. BUDDY FEEDBACK - PRIORITY ACTION ITEM */}
+      {/* 1. STREAK HERO - PRIMARY GAMIFICATION & RETENTION */}
+      <StreakHero userId={user.id} />
+
+      {/* 2. BUDDY FEEDBACK - PRIORITY ACTION ITEM */}
       <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-5 border-2 border-teal-200">
         <BuddyFeedbackCard studentId={user.id} buddyId={profile?.buddy_id || ''} buddyName="Your Buddy" />
       </div>
 
-      {/* 2. STUDENT VOICE NOTES - ACTION ITEM */}
+      {/* 3. STUDENT VOICE NOTES - ACTION ITEM */}
       <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-5 border-2 border-orange-200">
         <StudentVoiceNotesCard studentId={user.id} buddyId={profile?.buddy_id || ''} />
       </div>
 
-      {/* 3. STREAK HERO - Primary retention driver */}
-      <StreakHero userId={user.id} />
-
-      {/* 2. BUDDY SIGNAL - Shows relationship is real */}
+      {/* 4. BUDDY SIGNAL - Shows relationship is real */}
       <BuddySignalCard userId={user.id} />
 
-      {/* 3. DAYS TO CAT - Context for urgency */}
+      {/* 5. DAYS TO CAT - Context for urgency */}
       <CATContextCard />
 
-      {/* 4. CAT READINESS TEST (kept for prominence) */}
+      {/* 6. CAT READINESS TEST (kept for prominence) */}
       <CATTestWidget userId={user.id} />
 
-      {/* 5. TODAY STATUS */}
+      {/* 7. TODAY STATUS */}
       <div className={cn('p-5 rounded-2xl border-2', submittedToday ? 'border-emerald-200 bg-emerald-50/40 bg-white' : 'border-orange-200 bg-orange-50/40 bg-white')}>
         <div className="flex items-center justify-between">
           <div>
@@ -112,7 +112,7 @@ export default async function StudentHomePage() {
         </div>
       </div>
 
-      {/* 6. QUICK STATS FROM LAST 7 DAYS */}
+      {/* 8. QUICK STATS FROM LAST 7 DAYS */}
       <div>
         <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Your progress</h2>
         <div className="grid grid-cols-2 gap-3">
