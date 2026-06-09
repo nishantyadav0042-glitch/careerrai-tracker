@@ -86,7 +86,7 @@ export function BuddyAudioResponsesCompact({
             >
               <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
                 <span className="text-xs font-medium text-stone-700 truncate">
-                  {response.student_name.split(' ')[0]}
+                  {response.student_name?.split(' ')[0] || 'Student'}
                 </span>
                 <span className="text-xs text-stone-500 flex-shrink-0 whitespace-nowrap">
                   {new Date(response.created_at).toLocaleDateString('en-IN', {

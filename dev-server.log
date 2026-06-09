@@ -200,3 +200,7 @@
  GET /student/home 200 in 471ms (next.js: 115ms, proxy.ts: 258ms, application-code: 98ms)
 ✓ Compiled in 269ms
 ✓ Compiled in 141ms
+✓ Compiled in 468ms
+ GET /student/home 200 in 1659ms (next.js: 523ms, proxy.ts: 860ms, application-code: 277ms)
+✓ Compiled in 351ms
+ GET /student/home 200 in 1216ms (next.js: 267ms, proxy.ts: 776ms, application-code: 173ms)
