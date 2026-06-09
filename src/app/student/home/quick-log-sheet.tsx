@@ -86,16 +86,47 @@ export function QuickLogSheet({ isOpen, onClose, userId }: QuickLogSheetProps) {
 
       const feelingOption = FEELING_OPTIONS[feeling];
 
-      // Create daily report
-      const { error: reportError } = await supabase.from('daily_reports').insert({
-        student_id: userId,
-        report_date: todayString,
-        study_duration: hours,
-        topics_covered: selectedTopics,
-        confidence: feelingOption.confidence,
-        stress: feelingOption.stress,
-        quality_focus: 3
-      });
+      // Check if report exists for today
+      const { data: existingReport, error: checkError } = await supabase
+        .from('daily_reports')
+        .select('id')
+        .eq('student_id', userId)
+        .eq('report_date', todayString)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+      // Create or update daily report
+      let reportError;
+      if (existingReport) {
+        // Update existing report
+        const { error: updateError } = await supabase
+          .from('daily_reports')
+          .update({
+            study_duration: hours,
+            topics_covered: selectedTopics,
+            confidence: feelingOption.confidence,
+            stress: feelingOption.stress,
+            quality_focus: 3,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingReport.id);
+        reportError = updateError;
+      } else {
+        // Insert new report
+        const { error: insertError } = await supabase
+          .from('daily_reports')
+          .insert({
+            student_id: userId,
+            report_date: todayString,
+            study_duration: hours,
+            topics_covered: selectedTopics,
+            confidence: feelingOption.confidence,
+            stress: feelingOption.stress,
+            quality_focus: 3,
+          });
+        reportError = insertError;
+      }
 
       if (reportError) throw reportError;
 
