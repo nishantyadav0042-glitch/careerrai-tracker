@@ -49,11 +49,11 @@ export default async function BuddyHomePage() {
 
           <div className="flex items-center gap-1.5 sm:gap-3 ml-2 flex-shrink-0">
             <Link
-              href="/buddy/setup"
+              href="/buddy/settings"
               className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 text-stone-700 hover:bg-stone-100 rounded-lg transition-colors text-xs sm:text-sm"
             >
               <Settings className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-              <span className="hidden sm:inline font-medium">Setup</span>
+              <span className="hidden sm:inline font-medium">Settings</span>
             </Link>
 
             <form action="/api/auth/logout" method="post">

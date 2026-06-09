@@ -16,7 +16,7 @@ import { VideoSessionsCard } from './video-sessions-card';
 import { computeSummary, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
 import type { DailyReport } from '@/types';
-import { ArrowRight, CheckCircle2, Clock } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default async function StudentHomePage() {
@@ -49,11 +49,18 @@ export default async function StudentHomePage() {
   return (
     <StudentHomeClient>
       <div className="space-y-4 sm:space-y-5">
-      {/* Greeting - COMPACT */}
-      <div className="px-0.5 sm:px-1 py-1">
+      {/* Greeting - COMPACT with Settings Link */}
+      <div className="flex items-center justify-between px-0.5 sm:px-1 py-1">
         <h1 className="text-lg sm:text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Hey {firstName}! 👋
         </h1>
+        <Link
+          href="/student/settings"
+          className="p-2 hover:bg-stone-100 rounded-lg transition-colors"
+          title="Settings"
+        >
+          <Settings className="w-5 h-5 text-stone-600" />
+        </Link>
       </div>
 
       {/* PHASE 3: NEW HOME PAGE REDESIGN */}
