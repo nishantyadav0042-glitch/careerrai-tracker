@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get student name
+    // Get student name and email (email needed to invite them to the calendar event)
     const { data: studentProfile } = await admin
       .from('profiles')
-      .select('full_name')
+      .select('full_name, email')
       .eq('id', body.studentId)
       .single();
 
@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
               title: body.title,
               description: `Session with ${studentProfile?.full_name || 'student'}${body.description ? ': ' + body.description : ''}`,
               studentName: studentProfile?.full_name || 'Student',
+              studentEmail: studentProfile?.email || undefined,
               startTime: body.startTime,
               endTime: body.endTime,
             }),

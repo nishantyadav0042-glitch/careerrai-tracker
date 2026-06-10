@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Play, Pause, Download } from 'lucide-react';
+import { Play, Pause, Mic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceNotePlayerProps {
@@ -34,28 +34,13 @@ export function VoiceNotePlayer({
     }
   };
 
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
-    }
-  };
-
-  const handleEnded = () => {
-    setIsPlaying(false);
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const time = Math.max(0, Math.min(duration, ratio * duration));
+    audioRef.current.currentTime = time;
     setCurrentTime(time);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-    }
   };
 
   const formatTime = (seconds: number) => {
@@ -77,100 +62,60 @@ export function VoiceNotePlayer({
     return date.toLocaleDateString();
   };
 
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
-    <div className={cn('space-y-3', className)}>
+    <div
+      className={cn(
+        'rounded-xl border border-stone-200 bg-white px-3 py-2 max-h-[72px]',
+        className
+      )}
+    >
       <audio
         ref={audioRef}
         src={audioUrl}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
+        onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+        onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
+        onEnded={() => setIsPlaying(false)}
         preload="metadata"
       />
 
-      <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="font-semibold text-orange-900">Voice Message</p>
-            <p className="text-xs text-orange-700">From {buddyName}</p>
+      {/* Row 1: identity + duration */}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-6 h-6 rounded-full bg-[#2A9D8F] text-white text-[11px] font-semibold flex items-center justify-center flex-shrink-0">
+            {buddyName ? buddyName.charAt(0).toUpperCase() : <Mic className="w-3 h-3" />}
           </div>
-          <p className="text-xs font-medium text-orange-600">
-            {getTimeAgo(createdAt)}
-          </p>
+          <span className="text-xs font-medium text-stone-800 truncate">
+            {buddyName} · {getTimeAgo(createdAt)}
+          </span>
         </div>
+        <span className="text-xs text-stone-500 tabular-nums flex-shrink-0">
+          {formatTime(duration)}
+        </span>
+      </div>
 
-        {/* Player Controls */}
-        <div className="space-y-3">
-          {/* Play/Pause Button */}
-          <button
-            onClick={togglePlay}
-            className="w-full flex items-center gap-3 py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-all font-medium"
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-5 h-5" />
-                Pause
-              </>
-            ) : (
-              <>
-                <Play className="w-5 h-5" />
-                Play Message
-              </>
-            )}
-          </button>
-
-          {/* Progress Bar */}
-          {duration > 0 && (
-            <div className="space-y-2">
-              <input
-                type="range"
-                min="0"
-                max={duration}
-                value={currentTime}
-                onChange={handleSeek}
-                className="w-full h-2 bg-orange-300 rounded-lg appearance-none cursor-pointer accent-orange-600"
-              />
-              <div className="flex justify-between items-center text-xs text-orange-700 font-medium">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Waveform Animation During Playback */}
-          {isPlaying && (
-            <div className="flex items-center justify-center gap-1 py-3">
-              {[...Array(12)].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-0.5 bg-orange-600 rounded-full"
-                  style={{
-                    height: `${Math.random() * 20 + 4}px`,
-                    animation: `wave 0.6s ease-in-out infinite`,
-                    animationDelay: `${i * 0.05}s`
-                  }}
-                />
-              ))}
-              <style>{`
-                @keyframes wave {
-                  0%, 100% { opacity: 0.4; }
-                  50% { opacity: 1; }
-                }
-              `}</style>
-            </div>
-          )}
-
-          {/* Download Button */}
-          <a
-            href={audioUrl}
-            download
-            className="inline-flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Download
-          </a>
+      {/* Row 2: play + progress */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={togglePlay}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          className="w-7 h-7 rounded-full bg-[#2A9D8F] hover:bg-[#22867b] text-white flex items-center justify-center flex-shrink-0 transition-colors"
+        >
+          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+        </button>
+        <div
+          className="flex-1 h-1.5 bg-stone-200 rounded-full cursor-pointer"
+          onClick={handleSeek}
+        >
+          <div
+            className="h-full bg-[#2A9D8F] rounded-full transition-[width]"
+            style={{ width: `${progress}%` }}
+          />
         </div>
+        <span className="text-[11px] text-stone-500 tabular-nums flex-shrink-0">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </span>
       </div>
     </div>
   );

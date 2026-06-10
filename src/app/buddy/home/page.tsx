@@ -5,6 +5,7 @@ import { StudentVoiceNotesSection } from './student-voice-notes-section';
 import { BuddyAudioResponsesCompact } from '@/components/buddy-audio-responses-compact';
 import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
 import { BuddyVideoSessionsDashboard } from '@/components/buddy-video-sessions-dashboard';
+import { UpcomingSessionCard } from '@/components/upcoming-session-card';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
 
@@ -80,6 +81,9 @@ export default async function BuddyHomePage() {
       {/* Main Content - Mobile Optimized */}
       <div className="w-full px-3 sm:px-4 py-4 sm:py-8">
         <div className="space-y-3 sm:space-y-5">
+          {/* 0. NEXT SESSION (24h) - hidden when none */}
+          <UpcomingSessionCard buddyId={user.id} />
+
           {/* 1. COMPACT Audio Responses - TOP PRIORITY */}
           <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-3 sm:p-5 border-2 border-blue-200">
             <BuddyAudioResponsesCompact buddyId={user.id} />

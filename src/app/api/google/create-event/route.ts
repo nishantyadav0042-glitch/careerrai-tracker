@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
+import type { calendar_v3 } from 'googleapis';
 import { createClient } from '@/lib/supabase/server';
 import { getValidGoogleAccessToken } from '@/lib/google-oauth-utils';
 
@@ -7,14 +8,26 @@ interface CreateEventRequest {
   title: string;
   description?: string;
   studentName: string;
+  studentEmail?: string;
   startTime: string; // ISO 8601 format
   endTime: string; // ISO 8601 format
 }
 
+/** Pull the Meet link out of an event, checking both modern and legacy fields */
+function extractMeetLink(event: calendar_v3.Schema$Event): string | undefined {
+  const videoEntry = event.conferenceData?.entryPoints?.find(
+    (ep) => ep.entryPointType === 'video'
+  );
+  return videoEntry?.uri ?? event.hangoutLink ?? undefined;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * POST /api/google/create-event
- * Creates a Google Calendar event with Google Meet conferencing
- * Returns the Meet link and Calendar event ID
+ * Creates a Google Calendar event with Google Meet conferencing on the
+ * buddy's calendar, adding the student as an attendee so the event shows
+ * up on their calendar too. Returns the Meet link and Calendar event ID.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +53,6 @@ export async function POST(request: NextRequest) {
     // Get user's valid access token (auto-refreshes if needed)
     const accessToken = await getValidGoogleAccessToken(user.id);
 
-    // Create OAuth2 client and set access token
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID!,
       process.env.GOOGLE_CLIENT_SECRET!,
@@ -51,14 +63,18 @@ export async function POST(request: NextRequest) {
       access_token: accessToken,
     });
 
-    // Create Google Calendar API client
     const calendar = google.calendar({
       version: 'v3',
       auth: oauth2Client,
     });
 
-    // Create event with Google Meet conferencing
-    const event = {
+    // Student joins as attendee — the event lands on their calendar
+    // automatically, no second event needed
+    const attendees = body.studentEmail
+      ? [{ email: body.studentEmail, displayName: body.studentName }]
+      : undefined;
+
+    const event: calendar_v3.Schema$Event = {
       summary: `Session: ${body.title}`,
       description: `${body.studentName} - ${body.description || 'Video session with buddy'}`,
       start: {
@@ -69,46 +85,56 @@ export async function POST(request: NextRequest) {
         dateTime: new Date(body.endTime).toISOString(),
         timeZone: 'Asia/Kolkata',
       },
+      attendees,
       conferenceData: {
         createRequest: {
           requestId: `careerrai-${user.id}-${Date.now()}`,
           conferenceSolutionKey: {
-            key: 'hangoutsMeet',
+            type: 'hangoutsMeet',
           },
         },
       },
-    } as any;
+    };
 
-    // Call Google Calendar API with proper parameters
     const response = await calendar.events.insert({
       calendarId: 'primary',
       conferenceDataVersion: 1,
-      resource: event,
-    } as any);
+      sendUpdates: 'all', // email the student their invite
+      requestBody: event,
+    });
 
-    const eventData = response.data;
+    let eventData = response.data;
+    let meetLink = extractMeetLink(eventData);
 
-    // Extract Google Meet link - check multiple possible locations
-    let meetLink: string | undefined;
-
-    // Try conferenceData entryPoints (primary location)
-    if (eventData.conferenceData?.entryPoints) {
-      const videoEntry = eventData.conferenceData.entryPoints.find(
-        (ep: any) => ep.entryPointType === 'video'
-      );
-      if (videoEntry?.uri) {
-        meetLink = videoEntry.uri;
-      }
+    // Conference creation can come back as "pending" — the Meet link only
+    // materialises after Google finishes provisioning. Re-fetch the event
+    // (max 2 retries, 2s apart) until the link appears.
+    let retries = 0;
+    while (!meetLink && eventData.id && retries < 2) {
+      await sleep(2000);
+      const refreshed = await calendar.events.get({
+        calendarId: 'primary',
+        eventId: eventData.id,
+      });
+      eventData = refreshed.data;
+      meetLink = extractMeetLink(eventData);
+      retries++;
     }
 
-    // Fallback to hangoutLink (older API format)
-    if (!meetLink && eventData.hangoutLink) {
-      meetLink = eventData.hangoutLink;
-    }
-
-    // Log the full response for debugging if no link found
     if (!meetLink) {
-      console.error('No Meet link generated. Full response:', JSON.stringify(eventData, null, 2));
+      // Don't hand back a success with no link — callers would store NULL
+      console.error(
+        'No Meet link after retries. conferenceData:',
+        JSON.stringify(eventData.conferenceData, null, 2)
+      );
+      // Clean up the linkless event so the buddy's calendar isn't littered
+      if (eventData.id) {
+        await calendar.events.delete({ calendarId: 'primary', eventId: eventData.id }).catch(() => {});
+      }
+      return NextResponse.json(
+        { error: 'Google did not return a Meet link for the event. Please try again.' },
+        { status: 502 }
+      );
     }
 
     return NextResponse.json({
