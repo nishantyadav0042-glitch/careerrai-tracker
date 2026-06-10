@@ -25,6 +25,8 @@ export function VideoSessionsCard({ userId }: VideoSessionsCardProps) {
         .from('video_sessions')
         .select('*')
         .eq('student_id', userId)
+        .eq('session_status', 'scheduled')
+        .gte('scheduled_at', new Date().toISOString())
         .order('scheduled_at', { ascending: true })
         .limit(3);
 

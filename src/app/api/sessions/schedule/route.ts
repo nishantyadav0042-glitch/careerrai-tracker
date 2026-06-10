@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { isGoogleCalendarConnected } from '@/lib/google-oauth-utils';
 
 interface ScheduleSessionRequest {
@@ -17,7 +18,8 @@ interface ScheduleSessionRequest {
 export async function POST(request: NextRequest) {
   try {
     const admin = createAdminClient();
-    const { data: { user }, error: authError } = await admin.auth.getUser();
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(
@@ -99,7 +101,8 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              // Auth context will be used from the request
+              // Forward the user's session cookies so create-event can authenticate
+              cookie: request.headers.get('cookie') ?? '',
             },
             body: JSON.stringify({
               title: body.title,

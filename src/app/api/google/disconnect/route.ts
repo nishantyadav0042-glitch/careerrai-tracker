@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { disconnectGoogleCalendar } from '@/lib/google-oauth-utils';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * POST /api/google/disconnect
@@ -8,8 +8,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
  */
 export async function POST(request: NextRequest) {
   try {
-    const admin = createAdminClient();
-    const { data: { user }, error: authError } = await admin.auth.getUser();
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(

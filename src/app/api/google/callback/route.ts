@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * GET /api/google/callback
@@ -41,8 +42,9 @@ export async function GET(request: NextRequest) {
       throw new Error('Missing refresh token or access token from Google');
     }
 
-    // Get user from auth
-    const { data: { user }, error: authError } = await createAdminClient().auth.getUser();
+    // Get user from auth (cookie-based session — the user lands here from Google's redirect in their own browser)
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.redirect(
@@ -77,7 +79,8 @@ export async function GET(request: NextRequest) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // The setup-reminders endpoint will get the user from the auth context
+          // Forward the user's session cookies so setup-reminders can authenticate
+          cookie: request.headers.get('cookie') ?? '',
         },
       });
     } catch (remindersError) {

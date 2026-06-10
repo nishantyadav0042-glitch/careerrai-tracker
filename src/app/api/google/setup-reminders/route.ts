@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { createAutomatedReminders } from '@/lib/google-reminder-utils';
 
 /**
@@ -9,7 +10,8 @@ import { createAutomatedReminders } from '@/lib/google-reminder-utils';
 export async function POST(request: NextRequest) {
   try {
     const admin = createAdminClient();
-    const { data: { user }, error: authError } = await admin.auth.getUser();
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(

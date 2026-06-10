@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { getValidGoogleAccessToken } from '@/lib/google-oauth-utils';
 
 interface CreateEventRequest {
@@ -18,8 +18,8 @@ interface CreateEventRequest {
  */
 export async function POST(request: NextRequest) {
   try {
-    const admin = createAdminClient();
-    const { data: { user }, error: authError } = await admin.auth.getUser();
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(
