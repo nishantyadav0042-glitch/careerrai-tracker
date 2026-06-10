@@ -52,22 +52,38 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Store tokens in Supabase
-    const { error: updateError } = await createAdminClient()
-      .from('profiles')
-      .update({
-        google_oauth_refresh_token: tokens.refresh_token,
-        google_oauth_access_token: tokens.access_token,
-        google_oauth_token_expires_at: tokens.expiry_date
+    // Store tokens in Supabase — dedicated table (service-role writes only,
+    // owner-only RLS) so other users' clients can never read them
+    const admin = createAdminClient();
+    const { error: tokenError } = await admin
+      .from('google_oauth_tokens')
+      .upsert({
+        user_id: user.id,
+        refresh_token: tokens.refresh_token,
+        access_token: tokens.access_token,
+        token_expires_at: tokens.expiry_date
           ? new Date(tokens.expiry_date).toISOString()
           : null,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (tokenError) {
+      console.error('Error storing tokens:', tokenError);
+      return NextResponse.redirect(
+        `${state || process.env.NEXT_PUBLIC_APP_URL}/settings?error=token_storage_failed`
+      );
+    }
+
+    const { error: profileError } = await admin
+      .from('profiles')
+      .update({
         google_calendar_connected: true,
         google_calendar_connected_at: new Date().toISOString(),
       })
       .eq('id', user.id);
 
-    if (updateError) {
-      console.error('Error storing tokens:', updateError);
+    if (profileError) {
+      console.error('Error updating connection status:', profileError);
       return NextResponse.redirect(
         `${state || process.env.NEXT_PUBLIC_APP_URL}/settings?error=token_storage_failed`
       );

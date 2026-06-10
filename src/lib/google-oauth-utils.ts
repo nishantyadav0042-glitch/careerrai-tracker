@@ -8,25 +8,25 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function getValidGoogleAccessToken(userId: string): Promise<string> {
   const admin = createAdminClient();
 
-  // Get user's tokens from Supabase
-  const { data: profile, error } = await admin
-    .from('profiles')
-    .select('google_oauth_refresh_token, google_oauth_access_token, google_oauth_token_expires_at')
-    .eq('id', userId)
+  // Get user's tokens from Supabase (dedicated table, service-role access only)
+  const { data: tokens, error } = await admin
+    .from('google_oauth_tokens')
+    .select('refresh_token, access_token, token_expires_at')
+    .eq('user_id', userId)
     .single();
 
-  if (error || !profile?.google_oauth_refresh_token) {
+  if (error || !tokens?.refresh_token) {
     throw new Error('User has not connected Google Calendar');
   }
 
   const now = new Date();
-  const expiryDate = profile.google_oauth_token_expires_at
-    ? new Date(profile.google_oauth_token_expires_at)
+  const expiryDate = tokens.token_expires_at
+    ? new Date(tokens.token_expires_at)
     : null;
 
   // Check if token is still valid (with 5 min buffer)
   if (expiryDate && expiryDate.getTime() > now.getTime() + 5 * 60 * 1000) {
-    return profile.google_oauth_access_token;
+    return tokens.access_token;
   }
 
   // Token expired, refresh it
@@ -37,7 +37,7 @@ export async function getValidGoogleAccessToken(userId: string): Promise<string>
   );
 
   oauth2Client.setCredentials({
-    refresh_token: profile.google_oauth_refresh_token,
+    refresh_token: tokens.refresh_token,
   });
 
   try {
@@ -49,14 +49,15 @@ export async function getValidGoogleAccessToken(userId: string): Promise<string>
 
     // Update tokens in Supabase
     await admin
-      .from('profiles')
+      .from('google_oauth_tokens')
       .update({
-        google_oauth_access_token: credentials.access_token,
-        google_oauth_token_expires_at: credentials.expiry_date
+        access_token: credentials.access_token,
+        token_expires_at: credentials.expiry_date
           ? new Date(credentials.expiry_date).toISOString()
           : null,
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('user_id', userId);
 
     return credentials.access_token;
   } catch (error) {
@@ -92,17 +93,17 @@ export async function isGoogleCalendarConnected(userId: string): Promise<boolean
 export async function disconnectGoogleCalendar(userId: string): Promise<void> {
   const admin = createAdminClient();
 
-  const { error } = await admin
+  const { error: deleteError } = await admin
+    .from('google_oauth_tokens')
+    .delete()
+    .eq('user_id', userId);
+
+  const { error: updateError } = await admin
     .from('profiles')
-    .update({
-      google_oauth_refresh_token: null,
-      google_oauth_access_token: null,
-      google_oauth_token_expires_at: null,
-      google_calendar_connected: false,
-    })
+    .update({ google_calendar_connected: false })
     .eq('id', userId);
 
-  if (error) {
+  if (deleteError || updateError) {
     throw new Error('Failed to disconnect Google Calendar');
   }
 }
