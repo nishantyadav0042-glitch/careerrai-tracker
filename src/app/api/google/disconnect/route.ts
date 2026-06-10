@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { disconnectGoogleCalendar } from '@/lib/google-oauth-utils';
+import { deleteAutomatedReminders } from '@/lib/google-reminder-utils';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -16,6 +17,14 @@ export async function POST(request: NextRequest) {
         { error: 'Unauthorized' },
         { status: 401 }
       );
+    }
+
+    // Remove our reminder events while we still hold a valid token
+    // (best-effort — disconnect proceeds even if cleanup fails)
+    try {
+      await deleteAutomatedReminders(user.id);
+    } catch (cleanupError) {
+      console.error('Reminder cleanup failed during disconnect:', cleanupError);
     }
 
     // Disconnect calendar
