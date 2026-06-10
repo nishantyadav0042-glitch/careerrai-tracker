@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import type { Profile, DailyReport } from '@/types';
+import type { DailyReport } from '@/types';
 import { getTodayIST } from '@/lib/utils';
 import { CheckCircle2, Clock, AlertCircle, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ export default async function BuddyStudentsPage() {
   // Get students assigned to this buddy
   const { data: students } = await supabase
     .from('profiles')
-    .select('*')
+    .select('id, full_name, exam_target')
     .eq('buddy_id', user.id)
     .eq('role', 'student');
 
@@ -68,7 +68,7 @@ export default async function BuddyStudentsPage() {
         <p className="text-sm text-stone-600 mt-1">{(students ?? []).length} active</p>
       </div>
 
-      {(students ?? []).map((student: Profile) => {
+      {(students ?? []).map((student) => {
         const reps = reportsMap[student.id] ?? [];
         const lastReport = reps.sort((a, b) => b.report_date.localeCompare(a.report_date))[0];
         const lastDate = lastReport?.report_date;
@@ -91,7 +91,7 @@ export default async function BuddyStudentsPage() {
           statusBadge = <Badge color="red"><AlertCircle className="w-3 h-3" />Inactive</Badge>;
         }
 
-        const initials = student.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+        const initials = student.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
 
         return (
           <Link key={student.id} href={`/buddy/students/${student.id}`}>

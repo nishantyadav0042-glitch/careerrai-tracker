@@ -42,7 +42,7 @@ export default async function BuddyStudentDetailPage({
   const admin = createAdminClient();
 
   // Verify this student belongs to this buddy
-  const { data: student } = await admin.from('profiles').select('*').eq('id', id).single();
+  const { data: student } = await admin.from('profiles').select('buddy_id, full_name, exam_target, email, cat_percentile').eq('id', id).single();
   if (!student || student.buddy_id !== user.id) notFound();
 
   const { data: reportsRaw } = await admin

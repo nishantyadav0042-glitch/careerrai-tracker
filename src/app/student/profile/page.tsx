@@ -15,7 +15,7 @@ export default async function StudentProfilePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('*').eq('id', user.id).single();
+  const { data: profile } = await admin.from('profiles').select('full_name, email, exam_target, buddy_id, notif_prefs, created_at').eq('id', user.id).single();
   if (!profile) redirect('/login');
 
   let buddyName: string | null = null;

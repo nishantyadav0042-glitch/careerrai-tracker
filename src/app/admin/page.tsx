@@ -27,7 +27,7 @@ export default async function AdminPage() {
   if (adminProfile?.role !== 'admin') redirect('/login');
 
   // Fetch all profiles
-  const { data: allProfiles } = await admin.from('profiles').select('*').order('role').order('full_name');
+  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, exam_target, buddy_id').order('role').order('full_name');
   const profiles = (allProfiles ?? []) as Profile[];
 
   const students = profiles.filter(p => p.role === 'student');

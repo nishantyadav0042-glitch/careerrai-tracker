@@ -13,7 +13,7 @@ export default async function BuddyProfilePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('*').eq('id', user.id).single();
+  const { data: profile } = await admin.from('profiles').select('full_name, email, notif_prefs').eq('id', user.id).single();
   if (!profile) redirect('/login');
 
   const { count: studentCount } = await admin
