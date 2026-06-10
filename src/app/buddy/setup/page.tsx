@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { BuddyAudioRecorder } from '@/components/buddy-audio-recorder';
+import { SetupRecorderClient } from './setup-recorder-client';
 import { CheckCircle2 } from 'lucide-react';
 
 export default async function BuddySetupPage() {
@@ -96,13 +96,7 @@ export default async function BuddySetupPage() {
               </div>
             </div>
           ) : (
-            <BuddyAudioRecorder
-              buddyId={user.id}
-              onUploadComplete={() => {
-                // Reload page to show completion state
-                window.location.reload();
-              }}
-            />
+            <SetupRecorderClient buddyId={user.id} />
           )}
         </div>
 
