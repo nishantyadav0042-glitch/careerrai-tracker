@@ -77,6 +77,17 @@ export default async function BuddyStudentDetailPage({
 
   const lastSessionDate = lastVideoSession?.ended_at ? new Date(lastVideoSession.ended_at) : null;
 
+  // Upcoming scheduled sessions with this student (for the join-link list)
+  const { data: upcomingSessions } = await admin
+    .from('video_sessions')
+    .select('id, title, scheduled_at, google_meet_link')
+    .eq('student_id', id)
+    .eq('buddy_id', user.id)
+    .eq('session_status', 'scheduled')
+    .gte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true })
+    .limit(3);
+
   const summary = computeSummary(reports, period);
 
   const moodData = reports.slice().reverse().map((r) => ({
@@ -218,6 +229,47 @@ export default async function BuddyStudentDetailPage({
           ))}
         </div>
       </div>
+
+      {/* Upcoming sessions with this student */}
+      {(upcomingSessions?.length ?? 0) > 0 && (
+        <div className="bg-white rounded-xl border-2 border-teal-200 p-4 space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-600">
+            Upcoming Sessions with {firstName}
+          </h3>
+          {upcomingSessions!.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-stone-900 truncate">{s.title || 'Session'}</p>
+                <p className="text-xs text-stone-600">
+                  {new Date(s.scheduled_at!).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+              {s.google_meet_link ? (
+                <a
+                  href={s.google_meet_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  Join Meet →
+                </a>
+              ) : (
+                <span className="flex-shrink-0 text-xs text-stone-400">No Meet link</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Video Session Prompt - suggests video call if 10+ days since last session */}
       <VideoSessionPromptClient

@@ -60,7 +60,7 @@ export function UpcomingSessionCard({ buddyId }: UpcomingSessionCardProps) {
     minute: '2-digit',
   });
 
-  const meetLink = session.google_meet_link || session.gmeet_link;
+  const meetLink = session.google_meet_link;
 
   return (
     <div className="bg-white rounded-xl p-4 sm:p-5 border-2 border-[#2A9D8F] shadow-sm">

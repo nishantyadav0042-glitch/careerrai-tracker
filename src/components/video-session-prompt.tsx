@@ -32,6 +32,7 @@ export function VideoSessionPrompt({
   const [showForm, setShowForm] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [scheduled, setScheduled] = useState(false);
+  const [meetLink, setMeetLink] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const [sessionType, setSessionType] = useState('session');
@@ -77,19 +78,21 @@ export function VideoSessionPrompt({
         throw new Error(errorData.error || 'Failed to schedule session');
       }
 
-      const { session } = await res.json();
+      const data = await res.json();
+      setMeetLink(data.session?.googleMeetLink ?? null);
       setScheduled(true);
       setShowForm(false);
 
       // Reset form
       setTimeout(() => {
         setScheduled(false);
+        setMeetLink(null);
         setSessionType('session');
         setDuration(30);
         setNotes('');
         setScheduledDate('');
         setScheduledTime('14:00');
-      }, 3000);
+      }, 6000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to schedule');
     } finally {
@@ -99,10 +102,19 @@ export function VideoSessionPrompt({
 
   if (scheduled) {
     return (
-      <Card className="p-4 bg-green-50 border-green-200 mb-4">
-        <div className="flex items-center gap-2 text-green-700">
-          <Video className="w-5 h-5" />
-          <span className="font-medium">Session scheduled! Google Meet link sent to {studentName}</span>
+      <Card
+        className={cn(
+          'p-4 mb-4',
+          meetLink ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+        )}
+      >
+        <div className={cn('flex items-center gap-2', meetLink ? 'text-green-700' : 'text-amber-800')}>
+          <Video className="w-5 h-5 flex-shrink-0" />
+          <span className="font-medium">
+            {meetLink
+              ? `Session scheduled! Google Meet link sent to ${studentName}`
+              : 'Session scheduled — no Meet link yet. Connect Google Calendar in Settings to auto-generate Meet links.'}
+          </span>
         </div>
       </Card>
     );
