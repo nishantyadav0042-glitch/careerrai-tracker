@@ -1,8 +1,8 @@
 full_name,email,phone,role,exam_target,buddy_email,username,password
-Test Student 1,teststudent1@careerrai.com,+91-9000000001,student,CAT,testbuddy1@careerrai.com,teststudent1,Test@1234
-Test Student 2,teststudent2@careerrai.com,+91-9000000002,student,CAT,testbuddy1@careerrai.com,teststudent2,Test@2345
-Test Student 3,teststudent3@careerrai.com,+91-9000000003,student,CAT,testbuddy2@careerrai.com,teststudent3,Test@3456
-Test Student 4,teststudent4@careerrai.com,+91-9000000004,student,CAT,testbuddy2@careerrai.com,teststudent4,Test@4567
-Test Student 5,teststudent5@careerrai.com,+91-9000000005,student,CAT,,teststudent5,Test@5678
-Test Buddy 1,testbuddy1@careerrai.com,+91-9000000010,buddy,,,testbuddy1,Test@buddy1
-Test Buddy 2,testbuddy2@careerrai.com,+91-9000000011,buddy,,,testbuddy2,Test@buddy2
+Test Student 1,teststudent1@careerrai.com,-8999999910,student,CAT,testbuddy1@careerrai.com,teststudent1,Test@1234
+Test Student 2,teststudent2@careerrai.com,-8999999911,student,CAT,testbuddy1@careerrai.com,teststudent2,Test@2345
+Test Student 3,teststudent3@careerrai.com,-8999999912,student,CAT,testbuddy2@careerrai.com,teststudent3,Test@3456
+Test Student 4,teststudent4@careerrai.com,-8999999913,student,CAT,testbuddy2@careerrai.com,teststudent4,Test@4567
+Test Student 5,teststudent5@careerrai.com,-8999999914,student,CAT,,teststudent5,Test@5678
+Test Buddy 1,testbuddy1@careerrai.com,-8999999919,buddy,,,testbuddy1,Test@buddy1
+Test Buddy 2,testbuddy2@careerrai.com,-8999999920,buddy,,,testbuddy2,Test@buddy2

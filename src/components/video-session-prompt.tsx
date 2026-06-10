@@ -57,22 +57,25 @@ export function VideoSessionPrompt({
     setError('');
 
     try {
-      const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`);
+      const startDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+      const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
 
-      const res = await fetch('/api/video-sessions', {
+      const res = await fetch('/api/sessions/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: studentId,
-          buddy_id: buddyId,
-          scheduled_at: scheduledAt.toISOString(),
-          session_type: sessionType,
-          duration_minutes: duration,
-          notes,
+          studentId,
+          title: sessionType || 'Session',
+          description: notes || undefined,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to schedule session');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to schedule session');
+      }
 
       const { session } = await res.json();
       setScheduled(true);
