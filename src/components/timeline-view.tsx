@@ -109,7 +109,7 @@ export function TimelineView({ studentId }: TimelineViewProps) {
                           <div className="mt-2 text-xs text-stone-600 space-y-0.5">
                             <p>
                               <span className="font-medium">Time:</span>{' '}
-                              {new Date(item.metadata.created_at).toLocaleDateString()}
+                              {new Date(item.metadata.created_at as string).toLocaleDateString()}
                             </p>
                           </div>
                         )}

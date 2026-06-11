@@ -1,7 +1,13 @@
 import { useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-type RealtimeCallback = (event: any) => void;
+type RealtimePayload = {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: Record<string, unknown>;
+  old: Record<string, unknown>;
+};
+
+type RealtimeCallback = (event: RealtimePayload) => void;
 
 interface RealtimeSubscriptionOptions {
   onInsert?: RealtimeCallback;
@@ -75,8 +81,8 @@ export function useStreakLeaderboard() {
     (
       onUpdate: (event: {
         eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-        new?: any;
-        old?: any;
+        new?: Record<string, unknown>;
+        old?: Record<string, unknown>;
       }) => void
     ) => {
       const subscription = supabase
@@ -115,7 +121,7 @@ export function useLiveNotifications(userId: string) {
 
   const subscribe = useCallback(
     (
-      onNew: (notification: any) => void
+      onNew: (notification: Record<string, unknown>) => void
     ) => {
       const subscription = supabase
         .channel(`notifications:user_id=eq.${userId}`)

@@ -15,7 +15,7 @@ export interface TimelineItem {
   icon: string;
   title: string;
   description: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   color: 'orange' | 'blue' | 'emerald' | 'purple' | 'amber';
 }
 
@@ -31,7 +31,7 @@ export function getTimelineColor(type: TimelineItemType): 'orange' | 'blue' | 'e
     milestone: 'amber',
     streak: 'orange'
   };
-  return colors[type] as any;
+  return colors[type] as 'orange' | 'blue' | 'emerald' | 'purple' | 'amber';
 }
 
 /**
