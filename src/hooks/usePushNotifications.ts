@@ -74,7 +74,7 @@ export function usePushNotifications() {
       // Subscribe to push
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
       });
 
       // Save subscription to database
@@ -146,10 +146,6 @@ export function usePushNotifications() {
           tag: options.tag,
           data: options.data,
           requireInteraction: false,
-          actions: [
-            { action: 'open', title: 'Open' },
-            { action: 'close', title: 'Close' },
-          ],
         });
       } catch (error) {
         console.error('Failed to show notification:', error);
