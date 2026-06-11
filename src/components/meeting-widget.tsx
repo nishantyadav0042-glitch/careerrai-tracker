@@ -280,19 +280,30 @@ export function MeetingWidget({ role, students = [], calendarConnected = false }
                   Starts in {formatCountdown(startMs - now)}
                 </p>
               )}
-              <a
-                href={meeting.meetLink ?? '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-white font-bold text-base transition-transform active:scale-[0.98]"
-                style={{ backgroundColor: '#E8652D', minHeight: 48 }}
-              >
-                <Video className="w-5 h-5" />
-                Join Meeting
-              </a>
+              {meeting.meetLink ? (
+                <a
+                  href={meeting.meetLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-white font-bold text-base transition-transform active:scale-[0.98]"
+                  style={{ backgroundColor: '#E8652D', minHeight: 48 }}
+                >
+                  <Video className="w-5 h-5" />
+                  Join Meeting
+                </a>
+              ) : (
+                <button
+                  disabled
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-white font-bold text-base opacity-60 cursor-not-allowed"
+                  style={{ backgroundColor: '#E8652D', minHeight: 48 }}
+                >
+                  <Video className="w-5 h-5" />
+                  Meet link pending...
+                </button>
+              )}
             </div>
           ) : (
-            meeting.meetLink && (
+            meeting.meetLink ? (
               <a
                 href={meeting.meetLink}
                 target="_blank"
@@ -303,6 +314,10 @@ export function MeetingWidget({ role, students = [], calendarConnected = false }
                 <Video className="w-4 h-4" />
                 Join
               </a>
+            ) : (
+              <div className="text-center text-xs text-stone-400 py-2.5">
+                Meet link will appear when live
+              </div>
             )
           )}
         </div>

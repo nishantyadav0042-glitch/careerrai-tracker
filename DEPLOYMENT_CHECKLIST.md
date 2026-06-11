@@ -17,11 +17,15 @@
 # Run from project root
 npx supabase migration up
 
-# Verify migration 018 applied
+# Verify all migrations applied
 npx supabase db status
 ```
 
-**Expected**: `018_daily_tracker_schema.sql` marked as applied
+**Expected**: All migrations marked as applied, including:
+- `015_add_google_meet_to_sessions.sql` (for meeting links)
+- `016_move_oauth_tokens_to_own_table.sql` (for Google auth)
+- `017_add_title_description_to_sessions.sql` (for session details)
+- `018_daily_tracker_schema.sql` (for daily tracker features)
 
 #### Seed Daily Puzzles (30-day batch)
 ```bash
