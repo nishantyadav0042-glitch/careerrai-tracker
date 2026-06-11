@@ -136,8 +136,9 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (error) {
-      console.error('Error creating Google Calendar event:', error);
-      calendarError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Error creating Google Calendar event:', errorMsg);
+      calendarError = errorMsg;
     }
 
     return NextResponse.json({
