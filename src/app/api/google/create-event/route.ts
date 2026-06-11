@@ -78,12 +78,10 @@ export async function POST(request: NextRequest) {
       summary: `Session: ${body.title}`,
       description: `${body.studentName} - ${body.description || 'Video session with buddy'}`,
       start: {
-        dateTime: new Date(body.startTime).toISOString(),
-        timeZone: 'Asia/Kolkata',
+        dateTime: body.startTime,
       },
       end: {
-        dateTime: new Date(body.endTime).toISOString(),
-        timeZone: 'Asia/Kolkata',
+        dateTime: body.endTime,
       },
       attendees,
       conferenceData: {
@@ -108,10 +106,10 @@ export async function POST(request: NextRequest) {
 
     // Conference creation can come back as "pending" — the Meet link only
     // materialises after Google finishes provisioning. Re-fetch the event
-    // (max 2 retries, 2s apart) until the link appears.
+    // (max 5 retries, 1.5s apart) until the link appears.
     let retries = 0;
-    while (!meetLink && eventData.id && retries < 2) {
-      await sleep(2000);
+    while (!meetLink && eventData.id && retries < 5) {
+      await sleep(1500);
       const refreshed = await calendar.events.get({
         calendarId: 'primary',
         eventId: eventData.id,
