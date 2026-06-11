@@ -1,30 +1,48 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
+import { createClient } from '@/lib/supabase/client';
 import { loadBuddyStudents, getSeverityColor, getSeverityEmoji } from '@/lib/urgency-score';
 import { StudentUrgencyData } from '@/lib/urgency-score';
-import { MessageSquare, Phone, Send, TrendingDown } from 'lucide-react';
+import { Mic, Video, ArrowRight, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { VoiceNoteRecorder } from '@/components/voice-note-recorder';
+import { ScheduleSessionModal } from '@/components/schedule-session-modal';
 
 interface BuddyTriageViewProps {
   buddyId: string;
 }
 
 export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
+  const router = useRouter();
+  const supabase = createClient();
   const [students, setStudents] = useState<StudentUrgencyData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'critical' | 'warning'>('all');
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [recordFor, setRecordFor] = useState<StudentUrgencyData | null>(null);
+  const [scheduleFor, setScheduleFor] = useState<StudentUrgencyData | null>(null);
 
   useEffect(() => {
     loadStudents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadStudents() {
     setIsLoading(true);
     try {
-      const data = await loadBuddyStudents(buddyId);
+      const [data, { data: profile }] = await Promise.all([
+        loadBuddyStudents(buddyId),
+        supabase
+          .from('profiles')
+          .select('google_calendar_connected')
+          .eq('id', buddyId)
+          .single(),
+      ]);
       setStudents(data);
+      setCalendarConnected(profile?.google_calendar_connected ?? false);
     } catch (error) {
       console.error('Error loading students:', error);
     } finally {
@@ -98,7 +116,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
             <Card
               key={student.student_id}
               className={cn(
-                'overflow-hidden border-2 transition-all hover:shadow-lg cursor-pointer',
+                'overflow-hidden border-2 transition-all hover:shadow-lg',
                 student.severity === 'critical'
                   ? 'border-red-300 bg-red-50/50'
                   : student.severity === 'warning'
@@ -110,7 +128,10 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
 
               <div className="p-5 space-y-3">
                 {/* Header */}
-                <div className="flex items-start justify-between">
+                <div
+                  className="flex items-start justify-between cursor-pointer"
+                  onClick={() => router.push(`/buddy/students/${student.student_id}`)}
+                >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-2xl">{getSeverityEmoji(student.severity)}</span>
@@ -158,7 +179,6 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
 
                 {/* Status Row */}
                 <div className="flex gap-4 text-xs pt-2 border-t border-stone-200">
-                  {/* Streak */}
                   <div>
                     <span className="text-stone-600">Streak:</span>
                     <span
@@ -175,7 +195,6 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
                     </span>
                   </div>
 
-                  {/* Mock Drops */}
                   {student.recentDrops > 0 && (
                     <div className="flex items-center gap-1 text-red-600 font-semibold">
                       <TrendingDown className="w-3 h-3" />
@@ -183,7 +202,6 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
                     </div>
                   )}
 
-                  {/* Feedback Gap */}
                   <div className="ml-auto">
                     <span className="text-stone-600">Last feedback:</span>
                     <span className="ml-1 font-semibold text-stone-900">
@@ -197,25 +215,61 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 pt-2">
-                  <button className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all text-sm font-medium">
-                    <MessageSquare className="w-4 h-4" />
-                    Message
+                  <button
+                    onClick={() => setRecordFor(student)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-all text-sm font-medium"
+                    style={{ minHeight: 44 }}
+                  >
+                    <Mic className="w-4 h-4" />
+                    Voice note
                   </button>
 
-                  <button className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-all text-sm font-medium">
-                    <Send className="w-4 h-4" />
-                    Feedback
+                  <button
+                    onClick={() => setScheduleFor(student)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-all text-sm font-medium"
+                    style={{ minHeight: 44 }}
+                  >
+                    <Video className="w-4 h-4" />
+                    Session
                   </button>
 
-                  <button className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-all text-sm font-medium">
-                    <Phone className="w-4 h-4" />
-                    Call
+                  <button
+                    onClick={() => router.push(`/buddy/students/${student.student_id}`)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-stone-100 text-stone-700 rounded-lg hover:bg-stone-200 transition-all text-sm font-medium"
+                    style={{ minHeight: 44 }}
+                  >
+                    View
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Voice note bottom sheet for the picked student */}
+      {recordFor && (
+        <VoiceNoteRecorder
+          studentId={recordFor.student_id}
+          buddyId={buddyId}
+          studentName={recordFor.student_name}
+          isOpen={!!recordFor}
+          onClose={() => setRecordFor(null)}
+          onSendComplete={() => {}}
+          feedbackType="buddy_feedback"
+        />
+      )}
+
+      {/* Schedule modal for the picked student */}
+      {scheduleFor && (
+        <ScheduleSessionModal
+          isOpen={!!scheduleFor}
+          onClose={() => setScheduleFor(null)}
+          students={[{ id: scheduleFor.student_id, full_name: scheduleFor.student_name }]}
+          defaultStudentId={scheduleFor.student_id}
+          calendarConnected={calendarConnected}
+        />
       )}
     </div>
   );

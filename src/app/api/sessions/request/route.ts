@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
           user_id: buddyId,
           type: 'session_request',
           title: 'Session Request',
-          message: 'A student requested to schedule a session with you',
-          related_user_id: user.id,
+          body: 'A student requested to schedule a session with you',
+          data: { studentId: user.id },
           read: false,
         });
     } catch (notifError) {

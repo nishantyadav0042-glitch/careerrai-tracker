@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { isCalendarConnected } from '@/lib/google-calendar';
 import { BuddyTriageView } from './buddy-triage-view';
 import { StudentVoiceNotesSection } from './student-voice-notes-section';
 import { BuddyAudioResponsesCompact } from '@/components/buddy-audio-responses-compact';
 import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
-import { BuddyVideoSessionsDashboard } from '@/components/buddy-video-sessions-dashboard';
-import { UpcomingSessionCard } from '@/components/upcoming-session-card';
+import { MeetingWidget } from '@/components/meeting-widget';
+import { GoogleCalendarConnect } from '@/components/google-calendar-connect';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
 
@@ -30,6 +32,17 @@ export default async function BuddyHomePage() {
   if (!profile?.intro_audio_url) {
     redirect('/buddy/setup');
   }
+
+  // Meeting widget data — parallel, single round trip
+  const admin = createAdminClient();
+  const [{ data: students }, calendarConnected] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('id, full_name')
+      .eq('buddy_id', user.id)
+      .order('full_name'),
+    isCalendarConnected(user.id),
+  ]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 to-stone-100">
@@ -81,8 +94,20 @@ export default async function BuddyHomePage() {
       {/* Main Content - Mobile Optimized */}
       <div className="w-full px-3 sm:px-4 py-4 sm:py-8">
         <div className="space-y-3 sm:space-y-5">
-          {/* 0. NEXT SESSION (24h) - hidden when none */}
-          <UpcomingSessionCard buddyId={user.id} />
+          {/* 0. MEETING WIDGET — top of page, above everything */}
+          <MeetingWidget
+            role="buddy"
+            students={students ?? []}
+            calendarConnected={calendarConnected}
+          />
+
+          {/* 0.5 Google Calendar connect CTA when disconnected */}
+          {!calendarConnected && (
+            <GoogleCalendarConnect
+              connected={false}
+              redirectPath="/buddy/home"
+            />
+          )}
 
           {/* 1. COMPACT Audio Responses - TOP PRIORITY */}
           <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-3 sm:p-5 border-2 border-blue-200">
@@ -94,12 +119,7 @@ export default async function BuddyHomePage() {
             <BuddyQuickVoiceMessage buddyId={user.id} buddyName={profile?.full_name || 'Buddy'} />
           </div>
 
-          {/* 3. Video Sessions - Compact Display */}
-          <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-3 sm:p-5 border-2 border-teal-200">
-            <BuddyVideoSessionsDashboard buddyId={user.id} buddyName={profile?.full_name || 'Buddy'} />
-          </div>
-
-          {/* 4. Student Voice Notes - Priority Action */}
+          {/* 3. Student Voice Notes - Priority Action */}
           <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-3 sm:p-5 border-2 border-orange-200">
             <StudentVoiceNotesSection buddyId={user.id} />
           </div>

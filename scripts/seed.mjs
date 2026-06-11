@@ -1,9 +1,9 @@
-// CareerRai seed script — creates demo accounts + 14 days of data
+﻿// CareerRai seed script â€” creates demo accounts + 14 days of data
 // Run with: node scripts/seed.mjs
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://pobhpszlsozeonejtzqy.supabase.co';
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvYmhwc3psc296ZW9uZWp0enF5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTg4MzE0MywiZXhwIjoyMDk1NDU5MTQzfQ.yYu29XedkJeUnyA5WGCE2cIjmS5hrbIVQK7LbTa4Zxg';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -61,7 +61,7 @@ function makeReport(studentId, daysAgo) {
 }
 
 async function main() {
-  console.log('🌱 Seeding CareerRai demo data...\n');
+  console.log('ðŸŒ± Seeding CareerRai demo data...\n');
 
   // Step 1: create auth users
   const userIds = {};
@@ -77,9 +77,9 @@ async function main() {
       console.error('ERROR:', error.message);
     } else if (data?.user) {
       userIds[u.email] = data.user.id;
-      console.log('✓', data.user.id);
+      console.log('âœ“', data.user.id);
     } else {
-      // User already exists — fetch id
+      // User already exists â€” fetch id
       const { data: { users } } = await supabase.auth.admin.listUsers();
       const found = users.find(u2 => u2.email === u.email);
       if (found) { userIds[u.email] = found.id; console.log('(already exists)', found.id); }
@@ -99,7 +99,7 @@ async function main() {
 
   const { error: profErr } = await supabase.from('profiles').upsert(profileRows, { onConflict: 'id' });
   if (profErr) console.error('Profile upsert error:', profErr.message);
-  else console.log('✓ Profiles upserted');
+  else console.log('âœ“ Profiles upserted');
 
   // Step 3: assign students to buddies
   const buddy1Id = userIds['nishant@careerrai.com'];
@@ -117,7 +117,7 @@ async function main() {
       await supabase.from('profiles').update({ buddy_id: buddy2Id }).eq('id', userIds[email]);
     }
   }
-  console.log('✓ Students assigned to buddies');
+  console.log('âœ“ Students assigned to buddies');
 
   // Step 4: create daily reports (14 days, skip today and 2 random days per student)
   console.log('\nCreating daily reports...');
@@ -131,7 +131,7 @@ async function main() {
     }
     const { error } = await supabase.from('daily_reports').upsert(reports, { onConflict: 'student_id,report_date' });
     if (error) console.error(`Reports error for ${s.full_name}:`, error.message);
-    else console.log(`✓ ${reports.length} reports for ${s.full_name}`);
+    else console.log(`âœ“ ${reports.length} reports for ${s.full_name}`);
   }
 
   // Step 5: buddy feedback
@@ -141,7 +141,7 @@ async function main() {
       buddy_id: buddy1Id,
       student_id: userIds['aarav@careerrai.com'],
       feedback_date: dateStr(5),
-      feedback_text: 'Strong week — your Quant accuracy is climbing steadily. Push harder on RC; your speed there is the bottleneck right now.',
+      feedback_text: 'Strong week â€” your Quant accuracy is climbing steadily. Push harder on RC; your speed there is the bottleneck right now.',
       rating: 4,
       next_steps: ['Increase Quant practice', 'Push RC speed'],
       period_covered: 'weekly',
@@ -150,7 +150,7 @@ async function main() {
       buddy_id: buddy1Id,
       student_id: userIds['priya@careerrai.com'],
       feedback_date: dateStr(7),
-      feedback_text: "Priya, stress has been high this week. Let's work on managing that first — sleep and breaks matter more than extra hours right now.",
+      feedback_text: "Priya, stress has been high this week. Let's work on managing that first â€” sleep and breaks matter more than extra hours right now.",
       rating: 3,
       next_steps: ['Reduce test anxiety', 'Improve sleep schedule'],
       period_covered: 'weekly',
@@ -160,7 +160,7 @@ async function main() {
   if (fbRows.length > 0) {
     const { error } = await supabase.from('buddy_feedback').insert(fbRows);
     if (error) console.error('Feedback error:', error.message);
-    else console.log('✓ Buddy feedback created');
+    else console.log('âœ“ Buddy feedback created');
   }
 
   // Step 6: test results
@@ -175,7 +175,7 @@ async function main() {
   if (testRows.length > 0) {
     const { error } = await supabase.from('test_results').insert(testRows);
     if (error) console.error('Test results error:', error.message);
-    else console.log('✓ Test results created');
+    else console.log('âœ“ Test results created');
   }
 
   // Step 7: welcome notifications
@@ -186,7 +186,7 @@ async function main() {
     notifRows.push({
       user_id: userIds[s.email],
       type: 'broadcast',
-      title: 'Welcome to CareerRai! 🎯',
+      title: 'Welcome to CareerRai! ðŸŽ¯',
       body: "Bas 90 second roz. That's it. Fill your first daily report to start your streak.",
       data: {},
       read: false,
@@ -195,12 +195,12 @@ async function main() {
   }
   if (notifRows.length > 0) {
     await supabase.from('notifications').insert(notifRows);
-    console.log('✓ Welcome notifications created');
+    console.log('âœ“ Welcome notifications created');
   }
 
-  console.log('\n✅ Seed complete!\n');
+  console.log('\nâœ… Seed complete!\n');
   console.log('Demo login credentials (all use password: CareerRai2026!)');
-  console.log('─────────────────────────────────────────────────────────');
+  console.log('â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€');
   console.log('Student (Aarav):  aarav@careerrai.com');
   console.log('Student (Priya):  priya@careerrai.com');
   console.log('Student (Rohan):  rohan@careerrai.com');
@@ -209,7 +209,7 @@ async function main() {
   console.log('Buddy (Nishant):  nishant@careerrai.com');
   console.log('Buddy (Priya M):  mentor2@careerrai.com');
   console.log('Admin:            admin@careerrai.com');
-  console.log('─────────────────────────────────────────────────────────');
+  console.log('â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€');
 }
 
 main().catch(console.error);

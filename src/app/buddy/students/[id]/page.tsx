@@ -76,6 +76,16 @@ export default async function BuddyStudentDetailPage({
     .single();
 
   const lastSessionDate = lastVideoSession?.ended_at ? new Date(lastVideoSession.ended_at) : null;
+  const daysSinceLastSession = lastSessionDate
+    ? Math.floor((Date.now() - lastSessionDate.getTime()) / 86_400_000)
+    : null;
+
+  const { data: buddyTokens } = await admin
+    .from('google_oauth_tokens')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const calendarConnected = !!buddyTokens;
 
   // Upcoming scheduled sessions with this student (for the join-link list)
   const { data: upcomingSessions } = await admin
@@ -271,14 +281,52 @@ export default async function BuddyStudentDetailPage({
         </div>
       )}
 
-      {/* Video Session Prompt - suggests video call if 10+ days since last session */}
+      {/* Schedule session CTA — nudges harder when 10+ days since last session */}
       <VideoSessionPromptClient
         studentId={id}
         studentName={student.full_name}
-        buddyId={user.id}
-        buddyName={user.user_metadata?.full_name || 'Buddy'}
-        lastSessionDate={lastSessionDate}
+        calendarConnected={calendarConnected}
+        daysSinceLastSession={daysSinceLastSession}
       />
+
+      {/* Sent voice notes — read receipts */}
+      {feedback.some((f) => f.voice_note_url) && (
+        <div className="rounded-2xl border border-stone-200 bg-white p-4">
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2.5">
+            Voice notes you sent
+          </p>
+          <div className="space-y-1.5">
+            {feedback
+              .filter((f) => f.voice_note_url)
+              .slice(0, 5)
+              .map((f) => {
+                const listened = !!(f as unknown as { read_at: string | null }).read_at;
+                const thanked = !!(f as unknown as { thanked_at: string | null }).thanked_at;
+                return (
+                  <div
+                    key={f.id}
+                    className="flex items-center justify-between gap-2 text-xs py-1.5 px-2 rounded-lg bg-stone-50"
+                  >
+                    <span className="text-stone-600">
+                      🎤 {new Date(f.created_at).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                    <span
+                      className={cn(
+                        'font-medium',
+                        listened ? 'text-emerald-600' : 'text-stone-400'
+                      )}
+                    >
+                      {thanked ? '❤️ Loved it' : listened ? '✓ Listened' : 'Not played yet'}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Feedback list + form (client component - manages optimistic updates) */}
       <FeedbackList initial={feedback} studentId={id} studentFirstName={firstName} />

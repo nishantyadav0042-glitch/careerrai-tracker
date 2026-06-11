@@ -12,7 +12,9 @@ import { CATContextCard } from './cat-context-card';
 import { HeatmapCard } from './heatmap-card';
 import { BuddyFeedbackCard } from './buddy-feedback-card';
 import { StudentVoiceNotesCard } from './student-voice-notes-card';
-import { VideoSessionsCard } from './video-sessions-card';
+import { MeetingWidget } from '@/components/meeting-widget';
+import { GoogleCalendarConnect } from '@/components/google-calendar-connect';
+import { isCalendarConnected } from '@/lib/google-calendar';
 import { RequestSessionButton } from './request-session-button';
 import { computeSummary, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
@@ -49,13 +51,16 @@ export default async function StudentHomePage() {
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Friend';
 
   const admin = createAdminClient();
-  const { data: upcomingSessions } = await admin
-    .from('video_sessions')
-    .select('id')
-    .eq('student_id', user.id)
-    .eq('session_status', 'scheduled')
-    .gte('scheduled_at', new Date().toISOString())
-    .limit(1);
+  const [{ data: upcomingSessions }, calendarConnected] = await Promise.all([
+    admin
+      .from('video_sessions')
+      .select('id')
+      .eq('student_id', user.id)
+      .eq('session_status', 'scheduled')
+      .gte('scheduled_at', new Date().toISOString())
+      .limit(1),
+    isCalendarConnected(user.id),
+  ]);
 
   const hasUpcomingSessions = (upcomingSessions?.length ?? 0) > 0;
 
@@ -76,12 +81,20 @@ export default async function StudentHomePage() {
         </Link>
       </div>
 
-      {/* PHASE 3: NEW HOME PAGE REDESIGN */}
+      {/* 0. GOOGLE CALENDAR CONNECT - dismissible CTA until connected */}
+      {!calendarConnected && (
+        <GoogleCalendarConnect
+          connected={false}
+          redirectPath="/student/home"
+          dismissible
+        />
+      )}
+
       {/* 1. STREAK HERO - PRIMARY GAMIFICATION & RETENTION */}
       <StreakHero userId={user.id} />
 
-      {/* 2. VIDEO SESSIONS - Upcoming calls with buddy */}
-      <VideoSessionsCard userId={user.id} />
+      {/* 2. MEETING WIDGET - directly under the streak hero */}
+      <MeetingWidget role="student" />
 
       {/* 2.5. REQUEST SESSION - If no upcoming sessions */}
       <RequestSessionButton

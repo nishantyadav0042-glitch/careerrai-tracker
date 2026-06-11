@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { disconnectGoogleCalendar } from '@/lib/google-oauth-utils';
+import { disconnectGoogleCalendar } from '@/lib/google-calendar';
 import { deleteAutomatedReminders } from '@/lib/google-reminder-utils';
 import { createClient } from '@/lib/supabase/server';
 

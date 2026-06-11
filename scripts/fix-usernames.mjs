@@ -1,8 +1,8 @@
-// Fix script - populate usernames from emails
+﻿// Fix script - populate usernames from emails
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://posebhpszlsozeonejtzqy.supabase.co';
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvYmhwc3psc296ZW9uZWp0enF5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTg4MzE0MywiZXhwIjoyMDk1NDU5MTQzfQ.yYu29XedkJeUnyA5WGCE2cIjmS5hrbIVQK7LbTa4Zxg';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -18,10 +18,10 @@ const USERNAMES = {
 };
 
 async function main() {
-  console.log('🔧 Fixing usernames in profiles...\n');
+  console.log('ðŸ”§ Fixing usernames in profiles...\n');
 
   for (const [email, username] of Object.entries(USERNAMES)) {
-    console.log(`Setting username for ${email} → ${username}`);
+    console.log(`Setting username for ${email} â†’ ${username}`);
     const { error } = await supabase
       .from('profiles')
       .update({ username })
@@ -30,11 +30,11 @@ async function main() {
     if (error) {
       console.error(`Error updating ${email}:`, error.message);
     } else {
-      console.log(`✓ ${username} set`);
+      console.log(`âœ“ ${username} set`);
     }
   }
 
-  console.log('\n✅ Username fix complete!\n');
+  console.log('\nâœ… Username fix complete!\n');
 }
 
 main().catch(console.error);

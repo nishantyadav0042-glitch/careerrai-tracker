@@ -1,6 +1,5 @@
-import { google } from 'googleapis';
 import type { calendar_v3 } from 'googleapis';
-import { getValidGoogleAccessToken } from './google-oauth-utils';
+import { getCalendarClient } from './google-calendar';
 
 interface ReminderDef {
   key: string; // stable id used for idempotency via extendedProperties
@@ -51,16 +50,6 @@ const BUDDY_REMINDERS: ReminderDef[] = [
   },
 ];
 
-function getCalendarClient(accessToken: string) {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID!,
-    process.env.GOOGLE_CLIENT_SECRET!,
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/google/callback`
-  );
-  oauth2Client.setCredentials({ access_token: accessToken });
-  return google.calendar({ version: 'v3', auth: oauth2Client });
-}
-
 /**
  * Today's date in IST as YYYY-MM-DD (server may run in any timezone).
  */
@@ -102,8 +91,7 @@ export async function createAutomatedReminders(
   userId: string,
   role: 'student' | 'buddy'
 ): Promise<{ success: boolean; reminders: string[] }> {
-  const accessToken = await getValidGoogleAccessToken(userId);
-  const calendar = getCalendarClient(accessToken);
+  const { calendar } = await getCalendarClient(userId);
 
   const defs = role === 'student' ? STUDENT_REMINDERS : BUDDY_REMINDERS;
   const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/${role}/home`;
@@ -159,8 +147,7 @@ export async function createAutomatedReminders(
  * Finds them by their private extended property — no local bookkeeping.
  */
 export async function deleteAutomatedReminders(userId: string): Promise<void> {
-  const accessToken = await getValidGoogleAccessToken(userId);
-  const calendar = getCalendarClient(accessToken);
+  const { calendar } = await getCalendarClient(userId);
 
   const allDefs = [...STUDENT_REMINDERS, ...BUDDY_REMINDERS];
   for (const def of allDefs) {

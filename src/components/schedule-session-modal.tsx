@@ -1,62 +1,286 @@
 'use client';
 
-import { useState } from 'react';
-import { X } from 'lucide-react';
-import { ScheduleSessionForm } from './schedule-session-form';
+import { useState, useEffect } from 'react';
+import { X, Copy, CheckCircle2, Calendar, Video } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+export interface SchedulableStudent {
+  id: string;
+  full_name: string;
+}
 
 interface ScheduleSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  studentId: string;
-  studentName: string;
-  buddyName: string;
+  students: SchedulableStudent[];
+  calendarConnected: boolean;
+  onScheduled?: () => void;
+  /** Preselect a student (e.g. opened from a student card) */
+  defaultStudentId?: string;
+}
+
+const DURATIONS = [20, 30, 45, 60];
+
+function todayIST(): string {
+  // YYYY-MM-DD in IST for the date input min
+  return new Date(Date.now() + 5.5 * 60 * 60_000).toISOString().slice(0, 10);
 }
 
 export function ScheduleSessionModal({
   isOpen,
   onClose,
-  studentId,
-  studentName,
-  buddyName,
+  students,
+  calendarConnected,
+  onScheduled,
+  defaultStudentId,
 }: ScheduleSessionModalProps) {
+  const [studentId, setStudentId] = useState(defaultStudentId ?? '');
+  const [date, setDate] = useState(todayIST());
+  const [time, setTime] = useState('19:00');
+  const [duration, setDuration] = useState(30);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [meetLink, setMeetLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setError(null);
+      setMeetLink(null);
+      setCopied(false);
+      if (defaultStudentId) setStudentId(defaultStudentId);
+      else if (students.length === 1) setStudentId(students[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleCreate = async () => {
+    setError(null);
+    if (!studentId) {
+      setError('Pick a student first.');
+      return;
+    }
+    // The chosen wall-clock time is IST. IST = UTC+5:30.
+    const utcMs = new Date(`${date}T${time}:00Z`).getTime() - 5.5 * 60 * 60_000;
+    if (isNaN(utcMs)) {
+      setError('Pick a valid date and time.');
+      return;
+    }
+    if (utcMs < Date.now() + 60_000) {
+      setError('Pick a time in the future (IST).');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/calendar/schedule-meeting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          startTime: new Date(utcMs).toISOString(),
+          durationMinutes: duration,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Couldn't reach Google Calendar — try again.");
+        return;
+      }
+      setMeetLink(data.meetLink);
+      onScheduled?.();
+    } catch {
+      setError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyLink = () => {
+    if (!meetLink) return;
+    navigator.clipboard.writeText(meetLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto">
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center z-50 pointer-events-none">
+        <div
+          className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto pointer-events-auto animate-in slide-in-from-bottom-6 duration-300"
+          style={{ animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
+        >
           {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-stone-200 p-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-stone-900">Schedule Session</h2>
+          <div className="sticky top-0 bg-white border-b border-stone-100 px-5 py-4 flex items-center justify-between rounded-t-2xl z-10">
+            <h2 className="text-base font-bold text-stone-900">
+              {meetLink ? 'Session booked!' : 'Schedule Session'}
+            </h2>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors"
+              aria-label="Close"
+              className="p-2 -m-2 text-stone-400 hover:text-stone-600 transition-colors"
             >
-              <X className="w-5 h-5 text-stone-600" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Content */}
-          <div className="p-4">
-            <ScheduleSessionForm
-              studentId={studentId}
-              studentName={studentName}
-              buddyName={buddyName}
-              onSuccess={() => {
-                // Close modal after successful scheduling
-                setTimeout(onClose, 1500);
-              }}
-              onError={() => {
-                // Keep modal open on error
-              }}
-            />
+          <div className="p-5">
+            {meetLink ? (
+              /* ── Success state ───────────────────────────── */
+              <div className="space-y-4 text-center">
+                <div className="w-14 h-14 mx-auto rounded-full bg-emerald-100 flex items-center justify-center animate-in zoom-in duration-300">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                </div>
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 flex items-center gap-2">
+                  <Video className="w-4 h-4 text-[#2A9D8F] flex-shrink-0" />
+                  <span className="text-sm font-mono text-stone-800 truncate flex-1 text-left">
+                    {meetLink.replace('https://', '')}
+                  </span>
+                  <button
+                    onClick={copyLink}
+                    aria-label="Copy Meet link"
+                    className="p-2 rounded-lg hover:bg-stone-200 transition-colors flex-shrink-0"
+                  >
+                    {copied ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-4 h-4 text-stone-500" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-stone-500">
+                  Calendar invites sent to both of you 📅
+                </p>
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 rounded-xl text-white font-semibold transition-colors hover:opacity-90"
+                  style={{ backgroundColor: '#2A9D8F', minHeight: 48 }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : !calendarConnected ? (
+              /* ── Blocking state: Google not connected ────── */
+              <div className="space-y-4 text-center py-2">
+                <div className="w-14 h-14 mx-auto rounded-full bg-orange-100 flex items-center justify-center">
+                  <Calendar className="w-7 h-7 text-[#E8652D]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-stone-900">
+                    Connect Google Calendar first
+                  </p>
+                  <p className="text-xs text-stone-500 mt-1">
+                    Sessions create real Google Meet links and calendar invites —
+                    takes 30 seconds, one time.
+                  </p>
+                </div>
+                <a
+                  href="/api/google/auth?redirect=/buddy/home"
+                  className="block w-full py-3 rounded-xl text-white font-semibold transition-colors hover:opacity-90"
+                  style={{ backgroundColor: '#E8652D', minHeight: 48, lineHeight: '24px' }}
+                >
+                  Connect Google Calendar
+                </a>
+              </div>
+            ) : (
+              /* ── Form ────────────────────────────────────── */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Student
+                  </label>
+                  <select
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    className="w-full px-3 py-3 rounded-xl border border-stone-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                  >
+                    <option value="">Choose a student…</option>
+                    {students.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      min={todayIST()}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                      Time (IST)
+                    </label>
+                    <input
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Duration
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {DURATIONS.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setDuration(d)}
+                        className={cn(
+                          'py-2.5 rounded-xl text-sm border transition-colors',
+                          duration === d
+                            ? 'border-[#2A9D8F] bg-[#2A9D8F]/10 text-[#2A9D8F] font-semibold'
+                            : 'border-stone-200 text-stone-600 hover:border-stone-300 font-medium'
+                        )}
+                        style={{ minHeight: 44 }}
+                      >
+                        {d}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleCreate}
+                  disabled={loading}
+                  className={cn(
+                    'w-full py-3.5 rounded-xl text-white font-semibold transition-all',
+                    loading ? 'opacity-70 cursor-wait' : 'hover:opacity-90 active:scale-[0.99]'
+                  )}
+                  style={{ backgroundColor: '#2A9D8F', minHeight: 48 }}
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Creating your Meet link…
+                    </span>
+                  ) : (
+                    'Create Meeting'
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -14,6 +14,8 @@ interface BuddyFeedback {
   buddy_id: string;
   buddy_name: string;
   buddy_college?: string;
+  read_at: string | null;
+  thanked_at: string | null;
 }
 
 interface BuddyFeedbackCardProps {
@@ -49,6 +51,8 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
           voice_note_url,
           created_at,
           buddy_id,
+          read_at,
+          thanked_at,
           profiles!buddy_feedback_buddy_id_fkey(full_name, college)
         `)
         .eq('student_id', studentId)
@@ -68,6 +72,8 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
         buddy_id: f.buddy_id,
         buddy_name: (f.profiles as any)?.full_name || 'Buddy',
         buddy_college: (f.profiles as any)?.college,
+        read_at: f.read_at,
+        thanked_at: f.thanked_at,
       })) || [];
 
       setFeedbacks(formattedData);
@@ -142,7 +148,12 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
                 <VoiceNotePlayer
                   audioUrl={feedback.voice_note_url}
                   buddyName={feedback.buddy_name}
+                  buddyCollege={feedback.buddy_college}
                   createdAt={feedback.created_at}
+                  feedbackId={feedback.id}
+                  isNew={!feedback.read_at}
+                  thanked={!!feedback.thanked_at}
+                  canThank
                 />
               </div>
             )}
