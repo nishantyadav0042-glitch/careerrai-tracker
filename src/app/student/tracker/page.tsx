@@ -35,7 +35,7 @@ export default async function DailyTrackerPage() {
         </div>
 
         {/* Main Tracker */}
-        <DailyTrackerApp />
+        <DailyTrackerApp studentId={user.id} />
 
         {/* Info Cards */}
         <div className="space-y-3">
