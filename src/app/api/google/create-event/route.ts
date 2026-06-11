@@ -130,16 +130,43 @@ export async function POST(request: NextRequest) {
 
     console.log('Event created:', { eventId: eventData.id, hasConference: !!eventData.conferenceData });
 
-    // 7. EXTRACT MEET LINK
-    const meetLink = eventData.conferenceData?.entryPoints
-      ?.find(ep => ep.entryPointType === 'video')
-      ?.uri
-      || eventData.hangoutLink;
+    // 7. WAIT FOR GOOGLE TO GENERATE MEET LINK, THEN FETCH IT
+    // Google doesn't return the Meet link in the insert response — it generates it asynchronously
+    // We must wait a moment then call events.get() to read the generated link
+    let meetLink: string | null = null;
+    let retries = 0;
+    const maxRetries = 10;
+    const retryDelayMs = 500;
+
+    while (!meetLink && retries < maxRetries) {
+      if (retries > 0) {
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+      }
+
+      const { data: updatedEvent } = await calendar.events.get({
+        calendarId: 'primary',
+        eventId: eventData.id!,
+      });
+
+      // Try to extract the Meet link from the updated event
+      meetLink = updatedEvent?.hangoutLink
+        || updatedEvent?.conferenceData?.entryPoints
+          ?.find(ep => ep.entryPointType === 'video')
+          ?.uri
+        || null;
+
+      if (meetLink) {
+        console.log('Meet link generated on retry', retries + 1, ':', meetLink);
+        break;
+      }
+
+      retries++;
+    }
 
     if (!meetLink) {
-      console.error('No Meet link found in event:', {
+      console.error('No Meet link found after', maxRetries, 'retries:', {
         eventId: eventData.id,
-        conferenceData: eventData.conferenceData,
       });
 
       // Clean up - delete the event if we can't get a Meet link
@@ -158,7 +185,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Meet link generated:', meetLink);
+    console.log('Meet link confirmed:', meetLink);
 
     return NextResponse.json({
       success: true,
