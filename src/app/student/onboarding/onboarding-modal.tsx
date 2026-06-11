@@ -37,7 +37,14 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     getUser();
   }, [supabase]);
 
+  const [studyTargetHours, setStudyTargetHours] = useState<number>(2);
+
   const handleNext = async (data?: any) => {
+    // Screen 2 (index 2) = Daily Commitment — save the target hours
+    if (currentScreen === 2 && data?.studyTargetHours) {
+      setStudyTargetHours(data.studyTargetHours);
+    }
+
     if (currentScreen < screens.length - 1) {
       setCurrentScreen(currentScreen + 1);
     } else {
@@ -52,7 +59,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
         const { data: updateResult, error } = await supabase
           .from('profiles')
-          .update({ onboarding_completed: true })
+          .update({ onboarding_completed: true, study_target_hours: studyTargetHours })
           .eq('id', userId)
           .select();
 

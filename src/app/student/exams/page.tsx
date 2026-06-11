@@ -7,6 +7,7 @@ import type { TestResult } from '@/types';
 import { Brain, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TestRunner } from '../test-runner';
+import { MockDropIntervention } from '@/components/mock-drop-intervention';
 
 const TESTS = [
   { id: 'cat-readiness', name: 'CAT Readiness Test', desc: '35 questions · ~15 min · Complete diagnostic', color: 'orange' as const },
@@ -17,12 +18,16 @@ export default function ExamsPage() {
   const [results, setResults] = useState<TestResult[]>([]);
   const [activeTest, setActiveTest] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [buddyId, setBuddyId] = useState<string | null>(null);
+  const [dropAlert, setDropAlert] = useState<{ drop: number } | null>(null);
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
+      const { data: profile } = await supabase.from('profiles').select('buddy_id').eq('id', user.id).single();
+      setBuddyId(profile?.buddy_id ?? null);
       const { data } = await supabase.from('test_results').select('*').eq('student_id', user.id).order('attempt_date', { ascending: false });
       setResults((data ?? []) as TestResult[]);
     }
@@ -33,7 +38,36 @@ export default function ExamsPage() {
   async function saveResult(result: Omit<TestResult, 'id' | 'student_id' | 'created_at'>) {
     if (!userId) return;
     const { data } = await supabase.from('test_results').insert({ ...result, student_id: userId }).select().single();
-    if (data) setResults((prev) => [data as TestResult, ...prev]);
+    if (data) {
+      const updated = [data as TestResult, ...results];
+      setResults(updated);
+
+      // Check for mock drop (need 2+ attempts)
+      if (updated.length >= 2 && result.percentile !== undefined) {
+        const prev = updated[1].percentile;
+        const drop = prev - result.percentile;
+        if (drop > 8) {
+          // Check 30-day cooldown
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          const { data: recent } = await supabase
+            .from('mock_drop_alerts')
+            .select('id')
+            .eq('student_id', userId)
+            .gte('triggered_at', thirtyDaysAgo.toISOString())
+            .limit(1);
+          if (!recent || recent.length === 0) {
+            await supabase.from('mock_drop_alerts').insert({
+              student_id: userId,
+              drop_amount: drop,
+              buddy_notified: !!buddyId,
+            });
+            setDropAlert({ drop });
+            return; // don't close test runner — show intervention overlay first
+          }
+        }
+      }
+    }
     setActiveTest(null);
   }
 
@@ -100,6 +134,14 @@ export default function ExamsPage() {
           testName={TESTS.find((t) => t.id === activeTest)!.name}
           onComplete={saveResult}
           onClose={() => setActiveTest(null)}
+        />
+      )}
+
+      {dropAlert && userId && (
+        <MockDropIntervention
+          studentId={userId}
+          dropAmount={dropAlert.drop}
+          onDismiss={() => { setDropAlert(null); setActiveTest(null); }}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Send, Star, Volume2 } from 'lucide-react';
+import { Send, Star, Volume2, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import type { BuddyFeedback } from '@/types';
@@ -237,10 +237,34 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
   const [rating, setRating] = useState(4);
   const [nextSteps, setNextSteps] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftUsed, setDraftUsed] = useState(false);
   const [error, setError] = useState('');
 
   const toggleStep = (s: string) =>
     setNextSteps((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+
+  async function generateDraft() {
+    setDraftLoading(true);
+    try {
+      const res = await fetch('/api/feedback-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
+      });
+      if (res.ok) {
+        const { draft } = await res.json();
+        if (draft) {
+          setFbText(`[AI Draft — please personalize before sending]\n\n${draft}`);
+          setDraftUsed(true);
+        }
+      }
+    } catch (e) {
+      console.error('draft error', e);
+    } finally {
+      setDraftLoading(false);
+    }
+  }
 
   async function submit() {
     if (!fbText.trim()) return;
@@ -255,7 +279,7 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
       if (!res.ok) { setError('Failed to submit. Try again.'); return; }
       const { feedback } = await res.json();
       onSuccess(feedback as BuddyFeedback);
-      setFbText(''); setRating(4); setNextSteps([]); setOpen(false);
+      setFbText(''); setRating(4); setNextSteps([]); setOpen(false); setDraftUsed(false);
     } finally {
       setSubmitting(false);
     }
@@ -273,7 +297,33 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
     <Card className="p-5">
       <h3 className="font-semibold text-stone-900 mb-4">Write feedback</h3>
       <div className="space-y-4">
-        <textarea value={fbText} onChange={(e) => setFbText(e.target.value)} placeholder="Be specific and reference their data..." rows={4} className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 resize-none" />
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-sm font-medium text-stone-700">Your feedback</label>
+            <button
+              type="button"
+              onClick={generateDraft}
+              disabled={draftLoading}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 transition-all disabled:opacity-50"
+            >
+              {draftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {draftLoading ? 'Drafting…' : 'Draft with AI'}
+            </button>
+          </div>
+          <textarea
+            value={fbText}
+            onChange={(e) => { setFbText(e.target.value); setDraftUsed(false); }}
+            placeholder="Be specific and reference their data..."
+            rows={4}
+            className={cn(
+              'w-full px-3 py-2.5 bg-white border rounded-xl text-sm focus:outline-none resize-none transition-colors',
+              draftUsed ? 'border-teal-300 bg-teal-50/40 focus:border-teal-500' : 'border-stone-300 focus:border-stone-900'
+            )}
+          />
+          {draftUsed && (
+            <p className="text-[11px] text-teal-600 mt-1">✏️ AI draft loaded — edit before sending</p>
+          )}
+        </div>
         <div className="flex gap-1">
           {[1, 2, 3, 4, 5].map((s) => (
             <button key={s} type="button" onClick={() => setRating(s)}>

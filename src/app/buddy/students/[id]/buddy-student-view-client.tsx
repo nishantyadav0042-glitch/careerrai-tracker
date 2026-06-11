@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { VoiceNoteRecorder } from '@/components/voice-note-recorder';
+import { WeeklySignalCard } from '@/components/weekly-signal-card';
 import { Mic } from 'lucide-react';
 
 interface BuddyStudentViewClientProps {
@@ -19,8 +20,21 @@ export function BuddyStudentViewClient({
 }: BuddyStudentViewClientProps) {
   const [isRecorderOpen, setIsRecorderOpen] = useState(false);
 
+  const scrollToFeedback = () => {
+    const el = document.getElementById('feedback-section');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <>
+      {/* Weekly Signal Card — top of detail page (client) */}
+      <WeeklySignalCard
+        studentId={studentId}
+        studentName={studentName}
+        onVoiceNote={() => setIsRecorderOpen(true)}
+        onFeedback={scrollToFeedback}
+      />
+
       {/* Voice Note Recorder Button (Floating) */}
       <button
         onClick={() => setIsRecorderOpen(true)}
@@ -38,10 +52,7 @@ export function BuddyStudentViewClient({
         studentName={studentName}
         isOpen={isRecorderOpen}
         onClose={() => setIsRecorderOpen(false)}
-        onSendComplete={() => {
-          setIsRecorderOpen(false);
-          // Could refresh feedback list here if needed
-        }}
+        onSendComplete={() => setIsRecorderOpen(false)}
         feedbackType="buddy_feedback"
       />
     </>

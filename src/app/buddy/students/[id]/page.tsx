@@ -329,9 +329,11 @@ export default async function BuddyStudentDetailPage({
       )}
 
       {/* Feedback list + form (client component - manages optimistic updates) */}
-      <FeedbackList initial={feedback} studentId={id} studentFirstName={firstName} />
+      <div id="feedback-section">
+        <FeedbackList initial={feedback} studentId={id} studentFirstName={firstName} />
+      </div>
 
-      {/* Voice note recorder (client component) */}
+      {/* Voice note recorder + Weekly Signal (client components) */}
       <BuddyStudentViewClient
         studentId={id}
         studentName={student.full_name}
