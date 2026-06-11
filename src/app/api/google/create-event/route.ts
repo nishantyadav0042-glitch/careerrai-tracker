@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       hasAttendees: !!attendees?.length,
     });
 
-    const { data: eventData, errors } = await calendar.events.insert({
+    const { data: eventData } = await calendar.events.insert({
       calendarId: 'primary',
       conferenceDataVersion: 1,
       sendUpdates: 'all',
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!eventData || !eventData.id) {
-      console.error('Event creation failed:', errors);
+      console.error('Event creation failed');
       return NextResponse.json(
         { error: 'Failed to create calendar event' },
         { status: 502 }
