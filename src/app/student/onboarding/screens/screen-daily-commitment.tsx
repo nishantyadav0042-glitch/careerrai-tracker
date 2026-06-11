@@ -5,7 +5,7 @@ import { Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ScreenDailyCommitmentProps {
-  onNext: (data?: any) => Promise<void>;
+  onNext: (data?: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
   canGoBack: boolean;
   isLoading: boolean;
@@ -72,7 +72,7 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
         <div className="flex gap-2">
           <Target className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-blue-800">
-            <span className="font-semibold">Your buddy checks your streak every Monday.</span> They'll notice if you're
+            <span className="font-semibold">Your buddy checks your streak every Monday.</span> They&apos;ll notice if you&apos;re
             consistently hitting or missing your target.
           </p>
         </div>

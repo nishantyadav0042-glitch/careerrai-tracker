@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { loadStudentTimeline, groupTimelineByWeek, TimelineItem } from '@/lib/timeline-utils';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -29,11 +30,7 @@ export function TimelineView({ studentId }: TimelineViewProps) {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await loadStudentTimeline(studentId);
@@ -43,7 +40,11 @@ export function TimelineView({ studentId }: TimelineViewProps) {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [studentId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (isLoading) {
     return (

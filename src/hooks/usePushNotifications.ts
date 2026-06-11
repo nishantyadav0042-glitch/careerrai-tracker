@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -7,7 +8,7 @@ interface PushNotificationOptions {
   badge?: string;
   icon?: string;
   tag?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -20,18 +21,6 @@ export function usePushNotifications() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check browser support
-  useEffect(() => {
-    const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-    setIsSupported(supported);
-
-    if (supported) {
-      checkSubscriptionStatus();
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
   const checkSubscriptionStatus = useCallback(async () => {
     try {
       const registration = await navigator.serviceWorker.ready;
@@ -43,6 +32,17 @@ export function usePushNotifications() {
       setIsLoading(false);
     }
   }, []);
+
+  // Check browser support on mount
+  useEffect(() => {
+    const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    setIsSupported(supported);
+    if (supported) {
+      checkSubscriptionStatus();
+    } else {
+      setIsLoading(false);
+    }
+  }, [checkSubscriptionStatus]);
 
   const subscribe = useCallback(async () => {
     try {

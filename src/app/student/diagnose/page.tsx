@@ -11,20 +11,20 @@ export default function DiagnosticsPage() {
     setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
   };
 
-  const handleInputChange = (e: any) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     addLog(`onChange: e.target.value="${e.target.value}", length=${e.target.value.length}`);
     setTestValue(e.target.value);
   };
 
-  const handleKeyDown = (e: any) => {
-    addLog(`onKeyDown: key="${e.key}", value="${e.target.value}"`);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    addLog(`onKeyDown: key="${e.key}", value="${(e.target as HTMLInputElement).value}"`);
   };
 
-  const handleKeyUp = (e: any) => {
-    addLog(`onKeyUp: key="${e.key}", value="${e.target.value}"`);
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    addLog(`onKeyUp: key="${e.key}", value="${(e.target as HTMLInputElement).value}"`);
   };
 
-  const handlePaste = (e: any) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pastedText = e.clipboardData?.getData('text');
     addLog(`onPaste: "${pastedText}"`);
   };
@@ -51,7 +51,7 @@ export default function DiagnosticsPage() {
         {/* Test Input */}
         <div className="bg-blue-50 border-2 border-blue-300 p-6 rounded-lg">
           <h2 className="text-xl font-bold mb-3">Test Input Field</h2>
-          <p className="text-sm text-stone-600 mb-3">Try typing "hello" or "12345" below:</p>
+          <p className="text-sm text-stone-600 mb-3">Try typing &quot;hello&quot; or &quot;12345&quot; below:</p>
           <input
             id="test-input"
             type="text"
@@ -64,7 +64,7 @@ export default function DiagnosticsPage() {
             className="w-full px-4 py-3 border-2 border-stone-300 rounded-lg text-lg focus:outline-none focus:border-blue-500"
           />
           <p className="mt-3 text-sm font-mono bg-white p-2 rounded border">
-            Current value: <span className="font-bold">"{testValue}"</span> (length: {testValue.length})
+            Current value: <span className="font-bold">&quot;{testValue}&quot;</span> (length: {testValue.length})
           </p>
           <button
             onClick={testInputDetection}
@@ -110,10 +110,10 @@ export default function DiagnosticsPage() {
         <div className="bg-yellow-50 border-2 border-yellow-300 p-6 rounded-lg">
           <h2 className="text-xl font-bold mb-3">📋 What to Do</h2>
           <ol className="list-decimal list-inside space-y-2 text-sm">
-            <li>Type "hello" or "12345" in the test input above</li>
+            <li>Type &quot;hello&quot; or &quot;12345&quot; in the test input above</li>
             <li>Watch the event logs - do you see onChange events for each character?</li>
             <li>Check if the value under the input updates correctly</li>
-            <li>Click "Inspect Input Element" and check the output</li>
+            <li>Click &quot;Inspect Input Element&quot; and check the output</li>
             <li><strong>Copy all the logs and send them to me</strong></li>
           </ol>
         </div>

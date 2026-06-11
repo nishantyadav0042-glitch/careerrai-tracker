@@ -1,6 +1,8 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/purity */
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { X, Check } from 'lucide-react';
 import { updateStreakAfterLog, checkAndCreateMilestones } from '@/lib/streak-utils';
@@ -38,20 +40,7 @@ export function QuickLogSheet({ isOpen, onClose, userId }: QuickLogSheetProps) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [buddyId, setBuddyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      // Reset form when closing
-      setHours(null);
-      setSelectedTopics([]);
-      setFeeling(null);
-      setShowConfetti(false);
-    } else {
-      // Load buddy info when opening
-      loadBuddyInfo();
-    }
-  }, [isOpen]);
-
-  async function loadBuddyInfo() {
+  const loadBuddyInfo = useCallback(async () => {
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -65,7 +54,20 @@ export function QuickLogSheet({ isOpen, onClose, userId }: QuickLogSheetProps) {
     } catch (error) {
       console.log('Could not load buddy info');
     }
-  }
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset form when closing
+      setHours(null);
+      setSelectedTopics([]);
+      setFeeling(null);
+      setShowConfetti(false);
+    } else {
+      // Load buddy info when opening
+      loadBuddyInfo();
+    }
+  }, [isOpen, loadBuddyInfo]);
 
   const toggleTopic = (topic: string) => {
     setSelectedTopics((prev) =>

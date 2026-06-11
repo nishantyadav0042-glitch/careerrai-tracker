@@ -6,7 +6,7 @@ import { Zap, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface ScreenBaselineTestProps {
-  onNext: (data?: any) => Promise<void>;
+  onNext: (data?: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
   canGoBack: boolean;
   isLoading: boolean;
@@ -112,7 +112,7 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
             <div className="text-center space-y-3">
               <p className="text-sm text-stone-700 font-medium">Your buddy needs this to guide you</p>
               <p className="text-xs text-stone-600 leading-relaxed">
-                Takes 5 minutes. 35 questions. Your score tells your buddy exactly where to focus with you. It's the
+                Takes 5 minutes. 35 questions. Your score tells your buddy exactly where to focus with you. It&apos;s the
                 fastest way to get personalized guidance.
               </p>
             </div>
@@ -135,13 +135,13 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
               type="button"
               className="w-full py-3 bg-white text-stone-900 border-2 border-stone-200 rounded-xl font-medium hover:bg-stone-50 transition-all cursor-pointer"
             >
-              I'll do this later
+              I&apos;ll do this later
             </button>
 
             {/* Warning Message */}
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-xs text-amber-800 text-center">
-                <span className="font-semibold">Heads up:</span> Your buddy can't give personalized guidance without
+                <span className="font-semibold">Heads up:</span> Your buddy can&apos;t give personalized guidance without
                 this. Strongly recommended.
               </p>
             </div>
@@ -149,7 +149,7 @@ export default function ScreenBaselineTest({ onNext, onBack, canGoBack, isLoadin
 
           {/* Quick Note */}
           <p className="text-xs text-stone-500 text-center italic">
-            Don't worry about your score. This is just to understand your current level. Improvement is what matters.
+            Don&apos;t worry about your score. This is just to understand your current level. Improvement is what matters.
           </p>
         </>
       )}

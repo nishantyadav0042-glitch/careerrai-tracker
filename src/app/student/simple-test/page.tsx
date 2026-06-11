@@ -33,7 +33,7 @@ export default function SimpleTestPage() {
           }}
         />
         <p style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-          ℹ️ If you can type multiple characters here, React isn't the problem.
+          ℹ️ If you can type multiple characters here, React isn&apos;t the problem.
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export default function SimpleTestPage() {
           }}
         />
         <p style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-          ℹ️ If inputMode doesn't help, the browser might have a setting enabled.
+          ℹ️ If inputMode doesn&apos;t help, the browser might have a setting enabled.
         </p>
       </div>
 

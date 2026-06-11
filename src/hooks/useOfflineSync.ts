@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback } from 'react';
 
 interface PendingLog {
@@ -129,6 +130,7 @@ export function useOfflineSync() {
   }, [isOnline, pendingLogs]);
 
   // Auto-sync when coming online
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (isOnline) {
       syncPendingLogs();

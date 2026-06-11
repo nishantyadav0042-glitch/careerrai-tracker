@@ -39,10 +39,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
   const [studyTargetHours, setStudyTargetHours] = useState<number>(2);
 
-  const handleNext = async (data?: any) => {
+  const handleNext = async (data?: Record<string, unknown>) => {
     // Screen 2 (index 2) = Daily Commitment — save the target hours
     if (currentScreen === 2 && data?.studyTargetHours) {
-      setStudyTargetHours(data.studyTargetHours);
+      setStudyTargetHours(data.studyTargetHours as number);
     }
 
     if (currentScreen < screens.length - 1) {

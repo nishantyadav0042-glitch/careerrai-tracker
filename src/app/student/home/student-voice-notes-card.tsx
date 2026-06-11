@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Mic, Plus } from 'lucide-react';
 
@@ -22,11 +23,7 @@ export function StudentVoiceNotesCard({ studentId, buddyId, onRecordNew }: Stude
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchVoiceNotes();
-  }, []);
-
-  const fetchVoiceNotes = async () => {
+  const fetchVoiceNotes = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('buddy_feedback')
@@ -44,7 +41,11 @@ export function StudentVoiceNotesCard({ studentId, buddyId, onRecordNew }: Stude
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase, studentId]);
+
+  useEffect(() => {
+    fetchVoiceNotes();
+  }, [fetchVoiceNotes]);
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString);

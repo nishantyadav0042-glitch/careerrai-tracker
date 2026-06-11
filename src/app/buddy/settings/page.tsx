@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { GoogleCalendarConnectBtn } from '@/components/google-calendar-connect-btn';
 
@@ -9,11 +10,7 @@ export default function BuddySettingsPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    checkGoogleCalendarStatus();
-  }, []);
-
-  const checkGoogleCalendarStatus = async () => {
+  const checkGoogleCalendarStatus = useCallback(async () => {
     try {
       const {
         data: { user },
@@ -33,7 +30,11 @@ export default function BuddySettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    checkGoogleCalendarStatus();
+  }, [checkGoogleCalendarStatus]);
 
   const handleSuccess = () => {
     setIsConnected(true);

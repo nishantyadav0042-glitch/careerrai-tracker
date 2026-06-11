@@ -239,7 +239,7 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@N
       <Card className="p-4 bg-blue-50 border-blue-200">
         <h4 className="text-xs font-semibold text-blue-900 mb-2 uppercase tracking-wide">Import Guide</h4>
         <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
-          <li><strong>Role:</strong> Must be "student" or "buddy"</li>
+          <li><strong>Role:</strong> Must be &quot;student&quot; or &quot;buddy&quot;</li>
           <li><strong>Email:</strong> Must be unique (not already in system)</li>
           <li><strong>Exam Target:</strong> Required for students (CAT only), leave blank for buddies</li>
           <li><strong>Buddy Email:</strong> Optional. If provided, must match a buddy email in the same import</li>

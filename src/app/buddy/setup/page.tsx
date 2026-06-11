@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { SetupRecorderClient } from './setup-recorder-client';
 import { CheckCircle2 } from 'lucide-react';
@@ -42,7 +43,7 @@ export default async function BuddySetupPage() {
             <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0" />
             <div>
               <p className="font-semibold text-stone-900">Account Created</p>
-              <p className="text-sm text-stone-600">You're set up as an IIM alumni buddy</p>
+              <p className="text-sm text-stone-600">You&apos;re set up as an IIM alumni buddy</p>
             </div>
           </div>
 
@@ -79,7 +80,7 @@ export default async function BuddySetupPage() {
             <div className="text-center py-8">
               <CheckCircle2 className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-stone-900 mb-2">
-                You're All Set! 🎉
+                You&apos;re All Set! 🎉
               </h2>
               <p className="text-stone-600 mb-6">
                 Your intro audio has been saved. Students will hear this when they
@@ -87,12 +88,12 @@ export default async function BuddySetupPage() {
               </p>
 
               <div className="flex gap-3 justify-center">
-                <a
+                <Link
                   href="/buddy/students"
                   className="px-6 py-3 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-all"
                 >
                   View Your Students
-                </a>
+                </Link>
               </div>
             </div>
           ) : (
@@ -111,7 +112,7 @@ export default async function BuddySetupPage() {
               score/percentile
             </li>
             <li>
-              ✓ <strong>Tell Your Story:</strong> How did CAT shape your life? What's
+              ✓ <strong>Tell Your Story:</strong> How did CAT shape your life? What&apos;s
               your background?
             </li>
             <li>

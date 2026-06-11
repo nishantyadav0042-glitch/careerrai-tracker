@@ -6,7 +6,7 @@ import { createAdminClient } from '../src/lib/supabase/admin';
  */
 
 const puzzleTypes = ['seating', 'blood_relation', 'constraint', 'arrangement'];
-const samplePuzzles: Record<string, any> = {
+const samplePuzzles: Record<string, { description: string; [key: string]: unknown }> = {
   seating: {
     description: 'Seating arrangement puzzle',
     setup: 'Six people (A, B, C, D, E, F) sit around a circular table...',

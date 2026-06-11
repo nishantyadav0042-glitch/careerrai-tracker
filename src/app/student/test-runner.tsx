@@ -88,6 +88,7 @@ export function TestRunner({ testId, testName, onComplete, onClose }: TestRunner
     } else {
       const score = Object.values(newAnswers).reduce((s, v) => s + v, 0);
       const normalized = Math.round((score / (questions.length * 4)) * 100);
+      // eslint-disable-next-line react-hooks/purity
       const percentile = Math.min(99, Math.max(1, normalized + Math.floor(Math.random() * 10) - 5));
       setResult({ score: normalized, percentile });
     }

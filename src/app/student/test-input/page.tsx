@@ -11,7 +11,7 @@ export default function TestInputPage() {
       <p style={{ color: '#666' }}>This page has NO parent layout, NO form, NO handlers. Just plain inputs.</p>
 
       <div style={{ marginBottom: '30px' }}>
-        <h2>Test 1: Type "hello"</h2>
+        <h2>Test 1: Type &quot;hello&quot;</h2>
         <input
           type="text"
           value={text}
@@ -29,7 +29,7 @@ export default function TestInputPage() {
       </div>
 
       <div style={{ marginBottom: '30px' }}>
-        <h2>Test 2: Type "12345"</h2>
+        <h2>Test 2: Type &quot;12345&quot;</h2>
         <input
           type="text"
           value={number}

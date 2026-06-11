@@ -5,8 +5,10 @@
  * This script reads all migration files and logs the SQL to be executed
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function runFixes() {
   console.log('🚀 CareerRai Database Fix Script\n');

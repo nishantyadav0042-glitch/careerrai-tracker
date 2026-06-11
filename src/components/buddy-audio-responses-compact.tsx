@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Volume2, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { BuddyFeedback } from '@/types';
@@ -21,11 +22,7 @@ export function BuddyAudioResponsesCompact({
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchResponses();
-  }, []);
-
-  const fetchResponses = async () => {
+  const fetchResponses = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('buddy_feedback')
@@ -45,18 +42,25 @@ export function BuddyAudioResponsesCompact({
         .limit(5);
 
       if (!error && data) {
-        const formatted = data.map((item: any) => ({
-          ...item,
-          student_name: item.profiles?.full_name || 'Student',
-        }));
-        setResponses(formatted);
+        const formatted = data.map((item) => {
+          const profileArr = item.profiles as Array<{ full_name?: string }> | { full_name?: string } | null;
+          const fullName = Array.isArray(profileArr)
+            ? profileArr[0]?.full_name
+            : profileArr?.full_name;
+          return { ...item, student_name: fullName || 'Student' };
+        });
+        setResponses(formatted as unknown as StudentAudioResponse[]);
       }
     } catch (err) {
       console.error('Error fetching responses:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase, buddyId]);
+
+  useEffect(() => {
+    fetchResponses();
+  }, [fetchResponses]);
 
   if (loading) return null;
   if (responses.length === 0) return null;

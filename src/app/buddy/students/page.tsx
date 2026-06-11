@@ -39,7 +39,7 @@ export default async function BuddyStudentsPage() {
 
   // Get last 7 days reports for each student
   const studentIds = (students ?? []).map((s) => s.id);
-  let reportsMap: Record<string, DailyReport[]> = {};
+  const reportsMap: Record<string, DailyReport[]> = {};
 
   if (studentIds.length > 0) {
     const weekAgo = new Date();

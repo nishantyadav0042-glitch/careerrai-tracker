@@ -57,7 +57,7 @@ export default async function DailyTrackerPage() {
               <div>
                 <p className="text-sm font-semibold text-orange-900">Buddy Sees Everything</p>
                 <p className="text-xs text-orange-700 mt-1">
-                  Your buddy gets notified when you log. They'll use this to give better feedback.
+                  Your buddy gets notified when you log. They&apos;ll use this to give better feedback.
                 </p>
               </div>
             </div>
@@ -69,7 +69,7 @@ export default async function DailyTrackerPage() {
               <div>
                 <p className="text-sm font-semibold text-blue-900">Best Time to Log</p>
                 <p className="text-xs text-blue-700 mt-1">
-                  Log right after your study session. Today's log locks in at 3 AM tomorrow.
+                  Log right after your study session. Today&apos;s log locks in at 3 AM tomorrow.
                 </p>
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
@@ -25,12 +26,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
   const [recordFor, setRecordFor] = useState<StudentUrgencyData | null>(null);
   const [scheduleFor, setScheduleFor] = useState<StudentUrgencyData | null>(null);
 
-  useEffect(() => {
-    loadStudents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadStudents() {
+  const loadStudents = useCallback(async () => {
     setIsLoading(true);
     try {
       const [data, { data: profile }] = await Promise.all([
@@ -48,7 +44,11 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [buddyId, supabase]);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
 
   const filteredStudents = students.filter((s) => {
     if (filter === 'all') return true;

@@ -37,7 +37,7 @@ export function MockDropIntervention({ studentId, dropAmount, buddyFirstName, on
             <AlertCircle className="w-6 h-6 flex-shrink-0 mt-0.5" />
             <div>
               <h2 className="text-lg font-bold leading-snug">
-                Score drop detected.<br />This is expected. Here's why.
+                Score drop detected.<br />This is expected. Here&apos;s why.
               </h2>
             </div>
           </div>
@@ -48,7 +48,7 @@ export function MockDropIntervention({ studentId, dropAmount, buddyFirstName, on
           <p className="text-sm text-stone-700 leading-relaxed">
             As CAT gets closer, more serious competitors take mocks. The pool gets tougher,
             so the same accuracy gives a lower percentile.{' '}
-            <strong>Your skill hasn't declined — the benchmark moved.</strong>
+            <strong>Your skill hasn&apos;t declined — the benchmark moved.</strong>
           </p>
 
           {/* Visual comparison */}

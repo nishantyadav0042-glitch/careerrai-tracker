@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Video, Calendar, MoreVertical, X } from 'lucide-react';

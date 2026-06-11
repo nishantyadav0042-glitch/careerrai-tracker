@@ -60,7 +60,7 @@ async function seedPuzzles() {
   console.log('🌱 Seeding 30 days of puzzles...');
 
   const puzzleTypes = ['seating', 'blood_relation', 'constraint', 'arrangement'];
-  const samplePuzzles: Record<string, any> = {
+  const samplePuzzles: Record<string, { description: string; [key: string]: unknown }> = {
     seating: { description: 'Seating arrangement puzzle' },
     blood_relation: { description: 'Blood relation puzzle' },
     constraint: { description: 'Constraint-based logic puzzle' },

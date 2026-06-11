@@ -194,7 +194,7 @@ export default function StudentReportsPage() {
                     <div>
                       <div className="text-[10px] uppercase tracking-wider text-stone-500 font-semibold mb-1">Mood</div>
                       <div className="text-sm text-stone-800">Conf {r.confidence} · Stress {r.stress} · Sleep {r.sleep_quality} · Energy {r.overall_energy}</div>
-                      {r.notes && <div className="text-xs text-stone-600 mt-1 italic">"{r.notes}"</div>}
+                      {r.notes && <div className="text-xs text-stone-600 mt-1 italic">&quot;{r.notes}&quot;</div>}
                     </div>
                   </div>
                 )}
@@ -203,7 +203,7 @@ export default function StudentReportsPage() {
           })}
           {reports.length === 0 && (
             <Card className="p-8 text-center">
-              <p className="text-sm text-stone-600">No reports yet — fill today's to start your streak.</p>
+              <p className="text-sm text-stone-600">No reports yet — fill today&apos;s to start your streak.</p>
             </Card>
           )}
         </div>
@@ -222,7 +222,7 @@ export default function StudentReportsPage() {
                 <span className="text-xs text-stone-600">{new Date(f.feedback_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
                 <div className="flex">{[1,2,3,4,5].map((s) => <Star key={s} className={cn('w-3.5 h-3.5', s <= f.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300')} />)}</div>
               </div>
-              <p className="text-sm text-stone-800 leading-relaxed">"{f.feedback_text}"</p>
+              <p className="text-sm text-stone-800 leading-relaxed">&quot;{f.feedback_text}&quot;</p>
               {f.next_steps?.length > 0 && (
                 <div className="pt-2 border-t border-teal-200">
                   <div className="text-[10px] uppercase tracking-wider text-teal-700 font-semibold mb-1.5">Next steps</div>

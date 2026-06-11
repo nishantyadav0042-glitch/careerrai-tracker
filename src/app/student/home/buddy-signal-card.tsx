@@ -99,9 +99,8 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
     .slice(0, 2)
     .toUpperCase();
 
-  const daysAgo = Math.floor(
-    (Date.now() - new Date(feedback.created_at).getTime()) / (1000 * 60 * 60 * 24)
-  );
+  // eslint-disable-next-line react-hooks/purity
+  const daysAgo = Math.floor((Date.now() - new Date(feedback.created_at).getTime()) / (1000 * 60 * 60 * 24));
 
   const timeAgoText =
     daysAgo === 0
@@ -145,8 +144,8 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
           <div className="space-y-2">
             {feedback.feedback_text && (
               <p className="text-sm text-stone-700 leading-relaxed">
-                "{feedback.feedback_text.substring(0, 100)}
-                {feedback.feedback_text.length > 100 ? '...' : ''}"
+                &quot;{feedback.feedback_text.substring(0, 100)}
+                {feedback.feedback_text.length > 100 ? '...' : ''}&quot;
               </p>
             )}
 

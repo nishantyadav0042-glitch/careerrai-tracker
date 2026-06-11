@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Mic, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { VoiceNoteRecorder } from '@/components/voice-note-recorder';
@@ -27,11 +28,7 @@ export function BuddyQuickVoiceMessage({
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStudents();
-  }, []);
-
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -50,7 +47,11 @@ export function BuddyQuickVoiceMessage({
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase, buddyId]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
 
   if (loading || students.length === 0) {
     return null;

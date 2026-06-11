@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
@@ -117,7 +118,7 @@ export function WeeklySignalCard({ studentId, studentName, onVoiceNote, onFeedba
       {insight && (
         <div className="bg-teal-100/60 rounded-xl p-3 mb-4">
           <p className="text-xs font-semibold text-teal-800 mb-1">AI Observation</p>
-          <p className="text-sm text-teal-900 italic">"{insight}"</p>
+          <p className="text-sm text-teal-900 italic">&quot;{insight}&quot;</p>
         </div>
       )}
 

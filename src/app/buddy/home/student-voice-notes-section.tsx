@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Mic, Volume2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -21,11 +22,7 @@ export function StudentVoiceNotesSection({ buddyId }: StudentVoiceNotesSectionPr
   const [students, setStudents] = useState<StudentNote[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStudents();
-  }, []);
-
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     try {
       // Fetch all students assigned to this buddy
       const { data, error } = await supabase
@@ -50,7 +47,11 @@ export function StudentVoiceNotesSection({ buddyId }: StudentVoiceNotesSectionPr
     } finally {
       setLoading(false);
     }
-  };
+  }, [buddyId, supabase]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
 
   return (
     <div className="space-y-2.5 sm:space-y-4">
@@ -63,7 +64,7 @@ export function StudentVoiceNotesSection({ buddyId }: StudentVoiceNotesSectionPr
           </h2>
         </div>
         <p className="text-xs sm:text-sm text-stone-600">
-          Check your students' concerns and respond
+          Check your students&apos; concerns and respond
         </p>
       </div>
 

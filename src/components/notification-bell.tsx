@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { Bell, X, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Notification } from '@/types';
@@ -10,12 +11,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const supabase = createClient();
 
-  useEffect(() => {
-    loadNotifications();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  async function loadNotifications() {
+  const loadNotifications = useCallback(async () => {
     const { data } = await supabase
       .from('notifications')
       .select('*')
@@ -23,7 +19,11 @@ export function NotificationBell({ userId }: { userId: string }) {
       .order('created_at', { ascending: false })
       .limit(20);
     if (data) setNotifications(data as Notification[]);
-  }
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   async function markRead(id: string) {
     await supabase.from('notifications').update({ read: true }).eq('id', id);
@@ -70,7 +70,7 @@ export function NotificationBell({ userId }: { userId: string }) {
             </div>
             <div className="max-h-96 overflow-y-auto divide-y divide-stone-100">
               {notifications.length === 0 && (
-                <div className="p-6 text-center text-sm text-stone-500">You're all caught up.</div>
+                <div className="p-6 text-center text-sm text-stone-500">You&apos;re all caught up.</div>
               )}
               {notifications.map((n) => (
                 <div

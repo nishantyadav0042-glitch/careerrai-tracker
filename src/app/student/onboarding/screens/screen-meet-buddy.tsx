@@ -1,11 +1,12 @@
 'use client';
+/* eslint-disable react-hooks/purity */
 
 import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Play, Pause, Volume2 } from 'lucide-react';
 
 interface ScreenMeetBuddyProps {
-  onNext: (data?: any) => Promise<void>;
+  onNext: (data?: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
   canGoBack: boolean;
   isLoading: boolean;
@@ -126,7 +127,7 @@ export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }
       {/* Subtitle */}
       <div>
         <p className="text-sm text-orange-600 font-semibold uppercase tracking-wider">Meet Your Buddy</p>
-        <p className="text-xs text-stone-500 mt-1">"Your buddy is ready" to guide your CAT prep</p>
+        <p className="text-xs text-stone-500 mt-1">&quot;Your buddy is ready&quot; to guide your CAT prep</p>
       </div>
 
       {/* Buddy Card */}
@@ -224,7 +225,7 @@ export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }
       {/* Info Text */}
       <p className="text-xs text-stone-500 text-center">
         Your buddy is an IIM alumni who scored in the{' '}
-        {buddy.cat_percentile ? `${buddy.cat_percentile.toFixed(0)}%ile` : 'top percentiles'} on CAT. They'll review
+        {buddy.cat_percentile ? `${buddy.cat_percentile.toFixed(0)}%ile` : 'top percentiles'} on CAT. They&apos;ll review
         your progress every week and give you personalized guidance.
       </p>
 

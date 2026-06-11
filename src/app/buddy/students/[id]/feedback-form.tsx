@@ -156,7 +156,7 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
       {/* Student Responses Section */}
       {studentResponses.length > 0 && (
         <div>
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">📝 {studentFirstName}'s responses</h2>
+          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">📝 {studentFirstName}&apos;s responses</h2>
           <div className="space-y-2 mb-4">
             {studentResponses.map((resp) => (
               <Card key={resp.id} className="p-4 bg-blue-50 border-blue-200">

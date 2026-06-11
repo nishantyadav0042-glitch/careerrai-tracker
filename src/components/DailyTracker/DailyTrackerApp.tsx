@@ -61,7 +61,7 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
       {puzzleLoading ? (
         <div className="flex items-center justify-center py-6 text-stone-500">
           <Loader2 className="w-4 h-4 animate-spin mr-2" />
-          <span className="text-sm">Loading today's puzzle...</span>
+          <span className="text-sm">Loading today&apos;s puzzle...</span>
         </div>
       ) : puzzle ? (
         <DailyPuzzleCard

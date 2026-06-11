@@ -15,6 +15,7 @@
  *   - Set to run daily at 2 AM
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 

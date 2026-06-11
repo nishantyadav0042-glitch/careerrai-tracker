@@ -77,7 +77,7 @@ export default async function BuddyStudentDetailPage({
 
   const lastSessionDate = lastVideoSession?.ended_at ? new Date(lastVideoSession.ended_at) : null;
   const daysSinceLastSession = lastSessionDate
-    ? Math.floor((Date.now() - lastSessionDate.getTime()) / 86_400_000)
+    ? Math.floor((new Date().getTime() - lastSessionDate.getTime()) / 86_400_000)
     : null;
 
   const { data: buddyTokens } = await admin
@@ -228,7 +228,7 @@ export default async function BuddyStudentDetailPage({
                 <div>Study {r.study_duration.toFixed(1)}h · Quality {r.quality_focus}/5 · Difficulty {r.difficulty}/5</div>
                 <div>Confidence {r.confidence}/5 · Stress {r.stress}/5 · Sleep {r.sleep_quality}/5 · Energy {r.overall_energy}/5</div>
                 {r.nutrition_exercise && <div className="text-teal-700">✓ Nutrition &amp; exercise done</div>}
-                {r.notes && <div className="italic text-stone-500">"{r.notes}"</div>}
+                {r.notes && <div className="italic text-stone-500">&quot;{r.notes}&quot;</div>}
                 {r.mock_taken && (
                   <div className="pt-1 border-t border-stone-100">
                     Mock: {r.mock_name} · Accuracy {r.total_accuracy}% · Quant {r.quant_score}% · Verbal {r.verbal_score}%

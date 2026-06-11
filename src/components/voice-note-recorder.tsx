@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, Play, Pause, Trash2, Send, X, Square } from 'lucide-react';
@@ -51,6 +52,7 @@ export function VoiceNoteRecorder({
   const [levels, setLevels] = useState<number[]>(() => Array(BAR_COUNT).fill(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const [playTime, setPlayTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [nudge, setNudge] = useState<string | null>(null);
 
   const blobRef = useRef<Blob | null>(null);
@@ -142,6 +144,7 @@ export function VoiceNoteRecorder({
         setPhase('review');
         setIsPlaying(false);
         setPlayTime(0);
+        setDuration(durationRef.current);
       };
 
       mediaRecorderRef.current = recorder;
@@ -229,7 +232,7 @@ export function VoiceNoteRecorder({
   if (!isOpen) return null;
 
   const reviewProgress =
-    durationRef.current > 0 ? Math.min(100, (playTime / durationRef.current) * 100) : 0;
+    duration > 0 ? Math.min(100, (playTime / duration) * 100) : 0;
 
   return (
     <>
@@ -342,7 +345,7 @@ export function VoiceNoteRecorder({
                     <input
                       type="range"
                       min={0}
-                      max={durationRef.current || 1}
+                      max={duration || 1}
                       step={0.1}
                       value={playTime}
                       disabled={phase === 'sending'}
@@ -361,7 +364,7 @@ export function VoiceNoteRecorder({
                     />
                     <div className="flex justify-between text-[11px] text-stone-500 tabular-nums">
                       <span>{fmt(playTime)}</span>
-                      <span>{fmt(durationRef.current)}</span>
+                      <span>{fmt(duration)}</span>
                     </div>
                   </div>
                 </div>

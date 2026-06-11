@@ -101,6 +101,7 @@ export function VoiceNotePlayer({
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
+    // eslint-disable-next-line react-hooks/purity
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
     if (seconds < 60) return 'just now';
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;

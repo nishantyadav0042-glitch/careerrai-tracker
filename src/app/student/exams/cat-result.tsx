@@ -119,7 +119,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
             <Card className="p-4 mb-6 bg-indigo-50 border-indigo-200">
               <div className="text-xs font-semibold uppercase text-indigo-700 mb-4">Category Performance</div>
               <div className="space-y-3">
-                {Object.entries(feedback.categories).map(([category, data]: [string, any]) => (
+                {(Object.entries(feedback.categories) as [string, { score: number; action: string }][]).map(([category, data]) => (
                   <div key={category} className="pb-3 border-b border-indigo-200 last:border-b-0">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-semibold text-indigo-900">{category}</span>
@@ -146,7 +146,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
           <Card className="p-4 mb-6 bg-amber-50 border-amber-200">
             <div className="flex items-center gap-2 mb-3">
               <Calendar className="w-4 h-4 text-amber-600" />
-              <span className="text-xs font-semibold uppercase text-amber-700">Next Steps (Your Buddy's Advice)</span>
+              <span className="text-xs font-semibold uppercase text-amber-700">Next Steps (Your Buddy&apos;s Advice)</span>
             </div>
             <ul className="space-y-2">
               {feedback.next_steps.map((step, i) => (
@@ -165,7 +165,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
                 <li>✓ <strong>Personalized Buddy</strong>: Not just a test - a real mentor analyzing YOUR data</li>
                 <li>✓ <strong>Smart Feedback</strong>: AI-powered insights + human touch from your buddy</li>
                 <li>✓ <strong>Real Data</strong>: Percentiles based on actual CAT 2023-2025 results</li>
-                <li>✓ <strong>Growth Timeline</strong>: Know exactly when you'll hit your target score</li>
+                <li>✓ <strong>Growth Timeline</strong>: Know exactly when you&apos;ll hit your target score</li>
                 <li>✓ <strong>Accountability</strong>: Weekly check-ins ensure you stay on track</li>
               </ul>
             </div>

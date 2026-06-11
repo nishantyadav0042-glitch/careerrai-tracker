@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { MessageSquare, Mic, Volume2 } from 'lucide-react';
 import { VoiceNotePlayer } from '@/components/voice-note-player';
@@ -30,11 +31,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
   const [loading, setLoading] = useState(true);
   const [showRecorder, setShowRecorder] = useState(false);
 
-  useEffect(() => {
-    fetchFeedbacks();
-  }, []);
-
-  const fetchFeedbacks = async () => {
+  const fetchFeedbacks = useCallback(async () => {
     try {
       // Don't fetch if buddy is not set or is the student themselves
       if (!buddyId || buddyId === studentId) {
@@ -70,8 +67,8 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
         voice_note_url: f.voice_note_url,
         created_at: f.created_at,
         buddy_id: f.buddy_id,
-        buddy_name: (f.profiles as any)?.full_name || 'Buddy',
-        buddy_college: (f.profiles as any)?.college,
+        buddy_name: (f.profiles as { full_name?: string; college?: string })?.full_name || 'Buddy',
+        buddy_college: (f.profiles as { full_name?: string; college?: string })?.college,
         read_at: f.read_at,
         thanked_at: f.thanked_at,
       })) || [];
@@ -82,7 +79,11 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
     } finally {
       setLoading(false);
     }
-  };
+  }, [buddyId, studentId, supabase]);
+
+  useEffect(() => {
+    fetchFeedbacks();
+  }, [fetchFeedbacks]);
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString);

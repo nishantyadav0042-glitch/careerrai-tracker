@@ -13,7 +13,7 @@ interface StreakHeroProps {
 
 export function StreakHero({ userId }: StreakHeroProps) {
   const supabase = createClient();
-  const [streakData, setStreakData] = useState<any>(null);
+  const [streakData, setStreakData] = useState<{ current_streak: number; longest_streak: number; last_log_date: string | null; milestone_sent_7: boolean; milestone_sent_21: boolean } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -146,7 +146,7 @@ export function StreakHero({ userId }: StreakHeroProps) {
               👑 30-DAY MASTER UNLOCKED!
             </p>
             <p className="text-xs text-yellow-100">
-              Congratulations! You've earned <strong>1 MONTH FREE EXTENSION</strong> on your CareerRai subscription.
+              Congratulations! You&apos;ve earned <strong>1 MONTH FREE EXTENSION</strong> on your CareerRai subscription.
             </p>
             <p className="text-xs text-yellow-200 mt-2 font-semibold">
               ✓ Reward applied to your account

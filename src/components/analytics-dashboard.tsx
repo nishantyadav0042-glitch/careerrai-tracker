@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import {
   analyzeMockTrend,
@@ -26,11 +27,7 @@ export function AnalyticsDashboard({ studentId }: AnalyticsDashboardProps) {
   const [readiness, setReadiness] = useState<CATReadiness | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
-
-  async function loadAnalytics() {
+  const loadAnalytics = useCallback(async () => {
     setIsLoading(true);
     try {
       const [trend, corr, intens, read] = await Promise.all([
@@ -49,7 +46,11 @@ export function AnalyticsDashboard({ studentId }: AnalyticsDashboardProps) {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [studentId]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
 
   if (isLoading) {
     return (
