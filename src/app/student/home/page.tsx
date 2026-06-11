@@ -13,8 +13,10 @@ import { HeatmapCard } from './heatmap-card';
 import { BuddyFeedbackCard } from './buddy-feedback-card';
 import { StudentVoiceNotesCard } from './student-voice-notes-card';
 import { VideoSessionsCard } from './video-sessions-card';
+import { RequestSessionButton } from './request-session-button';
 import { computeSummary, getHeatmapData } from '@/lib/analytics';
 import { getTodayIST, formatDateLong } from '@/lib/utils';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { DailyReport } from '@/types';
 import { ArrowRight, CheckCircle2, Clock, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -46,6 +48,17 @@ export default async function StudentHomePage() {
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Friend';
 
+  const admin = createAdminClient();
+  const { data: upcomingSessions } = await admin
+    .from('video_sessions')
+    .select('id')
+    .eq('student_id', user.id)
+    .eq('session_status', 'scheduled')
+    .gte('scheduled_at', new Date().toISOString())
+    .limit(1);
+
+  const hasUpcomingSessions = (upcomingSessions?.length ?? 0) > 0;
+
   return (
     <StudentHomeClient>
       <div className="space-y-4 sm:space-y-5">
@@ -69,6 +82,13 @@ export default async function StudentHomePage() {
 
       {/* 2. VIDEO SESSIONS - Upcoming calls with buddy */}
       <VideoSessionsCard userId={user.id} />
+
+      {/* 2.5. REQUEST SESSION - If no upcoming sessions */}
+      <RequestSessionButton
+        buddyId={profile?.buddy_id || ''}
+        buddyName="Your Buddy"
+        hasUpcomingSessions={hasUpcomingSessions}
+      />
 
       {/* 3. BUDDY FEEDBACK - PRIORITY ACTION ITEM */}
       <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-5 border-2 border-teal-200">

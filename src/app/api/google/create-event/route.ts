@@ -94,15 +94,31 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const response = await calendar.events.insert({
-      calendarId: 'primary',
-      conferenceDataVersion: 1,
-      sendUpdates: 'all', // email the student their invite
-      requestBody: event,
-    });
+    let response;
+    try {
+      response = await calendar.events.insert({
+        calendarId: 'primary',
+        conferenceDataVersion: 1,
+        sendUpdates: 'all',
+        requestBody: event,
+      });
+    } catch (apiError) {
+      console.error('Google Calendar API error:', apiError);
+      return NextResponse.json(
+        { error: `Calendar API error: ${apiError instanceof Error ? apiError.message : 'Unknown'}` },
+        { status: 500 }
+      );
+    }
 
     let eventData = response.data;
     let meetLink = extractMeetLink(eventData);
+
+    console.log('Initial event response:', {
+      eventId: eventData.id,
+      meetLink,
+      conferenceStatus: eventData.conferenceData?.conferenceStatus,
+      entryPoints: eventData.conferenceData?.entryPoints,
+    });
 
     // Conference creation can come back as "pending" — the Meet link only
     // materialises after Google finishes provisioning. Re-fetch the event
