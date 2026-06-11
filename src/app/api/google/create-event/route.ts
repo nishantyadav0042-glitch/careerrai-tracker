@@ -74,14 +74,20 @@ export async function POST(request: NextRequest) {
       ? [{ email: body.studentEmail, displayName: body.studentName }]
       : undefined;
 
+    // Convert UTC times to IST local time (remove Z for timezone-aware dateTime)
+    const startIST = body.startTime.replace('Z', '');
+    const endIST = body.endTime.replace('Z', '');
+
     const event: calendar_v3.Schema$Event = {
       summary: `Session: ${body.title}`,
       description: `${body.studentName} - ${body.description || 'Video session with buddy'}`,
       start: {
-        dateTime: body.startTime,
+        dateTime: startIST,
+        timeZone: 'Asia/Kolkata',
       },
       end: {
-        dateTime: body.endTime,
+        dateTime: endIST,
+        timeZone: 'Asia/Kolkata',
       },
       attendees,
       conferenceData: {
@@ -122,16 +128,17 @@ export async function POST(request: NextRequest) {
 
     // Conference creation can come back as "pending" — the Meet link only
     // materialises after Google finishes provisioning. Re-fetch the event
-    // (max 5 retries, 1.5s apart) until the link appears.
+    // (max 8 retries, 1s apart, max 8 seconds total) until the link appears.
     let retries = 0;
-    while (!meetLink && eventData.id && retries < 5) {
-      await sleep(1500);
+    while (!meetLink && eventData.id && retries < 8) {
+      await sleep(1000);
       const refreshed = await calendar.events.get({
         calendarId: 'primary',
         eventId: eventData.id,
       });
       eventData = refreshed.data;
       meetLink = extractMeetLink(eventData);
+      console.log(`Retry ${retries + 1}: meetLink=${meetLink ? 'FOUND' : 'pending'}`);
       retries++;
     }
 
