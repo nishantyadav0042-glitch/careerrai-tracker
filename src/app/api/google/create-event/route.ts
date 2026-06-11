@@ -152,9 +152,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Create event error:', error instanceof Error ? error.message : error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Create event error:', errorMessage);
     return NextResponse.json(
-      { error: 'Failed to create calendar event' },
+      { error: `Failed to create calendar event: ${errorMessage}` },
       { status: 500 }
     );
   }

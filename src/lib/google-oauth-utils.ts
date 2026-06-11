@@ -15,8 +15,13 @@ export async function getValidGoogleAccessToken(userId: string): Promise<string>
     .eq('user_id', userId)
     .single();
 
-  if (error || !tokens?.refresh_token) {
-    throw new Error('User has not connected Google Calendar');
+  if (error) {
+    console.error('Error retrieving tokens for user', userId, ':', error);
+    throw new Error(`Failed to retrieve Google Calendar tokens: ${error.message}`);
+  }
+
+  if (!tokens?.refresh_token) {
+    throw new Error('User has not connected Google Calendar (no refresh token)');
   }
 
   const now = new Date();
