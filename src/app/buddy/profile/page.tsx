@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { Settings } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NotifPrefsPanel } from '@/components/notif-prefs-panel';
@@ -27,9 +29,18 @@ export default async function BuddyProfilePage() {
 
   return (
     <div className="space-y-5 pb-24">
-      <div className="px-1">
-        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Profile</p>
-        <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>You</h1>
+      <div className="px-1 flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Profile</p>
+          <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>You</h1>
+        </div>
+        <Link
+          href="/buddy/settings"
+          className="p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+          title="Settings"
+        >
+          <Settings className="w-5 h-5" />
+        </Link>
       </div>
 
       <Card className="p-6">
