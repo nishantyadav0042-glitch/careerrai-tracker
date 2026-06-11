@@ -93,6 +93,18 @@ ENV VARS (required in Vercel):
   ❤️ Thanks reaction → buddy notification.
 - Server routes for send/read/thanks so notifications stay service-role only.
 
+## 🚨 BLOCKER FOUND 2026-06-11 — Calendar API never enabled
+
+Live test against Google with the stored OAuth token returned:
+`SERVICE_DISABLED — Google Calendar API has not been used in project
+307670815298`. **This was the true root cause of every Meet-link failure
+since the beginning** (OAuth token exchange works without the Calendar API,
+so connecting always "succeeded" while every calendar call failed).
+
+**Fix (founder, 1 minute):** open
+https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=307670815298
+→ click **ENABLE** → wait 2–5 minutes → schedule a session again.
+
 ## 🚨 SECURITY — ACT TODAY
 
 The Supabase **service-role key** (full database admin, bypasses all RLS) was
@@ -143,3 +155,34 @@ Google Cloud Console → Credentials → the OAuth client must whitelist
 `https://careerrai-daily.vercel.app/api/google/callback` as an authorized
 redirect URI, and the Calendar API must be enabled. While the consent screen
 is in Testing mode, add each buddy/student Gmail as a test user (cap 100).
+
+Note: these three env vars are already SET on the careerrai-daily Vercel
+project (verified 2026-06-11) — OAuth tokens exist in the DB, proving the
+flow works end-to-end. Nothing to do unless you rotate keys.
+
+## New/changed API surface
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/google/auth` | GET (`?redirect=/path`) or POST | start OAuth |
+| `/api/google/callback` | GET | token exchange + gmail capture + reminders |
+| `/api/google/disconnect` | POST | remove tokens + cleanup reminders |
+| `/api/calendar/schedule-meeting` | POST | create session + REAL Meet link |
+| `/api/calendar/cancel-meeting` | POST | cancel + delete Google events |
+| `/api/calendar/upcoming-meetings` | GET | widget data (both roles) |
+| `/api/voice-notes/send` | POST multipart | upload + feedback row + notify |
+| `/api/voice-notes/mark-read` | POST | read receipt + clear notification |
+| `/api/voice-notes/thanks` | POST | ❤️ reaction → buddy notification |
+
+Removed (dead): `/api/sessions/schedule`, `/api/google/create-event`,
+`gmeet-utils.ts`, `google-oauth-utils.ts`, `upcoming-session-card`,
+`buddy-video-sessions-dashboard`, `video-sessions-card`,
+`video-session-prompt`, `schedule-session-form`, `/admin/voice-test`,
+20+ root-level debug scripts.
+
+## Running seed scripts locally
+
+```powershell
+$env:SUPABASE_SERVICE_ROLE_KEY = "<the NEW rotated key>"
+node scripts/seed.mjs
+```

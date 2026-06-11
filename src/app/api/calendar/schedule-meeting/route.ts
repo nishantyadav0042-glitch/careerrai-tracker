@@ -293,7 +293,35 @@ export async function POST(request: NextRequest) {
       invitesSent: attendees.length > 0,
     });
   } catch (error) {
-    console.error('schedule-meeting error:', error);
+    // Surface Google API errors precisely instead of a generic 500
+    const apiError = error as {
+      message?: string;
+      errors?: Array<{ reason?: string; message?: string }>;
+      response?: { data?: { error?: { errors?: Array<{ reason?: string }>; message?: string } } };
+    };
+    const reason =
+      apiError.errors?.[0]?.reason ||
+      apiError.response?.data?.error?.errors?.[0]?.reason;
+    const detail =
+      apiError.response?.data?.error?.message || apiError.message || String(error);
+    console.error('schedule-meeting error:', reason, detail);
+
+    if (reason === 'accessNotConfigured' || detail.includes('SERVICE_DISABLED') || detail.includes('has not been used in project')) {
+      return NextResponse.json(
+        {
+          error:
+            'Google Calendar API is disabled in the app’s Google Cloud project. Founder: enable it at console.cloud.google.com → APIs & Services → Google Calendar API → Enable, then retry.',
+          code: 'CALENDAR_API_DISABLED',
+        },
+        { status: 502 }
+      );
+    }
+    if (reason === 'insufficientPermissions' || detail.includes('insufficient')) {
+      return NextResponse.json(
+        { error: 'Google Calendar permissions are missing — disconnect and reconnect Google Calendar in Settings.', code: 'INSUFFICIENT_SCOPE' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: "Couldn't reach Google Calendar — try again." },
       { status: 500 }
