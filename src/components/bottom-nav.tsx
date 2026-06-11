@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Calendar, FileText, GraduationCap, User, Users, TrendingUp } from 'lucide-react';
+import { Home, Calendar, FileText, GraduationCap, User, Users, TrendingUp, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -50,6 +50,7 @@ const BUDDY_ITEMS: NavItem[] = [
   { href: '/buddy/students', icon: Users, label: 'Students' },
   { href: '/buddy/trends', icon: TrendingUp, label: 'Trends' },
   { href: '/buddy/profile', icon: User, label: 'Profile' },
+  { href: '/buddy/settings', icon: Settings, label: 'Settings' },
 ];
 
 export function StudentBottomNav() {
