@@ -129,3 +129,71 @@ export interface VideoSession {
   created_at: string;
   updated_at: string;
 }
+
+// Daily Tracker Types
+export interface StreakData {
+  id: string;
+  student_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_log_date: string | null;
+  milestone_sent_7: boolean;
+  milestone_sent_21: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StreakShield {
+  id: string;
+  student_id: string;
+  used_on: string | null;
+  granted_by: string | null;
+  reason: 'student_used' | 'buddy_granted';
+  created_at: string;
+}
+
+export interface DailyLrdiPuzzle {
+  id: string;
+  puzzle_date: string;
+  puzzle_type: 'seating' | 'blood_relation' | 'constraint' | 'arrangement' | 'logic';
+  puzzle_content: Record<string, unknown>;
+  difficulty: number;
+  difficulty_description?: string;
+  estimated_time_minutes: number;
+  solution?: string;
+  explanation?: string;
+  created_at: string;
+}
+
+export interface LrdiPuzzleAttempt {
+  id: string;
+  student_id: string;
+  puzzle_id: string;
+  solved: boolean;
+  time_taken_seconds?: number;
+  accuracy?: number;
+  submitted_at: string;
+}
+
+export interface TodoItem {
+  id: string;
+  student_id: string;
+  title: string;
+  description?: string;
+  category: 'buddy_suggested' | 'student_custom' | 'daily_puzzle' | 'mock_review' | 'session';
+  due_date?: string;
+  due_time?: string;
+  priority: number;
+  completed_at?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnalyticsEvent {
+  id: string;
+  student_id: string;
+  event_type: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
