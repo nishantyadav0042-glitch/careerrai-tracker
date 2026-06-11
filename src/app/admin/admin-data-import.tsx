@@ -23,23 +23,6 @@ export function AdminDataImport() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<any>(null);
-
-  async function testAPI() {
-    console.log('[TEST] Testing API...');
-    try {
-      const response = await fetch('/api/admin/test', { method: 'POST' });
-      const data = await response.json();
-      console.log('[TEST] Response:', data);
-      setTestResult(data);
-      if (!response.ok) {
-        setError(`Test failed: ${data.error}`);
-      }
-    } catch (err) {
-      console.error('[TEST] Error:', err);
-      setError(`Test error: ${String(err)}`);
-    }
-  }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -156,26 +139,9 @@ Nishant Yadav,nishant@careerrai.com,+91-9876543215,buddy,,nishant_yadav,Secure@N
               <Download className="w-4 h-4" />
               Template
             </button>
-            <button
-              type="button"
-              onClick={testAPI}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-100 text-blue-900 hover:bg-blue-200 transition"
-            >
-              🧪 Test API
-            </button>
           </div>
         </form>
       </Card>
-
-      {/* Test result */}
-      {testResult && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
-          <div className="text-xs font-mono text-blue-900">
-            <div className="font-semibold mb-1">API Test Result:</div>
-            <pre className="overflow-auto text-[11px]">{JSON.stringify(testResult, null, 2)}</pre>
-          </div>
-        </Card>
-      )}
 
       {/* Error message */}
       {error && (
