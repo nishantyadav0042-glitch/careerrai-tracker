@@ -2,28 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import type { calendar_v3 } from 'googleapis';
 import { createClient } from '@/lib/supabase/server';
-import { getValidGoogleAccessToken } from '@/lib/google-oauth-utils';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 interface CreateEventRequest {
   title: string;
   description?: string;
   studentName: string;
   studentEmail?: string;
-  startTime: string;
-  endTime: string;
+  startTime: string;  // RFC3339/ISO 8601 UTC with Z
+  endTime: string;    // RFC3339/ISO 8601 UTC with Z
+  sessionId?: string;
 }
-
-function extractMeetLink(event: calendar_v3.Schema$Event): string | undefined {
-  const videoEntry = event.conferenceData?.entryPoints?.find(
-    (ep) => ep.entryPointType === 'video'
-  );
-  return videoEntry?.uri ?? event.hangoutLink ?? undefined;
-}
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. AUTHENTICATE
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -31,44 +24,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // 2. PARSE REQUEST
     const body = await request.json() as CreateEventRequest;
 
     if (!body.title || !body.startTime || !body.endTime) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: title, startTime, endTime' },
         { status: 400 }
       );
     }
 
-    const accessToken = await getValidGoogleAccessToken(user.id);
+    // 3. CHECK IF USER HAS GOOGLE CALENDAR CONNECTED
+    const admin = createAdminClient();
+    const { data: profile, error: profileError } = await admin
+      .from('profiles')
+      .select('google_calendar_connected')
+      .eq('id', user.id)
+      .single();
 
+    if (profileError || !profile?.google_calendar_connected) {
+      return NextResponse.json(
+        { error: 'Google Calendar not connected. Connect it in Settings first.' },
+        { status: 403 }
+      );
+    }
+
+    // 4. GET GOOGLE OAUTH TOKENS
+    const { data: tokens, error: tokenError } = await admin
+      .from('google_oauth_tokens')
+      .select('access_token, refresh_token, token_expires_at')
+      .eq('user_id', user.id)
+      .single();
+
+    if (tokenError || !tokens) {
+      console.error('Tokens not found for user:', user.id);
+      return NextResponse.json(
+        { error: 'Google Calendar tokens not found. Please reconnect.' },
+        { status: 403 }
+      );
+    }
+
+    // 5. SET UP GOOGLE OAUTH CLIENT
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID!,
       process.env.GOOGLE_CLIENT_SECRET!,
       `${process.env.NEXT_PUBLIC_APP_URL}/api/google/callback`
     );
 
-    oauth2Client.setCredentials({ access_token: accessToken });
+    oauth2Client.setCredentials({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+    });
 
     const calendar = google.calendar({
       version: 'v3',
       auth: oauth2Client,
     });
 
+    // 6. CREATE CALENDAR EVENT WITH MEET
     const attendees = body.studentEmail
       ? [{ email: body.studentEmail, displayName: body.studentName }]
       : undefined;
 
-    // Simple approach: use ISO UTC times directly
-    // Google Calendar understands RFC3339 format (what toISOString() produces)
     const event: calendar_v3.Schema$Event = {
-      summary: `Session: ${body.title}`,
-      description: `${body.studentName}${body.description ? ': ' + body.description : ''}`,
+      summary: `${body.title}`,
+      description: body.description || '',
       start: {
-        dateTime: body.startTime,
+        dateTime: body.startTime, // Send UTC ISO string directly
       },
       end: {
-        dateTime: body.endTime,
+        dateTime: body.endTime, // Send UTC ISO string directly
       },
       attendees,
       conferenceData: {
@@ -81,65 +106,59 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    console.log('Creating Google Calendar event:', {
+    console.log('Creating event with:', {
       title: event.summary,
-      startTime: event.start?.dateTime,
-      endTime: event.end?.dateTime,
-      hasAttendee: !!attendees?.[0],
+      startTime: body.startTime,
+      endTime: body.endTime,
+      hasAttendees: !!attendees?.length,
     });
 
-    const response = await calendar.events.insert({
+    const { data: eventData, errors } = await calendar.events.insert({
       calendarId: 'primary',
       conferenceDataVersion: 1,
       sendUpdates: 'all',
       requestBody: event,
     });
 
-    let eventData = response.data;
-    let meetLink = extractMeetLink(eventData);
-
-    console.log('Event created:', {
-      eventId: eventData.id,
-      hasMeetLink: !!meetLink,
-      conferenceStatus: eventData.conferenceData?.conferenceStatus,
-    });
-
-    // Wait for Meet link generation (Google may return it pending)
-    let retries = 0;
-    while (!meetLink && eventData.id && retries < 10) {
-      await sleep(800);
-      const refreshed = await calendar.events.get({
-        calendarId: 'primary',
-        eventId: eventData.id,
-      });
-      eventData = refreshed.data;
-      meetLink = extractMeetLink(eventData);
-      retries++;
-
-      if (retries % 3 === 0) {
-        console.log(`Waiting for Meet link... attempt ${retries}`);
-      }
-    }
-
-    if (!meetLink) {
-      console.error('No Meet link generated', {
-        eventId: eventData.id,
-        conferenceData: eventData.conferenceData,
-        retries,
-      });
-
-      // Clean up
-      if (eventData.id) {
-        await calendar.events.delete({ calendarId: 'primary', eventId: eventData.id }).catch(() => {});
-      }
-
+    if (!eventData || !eventData.id) {
+      console.error('Event creation failed:', errors);
       return NextResponse.json(
-        { error: 'Failed to generate Google Meet link. Please try scheduling again.' },
+        { error: 'Failed to create calendar event' },
         { status: 502 }
       );
     }
 
-    console.log('Meet link generated successfully:', meetLink);
+    console.log('Event created:', { eventId: eventData.id, hasConference: !!eventData.conferenceData });
+
+    // 7. EXTRACT MEET LINK
+    const meetLink = eventData.conferenceData?.entryPoints
+      ?.find(ep => ep.entryPointType === 'video')
+      ?.uri
+      || eventData.hangoutLink;
+
+    if (!meetLink) {
+      console.error('No Meet link found in event:', {
+        eventId: eventData.id,
+        conferenceData: eventData.conferenceData,
+      });
+
+      // Clean up - delete the event if we can't get a Meet link
+      try {
+        await calendar.events.delete({
+          calendarId: 'primary',
+          eventId: eventData.id,
+        });
+      } catch {
+        console.warn('Could not delete event without Meet link');
+      }
+
+      return NextResponse.json(
+        { error: 'Failed to generate Google Meet link' },
+        { status: 502 }
+      );
+    }
+
+    console.log('Meet link generated:', meetLink);
 
     return NextResponse.json({
       success: true,
@@ -148,14 +167,14 @@ export async function POST(request: NextRequest) {
       eventData: {
         id: eventData.id,
         htmlLink: eventData.htmlLink,
-        summary: eventData.summary,
       },
     });
+
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Create event error:', errorMessage);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('Create event error:', errorMsg);
     return NextResponse.json(
-      { error: `Failed to create calendar event: ${errorMessage}` },
+      { error: `Failed to create event: ${errorMsg}` },
       { status: 500 }
     );
   }

@@ -1,72 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
-import { isGoogleCalendarConnected } from '@/lib/google-oauth-utils';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 interface ScheduleSessionRequest {
   studentId: string;
   title: string;
+  startTime: string; // ISO 8601 UTC
+  endTime: string;   // ISO 8601 UTC
   description?: string;
-  startTime: string; // ISO 8601
-  endTime: string; // ISO 8601
 }
 
-/**
- * POST /api/sessions/schedule
- * Creates a video session and optionally creates a Google Calendar event
- */
 export async function POST(request: NextRequest) {
   try {
-    const admin = createAdminClient();
+    // 1. AUTHENTICATE THE BUDDY
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
+    // 2. PARSE & VALIDATE INPUT
     const body = await request.json() as ScheduleSessionRequest;
 
     if (!body.studentId || !body.title || !body.startTime || !body.endTime) {
       return NextResponse.json(
-        { error: 'Missing required fields: studentId, title, startTime, endTime' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Verify that the current user is a buddy (the one scheduling)
-    const { data: buddyProfile } = await admin
+    // 3. VERIFY BUDDY OWNS THIS STUDENT
+    const admin = createAdminClient();
+    const { data: student, error: studentError } = await admin
       .from('profiles')
-      .select('role, full_name')
-      .eq('id', user.id)
+      .select('full_name, email, buddy_id')
+      .eq('id', body.studentId)
       .single();
 
-    if (buddyProfile?.role !== 'buddy') {
+    if (studentError || !student) {
       return NextResponse.json(
-        { error: 'Only buddies can schedule sessions' },
+        { error: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    if (student.buddy_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized - student not assigned to this buddy' },
         { status: 403 }
       );
     }
 
-    // Get student name and email (email needed to invite them to the calendar event)
-    const { data: studentProfile } = await admin
-      .from('profiles')
-      .select('full_name, email')
-      .eq('id', body.studentId)
-      .single();
-
-    // Create session in database (initially without Meet link)
+    // 4. CREATE SESSION IN DATABASE
     const { data: session, error: sessionError } = await admin
       .from('video_sessions')
       .insert({
         buddy_id: user.id,
         student_id: body.studentId,
-        title: body.title,
-        description: body.description,
-        scheduled_at: new Date(body.startTime).toISOString(),
+        title: body.title || 'Session',
+        description: body.description || null,
+        scheduled_at: body.startTime,
         duration_minutes: Math.round(
           (new Date(body.endTime).getTime() - new Date(body.startTime).getTime()) / 60000
         ),
@@ -75,92 +69,88 @@ export async function POST(request: NextRequest) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .select()
+      .select('id, created_at')
       .single();
 
     if (sessionError || !session) {
+      console.error('Session creation error:', sessionError);
       return NextResponse.json(
         { error: 'Failed to create session' },
         { status: 500 }
       );
     }
 
-    let googleEventId: string | null = null;
+    // 5. TRY TO CREATE GOOGLE CALENDAR EVENT (OPTIONAL)
     let googleMeetLink: string | null = null;
+    let googleEventId: string | null = null;
     let calendarError: string | null = null;
 
-    // Check if buddy has Google Calendar connected
     try {
-      const hasCalendar = await isGoogleCalendarConnected(user.id);
-
-      if (hasCalendar) {
-        // Create Google Calendar event
-        const eventResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_APP_URL}/api/google/create-event`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              // Forward the user's session cookies so create-event can authenticate
-              cookie: request.headers.get('cookie') ?? '',
-            },
-            body: JSON.stringify({
-              title: body.title,
-              description: `Session with ${studentProfile?.full_name || 'student'}${body.description ? ': ' + body.description : ''}`,
-              studentName: studentProfile?.full_name || 'Student',
-              studentEmail: studentProfile?.email || undefined,
-              startTime: body.startTime,
-              endTime: body.endTime,
-            }),
-          }
-        );
-
-        if (eventResponse.ok) {
-          const eventData = await eventResponse.json();
-          googleEventId = eventData.eventId;
-          googleMeetLink = eventData.meetLink;
-
-          // Update session with Google Meet link
-          if (googleEventId && googleMeetLink) {
-            await admin
-              .from('video_sessions')
-              .update({
-                google_event_id: googleEventId,
-                google_meet_link: googleMeetLink,
-              })
-              .eq('id', session.id);
-          }
-        } else {
-          const errorData = await eventResponse.json();
-          calendarError = errorData.error || 'Failed to create calendar event';
+      const eventResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL}/api/google/create-event`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': request.headers.get('cookie') || '',
+          },
+          body: JSON.stringify({
+            title: body.title,
+            description: `Session with ${student.full_name}${body.description ? ': ' + body.description : ''}`,
+            studentName: student.full_name,
+            studentEmail: student.email,
+            startTime: body.startTime,
+            endTime: body.endTime,
+            sessionId: session.id,
+          }),
         }
+      );
+
+      if (eventResponse.ok) {
+        const eventData = await eventResponse.json();
+        googleEventId = eventData.eventId;
+        googleMeetLink = eventData.meetLink;
+
+        // Update session with Meet link
+        if (googleMeetLink && googleEventId) {
+          await admin
+            .from('video_sessions')
+            .update({
+              google_event_id: googleEventId,
+              google_meet_link: googleMeetLink,
+            })
+            .eq('id', session.id);
+        }
+      } else {
+        const errorData = await eventResponse.json();
+        calendarError = errorData.error;
+        console.warn('Calendar event creation failed:', calendarError);
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('Error creating Google Calendar event:', errorMsg);
-      calendarError = errorMsg;
+      calendarError = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('Calendar event creation error:', calendarError);
     }
 
     return NextResponse.json({
       success: true,
       session: {
         id: session.id,
-        title: session.title,
-        startTime: session.scheduled_at,
-        duration: session.duration_minutes,
-        googleMeetLink,
+        title: body.title,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        googleMeetLink: googleMeetLink || undefined,
       },
-      calendarStatus: {
-        connected: googleEventId ? true : false,
-        eventId: googleEventId,
-        meetLink: googleMeetLink,
-        error: calendarError,
+      calendar: {
+        connected: !!googleEventId,
+        meetLink: googleMeetLink || undefined,
+        error: calendarError || undefined,
       },
     });
+
   } catch (error) {
-    console.error('Error scheduling session:', error);
+    console.error('Schedule session error:', error);
     return NextResponse.json(
-      { error: 'Failed to schedule session' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
