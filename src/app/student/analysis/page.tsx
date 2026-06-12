@@ -152,24 +152,20 @@ export default function AnalysisPage() {
 
         {debriefs.length === 0 ? (
           <>
-            {/* Pre-mock promise, not a blank */}
             <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center space-y-2">
               <p className="text-3xl">📈</p>
-              <p className="text-stone-800 font-semibold">Take 2 mocks and your trend line appears here.</p>
+              <p className="text-stone-800 font-semibold">Log your first mock to unlock your data.</p>
               <p className="text-sm text-stone-500">
-                This is the chart that proves you&apos;re improving — raw scores lie, trends don&apos;t.
+                Section breakdown, error patterns, and your trajectory toward CAT — all from a single debrief.
               </p>
             </div>
             <div className="space-y-2">
               {[
-                'Section-wise percentile trend',
-                'Error-bucket trend · are silly mistakes shrinking?',
-                'Consistency heatmap',
+                'Section-wise percentile trend (needs 2+ mocks)',
+                'Error-bucket breakdown',
+                'Strategy note from your last debrief',
               ].map((slot) => (
-                <div
-                  key={slot}
-                  className="rounded-2xl border-2 border-dashed border-stone-200 px-4 py-3 text-center text-xs text-stone-400"
-                >
+                <div key={slot} className="rounded-2xl border-2 border-dashed border-stone-200 px-4 py-3 text-center text-xs text-stone-400">
                   {slot}
                 </div>
               ))}
@@ -177,8 +173,8 @@ export default function AnalysisPage() {
           </>
         ) : (
           <>
-            {/* Percentile trend */}
-            {percentileData.length > 0 && (
+            {/* Percentile trend — needs 2+ mocks for a meaningful line */}
+            {percentileData.length >= 2 && (
               <div className="bg-white rounded-2xl border border-stone-200 p-5">
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-4">
                   Percentile trend

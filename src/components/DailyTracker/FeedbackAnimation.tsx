@@ -103,8 +103,8 @@ export function FeedbackAnimation({
 
     animate();
 
-    // Give the prescriptive line time to be read
-    const timer = setTimeout(onComplete, noticed ? 5000 : 3000);
+    // noticed lines need reading time; plain success = 2s
+    const timer = setTimeout(onComplete, noticed ? 3500 : 2000);
     return () => clearTimeout(timer);
   }, [isVisible, onComplete, noticed]);
 

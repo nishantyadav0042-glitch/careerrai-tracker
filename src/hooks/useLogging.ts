@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { getLogDateString } from '@/lib/streak-utils';
 import type { StreakData } from '@/types';
 
 interface LoggingPayload {
@@ -45,12 +46,7 @@ export function useLogging() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
-      // Use 3 AM boundary
-      const now = new Date();
-      const today3am = new Date();
-      today3am.setHours(3, 0, 0, 0);
-      const logDate = now < today3am ? new Date(today3am.getTime() - 86400000) : today3am;
-      const dateStr = logDate.toISOString().split('T')[0];
+      const dateStr = getLogDateString();
       const { data } = await supabase
         .from('daily_reports')
         .select('id')
@@ -99,7 +95,9 @@ export function useLogging() {
       queryClient.invalidateQueries({ queryKey: ['streak'] });
       queryClient.invalidateQueries({ queryKey: ['has-logged-today'] });
       queryClient.invalidateQueries({ queryKey: ['shields-remaining'] });
-      queryClient.invalidateQueries({ queryKey: ['progress-snapshot'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
+      // Refetch immediately so UI reflects the new log without waiting for staleTime
+      queryClient.refetchQueries({ queryKey: ['progress-snapshot'] });
     },
   });
 

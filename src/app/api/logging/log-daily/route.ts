@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  getLogDateString,
+  VALID_SECTIONS,
+  VALID_ENERGY,
+  VALID_EMOTIONAL_CHIPS,
+} from '@/lib/streak-utils';
 
 interface LoggingRequest {
   hours: number;
@@ -9,9 +15,6 @@ interface LoggingRequest {
   notes?: string;
   emotional_chips?: string[];
 }
-
-const VALID_SECTIONS = ['VARC', 'DILR', 'QA', 'Mock', 'Revision'];
-const VALID_ENERGY = ['🙏', '💪', '🔥'];
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,11 +30,16 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(body.sections) || body.sections.length === 0) {
       return NextResponse.json({ error: 'Select at least one section' }, { status: 400 });
     }
-    if (!body.sections.every((s) => VALID_SECTIONS.includes(s))) {
+    if (!body.sections.every((s) => (VALID_SECTIONS as readonly string[]).includes(s))) {
       return NextResponse.json({ error: 'Invalid section' }, { status: 400 });
     }
-    if (!VALID_ENERGY.includes(body.energy)) {
+    if (!(VALID_ENERGY as readonly string[]).includes(body.energy)) {
       return NextResponse.json({ error: 'Invalid energy' }, { status: 400 });
+    }
+    if (body.emotional_chips) {
+      if (!body.emotional_chips.every((c) => (VALID_EMOTIONAL_CHIPS as readonly string[]).includes(c))) {
+        return NextResponse.json({ error: 'Invalid emotional chip' }, { status: 400 });
+      }
     }
 
     const admin = createAdminClient();
@@ -44,12 +52,7 @@ export async function POST(request: NextRequest) {
 
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-    // 3 AM boundary
-    const now = new Date();
-    const today3am = new Date();
-    today3am.setHours(3, 0, 0, 0);
-    const logDate = now < today3am ? new Date(today3am.getTime() - 86400000) : today3am;
-    const dateStr = logDate.toISOString().split('T')[0];
+    const dateStr = getLogDateString();
 
     const { data: existingLog } = await admin
       .from('daily_reports')
@@ -249,15 +252,12 @@ async function updateStreak(studentId: string, admin: ReturnType<typeof createAd
     .from('streak_data')
     .select('*')
     .eq('student_id', studentId)
-    .single();
+    .maybeSingle();
 
-  const now = new Date();
-  const today3am = new Date();
-  today3am.setHours(3, 0, 0, 0);
-  const logDate = now < today3am ? new Date(today3am.getTime() - 86400000) : today3am;
-  const dateStr = logDate.toISOString().split('T')[0];
+  const dateStr = getLogDateString();
 
-  if (getError && getError.code === 'PGRST116') {
+  if (!streak && !getError) {
+    // First-ever streak record for this student
     const { data: newStreak } = await admin
       .from('streak_data')
       .insert({ student_id: studentId, current_streak: 1, longest_streak: 1, last_log_date: dateStr })

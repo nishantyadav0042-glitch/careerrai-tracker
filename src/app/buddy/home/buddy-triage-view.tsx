@@ -256,7 +256,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
           studentName={recordFor.student_name}
           isOpen={!!recordFor}
           onClose={() => setRecordFor(null)}
-          onSendComplete={() => {}}
+          onSendComplete={() => { setRecordFor(null); loadStudents(); }}
           feedbackType="buddy_feedback"
         />
       )}

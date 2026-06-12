@@ -90,7 +90,7 @@ export function HeroCard({
         </div>
       ) : (
         <button
-          onClick={onLogClick}
+          onClick={() => { navigator.vibrate?.(20); onLogClick(); }}
           disabled={isLoading}
           className={cn(
             'w-full py-3.5 rounded-xl font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2',

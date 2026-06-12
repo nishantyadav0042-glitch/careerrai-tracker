@@ -7,52 +7,53 @@ import Link from 'next/link';
 interface BuddyInsightCardProps {
   studentId: string;
   dailyNudge?: string | null;
+  /** Passed from server component — eliminates 2 of 3 client Supabase waterfalls */
+  buddyId?: string | null;
+  /** Pre-formatted: "Rajan · 99%ile" or just "Rajan" */
+  buddyName?: string | null;
 }
 
-export function BuddyInsightCard({ studentId, dailyNudge }: BuddyInsightCardProps) {
+export function BuddyInsightCard({ studentId, dailyNudge, buddyId: buddyIdProp, buddyName: buddyNameProp }: BuddyInsightCardProps) {
   const supabase = createClient();
 
   const { data } = useQuery({
     queryKey: ['buddy-insight', studentId],
     queryFn: async () => {
-      const [{ data: feedback }, { data: me }] = await Promise.all([
-        supabase
-          .from('buddy_feedback')
-          .select('feedback_text, feedback_date, feedback_type')
-          .eq('student_id', studentId)
-          .eq('feedback_type', 'buddy_feedback')
-          .order('feedback_date', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase.from('profiles').select('buddy_id').eq('id', studentId).maybeSingle(),
-      ]);
-      let buddy: { full_name: string; cat_percentile: number | null } | null = null;
-      if (me?.buddy_id) {
-        const { data: b } = await supabase
-          .from('profiles')
-          .select('full_name, cat_percentile')
-          .eq('id', me.buddy_id)
-          .maybeSingle();
-        buddy = b;
-      }
-      return { feedback, buddy };
+      // Only 1 query — buddy identity already comes from server props
+      const { data: feedback } = await supabase
+        .from('buddy_feedback')
+        .select('feedback_text, feedback_date, feedback_type')
+        .eq('student_id', studentId)
+        .eq('feedback_type', 'buddy_feedback')
+        .order('feedback_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return { feedback };
     },
     staleTime: 10 * 60 * 1000,
   });
 
   const latestFeedback = data?.feedback;
-  const buddy = data?.buddy;
   const nudgeText = dailyNudge ?? latestFeedback?.feedback_text ?? null;
 
-  if (!nudgeText) return null;
+  // Always render a placeholder when buddy is matched but no feedback yet —
+  // prevents layout jump when card disappears
+  if (!nudgeText && !buddyIdProp) return null;
+
+  if (!nudgeText && buddyIdProp) {
+    return (
+      <div className="flex items-start gap-2 bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3">
+        <span className="text-xs font-bold text-teal-600 shrink-0 mt-0.5">💬 Buddy</span>
+        <p className="text-xs text-teal-700 leading-snug">
+          Your buddy will respond after today&apos;s debrief.
+        </p>
+      </div>
+    );
+  }
 
   const isSystemNudge = !!dailyNudge && !latestFeedback;
   const label = isSystemNudge ? '⚠️ Pattern detected' : '💬 Buddy';
-  // Journey, not brand — the buddy's own CAT outcome under their words
-  const journeyLine =
-    !isSystemNudge && buddy
-      ? `${buddy.full_name.split(' ')[0]}${buddy.cat_percentile != null ? ` · hit ${Math.round(Number(buddy.cat_percentile))} %ile in CAT` : ''}`
-      : null;
+  const journeyLine = !isSystemNudge && buddyNameProp ? buddyNameProp : null;
 
   return (
     <Link href="/student/buddy" className="block">

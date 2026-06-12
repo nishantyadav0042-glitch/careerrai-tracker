@@ -53,6 +53,8 @@ export function LoggingModal({
 
   const handleSubmit = async () => {
     if (!isValid) return;
+    // Haptic confirmation on submit — feels native on mobile
+    navigator.vibrate?.(50);
     try {
       setError(null);
       const result = await onSubmit({

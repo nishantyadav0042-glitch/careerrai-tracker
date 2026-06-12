@@ -18,7 +18,9 @@ export default async function DailyTrackerPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [{ data: profile }, { data: sessions }, { data: pendingReqs }, { data: anyDebrief }, { data: logs }, { data: mocks }] = await Promise.all([
+  const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
+
+  const [{ data: profile }, { data: sessions }, { data: pendingReqs }, { data: anyDebrief }, { data: logs }, { data: mocks }, { data: recentMock }] = await Promise.all([
     admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile').eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -49,6 +51,16 @@ export default async function DailyTrackerPage() {
       .from('mock_debriefs')
       .select('id')
       .eq('student_id', user.id),
+    // Server-side pending debrief detection — no extra client waterfall
+    admin
+      .from('daily_reports')
+      .select('report_date, updated_at')
+      .eq('student_id', user.id)
+      .eq('mock_taken', true)
+      .gte('report_date', twoDaysAgo)
+      .order('report_date', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -56,6 +68,32 @@ export default async function DailyTrackerPage() {
   const dreamColleges = (profile?.dream_colleges as string[] | null) ?? [];
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
+
+  // Fetch buddy name now that we have buddyId (extra query only when matched)
+  let buddyName: string | null = null;
+  if (buddyId) {
+    const { data: buddyProfile } = await admin
+      .from('profiles')
+      .select('full_name, cat_percentile')
+      .eq('id', buddyId)
+      .maybeSingle();
+    if (buddyProfile?.full_name) {
+      buddyName = buddyProfile.full_name.split(' ')[0] +
+        (buddyProfile.cat_percentile != null ? ` · ${Math.round(Number(buddyProfile.cat_percentile))}%ile` : '');
+    }
+  }
+
+  // Server-side pending debrief: check if the recent mock has a debrief
+  let serverPendingDebrief: { report_date: string; updated_at: string } | null = null;
+  if (recentMock) {
+    const { data: existingDebrief } = await admin
+      .from('mock_debriefs')
+      .select('id')
+      .eq('student_id', user.id)
+      .eq('log_date', recentMock.report_date)
+      .maybeSingle();
+    if (!existingDebrief) serverPendingDebrief = recentMock;
+  }
 
   const daysToCat = Math.max(
     0,
@@ -129,7 +167,14 @@ export default async function DailyTrackerPage() {
           </div>
         )}
 
-        <DailyTrackerApp studentId={user.id} todaySession={todaySession} hasBuddy={!!buddyId} />
+        <DailyTrackerApp
+          studentId={user.id}
+          todaySession={todaySession}
+          hasBuddy={!!buddyId}
+          buddyId={buddyId}
+          buddyName={buddyName}
+          initialPendingDebrief={serverPendingDebrief}
+        />
 
         {/* Day one: the debrief promise — sell it before it exists */}
         {!hasDebriefedBefore && (
