@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
+import { UrgentHelpBanner } from './urgent-help-banner';
 
 export const metadata = {
   title: 'CareerRai',
@@ -17,7 +18,7 @@ export default async function DailyTrackerPage() {
 
   const admin = createAdminClient();
   const [{ data: profile }, { data: sessions }] = await Promise.all([
-    admin.from('profiles').select('full_name, cat_percentile').eq('id', user.id).single(),
+    admin.from('profiles').select('full_name, cat_percentile, buddy_id').eq('id', user.id).single(),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')
@@ -29,6 +30,8 @@ export default async function DailyTrackerPage() {
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+  const buddyId = profile?.buddy_id ?? null;
+
   const daysToCat = Math.max(
     0,
     Math.ceil((CAT_EXAM_DATE.getTime() - Date.now()) / 86_400_000)
@@ -44,6 +47,19 @@ export default async function DailyTrackerPage() {
     nextSession && new Date(nextSession.scheduled_at).getTime() - Date.now() < 24 * 3_600_000
       ? nextSession
       : null;
+
+  // Pending session request
+  let hasPendingRequest = false;
+  if (buddyId) {
+    const { data: reqs } = await admin
+      .from('session_requests')
+      .select('id')
+      .eq('student_id', user.id)
+      .eq('buddy_id', buddyId)
+      .eq('status', 'pending')
+      .limit(1);
+    hasPendingRequest = (reqs?.length ?? 0) > 0;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -64,6 +80,14 @@ export default async function DailyTrackerPage() {
             </span>
           </div>
         </div>
+
+        {/* Important: urgent help / pending session request */}
+        {buddyId && (
+          <UrgentHelpBanner
+            buddyId={buddyId}
+            hasPendingRequest={hasPendingRequest}
+          />
+        )}
 
         <DailyTrackerApp studentId={user.id} todaySession={todaySession} />
 

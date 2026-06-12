@@ -262,6 +262,7 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
   const [submitting, setSubmitting] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftUsed, setDraftUsed] = useState(false);
+  const [draftError, setDraftError] = useState('');
   const [error, setError] = useState('');
 
   const toggleStep = (s: string) =>
@@ -269,21 +270,23 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
 
   async function generateDraft() {
     setDraftLoading(true);
+    setDraftError('');
     try {
       const res = await fetch('/api/feedback-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId }),
       });
-      if (res.ok) {
-        const { draft } = await res.json();
-        if (draft) {
-          setFbText(`[AI Draft — please personalize before sending]\n\n${draft}`);
-          setDraftUsed(true);
-        }
+      const data = await res.json();
+      if (res.ok && data.draft) {
+        setFbText(`[AI Draft — please personalize before sending]\n\n${data.draft}`);
+        setDraftUsed(true);
+      } else {
+        setDraftError(data.error ?? 'AI draft failed — try again or use a template below.');
       }
     } catch (e) {
       console.error('draft error', e);
+      setDraftError('Could not reach AI — check your connection and try again.');
     } finally {
       setDraftLoading(false);
     }
@@ -357,6 +360,9 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
           />
           {draftUsed && (
             <p className="text-[11px] text-teal-600 mt-1">✏️ AI draft loaded — edit before sending</p>
+          )}
+          {draftError && (
+            <p className="text-[11px] text-rose-500 mt-1">{draftError}</p>
           )}
         </div>
         <div className="flex gap-1">
