@@ -56,10 +56,18 @@ export async function POST(request: NextRequest) {
 
     const { data: existingLog } = await admin
       .from('daily_reports')
-      .select('id')
+      .select('id, updated_at')
       .eq('student_id', user.id)
       .eq('report_date', dateStr)
       .maybeSingle();
+
+    // Rate limit: block hammering (same report updated within last 15 seconds)
+    if (existingLog?.updated_at) {
+      const secsSinceUpdate = (Date.now() - new Date(existingLog.updated_at).getTime()) / 1000;
+      if (secsSinceUpdate < 15) {
+        return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      }
+    }
 
     const logData = {
       student_id: user.id,

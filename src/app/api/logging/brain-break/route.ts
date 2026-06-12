@@ -16,6 +16,18 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+
+    // Server-side 3-plays/day limit — localStorage alone is bypassable
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { count } = await admin
+      .from('brain_break_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('student_id', user.id)
+      .gte('created_at', `${todayStr}T00:00:00.000Z`);
+    if ((count ?? 0) >= 3) {
+      return NextResponse.json({ error: 'Daily limit reached', limit: 3 }, { status: 429 });
+    }
+
     await admin.from('brain_break_logs').insert({
       student_id: user.id,
       game_type: body.game_type,
