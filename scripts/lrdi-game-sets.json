@@ -1,0 +1,472 @@
+[
+  {
+    "type": "seating",
+    "difficulty": 5,
+    "estimatedTime": 12,
+    "content": {
+      "mode": "linear",
+      "title": "The Photo Frame Alibi",
+      "story": "A topper's answer sheet vanished during yesterday's photo session. Six suspects sat in a row, Seat 1 to Seat 6 from left to right. Reconstruct who sat where to verify their alibis.",
+      "entities": ["Qasim", "Tanvi", "Sana", "Parth", "Uma", "Rhea"],
+      "slotLabels": ["Seat 1", "Seat 2", "Seat 3", "Seat 4", "Seat 5", "Seat 6"],
+      "solution": ["Tanvi", "Parth", "Rhea", "Qasim", "Sana", "Uma"],
+      "clues": [
+        "Rhea has exactly two people to her left.",
+        "Parth sits immediately between Tanvi and Rhea.",
+        "Tanvi sits at one of the two ends.",
+        "Uma sits exactly two seats to the right of Qasim."
+      ],
+      "questions": [
+        {
+          "q": "Who sits in Seat 5?",
+          "options": ["Qasim", "Uma", "Sana", "Parth"],
+          "answer": 2
+        },
+        {
+          "q": "How many people sit between Tanvi and Qasim?",
+          "options": ["3", "2", "1", "4"],
+          "answer": 1
+        },
+        {
+          "q": "Who are Sana's immediate neighbours?",
+          "options": ["Qasim and Uma", "Rhea and Qasim", "Uma and Tanvi", "Parth and Qasim"],
+          "answer": 0
+        }
+      ]
+    },
+    "solutionText": "Tanvi, Parth, Rhea, Qasim, Sana, Uma (Seat 1 → 6)",
+    "explanation": "Rhea has two people to her left, so she takes Seat 3. Parth sits between Tanvi and Rhea, and Tanvi is at an end — that forces Tanvi to Seat 1 and Parth to Seat 2. Uma is two seats right of Qasim, so Qasim takes Seat 4 and Uma Seat 6, leaving Sana in Seat 5."
+  },
+  {
+    "type": "seating",
+    "difficulty": 6,
+    "estimatedTime": 14,
+    "content": {
+      "mode": "circular",
+      "title": "The Round Table Leak",
+      "story": "Someone leaked the GD topic before the discussion. Six suspects sat around a circular table, Seats 1–6 clockwise, all facing the centre. Rebuild the seating to trace the whisper chain.",
+      "entities": ["Bina", "Esha", "Aarav", "Farhan", "Diya", "Chirag"],
+      "slotLabels": ["Seat 1", "Seat 2", "Seat 3", "Seat 4", "Seat 5", "Seat 6"],
+      "solution": ["Aarav", "Diya", "Farhan", "Bina", "Chirag", "Esha"],
+      "clues": [
+        "Aarav sits at Seat 1.",
+        "Bina sits directly opposite Aarav.",
+        "Going clockwise from Diya, exactly one person sits between Diya and Bina.",
+        "Chirag is an immediate neighbour of both Bina and Esha."
+      ],
+      "questions": [
+        {
+          "q": "Who sits directly opposite Farhan?",
+          "options": ["Chirag", "Diya", "Esha", "Aarav"],
+          "answer": 2
+        },
+        {
+          "q": "Which pair sits between Aarav and Bina, going clockwise from Aarav?",
+          "options": ["Diya and Farhan", "Farhan and Chirag", "Diya and Chirag", "Esha and Diya"],
+          "answer": 0
+        },
+        {
+          "q": "If everyone shifts one seat clockwise, who lands on Seat 3?",
+          "options": ["Farhan", "Bina", "Aarav", "Diya"],
+          "answer": 3
+        }
+      ]
+    },
+    "solutionText": "Seat 1–6 clockwise: Aarav, Diya, Farhan, Bina, Chirag, Esha",
+    "explanation": "Bina sits opposite Aarav (Seat 1), so she takes Seat 4. Exactly one person between Diya and Bina going clockwise puts Diya at Seat 2. Chirag must touch both Bina and Esha — only Seat 5 works, with Esha at Seat 6. Farhan takes the last seat, Seat 3."
+  },
+  {
+    "type": "constraint",
+    "difficulty": 5,
+    "estimatedTime": 12,
+    "content": {
+      "mode": "linear",
+      "title": "The Torn Timetable",
+      "story": "A rival tore up the topper's study timetable — one subject per day, Monday to Saturday. Only fragments of evidence survive. Reconstruct the full plan.",
+      "entities": ["GK", "QA", "Revision", "LRDI", "Mock", "VARC"],
+      "slotLabels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "solution": ["VARC", "LRDI", "QA", "Mock", "GK", "Revision"],
+      "clues": [
+        "QA is planned for Wednesday.",
+        "LRDI is scheduled the day just before QA.",
+        "Mock is scheduled immediately after QA.",
+        "Revision is on Saturday.",
+        "GK is not on Monday."
+      ],
+      "questions": [
+        {
+          "q": "Which subject is planned for Monday?",
+          "options": ["GK", "Mock", "VARC", "LRDI"],
+          "answer": 2
+        },
+        {
+          "q": "How many subjects are scheduled between LRDI and GK?",
+          "options": ["1", "3", "2", "0"],
+          "answer": 2
+        },
+        {
+          "q": "If VARC and Revision swap days, what is on Saturday?",
+          "options": ["QA", "VARC", "GK", "Mock"],
+          "answer": 1
+        }
+      ]
+    },
+    "solutionText": "Mon VARC, Tue LRDI, Wed QA, Thu Mock, Fri GK, Sat Revision",
+    "explanation": "QA anchors Wednesday. LRDI sits Tuesday (just before) and Mock Thursday (just after). Revision takes Saturday. GK can't be on Monday, so GK lands on Friday and VARC opens the week on Monday."
+  },
+  {
+    "type": "seating",
+    "difficulty": 6,
+    "estimatedTime": 15,
+    "content": {
+      "mode": "linear",
+      "title": "The Library Whisperer",
+      "story": "Someone swapped formula notes in the library's back row — seven suspects, Seat 1 to Seat 7 from left to right. Rebuild the row to find who could reach whose desk.",
+      "entities": ["Pia", "Jai", "Om", "Kiran", "Meera", "Lara", "Naveen"],
+      "slotLabels": ["Seat 1", "Seat 2", "Seat 3", "Seat 4", "Seat 5", "Seat 6", "Seat 7"],
+      "solution": ["Naveen", "Kiran", "Jai", "Meera", "Om", "Lara", "Pia"],
+      "clues": [
+        "Meera sits exactly in the middle (Seat 4).",
+        "Jai sits immediately to the left of Meera.",
+        "Kiran sits immediately between Naveen and Jai.",
+        "Pia sits at the right end.",
+        "Exactly one person sits between Meera and Lara."
+      ],
+      "questions": [
+        {
+          "q": "Who sits third to the right of Kiran?",
+          "options": ["Lara", "Om", "Meera", "Pia"],
+          "answer": 1
+        },
+        {
+          "q": "How many people sit between Naveen and Om?",
+          "options": ["3", "2", "4", "1"],
+          "answer": 0
+        },
+        {
+          "q": "Who sits at the two ends?",
+          "options": ["Naveen and Pia", "Naveen and Lara", "Kiran and Pia", "Jai and Pia"],
+          "answer": 0
+        }
+      ]
+    },
+    "solutionText": "Naveen, Kiran, Jai, Meera, Om, Lara, Pia (Seat 1 → 7)",
+    "explanation": "Meera fixes Seat 4 and Jai Seat 3. Kiran between Naveen and Jai forces Kiran to Seat 2 and Naveen to Seat 1. Pia takes Seat 7. Exactly one person between Meera and Lara means Lara is at Seat 6 (Seat 2 is taken), leaving Om in Seat 5."
+  },
+  {
+    "type": "seating",
+    "difficulty": 7,
+    "estimatedTime": 18,
+    "content": {
+      "mode": "circular",
+      "title": "The War Room Mole",
+      "story": "A mock-strategy document leaked from the war room. Eight strategists sat around the circular table, Seats 1–8 clockwise, facing the centre. Reconstruct every seat to expose who sat beside whom.",
+      "entities": ["Dev", "Ela", "Hina", "Bala", "Cyrus", "Gopal", "Anika", "Faiz"],
+      "slotLabels": ["Seat 1", "Seat 2", "Seat 3", "Seat 4", "Seat 5", "Seat 6", "Seat 7", "Seat 8"],
+      "solution": ["Hina", "Cyrus", "Anika", "Gopal", "Dev", "Bala", "Faiz", "Ela"],
+      "clues": [
+        "Hina sits at Seat 1.",
+        "Dev sits directly opposite Hina.",
+        "Anika sits two seats clockwise from Hina.",
+        "Gopal sits immediately between Anika and Dev.",
+        "Bala sits immediately clockwise of Dev.",
+        "Cyrus sits immediately between Hina and Anika.",
+        "Faiz is an immediate neighbour of Bala."
+      ],
+      "questions": [
+        {
+          "q": "Who sits directly opposite Cyrus?",
+          "options": ["Faiz", "Gopal", "Bala", "Ela"],
+          "answer": 2
+        },
+        {
+          "q": "Counting clockwise from Anika, how many people sit between Anika and Faiz?",
+          "options": ["2", "3", "4", "5"],
+          "answer": 1
+        },
+        {
+          "q": "Who are Ela's immediate neighbours?",
+          "options": ["Faiz and Hina", "Hina and Cyrus", "Bala and Faiz", "Dev and Gopal"],
+          "answer": 0
+        }
+      ]
+    },
+    "solutionText": "Seat 1–8 clockwise: Hina, Cyrus, Anika, Gopal, Dev, Bala, Faiz, Ela",
+    "explanation": "Dev sits opposite Hina (Seat 1), so Dev takes Seat 5. Anika is two seats clockwise of Hina → Seat 3, with Cyrus between Hina and Anika at Seat 2 and Gopal between Anika and Dev at Seat 4. Bala follows Dev at Seat 6. Faiz must touch Bala → Seat 7, so Ela takes Seat 8."
+  },
+  {
+    "type": "arrangement",
+    "difficulty": 5,
+    "estimatedTime": 12,
+    "content": {
+      "mode": "linear",
+      "title": "The Tampered Scoreboard",
+      "story": "Someone shuffled the mock-test scoreboard overnight. Six students, Rank 1 (highest) to Rank 6 (lowest). Use the surviving evidence to restore the true ranking.",
+      "entities": ["Esha", "Chitra", "Devi", "Arjun", "Farhan", "Bharat"],
+      "slotLabels": ["Rank 1", "Rank 2", "Rank 3", "Rank 4", "Rank 5", "Rank 6"],
+      "solution": ["Devi", "Farhan", "Bharat", "Esha", "Arjun", "Chitra"],
+      "clues": [
+        "Devi scored the highest.",
+        "Exactly one person scored more than Farhan.",
+        "Chitra scored the lowest.",
+        "Arjun is ranked just above Chitra.",
+        "Bharat is ranked immediately above Esha."
+      ],
+      "questions": [
+        {
+          "q": "Who holds Rank 4?",
+          "options": ["Bharat", "Arjun", "Esha", "Farhan"],
+          "answer": 2
+        },
+        {
+          "q": "How many people are ranked between Farhan and Arjun?",
+          "options": ["2", "1", "3", "0"],
+          "answer": 0
+        },
+        {
+          "q": "If Esha climbs two ranks, whose rank does she take?",
+          "options": ["Devi", "Bharat", "Farhan", "Arjun"],
+          "answer": 2
+        }
+      ]
+    },
+    "solutionText": "Rank 1 → 6: Devi, Farhan, Bharat, Esha, Arjun, Chitra",
+    "explanation": "Devi is Rank 1, and with exactly one person above him, Farhan is Rank 2. Chitra is last (Rank 6) with Arjun just above at Rank 5. Bharat and Esha must be consecutive with Bharat higher — only Ranks 3 and 4 remain."
+  },
+  {
+    "type": "constraint",
+    "difficulty": 6,
+    "estimatedTime": 15,
+    "content": {
+      "mode": "linear",
+      "title": "The Vanished Interview List",
+      "story": "HR lost the master interview list. Seven candidates were interviewed across one week, Monday to Sunday — one per day. Piece the schedule back together from email fragments.",
+      "entities": ["Zoya", "Sam", "Uday", "Riya", "Wafa", "Tara", "Vik"],
+      "slotLabels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "solution": ["Tara", "Vik", "Riya", "Zoya", "Sam", "Wafa", "Uday"],
+      "clues": [
+        "Riya's interview is on Wednesday.",
+        "Vik is interviewed the day just before Riya.",
+        "Exactly two candidates are interviewed between Vik and Sam.",
+        "Zoya's interview falls between Riya's and Sam's days.",
+        "Tara is interviewed before Vik.",
+        "Uday is interviewed on Sunday."
+      ],
+      "questions": [
+        {
+          "q": "Who is interviewed on Saturday?",
+          "options": ["Sam", "Zoya", "Uday", "Wafa"],
+          "answer": 3
+        },
+        {
+          "q": "How many candidates are interviewed after Zoya?",
+          "options": ["4", "3", "2", "1"],
+          "answer": 1
+        },
+        {
+          "q": "Who is interviewed immediately after Tara?",
+          "options": ["Riya", "Vik", "Zoya", "Sam"],
+          "answer": 1
+        }
+      ]
+    },
+    "solutionText": "Mon Tara, Tue Vik, Wed Riya, Thu Zoya, Fri Sam, Sat Wafa, Sun Uday",
+    "explanation": "Riya = Wednesday, so Vik = Tuesday. Exactly two people between Vik and Sam pushes Sam to Friday. Zoya sits between Riya and Sam → Thursday. Tara must precede Vik → Monday. With Uday on Sunday, Wafa takes Saturday."
+  },
+  {
+    "type": "seating",
+    "difficulty": 6,
+    "estimatedTime": 14,
+    "content": {
+      "mode": "circular",
+      "title": "The Huddle Heist",
+      "story": "A prototype went missing during the team huddle. Six suspects sat around a circular table, Seats 1–6 clockwise, facing the centre. Reconstruct the circle to see who had reach.",
+      "entities": ["Omar", "Kabir", "Priya", "Nidhi", "Lina", "Mohan"],
+      "slotLabels": ["Seat 1", "Seat 2", "Seat 3", "Seat 4", "Seat 5", "Seat 6"],
+      "solution": ["Kabir", "Priya", "Mohan", "Lina", "Omar", "Nidhi"],
+      "clues": [
+        "Kabir sits at Seat 1.",
+        "Lina sits directly opposite Kabir.",
+        "Mohan sits immediately counter-clockwise of Lina.",
+        "Nidhi is an immediate neighbour of Kabir, but not of Mohan.",
+        "Omar sits immediately between Lina and Nidhi."
+      ],
+      "questions": [
+        {
+          "q": "Who sits directly opposite Priya?",
+          "options": ["Nidhi", "Omar", "Lina", "Mohan"],
+          "answer": 1
+        },
+        {
+          "q": "Who is the third person, counting clockwise from Kabir?",
+          "options": ["Mohan", "Priya", "Lina", "Omar"],
+          "answer": 2
+        },
+        {
+          "q": "Who are Mohan's immediate neighbours?",
+          "options": ["Kabir and Lina", "Priya and Omar", "Priya and Lina", "Nidhi and Omar"],
+          "answer": 2
+        }
+      ]
+    },
+    "solutionText": "Seat 1–6 clockwise: Kabir, Priya, Mohan, Lina, Omar, Nidhi",
+    "explanation": "Lina sits opposite Kabir (Seat 1) → Seat 4, and Mohan just counter-clockwise of her → Seat 3. Nidhi must touch Kabir but not Mohan, which rules out Seat 2 — so Nidhi takes Seat 6. Omar fits between Lina and Nidhi at Seat 5, leaving Priya at Seat 2."
+  },
+  {
+    "type": "seating",
+    "difficulty": 7,
+    "estimatedTime": 18,
+    "content": {
+      "mode": "linear",
+      "title": "The Bench of Eight",
+      "story": "An invigilator suspects copying on the exam hall's longest bench — eight students, Seat 1 to Seat 8, left to right. A tougher case: rebuild the bench seat by seat.",
+      "entities": ["Gita", "Asha", "Eknath", "Babu", "Hari", "Falak", "Daksh", "Charu"],
+      "slotLabels": ["Seat 1", "Seat 2", "Seat 3", "Seat 4", "Seat 5", "Seat 6", "Seat 7", "Seat 8"],
+      "solution": ["Falak", "Babu", "Hari", "Asha", "Daksh", "Gita", "Charu", "Eknath"],
+      "clues": [
+        "Asha sits in Seat 4.",
+        "Falak sits at the left end.",
+        "Exactly two people sit between Asha and Charu.",
+        "Hari sits immediately to the left of Asha.",
+        "Babu sits immediately between Falak and Hari.",
+        "Daksh sits immediately to the right of Asha.",
+        "Eknath sits at the right end."
+      ],
+      "questions": [
+        {
+          "q": "Who sits second to the left of Gita?",
+          "options": ["Daksh", "Asha", "Hari", "Babu"],
+          "answer": 1
+        },
+        {
+          "q": "How many people sit between Babu and Daksh?",
+          "options": ["1", "2", "3", "4"],
+          "answer": 1
+        },
+        {
+          "q": "Who are Charu's immediate neighbours?",
+          "options": ["Gita and Eknath", "Daksh and Eknath", "Gita and Hari", "Asha and Eknath"],
+          "answer": 0
+        }
+      ]
+    },
+    "solutionText": "Falak, Babu, Hari, Asha, Daksh, Gita, Charu, Eknath (Seat 1 → 8)",
+    "explanation": "Asha anchors Seat 4, putting Hari at 3 and Daksh at 5. Falak takes the left end, with Babu between Falak and Hari at Seat 2. Exactly two people between Asha and Charu means Charu sits at Seat 7 (Seat 1 is taken). Eknath closes the row at Seat 8, and Gita slots into Seat 6."
+  },
+  {
+    "type": "arrangement",
+    "difficulty": 5,
+    "estimatedTime": 12,
+    "content": {
+      "mode": "linear",
+      "title": "The Coded Roadmap",
+      "story": "A 99.9 percentiler left behind their 6-week QA revision roadmap — but in code. One topic per week. Decode the sequence from the clues.",
+      "entities": ["Geometry", "Data", "Arithmetic", "Modern Math", "Numbers", "Algebra"],
+      "slotLabels": ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"],
+      "solution": ["Arithmetic", "Numbers", "Algebra", "Data", "Geometry", "Modern Math"],
+      "clues": [
+        "Algebra is planned for Week 3.",
+        "Numbers is revised the week just before Algebra.",
+        "Arithmetic kicks off Week 1.",
+        "Exactly one topic sits between Algebra and Geometry.",
+        "Modern Math comes after Geometry."
+      ],
+      "questions": [
+        {
+          "q": "Which topic is planned for Week 4?",
+          "options": ["Geometry", "Data", "Modern Math", "Numbers"],
+          "answer": 1
+        },
+        {
+          "q": "How many topics are revised between Arithmetic and Data?",
+          "options": ["3", "1", "2", "4"],
+          "answer": 2
+        },
+        {
+          "q": "Which topic comes immediately after Data?",
+          "options": ["Algebra", "Modern Math", "Geometry", "Numbers"],
+          "answer": 2
+        }
+      ]
+    },
+    "solutionText": "W1 Arithmetic, W2 Numbers, W3 Algebra, W4 Data, W5 Geometry, W6 Modern Math",
+    "explanation": "Algebra = Week 3 pins Numbers to Week 2, and Arithmetic takes Week 1. Exactly one topic between Algebra and Geometry forces Geometry to Week 5 (Week 1 is taken). Modern Math comes after Geometry → Week 6, so Data fills Week 4."
+  },
+  {
+    "type": "seating",
+    "difficulty": 5,
+    "estimatedTime": 12,
+    "content": {
+      "mode": "linear",
+      "title": "The Cubicle Switcheroo",
+      "story": "Pranksters swapped every nameplate in the intern corridor — Cubicles 1 to 6 in a straight line. Restore the true cubicle map before the manager arrives.",
+      "entities": ["Jaya", "Lata", "Ishan", "Harsh", "Gauri", "Karan"],
+      "slotLabels": ["Cubicle 1", "Cubicle 2", "Cubicle 3", "Cubicle 4", "Cubicle 5", "Cubicle 6"],
+      "solution": ["Ishan", "Karan", "Gauri", "Lata", "Harsh", "Jaya"],
+      "clues": [
+        "Gauri is in Cubicle 3.",
+        "Ishan is at the left end.",
+        "Karan sits immediately between Ishan and Gauri.",
+        "Jaya is at one of the ends.",
+        "Harsh is immediately next to Jaya."
+      ],
+      "questions": [
+        {
+          "q": "Who is in Cubicle 4?",
+          "options": ["Harsh", "Jaya", "Karan", "Lata"],
+          "answer": 3
+        },
+        {
+          "q": "How many people sit between Ishan and Harsh?",
+          "options": ["3", "2", "4", "1"],
+          "answer": 0
+        },
+        {
+          "q": "Who are Gauri's immediate neighbours?",
+          "options": ["Ishan and Karan", "Karan and Lata", "Lata and Harsh", "Karan and Harsh"],
+          "answer": 1
+        }
+      ]
+    },
+    "solutionText": "Ishan, Karan, Gauri, Lata, Harsh, Jaya (Cubicle 1 → 6)",
+    "explanation": "Ishan takes Cubicle 1, and Karan sits between him and Gauri (Cubicle 3) → Cubicle 2. Jaya needs an end and Cubicle 1 is taken → Cubicle 6, with Harsh beside her at 5. Lata fills the last gap, Cubicle 4."
+  },
+  {
+    "type": "constraint",
+    "difficulty": 6,
+    "estimatedTime": 14,
+    "content": {
+      "mode": "linear",
+      "title": "The Scrambled Calendar",
+      "story": "The coaching admin scrambled next week's sectional test calendar — five tests, Monday to Friday, one per day. Recover the real schedule from the clues.",
+      "entities": ["VARC-2", "QA-1", "LRDI-1", "VARC-1", "QA-2"],
+      "slotLabels": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      "solution": ["QA-1", "LRDI-1", "VARC-1", "QA-2", "VARC-2"],
+      "clues": [
+        "VARC-1 is on Wednesday.",
+        "LRDI-1 is the day just before VARC-1.",
+        "QA-1 is earlier in the week than LRDI-1.",
+        "QA-2 is not on Friday."
+      ],
+      "questions": [
+        {
+          "q": "Which sectional is on Thursday?",
+          "options": ["VARC-2", "QA-2", "LRDI-1", "QA-1"],
+          "answer": 1
+        },
+        {
+          "q": "How many sectionals are scheduled between QA-1 and QA-2?",
+          "options": ["1", "0", "2", "3"],
+          "answer": 2
+        },
+        {
+          "q": "Which sectional is exactly two days after QA-1?",
+          "options": ["LRDI-1", "VARC-2", "QA-2", "VARC-1"],
+          "answer": 3
+        }
+      ]
+    },
+    "solutionText": "Mon QA-1, Tue LRDI-1, Wed VARC-1, Thu QA-2, Fri VARC-2",
+    "explanation": "VARC-1 = Wednesday pins LRDI-1 to Tuesday. QA-1 must come earlier → Monday. QA-2 can't be on Friday → Thursday, leaving VARC-2 to close the week on Friday."
+  }
+]

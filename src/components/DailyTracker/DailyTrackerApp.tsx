@@ -6,6 +6,7 @@ import { LoggingModal, type LoggingData } from './LoggingModal';
 import { FeedbackAnimation } from './FeedbackAnimation';
 import { DailyPuzzleCard } from './DailyPuzzleCard';
 import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
+import { DetectiveCaseModal, isDetectiveCase } from './DetectiveCaseModal';
 import { TodoListSection } from './TodoListSection';
 import { useLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
@@ -38,7 +39,8 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
   };
 
   const puzzleContent = puzzle?.puzzle_content as PuzzleContent | undefined;
-  const isPlayablePuzzle = !!puzzleContent?.question && Array.isArray(puzzleContent?.options);
+  const isCasePuzzle = isDetectiveCase(puzzle?.puzzle_content);
+  const isPlayablePuzzle = isCasePuzzle || (!!puzzleContent?.question && Array.isArray(puzzleContent?.options));
 
   const handlePuzzleComplete = async (result: { solved: boolean; timeSeconds: number; accuracy: number }) => {
     await submitAttempt({
@@ -71,6 +73,7 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
           puzzleDate={puzzle.puzzle_date}
           puzzleType={puzzle.puzzle_type}
           difficulty={puzzle.difficulty}
+          title={isCasePuzzle ? (puzzle.puzzle_content as { title?: string }).title : undefined}
           estimatedTime={puzzle.estimated_time_minutes || 15}
           isSolved={!!attempt}
           timeTaken={attempt?.time_taken_seconds ? Math.max(1, Math.round(attempt.time_taken_seconds / 60)) : undefined}
@@ -85,8 +88,20 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         </div>
       )}
 
-      {/* Puzzle Solver */}
-      {isPlayablePuzzle && puzzle && (
+      {/* Detective Case Game (new format) */}
+      {isCasePuzzle && puzzle && (
+        <DetectiveCaseModal
+          isOpen={isPuzzleOpen}
+          onClose={() => setIsPuzzleOpen(false)}
+          content={puzzle.puzzle_content as Parameters<typeof DetectiveCaseModal>[0]['content']}
+          explanation={puzzle.explanation}
+          caseDate={puzzle.puzzle_date}
+          onComplete={handlePuzzleComplete}
+        />
+      )}
+
+      {/* Legacy single-question solver (fallback for old content) */}
+      {!isCasePuzzle && isPlayablePuzzle && puzzle && (
         <PuzzleSolverModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DailyPuzzleCardProps {
@@ -10,6 +10,7 @@ interface DailyPuzzleCardProps {
   difficulty: number;
   estimatedTime: number;
   isSolved: boolean;
+  title?: string;
   timeTaken?: number;
   accuracy?: number;
   solution?: string;
@@ -17,12 +18,20 @@ interface DailyPuzzleCardProps {
   onSolve: () => void;
 }
 
+const typeLabels: Record<string, string> = {
+  seating: 'Seating Arrangement',
+  blood_relation: 'Blood Relations',
+  constraint: 'Logical Constraints',
+  arrangement: 'Ordering & Ranking',
+};
+
 export function DailyPuzzleCard({
   puzzleDate,
   puzzleType,
   difficulty,
   estimatedTime,
   isSolved,
+  title,
   timeTaken,
   accuracy,
   solution,
@@ -31,11 +40,11 @@ export function DailyPuzzleCard({
 }: DailyPuzzleCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const difficultyLabel = difficulty <= 3 ? 'Easy' : difficulty <= 6 ? 'Medium' : 'Hard';
-  const difficultyColor = difficulty <= 3 ? 'green' : difficulty <= 6 ? 'amber' : 'red';
+  const difficultyLabel = difficulty <= 4 ? 'Medium' : difficulty <= 6 ? 'Medium+' : 'Hard';
 
   const date = new Date(puzzleDate + 'T00:00:00');
   const dateStr = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+  const caseNumber = puzzleDate.replace(/-/g, '').slice(2);
 
   return (
     <div
@@ -43,7 +52,7 @@ export function DailyPuzzleCard({
         'rounded-2xl border-2 p-4 transition-all',
         isSolved
           ? 'bg-emerald-50 border-emerald-200'
-          : 'bg-orange-50 border-orange-200'
+          : 'bg-stone-900 border-stone-800'
       )}
     >
       {/* Header */}
@@ -51,19 +60,24 @@ export function DailyPuzzleCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             {isSolved ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-orange-600" />
+              <span className="text-base leading-none">🕵️</span>
             )}
-            <span className="text-xs uppercase tracking-widest font-semibold text-stone-600">
-              {puzzleType}
+            <span
+              className={cn(
+                'text-[10px] uppercase tracking-widest font-semibold',
+                isSolved ? 'text-emerald-700' : 'text-amber-400'
+              )}
+            >
+              Case File #{caseNumber}
             </span>
           </div>
-          <h3 className="text-sm font-semibold text-stone-900">
-            Daily LRDI Puzzle
+          <h3 className={cn('text-sm font-bold', isSolved ? 'text-stone-900' : 'text-white')}>
+            {title || "Today's LRDI Mystery"}
           </h3>
-          <p className="text-xs text-stone-500 mt-0.5">
-            {dateStr}
+          <p className={cn('text-xs mt-0.5', isSolved ? 'text-stone-500' : 'text-stone-400')}>
+            {typeLabels[puzzleType] || puzzleType} · {dateStr}
           </p>
         </div>
 
@@ -71,11 +85,7 @@ export function DailyPuzzleCard({
         <div
           className={cn(
             'px-2.5 py-1 rounded-full text-xs font-semibold',
-            difficultyColor === 'green'
-              ? 'bg-green-100 text-green-700'
-              : difficultyColor === 'amber'
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-red-100 text-red-700'
+            isSolved ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-400/20 text-amber-300'
           )}
         >
           {difficultyLabel}
@@ -86,12 +96,12 @@ export function DailyPuzzleCard({
       {isSolved && timeTaken ? (
         <div className="mt-4 space-y-2 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-stone-600">Time taken</span>
+            <span className="text-stone-600">Case solved in</span>
             <span className="font-semibold text-stone-900">{timeTaken}m</span>
           </div>
           {accuracy !== undefined && (
             <div className="flex items-center justify-between">
-              <span className="text-stone-600">Accuracy</span>
+              <span className="text-stone-600">Case questions correct</span>
               <span className="font-semibold text-stone-900">
                 {Math.round(accuracy * 100)}%
               </span>
@@ -99,9 +109,9 @@ export function DailyPuzzleCard({
           )}
         </div>
       ) : (
-        <div className="mt-3 flex items-center gap-2 text-xs text-stone-600">
+        <div className={cn('mt-3 flex items-center gap-2 text-xs', isSolved ? 'text-stone-600' : 'text-stone-400')}>
           <Clock className="w-4 h-4" />
-          <span>Est. {estimatedTime} min</span>
+          <span>~{estimatedTime} min · A real CAT LRDI set in disguise</span>
         </div>
       )}
 
@@ -109,9 +119,9 @@ export function DailyPuzzleCard({
       {!isSolved && (
         <button
           onClick={onSolve}
-          className="w-full mt-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold text-sm transition-colors active:scale-[0.98]"
+          className="w-full mt-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-900 rounded-lg font-bold text-sm transition-colors active:scale-[0.98]"
         >
-          Solve Now →
+          🔍 Open today&apos;s case
         </button>
       )}
 
@@ -121,7 +131,7 @@ export function DailyPuzzleCard({
           onClick={() => setIsExpanded(!isExpanded)}
           className="w-full mt-3 text-xs text-emerald-700 font-medium hover:underline"
         >
-          {isExpanded ? '▼ Hide' : '▶ View Solution'}
+          {isExpanded ? '▼ Hide' : "▶ View the detective's method"}
         </button>
       )}
 
@@ -132,7 +142,7 @@ export function DailyPuzzleCard({
             <p className="text-xs font-semibold text-stone-900">Answer: {solution}</p>
           )}
           <p className="text-xs text-stone-700 leading-relaxed">
-            {explanation || 'No explanation available for this puzzle.'}
+            {explanation || 'No explanation available for this case.'}
           </p>
         </div>
       )}

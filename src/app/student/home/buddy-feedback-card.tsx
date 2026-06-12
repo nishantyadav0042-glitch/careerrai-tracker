@@ -101,7 +101,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
       {/* Header */}
       <div className="px-1">
         <div className="flex items-center gap-2 mb-1">
-          <MessageSquare className="w-5 h-5 text-teal-700" />
+          <MessageSquare className="w-4 h-4 text-teal-700" />
           <h2 className="text-sm font-bold uppercase tracking-widest text-stone-700">
             Buddy Feedback
           </h2>
@@ -114,7 +114,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
         <div className="text-center py-8 text-stone-500">Loading feedback...</div>
       ) : feedbacks.length === 0 ? (
         <div className="bg-white border-2 border-stone-200 rounded-xl p-6 text-center">
-          <MessageSquare className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+          <MessageSquare className="w-5 h-5 text-stone-300 mx-auto mb-2" />
           <p className="text-stone-600 text-sm">No feedback yet</p>
           <p className="text-stone-500 text-xs mt-1">Your buddy will share insights here</p>
         </div>
