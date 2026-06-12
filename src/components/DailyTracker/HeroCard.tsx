@@ -81,7 +81,7 @@ export function HeroCard({
       {hasLoggedToday ? (
         <div className="flex items-center gap-2 bg-white/20 rounded-xl px-4 py-3 backdrop-blur-sm">
           <Zap className="w-5 h-5" />
-          <span className="text-sm font-semibold">Logged today ✓</span>
+          <span className="text-sm font-semibold">Day {currentStreak} logged ✓</span>
         </div>
       ) : (
         <button
@@ -105,6 +105,10 @@ export function HeroCard({
             </>
           )}
         </button>
+      )}
+
+      {!hasLoggedToday && (
+        <p className="text-[11px] text-center opacity-70">Day ends 3 AM — late-night counts</p>
       )}
 
       {/* Pulse animation indicator when no log */}

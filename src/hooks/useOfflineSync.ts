@@ -4,9 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 interface PendingLog {
   id: string;
   hours: number;
-  topics: string[];
-  mood: string;
-  mockScore?: { percentile: number; time: number };
+  sections: string[];
+  energy: string;
   notes?: string;
   timestamp: number;
   status: 'pending' | 'synced' | 'failed';
@@ -99,9 +98,8 @@ export function useOfflineSync() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             hours: log.hours,
-            topics: log.topics,
-            mood: log.mood,
-            mockScore: log.mockScore,
+            sections: log.sections,
+            energy: log.energy,
             notes: log.notes,
           }),
         });

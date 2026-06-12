@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/utils';
 import type { DailyReport, BuddyFeedback } from '@/types';
 import { ChevronDown, Award, Star, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TOPIC_COLORS = ['#1c1917', '#ea580c', '#0f766e', '#a16207', '#9f1239', '#4338ca'];
 
@@ -43,7 +43,6 @@ export default function StudentReportsPage() {
   const topicData = Object.entries(topicCounts).map(([name, value]) => ({ name, value }));
 
   const perfData = reports.slice().reverse().map((r) => ({ date: formatDate(r.report_date), score: r.mock_taken ? r.total_accuracy : null }));
-  const moodData = reports.slice().reverse().map((r) => ({ date: formatDate(r.report_date), confidence: r.confidence, stress: r.stress, sleep: r.sleep_quality, energy: r.overall_energy }));
 
   if (loading) return <div className="py-20 text-center text-sm text-stone-500">Loading…</div>;
 
@@ -127,26 +126,6 @@ export default function StudentReportsPage() {
           </div>
         </Card>
       )}
-
-      {/* Mood chart */}
-      <Card className="p-5">
-        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-4">Mood trends</h2>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={moodData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#78716c' }} />
-              <YAxis domain={[1, 5]} tick={{ fontSize: 10, fill: '#78716c' }} />
-              <Tooltip contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8, color: 'white', fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} iconType="line" />
-              <Line type="monotone" dataKey="confidence" stroke="#0f766e" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="stress" stroke="#e11d48" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="sleep" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="energy" stroke="#ea580c" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
 
       {/* Day-by-day */}
       <div>

@@ -35,7 +35,7 @@ export async function loginAction(_: unknown, formData: FormData) {
 
   const role = profile?.role ?? 'student';
   const dest =
-    role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/home';
+    role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/tracker';
 
   // Return dest instead of calling redirect() so Set-Cookie headers are sent in the POST response
   return { error: null, dest };

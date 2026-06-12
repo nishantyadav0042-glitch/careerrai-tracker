@@ -3,24 +3,79 @@
 import { useState } from 'react';
 import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
+import { MockDebriefModal, type MockDebriefData } from './MockDebriefModal';
 import { FeedbackAnimation } from './FeedbackAnimation';
 import { DailyPuzzleCard, type GameType } from './DailyPuzzleCard';
 import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
 import { DetectiveCaseModal, isDetectiveCase } from './DetectiveCaseModal';
 import { EscapeRoomModal, isEscapeRoom } from './EscapeRoomModal';
 import { MafiaLogicModal, isMafiaGame } from './MafiaLogicModal';
-import { TodoListSection } from './TodoListSection';
+import { BuddyInsightCard } from './BuddyInsightCard';
+import { ProgressSnapshot } from './ProgressSnapshot';
 import { useLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Video } from 'lucide-react';
+
+function SessionStrip({ session }: { session: TodaySession }) {
+  const startsAt = new Date(session.scheduled_at);
+  const minsAway = Math.round((startsAt.getTime() - Date.now()) / 60_000);
+  const joinable = minsAway <= 15 && !!session.google_meet_link;
+
+  return (
+    <div className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <Video className="w-4 h-4 text-indigo-600 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-indigo-900 truncate">
+            {session.title || 'Buddy session'}
+          </p>
+          <p className="text-[11px] text-indigo-600">
+            {startsAt.toLocaleString('en-IN', {
+              timeZone: 'Asia/Kolkata',
+              hour: '2-digit',
+              minute: '2-digit',
+              day: 'numeric',
+              month: 'short',
+            })}
+          </p>
+        </div>
+      </div>
+      {joinable ? (
+        <a
+          href={session.google_meet_link!}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors"
+        >
+          Join →
+        </a>
+      ) : (
+        <span className="shrink-0 text-[11px] font-medium text-indigo-500">
+          {minsAway > 60 ? `in ${Math.round(minsAway / 60)}h` : `in ${Math.max(0, minsAway)}m`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface TodaySession {
+  id: string;
+  title: string | null;
+  scheduled_at: string;
+  google_meet_link: string | null;
+}
 
 interface DailyTrackerAppProps {
   studentId?: string;
+  todaySession?: TodaySession | null;
 }
 
-export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export function DailyTrackerApp({ studentId = '', todaySession = null }: DailyTrackerAppProps) {
+  const [isLogOpen, setIsLogOpen] = useState(false);
+  const [isDebriefOpen, setIsDebriefOpen] = useState(false);
   const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
+  const [currentLogDate, setCurrentLogDate] = useState('');
+  const [lastNudge, setLastNudge] = useState<string | null>(null);
 
   const {
     currentStreak,
@@ -36,8 +91,30 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
 
   const { puzzle, attempt, isLoading: puzzleLoading, submitAttempt } = useDailyPuzzle(studentId);
 
-  const handleSubmit = async (data: LoggingData) => {
-    await submitLog(data);
+  const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
+    const result = await submitLog(data);
+    if (result?.daily_nudge) setLastNudge(result.daily_nudge);
+    const mockSelected = data.sections.includes('Mock');
+    if (mockSelected) {
+      // Compute today's log date (same 3 AM boundary logic)
+      const now = new Date();
+      const today3am = new Date();
+      today3am.setHours(3, 0, 0, 0);
+      const logDate = now < today3am ? new Date(today3am.getTime() - 86400000) : today3am;
+      setCurrentLogDate(logDate.toISOString().split('T')[0]);
+      setIsLogOpen(false);
+      setIsDebriefOpen(true);
+    }
+    return { mockSelected };
+  };
+
+  const handleDebriefSubmit = async (data: MockDebriefData) => {
+    const response = await fetch('/api/logging/mock-debrief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, log_date: currentLogDate }),
+    });
+    if (!response.ok) throw new Error('Failed to save debrief');
   };
 
   const rawContent = puzzle?.puzzle_content;
@@ -57,26 +134,22 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
     : 'detective';
 
   const handlePuzzleComplete = async (result: { solved: boolean; timeSeconds: number; accuracy: number }) => {
-    await submitAttempt({
-      solved: result.solved,
-      timeSeconds: result.timeSeconds,
-      accuracy: result.accuracy,
-    });
+    await submitAttempt({ solved: result.solved, timeSeconds: result.timeSeconds, accuracy: result.accuracy });
   };
 
   return (
-    <div className="space-y-6">
-      {/* Hero Card - Main CTA */}
+    <div className="space-y-5">
+      {/* 1. Hero — Streak + Log */}
       <HeroCard
         currentStreak={currentStreak}
         maxStreak={maxStreak}
-        onLogClick={() => setIsModalOpen(true)}
+        onLogClick={() => setIsLogOpen(true)}
         isLoading={isSubmitting}
         hasLoggedToday={hasLoggedToday}
         shieldsRemaining={shieldsRemaining}
       />
 
-      {/* Daily Game */}
+      {/* 2. Daily Puzzle */}
       {puzzleLoading ? (
         <div className="flex items-center justify-center py-6 text-stone-500">
           <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -103,7 +176,16 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         </div>
       )}
 
-      {/* Arrangement games: Detective + Airport (shared engine) */}
+      {/* 3. Buddy insight — 1 line */}
+      {studentId && <BuddyInsightCard studentId={studentId} dailyNudge={lastNudge} />}
+
+      {/* 4. Today's session strip */}
+      {todaySession && <SessionStrip session={todaySession} />}
+
+      {/* 5. Progress snapshot — 3 numbers */}
+      {studentId && <ProgressSnapshot studentId={studentId} />}
+
+      {/* Modals — Arrangement games: Detective + Airport */}
       {isCasePuzzle && puzzle && (
         <DetectiveCaseModal
           isOpen={isPuzzleOpen}
@@ -115,7 +197,7 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         />
       )}
 
-      {/* Escape Room (Quant locks) */}
+      {/* Escape Room */}
       {isEscape && puzzle && (
         <EscapeRoomModal
           isOpen={isPuzzleOpen}
@@ -126,7 +208,7 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         />
       )}
 
-      {/* Mafia (truth-liar deduction) */}
+      {/* Mafia */}
       {isMafia && puzzle && (
         <MafiaLogicModal
           isOpen={isPuzzleOpen}
@@ -137,7 +219,7 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         />
       )}
 
-      {/* Legacy single-question solver (fallback for old content) */}
+      {/* Legacy single-question fallback */}
       {!isCasePuzzle && !isEscape && !isMafia && isPlayablePuzzle && puzzle && (
         <PuzzleSolverModal
           isOpen={isPuzzleOpen}
@@ -149,23 +231,26 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         />
       )}
 
-      {/* TODO List */}
-      {studentId && <TodoListSection studentId={studentId} />}
-
-      {/* Logging Modal */}
+      {/* Layer 1 Log */}
       <LoggingModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleSubmit}
+        isOpen={isLogOpen}
+        onClose={() => setIsLogOpen(false)}
+        onSubmit={handleLogSubmit}
         isSubmitting={isSubmitting}
+      />
+
+      {/* Layer 2 Debrief */}
+      <MockDebriefModal
+        isOpen={isDebriefOpen}
+        onClose={() => setIsDebriefOpen(false)}
+        onSubmit={handleDebriefSubmit}
+        logDate={currentLogDate}
       />
 
       {/* Feedback Animation */}
       <FeedbackAnimation
         isVisible={showFeedback}
-        onComplete={() => {
-          setShowFeedback(false);
-        }}
+        onComplete={() => setShowFeedback(false)}
         streakIncrement={currentStreak}
         bonus={feedbackData?.bonus}
       />

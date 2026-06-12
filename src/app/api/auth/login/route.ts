@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   }
 
   const role = profile.role ?? 'student';
-  const dest = role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/home';
+  const dest = role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/tracker';
 
   // Return a redirect — browser follows it and sends the Set-Cookie cookies with the next request
   const response = NextResponse.redirect(`${origin}${dest}`, { status: 302 });
