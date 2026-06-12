@@ -12,6 +12,8 @@ interface DailyPuzzleCardProps {
   isSolved: boolean;
   timeTaken?: number;
   accuracy?: number;
+  solution?: string;
+  explanation?: string;
   onSolve: () => void;
 }
 
@@ -23,6 +25,8 @@ export function DailyPuzzleCard({
   isSolved,
   timeTaken,
   accuracy,
+  solution,
+  explanation,
   onSolve,
 }: DailyPuzzleCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -123,9 +127,12 @@ export function DailyPuzzleCard({
 
       {/* Solution (if expanded) */}
       {isExpanded && isSolved && (
-        <div className="mt-3 pt-3 border-t border-emerald-200">
+        <div className="mt-3 pt-3 border-t border-emerald-200 space-y-1.5">
+          {solution && (
+            <p className="text-xs font-semibold text-stone-900">Answer: {solution}</p>
+          )}
           <p className="text-xs text-stone-700 leading-relaxed">
-            Solution details would load here in Phase 2.
+            {explanation || 'No explanation available for this puzzle.'}
           </p>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { getTodayIST } from '@/lib/utils';
 import type { DailyLrdiPuzzle, LrdiPuzzleAttempt } from '@/types';
 
 export function useDailyPuzzle(studentId: string) {
@@ -10,7 +11,8 @@ export function useDailyPuzzle(studentId: string) {
   const { data: todayPuzzle, isLoading: puzzleLoading } = useQuery({
     queryKey: ['daily-puzzle-today'],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
+      // Puzzles are dated in IST — UTC would request yesterday's puzzle until 5:30 AM
+      const today = getTodayIST();
 
       const { data, error } = await supabase
         .from('daily_lrdi_puzzles')
@@ -45,19 +47,20 @@ export function useDailyPuzzle(studentId: string) {
   const submitAttemptMutation = useMutation({
     mutationFn: async (payload: {
       solved: boolean;
-      timeTaken?: number;
+      timeSeconds?: number;
       accuracy?: number;
     }) => {
       if (!todayPuzzle) throw new Error('No puzzle today');
 
-      // Upsert attempt
       const { data, error } = await supabase
         .from('lrdi_puzzle_attempts')
         .upsert(
           {
             student_id: studentId,
             puzzle_id: todayPuzzle.id,
-            ...payload,
+            solved: payload.solved,
+            time_taken_seconds: payload.timeSeconds ?? null,
+            accuracy: payload.accuracy ?? null,
           },
           { onConflict: 'student_id,puzzle_id' }
         )

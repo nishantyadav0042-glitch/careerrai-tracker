@@ -5,6 +5,7 @@ import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
 import { FeedbackAnimation } from './FeedbackAnimation';
 import { DailyPuzzleCard } from './DailyPuzzleCard';
+import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
 import { TodoListSection } from './TodoListSection';
 import { useLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
@@ -16,6 +17,7 @@ interface DailyTrackerAppProps {
 
 export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
 
   const {
     currentStreak,
@@ -35,13 +37,14 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
     await submitLog(data);
   };
 
-  const handleSolvePuzzle = async () => {
-    // In real app, would navigate to puzzle solver
-    // For now, mark as solved (phase 2)
+  const puzzleContent = puzzle?.puzzle_content as PuzzleContent | undefined;
+  const isPlayablePuzzle = !!puzzleContent?.question && Array.isArray(puzzleContent?.options);
+
+  const handlePuzzleComplete = async (result: { solved: boolean; timeSeconds: number; accuracy: number }) => {
     await submitAttempt({
-      solved: true,
-      timeTaken: 15,
-      accuracy: 0.75,
+      solved: result.solved,
+      timeSeconds: result.timeSeconds,
+      accuracy: result.accuracy,
     });
   };
 
@@ -69,12 +72,30 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
           puzzleType={puzzle.puzzle_type}
           difficulty={puzzle.difficulty}
           estimatedTime={puzzle.estimated_time_minutes || 15}
-          isSolved={!!attempt?.solved}
-          timeTaken={attempt?.time_taken_seconds ? Math.round(attempt.time_taken_seconds / 60) : undefined}
+          isSolved={!!attempt}
+          timeTaken={attempt?.time_taken_seconds ? Math.max(1, Math.round(attempt.time_taken_seconds / 60)) : undefined}
           accuracy={attempt?.accuracy}
-          onSolve={handleSolvePuzzle}
+          solution={puzzle.solution}
+          explanation={puzzle.explanation}
+          onSolve={() => isPlayablePuzzle && setIsPuzzleOpen(true)}
         />
-      ) : null}
+      ) : (
+        <div className="rounded-2xl border-2 border-stone-200 bg-stone-50 p-4 text-center">
+          <p className="text-sm text-stone-600">🧩 No puzzle today — check back tomorrow!</p>
+        </div>
+      )}
+
+      {/* Puzzle Solver */}
+      {isPlayablePuzzle && puzzle && (
+        <PuzzleSolverModal
+          isOpen={isPuzzleOpen}
+          onClose={() => setIsPuzzleOpen(false)}
+          puzzleType={puzzle.puzzle_type}
+          content={puzzleContent!}
+          explanation={puzzle.explanation}
+          onComplete={handlePuzzleComplete}
+        />
+      )}
 
       {/* TODO List */}
       {studentId && <TodoListSection studentId={studentId} />}

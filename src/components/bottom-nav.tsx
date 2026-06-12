@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Calendar, FileText, GraduationCap, User, Users, TrendingUp, Settings } from 'lucide-react';
+import { Home, FileText, GraduationCap, User, Users, TrendingUp, Settings, Puzzle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -40,7 +40,7 @@ function NavBar({ items }: { items: NavItem[] }) {
 
 const STUDENT_ITEMS: NavItem[] = [
   { href: '/student/home', icon: Home, label: 'Home' },
-  { href: '/student/today', icon: Calendar, label: 'Today' },
+  { href: '/student/tracker', icon: Puzzle, label: 'Tracker' },
   { href: '/student/reports', icon: FileText, label: 'Reports' },
   { href: '/student/exams', icon: GraduationCap, label: 'Exams' },
   { href: '/student/profile', icon: User, label: 'Profile' },
