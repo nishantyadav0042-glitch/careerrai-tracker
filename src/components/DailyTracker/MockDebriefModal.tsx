@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Loader2, Plus, Minus } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { X, Loader2, Plus, Minus, Camera, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MockDebriefData {
@@ -138,6 +138,41 @@ function Counter({ value, onChange }: { value: number; onChange: (v: number) => 
 
 const defaultSection = (): SectionData => ({ attempted: 0, correct: 0, time_min: 0, percentile: null });
 
+interface ParsedSection {
+  attempted: number | null;
+  correct: number | null;
+  time_min: number | null;
+  percentile: number | null;
+}
+
+interface ParsedScorecard {
+  mock_name: string | null;
+  overall_percentile: number | null;
+  varc: ParsedSection;
+  dilr: ParsedSection;
+  qa: ParsedSection;
+}
+
+/** Downscale to max 1568px long edge and re-encode as JPEG so uploads stay small. */
+async function fileToBase64Jpeg(file: File): Promise<{ data: string; mediaType: string }> {
+  const bitmap = await createImageBitmap(file);
+  const MAX_EDGE = 1568;
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not supported');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  return { data: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
+}
+
 export function MockDebriefModal({
   isOpen,
   onClose,
@@ -162,6 +197,51 @@ export function MockDebriefModal({
   const [overallPercentile, setOverallPercentile] = useState<number | null>(null);
   const [strategyNote, setStrategyNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleScorecardUpload = async (file: File) => {
+    setScanning(true);
+    setScanError(null);
+    setScanResult(null);
+    try {
+      const { data, mediaType } = await fileToBase64Jpeg(file);
+      const res = await fetch('/api/parse-scorecard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: data, mediaType }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setScanError(json.error ?? 'Could not read the scorecard — fill in manually.');
+        return;
+      }
+      const sc = json.scorecard as ParsedScorecard;
+      if (sc.overall_percentile != null) setOverallPercentile(sc.overall_percentile);
+      setSections((prev) => {
+        const next = { ...prev };
+        for (const key of ['varc', 'dilr', 'qa'] as const) {
+          const s = sc[key];
+          if (!s) continue;
+          next[key] = {
+            attempted: s.attempted ?? prev[key].attempted,
+            correct: s.correct ?? prev[key].correct,
+            time_min: s.time_min ?? prev[key].time_min,
+            percentile: s.percentile ?? prev[key].percentile,
+          };
+        }
+        return next;
+      });
+      setScanResult(sc.mock_name ? `Read ${sc.mock_name} ✓ — check the numbers below` : 'Scorecard read ✓ — check the numbers below');
+    } catch (e) {
+      console.error('scorecard scan error', e);
+      setScanError('Could not read the image — fill in manually.');
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleSectionChange = (key: SectionKey, field: keyof SectionData, val: number | null) => {
     setSections((prev) => ({
@@ -221,6 +301,53 @@ export function MockDebriefModal({
         </div>
 
         <div className="flex-1 px-6 py-5 space-y-7">
+          {/* Scorecard scan — AI prefill */}
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleScorecardUpload(f);
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={scanning || isSubmitting}
+              className={cn(
+                'w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm transition-all',
+                'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500',
+                'active:scale-[0.98] disabled:opacity-60'
+              )}
+            >
+              {scanning ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Reading scorecard…
+                </>
+              ) : (
+                <>
+                  <Camera className="w-4 h-4" />
+                  Scan scorecard screenshot
+                  <Sparkles className="w-3.5 h-3.5 opacity-70" />
+                </>
+              )}
+            </button>
+            <p className="text-[11px] text-zinc-600 text-center mt-1.5">
+              Works with SIMCAT, AIMCAT, CL & more — AI fills the numbers for you
+            </p>
+            {scanResult && (
+              <p className="text-xs text-teal-400 text-center mt-1">{scanResult}</p>
+            )}
+            {scanError && (
+              <p className="text-xs text-rose-400 text-center mt-1">{scanError}</p>
+            )}
+          </div>
+
           {/* Overall percentile */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">
