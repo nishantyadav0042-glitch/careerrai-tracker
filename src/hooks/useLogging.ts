@@ -33,8 +33,8 @@ export function useLogging() {
         .from('streak_data')
         .select('*')
         .eq('student_id', user.id)
-        .single();
-      if (error && error.code !== 'PGRST116') throw error;
+        .maybeSingle();
+      if (error) throw error;
       return data as StreakData | null;
     },
   });
@@ -55,7 +55,7 @@ export function useLogging() {
         .select('id')
         .eq('student_id', user.id)
         .eq('report_date', dateStr)
-        .single();
+        .maybeSingle();
       return !!data;
     },
   });

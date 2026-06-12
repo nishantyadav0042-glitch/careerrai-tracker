@@ -17,7 +17,7 @@ export default async function DailyTrackerPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [{ data: profile }, { data: sessions }] = await Promise.all([
+  const [{ data: profile }, { data: sessions }, { data: pendingReqs }] = await Promise.all([
     admin.from('profiles').select('full_name, cat_percentile, buddy_id').eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -26,6 +26,12 @@ export default async function DailyTrackerPage() {
       .eq('session_status', 'scheduled')
       .gte('scheduled_at', new Date().toISOString())
       .order('scheduled_at', { ascending: true })
+      .limit(1),
+    admin
+      .from('session_requests')
+      .select('id')
+      .eq('student_id', user.id)
+      .eq('status', 'pending')
       .limit(1),
   ]);
 
@@ -48,18 +54,7 @@ export default async function DailyTrackerPage() {
       ? nextSession
       : null;
 
-  // Pending session request
-  let hasPendingRequest = false;
-  if (buddyId) {
-    const { data: reqs } = await admin
-      .from('session_requests')
-      .select('id')
-      .eq('student_id', user.id)
-      .eq('buddy_id', buddyId)
-      .eq('status', 'pending')
-      .limit(1);
-    hasPendingRequest = (reqs?.length ?? 0) > 0;
-  }
+  const hasPendingRequest = (pendingReqs?.length ?? 0) > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">

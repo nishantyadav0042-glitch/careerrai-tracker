@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
       model: 'claude-opus-4-8',
       max_tokens: 2048,
       output_config: {
-        effort: 'low',
         format: {
           type: 'json_schema',
           schema: SCORECARD_SCHEMA,
