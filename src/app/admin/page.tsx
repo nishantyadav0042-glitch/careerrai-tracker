@@ -60,12 +60,44 @@ export default async function AdminPage() {
   const redFlagCount = studentStats.filter(s => s.hasRedFlags).length;
   const onTrack = studentStats.filter(s => s.summary.band === 'On track').length;
 
+  // Buddy performance: feedback volume + response speed over last 14 days
+  // eslint-disable-next-line react-hooks/purity
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+  const { data: recentFeedback } = await admin
+    .from('buddy_feedback')
+    .select('buddy_id, created_at, feedback_date')
+    .gte('created_at', twoWeeksAgo);
+
+  // Churn risk: days since last log per student (beyond the 7-day window = high risk)
+  const { data: lastLogs } = studentIds.length > 0
+    ? await admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds).order('report_date', { ascending: false })
+    : { data: [] };
+  const lastLogByStudent = new Map<string, string>();
+  for (const r of lastLogs ?? []) {
+    if (!lastLogByStudent.has(r.student_id)) lastLogByStudent.set(r.student_id, r.report_date);
+  }
+  const todayMs = new Date(today + 'T00:00:00').getTime();
+  const churnRisk = students
+    .map((s) => {
+      const last = lastLogByStudent.get(s.id);
+      const daysSince = last ? Math.floor((todayMs - new Date(last + 'T00:00:00').getTime()) / 86400000) : null;
+      const buddy = buddies.find(b => b.id === s.buddy_id);
+      return { student: s, daysSince, buddy };
+    })
+    .filter(({ daysSince }) => daysSince === null || daysSince >= 4)
+    .sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999));
+
   // Buddy stats
   const buddyStats = buddies.map(b => {
     const myStudents = students.filter(s => s.buddy_id === b.id);
     const myStats = myStudents.map(s => studentStats.find(ss => ss.student.id === s.id)!).filter(Boolean);
     const redFlags = myStats.filter(s => s.hasRedFlags).length;
-    return { buddy: b, studentCount: myStudents.length, redFlags, students: myStudents };
+    const myFeedback = (recentFeedback ?? []).filter(f => f.buddy_id === b.id);
+    const gaps = myFeedback
+      .map(f => (new Date(f.created_at).getTime() - new Date(f.feedback_date + 'T00:00:00').getTime()) / 3600000)
+      .filter(h => h >= 0 && h < 24 * 7);
+    const avgResponseHrs = gaps.length > 0 ? Math.max(1, Math.round(gaps.reduce((s, h) => s + h, 0) / gaps.length)) : null;
+    return { buddy: b, studentCount: myStudents.length, redFlags, students: myStudents, feedbackCount: myFeedback.length, avgResponseHrs };
   });
 
   return (
@@ -130,6 +162,29 @@ export default async function AdminPage() {
           </Card>
         )}
 
+        {/* Churn risk panel */}
+        {churnRisk.length > 0 && (
+          <Card className="p-5 bg-amber-50 border-amber-200 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="w-4 h-4 text-amber-600" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Churn risk — inactive students</span>
+            </div>
+            <div className="space-y-2">
+              {churnRisk.map(({ student, daysSince, buddy }) => (
+                <div key={student.id} className="flex items-center justify-between bg-white rounded-xl p-3 border border-amber-100">
+                  <div>
+                    <div className="font-semibold text-stone-900 text-sm">{student.full_name}</div>
+                    <div className="text-xs text-stone-500">{buddy ? `Buddy: ${buddy.full_name}` : 'No buddy assigned'}</div>
+                  </div>
+                  <Badge color={daysSince === null || daysSince >= 7 ? 'red' : 'amber'}>
+                    {daysSince === null ? 'Never logged' : `${daysSince}d inactive`}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {/* All students */}
         <div className="mb-6">
           <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">All students</h2>
@@ -140,7 +195,7 @@ export default async function AdminPage() {
         <div className="mb-6">
           <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Buddies</h2>
           <div className="space-y-2">
-            {buddyStats.map(({ buddy, studentCount, redFlags }) => {
+            {buddyStats.map(({ buddy, studentCount, redFlags, feedbackCount, avgResponseHrs }) => {
               const initials = buddy.full_name[0].toUpperCase();
               return (
                 <Card key={buddy.id} className="p-4">
@@ -155,6 +210,11 @@ export default async function AdminPage() {
                         {redFlags > 0 && <Badge color="red">{redFlags} red flag{redFlags > 1 ? 's' : ''}</Badge>}
                       </div>
                       <div className="text-xs text-stone-500 mt-0.5">{buddy.email} · {studentCount} student{studentCount !== 1 ? 's' : ''}</div>
+                      <div className="text-xs text-stone-600 mt-1">
+                        {feedbackCount} feedback (14d)
+                        {avgResponseHrs !== null && <> · responds in ~{avgResponseHrs}h</>}
+                        {feedbackCount === 0 && <span className="text-rose-600 font-medium"> · no recent activity</span>}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <Users className="w-4 h-4 text-stone-400" />

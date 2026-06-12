@@ -13,6 +13,29 @@ const NEXT_STEP_OPTIONS = [
   'Maintain current schedule',
 ];
 
+const FEEDBACK_TEMPLATES: { label: string; text: string }[] = [
+  {
+    label: '🔥 Streak praise',
+    text: 'Your consistency this week stood out — that streak is exactly how toppers build momentum. Keep the same rhythm and the scores will follow.',
+  },
+  {
+    label: '📉 Score dip',
+    text: "I saw the dip in your last mock. One bad mock is data, not a verdict — the pool gets tougher every month. Let's review your error log together and fix the 2-3 question types that cost you the most.",
+  },
+  {
+    label: '😰 High stress',
+    text: 'Your stress levels have been high lately. Remember: 2 focused hours beat 5 anxious ones. Cut tonight short, sleep well, and we reset tomorrow.',
+  },
+  {
+    label: '👻 Missing logs',
+    text: "I noticed you haven't logged in a few days. No judgment — life happens. Log even 30 minutes today so we don't lose the habit. Small steps count.",
+  },
+  {
+    label: '🎯 Mock reminder',
+    text: "You haven't taken a mock recently. At this stage one mock per week is non-negotiable — it's the only way to train exam temperament. Block 3 hours this weekend.",
+  },
+];
+
 export function FeedbackForm({
   studentId,
   studentFirstName,
@@ -309,6 +332,18 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
               {draftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
               {draftLoading ? 'Drafting…' : 'Draft with AI'}
             </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {FEEDBACK_TEMPLATES.map((t) => (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => { setFbText(t.text); setDraftUsed(false); }}
+                className="text-[11px] px-2.5 py-1 bg-stone-100 text-stone-700 rounded-full hover:bg-teal-100 hover:text-teal-800 transition-colors"
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
           <textarea
             value={fbText}
