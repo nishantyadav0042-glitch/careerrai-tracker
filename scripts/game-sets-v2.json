@@ -1,0 +1,306 @@
+{
+  "airport": [
+    {
+      "type": "arrangement",
+      "difficulty": 6,
+      "estimatedTime": 14,
+      "content": {
+        "game_type": "airport",
+        "mode": "linear",
+        "title": "Fog Over Runway 27",
+        "story": "Dense fog has delayed six flights at Mumbai T2. You are the controller. Arrange the departure sequence (Slot 1 departs first, Slot 6 last) using ATC conditions, or the schedule collapses.",
+        "entities": ["AI-203", "6E-455", "UK-871", "SG-112", "QP-330", "G8-764"],
+        "slotLabels": ["Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6"],
+        "solution": ["SG-112", "AI-203", "QP-330", "6E-455", "UK-871", "G8-764"],
+        "clues": [
+          "AI-203 departs immediately after SG-112.",
+          "Exactly two flights depart between AI-203 and UK-871.",
+          "G8-764 is the last to depart.",
+          "QP-330 departs before 6E-455 but after AI-203."
+        ],
+        "questions": [
+          { "q": "If UK-871 is delayed by one slot (swapping with the flight behind it), which flight now departs fifth?", "options": ["G8-764", "6E-455", "QP-330", "UK-871"], "answer": 0 },
+          { "q": "How many flights depart between SG-112 and 6E-455?", "options": ["1", "2", "3", "4"], "answer": 1 },
+          { "q": "Which of the following MUST be true?", "options": ["QP-330 departs in an even-numbered slot", "6E-455 departs immediately before UK-871", "AI-203 departs first", "UK-871 departs before QP-330"], "answer": 1 }
+        ]
+      },
+      "solutionText": "SG-112, AI-203, QP-330, 6E-455, UK-871, G8-764 (Slot 1 → 6)",
+      "explanation": "G8-764 takes Slot 6. SG-112 and AI-203 form a block. AI-203 and UK-871 have two flights between them; testing positions, only AI-203 in Slot 2 (SG-112 Slot 1) with UK-871 in Slot 5 works, since QP-330 must come after AI-203 but before 6E-455 — giving QP-330 Slot 3 and 6E-455 Slot 4."
+    },
+    {
+      "type": "arrangement",
+      "difficulty": 7,
+      "estimatedTime": 15,
+      "content": {
+        "game_type": "airport",
+        "mode": "circular",
+        "title": "The Holding Pattern",
+        "story": "Six aircraft are stacked in a circular holding pattern over Delhi, positions 1–6 clockwise. A storm cell is closing in — reconstruct the stack order from ATC radio fragments before clearance windows close.",
+        "entities": ["AI-101", "6E-988", "UK-340", "SG-577", "QP-215", "G8-432"],
+        "slotLabels": ["Pos 1", "Pos 2", "Pos 3", "Pos 4", "Pos 5", "Pos 6"],
+        "solution": ["UK-340", "QP-215", "AI-101", "G8-432", "6E-988", "SG-577"],
+        "clues": [
+          "AI-101 holds at Position 3.",
+          "G8-432 is directly opposite UK-340.",
+          "SG-577 holds at Position 6 and is an immediate neighbour of UK-340.",
+          "Exactly one aircraft holds between QP-215 and G8-432 (clockwise from QP-215)."
+        ],
+        "questions": [
+          { "q": "Which aircraft is directly opposite QP-215?", "options": ["6E-988", "SG-577", "G8-432", "AI-101"], "answer": 0 },
+          { "q": "Counting clockwise from AI-101, the third aircraft after it is?", "options": ["SG-577", "6E-988", "UK-340", "QP-215"], "answer": 0 },
+          { "q": "Which pair are immediate neighbours?", "options": ["UK-340 and AI-101", "G8-432 and 6E-988", "QP-215 and SG-577", "6E-988 and UK-340"], "answer": 1 }
+        ]
+      },
+      "solutionText": "UK-340, QP-215, AI-101, G8-432, 6E-988, SG-577 (Pos 1 → 6 clockwise)",
+      "explanation": "AI-101 is fixed at Pos 3 and SG-577 at Pos 6. SG-577's neighbours are Pos 5 and Pos 1, so UK-340 sits at one of them. UK-340 opposite G8-432 rules out Pos 5 (its opposite, Pos 2, would strand the QP-215 condition), so UK-340 takes Pos 1 and G8-432 Pos 4. Exactly one aircraft between QP-215 and G8-432 clockwise puts QP-215 at Pos 2, leaving 6E-988 at Pos 5."
+    },
+    {
+      "type": "arrangement",
+      "difficulty": 7,
+      "estimatedTime": 15,
+      "content": {
+        "game_type": "airport",
+        "mode": "linear",
+        "title": "Gate Change Chaos",
+        "story": "A systems glitch wiped the gate assignments at Bengaluru airport. Six flights must be re-assigned to Gates A–F (in a row, left to right). Passengers are already walking — get it right the first time.",
+        "entities": ["AI-560", "6E-721", "UK-209", "SG-883", "QP-444", "G8-156"],
+        "slotLabels": ["Gate A", "Gate B", "Gate C", "Gate D", "Gate E", "Gate F"],
+        "solution": ["QP-444", "UK-209", "G8-156", "AI-560", "SG-883", "6E-721"],
+        "clues": [
+          "UK-209 is at Gate B.",
+          "SG-883 is somewhere to the right of AI-560, with exactly zero gates between them.",
+          "6E-721 is at one of the end gates, but not Gate A.",
+          "G8-156 has exactly two flights to its left.",
+          "QP-444 is not adjacent to 6E-721."
+        ],
+        "questions": [
+          { "q": "Which flight is at Gate D?", "options": ["SG-883", "AI-560", "G8-156", "QP-444"], "answer": 1 },
+          { "q": "How many flights are between QP-444 and SG-883?", "options": ["2", "3", "4", "1"], "answer": 1 },
+          { "q": "If AI-560 and 6E-721 swap gates, which flight is then adjacent to SG-883 on BOTH sides?", "options": ["No flight — SG-883 has G8-156 and AI-560 as neighbours then", "G8-156 and 6E-721", "6E-721 and AI-560", "UK-209 and G8-156"], "answer": 2 }
+        ]
+      },
+      "solutionText": "QP-444, UK-209, G8-156, AI-560, SG-883, 6E-721 (Gate A → F)",
+      "explanation": "UK-209 fixed at B. G8-156 has exactly two flights left → Gate C. 6E-721 at an end but not A → Gate F. AI-560 and SG-883 are adjacent with SG-883 right — only D-E fits. QP-444 takes Gate A, which also satisfies non-adjacency with 6E-721."
+    }
+  ],
+  "escape": [
+    {
+      "type": "constraint",
+      "difficulty": 6,
+      "estimatedTime": 14,
+      "content": {
+        "game_type": "escape_room",
+        "title": "The Locked Library",
+        "story": "You stayed late in the campus library and the security system armed itself. Three electronic locks stand between you and the exit. Each lock's code is the answer to a quant problem scrawled by the last person who escaped.",
+        "locks": [
+          {
+            "room": "Reading Hall",
+            "prompt": "A book's price is first increased by 25% and then decreased by 20%. The final price is ₹480. The code is the original price (in ₹).",
+            "options": ["₹480", "₹500", "₹460", "₹520"],
+            "answer": 0,
+            "hint": "1.25 × 0.80 = 1.00 — the two changes cancel exactly."
+          },
+          {
+            "room": "Archive Corridor",
+            "prompt": "Two students shelve books together in 12 minutes. Alone, the faster one takes 20 minutes. The code is the time (minutes) the slower one needs alone.",
+            "options": ["28", "30", "32", "36"],
+            "answer": 1,
+            "hint": "Combined rate 1/12 minus faster rate 1/20 gives the slower rate."
+          },
+          {
+            "room": "Exit Vault",
+            "prompt": "The vault code is the largest two-digit number that leaves remainder 3 when divided by 7 and remainder 4 when divided by 5.",
+            "options": ["94", "59", "89", "84"],
+            "answer": 0,
+            "hint": "Numbers ≡3 (mod 7) and ≡4 (mod 5) repeat every 35. Start from the common solution and add 35s."
+          }
+        ],
+        "questions": [
+          { "q": "A price rises x% then falls x%, and the net change is −4%. What is x?", "options": ["25", "20", "10", "40"], "answer": 1 },
+          { "q": "Pipes A and B fill a tank in 12 and 20 minutes. Both open, but B is closed after 4 minutes. Total fill time?", "options": ["9 min 36 s", "10 min", "9 min", "10 min 40 s"], "answer": 0 },
+          { "q": "How many two-digit numbers leave remainder 3 when divided by 7?", "options": ["12", "13", "14", "11"], "answer": 1 }
+        ]
+      },
+      "solutionText": "Lock codes: ₹480, 30, 94",
+      "explanation": "Lock 1: +25% then −20% multiplies by exactly 1, so the original equals the final, ₹480. Lock 2: slower rate = 1/12 − 1/20 = 1/30 → 30 minutes. Lock 3: numbers satisfying both congruences are 24, 59, 94 — the largest two-digit one is 94."
+    },
+    {
+      "type": "constraint",
+      "difficulty": 7,
+      "estimatedTime": 15,
+      "content": {
+        "game_type": "escape_room",
+        "title": "The Server Room Lockdown",
+        "story": "A failed deployment triggered a lockdown in the startup's server room — with you inside. The cooling is off and the temperature is rising. Three keypad locks, three CAT-grade calculations. Move.",
+        "locks": [
+          {
+            "room": "Cooling Bay",
+            "prompt": "A server's fan speed and temperature are inversely proportional. At 3000 RPM the temp is 40°C. The code is the temp (°C) at 2400 RPM.",
+            "options": ["48", "50", "45", "52"],
+            "answer": 1,
+            "hint": "Inverse proportion: speed × temp is constant. 3000 × 40 = 2400 × T."
+          },
+          {
+            "room": "Data Cage",
+            "prompt": "A backup job copies 40% of files in 6 hours. Working at the same rate, the code is the TOTAL hours needed for the whole job.",
+            "options": ["12", "14", "15", "16"],
+            "answer": 2,
+            "hint": "40% ↔ 6 hours, so 10% ↔ 1.5 hours."
+          },
+          {
+            "room": "Exit Airlock",
+            "prompt": "The airlock code is the sum of all integers from 1 to n where n is the smallest integer such that this sum exceeds 100.",
+            "options": ["105", "91", "120", "110"],
+            "answer": 0,
+            "hint": "Triangular numbers: 1+2+…+13 = 91, 1+2+…+14 = ?"
+          }
+        ],
+        "questions": [
+          { "q": "x varies inversely with y². If x = 8 when y = 3, what is x when y = 6?", "options": ["2", "4", "16", "1"], "answer": 0 },
+          { "q": "A man does 1/3 of a job in 5 days, then works at double speed. Total days for the whole job?", "options": ["10", "12.5", "8.75", "9"], "answer": 0 },
+          { "q": "What is the sum of all two-digit multiples of 7?", "options": ["728", "707", "735", "700"], "answer": 0 }
+        ]
+      },
+      "solutionText": "Lock codes: 50, 15, 105",
+      "explanation": "Lock 1: 3000×40 = 120000 = 2400×T → T = 50. Lock 2: 40% in 6 h → 100% in 15 h. Lock 3: 1+…+13 = 91 ≤ 100, 1+…+14 = 105 > 100, so 105."
+    },
+    {
+      "type": "constraint",
+      "difficulty": 7,
+      "estimatedTime": 16,
+      "content": {
+        "game_type": "escape_room",
+        "title": "The Exam Hall Vault",
+        "story": "Legend says a 100-percentiler hid their notes in a vault under the old exam hall. You found the vault — and its three locks. Each lock tests exactly what CAT will test you on.",
+        "locks": [
+          {
+            "room": "Outer Gate",
+            "prompt": "A trader marks up goods 60% above cost and gives a 25% discount. The code is the profit percent.",
+            "options": ["35", "20", "25", "15"],
+            "answer": 1,
+            "hint": "Selling price = 1.60 × 0.75 = 1.20 × cost."
+          },
+          {
+            "room": "Inner Chamber",
+            "prompt": "A train 240 m long crosses a platform of equal length in 24 seconds. The code is the train's speed in km/h.",
+            "options": ["60", "72", "80", "90"],
+            "answer": 1,
+            "hint": "It covers train + platform = 480 m in 24 s → 20 m/s. Convert."
+          },
+          {
+            "room": "The Vault",
+            "prompt": "The vault opens with the number of distinct ways to choose 2 books from 8 (order doesn't matter).",
+            "options": ["56", "28", "64", "36"],
+            "answer": 1,
+            "hint": "8C2 = (8 × 7) / 2."
+          }
+        ],
+        "questions": [
+          { "q": "A shopkeeper sells at 20% profit. Had he bought 20% cheaper and sold for ₹18 less, profit would be 25%. The cost price is:", "options": ["₹90", "₹85", "₹80", "₹100"], "answer": 0 },
+          { "q": "Two trains of lengths 150 m and 250 m run toward each other at 54 km/h and 90 km/h. Time to cross each other?", "options": ["10 s", "12 s", "8 s", "15 s"], "answer": 0 },
+          { "q": "In how many ways can 4 students be seated in a row if 2 particular students must sit together?", "options": ["12", "6", "24", "18"], "answer": 0 }
+        ]
+      },
+      "solutionText": "Lock codes: 20, 72, 28",
+      "explanation": "Lock 1: 1.6 × 0.75 = 1.2 → 20% profit. Lock 2: 480 m / 24 s = 20 m/s = 72 km/h. Lock 3: 8C2 = 28."
+    }
+  ],
+  "mafia": [
+    {
+      "type": "constraint",
+      "difficulty": 6,
+      "estimatedTime": 13,
+      "content": {
+        "game_type": "mafia",
+        "title": "The Mock Test Leak",
+        "story": "Last night's All-India mock paper leaked from the coaching institute's print room. Five people had access. Exactly one is guilty — and the guilty one is lying. Everyone innocent tells the truth.",
+        "suspects": ["Arjun", "Bhavna", "Chetan", "Devika", "Eshan"],
+        "guilty_index": 2,
+        "statements": [
+          { "suspect": "Arjun", "says": "I was in the staff meeting until 9 PM. Devika was with me the whole time." },
+          { "suspect": "Bhavna", "says": "Chetan told me he went home at 7 PM, but I saw his scooter in the parking lot at 8:30 PM." },
+          { "suspect": "Chetan", "says": "I left the institute at 7 PM and never came back. I was nowhere near the print room." },
+          { "suspect": "Devika", "says": "I was in the staff meeting with Arjun until 9. The print room log shows one entry at 8:15 PM." },
+          { "suspect": "Eshan", "says": "I was teaching the evening batch till 9:30. My students can confirm it." }
+        ],
+        "facts": [
+          "The leak happened from the print room between 8:00 and 9:00 PM.",
+          "The parking lot CCTV is working and timestamped.",
+          "The print room log shows exactly one entry: 8:15 PM.",
+          "Exactly one suspect is lying; the liar is guilty."
+        ],
+        "questions": [
+          { "q": "Whose statement directly contradicts Chetan's?", "options": ["Arjun's", "Bhavna's", "Devika's", "Eshan's"], "answer": 1 },
+          { "q": "If instead BHAVNA were the single liar, why would the case still break?", "options": ["Then Chetan truly left at 7, but then nobody entered at 8:15, contradicting the log only if all others are accounted for — Arjun, Devika, Eshan have confirmed alibis, leaving no one for the 8:15 entry", "Because Bhavna had no access", "Because the CCTV would be wrong", "Because Devika would also be lying"], "answer": 0 },
+          { "q": "Which fact is essential to pinning the crime time on Chetan?", "options": ["The print room log entry at 8:15 PM", "The number of suspects", "Eshan's batch timing", "The meeting ending at 9 PM"], "answer": 0 }
+        ]
+      },
+      "solutionText": "Chetan is guilty — his 'I left at 7 PM' is the lie.",
+      "explanation": "Bhavna's CCTV observation (scooter at 8:30) contradicts Chetan's claim of leaving at 7 and not returning. Since exactly one person lies, both can't be true — one of these two is the liar. If Bhavna lied, Chetan really left at 7; but Arjun, Devika and Eshan all have mutually confirmed alibis, leaving nobody to make the 8:15 print-room entry. So Chetan is the liar, and the guilty one."
+    },
+    {
+      "type": "constraint",
+      "difficulty": 7,
+      "estimatedTime": 14,
+      "content": {
+        "game_type": "mafia",
+        "title": "The Scholarship Fraud",
+        "story": "Someone forged a signature on the merit scholarship list, adding their own name. Five shortlisted students were in the admin office that afternoon. Exactly one is guilty and lying; the rest speak the truth.",
+        "suspects": ["Farah", "Gautam", "Hina", "Ishaan", "Jaya"],
+        "guilty_index": 4,
+        "statements": [
+          { "suspect": "Farah", "says": "I submitted my form at the counter and left by 2 PM. Jaya was still in the office when I left." },
+          { "suspect": "Gautam", "says": "Hina and I were together in the waiting area from 2 to 4 PM. Neither of us went near the files." },
+          { "suspect": "Hina", "says": "Gautam is telling the truth about us. I also saw Ishaan leave at 2:30 PM." },
+          { "suspect": "Ishaan", "says": "I left at 2:30 PM for the metro. The forged entry wasn't on the list when I saw it at 2:15." },
+          { "suspect": "Jaya", "says": "I left the office before Farah did. I never saw the scholarship file." }
+        ],
+        "facts": [
+          "The forgery was done between 2:15 and 4:00 PM (Ishaan's 2:15 sighting is corroborated by the clerk).",
+          "The office CCTV was down, but the entry register is reliable.",
+          "Exactly one suspect is lying; the liar is guilty.",
+          "The register shows Farah signed out at 2:00 PM."
+        ],
+        "questions": [
+          { "q": "Which two statements are in direct contradiction?", "options": ["Farah's and Jaya's", "Gautam's and Hina's", "Ishaan's and Farah's", "Hina's and Jaya's"], "answer": 0 },
+          { "q": "Why can't Farah be the liar?", "options": ["The register confirms she signed out at 2:00 PM — before the forgery window opened at 2:15", "Because she is a topper", "Because Jaya vouched for her", "Because Gautam saw her leave"], "answer": 0 },
+          { "q": "With Jaya guilty, who was provably alone with access during the window?", "options": ["Jaya — Gautam and Hina were together, Ishaan left at 2:30 having seen a clean list, Farah was gone by 2:00", "Ishaan", "Hina", "Nobody"], "answer": 0 }
+        ]
+      },
+      "solutionText": "Jaya is guilty — her claim of leaving before Farah is the lie.",
+      "explanation": "Farah says Jaya was still in the office when she left; Jaya says she left before Farah. Direct contradiction — one of them lies. The register independently confirms Farah's 2:00 PM exit, which is before the forgery window even opens (2:15), so Farah had no opportunity and no motive to lie. Therefore Jaya is the liar — she stayed back and forged the entry."
+    },
+    {
+      "type": "constraint",
+      "difficulty": 7,
+      "estimatedTime": 14,
+      "content": {
+        "game_type": "mafia",
+        "title": "The Deleted Rank List",
+        "story": "The institute's internal rank list was deleted from the shared drive an hour before results. Five students had drive access. One is guilty and lying. The innocent four tell the truth — but truths can mislead.",
+        "suspects": ["Kabir", "Lata", "Manav", "Nidhi", "Omar"],
+        "guilty_index": 0,
+        "statements": [
+          { "suspect": "Kabir", "says": "My laptop was dead all evening — I couldn't have logged in even if I wanted to." },
+          { "suspect": "Lata", "says": "The drive's access log shows exactly two logins that evening: mine at 6 PM and one more at 7:40 PM." },
+          { "suspect": "Manav", "says": "I never logged in that evening. I was at the gym from 7 to 9 — Omar was on the next treadmill." },
+          { "suspect": "Nidhi", "says": "I saw Kabir's laptop plugged in and running in the common room at 7:30 PM." },
+          { "suspect": "Omar", "says": "Manav is right, we were at the gym together. The deletion alert came to my phone at 7:42 PM." }
+        ],
+        "facts": [
+          "The file was deleted at 7:41 PM via a logged-in session.",
+          "The access log is tamper-proof.",
+          "Lata's 6 PM login session auto-expired at 6:30 PM.",
+          "Exactly one suspect is lying; the liar is guilty."
+        ],
+        "questions": [
+          { "q": "Which statement breaks Kabir's alibi?", "options": ["Nidhi's — she saw his laptop running at 7:30 PM", "Omar's deletion alert", "Lata's login log", "Manav's gym claim"], "answer": 0 },
+          { "q": "Why must the 7:40 PM login belong to the deleter?", "options": ["The file was deleted at 7:41 via a logged-in session, and Lata's earlier session had expired at 6:30", "Because it was the last login", "Because Lata said so", "Because the alert came at 7:42"], "answer": 0 },
+          { "q": "If NIDHI were the liar instead, what would break?", "options": ["Then Kabir's laptop was truly dead, Lata/Manav/Omar are truthful and alibied — no one is left who could have made the 7:40 login", "Nothing — Nidhi could be guilty", "Lata's log would be wrong", "Manav's gym alibi would fail"], "answer": 0 }
+        ]
+      },
+      "solutionText": "Kabir is guilty — the 'dead laptop' story is the lie.",
+      "explanation": "The deletion at 7:41 PM required the 7:40 PM login (Lata's session had expired at 6:30). Manav and Omar alibi each other at the gym; Lata's statement matches the tamper-proof log; Nidhi saw Kabir's 'dead' laptop alive at 7:30. Kabir's statement collides with Nidhi's — one lies. If Nidhi lied, every remaining suspect is alibied and nobody could have made the 7:40 login. So Kabir is the liar and the deleter."
+    }
+  ]
+}

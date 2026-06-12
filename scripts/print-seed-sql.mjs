@@ -1,11 +1,17 @@
-// Prints upsert SQL for the daily LRDI detective cases (30 days, rotating sets).
+// Prints upsert SQL for the daily games (31 days, rotating game types:
+// detective → airport → escape room → mafia).
 // Usage: node scripts/print-seed-sql.mjs [chunkIndex chunkSize]
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const sets = JSON.parse(readFileSync(join(__dirname, 'lrdi-game-sets.json'), 'utf-8'));
+const detective = JSON.parse(readFileSync(join(__dirname, 'lrdi-game-sets.json'), 'utf-8'));
+const v2 = JSON.parse(readFileSync(join(__dirname, 'game-sets-v2.json'), 'utf-8'));
+
+// Daily rotation keeps the app fresh: each game type returns every 4 days.
+const pools = [detective, v2.airport, v2.escape, v2.mafia];
+const poolCursor = [0, 0, 0, 0];
 
 const esc = (s) => String(s).replace(/'/g, "''");
 
@@ -13,11 +19,14 @@ const today = new Date();
 today.setHours(0, 0, 0, 0);
 
 const rows = [];
-for (let i = 0; i < 30; i++) {
+for (let i = 0; i < 31; i++) {
   const date = new Date(today);
   date.setDate(date.getDate() + i);
   const dateStr = date.toISOString().split('T')[0];
-  const set = sets[i % sets.length];
+  const poolIdx = i % pools.length;
+  const pool = pools[poolIdx];
+  const set = pool[poolCursor[poolIdx] % pool.length];
+  poolCursor[poolIdx]++;
   rows.push(
     `('${dateStr}', '${set.type}', ${set.difficulty}, '${set.difficulty <= 6 ? 'Medium' : 'Hard'}', ${set.estimatedTime}, '${esc(JSON.stringify(set.content))}'::jsonb, '${esc(set.solutionText)}', '${esc(set.explanation)}')`
   );

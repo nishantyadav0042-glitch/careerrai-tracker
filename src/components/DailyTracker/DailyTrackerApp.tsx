@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
 import { FeedbackAnimation } from './FeedbackAnimation';
-import { DailyPuzzleCard } from './DailyPuzzleCard';
+import { DailyPuzzleCard, type GameType } from './DailyPuzzleCard';
 import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
 import { DetectiveCaseModal, isDetectiveCase } from './DetectiveCaseModal';
+import { EscapeRoomModal, isEscapeRoom } from './EscapeRoomModal';
+import { MafiaLogicModal, isMafiaGame } from './MafiaLogicModal';
 import { TodoListSection } from './TodoListSection';
 import { useLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
@@ -38,9 +40,21 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
     await submitLog(data);
   };
 
-  const puzzleContent = puzzle?.puzzle_content as PuzzleContent | undefined;
-  const isCasePuzzle = isDetectiveCase(puzzle?.puzzle_content);
-  const isPlayablePuzzle = isCasePuzzle || (!!puzzleContent?.question && Array.isArray(puzzleContent?.options));
+  const rawContent = puzzle?.puzzle_content;
+  const puzzleContent = rawContent as PuzzleContent | undefined;
+  const isEscape = isEscapeRoom(rawContent);
+  const isMafia = isMafiaGame(rawContent);
+  const isCasePuzzle = !isEscape && !isMafia && isDetectiveCase(rawContent);
+  const isPlayablePuzzle =
+    isCasePuzzle || isEscape || isMafia || (!!puzzleContent?.question && Array.isArray(puzzleContent?.options));
+
+  const gameType: GameType = isEscape
+    ? 'escape_room'
+    : isMafia
+    ? 'mafia'
+    : isCasePuzzle && (rawContent as { game_type?: string }).game_type === 'airport'
+    ? 'airport'
+    : 'detective';
 
   const handlePuzzleComplete = async (result: { solved: boolean; timeSeconds: number; accuracy: number }) => {
     await submitAttempt({
@@ -62,7 +76,7 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         shieldsRemaining={shieldsRemaining}
       />
 
-      {/* Daily Puzzle */}
+      {/* Daily Game */}
       {puzzleLoading ? (
         <div className="flex items-center justify-center py-6 text-stone-500">
           <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -72,8 +86,9 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         <DailyPuzzleCard
           puzzleDate={puzzle.puzzle_date}
           puzzleType={puzzle.puzzle_type}
+          gameType={gameType}
           difficulty={puzzle.difficulty}
-          title={isCasePuzzle ? (puzzle.puzzle_content as { title?: string }).title : undefined}
+          title={(rawContent as { title?: string } | undefined)?.title}
           estimatedTime={puzzle.estimated_time_minutes || 15}
           isSolved={!!attempt}
           timeTaken={attempt?.time_taken_seconds ? Math.max(1, Math.round(attempt.time_taken_seconds / 60)) : undefined}
@@ -88,20 +103,42 @@ export function DailyTrackerApp({ studentId = '' }: DailyTrackerAppProps) {
         </div>
       )}
 
-      {/* Detective Case Game (new format) */}
+      {/* Arrangement games: Detective + Airport (shared engine) */}
       {isCasePuzzle && puzzle && (
         <DetectiveCaseModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
-          content={puzzle.puzzle_content as Parameters<typeof DetectiveCaseModal>[0]['content']}
+          content={puzzle.puzzle_content as unknown as Parameters<typeof DetectiveCaseModal>[0]['content']}
           explanation={puzzle.explanation}
           caseDate={puzzle.puzzle_date}
           onComplete={handlePuzzleComplete}
         />
       )}
 
+      {/* Escape Room (Quant locks) */}
+      {isEscape && puzzle && (
+        <EscapeRoomModal
+          isOpen={isPuzzleOpen}
+          onClose={() => setIsPuzzleOpen(false)}
+          content={puzzle.puzzle_content as unknown as Parameters<typeof EscapeRoomModal>[0]['content']}
+          caseDate={puzzle.puzzle_date}
+          onComplete={handlePuzzleComplete}
+        />
+      )}
+
+      {/* Mafia (truth-liar deduction) */}
+      {isMafia && puzzle && (
+        <MafiaLogicModal
+          isOpen={isPuzzleOpen}
+          onClose={() => setIsPuzzleOpen(false)}
+          content={puzzle.puzzle_content as unknown as Parameters<typeof MafiaLogicModal>[0]['content']}
+          caseDate={puzzle.puzzle_date}
+          onComplete={handlePuzzleComplete}
+        />
+      )}
+
       {/* Legacy single-question solver (fallback for old content) */}
-      {!isCasePuzzle && isPlayablePuzzle && puzzle && (
+      {!isCasePuzzle && !isEscape && !isMafia && isPlayablePuzzle && puzzle && (
         <PuzzleSolverModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
