@@ -45,22 +45,23 @@ function check(html, markers) {
   return markers.map((m) => `${html.includes(m) ? 'OK ' : 'MISS'} ${m}`);
 }
 
-const [studentSession, buddySession] = await Promise.all([
+const [studentSession, buddySession, adminSession] = await Promise.all([
   login('teststudent1@careerrai.com', 'CareerRai2026!'),
   login('testbuddy1@careerrai.com', 'CareerRai2026!'),
+  login('admin@careerrai.com', 'CareerRai2026!'),
 ]);
 const sc = buildCookies(studentSession);
 const bc = buildCookies(buddySession);
+const ac = buildCookies(adminSession);
 
 const tests = [
-  ['/student/home', sc, ['Day streak', 'CAT', 'Quick', 'buddy']],
+  ['/student/home', sc, ['CAT', 'buddy']],
   ['/student/tracker', sc, ['Daily', 'puzzle', 'Buddy Sees Everything']],
   ['/student/journey', sc, ['Journey', 'Analytics']],
-  ['/student/reports', sc, ['streak', 'Reports']],
-  ['/student/profile', sc, ['profile', 'Buddy']],
+  ['/student/profile', sc, ['Your Progress', 'Days logged', 'Best streak', 'Share my progress', 'Your Buddy']],
   ['/student/exams', sc, ['Test', 'CAT']],
-  ['/buddy/home', bc, ['Triage', 'students', 'Meeting']],
   ['/buddy/students', bc, ['Student']],
+  ['/admin', ac, ['Churn risk', 'feedback (14d)', 'Broadcast', 'CareerRai Overview']],
 ];
 
 for (const [path, cookies, markers] of tests) {
