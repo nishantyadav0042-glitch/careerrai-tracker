@@ -51,6 +51,14 @@ export async function POST(request: NextRequest) {
       await admin.from('mock_debriefs').insert(row);
     }
 
+    // Keep CRS live: latest mock percentile becomes the profile's cat_percentile
+    if (body.overall_percentile != null) {
+      await admin
+        .from('profiles')
+        .update({ cat_percentile: body.overall_percentile })
+        .eq('id', user.id);
+    }
+
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
     console.error('Mock debrief error:', err);

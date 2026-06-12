@@ -148,9 +148,9 @@ export async function POST(request: NextRequest) {
         title: `🎤 ${senderFirst} sent you a voice note`,
         body:
           feedbackType === 'buddy_feedback'
-            ? 'Your buddy recorded something for you — listen on your dashboard.'
+            ? 'Your buddy recorded something for you — listen in the Buddy tab.'
             : `${senderFirst} replied to your note.`,
-        data: { feedbackId: row.id },
+        data: { feedbackId: row.id, url: '/student/buddy' },
       })
       .then(({ error: e }) => {
         if (e) console.error('Voice note notification failed:', e.message);
