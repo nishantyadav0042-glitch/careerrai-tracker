@@ -29,6 +29,13 @@ const client = new Anthropic();
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('buddy-insight: ANTHROPIC_API_KEY is not set in this environment');
+      return NextResponse.json(
+        { error: 'AI is not configured on the server — add ANTHROPIC_API_KEY in Vercel project settings' },
+        { status: 503 }
+      );
+    }
     const body: BuddyInsightRequest = await request.json();
 
     // Validate input

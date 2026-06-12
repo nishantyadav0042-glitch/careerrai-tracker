@@ -22,7 +22,7 @@ export function BuddyInsightCard({ studentId, dailyNudge }: BuddyInsightCardProp
         .eq('feedback_type', 'buddy_feedback')
         .order('feedback_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       return data;
     },
     staleTime: 10 * 60 * 1000,
