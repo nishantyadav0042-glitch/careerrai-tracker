@@ -7,6 +7,13 @@ const anthropic = new Anthropic();
 
 export async function POST() {
   try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('student ai-insights: ANTHROPIC_API_KEY is not set in this environment');
+      return NextResponse.json(
+        { error: 'AI is not configured on the server — add ANTHROPIC_API_KEY in Vercel project settings' },
+        { status: 503 }
+      );
+    }
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
