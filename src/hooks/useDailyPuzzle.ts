@@ -18,9 +18,9 @@ export function useDailyPuzzle(studentId: string) {
         .from('daily_lrdi_puzzles')
         .select('*')
         .eq('puzzle_date', today)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       return data as DailyLrdiPuzzle | null;
     },
   });
@@ -37,7 +37,7 @@ export function useDailyPuzzle(studentId: string) {
         .select('*')
         .eq('student_id', studentId)
         .eq('puzzle_id', todayPuzzle.id)
-        .single();
+        .maybeSingle();
 
       return data as LrdiPuzzleAttempt | null;
     },
