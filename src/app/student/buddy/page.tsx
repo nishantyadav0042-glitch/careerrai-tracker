@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BuddyFeedbackCard } from '@/app/student/home/buddy-feedback-card';
-import { ArrowLeft, Video, Calendar } from 'lucide-react';
+import { SessionRequestPanel } from './session-request-panel';
+import { Video, Calendar, PhoneCall } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
@@ -24,7 +25,7 @@ export default async function BuddyCommunicationPage() {
 
   const buddyId = profile?.buddy_id ?? null;
 
-  const [{ data: buddy }, { data: sessions }] = await Promise.all([
+  const [{ data: buddy }, { data: sessions }, { data: pendingRequests }] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
@@ -36,39 +37,49 @@ export default async function BuddyCommunicationPage() {
       .gte('scheduled_at', new Date(Date.now() - 3_600_000).toISOString())
       .order('scheduled_at', { ascending: true })
       .limit(5),
+    buddyId
+      ? admin
+          .from('session_requests')
+          .select('id, message, created_at, status')
+          .eq('student_id', user.id)
+          .eq('buddy_id', buddyId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
+  const hasPendingRequest = (pendingRequests?.length ?? 0) > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto space-y-6 pb-24">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <Link href="/student/tracker" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
-            <ArrowLeft className="w-5 h-5 text-stone-600" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-              Buddy
-            </h1>
-            <p className="text-sm text-stone-500">
-              {buddy ? `${buddy.full_name}${buddy.college ? ` · ${buddy.college}` : ''}` : 'Your buddy will appear here soon'}
+        <div>
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your mentor</p>
+          <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>
+            {buddy ? buddy.full_name : 'Buddy'}
+          </h1>
+          {buddy && (
+            <p className="text-sm text-stone-500 mt-0.5">
+              {buddy.college ? `IIM ${buddy.college}` : 'IIM Alumni'}
+              {buddy.cat_percentile ? ` · ${buddy.cat_percentile}%ile` : ''}
             </p>
-          </div>
+          )}
         </div>
 
         {!buddyId ? (
           <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
             <p className="text-stone-600 font-medium">No buddy assigned yet</p>
             <p className="text-sm text-stone-400 mt-1">
-              We&apos;re matching you with a mentor — voice notes and sessions will live here.
+              We&apos;re matching you with a mentor — voice notes and sessions will appear here.
             </p>
           </div>
         ) : (
           <>
-            {/* Upcoming sessions — full details */}
-            <div className="space-y-3">
+            {/* Upcoming sessions */}
+            <div className="space-y-2">
               <div className="flex items-center gap-2 px-1">
                 <Calendar className="w-4 h-4 text-indigo-600" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-stone-700">Sessions</h2>
@@ -124,9 +135,22 @@ export default async function BuddyCommunicationPage() {
                 })
               ) : (
                 <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-                  <p className="text-sm text-stone-500">No upcoming sessions — {buddyName} will schedule one soon.</p>
+                  <p className="text-sm text-stone-500">No upcoming sessions yet.</p>
                 </div>
               )}
+            </div>
+
+            {/* Urgent session request panel */}
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <PhoneCall className="w-4 h-4 text-orange-700" />
+                <h2 className="text-sm font-bold uppercase tracking-widest text-orange-800">Need urgent help?</h2>
+              </div>
+              <SessionRequestPanel
+                buddyId={buddyId}
+                buddyName={buddyName}
+                hasPendingRequest={hasPendingRequest}
+              />
             </div>
 
             {/* Voice notes + feedback + record response */}
