@@ -4,19 +4,14 @@ import { createClient } from '@/lib/supabase/client';
 import { computeSummary } from '@/lib/analytics';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDate } from '@/lib/utils';
-import type { DailyReport, BuddyFeedback } from '@/types';
-import { ChevronDown, Award, Star, CheckCircle2, AlertCircle } from 'lucide-react';
+import type { DailyReport } from '@/types';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const TOPIC_COLORS = ['#1c1917', '#ea580c', '#0f766e', '#a16207', '#9f1239', '#4338ca'];
 
 export default function StudentReportsPage() {
   const supabase = createClient();
   const [period, setPeriod] = useState(7);
   const [reports, setReports] = useState<DailyReport[]>([]);
-  const [feedback, setFeedback] = useState<BuddyFeedback[]>([]);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,12 +19,13 @@ export default function StudentReportsPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ data: reps }, { data: fb }] = await Promise.all([
-        supabase.from('daily_reports').select('*').eq('student_id', user.id).order('report_date', { ascending: false }).limit(period),
-        supabase.from('buddy_feedback').select('*').eq('student_id', user.id).order('feedback_date', { ascending: false }),
-      ]);
+      const { data: reps } = await supabase
+        .from('daily_reports')
+        .select('*')
+        .eq('student_id', user.id)
+        .order('report_date', { ascending: false })
+        .limit(period);
       setReports((reps ?? []) as DailyReport[]);
-      setFeedback((fb ?? []) as BuddyFeedback[]);
       setLoading(false);
     }
     load();
@@ -38,20 +34,14 @@ export default function StudentReportsPage() {
 
   const summary = computeSummary(reports, period);
 
-  const topicCounts: Record<string, number> = {};
-  reports.forEach((r) => r.topics_covered?.forEach((t) => { topicCounts[t] = (topicCounts[t] ?? 0) + 1; }));
-  const topicData = Object.entries(topicCounts).map(([name, value]) => ({ name, value }));
-
-  const perfData = reports.slice().reverse().map((r) => ({ date: formatDate(r.report_date), score: r.mock_taken ? r.total_accuracy : null }));
-
   if (loading) return <div className="py-20 text-center text-sm text-stone-500">Loading…</div>;
 
   return (
     <div className="space-y-5">
       <div className="px-1">
-        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Consolidated Report</p>
+        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">History</p>
         <h1 className="text-2xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-          Your progress
+          Day by day
         </h1>
       </div>
 
@@ -84,52 +74,8 @@ export default function StudentReportsPage() {
         </Card>
       </div>
 
-      {/* Topic donut */}
-      {topicData.length > 0 && (
-        <Card className="p-5">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-4">Topic distribution</h2>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={topicData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
-                  {topicData.map((_, idx) => <Cell key={idx} fill={TOPIC_COLORS[idx % TOPIC_COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8, color: 'white', fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2 justify-center">
-            {topicData.map((t, i) => (
-              <div key={t.name} className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ background: TOPIC_COLORS[i % TOPIC_COLORS.length] }} />
-                <span className="text-xs text-stone-700">{t.name}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Mock performance chart */}
-      {summary.totalMocks > 0 && (
-        <Card className="p-5">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-4">Mock test performance</h2>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={perfData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#78716c' }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#78716c' }} />
-                <Tooltip contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8, color: 'white', fontSize: 12 }} />
-                <Line type="monotone" dataKey="score" stroke="#ea580c" strokeWidth={2.5} dot={{ fill: '#ea580c', r: 4 }} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
-
       {/* Day-by-day */}
       <div>
-        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Day by day</h2>
         <div className="space-y-2">
           {reports.map((r) => {
             const isOpen = expandedDay === r.report_date;
@@ -182,43 +128,11 @@ export default function StudentReportsPage() {
           })}
           {reports.length === 0 && (
             <Card className="p-8 text-center">
-              <p className="text-sm text-stone-600">No reports yet — fill today&apos;s to start your streak.</p>
+              <p className="text-sm text-stone-600">No logs yet — log today to start your streak.</p>
             </Card>
           )}
         </div>
       </div>
-
-      {/* Buddy feedback */}
-      {feedback.length > 0 && (
-        <Card className="p-5 bg-teal-50 border-teal-200">
-          <div className="flex items-center gap-2 mb-3">
-            <Award className="w-4 h-4 text-teal-700" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-teal-800">Buddy feedback</span>
-          </div>
-          {feedback.map((f) => (
-            <div key={f.id} className="space-y-2 mb-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-stone-600">{new Date(f.feedback_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-                <div className="flex">{[1,2,3,4,5].map((s) => <Star key={s} className={cn('w-3.5 h-3.5', s <= f.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300')} />)}</div>
-              </div>
-              <p className="text-sm text-stone-800 leading-relaxed">&quot;{f.feedback_text}&quot;</p>
-              {f.next_steps?.length > 0 && (
-                <div className="pt-2 border-t border-teal-200">
-                  <div className="text-[10px] uppercase tracking-wider text-teal-700 font-semibold mb-1.5">Next steps</div>
-                  <ul className="space-y-1">
-                    {f.next_steps.map((s, j) => (
-                      <li key={j} className="text-xs text-stone-700 flex items-start gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-teal-600 mt-0.5 flex-shrink-0" />
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ))}
-        </Card>
-      )}
     </div>
   );
 }

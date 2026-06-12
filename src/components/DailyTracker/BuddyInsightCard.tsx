@@ -36,7 +36,7 @@ export function BuddyInsightCard({ studentId, dailyNudge }: BuddyInsightCardProp
   const label = isSystemNudge ? '⚠️ Pattern detected' : '💬 Buddy';
 
   return (
-    <Link href="/student/reports" className="block">
+    <Link href="/student/buddy" className="block">
       <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3">
         <span className="text-xs font-bold text-teal-700 shrink-0 mt-0.5">{label}</span>
         <p className="text-xs text-teal-900 leading-snug line-clamp-2">{nudgeText}</p>
