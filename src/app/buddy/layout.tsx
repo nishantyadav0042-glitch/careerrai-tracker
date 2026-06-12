@@ -14,7 +14,7 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
   const admin = createAdminClient();
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'buddy') {
-    if (profile?.role === 'student') redirect('/student/home');
+    if (profile?.role === 'student') redirect('/student/tracker');
     redirect('/login');
   }
 

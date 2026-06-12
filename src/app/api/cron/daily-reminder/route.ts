@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       await sendPushToUser(s.id, {
         title: "CareerRai: Report pending 📋",
         body: `Hey ${s.full_name.split(' ')[0]}, fill today's report — 90 seconds.`,
-        url: '/student/today',
+        url: '/student/tracker',
       });
     }
 

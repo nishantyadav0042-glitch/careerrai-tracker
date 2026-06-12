@@ -8,27 +8,11 @@ interface HeatmapCardProps {
     date: string;
     hours: number;
   }>;
-  days?: number; // default 14
+  days?: number;
   className?: string;
 }
 
 export function HeatmapCard({ daysData, days = 14, className }: HeatmapCardProps) {
-  // Calculate intensity for each day
-  const maxHours = Math.max(...daysData.map(d => d.hours), 4);
-
-  const getIntensity = (hours: number) => {
-    if (hours === 0) return 0;
-    return Math.min(4, Math.floor((hours / maxHours) * 4));
-  };
-
-  const colors = [
-    'bg-stone-100', // 0
-    'bg-orange-100', // 1
-    'bg-orange-300', // 2
-    'bg-orange-500', // 3
-    'bg-orange-700' // 4
-  ];
-
   return (
     <Card className={cn('p-5', className)}>
       <div className="flex items-center justify-between mb-4">
@@ -40,35 +24,35 @@ export function HeatmapCard({ daysData, days = 14, className }: HeatmapCardProps
 
       <div className="grid grid-cols-7 gap-1.5">
         {daysData.map((d, i) => {
-          const intensity = getIntensity(d.hours);
           const date = new Date(d.date);
           const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short' });
+          const hasStudy = d.hours > 0;
 
           return (
             <div key={i} className="flex flex-col items-center gap-1">
               <div
-                className={cn('aspect-square w-full rounded-md transition-all hover:ring-2 hover:ring-orange-600 cursor-pointer', colors[intensity])}
+                className={cn(
+                  'aspect-square w-full rounded-md flex items-center justify-center hover:ring-2 hover:ring-orange-400 cursor-pointer transition-all',
+                  hasStudy ? 'bg-orange-50 border border-orange-200' : 'bg-stone-100'
+                )}
                 title={`${d.date}: ${d.hours.toFixed(1)} hrs`}
-              />
+              >
+                <span className={cn(
+                  'text-[9px] font-bold leading-none',
+                  hasStudy ? 'text-orange-700' : 'text-stone-300'
+                )}>
+                  {hasStudy ? d.hours.toFixed(1) : '–'}
+                </span>
+              </div>
               <span className="text-[10px] text-stone-500">{dayLabel}</span>
             </div>
           );
         })}
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-200">
-        <span className="text-xs font-medium text-stone-600">Intensity</span>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-stone-500">Less</span>
-          <div className="flex gap-0.5">
-            {colors.map((color, i) => (
-              <div key={i} className={cn('w-3 h-3 rounded-sm', color)} />
-            ))}
-          </div>
-          <span className="text-[10px] text-stone-500">More</span>
-        </div>
-      </div>
+      <p className="text-[10px] text-stone-400 mt-4 pt-3 border-t border-stone-100">
+        Numbers show hours studied each day
+      </p>
     </Card>
   );
 }
