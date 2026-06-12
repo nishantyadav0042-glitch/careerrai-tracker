@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createClient } from '@/lib/supabase/client';
 import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
 import { MockDebriefModal, type MockDebriefData } from './MockDebriefModal';
+import { PendingDebriefCard } from './PendingDebriefCard';
 import { FeedbackAnimation } from './FeedbackAnimation';
 import { DailyPuzzleCard, type GameType } from './DailyPuzzleCard';
 import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
@@ -68,14 +71,44 @@ interface TodaySession {
 interface DailyTrackerAppProps {
   studentId?: string;
   todaySession?: TodaySession | null;
+  hasBuddy?: boolean;
 }
 
-export function DailyTrackerApp({ studentId = '', todaySession = null }: DailyTrackerAppProps) {
+export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
   const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
   const [currentLogDate, setCurrentLogDate] = useState('');
   const [lastNudge, setLastNudge] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // A mock logged in the last 48h with no debrief = the loud #1 card
+  const { data: pendingDebrief } = useQuery({
+    queryKey: ['pending-debrief', studentId],
+    enabled: !!studentId,
+    queryFn: async () => {
+      const supabase = createClient();
+      const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
+      const { data: mockReport } = await supabase
+        .from('daily_reports')
+        .select('report_date, updated_at')
+        .eq('student_id', studentId)
+        .eq('mock_taken', true)
+        .gte('report_date', twoDaysAgo)
+        .order('report_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!mockReport) return null;
+      const { data: debrief } = await supabase
+        .from('mock_debriefs')
+        .select('id')
+        .eq('student_id', studentId)
+        .eq('log_date', mockReport.report_date)
+        .maybeSingle();
+      return debrief ? null : mockReport;
+    },
+    staleTime: 60 * 1000,
+  });
 
   const {
     currentStreak,
@@ -104,6 +137,8 @@ export function DailyTrackerApp({ studentId = '', todaySession = null }: DailyTr
       setCurrentLogDate(logDate.toISOString().split('T')[0]);
       setIsLogOpen(false);
       setIsDebriefOpen(true);
+      // If they skip the debrief, the pending card takes over on home
+      queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
     }
     return { mockSelected };
   };
@@ -115,6 +150,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null }: DailyTr
       body: JSON.stringify({ ...data, log_date: currentLogDate }),
     });
     if (!response.ok) throw new Error('Failed to save debrief');
+    queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
   };
 
   const rawContent = puzzle?.puzzle_content;
@@ -139,6 +175,18 @@ export function DailyTrackerApp({ studentId = '', todaySession = null }: DailyTr
 
   return (
     <div className="space-y-5">
+      {/* 0. Pending mock debrief — the loud #1 card until it's done */}
+      {pendingDebrief && !isDebriefOpen && (
+        <PendingDebriefCard
+          loggedAt={pendingDebrief.updated_at}
+          hasBuddy={hasBuddy}
+          onStart={() => {
+            setCurrentLogDate(pendingDebrief.report_date);
+            setIsDebriefOpen(true);
+          }}
+        />
+      )}
+
       {/* 1. Hero — Streak + Log */}
       <HeroCard
         currentStreak={currentStreak}
@@ -253,6 +301,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null }: DailyTr
         onComplete={() => setShowFeedback(false)}
         streakIncrement={currentStreak}
         bonus={feedbackData?.bonus}
+        noticed={lastNudge}
       />
     </div>
   );

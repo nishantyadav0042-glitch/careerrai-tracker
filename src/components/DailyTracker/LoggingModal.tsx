@@ -118,6 +118,11 @@ export function LoggingModal({
                 </button>
               ))}
             </div>
+            {hours === 0 && (
+              <p className="text-xs text-amber-400/90 mt-2">
+                0-hour logs keep your record honest — they don&apos;t extend your study streak.
+              </p>
+            )}
           </div>
 
           {/* Sections */}
@@ -212,6 +217,7 @@ export function LoggingModal({
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isSubmitting ? 'Logging...' : sections.includes('Mock') ? 'Log & Debrief →' : 'Log Day'}
           </button>
+          <p className="text-[11px] text-zinc-600 text-center mt-2">15 seconds. The app answers back.</p>
         </div>
       </div>
     </div>

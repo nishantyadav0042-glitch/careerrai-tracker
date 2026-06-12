@@ -9,6 +9,8 @@ interface FeedbackAnimationProps {
   onComplete: () => void;
   streakIncrement?: number;
   bonus?: string;
+  /** The one prescriptive line the rule engine answered back with */
+  noticed?: string | null;
 }
 
 export function FeedbackAnimation({
@@ -16,6 +18,7 @@ export function FeedbackAnimation({
   onComplete,
   streakIncrement = 1,
   bonus,
+  noticed,
 }: FeedbackAnimationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -100,9 +103,10 @@ export function FeedbackAnimation({
 
     animate();
 
-    const timer = setTimeout(onComplete, 3000);
+    // Give the prescriptive line time to be read
+    const timer = setTimeout(onComplete, noticed ? 5000 : 3000);
     return () => clearTimeout(timer);
-  }, [isVisible, onComplete]);
+  }, [isVisible, onComplete, noticed]);
 
   return (
     <AnimatePresence>
@@ -146,7 +150,21 @@ export function FeedbackAnimation({
                     : `Great job staying consistent!`}
                 </p>
 
-                {bonus && (
+                {noticed && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.6 }}
+                    className="bg-stone-900 rounded-xl p-4 mb-4 text-left"
+                  >
+                    <p className="text-[10px] uppercase tracking-widest font-semibold text-orange-400 mb-1">
+                      CareerRai noticed
+                    </p>
+                    <p className="text-sm text-white leading-snug">{noticed}</p>
+                  </motion.div>
+                )}
+
+                {bonus && !noticed && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
