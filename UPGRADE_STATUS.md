@@ -1,7 +1,14 @@
 # CareerRai Dashboard Upgrade - BUILD STATUS
 
-**Date:** June 5-6, 2026  
-**Version:** Phase 1-9 COMPLETE - ENTERPRISE READY ✅✅✅
+**Date:** June 5-12, 2026  
+**Version:** ALL PHASES (0-10) COMPLETE — Sprint 1, 2 & 3 SHIPPED ✅✅✅
+
+### Phase 10 / Sprint 2-3 closeout (June 12, 2026, commit 261ed92)
+- ✅ §1.7 Profile trust signals: buddy credential card (IIM badge, CAT %ile, bio, verified response-time), progress summary card (days logged / best streak / latest %ile / target progress bar)
+- ✅ Sprint 3 §1.7 Shareable progress card (Web Share API + WhatsApp fallback)
+- ✅ §2.4 Feedback templates: 5 one-tap scenario templates in buddy feedback form
+- ✅ §3.1 Admin: churn-risk panel (4+ days inactive) + buddy performance metrics (feedback volume, avg response hrs)
+- Already shipped earlier: §2.4 weekly digest (cron + email), §3.1 batch messaging (admin broadcast)
 
 ---
 
