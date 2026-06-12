@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, CheckCircle2 } from 'lucide-react';
+import { Clock, CheckCircle2, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type GameType = 'detective' | 'airport' | 'escape_room' | 'mafia';
@@ -147,6 +147,26 @@ export function DailyPuzzleCard({
           )}
         >
           {theme.cta}
+        </button>
+      )}
+
+      {isSolved && (
+        <button
+          onClick={() => {
+            const grid = accuracy !== undefined
+              ? (accuracy >= 1 ? '✓✓✓' : accuracy >= 0.66 ? '✓✓✗' : accuracy >= 0.33 ? '✓✗✗' : '✗✗✗')
+              : '✓';
+            const text = `🧩 Daily Puzzle #${caseNumber} — solved in ${timeTaken ?? '?'}m ${grid}\nSame puzzle. Every aspirant. Daily.\nhttps://careerrai-daily.vercel.app`;
+            if (navigator.share) {
+              navigator.share({ text }).catch(() => {});
+            } else {
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+            }
+          }}
+          className="w-full mt-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] hover:bg-emerald-700"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          Share result card
         </button>
       )}
 

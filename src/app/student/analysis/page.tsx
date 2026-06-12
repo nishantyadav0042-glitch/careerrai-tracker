@@ -151,10 +151,30 @@ export default function AnalysisPage() {
         </div>
 
         {debriefs.length === 0 ? (
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
-            <p className="text-stone-600 font-medium">No data yet</p>
-            <p className="text-sm text-stone-400 mt-1">Log a day and take a mock to see your analysis here.</p>
-          </div>
+          <>
+            {/* Pre-mock promise, not a blank */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center space-y-2">
+              <p className="text-3xl">📈</p>
+              <p className="text-stone-800 font-semibold">Take 2 mocks and your trend line appears here.</p>
+              <p className="text-sm text-stone-500">
+                This is the chart that proves you&apos;re improving — raw scores lie, trends don&apos;t.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {[
+                'Section-wise percentile trend',
+                'Error-bucket trend · are silly mistakes shrinking?',
+                'Consistency heatmap',
+              ].map((slot) => (
+                <div
+                  key={slot}
+                  className="rounded-2xl border-2 border-dashed border-stone-200 px-4 py-3 text-center text-xs text-stone-400"
+                >
+                  {slot}
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <>
             {/* Percentile trend */}
@@ -180,6 +200,20 @@ export default function AnalysisPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+                {(() => {
+                  // One human sentence — never raw data alone
+                  const first = percentileData[0]?.percentile;
+                  const last = percentileData[percentileData.length - 1]?.percentile;
+                  if (percentileData.length < 2 || first == null || last == null) return null;
+                  const delta = Math.round(last - first);
+                  const text =
+                    delta > 0
+                      ? `Overall moved ${first} → ${last} across ${percentileData.length} mocks — the trend is doing its job.`
+                      : delta < 0
+                      ? `Down ${Math.abs(delta)} points across ${percentileData.length} mocks — debrief the last one properly before the next.`
+                      : `Flat across ${percentileData.length} mocks — consistency first, then push one section.`;
+                  return <p className="text-xs text-stone-500 mt-3 text-center">{text}</p>;
+                })()}
               </div>
             )}
 

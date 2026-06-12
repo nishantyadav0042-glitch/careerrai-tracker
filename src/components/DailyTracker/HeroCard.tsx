@@ -56,10 +56,15 @@ export function HeroCard({
         <div className="flex-1">
           <p className="text-xs uppercase tracking-widest opacity-90 font-semibold">Your streak</p>
           <div className="flex items-baseline gap-2 mt-2">
-            <Flame className="w-8 h-8 animate-bounce" />
+            <Flame className={cn('w-8 h-8', currentStreak > 0 ? 'animate-bounce' : 'opacity-50')} />
             <span className="text-5xl font-bold font-mono leading-none">{displayedStreak}</span>
-            <span className="text-lg opacity-80 font-normal">days</span>
+            <span className="text-lg opacity-80 font-normal">study days</span>
           </div>
+          {currentStreak === 0 && !hasLoggedToday && (
+            <p className="text-xs opacity-90 mt-1.5 font-medium">
+              Your streak starts with one log.
+            </p>
+          )}
           {maxStreak > currentStreak && (
             <p className="text-xs opacity-75 mt-1">
               Max: {maxStreak} days
@@ -101,14 +106,26 @@ export function HeroCard({
           ) : (
             <>
               <Zap className="w-5 h-5" />
-              Log Today
+              {currentStreak === 0 ? 'Log your first day' : 'Log Today'}
             </>
           )}
         </button>
       )}
 
       {!hasLoggedToday && (
-        <p className="text-[11px] text-center opacity-70">Day ends 3 AM — late-night counts</p>
+        <p className="text-[11px] text-center opacity-70">Day ends at 3 AM — late-night study counts</p>
+      )}
+
+      {hasLoggedToday && (
+        <p className="text-[10px] text-center opacity-60">
+          Study streak counts study days — a 0-hour log keeps the record, not the flame.
+        </p>
+      )}
+
+      {shieldsRemaining > 0 && !hasLoggedToday && (
+        <p className="text-[10px] text-center opacity-60 -mt-1">
+          🛡️ {shieldsRemaining} shield{shieldsRemaining > 1 ? 's' : ''} this month — auto-protects a missed day
+        </p>
       )}
 
       {currentStreak < 30 && (

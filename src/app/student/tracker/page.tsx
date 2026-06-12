@@ -17,7 +17,7 @@ export default async function DailyTrackerPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [{ data: profile }, { data: sessions }, { data: pendingReqs }] = await Promise.all([
+  const [{ data: profile }, { data: sessions }, { data: pendingReqs }, { data: anyDebrief }] = await Promise.all([
     admin.from('profiles').select('full_name, cat_percentile, buddy_id').eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -32,6 +32,11 @@ export default async function DailyTrackerPage() {
       .select('id')
       .eq('student_id', user.id)
       .eq('status', 'pending')
+      .limit(1),
+    admin
+      .from('mock_debriefs')
+      .select('id')
+      .eq('student_id', user.id)
       .limit(1),
   ]);
 
@@ -55,6 +60,7 @@ export default async function DailyTrackerPage() {
       : null;
 
   const hasPendingRequest = (pendingReqs?.length ?? 0) > 0;
+  const hasDebriefedBefore = (anyDebrief?.length ?? 0) > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -84,7 +90,29 @@ export default async function DailyTrackerPage() {
           />
         )}
 
-        <DailyTrackerApp studentId={user.id} todaySession={todaySession} />
+        {/* Day one: buddy not yet matched — never a ghost town */}
+        {!buddyId && (
+          <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
+            <p className="text-sm text-teal-900 leading-relaxed">
+              🤝 <strong>Your buddy is being matched</strong> — a mentor who&apos;s walked your exact
+              journey. Meanwhile, log today: your first week of data is what makes their guidance sharp.
+            </p>
+          </div>
+        )}
+
+        <DailyTrackerApp studentId={user.id} todaySession={todaySession} hasBuddy={!!buddyId} />
+
+        {/* Day one: the debrief promise — sell it before it exists */}
+        {!hasDebriefedBefore && (
+          <div className="rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50 px-4 py-4 flex items-start gap-3">
+            <span className="text-xl leading-none">📋</span>
+            <p className="text-xs text-stone-500 leading-relaxed">
+              <strong className="text-stone-700">Your first mock debrief unlocks here.</strong>
+              <br />
+              This is where the real work happens — log a mock and walk every error with your buddy.
+            </p>
+          </div>
+        )}
 
         {/* Footer: feedback link */}
         <p className="text-center text-[11px] text-stone-400 pb-20">

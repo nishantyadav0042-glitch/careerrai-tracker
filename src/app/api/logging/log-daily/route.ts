@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('student_id', user.id)
       .eq('report_date', dateStr)
-      .single();
+      .maybeSingle();
 
     const logData = {
       student_id: user.id,
@@ -82,8 +82,11 @@ export async function POST(request: NextRequest) {
       await admin.from('daily_reports').insert(logData);
     }
 
-    const streakUpdated = await updateStreak(user.id, admin);
-    const dailyNudge = await computeAvoidanceNudge(user.id, body.sections, admin);
+    // Study streak counts study days — a 0-hour log keeps the record, not the flame.
+    const streakUpdated = body.hours > 0
+      ? await updateStreak(user.id, admin)
+      : await getStreak(user.id, admin);
+    const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin);
 
     let bonus: string | undefined;
     if (Math.random() < 0.2) {
@@ -97,6 +100,9 @@ export async function POST(request: NextRequest) {
     }
 
     notifyBuddy(user.id, profile.buddy_id, { hours: body.hours, energy: body.energy }).catch(console.error);
+    if (body.sections.includes('Mock')) {
+      notifyBuddyMock(user.id, profile.buddy_id, dateStr).catch(console.error);
+    }
     logAnalyticsEvent(user.id, 'log_submitted', {
       hours: body.hours,
       sectionCount: body.sections.length,
@@ -110,25 +116,35 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function computeAvoidanceNudge(
+// Prescriptive rule engine — rule-based, single-user data, no AI.
+// Every log gets at most ONE line back. Priority: first-ever > avoidance >
+// no-mock-in-7-days > same-section tunnel vision.
+async function computePrescriptiveLine(
   studentId: string,
   todaySections: string[],
+  isNewLogForDate: boolean,
   admin: ReturnType<typeof createAdminClient>
 ): Promise<string | null> {
   try {
     const { data: recent } = await admin
       .from('daily_reports')
-      .select('topics_covered, report_date')
+      .select('topics_covered, report_date, mock_taken')
       .eq('student_id', studentId)
       .order('report_date', { ascending: false })
-      .limit(7);
+      .limit(14);
 
+    // Rule 1: first-ever log
+    const priorCount = (recent ?? []).length - (isNewLogForDate ? 1 : 0);
+    if (priorCount <= 0) {
+      return "First log done. Do this daily and in 2 weeks you'll see a pattern you can't see now.";
+    }
     if (!recent || recent.length < 3) return null;
 
-    const weakSections = ['VARC', 'DILR', 'QA'];
-    const avoidedFor: Record<string, number> = {};
+    const coreSections = ['VARC', 'DILR', 'QA'];
 
-    for (const section of weakSections) {
+    // Rule 2: avoiding a section 3+ days running
+    const avoidedFor: Record<string, number> = {};
+    for (const section of coreSections) {
       if (todaySections.includes(section)) continue;
       let daysMissed = 0;
       for (const report of recent) {
@@ -138,15 +154,54 @@ async function computeAvoidanceNudge(
       }
       if (daysMissed >= 3) avoidedFor[section] = daysMissed;
     }
-
     const worst = Object.entries(avoidedFor).sort(([, a], [, b]) => b - a)[0];
-    if (!worst) return null;
+    if (worst) {
+      const [section, days] = worst;
+      return `Day ${days} of skipping ${section} — that's the section costing you percentile.`;
+    }
 
-    const [section, days] = worst;
-    return `You haven't touched ${section} in ${days} days — avoidance compounds.`;
+    // Rule 3: no mock in 7+ days (and today isn't one)
+    if (!todaySections.includes('Mock') && recent.length >= 7) {
+      const hadRecentMock = recent.slice(0, 7).some((r) => r.mock_taken);
+      if (!hadRecentMock) {
+        return 'A week without a mock. Book one — your trend needs a data point.';
+      }
+    }
+
+    // Rule 4: same single section 4+ days running
+    const todayCore = todaySections.filter((s) => coreSections.includes(s));
+    if (todayCore.length === 1) {
+      const section = todayCore[0];
+      let runLength = 0;
+      for (const report of recent) {
+        const covered = ((report.topics_covered as string[]) ?? []).filter((s) => coreSections.includes(s));
+        if (covered.length === 1 && covered[0] === section) runLength++;
+        else break;
+      }
+      if (runLength >= 4) {
+        return `${runLength} days straight on ${section}. Tomorrow touch your weakest section instead.`;
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
+}
+
+async function getStreak(studentId: string, admin: ReturnType<typeof createAdminClient>) {
+  const { data } = await admin
+    .from('streak_data')
+    .select('*')
+    .eq('student_id', studentId)
+    .maybeSingle();
+  if (data) return data;
+  const { data: created } = await admin
+    .from('streak_data')
+    .insert({ student_id: studentId, current_streak: 0, longest_streak: 0 })
+    .select()
+    .single();
+  return created;
 }
 
 async function updateStreak(studentId: string, admin: ReturnType<typeof createAdminClient>) {
@@ -214,6 +269,29 @@ async function notifyBuddy(studentId: string, buddyId: string | null, data: { ho
     });
   } catch (error) {
     console.error('Failed to notify buddy:', error);
+  }
+}
+
+// The mock-logged ping — the debrief loop starts here. The 20 minutes after
+// a mock are worth more than the 3 hours in it.
+async function notifyBuddyMock(studentId: string, buddyId: string | null, logDate: string) {
+  if (!buddyId) return;
+  try {
+    const admin = createAdminClient();
+    const { data: student } = await admin.from('profiles').select('full_name').eq('id', studentId).single();
+    const name = student?.full_name?.split(' ')[0] || 'Your student';
+    await admin.from('notifications').insert({
+      user_id: buddyId,
+      type: 'mock_logged',
+      title: `${name} finished a mock`,
+      body: 'Debrief within 24h — walk it with them while it’s fresh.',
+      data: { student_id: studentId, log_date: logDate },
+      read: false,
+      channel: 'in_app',
+      link_url: `/buddy/students/${studentId}`,
+    });
+  } catch (error) {
+    console.error('Failed to send mock notification:', error);
   }
 }
 
