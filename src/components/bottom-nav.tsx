@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, FileText, GraduationCap, User, Users, TrendingUp, Settings, Puzzle } from 'lucide-react';
+import { Home, FileText, GraduationCap, User, Users, TrendingUp, Settings, Puzzle, Map } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -24,7 +24,7 @@ function NavBar({ items }: { items: NavItem[] }) {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-colors min-w-[60px]',
+                'flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-colors min-w-[48px]',
                 isActive ? 'text-stone-900' : 'text-stone-400'
               )}
             >
@@ -41,6 +41,7 @@ function NavBar({ items }: { items: NavItem[] }) {
 const STUDENT_ITEMS: NavItem[] = [
   { href: '/student/home', icon: Home, label: 'Home' },
   { href: '/student/tracker', icon: Puzzle, label: 'Tracker' },
+  { href: '/student/journey', icon: Map, label: 'Journey' },
   { href: '/student/reports', icon: FileText, label: 'Reports' },
   { href: '/student/exams', icon: GraduationCap, label: 'Exams' },
   { href: '/student/profile', icon: User, label: 'Profile' },

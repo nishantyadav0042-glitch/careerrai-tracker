@@ -142,7 +142,7 @@ export default async function BuddyStudentsPage() {
       <Card className="p-5 border-dashed border-2 border-stone-300 text-center">
         <Plus className="w-6 h-6 text-stone-400 mx-auto mb-2" />
         <div className="text-sm font-semibold text-stone-700">Add a new student</div>
-        <div className="text-xs text-stone-500 mt-0.5">Ask admin to assign a student to you (Phase 2)</div>
+        <div className="text-xs text-stone-500 mt-0.5">Ask admin to assign a student to you</div>
       </Card>
     </div>
   );
