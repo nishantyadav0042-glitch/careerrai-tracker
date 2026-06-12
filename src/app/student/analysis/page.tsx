@@ -28,12 +28,6 @@ interface MockDebrief {
   strategy_note: string | null;
 }
 
-interface DailyReport {
-  report_date: string;
-  study_duration: number;
-  topics_covered: string[];
-}
-
 const BUCKET_LABELS = [
   { key: 'conceptual', emoji: '🧠', label: 'Conceptual' },
   { key: 'silly', emoji: '🤏', label: 'Silly' },
@@ -53,7 +47,6 @@ const BUCKET_COLORS: Record<string, string> = {
 export default function AnalysisPage() {
   const supabase = createClient();
   const [debriefs, setDebriefs] = useState<MockDebrief[]>([]);
-  const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,27 +54,14 @@ export default function AnalysisPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const cutoff = thirtyDaysAgo.toISOString().split('T')[0];
-
-      const [{ data: d }, { data: r }] = await Promise.all([
-        supabase
-          .from('mock_debriefs')
-          .select('*')
-          .eq('student_id', user.id)
-          .order('taken_on', { ascending: true })
-          .limit(20),
-        supabase
-          .from('daily_reports')
-          .select('report_date, study_duration, topics_covered')
-          .eq('student_id', user.id)
-          .gte('report_date', cutoff)
-          .order('report_date', { ascending: true }),
-      ]);
+      const { data: d } = await supabase
+        .from('mock_debriefs')
+        .select('*')
+        .eq('student_id', user.id)
+        .order('taken_on', { ascending: true })
+        .limit(20);
 
       setDebriefs((d ?? []) as MockDebrief[]);
-      setReports((r ?? []) as DailyReport[]);
       setLoading(false);
     }
     load();
@@ -117,20 +97,6 @@ export default function AnalysisPage() {
     key,
     value: totalBuckets[key as keyof typeof totalBuckets],
   })).sort((a, b) => b.value - a.value);
-
-  // Heatmap — last 30 days
-  const heatmapData = (() => {
-    const map: Record<string, number> = {};
-    reports.forEach((r) => { map[r.report_date] = r.study_duration; });
-    const days: { date: string; hours: number; day: number }[] = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      days.push({ date: dateStr, hours: map[dateStr] ?? 0, day: d.getDay() });
-    }
-    return days;
-  })();
 
   // Section-wise accuracy from latest mock
   const latest = debriefs[debriefs.length - 1];
@@ -184,7 +150,7 @@ export default function AnalysisPage() {
           </div>
         </div>
 
-        {debriefs.length === 0 && reports.length === 0 ? (
+        {debriefs.length === 0 ? (
           <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
             <p className="text-stone-600 font-medium">No data yet</p>
             <p className="text-sm text-stone-400 mt-1">Log a day and take a mock to see your analysis here.</p>
@@ -274,42 +240,6 @@ export default function AnalysisPage() {
                 )}
               </div>
             )}
-
-            {/* Activity heatmap */}
-            <div className="bg-white rounded-2xl border border-stone-200 p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-4">
-                Last 30 days
-              </h2>
-              <div className="grid grid-cols-10 gap-1">
-                {heatmapData.map(({ date, hours }) => {
-                  const intensity = hours === 0 ? 0 : hours <= 1 ? 1 : hours <= 3 ? 2 : hours <= 5 ? 3 : 4;
-                  const bg =
-                    intensity === 0
-                      ? 'bg-stone-100'
-                      : intensity === 1
-                      ? 'bg-orange-200'
-                      : intensity === 2
-                      ? 'bg-orange-400'
-                      : intensity === 3
-                      ? 'bg-orange-600'
-                      : 'bg-orange-700';
-                  return (
-                    <div
-                      key={date}
-                      title={`${date}: ${hours}h`}
-                      className={`w-full aspect-square rounded-sm ${bg}`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-2 mt-3 justify-end">
-                <span className="text-[10px] text-stone-400">Less</span>
-                {['bg-stone-100', 'bg-orange-200', 'bg-orange-400', 'bg-orange-600', 'bg-orange-700'].map((c, i) => (
-                  <div key={i} className={`w-3 h-3 rounded-sm ${c}`} />
-                ))}
-                <span className="text-[10px] text-stone-400">More</span>
-              </div>
-            </div>
 
             {/* Latest strategy note */}
             {latest?.strategy_note && (

@@ -227,7 +227,7 @@ export async function assessCATReadiness(studentId: string): Promise<CATReadines
 
     const currentPercentile = profile?.cat_percentile || 0;
     const targetPercentile = 90; // Target for competitive college
-    const examDate = new Date(2026, 10, 23); // Nov 23, 2026
+    const examDate = new Date(2026, 10, 29); // Nov 29, 2026
     const today = new Date();
     const daysToExam = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 

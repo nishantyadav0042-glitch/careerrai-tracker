@@ -111,6 +111,12 @@ export function HeroCard({
         <p className="text-[11px] text-center opacity-70">Day ends 3 AM — late-night counts</p>
       )}
 
+      {currentStreak < 30 && (
+        <p className="text-[10px] text-center opacity-60 -mt-1">
+          🎁 Hit a 30-day streak → 1 month CareerRai free
+        </p>
+      )}
+
       {/* Pulse animation indicator when no log */}
       {!hasLoggedToday && (
         <style>{`
