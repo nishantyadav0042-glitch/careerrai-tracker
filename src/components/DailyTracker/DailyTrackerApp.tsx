@@ -15,6 +15,7 @@ import { EscapeRoomModal, isEscapeRoom } from './EscapeRoomModal';
 import { MafiaLogicModal, isMafiaGame } from './MafiaLogicModal';
 import { BuddyInsightCard } from './BuddyInsightCard';
 import { ProgressSnapshot } from './ProgressSnapshot';
+import { BrainBreakCard } from './BrainBreakCard';
 import { useLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
 import { Loader2, Video } from 'lucide-react';
@@ -232,6 +233,9 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
 
       {/* 5. Progress snapshot — 3 numbers */}
       {studentId && <ProgressSnapshot studentId={studentId} />}
+
+      {/* 6. Brain Break — cognitive reset, not CAT content */}
+      {studentId && <BrainBreakCard studentId={studentId} />}
 
       {/* Modals — Arrangement games: Detective + Airport */}
       {isCasePuzzle && puzzle && (

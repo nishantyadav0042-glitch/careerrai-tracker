@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
+import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
 
 export const metadata = {
   title: 'CareerRai',
@@ -17,8 +18,8 @@ export default async function DailyTrackerPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [{ data: profile }, { data: sessions }, { data: pendingReqs }, { data: anyDebrief }] = await Promise.all([
-    admin.from('profiles').select('full_name, cat_percentile, buddy_id').eq('id', user.id).single(),
+  const [{ data: profile }, { data: sessions }, { data: pendingReqs }, { data: anyDebrief }, { data: logs }, { data: mocks }] = await Promise.all([
+    admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile').eq('id', user.id).single(),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')
@@ -38,10 +39,23 @@ export default async function DailyTrackerPage() {
       .select('id')
       .eq('student_id', user.id)
       .limit(1),
+    admin
+      .from('daily_reports')
+      .select('report_date, study_duration')
+      .eq('student_id', user.id)
+      .order('report_date', { ascending: false })
+      .limit(90),
+    admin
+      .from('mock_debriefs')
+      .select('id')
+      .eq('student_id', user.id),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
+  const dreamColleges = (profile?.dream_colleges as string[] | null) ?? [];
+  const dreamCollege = dreamColleges[0] ?? null;
+  const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
 
   const daysToCat = Math.max(
     0,
@@ -62,6 +76,11 @@ export default async function DailyTrackerPage() {
   const hasPendingRequest = (pendingReqs?.length ?? 0) > 0;
   const hasDebriefedBefore = (anyDebrief?.length ?? 0) > 0;
 
+  // Stats for trajectory wall
+  const logCount = logs?.length ?? 0;
+  const daysStudied = logs?.filter((l) => (l.study_duration as number) > 0).length ?? 0;
+  const mockCount = mocks?.length ?? 0;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto space-y-5">
@@ -81,6 +100,16 @@ export default async function DailyTrackerPage() {
             </span>
           </div>
         </div>
+
+        {/* Trajectory Wall — dream-anchored, always present once college set */}
+        <TrajectoryWall
+          dreamCollege={dreamCollege}
+          currentPercentile={profile?.cat_percentile as number | null}
+          targetPercentile={targetPercentile}
+          logCount={logCount}
+          mockCount={mockCount}
+          daysStudied={daysStudied}
+        />
 
         {/* Important: urgent help / pending session request */}
         {buddyId && (

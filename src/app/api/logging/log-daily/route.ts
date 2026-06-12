@@ -7,6 +7,7 @@ interface LoggingRequest {
   sections: string[];
   energy: string;
   notes?: string;
+  emotional_chips?: string[];
 }
 
 const VALID_SECTIONS = ['VARC', 'DILR', 'QA', 'Mock', 'Revision'];
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
       mock_taken: body.sections.includes('Mock'),
       total_accuracy: null,
       notes: body.notes || null,
+      emotional_chips: body.emotional_chips ?? [],
       // Keep legacy numeric fields at defaults
       quality_focus: 3,
       difficulty: 3,
@@ -86,7 +88,7 @@ export async function POST(request: NextRequest) {
     const streakUpdated = body.hours > 0
       ? await updateStreak(user.id, admin)
       : await getStreak(user.id, admin);
-    const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin);
+    const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin, body.emotional_chips);
 
     let bonus: string | undefined;
     if (Math.random() < 0.2) {
@@ -103,10 +105,14 @@ export async function POST(request: NextRequest) {
     if (body.sections.includes('Mock')) {
       notifyBuddyMock(user.id, profile.buddy_id, dateStr).catch(console.error);
     }
+    if (body.emotional_chips && body.emotional_chips.length > 0 && !body.emotional_chips.includes('all_good')) {
+      notifyBuddyEmotional(user.id, profile.buddy_id, body.emotional_chips).catch(console.error);
+    }
     logAnalyticsEvent(user.id, 'log_submitted', {
       hours: body.hours,
       sectionCount: body.sections.length,
       hasMock: body.sections.includes('Mock'),
+      emotionalChips: body.emotional_chips ?? [],
     }).catch(console.error);
 
     return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge }, { status: 200 });
@@ -116,19 +122,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Prescriptive rule engine — rule-based, single-user data, no AI.
-// Every log gets at most ONE line back. Priority: first-ever > avoidance >
+// Evidence Engine — 5-rule prescriptive engine, single-user data, no AI.
+// Every log gets at most ONE line back.
+// Priority: first-ever > emotional flag > consistency gap > avoidance >
 // no-mock-in-7-days > same-section tunnel vision.
 async function computePrescriptiveLine(
   studentId: string,
   todaySections: string[],
   isNewLogForDate: boolean,
-  admin: ReturnType<typeof createAdminClient>
+  admin: ReturnType<typeof createAdminClient>,
+  emotionalChips?: string[]
 ): Promise<string | null> {
   try {
     const { data: recent } = await admin
       .from('daily_reports')
-      .select('topics_covered, report_date, mock_taken')
+      .select('topics_covered, report_date, mock_taken, emotional_chips, study_duration')
       .eq('student_id', studentId)
       .order('report_date', { ascending: false })
       .limit(14);
@@ -140,9 +148,35 @@ async function computePrescriptiveLine(
     }
     if (!recent || recent.length < 3) return null;
 
+    // Rule 2: emotional distress signal — respond to the person, not just the data
+    if (emotionalChips && emotionalChips.length > 0 && !emotionalChips.includes('all_good')) {
+      if (emotionalChips.includes('mock_scared')) {
+        return 'Mock fear is information — tell your buddy which section made you blank. That\'s the debrief agenda.';
+      }
+      if (emotionalChips.includes('burned_out')) {
+        return 'Burnout logged. One easy session tomorrow is better than skipping. Tell your buddy.';
+      }
+      if (emotionalChips.includes('comparing')) {
+        return 'Comparison mode is expensive prep time. Your only benchmark is last week\'s you.';
+      }
+      if (emotionalChips.includes('lost_confidence')) {
+        return 'Confidence dips after a hard day — your buddy has been exactly here. Talk to them.';
+      }
+      if (emotionalChips.includes('feeling_behind')) {
+        return `${daysBetween(recent[0]?.report_date)} days of data say you're showing up. That's not behind — that's the work.`;
+      }
+    }
+
+    // Rule 3: consistency signal — logged fewer than 4 of last 7 days
+    const last7 = recent.slice(0, 7);
+    const studyDaysIn7 = last7.filter((r) => (r.study_duration as number) > 0).length;
+    if (last7.length >= 7 && studyDaysIn7 < 4) {
+      return `${studyDaysIn7}/7 study days last week. CAT rewards consistency more than intensity.`;
+    }
+
     const coreSections = ['VARC', 'DILR', 'QA'];
 
-    // Rule 2: avoiding a section 3+ days running
+    // Rule 4: avoiding a section 3+ days running
     const avoidedFor: Record<string, number> = {};
     for (const section of coreSections) {
       if (todaySections.includes(section)) continue;
@@ -160,7 +194,7 @@ async function computePrescriptiveLine(
       return `Day ${days} of skipping ${section} — that's the section costing you percentile.`;
     }
 
-    // Rule 3: no mock in 7+ days (and today isn't one)
+    // Rule 5: no mock in 7+ days (and today isn't one)
     if (!todaySections.includes('Mock') && recent.length >= 7) {
       const hadRecentMock = recent.slice(0, 7).some((r) => r.mock_taken);
       if (!hadRecentMock) {
@@ -168,7 +202,7 @@ async function computePrescriptiveLine(
       }
     }
 
-    // Rule 4: same single section 4+ days running
+    // Rule 6: same single section 4+ days running
     const todayCore = todaySections.filter((s) => coreSections.includes(s));
     if (todayCore.length === 1) {
       const section = todayCore[0];
@@ -187,6 +221,12 @@ async function computePrescriptiveLine(
   } catch {
     return null;
   }
+}
+
+function daysBetween(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr);
+  return Math.round((Date.now() - d.getTime()) / 86_400_000);
 }
 
 async function getStreak(studentId: string, admin: ReturnType<typeof createAdminClient>) {
@@ -292,6 +332,36 @@ async function notifyBuddyMock(studentId: string, buddyId: string | null, logDat
     });
   } catch (error) {
     console.error('Failed to send mock notification:', error);
+  }
+}
+
+async function notifyBuddyEmotional(studentId: string, buddyId: string | null, chips: string[]) {
+  if (!buddyId) return;
+  try {
+    const admin = createAdminClient();
+    const { data: student } = await admin.from('profiles').select('full_name').eq('id', studentId).single();
+    const name = student?.full_name?.split(' ')[0] || 'Your student';
+    const chipLabels: Record<string, string> = {
+      mock_scared: 'scared by their mock',
+      burned_out: 'feeling burned out',
+      comparing: 'comparing themselves to others',
+      family_pressure: 'under family pressure',
+      lost_confidence: 'losing confidence',
+      feeling_behind: 'feeling behind',
+    };
+    const described = chips.map((c) => chipLabels[c] ?? c).join(', ');
+    await admin.from('notifications').insert({
+      user_id: buddyId,
+      type: 'emotional_flag',
+      title: `${name} flagged an emotional block`,
+      body: `They marked: ${described}. Check in with them.`,
+      data: { student_id: studentId, chips },
+      read: false,
+      channel: 'in_app',
+      link_url: `/buddy/students/${studentId}`,
+    });
+  } catch (error) {
+    console.error('Failed to send emotional notification:', error);
   }
 }
 

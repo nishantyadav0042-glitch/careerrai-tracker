@@ -8,6 +8,7 @@ interface LoggingPayload {
   sections: string[];
   energy: string;
   notes?: string;
+  emotional_chips?: string[];
 }
 
 interface LoggingResponse {
