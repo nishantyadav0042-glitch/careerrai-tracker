@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       .from('brain_break_logs')
       .select('id', { count: 'exact', head: true })
       .eq('student_id', user.id)
-      .gte('created_at', `${todayStr}T00:00:00.000Z`);
+      .gte('played_at', `${todayStr}T00:00:00.000Z`);
     if ((count ?? 0) >= 3) {
       return NextResponse.json({ error: 'Daily limit reached', limit: 3 }, { status: 429 });
     }
