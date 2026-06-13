@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, X } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, IndianRupee, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -107,9 +107,13 @@ const STUDENT_MORE: NavItem[] = [
   { href: '/student/settings', icon: Settings, label: 'Settings' },
 ];
 
-const BUDDY_ITEMS: NavItem[] = [
+const BUDDY_MAIN: NavItem[] = [
   { href: '/buddy/students', icon: Users, label: 'Students' },
   { href: '/buddy/trends', icon: TrendingUp, label: 'Trends' },
+  { href: '/buddy/earnings', icon: IndianRupee, label: 'Earnings' },
+];
+
+const BUDDY_MORE: NavItem[] = [
   { href: '/buddy/profile', icon: User, label: 'Profile' },
   { href: '/buddy/settings', icon: Settings, label: 'Settings' },
 ];
@@ -119,5 +123,5 @@ export function StudentBottomNav() {
 }
 
 export function BuddyBottomNav() {
-  return <NavBar items={BUDDY_ITEMS} />;
+  return <NavBar items={BUDDY_MAIN} moreItems={BUDDY_MORE} />;
 }

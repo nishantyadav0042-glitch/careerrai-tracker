@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -9,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { AdminBroadcast } from './admin-broadcast';
 import { AdminStudentsList } from './admin-students-list';
 import { AdminDataImport } from './admin-data-import';
+import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import type { Profile, DailyReport } from '@/types';
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function getTodayIST() {
@@ -29,6 +31,12 @@ export default async function AdminPage() {
   // Fetch all profiles
   const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, exam_target, buddy_id').order('role').order('full_name');
   const profiles = (allProfiles ?? []) as Profile[];
+
+  // Phone-OTP access list
+  const { data: allowlistRows } = await admin
+    .from('student_allowlist')
+    .select('id, phone, full_name, status, assigned_buddy_id')
+    .order('created_at', { ascending: false });
 
   const students = profiles.filter(p => p.role === 'student');
   const buddies = profiles.filter(p => p.role === 'buddy');
@@ -107,6 +115,12 @@ export default async function AdminPage() {
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-3">
+            <Link
+              href="/admin/payments"
+              className="flex items-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2 transition-colors"
+            >
+              <IndianRupee className="w-3.5 h-3.5" /> Payments
+            </Link>
             <Badge color="stone">Admin</Badge>
             <LogoutButton />
           </div>
@@ -225,6 +239,15 @@ export default async function AdminPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* Student access list (phone-OTP allowlist) */}
+        <div className="mb-6">
+          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Student access</h2>
+          <AdminAllowlist
+            rows={(allowlistRows ?? []) as AllowlistRow[]}
+            buddies={buddies.map((b) => ({ id: b.id, full_name: b.full_name }))}
+          />
         </div>
 
         {/* Data Import */}
