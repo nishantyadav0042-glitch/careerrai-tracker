@@ -58,6 +58,7 @@ export default async function AdminPaymentsPage() {
     const p = PLANS[r.plan];
     return sum + p.amountPaise / 100 / p.months;
   }, 0);
+  // eslint-disable-next-line react-hooks/purity
   const weekFromNow = Date.now() + 7 * 24 * 3600 * 1000;
   const expiringThisWeek = incoming.filter(
     (r) => r.status === 'active' && r.renewsAt && new Date(r.renewsAt).getTime() <= weekFromNow
