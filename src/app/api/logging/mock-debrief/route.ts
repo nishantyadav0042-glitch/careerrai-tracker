@@ -29,9 +29,12 @@ function computeInsight(
   if (overall_percentile != null && prevPercentile != null) {
     const delta = overall_percentile - prevPercentile;
     if (Math.abs(delta) >= 2) {
+      const cur = Math.round(overall_percentile);
+      const prev = Math.round(prevPercentile);
+      const mag = Math.abs(Math.round(delta));
       return delta > 0
-        ? `Percentile rose ${prevPercentile}→${overall_percentile} — up ${delta.toFixed(1)} points.`
-        : `Percentile moved ${prevPercentile}→${overall_percentile} — down ${Math.abs(delta).toFixed(1)} points.`;
+        ? `Percentile rose ${prev}→${cur} — up ${mag} point${mag === 1 ? '' : 's'}.`
+        : `Percentile moved ${prev}→${cur} — down ${mag} points.`;
     }
   }
 
@@ -86,12 +89,14 @@ export async function POST(request: NextRequest) {
       overall_percentile: body.overall_percentile ?? null,
     };
 
-    // Fetch previous debrief to compute delta before saving
+    // Fetch the chronologically-previous debrief to compute the delta. Use
+    // taken_on < this date (not just !=) so back-dating a mock compares against
+    // an actually-earlier result, never a newer one.
     const { data: prevDebriefs } = await admin
       .from('mock_debriefs')
       .select('overall_percentile')
       .eq('student_id', user.id)
-      .neq('log_date', body.log_date)
+      .lt('taken_on', body.log_date)
       .order('taken_on', { ascending: false })
       .limit(1);
     const prevPercentile = prevDebriefs?.[0]?.overall_percentile ?? null;
@@ -104,8 +109,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      // If no unique constraint yet, just insert
-      await admin.from('mock_debriefs').insert(row);
+      // The (student_id, log_date) unique constraint exists, so a conflict
+      // upserts cleanly; this fallback only runs on an unexpected error. Surface
+      // a real failure instead of reporting success.
+      const { error: insertError } = await admin.from('mock_debriefs').insert(row);
+      if (insertError) {
+        console.error('Mock debrief save failed:', error.message, insertError.message);
+        return NextResponse.json({ error: 'Could not save debrief' }, { status: 500 });
+      }
     }
 
     // Keep CRS live: latest mock percentile becomes the profile's cat_percentile

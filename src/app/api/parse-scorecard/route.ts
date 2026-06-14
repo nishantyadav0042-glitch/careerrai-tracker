@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { callGemini, extractJson, geminiEnabled } from '@/lib/gemini';
 import type { GeminiPart } from '@/lib/gemini';
 
@@ -66,14 +67,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image too large — try a tighter screenshot' }, { status: 413 });
     }
 
+    // The Gemini key is shared across all users on the free tier, so one student
+    // hammering the scanner can exhaust quota for everyone. Cap at 30 scans/user/hr.
+    // Fail-open: if the counter query errors, allow the request.
+    const admin = createAdminClient();
+    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    const { count } = await admin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('student_id', user.id)
+      .eq('event_type', 'scorecard_parse')
+      .gte('created_at', hourAgo);
+    if ((count ?? 0) >= 30) {
+      return NextResponse.json(
+        { error: 'Too many scans this hour — try again shortly, or enter the numbers manually.' },
+        { status: 429 }
+      );
+    }
+    // Count this attempt (fire-and-forget).
+    admin
+      .from('analytics_events')
+      .insert({ student_id: user.id, event_type: 'scorecard_parse', metadata: {} })
+      .then(({ error: e }) => { if (e) console.error('scorecard rate-limit log failed:', e.message); });
+
     const parts: GeminiPart[] = [
       { inlineData: { mimeType: mediaType, data: image } },
       { text: EXTRACT_PROMPT },
     ];
 
     const raw = await callGemini({ parts, json: true, maxTokens: 512, temperature: 0.1 });
-    const parsed = extractJson<ScorecardResult>(raw);
+    if (raw === null) {
+      // Transient AI failure (rate-limit / 5xx / network) — NOT a bad image.
+      // Distinct status so the client can say "try again" rather than "invalid".
+      return NextResponse.json(
+        { error: 'The scanner is busy right now — try again in a moment, or enter the numbers manually.' },
+        { status: 503 }
+      );
+    }
 
+    const parsed = extractJson<ScorecardResult>(raw);
     if (!parsed || !parsed.is_scorecard) {
       return NextResponse.json(
         { error: "That doesn't look like a mock scorecard — try a screenshot of your result page" },

@@ -66,7 +66,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ draft });
     }
 
-    const promptText = `You are drafting a short message for a mentor to send to their student. Write exactly 2 sentences: (1) state the consistency fact — days logged and average hours per day; (2) state one factual data point — either the stress level or the latest mock result if available. End the draft with a blank line and: "[Add your observation here:]". Use first person ("You logged…", "Your latest…"). Under 60 words before the placeholder. Facts only — no advice, no interpretation, no recommendations.\n\nData:\n${factsContext}`;
+    // Strip names BEFORE sending to the free-tier model (privacy on the input).
+    const safeContext = stripNames(factsContext, [student.full_name]);
+    const promptText = `You are drafting a short message for a mentor to send to their student. Write exactly 2 sentences: (1) state the consistency fact — days logged and average hours per day; (2) state one factual data point — either the stress level or the latest mock result if available. End the draft with a blank line and: "[Add your observation here:]". Use first person ("You logged…", "Your latest…"). Under 60 words before the placeholder. Facts only — no advice, no interpretation, no recommendations.\n\nData:\n${safeContext}`;
 
     const aiDraft = await callGemini({
       parts: [{ text: promptText }],

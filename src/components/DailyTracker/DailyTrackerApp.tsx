@@ -210,7 +210,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         />
       )}
 
-      {/* Post-debrief insight — one factual sentence, auto-dismisses */}
+      {/* Post-debrief insight — one factual sentence, manually dismissible */}
       {debriefInsight && (
         <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3">
           <span className="text-xs font-bold text-teal-700 shrink-0 mt-0.5">📊</span>

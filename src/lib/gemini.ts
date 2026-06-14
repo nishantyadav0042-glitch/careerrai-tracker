@@ -112,12 +112,19 @@ export function extractJson<T = unknown>(raw: string | null): T | null {
   }
 }
 
-// Privacy: strip student name tokens from any text before it goes to the model.
+// Privacy: strip student name tokens from any text before it goes to the model
+// (free-tier Gemini may train on prompts). Apply this to BOTH the input we send
+// AND the output we display — input stripping is what actually protects privacy.
 export function stripNames(text: string, names: (string | null | undefined)[]): string {
   let out = text;
   for (const name of names) {
     if (!name) continue;
-    for (const token of name.split(/\s+/).filter((t) => t.length > 2)) {
+    const trimmed = name.trim();
+    if (!trimmed) continue;
+    // Full name as a single unit first ("Priya Sharma" → "the student").
+    out = out.replace(new RegExp(`\\b${escapeRegExp(trimmed)}\\b`, 'gi'), 'the student');
+    // Then each name token (first/last) ≥ 2 chars, so short names are caught too.
+    for (const token of trimmed.split(/\s+/).filter((t) => t.length >= 2)) {
       out = out.replace(new RegExp(`\\b${escapeRegExp(token)}\\b`, 'gi'), 'the student');
     }
   }

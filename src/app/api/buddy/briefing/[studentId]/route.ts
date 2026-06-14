@@ -121,9 +121,11 @@ export async function POST(
   let source: 'ai' | 'fallback' = 'fallback';
 
   if (geminiEnabled()) {
+    // Strip names BEFORE sending to the free-tier model (not just on the way out).
+    const safeContext = stripNames(factsContext, [student.full_name]);
     const aiResult = await callGemini({
       parts: [{
-        text: `Here is the student's data for the last 7 days:\n${factsContext}\n\nWrite a briefing for the mentor in 3-5 bullet points. State only verifiable facts and numbers — no diagnoses, no recommendations, no interpretations. Each bullet: one factual sentence. If a pattern seems notable, phrase it as an open question (e.g. "DILR accuracy flat across 3 mocks — worth exploring why") rather than a conclusion. No student name.`,
+        text: `Here is the student's data for the last 7 days:\n${safeContext}\n\nWrite a briefing for the mentor in 3-5 bullet points. State only verifiable facts and numbers — no diagnoses, no recommendations, no interpretations. Each bullet: one factual sentence. If a pattern seems notable, phrase it as an open question (e.g. "DILR accuracy flat across 3 mocks — worth exploring why") rather than a conclusion. No student name.`,
       }],
       system: GOVERNING_RULE,
       maxTokens: 320,

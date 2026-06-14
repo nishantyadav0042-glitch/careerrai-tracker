@@ -142,13 +142,16 @@ export function ChatThread({
       });
       if (!res.ok) return;
       const { draft: generated } = (await res.json()) as { draft: string };
-      if (generated) setDraft(generated);
+      if (!generated) return;
+      // Don't clobber a half-typed message without asking.
+      if (draft.trim() && !window.confirm('Replace your current message with the generated draft?')) return;
+      setDraft(generated);
     } catch {
       // Silent — buddy still has the empty textarea
     } finally {
       setGeneratingDraft(false);
     }
-  }, [sendStudentId, generatingDraft]);
+  }, [sendStudentId, generatingDraft, draft]);
 
   const isBuddy = !!sendStudentId;
 
