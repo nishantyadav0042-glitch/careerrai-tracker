@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthUser } from '@/lib/auth';
 import { isCalendarConnected } from '@/lib/google-calendar';
 import { BuddyTriageView } from './buddy-triage-view';
 import { StudentVoiceNotesSection } from './student-voice-notes-section';
@@ -13,12 +13,11 @@ import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function BuddyHomePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from('profiles')
     .select('role, full_name, intro_audio_url')
     .eq('id', user.id)
@@ -27,7 +26,6 @@ export default async function BuddyHomePage() {
   if (profile?.role !== 'buddy') redirect('/');
   if (!profile?.intro_audio_url) redirect('/buddy/setup');
 
-  const admin = createAdminClient();
   const [{ data: students }, calendarConnected, { data: pendingRequests }] = await Promise.all([
     admin
       .from('profiles')

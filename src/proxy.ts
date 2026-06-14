@@ -23,9 +23,9 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Keep the session fresh so Server Components can read auth state.
-  await supabase.auth.getSession();
-
+  // Keep the session fresh so Server Components can read auth state. getUser()
+  // both validates the JWT and refreshes the token — a separate getSession()
+  // call would be a second, redundant round-trip on every request.
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
@@ -50,5 +50,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Skip the auth handshake on everything static: Next internals, PWA assets,
+  // fonts, audio (voice notes), and images. Otherwise every asset request would
+  // trigger a Supabase auth round-trip at first paint.
+  matcher: [
+    '/((?!_next/static|_next/image|_next/data|favicon.ico|manifest.json|sw.js|robots.txt|apple-touch-icon.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf|mp3|wav|m4a|webm|json|txt)$).*)',
+  ],
 };

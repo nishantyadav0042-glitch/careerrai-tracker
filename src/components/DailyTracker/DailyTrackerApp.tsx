@@ -8,7 +8,13 @@ import { LoggingModal, type LoggingData } from './LoggingModal';
 import { MockDebriefModal, type MockDebriefData } from './MockDebriefModal';
 import { PendingDebriefCard } from './PendingDebriefCard';
 import { MissRecoveryModal } from './MissRecoveryModal';
-import { FeedbackAnimation } from './FeedbackAnimation';
+import dynamic from 'next/dynamic';
+// framer-motion is heavy and the animation only appears AFTER a log submit —
+// keep it out of the initial tracker bundle.
+const FeedbackAnimation = dynamic(
+  () => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation),
+  { ssr: false }
+);
 import { DailyPuzzleCard, type GameType } from './DailyPuzzleCard';
 import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
 import { DetectiveCaseModal, isDetectiveCase } from './DetectiveCaseModal';

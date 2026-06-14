@@ -145,47 +145,48 @@ export async function loadStudentUrgency(
   const supabase = createClient();
 
   try {
-    // Get student profile
-    const { data: student } = await supabase
-      .from('profiles')
-      .select('full_name, cat_percentile')
-      .eq('id', studentId)
-      .single();
+    // These five reads are independent — fetch them concurrently instead of
+    // one-after-another (was 5 sequential round-trips per student).
+    const [
+      { data: student },
+      { data: streak },
+      { data: latestTest },
+      { data: dropAlerts },
+      { data: latestFeedback },
+    ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('full_name, cat_percentile')
+        .eq('id', studentId)
+        .single(),
+      supabase
+        .from('streak_data')
+        .select('current_streak, last_log_date')
+        .eq('student_id', studentId)
+        .single(),
+      supabase
+        .from('test_results')
+        .select('percentile, created_at')
+        .eq('student_id', studentId)
+        .eq('test_type', 'mock')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      supabase
+        .from('mock_drop_alerts')
+        .select('*')
+        .eq('student_id', studentId)
+        .gte('triggered_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      supabase
+        .from('feedback')
+        .select('created_at')
+        .eq('student_id', studentId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+    ]);
 
     if (!student) return null;
-
-    // Get streak data
-    const { data: streak } = await supabase
-      .from('streak_data')
-      .select('current_streak, last_log_date')
-      .eq('student_id', studentId)
-      .single();
-
-    // Get latest test
-    const { data: latestTest } = await supabase
-      .from('test_results')
-      .select('percentile, created_at')
-      .eq('student_id', studentId)
-      .eq('test_type', 'mock')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    // Get drop alerts (last 7 days)
-    const { data: dropAlerts } = await supabase
-      .from('mock_drop_alerts')
-      .select('*')
-      .eq('student_id', studentId)
-      .gte('triggered_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
-
-    // Get latest feedback
-    const { data: latestFeedback } = await supabase
-      .from('feedback')
-      .select('created_at')
-      .eq('student_id', studentId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
 
     // Calculate factors
     const today = new Date();
@@ -258,18 +259,19 @@ export async function loadBuddyStudents(
       return [];
     }
 
-    // Load urgency data for each student
-    const urgencyData: StudentUrgencyData[] = [];
-
-    for (const student of students) {
-      const data = await loadStudentUrgency(student.id);
-      if (data) {
-        urgencyData.push({
-          ...data,
-          free_onboarding_used: student.free_onboarding_used ?? false,
-        });
-      }
-    }
+    // Load every student's urgency concurrently — was a sequential for-loop, so
+    // a buddy with 20 students paid 20× the latency (each doing 5 queries).
+    const loaded = await Promise.all(
+      students.map(async (student): Promise<StudentUrgencyData | null> => {
+        const data = await loadStudentUrgency(student.id);
+        return data
+          ? { ...data, free_onboarding_used: student.free_onboarding_used ?? false }
+          : null;
+      })
+    );
+    const urgencyData: StudentUrgencyData[] = loaded.filter(
+      (d): d is StudentUrgencyData => d !== null
+    );
 
     // Sort by urgency score (descending)
     return urgencyData.sort((a, b) => b.score - a.score);

@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthUser } from '@/lib/auth';
 import { computeSummary } from '@/lib/analytics';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -119,8 +119,7 @@ export default async function BuddyStudentDetailPage({
   const { period: periodParam } = await searchParams;
   const period = parseInt(periodParam ?? '7');
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
 import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
@@ -14,8 +14,7 @@ export const metadata = {
 const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29, 2026
 
 export default async function DailyTrackerPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
@@ -70,40 +69,31 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
 
-  // Fetch buddy name now that we have buddyId (extra query only when matched)
+  // Second batch — three independent follow-ups that each need only first-batch
+  // results, so they run together instead of one-after-another.
+  const [buddyProfile, existingDebrief, streak] = await Promise.all([
+    buddyId
+      ? admin.from('profiles').select('full_name, cat_percentile').eq('id', buddyId).maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
+    recentMock
+      ? admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
+    admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', user.id).maybeSingle().then((r) => r.data),
+  ]);
+
   let buddyName: string | null = null;
-  if (buddyId) {
-    const { data: buddyProfile } = await admin
-      .from('profiles')
-      .select('full_name, cat_percentile')
-      .eq('id', buddyId)
-      .maybeSingle();
-    if (buddyProfile?.full_name) {
-      buddyName = buddyProfile.full_name.split(' ')[0] +
-        (buddyProfile.cat_percentile != null ? ` · ${Math.round(Number(buddyProfile.cat_percentile))}%ile` : '');
-    }
+  if (buddyProfile?.full_name) {
+    buddyName = buddyProfile.full_name.split(' ')[0] +
+      (buddyProfile.cat_percentile != null ? ` · ${Math.round(Number(buddyProfile.cat_percentile))}%ile` : '');
   }
 
-  // Server-side pending debrief: check if the recent mock has a debrief
-  let serverPendingDebrief: { report_date: string; updated_at: string } | null = null;
-  if (recentMock) {
-    const { data: existingDebrief } = await admin
-      .from('mock_debriefs')
-      .select('id')
-      .eq('student_id', user.id)
-      .eq('log_date', recentMock.report_date)
-      .maybeSingle();
-    if (!existingDebrief) serverPendingDebrief = recentMock;
-  }
+  // Server-side pending debrief: the recent mock exists but has no debrief yet.
+  const serverPendingDebrief: { report_date: string; updated_at: string } | null =
+    recentMock && !existingDebrief ? recentMock : null;
 
   // Miss-recovery: has this student lapsed (2+ days since last log, with a prior
   // streak) and not yet logged today? If so, surface the compassionate restart.
   let recovery: { missedDays: number; previousStreak: number } | null = null;
-  const { data: streak } = await admin
-    .from('streak_data')
-    .select('current_streak, last_log_date')
-    .eq('student_id', user.id)
-    .maybeSingle();
   if (streak?.last_log_date && (streak.current_streak ?? 0) > 0) {
     const todayStr = getLogDateString();
     const gap = Math.round((Date.parse(todayStr) - Date.parse(streak.last_log_date)) / 86_400_000);
