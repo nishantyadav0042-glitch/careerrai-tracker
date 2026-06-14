@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Anthropic } from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-
-const anthropic = new Anthropic();
+import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('feedback-draft: ANTHROPIC_API_KEY is not set in this environment');
-      return NextResponse.json(
-        { error: 'AI is not configured on the server — add ANTHROPIC_API_KEY in Vercel project settings' },
-        { status: 503 }
-      );
-    }
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,22 +35,12 @@ export async function POST(request: NextRequest) {
       .gte('report_date', sevenDaysAgo.toISOString().split('T')[0])
       .order('report_date', { ascending: false });
 
-    // Fetch latest test result
-    const { data: latestTest } = await admin
-      .from('test_results')
-      .select('percentile, score, created_at')
+    // Fetch latest mock debrief
+    const { data: latestDebrief } = await admin
+      .from('mock_debriefs')
+      .select('overall_percentile, taken_on')
       .eq('student_id', studentId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    // Fetch last feedback given
-    const { data: lastFeedback } = await admin
-      .from('buddy_feedback')
-      .select('feedback_text, created_at')
-      .eq('student_id', studentId)
-      .eq('feedback_type', 'buddy_feedback')
-      .order('created_at', { ascending: false })
+      .order('taken_on', { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -71,31 +52,44 @@ export async function POST(request: NextRequest) {
       ? ((logs ?? []).reduce((s, r) => s + (r.stress ?? 3), 0) / daysLogged).toFixed(1)
       : '3';
 
-    const contextLines = [
-      `Student: ${student.full_name.split(' ')[0]}`,
+    const factsContext = [
       `Current streak: ${student.current_streak ?? 0} days`,
       `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day, avg stress ${avgStress}/5`,
-      latestTest ? `Latest CAT readiness: ${latestTest.percentile?.toFixed(1) ?? '?'}%ile` : 'No test result yet',
-      lastFeedback
-        ? `Last feedback (${new Date(lastFeedback.created_at).toLocaleDateString('en-IN')}): "${lastFeedback.feedback_text?.substring(0, 100)}..."`
-        : 'No previous feedback given',
+      latestDebrief
+        ? `Latest mock (${latestDebrief.taken_on}): ${latestDebrief.overall_percentile ?? '?'}%ile`
+        : 'No mock debriefs yet',
     ].join('\n');
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
-      system: `You are an IIM alumni writing feedback for a CAT aspirant. Tone: direct, warm, senior-bhaiya/didi. Write 2-3 sentences: one observation on their consistency this week, one observation on an area to improve, one specific action for next week. Max 60 words. Use first person. No generic phrases. Be specific to the numbers given.`,
-      messages: [{
-        role: 'user',
-        content: `Generate feedback draft:\n${contextLines}`,
-      }],
+    if (!geminiEnabled()) {
+      // Rule-based fallback — buddy still gets something useful
+      const draft = ruleDraft(student.current_streak ?? 0, daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
+      return NextResponse.json({ draft });
+    }
+
+    const promptText = `You are drafting a short message for a mentor to send to their student. Write exactly 2 sentences: (1) state the consistency fact — days logged and average hours per day; (2) state one factual data point — either the stress level or the latest mock result if available. End the draft with a blank line and: "[Add your observation here:]". Use first person ("You logged…", "Your latest…"). Under 60 words before the placeholder. Facts only — no advice, no interpretation, no recommendations.\n\nData:\n${factsContext}`;
+
+    const aiDraft = await callGemini({
+      parts: [{ text: promptText }],
+      system: GOVERNING_RULE,
+      maxTokens: 200,
+      temperature: 0.3,
     });
 
-    const draft = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
+    const draft = aiDraft
+      ? stripNames(aiDraft, [student.full_name])
+      : ruleDraft(student.current_streak ?? 0, daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
 
     return NextResponse.json({ draft });
   } catch (error) {
     console.error('feedback-draft error:', error);
     return NextResponse.json({ error: 'Failed to generate draft', draft: '' }, { status: 500 });
   }
+}
+
+function ruleDraft(streak: number, daysLogged: number, avgHours: string, overallPct: number | null): string {
+  const line1 = `You logged ${daysLogged}/7 days this week, averaging ${avgHours} hrs/day (${streak}-day streak).`;
+  const line2 = overallPct !== null
+    ? `Your latest mock came in at ${overallPct}%ile overall.`
+    : `No mock result logged this week.`;
+  return `${line1} ${line2}\n\n[Add your observation here:]`;
 }

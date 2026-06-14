@@ -9,6 +9,7 @@ import { FeedbackList } from './feedback-form';
 import { BuddyStudentViewClient } from './buddy-student-view-client';
 import { VideoSessionPromptClient } from './video-session-prompt-client';
 import { OrientationCompleteButton } from './orientation-complete-button';
+import { BriefingPanel } from './briefing-panel';
 import type { DailyReport, BuddyFeedback } from '@/types';
 import { ArrowLeft, AlertCircle, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -131,7 +132,7 @@ export default async function BuddyStudentDetailPage({
     .single();
   if (!student || student.buddy_id !== user.id) notFound();
 
-  const [{ data: reportsRaw }, { data: feedbackRaw }, { data: debriefsRaw }] = await Promise.all([
+  const [{ data: reportsRaw }, { data: feedbackRaw }, { data: debriefsRaw }, { data: existingBriefing }] = await Promise.all([
     admin
       .from('daily_reports')
       .select('*')
@@ -150,6 +151,12 @@ export default async function BuddyStudentDetailPage({
       .eq('student_id', id)
       .order('taken_on', { ascending: false })
       .limit(5),
+    admin
+      .from('buddy_briefings')
+      .select('summary_text, source, generated_at')
+      .eq('student_id', id)
+      .eq('buddy_id', user.id)
+      .maybeSingle(),
   ]);
 
   const reports = (reportsRaw ?? []) as DailyReport[];
@@ -249,6 +256,12 @@ export default async function BuddyStudentDetailPage({
           <PeriodTab key={p} href={`${baseUrl}?period=${p}`} label={`${p} days`} active={period === p} />
         ))}
       </div>
+
+      {/* AI facts-only briefing — buddy-only, never shown to student */}
+      <BriefingPanel
+        studentId={id}
+        initial={existingBriefing as { summary_text: string; source: 'ai' | 'fallback'; generated_at: string } | null}
+      />
 
       {/* Needs-attention flags — the most important thing */}
       {needsAttentionFlags.length > 0 && (

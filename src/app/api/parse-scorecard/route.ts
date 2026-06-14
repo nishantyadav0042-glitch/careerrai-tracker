@@ -1,57 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Anthropic } from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
-
-const anthropic = new Anthropic();
-
-// Structured-output schema: every field nullable so missing values on the
-// scorecard come back as null instead of hallucinated numbers.
-const nullable = (type: 'integer' | 'number' | 'string') => ({
-  anyOf: [{ type }, { type: 'null' }],
-});
-
-const SECTION_SCHEMA = {
-  type: 'object',
-  properties: {
-    attempted: nullable('integer'),
-    correct: nullable('integer'),
-    time_min: nullable('integer'),
-    percentile: nullable('number'),
-  },
-  required: ['attempted', 'correct', 'time_min', 'percentile'],
-  additionalProperties: false,
-};
-
-const SCORECARD_SCHEMA = {
-  type: 'object',
-  properties: {
-    is_scorecard: {
-      type: 'boolean',
-      description: 'true only if the image is actually a mock test scorecard/result page',
-    },
-    mock_name: {
-      ...nullable('string'),
-      description: 'Test series + mock name if visible, e.g. "SIMCAT 5"',
-    },
-    overall_percentile: nullable('number'),
-    overall_score: nullable('number'),
-    varc: SECTION_SCHEMA,
-    dilr: SECTION_SCHEMA,
-    qa: SECTION_SCHEMA,
-  },
-  required: ['is_scorecard', 'mock_name', 'overall_percentile', 'overall_score', 'varc', 'dilr', 'qa'],
-  additionalProperties: false,
-};
+import { callGemini, extractJson, geminiEnabled } from '@/lib/gemini';
+import type { GeminiPart } from '@/lib/gemini';
 
 const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 type AllowedMediaType = (typeof ALLOWED_MEDIA_TYPES)[number];
 
+interface SectionResult {
+  attempted: number | null;
+  correct: number | null;
+  time_min: number | null;
+  percentile: number | null;
+}
+
+interface ScorecardResult {
+  is_scorecard: boolean;
+  mock_name: string | null;
+  overall_percentile: number | null;
+  overall_score: number | null;
+  varc: SectionResult;
+  dilr: SectionResult;
+  qa: SectionResult;
+}
+
+const EXTRACT_PROMPT = `This is a screenshot of a CAT mock test scorecard. Extract the data and return ONLY a JSON object with this exact structure (no markdown, no explanation):
+{
+  "is_scorecard": true,
+  "mock_name": "SIMCAT 5",
+  "overall_percentile": 85.5,
+  "overall_score": 142,
+  "varc": { "attempted": 24, "correct": 18, "time_min": 40, "percentile": 82.0 },
+  "dilr": { "attempted": 20, "correct": 14, "time_min": 45, "percentile": 78.0 },
+  "qa": { "attempted": 22, "correct": 16, "time_min": 35, "percentile": 88.0 }
+}
+
+Rules:
+- CAT sections are VARC, DILR, and QA. Map whatever section names appear to these three.
+- "attempted" = questions attempted, "correct" = correct answers, "time_min" = time in minutes, "percentile" = sectional percentile.
+- Use null for any value not visible on the scorecard. Never guess or compute values.
+- If this is NOT a test scorecard, set is_scorecard to false and every other value to null.
+- Return the raw JSON only — no surrounding text.`;
+
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('parse-scorecard: ANTHROPIC_API_KEY is not set in this environment');
+    if (!geminiEnabled()) {
+      console.error('parse-scorecard: GEMINI_API_KEY is not set');
       return NextResponse.json(
-        { error: 'AI is not configured on the server — add ANTHROPIC_API_KEY in Vercel project settings' },
+        { error: 'AI is not configured on the server — add GEMINI_API_KEY in Vercel project settings' },
         { status: 503 }
       );
     }
@@ -71,49 +66,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image too large — try a tighter screenshot' }, { status: 413 });
     }
 
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
-      max_tokens: 2048,
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: SCORECARD_SCHEMA,
-        },
-      },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType as AllowedMediaType, data: image },
-            },
-            {
-              type: 'text',
-              text: `This is a screenshot of a CAT mock test scorecard (could be from SIMCAT, AIMCAT, CL, iQuanta, or any test series). Extract the scores.
+    const parts: GeminiPart[] = [
+      { inlineData: { mimeType: mediaType, data: image } },
+      { text: EXTRACT_PROMPT },
+    ];
 
-Notes:
-- CAT sections are VARC (Verbal Ability & Reading Comprehension), DILR (Data Interpretation & Logical Reasoning), and QA (Quantitative Ability/Aptitude). Map whatever section names appear to these three.
-- "attempted" = questions attempted, "correct" = correct answers, "time_min" = time spent in minutes, "percentile" = sectional percentile.
-- Use null for anything not visible on the scorecard. Never guess or compute values that aren't shown.
-- If the image is not a test scorecard at all, set is_scorecard to false and everything else to null.`,
-            },
-          ],
-        },
-      ],
-    });
+    const raw = await callGemini({ parts, json: true, maxTokens: 512, temperature: 0.1 });
+    const parsed = extractJson<ScorecardResult>(raw);
 
-    if (response.stop_reason === 'refusal') {
-      return NextResponse.json({ error: 'Could not read this image' }, { status: 422 });
-    }
-
-    const textBlock = response.content.find((b) => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
-      return NextResponse.json({ error: 'No data extracted' }, { status: 422 });
-    }
-
-    const parsed = JSON.parse(textBlock.text);
-    if (!parsed.is_scorecard) {
+    if (!parsed || !parsed.is_scorecard) {
       return NextResponse.json(
         { error: "That doesn't look like a mock scorecard — try a screenshot of your result page" },
         { status: 422 }

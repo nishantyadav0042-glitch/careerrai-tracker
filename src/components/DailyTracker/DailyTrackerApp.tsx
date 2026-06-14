@@ -88,6 +88,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
   const [currentLogDate, setCurrentLogDate] = useState('');
   const [lastNudge, setLastNudge] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(!!recovery);
+  const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // A mock logged in the last 48h with no debrief = the loud #1 card.
@@ -160,6 +161,8 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
       body: JSON.stringify({ ...data, log_date: currentLogDate }),
     });
     if (!response.ok) throw new Error('Failed to save debrief');
+    const json = (await response.json()) as { insight?: string | null };
+    if (json.insight) setDebriefInsight(json.insight);
     queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
   };
 
@@ -205,6 +208,23 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
             setIsDebriefOpen(true);
           }}
         />
+      )}
+
+      {/* Post-debrief insight — one factual sentence, auto-dismisses */}
+      {debriefInsight && (
+        <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3">
+          <span className="text-xs font-bold text-teal-700 shrink-0 mt-0.5">📊</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-teal-900">{debriefInsight}</p>
+          </div>
+          <button
+            onClick={() => setDebriefInsight(null)}
+            className="text-teal-500 hover:text-teal-700 text-xs shrink-0"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* 1. Hero — Streak + Log */}
