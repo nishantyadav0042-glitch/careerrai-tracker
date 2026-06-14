@@ -105,35 +105,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       onComplete();
       return;
     }
-
     try {
-      console.log('Completing onboarding for user:', userId);
-
-      // Try to update database
-      const { error } = await supabase
-        .from('profiles')
-        .update({ onboarding_completed: true })
-        .eq('id', userId);
-
-      if (error) {
-        console.warn('DB update failed:', error);
-      } else {
-        console.log('DB update successful');
-      }
-
-      // Set localStorage emergency bypass
-      localStorage.setItem(`onboarding_skip_${userId}`, 'true');
-      console.log('Set localStorage bypass for user:', userId);
-
-      // Wait for update to propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', userId);
+      await new Promise(resolve => setTimeout(resolve, 500));
       onComplete();
-    } catch (err) {
-      console.error('Error completing onboarding:', err);
-      // Set localStorage bypass even if DB failed
-      if (userId) {
-        localStorage.setItem(`onboarding_skip_${userId}`, 'true');
-      }
+    } catch {
       onComplete();
     }
   };

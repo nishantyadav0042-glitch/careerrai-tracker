@@ -136,6 +136,7 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
         {feedback.voice_note_url ? (
           <VoiceNotePlayer
             audioUrl={feedback.voice_note_url}
+            feedbackId={feedback.id}
             buddyName={buddy.full_name}
             createdAt={feedback.created_at}
           />

@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === '/login' && user) {
     const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = '/student/home';
+    homeUrl.pathname = '/student/tracker';
     return NextResponse.redirect(homeUrl);
   }
 

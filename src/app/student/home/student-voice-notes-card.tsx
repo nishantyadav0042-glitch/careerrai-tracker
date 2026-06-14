@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Mic, Plus } from 'lucide-react';
+import { VoiceNotePlayer } from '@/components/voice-note-player';
 
 interface VoiceNote {
   id: string;
@@ -67,7 +68,12 @@ export function StudentVoiceNotesCard({ studentId, buddyId, onRecordNew }: Stude
             <span className="text-xs text-stone-500">{getTimeAgo(voiceNotes[0].created_at)}</span>
           </div>
           {voiceNotes[0].voice_note_url && (
-            <audio controls className="w-full h-5 rounded text-xs" src={voiceNotes[0].voice_note_url} />
+            <VoiceNotePlayer
+              feedbackId={voiceNotes[0].id}
+              audioUrl={voiceNotes[0].voice_note_url}
+              buddyName="You"
+              createdAt={voiceNotes[0].created_at}
+            />
           )}
         </div>
       )}
