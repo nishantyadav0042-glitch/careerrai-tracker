@@ -12,6 +12,7 @@ import type { NotifPrefs } from '@/types';
 import { DreamCollegesCard } from '@/components/dream-colleges-card';
 import { MembershipCard } from '@/components/membership-card';
 import { paymentsEnabled } from '@/lib/feature-flags';
+import { getActiveScholarship, scholarshipDisplay } from '@/lib/pricing';
 
 export default async function StudentProfilePage() {
   const supabase = await createClient();
@@ -61,6 +62,13 @@ export default async function StudentProfilePage() {
   const latestPercentile: number | null = latestTest?.percentile ?? null;
   const targetPercentile = 90;
   const progressPct = latestPercentile ? Math.min(100, Math.round((latestPercentile / targetPercentile) * 100)) : 0;
+
+  // Founder scholarship (if any) → adjusted per-plan prices for the membership card.
+  let scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null = null;
+  if (paymentsEnabled()) {
+    const active = await getActiveScholarship(user.id);
+    if (active) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(active) };
+  }
 
   const initials = profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   const buddyInitials = buddy ? buddy.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '';
@@ -119,10 +127,11 @@ export default async function StudentProfilePage() {
 
       {paymentsEnabled() && (
         <MembershipCard
-          status={(profile.subscription_status as 'free_beta' | 'active' | 'expired' | 'refund_requested') ?? 'free_beta'}
+          status={(profile.subscription_status as 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested') ?? 'free_beta'}
           plan={(profile.subscription_plan as string | null) ?? null}
           renewsAt={(profile.subscription_renews_at as string | null) ?? null}
           fullName={profile.full_name}
+          scholarship={scholarship}
         />
       )}
 

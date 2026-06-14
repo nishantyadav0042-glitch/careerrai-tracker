@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
 import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
+import { getLogDateString } from '@/lib/streak-utils';
 
 export const metadata = {
   title: 'CareerRai',
@@ -95,6 +96,20 @@ export default async function DailyTrackerPage() {
     if (!existingDebrief) serverPendingDebrief = recentMock;
   }
 
+  // Miss-recovery: has this student lapsed (2+ days since last log, with a prior
+  // streak) and not yet logged today? If so, surface the compassionate restart.
+  let recovery: { missedDays: number; previousStreak: number } | null = null;
+  const { data: streak } = await admin
+    .from('streak_data')
+    .select('current_streak, last_log_date')
+    .eq('student_id', user.id)
+    .maybeSingle();
+  if (streak?.last_log_date && (streak.current_streak ?? 0) > 0) {
+    const todayStr = getLogDateString();
+    const gap = Math.round((Date.parse(todayStr) - Date.parse(streak.last_log_date)) / 86_400_000);
+    if (gap >= 2) recovery = { missedDays: gap - 1, previousStreak: streak.current_streak as number };
+  }
+
   const daysToCat = Math.max(
     0,
     Math.ceil((CAT_EXAM_DATE.getTime() - Date.now()) / 86_400_000)
@@ -174,6 +189,7 @@ export default async function DailyTrackerPage() {
           buddyId={buddyId}
           buddyName={buddyName}
           initialPendingDebrief={serverPendingDebrief}
+          recovery={recovery}
         />
 
         {/* Day one: the debrief promise — sell it before it exists */}

@@ -7,6 +7,7 @@ import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
 import { MockDebriefModal, type MockDebriefData } from './MockDebriefModal';
 import { PendingDebriefCard } from './PendingDebriefCard';
+import { MissRecoveryModal } from './MissRecoveryModal';
 import { FeedbackAnimation } from './FeedbackAnimation';
 import { DailyPuzzleCard, type GameType } from './DailyPuzzleCard';
 import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
@@ -77,14 +78,16 @@ interface DailyTrackerAppProps {
   buddyId?: string | null;
   buddyName?: string | null;
   initialPendingDebrief?: { report_date: string; updated_at: string } | null;
+  recovery?: { missedDays: number; previousStreak: number } | null;
 }
 
-export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null }: DailyTrackerAppProps) {
+export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null, recovery = null }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
   const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
   const [currentLogDate, setCurrentLogDate] = useState('');
   const [lastNudge, setLastNudge] = useState<string | null>(null);
+  const [showRecovery, setShowRecovery] = useState(!!recovery);
   const queryClient = useQueryClient();
 
   // A mock logged in the last 48h with no debrief = the loud #1 card.
@@ -182,6 +185,16 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
 
   return (
     <div className="space-y-5">
+      {/* Miss-recovery — the compassionate restart for a returning student. */}
+      {recovery && showRecovery && !hasLoggedToday && (
+        <MissRecoveryModal
+          missedDays={recovery.missedDays}
+          previousStreak={recovery.previousStreak}
+          onRestart={() => { setShowRecovery(false); setIsLogOpen(true); }}
+          onDismiss={() => setShowRecovery(false)}
+        />
+      )}
+
       {/* 0. Pending mock debrief — the loud #1 card until it's done */}
       {pendingDebrief && !isDebriefOpen && (
         <PendingDebriefCard

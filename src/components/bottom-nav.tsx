@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, IndianRupee, X } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, Mic, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, IndianRupee, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -10,6 +10,8 @@ interface NavItem {
   href: string;
   icon: LucideIcon;
   label: string;
+  /** When > 0, shows a small badge on this nav item. */
+  badge?: number;
 }
 
 function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] }) {
@@ -70,7 +72,14 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                   isActive ? 'text-stone-900' : 'text-stone-400'
                 )}
               >
-                <Icon className={cn('w-5 h-5 transition-all', isActive && 'scale-110')} />
+                <div className="relative">
+                  <Icon className={cn('w-5 h-5 transition-all', isActive && 'scale-110')} />
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                      {item.badge > 9 ? '9+' : item.badge}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] font-semibold uppercase tracking-wider">{item.label}</span>
               </Link>
             );
@@ -97,7 +106,8 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
   { href: '/student/analysis', icon: TrendingUp, label: 'Analysis' },
-  { href: '/student/buddy', icon: MessageCircle, label: 'Buddy' },
+  { href: '/student/buddy', icon: Mic, label: 'Buddy' },
+  { href: '/student/chat', icon: MessageCircle, label: 'Chat' },
 ];
 
 const STUDENT_MORE: NavItem[] = [
@@ -109,6 +119,7 @@ const STUDENT_MORE: NavItem[] = [
 
 const BUDDY_MAIN: NavItem[] = [
   { href: '/buddy/students', icon: Users, label: 'Students' },
+  { href: '/buddy/chat', icon: MessageCircle, label: 'Chat' },
   { href: '/buddy/trends', icon: TrendingUp, label: 'Trends' },
   { href: '/buddy/earnings', icon: IndianRupee, label: 'Earnings' },
 ];
@@ -118,10 +129,16 @@ const BUDDY_MORE: NavItem[] = [
   { href: '/buddy/settings', icon: Settings, label: 'Settings' },
 ];
 
-export function StudentBottomNav() {
-  return <NavBar items={STUDENT_MAIN} moreItems={STUDENT_MORE} />;
+/** Apply an unread badge to the Chat nav item. */
+function withChatBadge(items: NavItem[], unread: number): NavItem[] {
+  if (!unread) return items;
+  return items.map((it) => (it.label === 'Chat' ? { ...it, badge: unread } : it));
 }
 
-export function BuddyBottomNav() {
-  return <NavBar items={BUDDY_MAIN} moreItems={BUDDY_MORE} />;
+export function StudentBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
+  return <NavBar items={withChatBadge(STUDENT_MAIN, chatUnread)} moreItems={STUDENT_MORE} />;
+}
+
+export function BuddyBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
+  return <NavBar items={withChatBadge(BUDDY_MAIN, chatUnread)} moreItems={BUDDY_MORE} />;
 }
