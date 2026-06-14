@@ -5,6 +5,32 @@
 
 import { createClient } from '@/lib/supabase/client';
 
+// ── Single source of truth for the 3 AM study-day boundary ─────────────────
+// A session running past midnight belongs to the previous calendar day
+// until 3:00:00 AM IST.  Unit-test edge cases:
+//   02:59 IST → previous day   |   03:00 IST → current day
+export function getLogDateString(now: Date = new Date()): string {
+  const today3am = new Date(now);
+  today3am.setHours(3, 0, 0, 0);
+  const logDate = now < today3am ? new Date(today3am.getTime() - 86_400_000) : today3am;
+  return logDate.toISOString().split('T')[0];
+}
+
+// ── Shared constants (import from here — never hardcode elsewhere) ───────────
+export const MS_PER_DAY = 86_400_000;
+export const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29 2026
+
+export const VALID_SECTIONS = ['VARC', 'DILR', 'QA', 'Mock', 'Revision'] as const;
+export const VALID_ENERGY = ['🙏', '💪', '🔥'] as const;
+export const VALID_EMOTIONAL_CHIPS = [
+  'mock_scared', 'burned_out', 'comparing',
+  'family_pressure', 'lost_confidence', 'feeling_behind', 'all_good',
+] as const;
+
+export type ValidSection = (typeof VALID_SECTIONS)[number];
+export type ValidEnergy = (typeof VALID_ENERGY)[number];
+export type ValidEmotionalChip = (typeof VALID_EMOTIONAL_CHIPS)[number];
+
 export interface StreakData {
   current_streak: number;
   longest_streak: number;

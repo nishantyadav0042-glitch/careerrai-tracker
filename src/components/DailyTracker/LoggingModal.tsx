@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EmotionalChips } from './EmotionalChips';
 
 interface LoggingModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export interface LoggingData {
   sections: string[];
   energy: string;
   notes?: string;
+  emotional_chips?: string[];
 }
 
 const HOURS_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
@@ -35,6 +37,7 @@ export function LoggingModal({
   const [hours, setHours] = useState<number | null>(null);
   const [sections, setSections] = useState<string[]>([]);
   const [energy, setEnergy] = useState<string | null>(null);
+  const [emotionalChips, setEmotionalChips] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +53,8 @@ export function LoggingModal({
 
   const handleSubmit = async () => {
     if (!isValid) return;
+    // Haptic confirmation on submit — feels native on mobile
+    navigator.vibrate?.(50);
     try {
       setError(null);
       const result = await onSubmit({
@@ -57,11 +62,13 @@ export function LoggingModal({
         sections,
         energy,
         notes: notes.trim() || undefined,
+        emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
       });
       // Reset form
       setHours(null);
       setSections([]);
       setEnergy(null);
+      setEmotionalChips([]);
       setNotes('');
       if (!result.mockSelected) onClose();
     } catch (err) {
@@ -178,6 +185,9 @@ export function LoggingModal({
               ))}
             </div>
           </div>
+
+          {/* Emotional chips */}
+          <EmotionalChips selected={emotionalChips} onChange={setEmotionalChips} />
 
           {/* Notes */}
           <div>

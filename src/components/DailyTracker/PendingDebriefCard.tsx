@@ -14,6 +14,7 @@ interface PendingDebriefCardProps {
  * everything else on the home screen until the debrief is done.
  */
 export function PendingDebriefCard({ loggedAt, hasBuddy, onStart }: PendingDebriefCardProps) {
+  // eslint-disable-next-line react-hooks/purity
   const hoursLeft = Math.round(24 - (Date.now() - new Date(loggedAt).getTime()) / 3_600_000);
 
   return (
@@ -29,7 +30,7 @@ export function PendingDebriefCard({ loggedAt, hasBuddy, onStart }: PendingDebri
         Debrief your mock{hasBuddy ? ' — your buddy has been notified' : ''}
       </p>
       <p className="text-xs text-stone-400 leading-relaxed">
-        The 20 minutes after a mock are worth more than the 3 hours in it.
+        Takes 3 minutes · scorecard photo optional · your buddy sees it immediately.
       </p>
       <div className="flex items-center justify-between pt-1">
         <span className="text-[11px] font-semibold text-amber-400">

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Volume2, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { VoiceNotePlayer } from '@/components/voice-note-player';
 import type { BuddyFeedback } from '@/types';
 
 interface StudentAudioResponse extends BuddyFeedback {
@@ -109,12 +110,12 @@ export function BuddyAudioResponsesCompact({
             {/* Expanded Content */}
             {expandedId === response.id && (
               <div className="px-2 sm:px-3 py-1.5 sm:py-2 border-t border-blue-200 bg-white space-y-1.5 sm:space-y-2">
-                {/* Audio Player - Compact */}
+                {/* Audio Player */}
                 {response.voice_note_url && (
-                  <audio
-                    controls
-                    className="w-full h-6 rounded text-xs"
-                    src={response.voice_note_url}
+                  <VoiceNotePlayer
+                    feedbackId={response.id}
+                    buddyName={response.student_name || 'Student'}
+                    createdAt={response.created_at}
                   />
                 )}
 

@@ -5,9 +5,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 const anthropic = new Anthropic();
 
-// Cache: student_id+week_start -> insight
-const weeklyCache = new Map<string, { insight: string; generatedAt: string }>();
-
 export async function POST(request: NextRequest) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -37,15 +34,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not your student' }, { status: 403 });
     }
 
-    // Cache key: student + week start
+    // Cache key: student + ISO week-start (Sunday)
     const now = new Date();
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay()); // Sunday
-    const cacheKey = `${studentId}-${weekStart.toISOString().split('T')[0]}`;
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const weekStartISO = weekStart.toISOString();
+    const weekKey = weekStart.toISOString().split('T')[0];
 
-    const cached = weeklyCache.get(cacheKey);
-    if (cached) {
-      return NextResponse.json({ insight: cached.insight, cached: true });
+    // Check DB cache first — survives cold starts across all serverless instances.
+    // Use limit(1) instead of maybeSingle() so concurrent inserts producing duplicate rows never break the cache.
+    const { data: cachedRows } = await admin
+      .from('analytics_events')
+      .select('metadata')
+      .eq('student_id', studentId)
+      .eq('event_type', 'weekly_signal_cache')
+      .gte('created_at', weekStartISO)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const cachedMeta = cachedRows?.[0]?.metadata;
+    // Verify buddy_id matches — prevents stale insights surviving student reassignment.
+    if (
+      cachedMeta &&
+      typeof cachedMeta === 'object' &&
+      'insight' in cachedMeta &&
+      (cachedMeta as { buddy_id?: string }).buddy_id === user.id
+    ) {
+      return NextResponse.json({ insight: (cachedMeta as { insight: string }).insight, cached: true });
     }
 
     // Fetch last 7 days of logs
@@ -91,7 +107,13 @@ export async function POST(request: NextRequest) {
     });
 
     const insight = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
-    weeklyCache.set(cacheKey, { insight, generatedAt: now.toISOString() });
+
+    // Persist to DB so all serverless instances share the same cached insight for the week.
+    admin.from('analytics_events').insert({
+      student_id: studentId,
+      event_type: 'weekly_signal_cache',
+      metadata: { insight, week: weekKey, buddy_id: user.id },
+    }).then(({ error: e }) => { if (e) console.error('weekly-signal cache save failed:', e.message); });
 
     return NextResponse.json({
       insight,

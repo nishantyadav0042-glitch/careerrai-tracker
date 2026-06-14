@@ -84,6 +84,7 @@ export default async function BuddyProfilePage() {
           <div className="space-y-2">
             {upcomingSessions!.map((s) => {
               const startsAt = new Date(s.scheduled_at);
+              // eslint-disable-next-line react-hooks/purity
               const minsAway = Math.round((startsAt.getTime() - Date.now()) / 60_000);
               const joinable = minsAway <= 15 && !!s.google_meet_link;
               const studentName = (s.profiles as { full_name?: string } | null)?.full_name ?? 'Student';

@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, Play, Pause, Trash2, Send, X, Square } from 'lucide-react';
+import { Mic, Play, Pause, Trash2, Send, X, Square, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceNoteRecorderProps {
@@ -54,6 +54,8 @@ export function VoiceNoteRecorder({
   const [playTime, setPlayTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [nudge, setNudge] = useState<string | null>(null);
+  const [textMode, setTextMode] = useState(false);
+  const [textDraft, setTextDraft] = useState('');
 
   const blobRef = useRef<Blob | null>(null);
   const mimeRef = useRef('');
@@ -229,6 +231,31 @@ export function VoiceNoteRecorder({
     }
   };
 
+  const sendText = async () => {
+    if (!textDraft.trim()) return;
+    setPhase('sending');
+    setError(null);
+    try {
+      const res = await fetch('/api/voice-notes/send-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, feedbackText: textDraft, feedbackType }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Send failed — try again.');
+        setPhase('idle');
+        return;
+      }
+      setPhase('sent');
+      onSendComplete?.();
+      setTimeout(onClose, 1100);
+    } catch {
+      setError('No connection — try again.');
+      setPhase('idle');
+    }
+  };
+
   if (!isOpen) return null;
 
   const reviewProgress =
@@ -270,16 +297,61 @@ export function VoiceNoteRecorder({
               onTimeUpdate={(e) => setPlayTime(e.currentTarget.currentTime)}
             />
 
-            {micDenied && (
-              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
-                <strong>Allow microphone access</strong> — tap the lock icon in your
-                address bar, enable Microphone, then try again.
+            {micDenied && !textMode && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2">
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  <strong>Microphone blocked</strong> — enable it in your browser settings, or send a text message instead.
+                </p>
+                <button
+                  onClick={() => setTextMode(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 underline underline-offset-2"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Switch to text
+                </button>
               </div>
             )}
             {error && <p className="text-xs text-red-600">{error}</p>}
 
-            {/* ── Idle ── */}
-            {phase === 'idle' && (
+            {/* ── Text fallback (mic denied) ── */}
+            {textMode && phase !== 'sent' && (
+              <div className="space-y-2">
+                <textarea
+                  className="w-full rounded-xl border border-stone-200 p-3 text-sm text-stone-900 resize-none focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  rows={4}
+                  placeholder={`Write a message for ${studentName.split(' ')[0]}…`}
+                  value={textDraft}
+                  onChange={(e) => setTextDraft(e.target.value)}
+                  maxLength={2000}
+                  disabled={phase === 'sending'}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setTextMode(false); setTextDraft(''); }}
+                    disabled={phase === 'sending'}
+                    className="px-4 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition-colors disabled:opacity-50"
+                    style={{ minHeight: 44 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={sendText}
+                    disabled={phase === 'sending' || !textDraft.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl text-white font-semibold transition-transform active:scale-[0.98] disabled:opacity-60"
+                    style={{ backgroundColor: '#2A9D8F', minHeight: 44 }}
+                  >
+                    {phase === 'sending' ? (
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <><Send className="w-4 h-4" />Send</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Idle (mic mode) ── */}
+            {phase === 'idle' && !textMode && (
               <button
                 onClick={startRecording}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-white font-semibold transition-transform active:scale-[0.98]"

@@ -111,14 +111,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: publicData } = admin.storage.from('voice-notes').getPublicUrl(path);
-
     const { data: row, error: insertError } = await admin
       .from('buddy_feedback')
       .insert({
         student_id: studentId,
         buddy_id: buddyId,
-        voice_note_url: publicData.publicUrl,
+        voice_note_url: path, // Store storage path; served via /api/voice-notes/signed-url
         feedback_type: feedbackType,
         feedback_date: new Date().toISOString().slice(0, 10),
         feedback_text: 'Voice message',

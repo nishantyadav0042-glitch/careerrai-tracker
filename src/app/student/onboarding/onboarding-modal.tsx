@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { X } from 'lucide-react';
+import ScreenDreamColleges from './screens/screen-dream-colleges';
+import ScreenHonesty from './screens/screen-honesty';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenBaselineTest from './screens/screen-baseline-test';
 import ScreenDailyCommitment from './screens/screen-daily-commitment';
@@ -21,6 +23,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [userId, setUserId] = useState<string | null>(null);
 
   const screens = [
+    { title: 'Your Dream Colleges', component: ScreenDreamColleges },
+    { title: 'Be Honest With Us', component: ScreenHonesty },
     { title: 'Meet Your Buddy', component: ScreenMeetBuddy },
     { title: 'Your Baseline Test', component: ScreenBaselineTest },
     { title: 'Daily Commitment', component: ScreenDailyCommitment },
@@ -38,10 +42,26 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   }, [supabase]);
 
   const [studyTargetHours, setStudyTargetHours] = useState<number>(2);
+  const [onboardingData, setOnboardingData] = useState<Record<string, unknown>>({});
 
   const handleNext = async (data?: Record<string, unknown>) => {
-    // Screen 2 (index 2) = Daily Commitment — save the target hours
-    if (currentScreen === 2 && data?.studyTargetHours) {
+    if (data) setOnboardingData((prev) => ({ ...prev, ...data }));
+
+    // Screen 0 = Dream Colleges; save immediately
+    if (currentScreen === 0 && data?.dream_colleges) {
+      supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '').then(() => {});
+    }
+    // Screen 1 = Honesty; save immediately
+    if (currentScreen === 1 && data) {
+      supabase.from('profiles').update({
+        is_repeater: data.is_repeater,
+        starting_percentile: data.starting_percentile ?? null,
+        hours_available: data.hours_available,
+        study_target_hours: data.hours_available,
+      }).eq('id', userId ?? '').then(() => {});
+    }
+    // Screen 4 (Daily Commitment) — save the target hours
+    if (currentScreen === 4 && data?.studyTargetHours) {
       setStudyTargetHours(data.studyTargetHours as number);
     }
 
@@ -85,36 +105,16 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       onComplete();
       return;
     }
-
     try {
-      console.log('Completing onboarding for user:', userId);
-
-      // Try to update database
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({ onboarding_completed: true })
         .eq('id', userId);
-
-      if (error) {
-        console.warn('DB update failed:', error);
-      } else {
-        console.log('DB update successful');
-      }
-
-      // Set localStorage emergency bypass
-      localStorage.setItem(`onboarding_skip_${userId}`, 'true');
-      console.log('Set localStorage bypass for user:', userId);
-
-      // Wait for update to propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (updateError) throw updateError;
+      await new Promise(resolve => setTimeout(resolve, 500));
       onComplete();
-    } catch (err) {
-      console.error('Error completing onboarding:', err);
-      // Set localStorage bypass even if DB failed
-      if (userId) {
-        localStorage.setItem(`onboarding_skip_${userId}`, 'true');
-      }
-      onComplete();
+    } catch {
+      setError('Could not save your progress. Please try again.');
     }
   };
 

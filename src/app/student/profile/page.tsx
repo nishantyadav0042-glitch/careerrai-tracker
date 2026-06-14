@@ -9,6 +9,9 @@ import { PushToggle } from '@/components/push-toggle';
 import { ShareProgressButton } from '@/components/share-progress-button';
 import { Check, GraduationCap, Clock } from 'lucide-react';
 import type { NotifPrefs } from '@/types';
+import { DreamCollegesCard } from '@/components/dream-colleges-card';
+import { MembershipCard } from '@/components/membership-card';
+import { paymentsEnabled } from '@/lib/feature-flags';
 
 export default async function StudentProfilePage() {
   const supabase = await createClient();
@@ -16,7 +19,7 @@ export default async function StudentProfilePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('full_name, email, exam_target, buddy_id, notif_prefs, created_at').eq('id', user.id).single();
+  const { data: profile } = await admin.from('profiles').select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at').eq('id', user.id).single();
   if (!profile) redirect('/login');
 
   // Buddy credentials + trust signals
@@ -111,6 +114,17 @@ export default async function StudentProfilePage() {
         )}
         <ShareProgressButton daysLogged={daysLogged ?? 0} bestStreak={bestStreak} percentile={latestPercentile} />
       </Card>
+
+      <DreamCollegesCard initial={(profile.dream_colleges as string[] | null) ?? []} />
+
+      {paymentsEnabled() && (
+        <MembershipCard
+          status={(profile.subscription_status as 'free_beta' | 'active' | 'expired' | 'refund_requested') ?? 'free_beta'}
+          plan={(profile.subscription_plan as string | null) ?? null}
+          renewsAt={(profile.subscription_renews_at as string | null) ?? null}
+          fullName={profile.full_name}
+        />
+      )}
 
       {/* Buddy Trust Signals */}
       <Card className="p-5">

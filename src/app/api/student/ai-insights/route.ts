@@ -20,6 +20,29 @@ export async function POST() {
 
     const admin = createAdminClient();
 
+    const { data: roleRow } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (roleRow?.role !== 'student') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // #9 rate limit: max 3 AI insight calls per student per UTC day
+    const todayUTC = new Date().toISOString().split('T')[0];
+    const { count: callsToday } = await admin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('student_id', user.id)
+      .eq('event_type', 'ai_insight_request')
+      .gte('created_at', `${todayUTC}T00:00:00.000Z`);
+    if ((callsToday ?? 0) >= 3) {
+      return NextResponse.json({ error: 'Daily AI insight limit reached. Check back tomorrow.' }, { status: 429 });
+    }
+    admin.from('analytics_events').insert({ student_id: user.id, event_type: 'ai_insight_request', metadata: { date: todayUTC } })
+      .then(({ error: e }) => { if (e) console.error('ai-insights rate limit log failed:', e.message); });
+
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 

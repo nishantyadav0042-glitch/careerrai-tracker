@@ -69,7 +69,14 @@ export async function cleanupOldVoiceNotes(): Promise<CleanupResult> {
     if (oldRecords && oldRecords.length > 0) {
       const filePaths = oldRecords
         .filter((r) => r.voice_note_url)
-        .map((r) => r.voice_note_url!.split('/').pop()) // Extract filename
+        .map((r) => {
+          const urlOrPath = r.voice_note_url!;
+          // New rows store the storage path directly (studentId/timestamp.ext).
+          // Legacy rows stored a full public URL — strip the bucket prefix to get the path.
+          const marker = '/object/public/voice-notes/';
+          const idx = urlOrPath.indexOf(marker);
+          return idx >= 0 ? urlOrPath.slice(idx + marker.length) : urlOrPath;
+        })
         .filter(Boolean) as string[];
 
       if (filePaths.length > 0) {

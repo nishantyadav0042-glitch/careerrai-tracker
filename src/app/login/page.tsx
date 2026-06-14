@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { StudentPhoneLogin } from './student-phone-login';
 
 const DEMO_ACCOUNTS = [
   { label: 'Student (Aarav)', username: 'aarav', password: 'CareerRai2026!' },
@@ -17,6 +18,8 @@ function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  // Students sign in with phone + OTP; buddies/admins keep username + password.
+  const [mode, setMode] = useState<'student' | 'staff'>('student');
 
   const hasError = params.get('error') === '1';
 
@@ -55,6 +58,27 @@ function LoginForm() {
         </div>
 
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
+          {/* Mode toggle: students use phone OTP, staff use username/password */}
+          <div className="flex bg-stone-100 rounded-xl p-1 mb-5">
+            {([['student', 'Student'], ['staff', 'Buddy · Admin']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMode(value)}
+                className={cn(
+                  'flex-1 py-2 text-sm font-medium rounded-lg transition-all',
+                  mode === value ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'student' ? (
+            <StudentPhoneLogin />
+          ) : (
+          <>
           {/* Native form POST — browser handles cookies + redirect, no JS in the auth flow */}
           <form action="/api/auth/login" method="POST" className="space-y-4">
             <div>
@@ -124,6 +148,8 @@ function LoginForm() {
               All demo accounts use password: <span className="font-mono">CareerRai2026!</span>
             </p>
           </div>
+          </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-stone-500">

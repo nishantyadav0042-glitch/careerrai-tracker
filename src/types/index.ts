@@ -41,6 +41,8 @@ export interface DailyReport {
   nutrition_exercise: boolean;
   overall_energy: number;
   notes: string | null;
+  mood_emoji: string | null;
+  emotional_chips: string[];
   created_at: string;
   updated_at: string;
 }

@@ -1,17 +1,18 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Play, Pause, Mic, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceNotePlayerProps {
-  audioUrl: string;
+  /** Storage path or legacy public URL — unused when feedbackId is provided */
+  audioUrl?: string;
   buddyName: string;
   createdAt: string;
   className?: string;
   /** IIM college label, e.g. "Ahmedabad" */
   buddyCollege?: string | null;
-  /** buddy_feedback row id — enables read receipts + thanks */
+  /** buddy_feedback row id — used to fetch a signed URL and for read receipts + thanks */
   feedbackId?: string;
   /** Show the NEW badge until first play */
   isNew?: boolean;
@@ -32,7 +33,25 @@ export function VoiceNotePlayer({
   thanked = false,
   canThank = false,
 }: VoiceNotePlayerProps) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Fetch a fresh signed URL whenever the feedbackId changes.
+  useEffect(() => {
+    if (!feedbackId) return;
+    setUrlError(false);
+    fetch('/api/voice-notes/signed-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedbackId }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.url) setSignedUrl(d.url); else setUrlError(true); })
+      .catch(() => { setUrlError(true); });
+  }, [feedbackId]);
+
+  const srcUrl = feedbackId ? signedUrl : (audioUrl ?? null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState<1 | 1.5>(1);
@@ -55,7 +74,7 @@ export function VoiceNotePlayer({
 
   const togglePlay = () => {
     const el = audioRef.current;
-    if (!el) return;
+    if (!el || !srcUrl) return;
     if (isPlaying) {
       el.pause();
       setIsPlaying(false);
@@ -112,11 +131,30 @@ export function VoiceNotePlayer({
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  if (feedbackId && urlError) {
+    return (
+      <div className={cn('rounded-xl border border-stone-200 bg-white px-3 py-2.5 flex items-center gap-2 text-xs text-stone-400', className)}>
+        <Mic className="w-4 h-4 flex-shrink-0" />
+        <span>Audio unavailable</span>
+      </div>
+    );
+  }
+
+  if (feedbackId && !signedUrl) {
+    // Still fetching the signed URL — show a compact loading state.
+    return (
+      <div className={cn('rounded-xl border border-stone-200 bg-white px-3 py-2.5 flex items-center gap-2', className)}>
+        <div className="w-11 h-11 rounded-full bg-stone-200 animate-pulse flex-shrink-0" />
+        <div className="flex-1 h-2 bg-stone-200 rounded-full animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <div className={cn('rounded-xl border border-stone-200 bg-white px-3 py-2.5', className)}>
       <audio
         ref={audioRef}
-        src={audioUrl}
+        src={srcUrl ?? undefined}
         onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
         onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
         onEnded={() => {
