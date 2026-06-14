@@ -4,8 +4,10 @@
 
 CareerRai is a CAT (Common Admission Test) exam preparation tracking app for Indian MBA aspirants. Students log daily study hours, track mock test scores, and get mentored by IIM-alumni 'buddy' mentors. Admins manage the platform, allowlist students, and track payments and buddy payouts.
 
-## Tech Stack
-```
+## Configuration Files
+
+### package.json
+```json
 {
   "name": "careerrai-tracker",
   "version": "0.1.0",
@@ -59,8 +61,6 @@ CareerRai is a CAT (Common Admission Test) exam preparation tracking app for Ind
   "type": "module"
 }
 ```
-
-## Configuration
 
 ### next.config.ts
 ```ts
@@ -13807,7 +13807,7 @@ export function WeeklySignalCard({ studentId, studentName, onVoiceNote, onFeedba
 }
 ```
 
-## App Pages and Layouts (src/app/)
+## App Pages and Layouts
 
 ### src/app/admin/admin-allowlist.tsx
 ```tsx
@@ -27730,39 +27730,18 @@ export async function POST(request: NextRequest) {
 
 ## Instructions for ChatGPT
 
-You now have the complete source code of **CareerRai** — a CAT exam prep tracking app built for Indian MBA aspirants. Students log daily study hours, take mock tests, and get mentored by IIM-alumni "buddy" mentors. The stack is Next.js 16 App Router + Supabase PostgreSQL + TailwindCSS + Anthropic Claude AI.
+You now have the complete source code of CareerRai, a CAT exam prep tracking app built for Indian MBA aspirants. It connects students with IIM-alumni "buddy" mentors.
 
-**User roles:**
-- **Student** — CAT aspirant; logs daily study, tracks mocks, gets voice notes from buddy
-- **Buddy** — IIM alumni mentor; sends voice/text feedback, monitors student performance
-- **Admin** — Platform operator; manages allowlist, tracks payments, sets buddy payouts
+Please provide:
 
-**Key flows:**
-1. Students authenticate via phone OTP (MSG91 SMS, allowlist-gated)
-2. Buddies/Admins authenticate via username + password
-3. Students subscribe via Razorpay (flag-gated off for beta)
-4. Admin manually processes buddy payouts (tracked in buddy_payouts table)
-5. AI features: scorecard parsing, weekly buddy signal, student AI insights
+1. **Strengths** — What is well-built, architecturally sound, or production-ready?
 
-Please analyse and provide:
+2. **Weaknesses & Bugs** — What could break in production? Any security holes, race conditions, missing validations, or logic errors?
 
-### 1. Strengths
-What is well-built, architecturally sound, or production-ready?
+3. **UX/Product Issues** — What flows are confusing, incomplete, or missing for the target user (Indian college student prepping for CAT)?
 
-### 2. Weaknesses & Bugs
-What could break in production? Any security holes, race conditions, missing validations, logic errors, or edge cases not handled?
+4. **Performance Concerns** — Any N+1 queries, missing indexes, heavy client bundles, or slow page loads?
 
-### 3. UX / Product Issues
-What flows are confusing, incomplete, or missing for the target user (Indian college student prepping for CAT)?
+5. **Missing Features** — What features would a real student/buddy/admin expect that aren't here yet?
 
-### 4. Performance Concerns
-Any N+1 queries, missing indexes, heavy client bundles, unnecessary re-renders, or slow page loads?
-
-### 5. Missing Features
-What would a real student, buddy, or admin expect that isn't here yet?
-
-### 6. Security Review
-Check RLS policies, auth flows, webhook signature verification, rate limiting, and any injection risks.
-
-### 7. Priority Improvements
-Give a ranked list of the top 10 things to fix or build next, with one-line reasoning for each.
+6. **Priority Improvements** — Give a ranked list of the top 10 things to fix or build next, with reasoning.
