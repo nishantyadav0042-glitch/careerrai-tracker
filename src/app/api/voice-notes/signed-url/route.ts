@@ -36,6 +36,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (rowError) {
+      // PGRST116 = no row matched the feedbackId → 404, not 500.
+      if (rowError.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
       console.error('signed-url db error:', rowError.message);
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

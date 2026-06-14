@@ -33,11 +33,12 @@ export function BuddySignalCard({ userId }: BuddySignalCardProps) {
   useEffect(() => {
     async function loadBuddySignal() {
       try {
-        // Get latest feedback
+        // Get latest feedback from buddy_feedback (the table where voice notes are stored via /api/voice-notes/send)
         const { data: feedbackData } = await supabase
-          .from('feedback')
+          .from('buddy_feedback')
           .select('*')
           .eq('student_id', userId)
+          .not('feedback_type', 'eq', 'student_response')
           .order('created_at', { ascending: false })
           .limit(1)
           .single();

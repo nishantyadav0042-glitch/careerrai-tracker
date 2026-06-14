@@ -219,7 +219,7 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
                       feedbackId={f.id}
                       audioUrl={f.voice_note_url}
                       buddyName="You"
-                      createdAt={f.feedback_date}
+                      createdAt={f.created_at}
                     />
                   </div>
                 )}

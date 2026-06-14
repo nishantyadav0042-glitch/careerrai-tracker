@@ -22,14 +22,15 @@ export function useOnboarding() {
           .single();
 
         if (error) {
-          // Profile row missing → treat as incomplete so onboarding runs.
-          setNeedsOnboarding(true);
+          // PGRST116 = no row found → genuinely new/incomplete profile → show onboarding.
+          // Any other error is transient (network, RLS, cold-start) → don't interrupt a completed user.
+          setNeedsOnboarding(error.code === 'PGRST116');
         } else {
           setNeedsOnboarding(profile?.onboarding_completed !== true);
         }
       } catch {
-        // Show onboarding on unexpected errors so incomplete profiles get a chance to complete setup.
-        setNeedsOnboarding(true);
+        // Unexpected JS exception (network down, etc.) — assume completed to avoid overwriting profile data.
+        setNeedsOnboarding(false);
       } finally {
         setIsLoading(false);
       }
