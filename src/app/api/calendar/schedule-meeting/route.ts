@@ -10,12 +10,15 @@ import {
 } from '@/lib/google-calendar';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
+const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
+type SessionType = typeof ALLOWED_SESSION_TYPES[number];
 
 interface ScheduleMeetingRequest {
   studentId: string;
   startTime: string; // ISO 8601
   durationMinutes: number;
   title?: string;
+  sessionType?: SessionType;
 }
 
 /**
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
     }
 
-    const { studentId, startTime, durationMinutes } = body;
+    const { studentId, startTime, durationMinutes, sessionType = 'guidance' } = body;
     if (!studentId || !startTime || !durationMinutes) {
       return NextResponse.json(
         { error: 'studentId, startTime and durationMinutes are required.' },
@@ -67,6 +70,9 @@ export async function POST(request: NextRequest) {
         { error: 'Duration must be 20, 30, 45 or 60 minutes.' },
         { status: 400 }
       );
+    }
+    if (!ALLOWED_SESSION_TYPES.includes(sessionType)) {
+      return NextResponse.json({ error: 'Invalid session type.' }, { status: 400 });
     }
 
     const start = new Date(startTime);
@@ -84,7 +90,7 @@ export async function POST(request: NextRequest) {
     // ── Student must belong to this buddy ────────────────────────
     const { data: student } = await admin
       .from('profiles')
-      .select('full_name, email, buddy_id')
+      .select('full_name, email, buddy_id, free_onboarding_used')
       .eq('id', studentId)
       .single();
     if (!student) {
@@ -94,6 +100,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'This student is not assigned to you.' },
         { status: 403 }
+      );
+    }
+    // Guard: only one free orientation per student.
+    if (sessionType === 'onboarding' && student.free_onboarding_used) {
+      return NextResponse.json(
+        { error: 'This student has already completed their free orientation.' },
+        { status: 409 }
       );
     }
 
@@ -115,8 +128,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Build event ──────────────────────────────────────────────
-    const title = body.title?.trim()
-      || `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`;
+    const isOrientation = sessionType === 'onboarding';
+    const title = body.title?.trim() || (
+      isOrientation
+        ? `Free Orientation — CareerRai with ${buddy.full_name.split(' ')[0]}`
+        : `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`
+    );
 
     // Student's Google-connected email wins; profiles.email is the fallback.
     // Missing email never blocks the meeting — the in-app widget covers it.
@@ -133,7 +150,18 @@ export async function POST(request: NextRequest) {
       attendees.push({ email: studentEmail, displayName: student.full_name });
     }
 
-    const description = [
+    const description = isOrientation ? [
+      `Free Orientation Session — CareerRai`,
+      ``,
+      `Mentor: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
+      `Student: ${student.full_name}`,
+      ``,
+      `This is a FREE orientation session (not a guidance/strategy session).`,
+      `Agenda: how CareerRai works, how the daily log and mock debrief catch preparation gaps,`,
+      `how the trajectory wall predicts target percentile, and what your buddy will do each week.`,
+      ``,
+      `${process.env.NEXT_PUBLIC_APP_URL}`,
+    ].join('\n') : [
       `1:1 prep session on CareerRai`,
       ``,
       `Mentor: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
@@ -243,7 +271,7 @@ export async function POST(request: NextRequest) {
         scheduled_at: start.toISOString(),
         duration_minutes: durationMinutes,
         session_status: 'scheduled',
-        session_type: 'session',
+        session_type: isOrientation ? 'onboarding' : 'guidance',
         google_event_id: event.id,
         google_meet_link: meetLink,
         student_google_event_id: studentEventId,
@@ -278,9 +306,13 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: studentId,
         type: 'session_scheduled',
-        title: `📅 Session with ${buddy.full_name.split(' ')[0]}`,
-        body: `${istTime} IST — your buddy booked a 1:1. Join from your dashboard.`,
-        data: { sessionId: session.id, meetLink },
+        title: isOrientation
+          ? `🎯 Free Orientation with ${buddy.full_name.split(' ')[0]}`
+          : `📅 Session with ${buddy.full_name.split(' ')[0]}`,
+        body: isOrientation
+          ? `${istTime} IST — your free orientation is booked. You'll see exactly how CareerRai works.`
+          : `${istTime} IST — your buddy booked a 1:1. Join from your dashboard.`,
+        data: { sessionId: session.id, meetLink, sessionType: isOrientation ? 'onboarding' : 'guidance' },
       })
       .then(({ error: e }) => {
         if (e) console.error('Notification insert failed:', e.message);

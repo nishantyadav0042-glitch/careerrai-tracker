@@ -266,7 +266,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
         <ScheduleSessionModal
           isOpen={!!scheduleFor}
           onClose={() => setScheduleFor(null)}
-          students={[{ id: scheduleFor.student_id, full_name: scheduleFor.student_name }]}
+          students={[{ id: scheduleFor.student_id, full_name: scheduleFor.student_name, free_onboarding_used: scheduleFor.free_onboarding_used }]}
           defaultStudentId={scheduleFor.student_id}
           calendarConnected={calendarConnected}
         />
