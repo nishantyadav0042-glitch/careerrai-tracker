@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Anthropic } from '@anthropic-ai/sdk';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 interface BuddyInsightRequest {
   score: number; // 0-100
@@ -36,6 +38,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 503 }
       );
     }
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (profile?.role !== 'student') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body: BuddyInsightRequest = await request.json();
 
     // Validate input
@@ -124,12 +141,25 @@ Based on this data, give your honest buddy advice.`;
 /**
  * Clear cache endpoint (admin only)
  */
-export async function DELETE(request: NextRequest): Promise<NextResponse> {
+export async function DELETE(_request: NextRequest): Promise<NextResponse> {
   try {
-    // In production, verify admin role from auth token
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (profile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     insightCache.clear();
     return NextResponse.json({ message: 'Cache cleared' });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Cache clear failed' }, { status: 500 });
   }
 }

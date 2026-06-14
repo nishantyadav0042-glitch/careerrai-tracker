@@ -20,6 +20,15 @@ export async function POST() {
 
     const admin = createAdminClient();
 
+    const { data: roleRow } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (roleRow?.role !== 'student') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
