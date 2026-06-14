@@ -197,7 +197,7 @@ export function MafiaLogicModal({ isOpen, onClose, content, caseDate, onComplete
                         </div>
                         <p className={cn('text-xs mt-0.5 leading-relaxed',
                           expandedStatement === i ? 'text-stone-700' : 'text-stone-500 truncate')}>
-                          "{stmt.says}"
+                          &quot;{stmt.says}&quot;
                         </p>
                       </div>
                     </button>

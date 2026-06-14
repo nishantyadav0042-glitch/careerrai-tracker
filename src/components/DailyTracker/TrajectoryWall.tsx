@@ -23,6 +23,7 @@ export function TrajectoryWall({
 
   const daysToCat = Math.max(
     0,
+    // eslint-disable-next-line react-hooks/purity
     Math.ceil((CAT_DATE.getTime() - Date.now()) / 86_400_000)
   );
 

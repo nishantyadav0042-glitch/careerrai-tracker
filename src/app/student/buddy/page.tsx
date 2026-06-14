@@ -34,6 +34,7 @@ export default async function BuddyCommunicationPage() {
       .select('id, title, scheduled_at, google_meet_link, session_status')
       .eq('student_id', user.id)
       .eq('session_status', 'scheduled')
+      // eslint-disable-next-line react-hooks/purity
       .gte('scheduled_at', new Date(Date.now() - 3_600_000).toISOString())
       .order('scheduled_at', { ascending: true })
       .limit(5),

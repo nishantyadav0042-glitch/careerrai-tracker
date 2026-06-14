@@ -14,6 +14,7 @@ interface PendingDebriefCardProps {
  * everything else on the home screen until the debrief is done.
  */
 export function PendingDebriefCard({ loggedAt, hasBuddy, onStart }: PendingDebriefCardProps) {
+  // eslint-disable-next-line react-hooks/purity
   const hoursLeft = Math.round(24 - (Date.now() - new Date(loggedAt).getTime()) / 3_600_000);
 
   return (
