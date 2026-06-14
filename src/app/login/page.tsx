@@ -18,7 +18,7 @@ function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  // Students sign in with phone + OTP; buddies/admins keep username + password.
+  // Students sign in with email + OTP; buddies/admins keep username + password.
   const [mode, setMode] = useState<'student' | 'staff'>('student');
 
   const hasError = params.get('error') === '1';

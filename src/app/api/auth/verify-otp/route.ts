@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeIndianPhone } from '@/lib/phone';
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone: rawPhone, token } = (await request.json()) as { phone?: string; token?: string };
-    const phone = normalizeIndianPhone(rawPhone);
-    if (!phone || !token || typeof token !== 'string') {
+    const { email: rawEmail, token } = (await request.json()) as { email?: string; token?: string };
+    const email = rawEmail?.trim().toLowerCase();
+    if (!email || !token || typeof token !== 'string') {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
@@ -28,7 +27,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data, error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error || !data.user) {
       return NextResponse.json({ error: 'That code is incorrect or expired.' }, { status: 401 });
     }
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { data: entry } = await admin
       .from('student_allowlist')
       .select('full_name, assigned_buddy_id')
-      .eq('phone', phone)
+      .eq('email', email)
       .maybeSingle();
 
     const { data: existing } = await admin
@@ -53,14 +52,14 @@ export async function POST(request: NextRequest) {
         id: data.user.id,
         role: 'student',
         full_name: entry?.full_name ?? 'Student',
-        phone,
+        email,
         buddy_id: entry?.assigned_buddy_id ?? null,
         subscription_status: 'free_beta',
       });
     } else {
       await admin
         .from('profiles')
-        .update({ phone, ...(entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}) })
+        .update({ email, ...(entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}) })
         .eq('id', data.user.id);
     }
 

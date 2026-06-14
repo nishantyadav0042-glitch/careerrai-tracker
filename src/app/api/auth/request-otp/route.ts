@@ -1,39 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeIndianPhone } from '@/lib/phone';
 
-// Never reveal whether a number is on the allowlist — same copy for "not added"
-// and "paused".
-const NOT_REGISTERED = "This number isn't registered yet. Your founder will add you after onboarding.";
+const NOT_REGISTERED = "This email isn't registered yet. Your founder will add you after onboarding.";
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone: rawPhone } = (await request.json()) as { phone?: string };
-    const phone = normalizeIndianPhone(rawPhone);
-    if (!phone) {
-      return NextResponse.json({ sent: false, message: 'Enter a valid 10-digit mobile number.' }, { status: 400 });
+    const { email: rawEmail } = (await request.json()) as { email?: string };
+    const email = rawEmail?.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ sent: false, message: 'Enter a valid email address.' }, { status: 400 });
     }
 
     const admin = createAdminClient();
 
-    // Gate: only active allowlist numbers can request a code.
+    // Gate: only active allowlist emails can request a code.
     const { data: entry } = await admin
       .from('student_allowlist')
       .select('status')
-      .eq('phone', phone)
+      .eq('email', email)
       .maybeSingle();
     if (!entry || entry.status !== 'active') {
       return NextResponse.json({ sent: false, message: NOT_REGISTERED }, { status: 200 });
     }
 
-    // Rate limit: max 3 sends / 30 min, 30s cooldown — protects MSG91 credits.
+    // Rate limit: max 3 sends / 30 min, 30s cooldown.
     const now = Date.now();
     const since = new Date(now - 30 * 60 * 1000).toISOString();
     const { data: recent } = await admin
       .from('otp_send_events')
       .select('sent_at')
-      .eq('phone', phone)
+      .eq('email', email)
       .gte('sent_at', since)
       .order('sent_at', { ascending: false });
     const sends = recent ?? [];
@@ -50,20 +47,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Supabase generates + sends the OTP natively; its Send-SMS hook routes the
-    // code to MSG91. No session is created here.
+    // Supabase sends the OTP via its built-in email provider — no external config needed.
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { cookies: { getAll: () => [], setAll: () => {} } }
     );
-    const { error } = await supabase.auth.signInWithOtp({ phone, options: { channel: 'sms' } });
+    const { error } = await supabase.auth.signInWithOtp({ email });
     if (error) {
       console.error('[request-otp] signInWithOtp error:', error.message);
       return NextResponse.json({ sent: false, message: "Couldn't send the code. Try again." }, { status: 502 });
     }
 
-    await admin.from('otp_send_events').insert({ phone });
+    await admin.from('otp_send_events').insert({ email });
     return NextResponse.json({ sent: true });
   } catch (e) {
     console.error('[request-otp] error', e);

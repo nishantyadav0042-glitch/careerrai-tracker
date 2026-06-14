@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, Phone, KeyRound } from 'lucide-react';
+import { ArrowRight, Mail, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Phase = 'phone' | 'otp';
+type Phase = 'email' | 'otp';
 
 export function StudentPhoneLogin() {
-  const [phase, setPhase] = useState<Phase>('phone');
-  const [phone, setPhone] = useState('');
+  const [phase, setPhase] = useState<Phase>('email');
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -21,12 +21,12 @@ export function StudentPhoneLogin() {
       const res = await fetch('/api/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (data.sent) {
         setPhase('otp');
-        setMessage('Code sent. Check your SMS.');
+        setMessage('Code sent. Check your email.');
       } else {
         setMessage(data.message ?? "Couldn't send the code. Try again.");
       }
@@ -45,7 +45,7 @@ export function StudentPhoneLogin() {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, token: otp }),
+        body: JSON.stringify({ email, token: otp }),
       });
       const data = await res.json();
       if (res.ok && data.dest) {
@@ -64,7 +64,7 @@ export function StudentPhoneLogin() {
     return (
       <form onSubmit={verifyOtp} className="space-y-4">
         <p className="text-sm text-stone-600">
-          Enter the 6-digit code sent to <span className="font-semibold text-stone-900">+91 {phone}</span>.
+          Enter the 6-digit code sent to <span className="font-semibold text-stone-900">{email}</span>.
         </p>
         <div>
           <label className="block text-sm font-medium text-stone-800 mb-1.5">Verification code</label>
@@ -95,10 +95,19 @@ export function StudentPhoneLogin() {
         </button>
 
         <div className="flex items-center justify-between text-xs">
-          <button type="button" onClick={() => { setPhase('phone'); setOtp(''); setMessage(null); }} className="text-stone-500 hover:text-stone-700">
-            ← Change number
+          <button
+            type="button"
+            onClick={() => { setPhase('email'); setOtp(''); setMessage(null); }}
+            className="text-stone-500 hover:text-stone-700"
+          >
+            ← Change email
           </button>
-          <button type="button" onClick={() => requestOtp()} disabled={loading} className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50">
+          <button
+            type="button"
+            onClick={() => requestOtp()}
+            disabled={loading}
+            className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
+          >
             Resend code
           </button>
         </div>
@@ -109,21 +118,18 @@ export function StudentPhoneLogin() {
   return (
     <form onSubmit={requestOtp} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
+        <label className="block text-sm font-medium text-stone-800 mb-1.5">Email address</label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-500 flex items-center gap-1">
-            <Phone className="w-4 h-4 text-stone-400" /> +91
-          </span>
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
           <input
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel-national"
-            maxLength={10}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-            placeholder="98765 43210"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
             required
-            className="w-full pl-[4.75rem] pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+            className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
           />
         </div>
       </div>
@@ -132,7 +138,7 @@ export function StudentPhoneLogin() {
 
       <button
         type="submit"
-        disabled={loading || phone.length < 10}
+        disabled={loading || !email.includes('@')}
         className={cn(
           'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-50',
           'bg-stone-900 text-white hover:bg-stone-800'
@@ -142,7 +148,7 @@ export function StudentPhoneLogin() {
       </button>
 
       <p className="text-[11px] text-stone-400 text-center">
-        We&apos;ll text you a one-time code. No password needed.
+        We&apos;ll email you a one-time code. No password needed.
       </p>
     </form>
   );
