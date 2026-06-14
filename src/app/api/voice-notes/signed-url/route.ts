@@ -29,12 +29,16 @@ export async function POST(request: NextRequest) {
     if (!feedbackId) return NextResponse.json({ error: 'feedbackId required' }, { status: 400 });
 
     const admin = createAdminClient();
-    const { data: row } = await admin
+    const { data: row, error: rowError } = await admin
       .from('buddy_feedback')
       .select('student_id, buddy_id, voice_note_url')
       .eq('id', feedbackId)
       .single();
 
+    if (rowError) {
+      console.error('signed-url db error:', rowError.message);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
     if (!row || !row.voice_note_url) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

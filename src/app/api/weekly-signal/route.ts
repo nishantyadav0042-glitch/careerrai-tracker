@@ -43,16 +43,25 @@ export async function POST(request: NextRequest) {
     const weekKey = weekStart.toISOString().split('T')[0];
 
     // Check DB cache first — survives cold starts across all serverless instances.
-    const { data: cachedEvent } = await admin
+    // Use limit(1) instead of maybeSingle() so concurrent inserts producing duplicate rows never break the cache.
+    const { data: cachedRows } = await admin
       .from('analytics_events')
       .select('metadata')
       .eq('student_id', studentId)
       .eq('event_type', 'weekly_signal_cache')
       .gte('created_at', weekStartISO)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (cachedEvent?.metadata && typeof cachedEvent.metadata === 'object' && 'insight' in cachedEvent.metadata) {
-      return NextResponse.json({ insight: (cachedEvent.metadata as { insight: string }).insight, cached: true });
+    const cachedMeta = cachedRows?.[0]?.metadata;
+    // Verify buddy_id matches — prevents stale insights surviving student reassignment.
+    if (
+      cachedMeta &&
+      typeof cachedMeta === 'object' &&
+      'insight' in cachedMeta &&
+      (cachedMeta as { buddy_id?: string }).buddy_id === user.id
+    ) {
+      return NextResponse.json({ insight: (cachedMeta as { insight: string }).insight, cached: true });
     }
 
     // Fetch last 7 days of logs

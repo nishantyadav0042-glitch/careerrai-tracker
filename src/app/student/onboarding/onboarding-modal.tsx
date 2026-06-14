@@ -106,11 +106,15 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       return;
     }
     try {
-      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', userId);
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', userId);
+      if (updateError) throw updateError;
       await new Promise(resolve => setTimeout(resolve, 500));
       onComplete();
     } catch {
-      onComplete();
+      setError('Could not save your progress. Please try again.');
     }
   };
 
