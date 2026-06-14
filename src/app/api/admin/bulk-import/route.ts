@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logAdminAction } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface ImportRow {
@@ -295,6 +296,12 @@ export async function POST(request: NextRequest) {
     };
 
     console.log('[BULK_IMPORT] Import complete:', result.summary);
+    logAdminAction(user.id, 'bulk_import', 'users', null, {
+      file: file.name,
+      total: result.summary.total,
+      created: result.summary.created,
+      failed: result.summary.failed,
+    });
     return NextResponse.json(result);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

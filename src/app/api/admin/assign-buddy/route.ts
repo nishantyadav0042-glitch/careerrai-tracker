@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logAdminAction } from '@/lib/audit';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
     .eq('id', student_id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  logAdminAction(user.id, 'assign_buddy', 'student', student_id, { buddy_id: buddy_id || null });
 
   return NextResponse.json({ ok: true, student_id, buddy_id });
 }

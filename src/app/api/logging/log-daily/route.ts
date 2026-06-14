@@ -69,36 +69,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const logData = {
-      student_id: user.id,
-      report_date: dateStr,
-      study_duration: body.hours,
-      topics_covered: body.sections,
-      mood_emoji: body.energy,
-      mock_taken: body.sections.includes('Mock'),
-      total_accuracy: null,
-      notes: body.notes || null,
-      emotional_chips: body.emotional_chips ?? [],
-      // Keep legacy numeric fields at defaults
-      quality_focus: 3,
-      difficulty: 3,
-      confidence: 4,
-      stress: 2,
-      sleep_quality: 7,
-      overall_energy: 4,
-      nutrition_exercise: false,
-    };
-
-    if (existingLog) {
-      await admin.from('daily_reports').update(logData).eq('id', existingLog.id);
-    } else {
-      await admin.from('daily_reports').insert(logData);
-    }
-
-    // Study streak counts study days — a 0-hour log keeps the record, not the flame.
-    const streakUpdated = body.hours > 0
-      ? await updateStreak(user.id, admin)
-      : await getStreak(user.id, admin);
+    // Atomic: both daily_reports and streak_data are updated inside a single Postgres
+    // transaction so a mid-flight server crash cannot leave them out of sync.
+    const { data: rpcResult, error: rpcError } = await admin.rpc('upsert_log_and_streak', {
+      p_student_id:      user.id,
+      p_report_date:     dateStr,
+      p_study_duration:  body.hours,
+      p_topics_covered:  body.sections,
+      p_mood_emoji:      body.energy,
+      p_mock_taken:      body.sections.includes('Mock'),
+      p_notes:           body.notes || null,
+      p_emotional_chips: body.emotional_chips ?? [],
+    });
+    if (rpcError) throw rpcError;
+    const streakUpdated = rpcResult;
     const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin, body.emotional_chips);
 
     let bonus: string | undefined;
@@ -119,11 +103,17 @@ export async function POST(request: NextRequest) {
     if (body.emotional_chips && body.emotional_chips.length > 0 && !body.emotional_chips.includes('all_good')) {
       notifyBuddyEmotional(user.id, profile.buddy_id, body.emotional_chips).catch(console.error);
     }
+    // #10 product analytics: hour_of_day + day_of_week drive retention heatmaps;
+    // is_first_today distinguishes new logs from edits for funnel analysis.
+    const nowUtc = new Date();
     logAnalyticsEvent(user.id, 'log_submitted', {
       hours: body.hours,
       sectionCount: body.sections.length,
       hasMock: body.sections.includes('Mock'),
       emotionalChips: body.emotional_chips ?? [],
+      is_first_today: !existingLog,
+      hour_of_day: nowUtc.getUTCHours(),
+      day_of_week: nowUtc.getUTCDay(),
     }).catch(console.error);
 
     return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge }, { status: 200 });
@@ -240,66 +230,6 @@ function daysBetween(dateStr: string | null | undefined): number {
   return Math.round((Date.now() - d.getTime()) / 86_400_000);
 }
 
-async function getStreak(studentId: string, admin: ReturnType<typeof createAdminClient>) {
-  const { data } = await admin
-    .from('streak_data')
-    .select('*')
-    .eq('student_id', studentId)
-    .maybeSingle();
-  if (data) return data;
-  const { data: created } = await admin
-    .from('streak_data')
-    .insert({ student_id: studentId, current_streak: 0, longest_streak: 0 })
-    .select()
-    .single();
-  return created;
-}
-
-async function updateStreak(studentId: string, admin: ReturnType<typeof createAdminClient>) {
-  const { data: streak, error: getError } = await admin
-    .from('streak_data')
-    .select('*')
-    .eq('student_id', studentId)
-    .maybeSingle();
-
-  const dateStr = getLogDateString();
-
-  if (!streak && !getError) {
-    // First-ever streak record for this student
-    const { data: newStreak } = await admin
-      .from('streak_data')
-      .insert({ student_id: studentId, current_streak: 1, longest_streak: 1, last_log_date: dateStr })
-      .select()
-      .single();
-    return newStreak;
-  }
-
-  if (!streak) throw new Error('Could not create or fetch streak');
-
-  const today = new Date(dateStr);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-  const lastLogDateStr = streak.last_log_date ? new Date(streak.last_log_date).toISOString().split('T')[0] : null;
-
-  if (lastLogDateStr !== dateStr) {
-    const newCurrent =
-      lastLogDateStr === yesterdayStr ? streak.current_streak + 1 : 1;
-    const newLongest = Math.max(streak.longest_streak, newCurrent);
-
-    const { data: updated } = await admin
-      .from('streak_data')
-      .update({ current_streak: newCurrent, longest_streak: newLongest, last_log_date: dateStr, updated_at: new Date().toISOString() })
-      .eq('student_id', studentId)
-      .select()
-      .single();
-
-    return updated;
-  }
-
-  return streak;
-}
 
 async function notifyBuddy(studentId: string, buddyId: string | null, data: { hours: number; energy: string }) {
   if (!buddyId) return;
