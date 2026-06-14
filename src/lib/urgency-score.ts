@@ -18,6 +18,7 @@ export interface StudentUrgencyData {
   streakStatus: 'active' | 'broken';
   streakDays: number;
   recentDrops: number;
+  free_onboarding_used?: boolean;
 }
 
 export interface UrgencyFactors {
@@ -249,7 +250,7 @@ export async function loadBuddyStudents(
     // Get all students assigned to this buddy
     const { data: students } = await supabase
       .from('profiles')
-      .select('id, full_name, cat_percentile')
+      .select('id, full_name, cat_percentile, free_onboarding_used')
       .eq('buddy_id', buddyId)
       .order('full_name');
 
@@ -263,7 +264,10 @@ export async function loadBuddyStudents(
     for (const student of students) {
       const data = await loadStudentUrgency(student.id);
       if (data) {
-        urgencyData.push(data);
+        urgencyData.push({
+          ...data,
+          free_onboarding_used: student.free_onboarding_used ?? false,
+        });
       }
     }
 

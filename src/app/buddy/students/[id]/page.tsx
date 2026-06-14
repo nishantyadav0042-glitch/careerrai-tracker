@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { FeedbackList } from './feedback-form';
 import { BuddyStudentViewClient } from './buddy-student-view-client';
 import { VideoSessionPromptClient } from './video-session-prompt-client';
+import { OrientationCompleteButton } from './orientation-complete-button';
 import type { DailyReport, BuddyFeedback } from '@/types';
 import { ArrowLeft, AlertCircle, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -179,13 +180,26 @@ export default async function BuddyStudentDetailPage({
 
   const { data: upcomingSessions } = await admin
     .from('video_sessions')
-    .select('id, title, scheduled_at, google_meet_link')
+    .select('id, title, scheduled_at, google_meet_link, session_type')
     .eq('student_id', id)
     .eq('buddy_id', user.id)
     .eq('session_status', 'scheduled')
     .gte('scheduled_at', new Date().toISOString())
     .order('scheduled_at', { ascending: true })
     .limit(3);
+
+  // Completed within 7 days — dashboard cleanup filter (view-only, never deleted)
+  // eslint-disable-next-line react-hooks/purity
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: recentCompleted } = await admin
+    .from('video_sessions')
+    .select('id, title, scheduled_at, session_type')
+    .eq('student_id', id)
+    .eq('buddy_id', user.id)
+    .eq('session_status', 'completed')
+    .gte('scheduled_at', sevenDaysAgo)
+    .order('scheduled_at', { ascending: false })
+    .limit(5);
 
   const summary = computeSummary(reports, period);
   const needsAttentionFlags = computeNeedsAttentionFlags(reports, debriefs);
@@ -354,41 +368,89 @@ export default async function BuddyStudentDetailPage({
         ))}
       </div>
 
-      {/* Upcoming sessions */}
-      {(upcomingSessions?.length ?? 0) > 0 && (
+      {/* Sessions — upcoming + completed within 7 days */}
+      {((upcomingSessions?.length ?? 0) > 0 || (recentCompleted?.length ?? 0) > 0) && (
         <div className="bg-white rounded-xl border-2 border-teal-200 p-4 space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-600">
-            Upcoming sessions with {firstName}
-          </h3>
-          {upcomingSessions!.map((s) => (
-            <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-stone-900 truncate">{s.title || 'Session'}</p>
-                <p className="text-xs text-stone-600">
-                  {new Date(s.scheduled_at!).toLocaleString('en-IN', {
-                    timeZone: 'Asia/Kolkata',
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-600">
+              Sessions with {firstName}
+            </h3>
+            <a
+              href={`/buddy/students/${id}/session-history`}
+              className="text-[11px] text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              Full history →
+            </a>
+          </div>
+
+          {/* Upcoming */}
+          {upcomingSessions?.map((s) => {
+            const isOrientation = s.session_type === 'onboarding';
+            return (
+              <div key={s.id} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${isOrientation ? 'border-orange-200 bg-orange-50' : 'border-stone-200'}`}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-stone-900 truncate">
+                      {s.title || (isOrientation ? 'Free Orientation' : 'Guidance Session')}
+                    </p>
+                    {isOrientation && (
+                      <span className="shrink-0 text-[9px] font-bold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-full">
+                        FREE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    {new Date(s.scheduled_at!).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {s.google_meet_link && (
+                    <a
+                      href={s.google_meet_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                    >
+                      Join →
+                    </a>
+                  )}
+                  {isOrientation && (
+                    <OrientationCompleteButton sessionId={s.id} />
+                  )}
+                </div>
               </div>
-              {s.google_meet_link ? (
-                <a
-                  href={s.google_meet_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors"
-                >
-                  Join Meet →
-                </a>
-              ) : (
-                <span className="flex-shrink-0 text-xs text-stone-400">No Meet link</span>
-              )}
-            </div>
-          ))}
+            );
+          })}
+
+          {/* Recently completed (7-day window) — view filter only, data never deleted */}
+          {recentCompleted?.map((s) => {
+            const isOrientation = s.session_type === 'onboarding';
+            return (
+              <div key={s.id} className="flex items-center gap-3 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-stone-500 truncate">
+                    {s.title || (isOrientation ? 'Free Orientation' : 'Guidance Session')}
+                  </p>
+                  <p className="text-xs text-stone-400">
+                    {new Date(s.scheduled_at!).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                    {' · Completed'}
+                    {isOrientation ? ' · Orientation' : ''}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

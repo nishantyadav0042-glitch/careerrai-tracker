@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 export interface SchedulableStudent {
   id: string;
   full_name: string;
+  free_onboarding_used?: boolean;
 }
 
 interface ScheduleSessionModalProps {
@@ -21,6 +22,7 @@ interface ScheduleSessionModalProps {
 }
 
 const DURATIONS = [20, 30, 45, 60];
+type SessionType = 'guidance' | 'onboarding';
 
 function todayIST(): string {
   // YYYY-MM-DD in IST for the date input min
@@ -39,6 +41,7 @@ export function ScheduleSessionModal({
   const [date, setDate] = useState(todayIST());
   const [time, setTime] = useState('19:00');
   const [duration, setDuration] = useState(30);
+  const [sessionType, setSessionType] = useState<SessionType>('guidance');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meetLink, setMeetLink] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export function ScheduleSessionModal({
       setCopied(false);
       if (defaultStudentId) setStudentId(defaultStudentId);
       else if (students.length === 1) setStudentId(students[0].id);
+      setSessionType('guidance');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -83,6 +87,7 @@ export function ScheduleSessionModal({
           studentId,
           startTime: new Date(utcMs).toISOString(),
           durationMinutes: duration,
+          sessionType,
         }),
       });
       const data = await res.json();
@@ -117,7 +122,9 @@ export function ScheduleSessionModal({
           {/* Header */}
           <div className="sticky top-0 bg-white border-b border-stone-100 px-5 py-4 flex items-center justify-between rounded-t-2xl z-10">
             <h2 className="text-base font-bold text-stone-900">
-              {meetLink ? 'Session booked!' : 'Schedule Session'}
+              {meetLink
+                ? sessionType === 'onboarding' ? 'Orientation booked!' : 'Session booked!'
+                : sessionType === 'onboarding' ? 'Schedule Free Orientation' : 'Schedule Session'}
             </h2>
             <button
               onClick={onClose}
@@ -189,6 +196,48 @@ export function ScheduleSessionModal({
             ) : (
               /* ── Form ────────────────────────────────────── */
               <div className="space-y-4">
+                {/* Session type toggle */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Session type
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: 'guidance', label: '📚 Guidance', sub: 'Paid mentoring session' },
+                      { value: 'onboarding', label: '🎯 Orientation', sub: 'Free — shows how it works' },
+                    ] as const).map(({ value, label, sub }) => {
+                      const selectedStudent = students.find((s) => s.id === studentId);
+                      const orientationUsed = value === 'onboarding' && selectedStudent?.free_onboarding_used;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={!!orientationUsed}
+                          onClick={() => !orientationUsed && setSessionType(value)}
+                          className={cn(
+                            'text-left px-3 py-2.5 rounded-xl border text-xs transition-colors',
+                            sessionType === value
+                              ? 'border-[#2A9D8F] bg-[#2A9D8F]/10 text-[#2A9D8F]'
+                              : orientationUsed
+                              ? 'border-stone-100 bg-stone-50 text-stone-300 cursor-not-allowed'
+                              : 'border-stone-200 text-stone-600 hover:border-stone-300'
+                          )}
+                        >
+                          <div className="font-semibold">{label}</div>
+                          <div className="text-[10px] mt-0.5 opacity-70">
+                            {orientationUsed ? 'Already done' : sub}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {sessionType === 'onboarding' && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-2">
+                      Orientation = how CareerRai works. Not a strategy/guidance session. Free for the student.
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1.5">
                     Student
@@ -269,13 +318,15 @@ export function ScheduleSessionModal({
                     'w-full py-3.5 rounded-xl text-white font-semibold transition-all',
                     loading ? 'opacity-70 cursor-wait' : 'hover:opacity-90 active:scale-[0.99]'
                   )}
-                  style={{ backgroundColor: '#2A9D8F', minHeight: 48 }}
+                  style={{ backgroundColor: sessionType === 'onboarding' ? '#E8652D' : '#2A9D8F', minHeight: 48 }}
                 >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                       Creating your Meet link…
                     </span>
+                  ) : sessionType === 'onboarding' ? (
+                    'Book Free Orientation'
                   ) : (
                     'Create Meeting'
                   )}

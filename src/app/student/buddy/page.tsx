@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BuddyFeedbackCard } from '@/app/student/home/buddy-feedback-card';
 import { SessionRequestPanel } from './session-request-panel';
-import { Video, Calendar, PhoneCall } from 'lucide-react';
+import { Video, Calendar, PhoneCall, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
@@ -24,19 +24,32 @@ export default async function BuddyCommunicationPage() {
     .single();
 
   const buddyId = profile?.buddy_id ?? null;
+  // eslint-disable-next-line react-hooks/purity
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  const [{ data: buddy }, { data: sessions }, { data: pendingRequests }] = await Promise.all([
+  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
+    // Upcoming: scheduled sessions + 1h grace window
     admin
       .from('video_sessions')
-      .select('id, title, scheduled_at, google_meet_link, session_status')
+      .select('id, title, scheduled_at, google_meet_link, session_status, session_type')
       .eq('student_id', user.id)
       .eq('session_status', 'scheduled')
       // eslint-disable-next-line react-hooks/purity
       .gte('scheduled_at', new Date(Date.now() - 3_600_000).toISOString())
       .order('scheduled_at', { ascending: true })
+      .limit(5),
+    // Completed within last 7 days — dashboard cleanup: older sessions go to History
+    // VIEW FILTER ONLY — no data is ever deleted, all sessions persist forever
+    admin
+      .from('video_sessions')
+      .select('id, title, scheduled_at, session_type, session_status')
+      .eq('student_id', user.id)
+      .eq('session_status', 'completed')
+      .gte('scheduled_at', sevenDaysAgo)
+      .order('scheduled_at', { ascending: false })
       .limit(5),
     buddyId
       ? admin
@@ -52,6 +65,7 @@ export default async function BuddyCommunicationPage() {
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
   const hasPendingRequest = (pendingRequests?.length ?? 0) > 0;
+  const sessions = [...(upcoming ?? []), ...(recentCompleted ?? [])];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -79,29 +93,56 @@ export default async function BuddyCommunicationPage() {
           </div>
         ) : (
           <>
-            {/* Upcoming sessions */}
+            {/* Sessions — upcoming + recently completed (7-day window) */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
-                <Calendar className="w-4 h-4 text-indigo-600" />
-                <h2 className="text-sm font-bold uppercase tracking-widest text-stone-700">Sessions</h2>
+              <div className="flex items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-indigo-600" />
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-stone-700">Sessions</h2>
+                </div>
+                {/* History link — older completed sessions, never deleted */}
+                <Link
+                  href="/student/buddy/history"
+                  className="flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-600 transition-colors"
+                >
+                  <Clock className="w-3 h-3" />
+                  History
+                </Link>
               </div>
-              {sessions && sessions.length > 0 ? (
+
+              {sessions.length > 0 ? (
                 sessions.map((s) => {
                   const startsAt = new Date(s.scheduled_at);
+                  // eslint-disable-next-line react-hooks/purity
                   const minsAway = Math.round((startsAt.getTime() - Date.now()) / 60_000);
-                  const joinable = minsAway <= 15 && !!s.google_meet_link;
+                  const isCompleted = s.session_status === 'completed';
+                  const isOrientation = s.session_type === 'onboarding';
+                  const joinable = !isCompleted && minsAway <= 15 && !!('google_meet_link' in s && s.google_meet_link);
                   return (
                     <div
                       key={s.id}
-                      className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3"
+                      className={`flex items-center justify-between gap-3 border rounded-2xl px-4 py-3 ${
+                        isOrientation
+                          ? 'bg-orange-50 border-orange-200'
+                          : isCompleted
+                          ? 'bg-stone-50 border-stone-200'
+                          : 'bg-indigo-50 border-indigo-200'
+                      }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <Video className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <Video className={`w-4 h-4 shrink-0 ${isOrientation ? 'text-orange-600' : isCompleted ? 'text-stone-400' : 'text-indigo-600'}`} />
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-indigo-900 truncate">
-                            {s.title || `Session with ${buddyName}`}
-                          </p>
-                          <p className="text-xs text-indigo-600">
+                          <div className="flex items-center gap-1.5">
+                            <p className={`text-sm font-semibold truncate ${isOrientation ? 'text-orange-900' : isCompleted ? 'text-stone-500' : 'text-indigo-900'}`}>
+                              {s.title || (isOrientation ? 'Free Orientation' : `Session with ${buddyName}`)}
+                            </p>
+                            {isOrientation && (
+                              <span className="shrink-0 text-[9px] font-bold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-full">
+                                FREE
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-xs ${isOrientation ? 'text-orange-600' : isCompleted ? 'text-stone-400' : 'text-indigo-600'}`}>
                             {startsAt.toLocaleString('en-IN', {
                               timeZone: 'Asia/Kolkata',
                               weekday: 'short',
@@ -110,19 +151,20 @@ export default async function BuddyCommunicationPage() {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
+                            {isCompleted && ' · Done'}
                           </p>
                         </div>
                       </div>
                       {joinable ? (
                         <a
-                          href={s.google_meet_link!}
+                          href={(s as { google_meet_link?: string }).google_meet_link!}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors"
                         >
                           Join →
                         </a>
-                      ) : (
+                      ) : !isCompleted ? (
                         <span className="shrink-0 text-[11px] font-medium text-indigo-500">
                           {minsAway > 1440
                             ? `in ${Math.round(minsAway / 1440)}d`
@@ -130,7 +172,7 @@ export default async function BuddyCommunicationPage() {
                             ? `in ${Math.round(minsAway / 60)}h`
                             : `in ${Math.max(0, minsAway)}m`}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })
