@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Loader2, CheckCircle, Sparkles } from 'lucide-react';
+import { Loader2, CheckCircle } from 'lucide-react';
 
 interface Props {
   buddyId: string;
@@ -13,9 +13,6 @@ export function SessionRequestPanel({ buddyId, buddyName, hasPendingRequest }: P
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [showAI, setShowAI] = useState(false);
-  const [aiInsights, setAiInsights] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
 
   async function submitRequest() {
     setSubmitting(true);
@@ -33,24 +30,6 @@ export function SessionRequestPanel({ buddyId, buddyName, hasPendingRequest }: P
       setError('Could not send request. Try again.');
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function loadAIInsights() {
-    setAiLoading(true);
-    setShowAI(true);
-    try {
-      const res = await fetch('/api/student/ai-insights', { method: 'POST' });
-      if (res.ok) {
-        const { insights } = await res.json();
-        setAiInsights(insights ?? '');
-      } else {
-        setAiInsights('Could not generate insights right now — try again later.');
-      }
-    } catch {
-      setAiInsights('Network error. Try again.');
-    } finally {
-      setAiLoading(false);
     }
   }
 
@@ -77,36 +56,14 @@ export function SessionRequestPanel({ buddyId, buddyName, hasPendingRequest }: P
         className="w-full px-3 py-2.5 text-sm bg-white border border-orange-200 rounded-xl focus:outline-none focus:border-orange-400 resize-none"
       />
       {error && <p className="text-xs text-rose-600">{error}</p>}
-      <div className="flex gap-2">
-        <button
-          onClick={submitRequest}
-          disabled={submitting}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
-        >
-          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          {submitting ? 'Sending…' : 'Request urgent session'}
-        </button>
-        <button
-          onClick={loadAIInsights}
-          disabled={aiLoading}
-          title="Get AI study tips"
-          className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-orange-200 text-orange-700 rounded-xl text-sm font-medium hover:bg-orange-50 transition-colors disabled:opacity-50"
-        >
-          <Sparkles className="w-4 h-4" />
-          {aiLoading ? '…' : 'AI tips'}
-        </button>
-      </div>
-
-      {showAI && (
-        <div className="bg-white border border-orange-200 rounded-xl p-3 space-y-1">
-          <p className="text-[10px] uppercase tracking-widest font-semibold text-orange-700 mb-2">AI study advice for this week</p>
-          {aiLoading ? (
-            <p className="text-sm text-stone-500 animate-pulse">Generating…</p>
-          ) : (
-            <div className="text-sm text-stone-800 whitespace-pre-line leading-relaxed">{aiInsights}</div>
-          )}
-        </div>
-      )}
+      <button
+        onClick={submitRequest}
+        disabled={submitting}
+        className="w-full flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+      >
+        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+        {submitting ? 'Sending…' : 'Request urgent session'}
+      </button>
     </div>
   );
 }

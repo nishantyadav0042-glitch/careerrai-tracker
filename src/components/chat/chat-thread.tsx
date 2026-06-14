@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from './types';
@@ -36,6 +36,7 @@ export function ChatThread({
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
   const supabase = createClient();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const seenIds = useRef<Set<string>>(new Set(initialMessages.map((m) => m.id)));
@@ -130,6 +131,30 @@ export function ChatThread({
     }
   }, [draft, sending, studentId, buddyId, meId, sendStudentId]);
 
+  const generateDraft = useCallback(async () => {
+    if (!sendStudentId || generatingDraft) return;
+    setGeneratingDraft(true);
+    try {
+      const res = await fetch('/api/chat/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: sendStudentId }),
+      });
+      if (!res.ok) return;
+      const { draft: generated } = (await res.json()) as { draft: string };
+      if (!generated) return;
+      // Don't clobber a half-typed message without asking.
+      if (draft.trim() && !window.confirm('Replace your current message with the generated draft?')) return;
+      setDraft(generated);
+    } catch {
+      // Silent — buddy still has the empty textarea
+    } finally {
+      setGeneratingDraft(false);
+    }
+  }, [sendStudentId, generatingDraft, draft]);
+
+  const isBuddy = !!sendStudentId;
+
   return (
     <div className="flex flex-col h-[calc(100vh-9rem)]">
       {/* Header */}
@@ -180,7 +205,19 @@ export function ChatThread({
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 pt-2 border-t border-stone-200">
+      <div className="shrink-0 pt-2 border-t border-stone-200 space-y-2">
+        {/* Generate Draft — buddy only, deliberate tap */}
+        {isBuddy && (
+          <button
+            onClick={generateDraft}
+            disabled={generatingDraft}
+            className="flex items-center gap-1.5 text-xs text-teal-700 hover:text-teal-900 disabled:opacity-40 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {generatingDraft ? 'Drafting…' : 'Generate draft'}
+          </button>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
