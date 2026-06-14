@@ -24,6 +24,32 @@ secret keys to the client — only the `NEXT_PUBLIC_*` vars are safe in the brow
 | `RAZORPAY_KEY_SECRET` | server only | Razorpay secret — order creation |
 | `RAZORPAY_WEBHOOK_SECRET` | server only | Razorpay webhook signature secret |
 | `NEXT_PUBLIC_PAYMENTS_ENABLED` | client + server | `true` to show the payment UI. **Leave `false` for beta.** |
+| `GEMINI_API_KEY` | server only | Google Gemini key for all AI features. Without it, every AI feature falls back to a rule-based version — nothing breaks. |
+| `GEMINI_MODEL` | server only | Optional. Defaults to `gemini-2.5-flash-lite`. |
+
+### AI (Gemini) notes
+
+All AI runs **server-side** through `src/lib/gemini.ts` on **Gemini Flash-Lite**
+(`gemini-2.5-flash-lite`). The key is read from `process.env.GEMINI_API_KEY`,
+sent only via the `x-goog-api-key` header (never a query string, never logged),
+and never reaches the client bundle. On a 429 / 5xx the client retries with
+exponential backoff + jitter, then returns `null` so the caller falls back to a
+rule-based result — a user never sees an AI error.
+
+**The governing rule (the moat):** AI may only summarize / organize / draft. It
+never diagnoses a cause or recommends an action to a student. There is no
+student-facing AI advisor. The buddy briefing and chat "Generate draft" are
+buddy-only; `buddy_briefings` RLS blocks students entirely.
+
+**Privacy — free tier trains on prompts.** Student names are stripped from every
+AI **input** (`stripNames`), and student-authored chat text is fenced as data to
+blunt prompt injection. **Migrate to a PAID Gemini key at ~500 students** — for
+data privacy (protecting the behavioral-data moat), not for capacity. Swap the
+key value in Vercel; no code change is needed.
+
+After adding or changing `GEMINI_API_KEY`, **redeploy** — env vars only apply to
+new deployments. Verify by opening the app as a buddy → a student → tap *Refresh*
+on the AI Facts Summary: multi-bullet prose means Gemini is live.
 
 ---
 

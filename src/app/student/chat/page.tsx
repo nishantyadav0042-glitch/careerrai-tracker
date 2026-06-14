@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthUser } from '@/lib/auth';
 import { ChatThread } from '@/components/chat/chat-thread';
 import { fetchPairMessages } from '@/lib/chat';
 
@@ -10,8 +10,7 @@ export const metadata = {
 };
 
 export default async function StudentChatPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
@@ -49,7 +48,6 @@ export default async function StudentChatPage() {
       buddyId={buddyId}
       meId={user.id}
       otherName={buddy?.full_name ?? 'Your buddy'}
-      subtitle="Your buddy usually replies within a day."
       initialMessages={messages}
     />
   );

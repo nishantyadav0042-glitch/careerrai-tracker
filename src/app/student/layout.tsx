@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getAuthUser } from '@/lib/auth';
 import { StudentBottomNav } from '@/components/bottom-nav';
 import { NotificationBell } from '@/components/notification-bell';
 import { Logo } from '@/components/logo';
@@ -8,18 +8,19 @@ import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount } from '@/lib/chat-unread';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  // Role check and unread count are independent — run them together.
+  const [{ data: profile }, chatUnread] = await Promise.all([
+    admin.from('profiles').select('role').eq('id', user.id).single(),
+    getChatUnreadCount(user.id, 'student'),
+  ]);
   if (profile?.role !== 'student') {
     if (profile?.role === 'buddy') redirect('/buddy/students');
     redirect('/login');
   }
-
-  const chatUnread = await getChatUnreadCount(user.id, 'student');
 
   return (
     <div className="min-h-screen bg-stone-50">
