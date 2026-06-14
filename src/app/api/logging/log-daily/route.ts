@@ -61,6 +61,14 @@ export async function POST(request: NextRequest) {
       .eq('report_date', dateStr)
       .maybeSingle();
 
+    // Capture the pre-reset streak so we can detect a lapse-recovery: the RPC
+    // below resets current_streak to 1 once a gap is crossed.
+    const { data: prevStreak } = await admin
+      .from('streak_data')
+      .select('current_streak, last_log_date')
+      .eq('student_id', user.id)
+      .maybeSingle();
+
     // Rate limit: block hammering (same report updated within last 15 seconds)
     if (existingLog?.updated_at) {
       const secsSinceUpdate = (Date.now() - new Date(existingLog.updated_at).getTime()) / 1000;
@@ -83,6 +91,22 @@ export async function POST(request: NextRequest) {
     });
     if (rpcError) throw rpcError;
     const streakUpdated = rpcResult;
+
+    // Miss-recovery: a fresh log today after a 2+ day gap with a prior streak is
+    // a comeback — the #1 retention event. Record it and gently nudge the buddy.
+    if (!existingLog && prevStreak?.last_log_date && (prevStreak.current_streak ?? 0) > 0) {
+      const gap = Math.round((Date.parse(dateStr) - Date.parse(prevStreak.last_log_date as string)) / 86_400_000);
+      if (gap >= 2) {
+        const missedDays = gap - 1;
+        admin.from('recovery_events').insert({
+          student_id: user.id,
+          missed_days: missedDays,
+          previous_streak: prevStreak.current_streak as number,
+        }).then(({ error }) => { if (error) console.error('recovery_events insert', error); });
+        notifyBuddyRecovery(user.id, profile.buddy_id, missedDays).catch(console.error);
+      }
+    }
+
     const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin, body.emotional_chips);
 
     let bonus: string | undefined;
@@ -300,6 +324,28 @@ async function notifyBuddyEmotional(studentId: string, buddyId: string | null, c
     });
   } catch (error) {
     console.error('Failed to send emotional notification:', error);
+  }
+}
+
+// A student came back after a lapse — the buddy's window to welcome, not scold.
+async function notifyBuddyRecovery(studentId: string, buddyId: string | null, missedDays: number) {
+  if (!buddyId) return;
+  try {
+    const admin = createAdminClient();
+    const { data: student } = await admin.from('profiles').select('full_name').eq('id', studentId).single();
+    const name = student?.full_name?.split(' ')[0] || 'Your student';
+    await admin.from('notifications').insert({
+      user_id: buddyId,
+      type: 'student_recovered',
+      title: `${name} is back after ${missedDays} day${missedDays === 1 ? '' : 's'}`,
+      body: 'A good moment to reach out — welcome them back, no guilt.',
+      data: { student_id: studentId, missed_days: missedDays },
+      read: false,
+      channel: 'in_app',
+      link_url: `/buddy/students/${studentId}`,
+    });
+  } catch (error) {
+    console.error('Failed to send recovery notification:', error);
   }
 }
 

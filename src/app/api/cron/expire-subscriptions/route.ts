@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 // Memberships are one-time purchases, not auto-debit. When a term ends we flip
-// the student from 'active' to 'expired' so the membership card re-shows the
-// plan buttons and they can renew manually. Runs daily.
+// the student from 'active' to 'paused' (data fully preserved) so the membership
+// card re-shows the plan buttons and they can reactivate manually. Runs daily.
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret');
   if (secret !== process.env.CRON_SECRET) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   const { error: updateErr } = await admin
     .from('profiles')
-    .update({ subscription_status: 'expired' })
+    .update({ subscription_status: 'paused' })
     .in('id', ids);
 
   if (updateErr) {
@@ -38,13 +38,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'update failed' }, { status: 500 });
   }
 
-  // Nudge each student in-app so they know to renew.
+  // Nudge each student in-app — continuity, not a hard stop.
   await admin.from('notifications').insert(
     lapsed.map((p) => ({
       user_id: p.id,
       type: 'membership',
-      title: 'Your membership has ended',
-      body: 'Renew anytime from your profile to keep full access.',
+      title: 'Your journey is paused — not gone',
+      body: 'Your streak, mocks, debriefs and buddy are saved. Reactivate anytime to continue exactly where you left off.',
       data: {},
       read: false,
       channel: 'in_app',

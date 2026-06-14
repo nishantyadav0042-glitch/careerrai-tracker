@@ -5,6 +5,7 @@ import { BuddyBottomNav } from '@/components/bottom-nav';
 import { NotificationBell } from '@/components/notification-bell';
 import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
+import { getChatUnreadCount } from '@/lib/chat-unread';
 
 export default async function BuddyLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -18,6 +19,8 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
     redirect('/login');
   }
 
+  const chatUnread = await getChatUnreadCount(user.id, 'buddy');
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
@@ -30,7 +33,7 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
         </div>
         {children}
       </div>
-      <BuddyBottomNav />
+      <BuddyBottomNav chatUnread={chatUnread} />
     </div>
   );
 }

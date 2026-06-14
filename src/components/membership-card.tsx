@@ -4,15 +4,17 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PLANS, type PlanId } from '@/lib/plans';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Heart } from 'lucide-react';
 
-type SubStatus = 'free_beta' | 'active' | 'expired' | 'refund_requested';
+type SubStatus = 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested';
 
 interface MembershipCardProps {
   status: SubStatus;
   plan: string | null;
   renewsAt: string | null;
   fullName: string;
+  // Founder scholarship attached to this account, with per-plan adjusted prices.
+  scholarship?: { label: string; pricing: Record<PlanId, string> } | null;
 }
 
 declare global {
@@ -35,13 +37,15 @@ function loadRazorpay(): Promise<boolean> {
 const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' | 'stone' | 'amber' }> = {
   free_beta: { text: 'Free beta', color: 'green' },
   active: { text: 'Active', color: 'green' },
-  expired: { text: 'Expired', color: 'amber' },
+  expired: { text: 'Paused', color: 'amber' },
+  paused: { text: 'Paused', color: 'amber' },
   refund_requested: { text: 'Refund requested', color: 'stone' },
 };
 
-export function MembershipCard({ status, plan, renewsAt, fullName }: MembershipCardProps) {
+export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }: MembershipCardProps) {
   const [busy, setBusy] = useState<PlanId | 'refund' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [coupon, setCoupon] = useState('');
 
   async function upgrade(planId: PlanId) {
     setBusy(planId);
@@ -50,10 +54,17 @@ export function MembershipCard({ status, plan, renewsAt, fullName }: MembershipC
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: planId }),
+        body: JSON.stringify({ plan: planId, coupon: coupon.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setMessage(data.error ?? "Couldn't start checkout."); return; }
+
+      // A scholarship/coupon brought the price to zero — already activated.
+      if (data.free) {
+        setMessage('You’re all set — your access is active. Refreshing…');
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
 
       const ok = await loadRazorpay();
       if (!ok || !window.Razorpay) { setMessage('Could not load the payment window. Try again.'); return; }
@@ -99,7 +110,17 @@ export function MembershipCard({ status, plan, renewsAt, fullName }: MembershipC
   }
 
   const badge = STATUS_LABEL[status];
-  const showPlans = status === 'free_beta' || status === 'expired';
+  const isPaused = status === 'paused' || status === 'expired';
+  const showPlans = status === 'free_beta' || isPaused;
+  const verb = isPaused ? 'Reactivate' : 'Start';
+
+  // Journey-length plans are the heroes; monthly is the quiet fallback.
+  const journeyPlans = (Object.keys(PLANS) as PlanId[]).filter((id) => PLANS[id].journey);
+  const fallbackPlans = (Object.keys(PLANS) as PlanId[]).filter((id) => !PLANS[id].journey);
+
+  function priceFor(id: PlanId): string {
+    return scholarship ? scholarship.pricing[id] : PLANS[id].display;
+  }
 
   return (
     <Card className="p-5">
@@ -110,7 +131,8 @@ export function MembershipCard({ status, plan, renewsAt, fullName }: MembershipC
 
       {status === 'free_beta' && (
         <p className="text-sm text-stone-600 mb-4">
-          You&apos;re on the free beta — full access, no charge. Upgrade anytime to lock in your spot.
+          You&apos;re on the free beta — full access, no charge. CAT is a season, not a subscription:
+          commit to the journey when you&apos;re ready.
         </p>
       )}
       {status === 'active' && (
@@ -119,29 +141,86 @@ export function MembershipCard({ status, plan, renewsAt, fullName }: MembershipC
           {renewsAt && <> · renews {new Date(renewsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</>}
         </p>
       )}
+      {isPaused && (
+        <p className="text-sm text-stone-600 mb-4">
+          Your streak, dream tracking, mock history, debriefs, and buddy access are <strong>paused — not gone</strong>.
+          Reactivate to continue exactly where you left off.
+        </p>
+      )}
       {status === 'refund_requested' && (
         <p className="text-sm text-stone-600 mb-4">Refund requested — your founder is processing it manually.</p>
       )}
 
       {showPlans && (
-        <div className="space-y-2">
-          {(Object.keys(PLANS) as PlanId[]).map((id) => (
+        <>
+          {scholarship && (
+            <div className="flex items-start gap-2 rounded-xl bg-orange-50 border border-orange-100 px-3 py-2.5 mb-3">
+              <Heart className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-stone-700">
+                A <strong>founder scholarship</strong> is on your account — your prices below are already adjusted.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {journeyPlans.map((id) => (
+              <button
+                key={id}
+                onClick={() => upgrade(id)}
+                disabled={busy !== null}
+                className="w-full flex items-center justify-between rounded-xl border border-stone-200 px-4 py-3 hover:border-stone-900 transition-colors disabled:opacity-50 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="text-sm font-semibold text-stone-900 flex items-center gap-1.5">
+                    {PLANS[id].label}
+                    {PLANS[id].recommended && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-orange-600">
+                        <Sparkles className="w-3 h-3" /> Best for the journey
+                      </span>
+                    )}
+                  </span>
+                  <span className="block text-xs text-stone-500 mt-0.5">{PLANS[id].tagline}</span>
+                </span>
+                <span className="text-right shrink-0 pl-3">
+                  <span className="block text-sm font-bold text-orange-600">
+                    {busy === id ? 'Starting…' : priceFor(id)}
+                  </span>
+                  {scholarship && (
+                    <span className="block text-[10px] text-stone-400 line-through">{PLANS[id].display}</span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Monthly — the quiet fallback for those who insist on month-to-month. */}
+          {fallbackPlans.map((id) => (
             <button
               key={id}
               onClick={() => upgrade(id)}
               disabled={busy !== null}
-              className="w-full flex items-center justify-between rounded-xl border border-stone-200 px-4 py-3 hover:border-stone-900 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-1.5 mt-2 text-xs text-stone-500 hover:text-stone-800 transition-colors disabled:opacity-50"
             >
-              <span className="text-sm font-semibold text-stone-900 flex items-center gap-1.5">
-                {id === 'quarterly' && <Sparkles className="w-3.5 h-3.5 text-orange-500" />}
-                {PLANS[id].label}
-              </span>
-              <span className="text-sm font-bold text-orange-600">
-                {busy === id ? 'Starting…' : PLANS[id].display}
-              </span>
+              {busy === id ? 'Starting…' : `or pay month-to-month — ${priceFor(id)}/mo`}
             </button>
           ))}
-        </div>
+
+          {!scholarship && (
+            <div className="mt-3 pt-3 border-t border-stone-100">
+              <label className="text-[11px] uppercase tracking-wide text-stone-400 font-semibold">Coupon code (optional)</label>
+              <input
+                value={coupon}
+                onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+                placeholder="e.g. WELCOME20"
+                className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm font-mono uppercase tracking-wide focus:outline-none focus:border-stone-900"
+              />
+            </div>
+          )}
+
+          <p className="text-[11px] text-stone-400 mt-3">
+            One commitment for your whole prep season — no auto-debit, ever. {verb} when you&apos;re ready.
+          </p>
+        </>
       )}
 
       {status === 'active' && (

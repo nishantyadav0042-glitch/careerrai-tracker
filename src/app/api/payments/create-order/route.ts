@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { createRazorpayOrder } from '@/lib/razorpay';
+import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 
 export async function POST(request: NextRequest) {
   if (!paymentsEnabled()) return NextResponse.json({ error: 'Payments are not enabled.' }, { status: 403 });
@@ -12,18 +13,59 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { plan } = (await request.json()) as { plan?: string };
+    const { plan, coupon } = (await request.json()) as { plan?: string; coupon?: string };
     if (!plan || !isPlanId(plan)) return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     const p = PLANS[plan];
 
-    const order = await createRazorpayOrder(p.amountPaise, `careerrai_${user.id.slice(0, 8)}_${Date.now()}`);
+    // Authoritative price: scholarship (founder grant) beats coupon; both verified server-side.
+    const price = await resolvePrice(user.id, plan, coupon);
+    if (price.error) return NextResponse.json({ error: price.error }, { status: 400 });
+
+    const admin = createAdminClient();
+
+    // Free path: a grant brought the price below Razorpay's floor — activate directly.
+    if (price.finalPaise < MIN_CHARGE_PAISE) {
+      const renews = new Date();
+      renews.setMonth(renews.getMonth() + p.months);
+
+      const { data: payRow } = await admin.from('student_payments').insert({
+        student_id: user.id,
+        amount: price.finalPaise,
+        original_amount: price.basePaise,
+        plan,
+        discount_source: price.discountSource,
+        coupon_code: price.couponCode,
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+      }).select('id').single();
+
+      await admin.from('profiles').update({
+        subscription_status: 'active',
+        subscription_plan: plan,
+        subscription_renews_at: renews.toISOString(),
+      }).eq('id', user.id);
+
+      // Burn the coupon (per-student + global) when one made it free.
+      if (price.couponId) {
+        await admin.from('coupon_redemptions').insert({
+          coupon_id: price.couponId, student_id: user.id, payment_id: payRow?.id ?? null,
+        });
+        await admin.rpc('increment_coupon_use', { p_coupon_id: price.couponId });
+      }
+
+      return NextResponse.json({ free: true });
+    }
+
+    const order = await createRazorpayOrder(price.finalPaise, `careerrai_${user.id.slice(0, 8)}_${Date.now()}`);
 
     // Record the intent; the webhook flips it to 'paid' after signature verify.
-    const admin = createAdminClient();
     await admin.from('student_payments').insert({
       student_id: user.id,
-      amount: p.amountPaise,
+      amount: price.finalPaise,
+      original_amount: price.basePaise,
       plan,
+      discount_source: price.discountSource,
+      coupon_code: price.couponCode,
       razorpay_order_id: order.id,
       status: 'created',
     });
@@ -34,6 +76,7 @@ export async function POST(request: NextRequest) {
       currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID, // public key id — safe on the client
       plan,
+      discountLabel: price.label,
     });
   } catch (e) {
     console.error('[create-order]', e);

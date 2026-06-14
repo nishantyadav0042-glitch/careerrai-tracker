@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         const admin = createAdminClient();
         const { data: row } = await admin
           .from('student_payments')
-          .select('id, student_id, plan, status')
+          .select('id, student_id, plan, status, coupon_code')
           .eq('razorpay_order_id', orderId)
           .maybeSingle();
 
@@ -55,6 +55,22 @@ export async function POST(request: NextRequest) {
               subscription_renews_at: renews.toISOString(),
             })
             .eq('id', row.student_id);
+
+          // Burn the coupon now that the payment is confirmed (so abandoned
+          // orders never consume one). Idempotent via the unique redemption row.
+          if (row.coupon_code) {
+            const { data: coupon } = await admin
+              .from('coupons')
+              .select('id')
+              .eq('code', row.coupon_code)
+              .maybeSingle();
+            if (coupon) {
+              const { error: redErr } = await admin
+                .from('coupon_redemptions')
+                .insert({ coupon_id: coupon.id, student_id: row.student_id, payment_id: row.id });
+              if (!redErr) await admin.rpc('increment_coupon_use', { p_coupon_id: coupon.id });
+            }
+          }
         }
       }
     }
