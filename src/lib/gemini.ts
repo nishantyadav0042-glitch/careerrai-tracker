@@ -114,9 +114,8 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
         continue;
       }
       if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        console.error(`[g400] status=${res.status}`);
-        console.error(`[g400] body=${errBody.slice(0, 500)}`);
+        const errText = await res.text().catch(() => '');
+        console.error(`[gemini] ${res.status} error (model=${model}):`, errText.slice(0, 300));
         return null;
       }
 
