@@ -44,10 +44,11 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
+    const keyLen = process.env.GEMINI_API_KEY?.length ?? 0;
+    console.log(`[parse-scorecard] GEMINI_API_KEY present=${keyLen > 0}, len=${keyLen}`);
     if (!geminiEnabled()) {
-      console.error('parse-scorecard: GEMINI_API_KEY is not set');
       return NextResponse.json(
-        { error: 'AI is not configured on the server — add GEMINI_API_KEY in Vercel project settings' },
+        { error: `AI key missing (len=${keyLen}) — check Vercel env var GEMINI_API_KEY is set for Production` },
         { status: 503 }
       );
     }
