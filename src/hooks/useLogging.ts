@@ -20,21 +20,29 @@ interface LoggingResponse {
   daily_nudge?: string | null;
 }
 
-export function useLogging() {
+export interface InitialLogging {
+  streak: StreakData | null;
+  hasLoggedToday: boolean;
+  shieldsRemaining: number;
+}
+
+export function useLogging(studentId: string, initial?: InitialLogging | null) {
   const supabase = createClient();
   const queryClient = useQueryClient();
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackData, setFeedbackData] = useState<LoggingResponse | null>(null);
 
+  // When the server already resolved this data (tracker page), seed it as
+  // initialData so the hero/streak paints instantly with no client round-trip.
   const { data: streakData, isLoading: streakLoading } = useQuery({
-    queryKey: ['streak'],
+    queryKey: ['streak', studentId],
+    enabled: !!studentId,
+    ...(initial ? { initialData: initial.streak } : {}),
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
       const { data, error } = await supabase
         .from('streak_data')
         .select('*')
-        .eq('student_id', user.id)
+        .eq('student_id', studentId)
         .maybeSingle();
       if (error) throw error;
       return data as StreakData | null;
@@ -42,15 +50,15 @@ export function useLogging() {
   });
 
   const { data: hasLoggedToday } = useQuery({
-    queryKey: ['has-logged-today'],
+    queryKey: ['has-logged-today', studentId],
+    enabled: !!studentId,
+    ...(initial ? { initialData: initial.hasLoggedToday } : {}),
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
       const dateStr = getLogDateString();
       const { data } = await supabase
         .from('daily_reports')
         .select('id')
-        .eq('student_id', user.id)
+        .eq('student_id', studentId)
         .eq('report_date', dateStr)
         .maybeSingle();
       return !!data;
@@ -58,16 +66,16 @@ export function useLogging() {
   });
 
   const { data: shieldsData } = useQuery({
-    queryKey: ['shields-remaining'],
+    queryKey: ['shields-remaining', studentId],
+    enabled: !!studentId,
+    ...(initial ? { initialData: initial.shieldsRemaining } : {}),
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return 0;
       const today = new Date();
       const resetDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
       const { data } = await supabase
         .from('streak_shields')
         .select('id')
-        .eq('student_id', user.id)
+        .eq('student_id', studentId)
         .gte('created_at', new Date(today.getFullYear(), today.getMonth(), 1).toISOString())
         .lt('created_at', resetDate.toISOString());
       return Math.max(0, 2 - (data?.length ?? 0));
@@ -76,8 +84,7 @@ export function useLogging() {
 
   const logMutation = useMutation({
     mutationFn: async (payload: LoggingPayload): Promise<LoggingResponse> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      // The API route authenticates server-side — no need for a client getUser().
       const response = await fetch('/api/logging/log-daily', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

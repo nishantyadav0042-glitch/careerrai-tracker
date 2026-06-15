@@ -24,7 +24,7 @@ import { BuddyInsightCard } from './BuddyInsightCard';
 import { ProgressSnapshot } from './ProgressSnapshot';
 import { BrainBreakCard } from './BrainBreakCard';
 import { SafeCard } from './SafeCard';
-import { useLogging } from '@/hooks/useLogging';
+import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
 import { Loader2, Video } from 'lucide-react';
 
@@ -85,9 +85,10 @@ interface DailyTrackerAppProps {
   buddyName?: string | null;
   initialPendingDebrief?: { report_date: string; updated_at: string } | null;
   recovery?: { missedDays: number; previousStreak: number } | null;
+  initialLogging?: InitialLogging | null;
 }
 
-export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null, recovery = null }: DailyTrackerAppProps) {
+export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null, recovery = null, initialLogging = null }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
   const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
@@ -137,7 +138,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
     feedbackData,
     setShowFeedback,
     submitLog,
-  } = useLogging();
+  } = useLogging(studentId, initialLogging);
 
   const { puzzle, attempt, isLoading: puzzleLoading, submitAttempt } = useDailyPuzzle(studentId);
 
