@@ -28,7 +28,7 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-2">
-            {profile?.is_demo && <Badge color="teal">Demo</Badge>}
+            {profile?.is_demo && <Badge color="purple">Demo</Badge>}
             <Badge color="orange">Buddy</Badge>
             <NotificationBell userId={user.id} />
           </div>

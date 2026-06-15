@@ -6,11 +6,14 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { StudentPhoneLogin } from './student-phone-login';
 
+const DEMO_PASSWORD = 'CareerRai2026!';
 const DEMO_ACCOUNTS = [
-  { label: 'Student (Aarav)', username: 'aarav', password: 'CareerRai2026!' },
-  { label: 'Student (Priya)', username: 'priya', password: 'CareerRai2026!' },
-  { label: 'Buddy (Nishant)', username: 'nishant', password: 'CareerRai2026!' },
-  { label: 'Admin', username: 'admin', password: 'CareerRai2026!' },
+  { label: 'Student · Aarav (recovery arc)', username: 'aarav', password: DEMO_PASSWORD },
+  { label: 'Student · Priya (first-timer)', username: 'priya', password: DEMO_PASSWORD },
+  { label: 'Student · Rohan (thriving)', username: 'rohan', password: DEMO_PASSWORD },
+  { label: 'Student · Meera (lapsed)', username: 'meera', password: DEMO_PASSWORD },
+  { label: 'Buddy (Nishant)', username: 'nishant', password: DEMO_PASSWORD },
+  { label: 'Admin', username: 'admin', password: DEMO_PASSWORD },
 ];
 
 function LoginForm() {
@@ -76,7 +79,16 @@ function LoginForm() {
           </div>
 
           {mode === 'student' ? (
-            <StudentPhoneLogin />
+            <>
+              <StudentPhoneLogin />
+              <p className="mt-4 pt-4 border-t border-stone-200 text-[11px] text-stone-400 text-center">
+                Demoing the product? Switch to{' '}
+                <button type="button" onClick={() => setMode('staff')} className="font-semibold text-orange-600 hover:text-orange-700">
+                  Buddy · Admin
+                </button>{' '}
+                for one-click demo logins.
+              </p>
+            </>
           ) : (
           <>
           {/* Native form POST — browser handles cookies + redirect, no JS in the auth flow */}
@@ -145,7 +157,7 @@ function LoginForm() {
               ))}
             </div>
             <p className="text-[10px] text-stone-400 text-center mt-2">
-              All demo accounts use password: <span className="font-mono">CareerRai2026!</span>
+              All demo accounts use password: <span className="font-mono">{DEMO_PASSWORD}</span>
             </p>
           </div>
           </>

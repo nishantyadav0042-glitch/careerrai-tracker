@@ -28,7 +28,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-2">
-            {profile?.is_demo && <Badge color="teal">Demo</Badge>}
+            {profile?.is_demo && <Badge color="purple">Demo</Badge>}
             <Badge color="stone">Student</Badge>
             <NotificationBell userId={user.id} />
           </div>

@@ -651,4 +651,28 @@ ON CONFLICT (email) DO UPDATE SET
   full_name          = EXCLUDED.full_name,
   assigned_buddy_id  = EXCLUDED.assigned_buddy_id;
 
+-- =============================================================
+-- 26. DEMO LOGIN CREDENTIALS
+-- Clean usernames matching the login page demo buttons, plus a
+-- known password so every demo account signs in via the staff
+-- username/password form. (Students normally use email OTP, but
+-- demo emails are unmonitored — username/password is the demo path.)
+-- Password for ALL demo accounts: CareerRai2026!
+-- =============================================================
+UPDATE public.profiles SET username = 'aarav'   WHERE id = v_aarav;
+UPDATE public.profiles SET username = 'priya'   WHERE id = v_priya;
+UPDATE public.profiles SET username = 'nishant' WHERE id = v_nishant;
+UPDATE public.profiles SET username = 'admin'   WHERE id = v_admin;
+UPDATE public.profiles SET username = 'rohan'   WHERE id = v_rohan;
+UPDATE public.profiles SET username = 'meera'   WHERE id = v_meera;
+UPDATE public.profiles SET username = 'arjun'   WHERE id = v_arjun;
+
+-- Reset passwords + confirm emails for all demo auth users.
+-- Requires pgcrypto (enabled by default on Supabase).
+UPDATE auth.users
+SET encrypted_password = crypt('CareerRai2026!', gen_salt('bf')),
+    email_confirmed_at = COALESCE(email_confirmed_at, now()),
+    updated_at = now()
+WHERE id IN (v_aarav, v_priya, v_nishant, v_admin, v_rohan, v_meera, v_arjun);
+
 END $$;
