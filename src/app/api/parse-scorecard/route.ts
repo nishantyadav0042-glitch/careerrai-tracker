@@ -44,11 +44,9 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
-    const keyLen = process.env.GEMINI_API_KEY?.length ?? 0;
-    console.log(`[parse-scorecard] GEMINI_API_KEY present=${keyLen > 0}, len=${keyLen}`);
     if (!geminiEnabled()) {
       return NextResponse.json(
-        { error: `AI key missing (len=${keyLen}) — check Vercel env var GEMINI_API_KEY is set for Production` },
+        { error: 'Scorecard scanner is not available — contact support.' },
         { status: 503 }
       );
     }
