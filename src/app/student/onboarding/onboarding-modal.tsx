@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { X } from 'lucide-react';
+import ScreenSocialProof from './screens/screen-social-proof';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenHonesty from './screens/screen-honesty';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
@@ -23,6 +24,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [userId, setUserId] = useState<string | null>(null);
 
   const screens = [
+    { title: 'Meet the Community', component: ScreenSocialProof },
     { title: 'Your Dream Colleges', component: ScreenDreamColleges },
     { title: 'Be Honest With Us', component: ScreenHonesty },
     { title: 'Meet Your Buddy', component: ScreenMeetBuddy },
@@ -47,12 +49,12 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const handleNext = async (data?: Record<string, unknown>) => {
     if (data) setOnboardingData((prev) => ({ ...prev, ...data }));
 
-    // Screen 0 = Dream Colleges; save immediately
-    if (currentScreen === 0 && data?.dream_colleges) {
+    // Screen 1 = Dream Colleges; save immediately
+    if (currentScreen === 1 && data?.dream_colleges) {
       supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '').then(() => {});
     }
-    // Screen 1 = Honesty; save immediately
-    if (currentScreen === 1 && data) {
+    // Screen 2 = Honesty; save immediately
+    if (currentScreen === 2 && data) {
       supabase.from('profiles').update({
         is_repeater: data.is_repeater,
         starting_percentile: data.starting_percentile ?? null,
@@ -60,8 +62,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         study_target_hours: data.hours_available,
       }).eq('id', userId ?? '').then(() => {});
     }
-    // Screen 4 (Daily Commitment) — save the target hours
-    if (currentScreen === 4 && data?.studyTargetHours) {
+    // Screen 5 (Daily Commitment) — save the target hours
+    if (currentScreen === 5 && data?.studyTargetHours) {
       setStudyTargetHours(data.studyTargetHours as number);
     }
 
