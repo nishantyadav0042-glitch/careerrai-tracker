@@ -47,7 +47,7 @@ async function resolveKey(): Promise<string | null> {
   } catch {
     _keyCache = null;
   }
-  return _keyCache;
+  return _keyCache ?? null;
 }
 
 export async function geminiEnabled(): Promise<boolean> {
