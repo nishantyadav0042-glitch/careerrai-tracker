@@ -5,6 +5,7 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
 import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
 import { getLogDateString } from '@/lib/streak-utils';
+import type { StreakData } from '@/types';
 
 export const metadata = {
   title: 'CareerRai',
@@ -69,16 +70,21 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
 
-  // Second batch — three independent follow-ups that each need only first-batch
-  // results, so they run together instead of one-after-another.
-  const [buddyProfile, existingDebrief, streak] = await Promise.all([
+  // Second batch — independent follow-ups that each need only first-batch
+  // results, so they run together instead of one-after-another. Streak + shields
+  // are fetched here too so the hero card hydrates with no client round-trip.
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+  const [buddyProfile, existingDebrief, streak, shieldRows] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, cat_percentile').eq('id', buddyId).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
     recentMock
       ? admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
-    admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', user.id).maybeSingle().then((r) => r.data),
+    admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle().then((r) => r.data),
+    admin.from('streak_shields').select('id').eq('student_id', user.id).gte('created_at', monthStart).lt('created_at', nextMonthStart).then((r) => r.data),
   ]);
 
   let buddyName: string | null = null;
@@ -99,6 +105,13 @@ export default async function DailyTrackerPage() {
     const gap = Math.round((Date.parse(todayStr) - Date.parse(streak.last_log_date)) / 86_400_000);
     if (gap >= 2) recovery = { missedDays: gap - 1, previousStreak: streak.current_streak as number };
   }
+
+  // Seed the hero/logging card with server data so it paints with no client fetch.
+  const initialLogging = {
+    streak: (streak as StreakData | null) ?? null,
+    hasLoggedToday: (logs?.[0]?.report_date ?? null) === getLogDateString(),
+    shieldsRemaining: Math.max(0, 2 - (shieldRows?.length ?? 0)),
+  };
 
   const daysToCat = Math.max(
     0,
@@ -180,6 +193,7 @@ export default async function DailyTrackerPage() {
           buddyName={buddyName}
           initialPendingDebrief={serverPendingDebrief}
           recovery={recovery}
+          initialLogging={initialLogging}
         />
 
         {/* Day one: the debrief promise — sell it before it exists */}
