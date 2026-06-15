@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       latestDebrief ? `Latest mock: ${latestDebrief.overall_percentile ?? '?'}%ile (${latestDebrief.taken_on})` : 'No recent mock',
     ].join(' | ');
 
-    if (!geminiEnabled()) {
+    if (!(await geminiEnabled())) {
       return NextResponse.json({ draft: '' });
     }
 

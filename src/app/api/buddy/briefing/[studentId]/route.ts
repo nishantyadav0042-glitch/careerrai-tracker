@@ -120,7 +120,7 @@ export async function POST(
   let summaryText: string;
   let source: 'ai' | 'fallback' = 'fallback';
 
-  if (geminiEnabled()) {
+  if (await geminiEnabled()) {
     // Strip names BEFORE sending to the free-tier model (not just on the way out).
     const safeContext = stripNames(factsContext, [student.full_name]);
     const aiResult = await callGemini({

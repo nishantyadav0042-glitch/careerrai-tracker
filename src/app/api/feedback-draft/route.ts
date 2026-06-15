@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         : 'No mock debriefs yet',
     ].join('\n');
 
-    if (!geminiEnabled()) {
+    if (!(await geminiEnabled())) {
       // Rule-based fallback — buddy still gets something useful
       const draft = ruleDraft(student.current_streak ?? 0, daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
       return NextResponse.json({ draft });
