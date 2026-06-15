@@ -105,7 +105,7 @@ export async function POST(
       d.qa?.percentile != null ? `QA ${d.qa.percentile}%ile` : null,
     ].filter(Boolean).join(', ');
     const eb = d.error_buckets;
-    const ebText = eb ? `errors: conceptual=${eb.conceptual}, silly=${eb.silly}, time=${eb.time}` : '';
+    const ebText = eb ? `errors: knowledge-gap=${eb.conceptual}, execution=${eb.silly}, time-misallocation=${eb.time}` : '';
     return `Mock ${i + 1} (${d.taken_on}): ${d.overall_percentile ?? '?'}%ile. ${sec}. ${ebText}`.trim();
   }).join('\n');
 
@@ -178,7 +178,7 @@ function fallbackBriefing(
     if (eb) {
       const total = eb.conceptual + eb.silly + eb.time + eb.panic + eb.selection;
       if (total > 0) {
-        lines.push(`• Error breakdown (latest mock): conceptual=${eb.conceptual}, silly=${eb.silly}, time=${eb.time}, panic=${eb.panic}, selection=${eb.selection}.`);
+        lines.push(`• Error breakdown (latest mock): knowledge-gap=${eb.conceptual}, execution=${eb.silly}, time-misallocation=${eb.time}, misread/framing=${eb.panic}, selection=${eb.selection}.`);
       }
     }
   } else {

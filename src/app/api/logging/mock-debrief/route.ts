@@ -46,10 +46,10 @@ function computeInsight(
     const [bucket, count] = dominant;
     const pct = Math.round((count / total) * 100);
     const labels: Record<keyof ErrorBuckets, string> = {
-      conceptual: 'conceptual',
-      silly: 'silly',
-      time: 'time-pressure',
-      panic: 'panic/misread',
+      conceptual: 'knowledge-gap',
+      silly: 'execution',
+      time: 'time-misallocation',
+      panic: 'misread/framing',
       selection: 'selection',
     };
     return `${count} of ${total} logged errors were ${labels[bucket]} (${pct}%).`;
