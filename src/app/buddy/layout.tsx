@@ -14,7 +14,7 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
   const admin = createAdminClient();
   // Role check and unread count are independent — run them together.
   const [{ data: profile }, chatUnread] = await Promise.all([
-    admin.from('profiles').select('role').eq('id', user.id).single(),
+    admin.from('profiles').select('role, is_demo').eq('id', user.id).single(),
     getChatUnreadCount(user.id, 'buddy'),
   ]);
   if (profile?.role !== 'buddy') {
@@ -28,6 +28,7 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-2">
+            {profile?.is_demo && <Badge color="teal">Demo</Badge>}
             <Badge color="orange">Buddy</Badge>
             <NotificationBell userId={user.id} />
           </div>
