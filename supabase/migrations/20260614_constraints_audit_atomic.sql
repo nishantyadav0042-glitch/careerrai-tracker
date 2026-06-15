@@ -68,7 +68,7 @@ BEGIN
     ) VALUES (
       p_student_id, p_report_date, p_study_duration, p_topics_covered,
       p_mood_emoji, p_mock_taken, p_notes, p_emotional_chips,
-      3, 3, 4, 2, 7, 4, FALSE
+      3, 3, 4, 2, 3, 4, FALSE
     );
   ELSE
     UPDATE public.daily_reports SET
@@ -79,7 +79,7 @@ BEGIN
       notes             = p_notes,
       emotional_chips   = p_emotional_chips,
       quality_focus     = 3, difficulty = 3, confidence = 4, stress = 2,
-      sleep_quality     = 7, overall_energy = 4, nutrition_exercise = FALSE,
+      sleep_quality     = 3, overall_energy = 4, nutrition_exercise = FALSE,
       updated_at        = now()
     WHERE id = v_existing_id;
   END IF;

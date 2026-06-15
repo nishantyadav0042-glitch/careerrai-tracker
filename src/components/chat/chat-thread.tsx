@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from './types';
 
@@ -38,6 +39,7 @@ export function ChatThread({
   const [sending, setSending] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const supabase = createClient();
+  const router = useRouter();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const seenIds = useRef<Set<string>>(new Set(initialMessages.map((m) => m.id)));
 
@@ -45,14 +47,17 @@ export function ChatThread({
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, []);
 
-  // Mark thread read on mount (clears unread for the viewer).
+  // Mark thread read on mount and refresh the layout so the nav badge clears.
   useEffect(() => {
     void fetch('/api/chat/read', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(sendStudentId ? { studentId: sendStudentId } : {}),
+    }).then(() => {
+      // Re-run server components so the unread badge in the layout reflects 0.
+      router.refresh();
     }).catch(() => {});
-  }, [sendStudentId]);
+  }, [sendStudentId, router]);
 
   // Realtime: append incoming messages for this exact pair. RLS guarantees
   // only pair members receive rows.
