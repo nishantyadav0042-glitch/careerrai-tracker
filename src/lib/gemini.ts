@@ -106,11 +106,18 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
 
       // Rate limit / transient server error → exponential backoff with jitter.
       if (res.status === 429 || res.status >= 500) {
-        if (attempt === maxRetries) return null;
+        if (attempt === maxRetries) {
+          console.error(`[gemini] API ${res.status} after ${attempt + 1} attempts (model=${model})`);
+          return null;
+        }
         await backoff(attempt);
         continue;
       }
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.error(`[gemini] API ${res.status} (model=${model}):`, errBody.slice(0, 300));
+        return null;
+      }
 
       const data = (await res.json()) as GeminiResponse;
       const text = data.candidates?.[0]?.content?.parts
