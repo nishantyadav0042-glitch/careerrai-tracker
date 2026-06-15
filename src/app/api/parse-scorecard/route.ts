@@ -44,7 +44,7 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
-    if (!geminiEnabled()) {
+    if (!(await geminiEnabled())) {
       return NextResponse.json(
         { error: 'Scorecard scanner is not available — contact support.' },
         { status: 503 }

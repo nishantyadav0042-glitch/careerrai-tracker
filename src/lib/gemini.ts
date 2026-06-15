@@ -21,7 +21,40 @@ ABSOLUTE RULES — these define the product and may never be broken:
 
 The mentor draws every conclusion. You only remove friction.`;
 
-export function geminiEnabled(): boolean {
+// Module-level key cache — avoids repeated DB lookups within a function lifetime.
+let _keyCache: string | null | undefined = undefined;
+
+async function resolveKey(): Promise<string | null> {
+  // 1. Try env var first (fast path).
+  const envKey = process.env.GEMINI_API_KEY;
+  if (envKey && envKey.length > 0) return envKey;
+
+  // 2. Env var is missing/empty — fall back to Supabase server_config table.
+  if (_keyCache !== undefined) return _keyCache;
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    const { data } = await admin
+      .from('server_config')
+      .select('value')
+      .eq('key', 'GEMINI_API_KEY')
+      .single();
+    _keyCache = data?.value ?? null;
+  } catch {
+    _keyCache = null;
+  }
+  return _keyCache;
+}
+
+export async function geminiEnabled(): Promise<boolean> {
+  return !!(await resolveKey());
+}
+
+export function geminiEnabledSync(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
@@ -47,7 +80,7 @@ interface GeminiResponse {
 // Returns the model's text, or null on any failure/limit — callers MUST have a
 // non-AI fallback so a user never sees an AI error.
 export async function callGemini(opts: CallOpts): Promise<string | null> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = await resolveKey();
   if (!key) return null;
 
   const model = opts.model ?? process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
