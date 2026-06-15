@@ -46,18 +46,18 @@ UPDATE public.profiles SET
   full_name           = 'Aarav Sharma',
   role                = 'student',
   exam_target         = 'CAT',
-  dream_colleges      = ARRAY['IIM Bangalore','IIM Calcutta','FMS Delhi'],
+  dream_colleges      = ARRAY['IIM Ahmedabad','IIM Bangalore','IIM Calcutta'],
   is_repeater         = TRUE,
-  starting_percentile = 84,
-  hours_available     = 6,
+  starting_percentile = 79,
+  hours_available     = 8,
   onboarding_completed= TRUE,
   buddy_id            = v_nishant,
-  cat_percentile      = 87.00,
+  cat_percentile      = 94.00,
   current_streak      = 20,
   best_streak         = 20,
   last_log_date       = '2026-06-14',
   total_logs_completed= 27,
-  study_target_hours  = 4,
+  study_target_hours  = 6,
   subscription_status = 'active',
   avatar_seed         = 'aarav-sharma'
 WHERE id = v_aarav;
@@ -67,13 +67,13 @@ UPDATE public.profiles SET
   full_name           = 'Priya Kapoor',
   role                = 'student',
   exam_target         = 'CAT',
-  dream_colleges      = ARRAY['IIM Indore','IIM Trichy','FMS Delhi'],
+  dream_colleges      = ARRAY['IIM Bangalore','IIM Calcutta','IIM Indore'],
   is_repeater         = FALSE,
   starting_percentile = NULL,
-  hours_available     = 3,
+  hours_available     = 4,
   onboarding_completed= TRUE,
   buddy_id            = v_nishant,
-  cat_percentile      = 68.00,
+  cat_percentile      = 74.00,
   current_streak      = 7,
   best_streak         = 10,
   last_log_date       = '2026-06-14',
@@ -87,9 +87,9 @@ UPDATE public.profiles SET
   is_demo             = TRUE,
   full_name           = 'Nishant Yadav',
   role                = 'buddy',
-  college             = 'IIM Bangalore',
-  cat_percentile      = 97.50,
-  buddy_bio           = 'CAT 2023 — 99.7%ile → IIM Bangalore. Repeater myself (80%ile first attempt). I specialize in helping repeaters break through the 95%ile wall by focusing on error patterns, not just scores.',
+  college             = 'IIM Ahmedabad',
+  cat_percentile      = 99.70,
+  buddy_bio           = E'CAT 2022 — 99.7%ile → IIM Ahmedabad. Placed at Bain & Company.\n\nI failed once at 81%ile. Spent 8 months reverse-engineering exactly why before my second attempt. That''s why I''m good at this — I''ve lived the stall.\n\nI take 4 students per batch and work on what actually moves the needle: error patterns, time allocation, and the mental game. Not cheerleading. Not generic advice.\n\n3 of my last 4 students crossed 98%ile. The fourth crossed 95%ile. All were repeaters stuck between 80–88%ile before we started.',
   agreed_monthly_payout = 3000,
   subscription_status = 'active',
   is_repeater         = TRUE,
@@ -113,7 +113,7 @@ UPDATE public.profiles SET
   starting_percentile = 88,
   onboarding_completed= TRUE,
   buddy_id            = v_nishant,
-  cat_percentile      = 92.00,
+  cat_percentile      = 97.00,
   current_streak      = 18,
   best_streak         = 18,
   last_log_date       = '2026-06-14',
@@ -295,43 +295,44 @@ VALUES
 ON CONFLICT (student_id, report_date) DO NOTHING;
 
 -- =============================================================
--- 8. MOCK DEBRIEFS — AARAV (4 mocks, dip-and-recovery arc)
+-- 8. MOCK DEBRIEFS — AARAV (4 mocks, 79→85→91→94%ile arc)
+-- Error total: 31 → 20 → 9 → 5 (84% reduction in 22 days)
 -- =============================================================
 INSERT INTO public.mock_debriefs
   (student_id, taken_on, log_date, overall_percentile, varc, dilr, qa,
    error_buckets, strategy_note, provider, mock_name, mock_date)
 VALUES
-  -- Mock 1 (May 22): the crash — 79%ile, heavy errors
+  -- Mock 1 (May 22): the crash — 79%ile, 31 total errors
   (v_aarav,'2026-05-22','2026-05-22',79.0,
-   '{"attempted":22,"correct":14,"time_min":40,"percentile":72}'::jsonb,
-   '{"attempted":16,"correct":8,"time_min":40,"percentile":63}'::jsonb,
-   '{"attempted":20,"correct":11,"time_min":40,"percentile":75}'::jsonb,
-   '{"conceptual":3,"silly":8,"time":4,"panic":2,"selection":7}'::jsonb,
-   'DILR set selection cost me 15 marks. Panicked in QA last 10 min. Need to address both.',
+   '{"attempted":22,"correct":14,"time_min":40,"percentile":74}'::jsonb,
+   '{"attempted":16,"correct":8,"time_min":40,"percentile":65}'::jsonb,
+   '{"attempted":20,"correct":11,"time_min":40,"percentile":76}'::jsonb,
+   '{"conceptual":4,"silly":10,"time":6,"panic":4,"selection":7}'::jsonb,
+   'Left 24 marks on the table in DILR alone. Picked wrong sets, burned 18 minutes on unfeasible ones. Not a knowledge problem — a selection problem. QA: 10 silly errors in closing 20 minutes. Panic-solving.',
    'TIME','AIMCAT 1','2026-05-22'),
-  -- Mock 2 (Jun 1): 82%ile — errors shrinking
-  (v_aarav,'2026-06-01','2026-06-01',82.0,
-   '{"attempted":24,"correct":16,"time_min":40,"percentile":78}'::jsonb,
-   '{"attempted":18,"correct":10,"time_min":40,"percentile":70}'::jsonb,
-   '{"attempted":22,"correct":13,"time_min":40,"percentile":80}'::jsonb,
-   '{"conceptual":3,"silly":5,"time":3,"panic":2,"selection":4}'::jsonb,
-   'Better set selection. Still silly mistakes in QA arithmetic — slow down on calculations.',
+  -- Mock 2 (Jun 1): 85%ile — selection fix pays off (+6, 20 errors)
+  (v_aarav,'2026-06-01','2026-06-01',85.0,
+   '{"attempted":24,"correct":17,"time_min":40,"percentile":82}'::jsonb,
+   '{"attempted":19,"correct":12,"time_min":40,"percentile":78}'::jsonb,
+   '{"attempted":23,"correct":15,"time_min":40,"percentile":84}'::jsonb,
+   '{"conceptual":3,"silly":6,"time":4,"panic":3,"selection":4}'::jsonb,
+   'Set selection worked — DILR jumped 13 points. QA arithmetic slips (6) still from rushing the closing segment. Need 8-min alarm before QA ends: stop solving, verify last 3.',
    'IMS','SimCAT 1','2026-06-01'),
-  -- Mock 3 (Jun 8): 85%ile — DILR jump notable
-  (v_aarav,'2026-06-08','2026-06-08',85.0,
-   '{"attempted":25,"correct":18,"time_min":40,"percentile":83}'::jsonb,
-   '{"attempted":20,"correct":13,"time_min":40,"percentile":80}'::jsonb,
-   '{"attempted":22,"correct":15,"time_min":40,"percentile":85}'::jsonb,
-   '{"conceptual":2,"silly":3,"time":2,"panic":1,"selection":2}'::jsonb,
-   'DILR set selection clean. Silly errors down. Feeling settled.',
+  -- Mock 3 (Jun 8): 91%ile — pacing fix, DILR at 89%ile (9 errors)
+  (v_aarav,'2026-06-08','2026-06-08',91.0,
+   '{"attempted":26,"correct":19,"time_min":40,"percentile":88}'::jsonb,
+   '{"attempted":21,"correct":15,"time_min":40,"percentile":89}'::jsonb,
+   '{"attempted":24,"correct":17,"time_min":40,"percentile":91}'::jsonb,
+   '{"conceptual":2,"silly":2,"time":2,"panic":1,"selection":2}'::jsonb,
+   'QA pacing fix worked — silly errors 6→2. DILR at 89%ile. Error total: 31→9 across 3 mocks. VARC RC accuracy 78% is the one gap: reading for comprehension not answer locations.',
    'Cracku','Full Mock 1','2026-06-08'),
-  -- Mock 4 (Jun 13): 87%ile — error buckets minimal
-  (v_aarav,'2026-06-13','2026-06-13',87.0,
-   '{"attempted":26,"correct":19,"time_min":40,"percentile":86}'::jsonb,
-   '{"attempted":20,"correct":14,"time_min":40,"percentile":84}'::jsonb,
-   '{"attempted":24,"correct":17,"time_min":40,"percentile":88}'::jsonb,
-   '{"conceptual":2,"silly":2,"time":1,"panic":1,"selection":1}'::jsonb,
-   'Error buckets clean. Trajectory solid. Need to tighten QA accuracy to hit 90+.',
+  -- Mock 4 (Jun 13): 94%ile — IIM-A range (5 errors total)
+  (v_aarav,'2026-06-13','2026-06-13',94.0,
+   '{"attempted":27,"correct":21,"time_min":40,"percentile":92}'::jsonb,
+   '{"attempted":22,"correct":16,"time_min":40,"percentile":91}'::jsonb,
+   '{"attempted":25,"correct":19,"time_min":40,"percentile":93}'::jsonb,
+   '{"conceptual":1,"silly":1,"time":1,"panic":1,"selection":1}'::jsonb,
+   'VARC went 74→92%ile — RC location technique confirmed. Error total: 31, 20, 9, 5. Linear reduction every mock. Gap to 99: 2–3 DILR sets unattempted per mock (12–15 marks). Guess at +3/-1 beats 0.',
    'TIME','AIMCAT 2','2026-06-13')
 ON CONFLICT (student_id, log_date) DO UPDATE SET
   taken_on          = EXCLUDED.taken_on,
@@ -342,25 +343,25 @@ ON CONFLICT (student_id, log_date) DO UPDATE SET
   provider = EXCLUDED.provider, mock_name = EXCLUDED.mock_name, mock_date = EXCLUDED.mock_date;
 
 -- =============================================================
--- 9. MOCK DEBRIEFS — PRIYA (2 mocks, first-timer calm arc)
+-- 9. MOCK DEBRIEFS — PRIYA (2 mocks, 62→74%ile, +12 jump)
 -- =============================================================
 INSERT INTO public.mock_debriefs
   (student_id, taken_on, log_date, overall_percentile, varc, dilr, qa,
    error_buckets, strategy_note, provider, mock_name, mock_date)
 VALUES
-  (v_priya,'2026-06-05','2026-06-05',65.0,
-   '{"attempted":20,"correct":12,"time_min":40,"percentile":62}'::jsonb,
-   '{"attempted":14,"correct":7,"time_min":40,"percentile":55}'::jsonb,
-   '{"attempted":18,"correct":10,"time_min":40,"percentile":60}'::jsonb,
-   '{"conceptual":5,"silly":4,"time":6,"panic":2,"selection":3}'::jsonb,
-   'First mock. Ran out of time in DILR — only 14 questions. Set selection practice needed.',
+  (v_priya,'2026-06-05','2026-06-05',62.0,
+   '{"attempted":20,"correct":11,"time_min":40,"percentile":60}'::jsonb,
+   '{"attempted":14,"correct":6,"time_min":40,"percentile":52}'::jsonb,
+   '{"attempted":18,"correct":10,"time_min":40,"percentile":58}'::jsonb,
+   '{"conceptual":6,"silly":5,"time":7,"panic":3,"selection":4}'::jsonb,
+   'First mock. DILR disaster — only 14 questions, ran out of time. 7 errors from pure time panic. Set selection and DILR timing are the immediate priority.',
    'IMS','SimCAT 1','2026-06-05'),
-  (v_priya,'2026-06-12','2026-06-12',68.0,
-   '{"attempted":22,"correct":14,"time_min":40,"percentile":67}'::jsonb,
-   '{"attempted":16,"correct":9,"time_min":40,"percentile":63}'::jsonb,
-   '{"attempted":20,"correct":11,"time_min":40,"percentile":66}'::jsonb,
-   '{"conceptual":4,"silly":4,"time":5,"panic":2,"selection":3}'::jsonb,
-   'Slightly better. Time improving. Conceptual errors in QA still there — revisit fundamentals.',
+  (v_priya,'2026-06-12','2026-06-12',74.0,
+   '{"attempted":23,"correct":16,"time_min":40,"percentile":72}'::jsonb,
+   '{"attempted":18,"correct":11,"time_min":40,"percentile":67}'::jsonb,
+   '{"attempted":21,"correct":13,"time_min":40,"percentile":70}'::jsonb,
+   '{"conceptual":4,"silly":4,"time":4,"panic":2,"selection":3}'::jsonb,
+   'Up 12 points in one mock cycle. DILR from 52 to 67%ile — set selection drill worked. Time errors halved. Conceptual gaps in QA still there. Foundation work is paying off.',
    'TIME','AIMCAT 1','2026-06-12')
 ON CONFLICT (student_id, log_date) DO UPDATE SET
   taken_on          = EXCLUDED.taken_on,
@@ -371,30 +372,30 @@ ON CONFLICT (student_id, log_date) DO UPDATE SET
   provider = EXCLUDED.provider, mock_name = EXCLUDED.mock_name, mock_date = EXCLUDED.mock_date;
 
 -- =============================================================
--- 10. MOCK DEBRIEFS — ROHAN (thriving, 3 mocks — 92%ile range)
+-- 10. MOCK DEBRIEFS — ROHAN (thriving, 91→95→97%ile)
 -- =============================================================
 INSERT INTO public.mock_debriefs
   (student_id, taken_on, log_date, overall_percentile, varc, dilr, qa,
    error_buckets, strategy_note, provider, mock_name, mock_date)
 VALUES
-  (v_rohan,'2026-05-25','2026-05-25',88.0,
-   '{"attempted":26,"correct":19,"time_min":40,"percentile":87}'::jsonb,
-   '{"attempted":20,"correct":14,"time_min":40,"percentile":86}'::jsonb,
-   '{"attempted":24,"correct":17,"time_min":40,"percentile":90}'::jsonb,
-   '{"conceptual":2,"silly":3,"time":1,"panic":0,"selection":1}'::jsonb,
-   'Strong session. QA near-perfect. VARC RC speed is the only issue.','TIME','AIMCAT 1','2026-05-25'),
-  (v_rohan,'2026-06-05','2026-06-05',91.0,
-   '{"attempted":27,"correct":21,"time_min":40,"percentile":90}'::jsonb,
-   '{"attempted":22,"correct":15,"time_min":40,"percentile":89}'::jsonb,
-   '{"attempted":26,"correct":19,"time_min":40,"percentile":93}'::jsonb,
-   '{"conceptual":1,"silly":2,"time":1,"panic":0,"selection":1}'::jsonb,
-   'Consistent. QA 93%ile. Holding the band.','IMS','SimCAT 2','2026-06-05'),
-  (v_rohan,'2026-06-12','2026-06-12',92.0,
-   '{"attempted":27,"correct":21,"time_min":40,"percentile":91}'::jsonb,
-   '{"attempted":22,"correct":16,"time_min":40,"percentile":90}'::jsonb,
-   '{"attempted":26,"correct":20,"time_min":40,"percentile":94}'::jsonb,
-   '{"conceptual":1,"silly":1,"time":0,"panic":0,"selection":1}'::jsonb,
-   'Locked in. IIM-A needs 95+. Two more weeks of this.','TIME','AIMCAT 2','2026-06-12')
+  (v_rohan,'2026-05-25','2026-05-25',91.0,
+   '{"attempted":26,"correct":20,"time_min":40,"percentile":89}'::jsonb,
+   '{"attempted":22,"correct":15,"time_min":40,"percentile":88}'::jsonb,
+   '{"attempted":26,"correct":19,"time_min":40,"percentile":92}'::jsonb,
+   '{"conceptual":2,"silly":2,"time":1,"panic":0,"selection":1}'::jsonb,
+   'Strong baseline. QA 92%ile. VARC RC speed is the one ceiling.','TIME','AIMCAT 1','2026-05-25'),
+  (v_rohan,'2026-06-05','2026-06-05',95.0,
+   '{"attempted":27,"correct":21,"time_min":40,"percentile":93}'::jsonb,
+   '{"attempted":23,"correct":17,"time_min":40,"percentile":92}'::jsonb,
+   '{"attempted":26,"correct":20,"time_min":40,"percentile":96}'::jsonb,
+   '{"conceptual":1,"silly":2,"time":0,"panic":0,"selection":1}'::jsonb,
+   'IIM-A range. QA 96%ile. VARC RC speed fixed. Errors down to 4 total.','IMS','SimCAT 2','2026-06-05'),
+  (v_rohan,'2026-06-12','2026-06-12',97.0,
+   '{"attempted":27,"correct":22,"time_min":40,"percentile":95}'::jsonb,
+   '{"attempted":24,"correct":18,"time_min":40,"percentile":94}'::jsonb,
+   '{"attempted":27,"correct":21,"time_min":40,"percentile":98}'::jsonb,
+   '{"conceptual":1,"silly":1,"time":0,"panic":0,"selection":0}'::jsonb,
+   'QA 98%ile. Errors: 2. Hold this for 3 more mocks and the calls start coming.','TIME','AIMCAT 2','2026-06-12')
 ON CONFLICT (student_id, log_date) DO UPDATE SET
   taken_on          = EXCLUDED.taken_on,
   overall_percentile= EXCLUDED.overall_percentile,
@@ -431,31 +432,39 @@ ON CONFLICT (student_id, log_date) DO UPDATE SET
   provider = EXCLUDED.provider, mock_name = EXCLUDED.mock_name, mock_date = EXCLUDED.mock_date;
 
 -- =============================================================
--- 12. BUDDY FEEDBACK (text notes — reach-ins, weeklies, alert)
+-- 12. BUDDY FEEDBACK (expert, data-driven coaching notes)
 -- =============================================================
 INSERT INTO public.buddy_feedback
   (buddy_id, student_id, feedback_date, feedback_text, feedback_type, rating, period_covered, next_steps)
 VALUES
-  -- Aarav: Day 10 reach-in (May 25)
+  -- Aarav: Day 10 reach-in (May 25) — precise diagnosis, not comfort
   (v_nishant, v_aarav, '2026-05-25',
-   'Aarav — haven''t seen a log in 3 days. That''s your dip talking, not your potential. Log tomorrow, even 1 hour. The streak rebuilds. The momentum has to restart consciously.',
-   'buddy_note', 4, 'adhoc', ARRAY['Log tomorrow, even 1 hour']),
-  -- Aarav: After Mock 3 (Jun 8)
+   E'Aarav — 3-day gap. I get it. That 79%ile after a 6-day streak hurts.\n\nBut here''s the thing: I pulled your mock data. You didn''t fail. You mis-selected sets in DILR and burned 18 minutes on two unfeasible ones. That''s not a skills problem — that''s a one-change fix. The score doesn''t reflect where your ceiling actually is.\n\nLog tomorrow. Doesn''t need to be 6 hours. Log 90 minutes of DILR set-selection drills — 8 sets, pick 2, move on. We''re not rebuilding. We''re correcting one thing.',
+   'buddy_note', 5, 'adhoc', ARRAY['Log tomorrow — 90 min DILR set-selection only','8 sets, pick 2 in 10 min, solve for 30 min']),
+  -- Aarav: After Mock 2 (Jun 1)
+  (v_nishant, v_aarav, '2026-06-01',
+   E'85%ile on SimCAT. +6 in 10 days. The DILR fix worked — went from 65 to 78%ile on set selection alone.\n\nNow the QA issue. You made 6 arithmetic slips in the last 20 minutes of QA. Look at the timestamps — they''re all in the final 8 minutes. You''re not making errors, you''re rushing when the clock shows sub-10 minutes.\n\nNext mock: set a silent alarm 8 minutes before QA ends. When it fires, don''t solve new questions. Verify the last 3 you did. That''s worth 6–9 marks.',
+   'buddy_note', 5, 'weekly', ARRAY['Set 8-min alarm in QA for final verification','No new questions after alarm — only verify last 3']),
+  -- Aarav: After Mock 3 (Jun 8) — the breakthrough
   (v_nishant, v_aarav, '2026-06-08',
-   'Aarav — 85%ile on Cracku. That''s 3 consecutive mock improvements. Silly errors: 8 → 3. Selection errors: 7 → 2. DILR jumped 17 points in %ile. The work is showing. Two more weeks of this and IIM-B territory is real. Keep the daily log going — that''s the root of all of this.',
-   'buddy_note', 5, 'weekly', ARRAY['Continue daily log','Focus QA accuracy in closing section']),
-  -- Priya: After Mock 1 (Jun 5)
+   E'91%ile. That''s the real you.\n\nTotal errors went from 31 (mock 1) to 9 (this mock). In 3 weeks. DILR is at 89%ile — it was 65%ile when we started. You didn''t learn new concepts. You learned to pick the right sets and trust your timing.\n\nOne thing left before 99%ile: VARC RC. Your accuracy is 78%, your speed is fine. You''re reading for comprehension when you should be reading for question-type. Next week: 3 RC passages per day, mark the answer location before reading the question. Report back after 5 days.',
+   'buddy_note', 5, 'weekly', ARRAY['3 RC passages per day — mark answer location first','Report accuracy % after 5 days']),
+  -- Aarav: After Mock 4 (Jun 13) — final push
+  (v_nishant, v_aarav, '2026-06-13',
+   E'94%ile. VARC went from 74 to 92%ile in 3 weeks — RC location technique worked.\n\nError total across all 4 mocks: 31, 20, 9, 5. Linear reduction every single time.\n\nHere''s the gap between 94 and 99: you''re leaving 2–3 DILR sets completely unattempted at the end. That''s 12–15 marks. Not wrong answers — blank. In the next mock, attempt all sets even if it means 2 minutes per set at the end. A guess at +3/-1 is better than 0.\n\nYou have 3 weeks before the real attempt. The ceiling is 99. I don''t say that to most students.',
+   'buddy_note', 5, 'weekly', ARRAY['Attempt all DILR sets — guess at +3/-1 beats 0','3-week final push: DILR completion + VARC accuracy']),
+  -- Priya: After Mock 1 (Jun 5) — framed as opportunity
   (v_nishant, v_priya, '2026-06-05',
-   'Priya — 65%ile on your first mock ever is a baseline, not a ceiling. Every 90%ile taker started around here. The DILR time issue is fixable with 2 weeks of dedicated set-selection practice — 10 min to pick, 30 min to solve. You''re building the habit; that''s the hard part and you''re doing it.',
-   'buddy_note', 4, 'adhoc', ARRAY['DILR set-selection practice daily','Time yourself: 8 min decision window per set']),
-  -- Priya: Weekly (Jun 12)
+   E'Priya — 62%ile on your first mock is actually good data.\n\nYou left 7 DILR marks on the table from time panic alone — not wrong answers, just unattempted. Fix one thing: set-selection speed. Spend 8 minutes choosing your 2 DILR sets before solving anything. Right now you''re picking on the fly and it''s costing you 20 minutes.\n\nAlso: your QA accuracy when you did attempt was 55% — that''s a conceptual gap in arithmetic and algebra. I''m sending you a 2-week drill list. Fundamentals first.',
+   'buddy_note', 4, 'adhoc', ARRAY['DILR: 8 min set-selection before solving — every session','QA: 2-week arithmetic + algebra fundamentals drill only']),
+  -- Priya: After Mock 2 (Jun 12) — highlight +12 jump
   (v_nishant, v_priya, '2026-06-12',
-   'Priya — mock 2 at 68%ile, up from 65. The consistency streak (10 days with 1 miss) is your actual edge. Other students do 3 on, 4 off. You''re building the compound effect. Keep it up.',
-   'buddy_note', 4, 'weekly', ARRAY['Maintain daily logging','Add one mock-set analysis per day']),
-  -- Meera: Alert note (Jun 9, after 4-day gap)
+   E'74%ile. Up 12 points in one mock cycle. That''s not luck — that''s the set-selection fix working exactly as expected.\n\nDILR went from 52 to 67%ile. VARC from 60 to 72%ile. You''re not where you want to be but you''re on the right trajectory — and you have 4 months left.\n\nThe students who reach 95%ile from here have one thing in common: they don''t stop logging. Not when life is busy, not when a mock goes badly. You''ve logged 17 of 18 days. Keep that.',
+   'buddy_note', 5, 'weekly', ARRAY['Keep daily log — no exceptions','QA: equations and inequalities, next 2 weeks']),
+  -- Meera: Alert note (Jun 9)
   (v_nishant, v_meera, '2026-06-09',
-   'Meera — 4 days without a log. What''s happening? Just reply when you see this. The mock trend is flattening and the gap will compound if we don''t address it now.',
-   'buddy_note', 3, 'adhoc', ARRAY['Resume daily logs','Reply to this note']);
+   E'Meera — 4 days without a log. Your mock trend went 73 → 71%ile between May and June, and those were days you were logging. When you stop logging, the trend won''t hold.\n\nI''m not going to send daily reminders — that''s not how this works. But I need you to make a decision: are you doing this seriously or not? If yes, log today. 1 hour minimum. If something is wrong, tell me and we''ll adjust the plan.',
+   'buddy_note', 3, 'adhoc', ARRAY['Log today — 1 hour minimum','Reply with what''s getting in the way']);
 
 -- =============================================================
 -- 13. CHAT MESSAGES (Nishant ↔ Aarav and Nishant ↔ Priya)
@@ -463,48 +472,63 @@ VALUES
 INSERT INTO public.chat_messages
   (student_id, buddy_id, sender_id, body, created_at, read_at)
 VALUES
-  -- Nishant → Aarav (Day 10 reach-in, May 25)
+  -- AARAV thread: the dip
   (v_aarav, v_nishant, v_nishant,
-   'Aarav, haven''t seen a log in 3 days. Everything okay? DM me if you want to talk.',
-   '2026-05-25 18:30:00+00', '2026-05-25 22:15:00+00'),
+   'Aarav — 3 days. What''s happening.',
+   '2026-05-25 18:30:00+00', '2026-05-25 22:10:00+00'),
   (v_aarav, v_nishant, v_aarav,
-   'Been feeling low after that mock. Lost motivation honestly.',
-   '2026-05-25 22:20:00+00', '2026-05-25 22:25:00+00'),
+   'Honestly, lost motivation after that mock. 79%ile felt like proof I can''t do this.',
+   '2026-05-25 22:15:00+00', '2026-05-25 22:20:00+00'),
   (v_aarav, v_nishant, v_nishant,
-   'That''s normal after a tough mock. But disappearing is how the dip gets worse. Log tomorrow, even 1 hour. Small restart.',
-   '2026-05-25 22:28:00+00', '2026-05-25 22:45:00+00'),
-  -- Aarav returns (May 26)
+   '79%ile on a mock where you mis-selected 3 DILR sets and burned 18 minutes on unfeasible ones. That''s not your ceiling. That''s one fixable mistake. Log tomorrow — 90 minutes, DILR set selection only. Nothing else.',
+   '2026-05-25 22:22:00+00', '2026-05-25 22:50:00+00'),
   (v_aarav, v_nishant, v_aarav,
-   'Logged today. 3 hours. Thanks for checking in.',
-   '2026-05-26 21:00:00+00', '2026-05-26 21:10:00+00'),
-  -- After Mock 3 (Jun 8)
+   'Logged. 3 hours. Did 8 DILR sets — selection only, didn''t even solve most of them.',
+   '2026-05-26 21:00:00+00', '2026-05-26 21:08:00+00'),
   (v_aarav, v_nishant, v_nishant,
-   '85%ile on Cracku. That''s the trajectory. Three more weeks of this and you''re IIM-B territory.',
-   '2026-06-08 20:00:00+00', '2026-06-08 20:30:00+00'),
-  -- After Mock 4 (Jun 13)
+   'Good. Do the same tomorrow. Selection is a muscle — it''s faster than learning new concepts and it''s what the mock 2 delta will come from.',
+   '2026-05-26 21:12:00+00', '2026-05-26 21:30:00+00'),
+  -- After Mock 2 (Jun 1)
   (v_aarav, v_nishant, v_aarav,
-   '87 today 🙏',
-   '2026-06-13 19:45:00+00', '2026-06-13 20:00:00+00'),
+   '85%ile on SimCAT 🙏 DILR felt completely different.',
+   '2026-06-01 20:30:00+00', '2026-06-01 20:35:00+00'),
   (v_aarav, v_nishant, v_nishant,
-   'Consistent. Keep the head down.',
-   '2026-06-13 20:05:00+00', '2026-06-13 20:15:00+00'),
+   'DILR went from 65 to 78%ile. That''s the selection fix. Now look at QA — your 6 arithmetic errors were all in the last 8 minutes. Set a silent alarm 8 min before QA ends. Stop solving, verify the last 3. That''s 6–9 marks sitting there.',
+   '2026-06-01 20:40:00+00', '2026-06-01 21:00:00+00'),
+  -- After Mock 3 (Jun 8) — 91%ile
+  (v_aarav, v_nishant, v_aarav,
+   '91%ile. I actually can''t believe this.',
+   '2026-06-08 19:45:00+00', '2026-06-08 19:50:00+00'),
+  (v_aarav, v_nishant, v_nishant,
+   'Believe it — you went from 31 total errors on mock 1 to 9 on this one. DILR is at 89%ile. One gap left: VARC RC accuracy at 78%. Next 5 days: 3 RC passages daily, mark where the answer lives before reading the question. Report back.',
+   '2026-06-08 19:55:00+00', '2026-06-08 20:15:00+00'),
+  -- After Mock 4 (Jun 13) — 94%ile
+  (v_aarav, v_nishant, v_aarav,
+   '94. VARC felt completely different this time.',
+   '2026-06-13 19:45:00+00', '2026-06-13 19:52:00+00'),
+  (v_aarav, v_nishant, v_nishant,
+   'VARC went from 74 to 92%ile. RC location technique, confirmed. Total errors across 4 mocks: 31, 20, 9, 5. The gap to 99: you''re leaving 2–3 DILR sets blank at the end — 12–15 marks. Attempt everything, even a guess. +3/-1 beats 0 every time. 3 weeks left. The ceiling is 99.',
+   '2026-06-13 19:58:00+00', '2026-06-13 20:15:00+00'),
 
-  -- Nishant ↔ Priya
+  -- PRIYA thread
   (v_priya, v_nishant, v_nishant,
-   'First mock is always the hardest. 65%ile is a baseline, not a ceiling. Keep the daily logs coming.',
-   '2026-06-05 20:00:00+00', '2026-06-05 20:45:00+00'),
+   '62%ile on your first mock. Here''s what I see: 7 of your errors were from time panic, not wrong thinking. Fix set selection and that''s +8 points before you learn a single new concept.',
+   '2026-06-05 20:00:00+00', '2026-06-05 20:40:00+00'),
   (v_priya, v_nishant, v_priya,
-   'I know. Just felt overwhelmed in DILR — ran out of time completely.',
-   '2026-06-05 20:50:00+00', '2026-06-05 21:00:00+00'),
+   'I froze completely in DILR. Just kept staring at the sets not knowing which to pick.',
+   '2026-06-05 20:45:00+00', '2026-06-05 20:52:00+00'),
   (v_priya, v_nishant, v_nishant,
-   'DILR time is fixable. Commit 10 min to picking sets, 30 min to solving. Practice that rhythm every day.',
-   '2026-06-05 21:05:00+00', '2026-06-05 21:20:00+00'),
-  (v_priya, v_nishant, v_nishant,
-   '68 on mock 2. Moving up. The time management will come with reps.',
-   '2026-06-12 20:00:00+00', '2026-06-12 20:30:00+00'),
-  -- Priya: recent unread (creates badge for Nishant's inbox)
+   'That freezing has a fix: 8 minutes, every time, before you solve anything. Scan all sets, mark the 2 easiest, start. Decision made in advance. Practice it every day — not just on mocks.',
+   '2026-06-05 20:55:00+00', '2026-06-05 21:10:00+00'),
   (v_priya, v_nishant, v_priya,
-   'Logging every day feels easier now. Really glad I started this.',
+   '74%ile on mock 2 😊 DILR actually went okay this time.',
+   '2026-06-12 20:15:00+00', '2026-06-12 20:25:00+00'),
+  (v_priya, v_nishant, v_nishant,
+   'Up 12 points in one cycle. DILR from 52 to 67%ile — that''s the selection drill. You''ve logged 17 of 18 days. The students who reach 95%ile from here are the ones who don''t stop logging when life gets busy.',
+   '2026-06-12 20:30:00+00', '2026-06-12 20:45:00+00'),
+  -- Priya: recent unread (creates inbox badge for Nishant)
+  (v_priya, v_nishant, v_priya,
+   'Logged again today. I think I actually understand what I''m doing now.',
    '2026-06-14 21:00:00+00', NULL);
 
 -- =============================================================
@@ -593,13 +617,13 @@ ON CONFLICT (buddy_id, period) DO UPDATE SET
 INSERT INTO public.buddy_briefings (student_id, buddy_id, summary_text, source, generated_at)
 VALUES
   (v_aarav, v_nishant,
-   'Aarav Sharma — 30 days tracked. 27 of 30 logged (90%). 3-day gap May 23–25. ' ||
-   'Study duration: Days 1–7 avg 4.6 h; Days 11–30 avg 4.1 h. ' ||
-   'Mock arc: 79%ile (May 22) → 82%ile (Jun 1) → 85%ile (Jun 8) → 87%ile (Jun 13) — 4 consecutive upward data points. ' ||
-   'Error-bucket trend (mock 1 vs mock 4): silly 8→2, selection 7→1, time 4→1, panic 2→1, conceptual 3→2. ' ||
-   'Section %ile arc across 4 mocks: VARC 72→86, DILR 63→84, QA 75→88. ' ||
-   'Current streak 20 days. Best streak 20 days. 1 recovery event (May 26, 3-day gap). 1 streak shield used (Jun 11, buddy-granted). ' ||
-   '— worth exploring why DILR (63→84) is outpacing QA (75→88) at this rate.',
+   E'Aarav Sharma — 30 days tracked. 27 of 30 logged (90%). 3-day gap May 23–25, fully recovered.\n\n'
+   'Study hours: Pre-mock avg 5.8h/day. Post-recovery avg 5.4h/day.\n\n'
+   'Mock arc (4 data points, 22 days):\n79%ile → 85%ile → 91%ile → 94%ile\n+15%ile total. All upward. No regression.\n\n'
+   'Error-bucket reduction mock 1 → mock 4:\n• Silly: 10 → 1\n• Selection: 7 → 1\n• Time: 6 → 1\n• Panic: 4 → 1\n• Conceptual: 4 → 1\nTotal errors: 31 → 5 (84% reduction in 22 days).\n\n'
+   'Section %ile arc:\n• VARC: 74 → 92 (+18)\n• DILR: 65 → 91 (+26)\n• QA: 76 → 93 (+17)\n\n'
+   'DILR is the headline: 65 → 91%ile in 22 days. Pure set-selection drill — no new concepts learned.\n\n'
+   'Gap to 99%ile: 2–3 DILR sets unattempted per mock (12–15 marks). That''s the only remaining unlock.',
    'ai', '2026-06-14 20:00:00+00')
 ON CONFLICT (student_id, buddy_id) DO UPDATE SET
   summary_text = EXCLUDED.summary_text,

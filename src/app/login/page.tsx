@@ -8,11 +8,11 @@ import { StudentPhoneLogin } from './student-phone-login';
 
 const DEMO_PASSWORD = 'CareerRai2026!';
 const DEMO_ACCOUNTS = [
-  { label: 'Student · Aarav (recovery arc)', username: 'aarav', password: DEMO_PASSWORD },
-  { label: 'Student · Priya (first-timer)', username: 'priya', password: DEMO_PASSWORD },
-  { label: 'Student · Rohan (thriving)', username: 'rohan', password: DEMO_PASSWORD },
-  { label: 'Student · Meera (lapsed)', username: 'meera', password: DEMO_PASSWORD },
-  { label: 'Buddy (Nishant)', username: 'nishant', password: DEMO_PASSWORD },
+  { label: 'Aarav — 79→94%ile in 30 days', username: 'aarav', password: DEMO_PASSWORD },
+  { label: 'Priya — first-timer, 62→74%ile', username: 'priya', password: DEMO_PASSWORD },
+  { label: 'Rohan — thriving at 97%ile', username: 'rohan', password: DEMO_PASSWORD },
+  { label: 'Meera — lapsed, needs attention', username: 'meera', password: DEMO_PASSWORD },
+  { label: 'Buddy — Nishant (IIM-A, Bain)', username: 'nishant', password: DEMO_PASSWORD },
   { label: 'Admin', username: 'admin', password: DEMO_PASSWORD },
 ];
 
