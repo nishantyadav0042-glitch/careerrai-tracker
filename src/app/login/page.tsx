@@ -4,7 +4,6 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { StudentPhoneLogin } from './student-phone-login';
 
 const DEMO_PASSWORD = 'CareerRai2026!';
 const DEMO_ACCOUNTS = [
@@ -21,8 +20,6 @@ function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  // Students sign in with email + OTP; buddies/admins keep username + password.
-  const [mode, setMode] = useState<'student' | 'staff'>('student');
 
   const hasError = params.get('error') === '1';
 
@@ -61,37 +58,7 @@ function LoginForm() {
         </div>
 
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
-          {/* Mode toggle: students use phone OTP, staff use username/password */}
-          <div className="flex bg-stone-100 rounded-xl p-1 mb-5">
-            {([['student', 'Student'], ['staff', 'Buddy · Admin']] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMode(value)}
-                className={cn(
-                  'flex-1 py-2 text-sm font-medium rounded-lg transition-all',
-                  mode === value ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {mode === 'student' ? (
-            <>
-              <StudentPhoneLogin />
-              <p className="mt-4 pt-4 border-t border-stone-200 text-[11px] text-stone-400 text-center">
-                Demoing the product? Switch to{' '}
-                <button type="button" onClick={() => setMode('staff')} className="font-semibold text-orange-600 hover:text-orange-700">
-                  Buddy · Admin
-                </button>{' '}
-                for one-click demo logins.
-              </p>
-            </>
-          ) : (
-          <>
-          {/* Native form POST — browser handles cookies + redirect, no JS in the auth flow */}
+          {/* Single login form — username + password for all roles */}
           <form action="/api/auth/login" method="POST" className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-stone-800 mb-1.5">Username</label>
@@ -102,6 +69,7 @@ function LoginForm() {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="your username"
                 required
+                autoComplete="username"
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
               />
             </div>
@@ -115,6 +83,7 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
+                  autoComplete="current-password"
                   className="w-full px-3 py-2.5 pr-10 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
                 />
                 <button
@@ -160,8 +129,6 @@ function LoginForm() {
               All demo accounts use password: <span className="font-mono">{DEMO_PASSWORD}</span>
             </p>
           </div>
-          </>
-          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-stone-500">
