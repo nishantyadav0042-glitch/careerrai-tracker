@@ -47,6 +47,11 @@ export async function POST(request: NextRequest) {
       .eq('id', data.user.id)
       .maybeSingle();
 
+    // Hard gate: a brand-new email not on the allowlist cannot create a profile.
+    if (!existing && !entry) {
+      return NextResponse.json({ error: 'This email is not on the access list. Contact support to get access.' }, { status: 403 });
+    }
+
     if (!existing) {
       await admin.from('profiles').insert({
         id: data.user.id,

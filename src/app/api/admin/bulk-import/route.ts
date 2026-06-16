@@ -62,11 +62,6 @@ function parseCSV(text: string): ImportRow[] {
       password: getValue('password') || undefined,
     };
 
-    // Debug logging
-    if (row.username) {
-      console.log(`[CSV_PARSE] Row ${i}: email=${row.email}, username=${row.username}, password=${row.password ? '***' : 'empty'}`);
-    }
-
     rows.push(row);
   }
   return rows;
@@ -84,8 +79,6 @@ function validateRow(row: ImportRow, rowNum: number): string | null {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[BULK_IMPORT] Starting import...');
-
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -93,38 +86,20 @@ export async function POST(request: NextRequest) {
     );
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.log('[BULK_IMPORT] No user authenticated');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const admin = createAdminClient();
     const { data: profile, error: profileError } = await admin.from('profiles').select('role').eq('id', user.id).single();
 
-    if (profileError) {
-      console.log('[BULK_IMPORT] Profile fetch error:', profileError.message);
-      return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 403 });
-    }
-
-    if (profile?.role !== 'admin') {
-      console.log('[BULK_IMPORT] User is not admin, role:', profile?.role);
-      return NextResponse.json({ error: 'Forbidden - not an admin' }, { status: 403 });
-    }
-
-    console.log('[BULK_IMPORT] Admin verified');
+    if (profileError) return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 403 });
+    if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden - not an admin' }, { status: 403 });
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    if (!file) {
-      console.log('[BULK_IMPORT] No file provided');
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
-    console.log('[BULK_IMPORT] File received:', file.name, 'size:', file.size);
     const text = await file.text();
-
     const rows = parseCSV(text);
-    console.log('[BULK_IMPORT] Parsed rows:', rows.length);
 
     // Validate all rows first
     const errors: Array<{ row: number; email: string; error: string }> = [];
@@ -166,24 +141,15 @@ export async function POST(request: NextRequest) {
         let userId: string;
 
         if (existingProfile) {
-          // User exists
           userId = existingProfile.id;
-          console.log(`[BULK_IMPORT] User exists for ${row.email}, ID: ${userId}`);
-
-          // If password provided in CSV, update it
           if (row.password) {
-            console.log(`[BULK_IMPORT] Updating password for ${row.email}`);
             const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
               password: row.password,
             });
-
             if (updateError) {
-              console.warn(`[BULK_IMPORT] Password update warning for ${row.email}:`, updateError.message);
               errors.push({ row: 0, email: row.email, error: `Password update failed: ${updateError.message}` });
               continue;
             }
-
-            console.log(`[BULK_IMPORT] Password updated for ${row.email}`);
           }
         } else {
           // New user - create auth account
@@ -208,7 +174,6 @@ export async function POST(request: NextRequest) {
           }
 
           userId = newUser.id;
-          console.log(`[BULK_IMPORT] Created new auth user for ${row.email}`);
         }
 
         // UPSERT profile (create if new, update if exists)
@@ -295,7 +260,6 @@ export async function POST(request: NextRequest) {
       buddyErrors,
     };
 
-    console.log('[BULK_IMPORT] Import complete:', result.summary);
     logAdminAction(user.id, 'bulk_import', 'users', null, {
       file: file.name,
       total: result.summary.total,

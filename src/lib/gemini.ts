@@ -38,14 +38,18 @@ async function resolveKey(): Promise<string | null> {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
-    const { data } = await admin
+    const { data, error } = await admin
       .from('server_config')
       .select('value')
       .eq('key', 'GEMINI_API_KEY')
       .single();
-    _keyCache = data?.value ?? null;
+    if (!error) {
+      // Only cache on a successful query. A transient DB error must not permanently
+      // disable AI for the lifetime of this worker process.
+      _keyCache = data?.value ?? null;
+    }
   } catch {
-    _keyCache = null;
+    // Don't set _keyCache — let the next request retry.
   }
   return _keyCache ?? null;
 }
