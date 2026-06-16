@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BuddyFeedbackCard } from '@/app/student/home/buddy-feedback-card';
 import { SessionRequestPanel } from './session-request-panel';
-import { Video, Calendar, PhoneCall, Clock } from 'lucide-react';
+import { Video, Calendar, PhoneCall, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
@@ -27,7 +27,7 @@ export default async function BuddyCommunicationPage() {
   // eslint-disable-next-line react-hooks/purity
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }] = await Promise.all([
+  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: lastFeedback }] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
@@ -61,11 +61,26 @@ export default async function BuddyCommunicationPage() {
           .order('created_at', { ascending: false })
           .limit(1)
       : Promise.resolve({ data: [] }),
+    // Last buddy feedback received — for SLA adherence indicator
+    buddyId
+      ? admin
+          .from('buddy_feedback')
+          .select('created_at')
+          .eq('student_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
   const hasPendingRequest = (pendingRequests?.length ?? 0) > 0;
   const sessions = [...(upcoming ?? []), ...(recentCompleted ?? [])];
+
+  // SLA: was there a buddy feedback in the last 48h?
+  const lastFeedbackMs = lastFeedback?.created_at ? new Date(lastFeedback.created_at).getTime() : null;
+  const hoursSinceLastFeedback = lastFeedbackMs ? Math.floor((Date.now() - lastFeedbackMs) / 3_600_000) : null;
+  const slaBreached = hoursSinceLastFeedback !== null && hoursSinceLastFeedback > 48;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -83,6 +98,31 @@ export default async function BuddyCommunicationPage() {
             </p>
           )}
         </div>
+
+        {/* Buddy SLA promise */}
+        {buddyId && (
+          <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${slaBreached ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+            {slaBreached ? (
+              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className={`text-xs font-semibold ${slaBreached ? 'text-amber-800' : 'text-emerald-800'}`}>
+                {slaBreached
+                  ? `${buddyName} hasn't sent feedback in ${hoursSinceLastFeedback}h`
+                  : `${buddyName} responds within 24h`}
+              </p>
+              <p className={`text-[11px] mt-0.5 ${slaBreached ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {slaBreached
+                  ? 'Send a session request if you need help urgently.'
+                  : hoursSinceLastFeedback !== null
+                  ? `Last feedback ${hoursSinceLastFeedback}h ago`
+                  : 'Your mentor is committed to keeping you on track'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {!buddyId ? (
           <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">

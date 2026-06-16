@@ -9,6 +9,7 @@ export interface SchedulableStudent {
   id: string;
   full_name: string;
   free_onboarding_used?: boolean;
+  daysSinceLastMock?: number;
 }
 
 interface ScheduleSessionModalProps {
@@ -255,6 +256,20 @@ export function ScheduleSessionModal({
                     ))}
                   </select>
                 </div>
+
+                {/* Debrief nudge: student had a recent mock that hasn't been debriefed */}
+                {(() => {
+                  const sel = students.find((s) => s.id === studentId);
+                  return sel?.daysSinceLastMock !== undefined &&
+                    sel.daysSinceLastMock >= 2 &&
+                    sel.daysSinceLastMock <= 21 ? (
+                    <div className="px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+                      <span className="font-semibold">Mock debrief pending:</span>{' '}
+                      {sel.full_name.split(' ')[0]} had a mock {sel.daysSinceLastMock}d ago — consider
+                      including a debrief in this session.
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

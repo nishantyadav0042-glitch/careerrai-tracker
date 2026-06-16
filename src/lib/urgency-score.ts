@@ -19,6 +19,12 @@ export interface StudentUrgencyData {
   streakDays: number;
   recentDrops: number;
   free_onboarding_used?: boolean;
+  // Efficacy metrics — the north-star truth layer
+  starting_percentile: number | null;
+  percentileDelta: number | null;      // cat_percentile − starting_percentile
+  daysSinceLastMock: number | null;    // days since latest mock_debrief.taken_on
+  daysSinceLastDebrief: number | null; // same (debrief = mock_debrief row exists)
+  isFlat: boolean;                     // 14+ days logged, no upward percentile movement
 }
 
 export interface UrgencyFactors {
@@ -231,7 +237,13 @@ export async function loadStudentUrgency(
       daysSinceFeedback,
       streakStatus: streakBroken ? 'broken' : 'active',
       streakDays: streak?.current_streak || 0,
-      recentDrops: dropAlerts?.length || 0
+      recentDrops: dropAlerts?.length || 0,
+      // Efficacy fields — null here; populated by loadBuddyStudents which has the batch data
+      starting_percentile: null,
+      percentileDelta: null,
+      daysSinceLastMock: null,
+      daysSinceLastDebrief: null,
+      isFlat: false,
     };
   } catch (error) {
     console.error('Error loading student urgency:', error);
@@ -240,7 +252,9 @@ export async function loadStudentUrgency(
 }
 
 /**
- * Get all assigned students with urgency scores, sorted by urgency
+ * Get all assigned students with urgency + efficacy scores, sorted by urgency.
+ * Batches the efficacy queries (mock_debriefs, daily_reports) across all students
+ * so the buddy home doesn't pay N×query latency.
  */
 export async function loadBuddyStudents(
   buddyId: string
@@ -248,32 +262,103 @@ export async function loadBuddyStudents(
   const supabase = createClient();
 
   try {
-    // Get all students assigned to this buddy
     const { data: students } = await supabase
       .from('profiles')
-      .select('id, full_name, cat_percentile, free_onboarding_used')
+      .select('id, full_name, cat_percentile, starting_percentile, free_onboarding_used')
       .eq('buddy_id', buddyId)
       .order('full_name');
 
-    if (!students || students.length === 0) {
-      return [];
+    if (!students || students.length === 0) return [];
+
+    const ids = students.map((s) => s.id);
+
+    // Batch-fetch the efficacy signals in parallel with the urgency queries.
+    const [urgencyResults, { data: latestDebriefs }, { data: logCounts }] = await Promise.all([
+      Promise.all(
+        students.map(async (student): Promise<StudentUrgencyData | null> => {
+          const data = await loadStudentUrgency(student.id);
+          return data
+            ? {
+                ...data,
+                free_onboarding_used: student.free_onboarding_used ?? false,
+                starting_percentile: student.starting_percentile ?? null,
+                percentileDelta: null,
+                daysSinceLastMock: null,
+                daysSinceLastDebrief: null,
+                isFlat: false,
+              }
+            : null;
+        })
+      ),
+      // Latest mock_debrief per student (one row each, sorted by taken_on desc)
+      supabase
+        .from('mock_debriefs')
+        .select('student_id, taken_on, overall_percentile')
+        .in('student_id', ids)
+        .order('taken_on', { ascending: false }),
+      // Log count in last 14 days for flat-percentile detection
+      supabase
+        .from('daily_reports')
+        .select('student_id, report_date')
+        .in('student_id', ids)
+        .gte('report_date', new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0]),
+    ]);
+
+    // Build per-student debrief index (latest per student)
+    const latestDebriefMap: Record<string, { taken_on: string; overall_percentile: number | null }> = {};
+    for (const d of latestDebriefs ?? []) {
+      if (!latestDebriefMap[d.student_id]) latestDebriefMap[d.student_id] = d;
     }
 
-    // Load every student's urgency concurrently — was a sequential for-loop, so
-    // a buddy with 20 students paid 20× the latency (each doing 5 queries).
-    const loaded = await Promise.all(
-      students.map(async (student): Promise<StudentUrgencyData | null> => {
-        const data = await loadStudentUrgency(student.id);
-        return data
-          ? { ...data, free_onboarding_used: student.free_onboarding_used ?? false }
+    // Percentile history per student (all debriefs, latest first — already ordered)
+    const debriefPercentilesByStudent: Record<string, number[]> = {};
+    for (const d of latestDebriefs ?? []) {
+      if (d.overall_percentile !== null) {
+        (debriefPercentilesByStudent[d.student_id] ??= []).push(d.overall_percentile);
+      }
+    }
+
+    // Log count per student in last 14 days
+    const logCountByStudent: Record<string, number> = {};
+    for (const r of logCounts ?? []) {
+      logCountByStudent[r.student_id] = (logCountByStudent[r.student_id] ?? 0) + 1;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const urgencyData: StudentUrgencyData[] = (urgencyResults.filter(Boolean) as StudentUrgencyData[]).map(
+      (item) => {
+        const s = students.find((x) => x.id === item.student_id)!;
+        const latestDebrief = latestDebriefMap[item.student_id];
+
+        const daysSinceLastMock = latestDebrief
+          ? Math.round((today.getTime() - new Date(latestDebrief.taken_on + 'T00:00:00').getTime()) / 86_400_000)
           : null;
-      })
-    );
-    const urgencyData: StudentUrgencyData[] = loaded.filter(
-      (d): d is StudentUrgencyData => d !== null
+
+        const percentileDelta =
+          s.cat_percentile !== null && s.starting_percentile !== null
+            ? Math.round((s.cat_percentile - s.starting_percentile) * 10) / 10
+            : null;
+
+        // Flat: 14+ days logged AND either no debriefs or percentile hasn't moved ≥2pts
+        const logsLast14 = logCountByStudent[item.student_id] ?? 0;
+        const pcts = debriefPercentilesByStudent[item.student_id] ?? [];
+        const isFlat =
+          logsLast14 >= 14 &&
+          (pcts.length === 0 || (pcts.length >= 2 && pcts[0] - pcts[pcts.length - 1] < 2));
+
+        return {
+          ...item,
+          starting_percentile: s.starting_percentile ?? null,
+          percentileDelta,
+          daysSinceLastMock,
+          daysSinceLastDebrief: daysSinceLastMock, // debrief = mock_debrief row
+          isFlat,
+        };
+      }
     );
 
-    // Sort by urgency score (descending)
     return urgencyData.sort((a, b) => b.score - a.score);
   } catch (error) {
     console.error('Error loading buddy students:', error);

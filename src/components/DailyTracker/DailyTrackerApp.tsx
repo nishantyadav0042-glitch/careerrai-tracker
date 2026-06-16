@@ -28,6 +28,12 @@ import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
 import { Loader2, Video } from 'lucide-react';
 
+// ── Feature flags — disable without deleting (re-enable by changing to true) ──
+// Brain break: unvalidated break-containment hypothesis; hidden for 60-day cohort.
+const BRAIN_BREAK_ENABLED = false;
+// Daily puzzle: content pipeline not ready; hidden until populated.
+const DAILY_PUZZLE_ENABLED = false;
+
 function SessionStrip({ session }: { session: TodaySession }) {
   const startsAt = new Date(session.scheduled_at);
   const minsAway = Math.round((startsAt.getTime() - Date.now()) / 60_000);
@@ -244,8 +250,8 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         shieldsRemaining={shieldsRemaining}
       />
 
-      {/* 2. Daily Puzzle */}
-      {puzzleLoading ? (
+      {/* 2. Daily Puzzle — hidden until content pipeline is ready */}
+      {DAILY_PUZZLE_ENABLED && (puzzleLoading ? (
         <div className="flex items-center justify-center py-6 text-stone-500">
           <Loader2 className="w-4 h-4 animate-spin mr-2" />
           <span className="text-sm">Loading today&apos;s puzzle...</span>
@@ -265,11 +271,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
           explanation={puzzle.explanation}
           onSolve={() => isPlayablePuzzle && setIsPuzzleOpen(true)}
         />
-      ) : (
-        <div className="rounded-2xl border-2 border-stone-200 bg-stone-50 p-4 text-center">
-          <p className="text-sm text-stone-600">🧩 No puzzle today — check back tomorrow!</p>
-        </div>
-      )}
+      ) : null)}
 
       {/* 3. Buddy insight — 1 line */}
       {studentId && (
@@ -288,15 +290,15 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         </SafeCard>
       )}
 
-      {/* 6. Brain Break — cognitive reset, not CAT content */}
-      {studentId && (
+      {/* 6. Brain Break — disabled: break-containment unvalidated in 60-day cohort */}
+      {BRAIN_BREAK_ENABLED && studentId && (
         <SafeCard>
           <BrainBreakCard studentId={studentId} />
         </SafeCard>
       )}
 
-      {/* Modals — Arrangement games: Detective + Airport */}
-      {isCasePuzzle && puzzle && (
+      {/* Puzzle modals — only rendered when DAILY_PUZZLE_ENABLED */}
+      {DAILY_PUZZLE_ENABLED && isCasePuzzle && puzzle && (
         <DetectiveCaseModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
@@ -307,8 +309,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         />
       )}
 
-      {/* Escape Room */}
-      {isEscape && puzzle && (
+      {DAILY_PUZZLE_ENABLED && isEscape && puzzle && (
         <EscapeRoomModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
@@ -318,8 +319,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         />
       )}
 
-      {/* Mafia */}
-      {isMafia && puzzle && (
+      {DAILY_PUZZLE_ENABLED && isMafia && puzzle && (
         <MafiaLogicModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
@@ -329,8 +329,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         />
       )}
 
-      {/* Legacy single-question fallback */}
-      {!isCasePuzzle && !isEscape && !isMafia && isPlayablePuzzle && puzzle && (
+      {DAILY_PUZZLE_ENABLED && !isCasePuzzle && !isEscape && !isMafia && isPlayablePuzzle && puzzle && (
         <PuzzleSolverModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
