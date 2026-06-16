@@ -29,11 +29,11 @@ interface MockDebrief {
 }
 
 const BUCKET_LABELS = [
-  { key: 'conceptual', emoji: '🧠', label: 'Conceptual' },
-  { key: 'silly', emoji: '🤏', label: 'Silly' },
-  { key: 'time', emoji: '⏱️', label: 'Time' },
-  { key: 'panic', emoji: '😰', label: 'Panic' },
-  { key: 'selection', emoji: '🎯', label: 'Selection' },
+  { key: 'conceptual', emoji: '🧠', label: 'Knowledge gap' },
+  { key: 'silly', emoji: '⚠️', label: 'Execution error' },
+  { key: 'time', emoji: '⏱️', label: 'Time misallocation' },
+  { key: 'panic', emoji: '↩️', label: 'Misread / framing' },
+  { key: 'selection', emoji: '✗', label: 'Selection error' },
 ];
 
 const BUCKET_COLORS: Record<string, string> = {

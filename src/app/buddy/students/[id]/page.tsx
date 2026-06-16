@@ -37,11 +37,11 @@ interface MockDebrief {
 }
 
 const BUCKET_LABELS: { key: keyof MockDebrief['error_buckets']; emoji: string; label: string }[] = [
-  { key: 'conceptual', emoji: '🧠', label: 'Conceptual' },
-  { key: 'silly', emoji: '🤏', label: 'Silly' },
-  { key: 'time', emoji: '⏱️', label: 'Time pressure' },
-  { key: 'panic', emoji: '😰', label: 'Panic/misread' },
-  { key: 'selection', emoji: '🎯', label: 'Wrong selection' },
+  { key: 'conceptual', emoji: '🧠', label: 'Knowledge gap' },
+  { key: 'silly', emoji: '⚠️', label: 'Execution error' },
+  { key: 'time', emoji: '⏱️', label: 'Time misallocation' },
+  { key: 'panic', emoji: '↩️', label: 'Misread / framing' },
+  { key: 'selection', emoji: '✗', label: 'Selection error' },
 ];
 
 function computeNeedsAttentionFlags(
@@ -89,18 +89,18 @@ function computeNeedsAttentionFlags(
     }
   }
 
-  // Silly errors dominant
+  // Execution errors dominant
   if (debriefs.length > 0) {
     const eb = debriefs[0].error_buckets;
     const total = Object.values(eb).reduce((a, b) => a + b, 0);
     if (total > 0 && eb.silly / total > 0.4) {
       flags.push(
-        `${eb.silly} silly errors in last mock (${Math.round((eb.silly / total) * 100)}%) — speed or focus issue`
+        `${eb.silly} execution errors in last mock (${Math.round((eb.silly / total) * 100)}%) — concept known, application breaking down`
       );
     }
     if (total > 0 && eb.conceptual / total > 0.4) {
       flags.push(
-        `${eb.conceptual} conceptual errors in last mock — foundational gaps remain`
+        `${eb.conceptual} knowledge-gap errors in last mock — foundational preparation required`
       );
     }
   }

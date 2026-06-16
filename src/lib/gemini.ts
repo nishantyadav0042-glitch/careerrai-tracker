@@ -38,14 +38,18 @@ async function resolveKey(): Promise<string | null> {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
-    const { data } = await admin
+    const { data, error } = await admin
       .from('server_config')
       .select('value')
       .eq('key', 'GEMINI_API_KEY')
       .single();
-    _keyCache = data?.value ?? null;
+    if (!error) {
+      // Only cache on a successful query. A transient DB error must not permanently
+      // disable AI for the lifetime of this worker process.
+      _keyCache = data?.value ?? null;
+    }
   } catch {
-    _keyCache = null;
+    // Don't set _keyCache — let the next request retry.
   }
   return _keyCache ?? null;
 }
@@ -114,9 +118,8 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
         continue;
       }
       if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        console.error(`[g400] status=${res.status}`);
-        console.error(`[g400] body=${errBody.slice(0, 500)}`);
+        const errText = await res.text().catch(() => '');
+        console.error(`[gemini] ${res.status} error (model=${model}):`, errText.slice(0, 300));
         return null;
       }
 

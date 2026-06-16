@@ -83,11 +83,6 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-    // Count this attempt (fire-and-forget).
-    admin
-      .from('analytics_events')
-      .insert({ student_id: user.id, event_type: 'scorecard_parse', metadata: {} })
-      .then(({ error: e }) => { if (e) console.error('scorecard rate-limit log failed:', e.message); });
 
     const parts: GeminiPart[] = [
       { inlineData: { mimeType: mediaType, data: image } },
@@ -97,12 +92,17 @@ export async function POST(request: NextRequest) {
     const raw = await callGemini({ parts, json: true, maxTokens: 512, temperature: 0.1 });
     if (raw === null) {
       // Transient AI failure (rate-limit / 5xx / network) — NOT a bad image.
-      // Distinct status so the client can say "try again" rather than "invalid".
+      // Don't count against the user's quota — they didn't get a result.
       return NextResponse.json(
         { error: 'The scanner is busy right now — try again in a moment, or enter the numbers manually.' },
         { status: 503 }
       );
     }
+    // Count this scan only after a successful AI response (fire-and-forget).
+    admin
+      .from('analytics_events')
+      .insert({ student_id: user.id, event_type: 'scorecard_parse', metadata: {} })
+      .then(({ error: e }) => { if (e) console.error('scorecard rate-limit log failed:', e.message); });
 
     const parsed = extractJson<ScorecardResult>(raw);
     if (!parsed || !parsed.is_scorecard) {

@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       const gap = Math.round((Date.parse(dateStr) - Date.parse(prevStreak.last_log_date as string)) / 86_400_000);
       if (gap >= 2) {
         const missedDays = gap - 1;
-        admin.from('recovery_events').insert({
+        void admin.from('recovery_events').insert({
           student_id: user.id,
           missed_days: missedDays,
           previous_streak: prevStreak.current_streak as number,

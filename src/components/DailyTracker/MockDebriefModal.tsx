@@ -22,11 +22,11 @@ interface MockDebriefModalProps {
 }
 
 const ERROR_BUCKETS = [
-  { key: 'conceptual' as const, emoji: '🧠', label: 'Conceptual', desc: 'Didn\'t know the concept' },
-  { key: 'silly' as const, emoji: '🤏', label: 'Silly', desc: 'Knew it, made a mistake' },
-  { key: 'time' as const, emoji: '⏱️', label: 'Time pressure', desc: 'Ran out of time' },
-  { key: 'panic' as const, emoji: '😰', label: 'Panic / misread', desc: 'Read wrong or froze' },
-  { key: 'selection' as const, emoji: '🎯', label: 'Wrong selection', desc: 'Picked wrong qs to attempt' },
+  { key: 'conceptual' as const, emoji: '🧠', label: 'Knowledge gap', desc: 'Concept or formula not known' },
+  { key: 'silly' as const, emoji: '⚠️', label: 'Execution error', desc: 'Concept clear; error in working steps' },
+  { key: 'time' as const, emoji: '⏱️', label: 'Time misallocation', desc: 'Insufficient time allocated to question' },
+  { key: 'panic' as const, emoji: '↩️', label: 'Misread / framing error', desc: 'Question or data misinterpreted' },
+  { key: 'selection' as const, emoji: '✗', label: 'Selection error', desc: 'Question should not have been attempted' },
 ];
 
 const SECTIONS = [
@@ -390,7 +390,7 @@ export function MockDebriefModal({
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">
-                Where did you lose marks?
+                Error classification
               </label>
               {totalErrors > 0 && (
                 <span className="text-xs text-zinc-500">{totalErrors} errors tagged</span>
@@ -421,7 +421,7 @@ export function MockDebriefModal({
           {/* Strategy note */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">
-              What will I do differently?
+              Corrective action
             </label>
             <textarea
               value={strategyNote}

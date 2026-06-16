@@ -91,7 +91,7 @@ export default async function BuddyStudentsPage() {
           statusBadge = <Badge color="red"><AlertCircle className="w-3 h-3" />Inactive</Badge>;
         }
 
-        const initials = student.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+        const initials = (student.full_name ?? '').split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '?';
 
         return (
           <Link key={student.id} href={`/buddy/students/${student.id}`}>

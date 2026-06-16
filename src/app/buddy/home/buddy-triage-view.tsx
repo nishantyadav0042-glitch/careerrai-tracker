@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { loadBuddyStudents, getSeverityColor, getSeverityEmoji } from '@/lib/urgency-score';
 import { StudentUrgencyData } from '@/lib/urgency-score';
-import { Mic, Video, ArrowRight, TrendingDown } from 'lucide-react';
+import { Mic, Video, ArrowRight, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceNoteRecorder } from '@/components/voice-note-recorder';
 import { ScheduleSessionModal } from '@/components/schedule-session-modal';
@@ -147,23 +147,44 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
                     </p>
                   </div>
 
-                  {/* Urgency Score */}
+                  {/* Efficacy — percentile delta (north star primary metric) */}
                   <div className="text-right">
-                    <div
-                      className={cn(
-                        'text-3xl font-bold',
-                        student.severity === 'critical'
-                          ? 'text-red-600'
-                          : student.severity === 'warning'
-                          ? 'text-amber-600'
-                          : 'text-emerald-600'
-                      )}
-                    >
-                      {student.score}
-                    </div>
-                    <p className="text-xs text-stone-500">urgency</p>
+                    {student.percentileDelta !== null ? (
+                      <>
+                        <div className="flex items-center justify-end gap-1">
+                          <div className={cn(
+                            'text-3xl font-bold',
+                            student.percentileDelta > 0 ? 'text-emerald-600' : student.percentileDelta < 0 ? 'text-red-600' : 'text-amber-600'
+                          )}>
+                            {student.percentileDelta > 0 ? '+' : ''}{student.percentileDelta}
+                          </div>
+                          {student.percentileDelta > 0 ? (
+                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                          ) : student.percentileDelta < 0 ? (
+                            <TrendingDown className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <Minus className="w-4 h-4 text-amber-500" />
+                          )}
+                        </div>
+                        <p className="text-xs text-stone-500">%ile delta</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold text-stone-400">—</div>
+                        <p className="text-xs text-stone-400">no baseline</p>
+                      </>
+                    )}
+                    <p className="text-[10px] text-stone-400 mt-0.5">urgency {student.score}</p>
                   </div>
                 </div>
+
+                {/* Flat-percentile flag */}
+                {student.isFlat && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                    <span>⚠️</span>
+                    <span className="font-medium">Flat — 14+ days logged, no percentile progress</span>
+                  </div>
+                )}
 
                 {/* Reasons */}
                 {student.reasons.length > 0 && (
@@ -199,6 +220,15 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
                     <div className="flex items-center gap-1 text-red-600 font-semibold">
                       <TrendingDown className="w-3 h-3" />
                       {student.recentDrops} drop{student.recentDrops !== 1 ? 's' : ''}
+                    </div>
+                  )}
+
+                  {student.daysSinceLastMock !== null && (
+                    <div>
+                      <span className="text-stone-600">Last mock:</span>
+                      <span className={cn('ml-1 font-semibold', student.daysSinceLastMock > 21 ? 'text-red-600' : 'text-stone-900')}>
+                        {student.daysSinceLastMock}d ago
+                      </span>
                     </div>
                   )}
 
@@ -266,7 +296,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
         <ScheduleSessionModal
           isOpen={!!scheduleFor}
           onClose={() => setScheduleFor(null)}
-          students={[{ id: scheduleFor.student_id, full_name: scheduleFor.student_name, free_onboarding_used: scheduleFor.free_onboarding_used }]}
+          students={[{ id: scheduleFor.student_id, full_name: scheduleFor.student_name, free_onboarding_used: scheduleFor.free_onboarding_used, daysSinceLastMock: scheduleFor.daysSinceLastMock ?? undefined }]}
           defaultStudentId={scheduleFor.student_id}
           calendarConnected={calendarConnected}
         />

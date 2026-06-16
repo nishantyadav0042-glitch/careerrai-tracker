@@ -103,7 +103,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   };
 
   const handleCompleteWithoutUpdate = async () => {
-    if (!userId) {
+    // Only mark onboarding complete if the user has progressed past screen 0.
+    // Closing at screen 0 (without seeing anything) should not permanently
+    // suppress the modal — the user should see it again on next visit.
+    if (!userId || currentScreen === 0) {
       onComplete();
       return;
     }
@@ -208,9 +211,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           />
         </div>
 
-        {/* Navigation Buttons */}
-        <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
-          {currentScreen > 0 && (
+        {/* Navigation Buttons — screen 0 (ScreenSocialProof) manages its own navigation */}
+        {currentScreen > 0 && (
+          <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -223,26 +226,24 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             >
               Back
             </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleNext();
-            }}
-            disabled={isLoading}
-            type="button"
-            className={cn(
-              'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-[0.98] cursor-pointer',
-              currentScreen === screens.length - 1
-                ? 'bg-orange-600 text-white hover:bg-orange-700'
-                : 'bg-orange-600 text-white hover:bg-orange-700',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            {isLoading ? 'Loading...' : currentScreen === screens.length - 1 ? 'Enter Dashboard' : 'Next'}
-          </button>
-        </div>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleNext();
+              }}
+              disabled={isLoading}
+              type="button"
+              className={cn(
+                'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-[0.98] cursor-pointer',
+                'bg-orange-600 text-white hover:bg-orange-700',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+            >
+              {isLoading ? 'Loading...' : currentScreen === screens.length - 1 ? 'Enter Dashboard' : 'Next'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

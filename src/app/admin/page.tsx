@@ -12,7 +12,8 @@ import { AdminStudentsList } from './admin-students-list';
 import { AdminDataImport } from './admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import type { Profile, DailyReport } from '@/types';
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2 } from 'lucide-react';
+import { computeBuddySLA } from '@/lib/buddy-sla';
 import { cn } from '@/lib/utils';
 
 function getTodayIST() {
@@ -29,8 +30,9 @@ export default async function AdminPage() {
   if (adminProfile?.role !== 'admin') redirect('/login');
 
   // Fetch all profiles
-  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, exam_target, buddy_id').order('role').order('full_name');
-  const profiles = (allProfiles ?? []) as Profile[];
+  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, exam_target, buddy_id, cat_percentile, starting_percentile').order('role').order('full_name');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profiles = (allProfiles ?? []) as any as Profile[];
 
   // Phone-OTP access list
   const { data: allowlistRows } = await admin
@@ -76,6 +78,12 @@ export default async function AdminPage() {
     .select('buddy_id, created_at, feedback_date')
     .gte('created_at', twoWeeksAgo);
 
+  // Video sessions for buddy show-up rate
+  const buddyIds = buddies.map(b => b.id);
+  const { data: videoSessions } = buddyIds.length > 0
+    ? await admin.from('video_sessions').select('buddy_id, session_status').in('buddy_id', buddyIds)
+    : { data: [] };
+
   // Churn risk: days since last log per student (beyond the 7-day window = high risk)
   const { data: lastLogs } = studentIds.length > 0
     ? await admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds).order('report_date', { ascending: false })
@@ -107,6 +115,17 @@ export default async function AdminPage() {
     const avgResponseHrs = gaps.length > 0 ? Math.max(1, Math.round(gaps.reduce((s, h) => s + h, 0) / gaps.length)) : null;
     return { buddy: b, studentCount: myStudents.length, redFlags, students: myStudents, feedbackCount: myFeedback.length, avgResponseHrs };
   });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawProfiles = allProfiles as any as Array<{ id: string; role: string; buddy_id: string | null; cat_percentile: number | null; starting_percentile: number | null }>;
+  const buddySLARanking = computeBuddySLA(
+    buddies.map(b => ({ id: b.id, full_name: b.full_name })),
+    rawProfiles
+      .filter(p => p.role === 'student')
+      .map(p => ({ id: p.id, buddy_id: p.buddy_id ?? null, cat_percentile: p.cat_percentile ?? null, starting_percentile: p.starting_percentile ?? null })),
+    (recentFeedback ?? []),
+    (videoSessions ?? []) as Array<{ buddy_id: string | null; session_status: string }>
+  );
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -216,6 +235,51 @@ export default async function AdminPage() {
           <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">All students</h2>
           <AdminStudentsList students={studentStats} buddies={buddies} />
         </div>
+
+        {/* Buddy SLA Rankings */}
+        {buddySLARanking.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <BarChart2 className="w-4 h-4 text-stone-500" />
+              <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Buddy SLA — ranked by avg %ile delta</h2>
+            </div>
+            <div className="space-y-2">
+              {buddySLARanking.map((sla, rank) => (
+                <Card key={sla.buddy_id} className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 flex items-center justify-center rounded-full bg-stone-100 text-xs font-bold text-stone-600 flex-shrink-0">
+                      #{rank + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-stone-900 text-sm">{sla.buddy_name}</div>
+                      <div className="text-xs text-stone-500 mt-0.5">{sla.student_count} student{sla.student_count !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div className="flex gap-3 text-right flex-shrink-0">
+                      <div>
+                        <div className={cn('text-lg font-bold', sla.avg_percentile_delta === null ? 'text-stone-400' : sla.avg_percentile_delta >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                          {sla.avg_percentile_delta !== null ? `${sla.avg_percentile_delta > 0 ? '+' : ''}${sla.avg_percentile_delta}` : '—'}
+                        </div>
+                        <div className="text-[10px] text-stone-500">%ile Δ</div>
+                      </div>
+                      <div>
+                        <div className={cn('text-lg font-bold', sla.avg_response_hrs === null ? 'text-stone-400' : sla.avg_response_hrs <= 24 ? 'text-emerald-600' : sla.avg_response_hrs <= 48 ? 'text-amber-600' : 'text-red-600')}>
+                          {sla.avg_response_hrs !== null ? `${sla.avg_response_hrs}h` : '—'}
+                        </div>
+                        <div className="text-[10px] text-stone-500">resp.</div>
+                      </div>
+                      <div>
+                        <div className={cn('text-lg font-bold', sla.session_show_up_rate === null ? 'text-stone-400' : sla.session_show_up_rate >= 80 ? 'text-emerald-600' : sla.session_show_up_rate >= 60 ? 'text-amber-600' : 'text-red-600')}>
+                          {sla.session_show_up_rate !== null ? `${sla.session_show_up_rate}%` : '—'}
+                        </div>
+                        <div className="text-[10px] text-stone-500">show-up</div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Buddies */}
         <div className="mb-6">
