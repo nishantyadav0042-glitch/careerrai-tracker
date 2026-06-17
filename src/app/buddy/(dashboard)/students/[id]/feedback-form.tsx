@@ -257,23 +257,42 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
   );
 }
 
+// Returns null if authorship is OK, or an error string if the text is too similar
+// to the AI bullets (lazy buddy submitting unedited material).
+function checkAuthorship(aiBulletText: string, submitted: string): string | null {
+  const norm = (s: string): string[] =>
+    s.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+  const aiWords = new Set(norm(aiBulletText));
+  const submittedTokens = norm(submitted);
+  const submittedSet = new Set(submittedTokens);
+  const ownWords = submittedTokens.filter(w => !aiWords.has(w));
+  const intersection = [...submittedSet].filter(w => aiWords.has(w)).length;
+  const union = aiWords.size + submittedSet.size - intersection;
+  const similarity = union > 0 ? intersection / union : 0;
+  if (similarity > 0.55 || ownWords.length < 15) {
+    return 'Add your own words — your student needs YOU, not a template. Edit this before sending.';
+  }
+  return null;
+}
+
 function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; onSuccess: (fb: BuddyFeedback) => void }) {
   const [open, setOpen] = useState(false);
   const [fbText, setFbText] = useState('');
   const [rating, setRating] = useState(4);
   const [nextSteps, setNextSteps] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [draftLoading, setDraftLoading] = useState(false);
-  const [draftUsed, setDraftUsed] = useState(false);
-  const [draftError, setDraftError] = useState('');
+  const [bulletLoading, setBulletLoading] = useState(false);
+  const [aiBullets, setAiBullets] = useState<string | null>(null);
+  const [bulletError, setBulletError] = useState('');
+  const [authorshipError, setAuthorshipError] = useState('');
   const [error, setError] = useState('');
 
   const toggleStep = (s: string) =>
     setNextSteps((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
 
-  async function generateDraft() {
-    setDraftLoading(true);
-    setDraftError('');
+  async function fetchBullets() {
+    setBulletLoading(true);
+    setBulletError('');
     try {
       const res = await fetch('/api/feedback-draft', {
         method: 'POST',
@@ -282,21 +301,26 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
       });
       const data = await res.json();
       if (res.ok && data.draft) {
-        setFbText(`[AI Draft — please personalize before sending]\n\n${data.draft}`);
-        setDraftUsed(true);
+        setAiBullets(data.draft);
       } else {
-        setDraftError(data.error ?? 'AI draft failed — try again or use a template below.');
+        setBulletError(data.error ?? 'AI facts failed — try again or use a template below.');
       }
     } catch (e) {
-      console.error('draft error', e);
-      setDraftError('Could not reach AI — check your connection and try again.');
+      console.error('bullet fetch error', e);
+      setBulletError('Could not reach AI — check your connection and try again.');
     } finally {
-      setDraftLoading(false);
+      setBulletLoading(false);
     }
   }
 
   async function submit() {
     if (!fbText.trim()) return;
+    // Authorship gate: if AI facts were used, the buddy must have written their own message.
+    if (aiBullets) {
+      const authErr = checkAuthorship(aiBullets, fbText);
+      if (authErr) { setAuthorshipError(authErr); return; }
+    }
+    setAuthorshipError('');
     setSubmitting(true);
     setError('');
     try {
@@ -305,10 +329,10 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: studentId, feedback_text: fbText.trim(), rating, next_steps: nextSteps, period_covered: 'adhoc' }),
       });
-      if (!res.ok) { setError('Failed to submit. Try again.'); return; }
-      const { feedback } = await res.json();
-      onSuccess(feedback as BuddyFeedback);
-      setFbText(''); setRating(4); setNextSteps([]); setOpen(false); setDraftUsed(false);
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? 'Failed to submit. Try again.'); return; }
+      onSuccess(json.feedback as BuddyFeedback);
+      setFbText(''); setRating(4); setNextSteps([]); setOpen(false); setAiBullets(null);
     } finally {
       setSubmitting(false);
     }
@@ -326,48 +350,54 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
     <Card className="p-5">
       <h3 className="font-semibold text-stone-900 mb-4">Write feedback</h3>
       <div className="space-y-4">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
+        {/* AI fact bullets — reference material, not a draft */}
+        {aiBullets ? (
+          <div className="rounded-xl bg-teal-50 border border-teal-200 p-3">
+            <p className="text-[11px] font-semibold text-teal-700 uppercase tracking-wider mb-2">Facts to write from</p>
+            <pre className="text-xs text-teal-900 whitespace-pre-wrap font-sans leading-relaxed">{aiBullets}</pre>
+            <p className="text-[11px] text-teal-600 mt-2">Write your message below in your own words — these are just the facts.</p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-stone-700">Your feedback</label>
             <button
               type="button"
-              onClick={generateDraft}
-              disabled={draftLoading}
+              onClick={fetchBullets}
+              disabled={bulletLoading}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 transition-all disabled:opacity-50"
             >
-              {draftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {draftLoading ? 'Drafting…' : 'Draft with AI'}
+              {bulletLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {bulletLoading ? 'Gathering facts…' : 'Get AI facts'}
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {FEEDBACK_TEMPLATES.map((t) => (
-              <button
-                key={t.label}
-                type="button"
-                onClick={() => { setFbText(t.text); setDraftUsed(false); }}
-                className="text-[11px] px-2.5 py-1 bg-stone-100 text-stone-700 rounded-full hover:bg-teal-100 hover:text-teal-800 transition-colors"
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={fbText}
-            onChange={(e) => { setFbText(e.target.value); setDraftUsed(false); }}
-            placeholder="Be specific and reference their data..."
-            rows={4}
-            className={cn(
-              'w-full px-3 py-2.5 bg-white border rounded-xl text-sm focus:outline-none resize-none transition-colors',
-              draftUsed ? 'border-teal-300 bg-teal-50/40 focus:border-teal-500' : 'border-stone-300 focus:border-stone-900'
-            )}
-          />
-          {draftUsed && (
-            <p className="text-[11px] text-teal-600 mt-1">✏️ AI draft loaded — edit before sending</p>
-          )}
-          {draftError && (
-            <p className="text-[11px] text-rose-500 mt-1">{draftError}</p>
-          )}
+        )}
+        {bulletError && <p className="text-[11px] text-rose-500">{bulletError}</p>}
+
+        {/* Templates */}
+        <div className="flex flex-wrap gap-1.5">
+          {FEEDBACK_TEMPLATES.map((t) => (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => { setFbText(t.text); setAiBullets(null); setAuthorshipError(''); }}
+              className="text-[11px] px-2.5 py-1 bg-stone-100 text-stone-700 rounded-full hover:bg-teal-100 hover:text-teal-800 transition-colors"
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+
+        <textarea
+          value={fbText}
+          onChange={(e) => { setFbText(e.target.value); setAuthorshipError(''); }}
+          placeholder={aiBullets ? 'Write your message to your student from these facts…' : 'Be specific and reference their data…'}
+          rows={4}
+          className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 resize-none"
+        />
+        {authorshipError && (
+          <p className="text-xs text-rose-600 font-medium">{authorshipError}</p>
+        )}
+
         <div className="flex gap-1">
           {[1, 2, 3, 4, 5].map((s) => (
             <button key={s} type="button" onClick={() => setRating(s)}>
@@ -385,7 +415,7 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
         </div>
         {error && <p className="text-xs text-rose-600">{error}</p>}
         <div className="flex gap-2">
-          <button type="button" onClick={() => setOpen(false)} className="flex-1 py-2.5 border border-stone-300 rounded-xl text-sm font-medium hover:bg-stone-50">Cancel</button>
+          <button type="button" onClick={() => { setOpen(false); setAiBullets(null); }} className="flex-1 py-2.5 border border-stone-300 rounded-xl text-sm font-medium hover:bg-stone-50">Cancel</button>
           <button type="button" onClick={submit} disabled={!fbText.trim() || submitting} className="flex-1 py-2.5 bg-teal-700 text-white rounded-xl text-sm font-medium hover:bg-teal-800 disabled:opacity-50">
             {submitting ? 'Submitting…' : 'Submit'}
           </button>

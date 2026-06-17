@@ -219,22 +219,27 @@ export function MockDebriefModal({
         return;
       }
       const sc = json.scorecard as ParsedScorecard;
-      if (sc.overall_percentile != null) setOverallPercentile(sc.overall_percentile);
-      setSections((prev) => {
-        const next = { ...prev };
+      // Each scan = this scorecard only. Never inherit fields from a previous scan.
+      // Fields Gemini returns as null were not present on this image — show blank.
+      setOverallPercentile(sc.overall_percentile ?? null);
+      setSections(() => {
+        const fresh = { varc: defaultSection(), dilr: defaultSection(), qa: defaultSection() };
         for (const key of ['varc', 'dilr', 'qa'] as const) {
           const s = sc[key];
           if (!s) continue;
-          next[key] = {
-            attempted: s.attempted ?? prev[key].attempted,
-            correct: s.correct ?? prev[key].correct,
-            time_min: s.time_min ?? prev[key].time_min,
-            percentile: s.percentile ?? prev[key].percentile,
+          fresh[key] = {
+            attempted: s.attempted ?? 0,
+            correct: s.correct ?? 0,
+            time_min: s.time_min ?? 0,
+            percentile: s.percentile ?? null,
           };
         }
-        return next;
+        return fresh;
       });
-      setScanResult(sc.mock_name ? `Read ${sc.mock_name} ✓ — check the numbers below` : 'Scorecard read ✓ — check the numbers below');
+      setScanResult(
+        (sc.mock_name ? `Read ${sc.mock_name} ✓` : 'Scorecard read ✓') +
+        ' — blank fields weren\'t on this image, fill if needed'
+      );
     } catch (e) {
       console.error('scorecard scan error', e);
       setScanError('Could not read the image — fill in manually.');

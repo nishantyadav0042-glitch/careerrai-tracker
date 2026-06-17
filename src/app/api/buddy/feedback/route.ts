@@ -19,6 +19,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
+  // Server-side authorship gate: reject unedited AI material.
+  const trimmed = (feedback_text as string).trim();
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 15) {
+    return NextResponse.json({ error: 'Feedback is too short — write at least a sentence in your own words.' }, { status: 400 });
+  }
+  if (trimmed.includes('[Write your') || trimmed.includes('[Add your')) {
+    return NextResponse.json({ error: 'Remove the placeholder and write your own message first.' }, { status: 400 });
+  }
+
   const admin = createAdminClient();
 
   // Verify this student is actually assigned to this buddy

@@ -68,7 +68,15 @@ export async function POST(request: NextRequest) {
 
     // Strip names BEFORE sending to the free-tier model (privacy on the input).
     const safeContext = stripNames(factsContext, [student.full_name]);
-    const promptText = `You are drafting a short message for a mentor to send to their student. Write exactly 2 sentences: (1) state the consistency fact — days logged and average hours per day; (2) state one factual data point — either the stress level or the latest mock result if available. End the draft with a blank line and: "[Add your observation here:]". Use first person ("You logged…", "Your latest…"). Under 60 words before the placeholder. Facts only — no advice, no interpretation, no recommendations.\n\nData:\n${safeContext}`;
+    // Return bullet-point facts, not a prose draft. The buddy writes the actual
+    // message in their own voice; AI does the fact-gathering, human does the words.
+    const promptText = `You are helping a mentor prepare to write a message to their student.
+Return ONLY 3-4 bullet points of raw facts the mentor can write from. Do NOT write a message.
+One short fact per bullet. No advice, no recommendations, no interpretation, no opener.
+End with exactly this line: "• [Write your message to your student from these facts]"
+
+Data:
+${safeContext}`;
 
     const aiDraft = await callGemini({
       parts: [{ text: promptText }],
@@ -89,9 +97,9 @@ export async function POST(request: NextRequest) {
 }
 
 function ruleDraft(streak: number, daysLogged: number, avgHours: string, overallPct: number | null): string {
-  const line1 = `You logged ${daysLogged}/7 days this week, averaging ${avgHours} hrs/day (${streak}-day streak).`;
-  const line2 = overallPct !== null
-    ? `Your latest mock came in at ${overallPct}%ile overall.`
-    : `No mock result logged this week.`;
-  return `${line1} ${line2}\n\n[Add your observation here:]`;
+  return [
+    `• ${daysLogged}/7 days logged this week, avg ${avgHours} hrs/day (${streak}-day streak)`,
+    overallPct !== null ? `• Latest mock: ${overallPct}%ile overall` : `• No mock logged this week`,
+    `• [Write your message to your student from these facts]`,
+  ].join('\n');
 }

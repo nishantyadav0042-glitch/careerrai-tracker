@@ -37,7 +37,8 @@ const EXTRACT_PROMPT = `This is a screenshot of a CAT mock test scorecard. Extra
 
 Rules:
 - CAT sections are VARC, DILR, and QA. Map whatever section names appear to these three.
-- "attempted" = questions attempted, "correct" = correct answers, "time_min" = time in minutes, "percentile" = sectional percentile.
+- "attempted" = questions attempted, "correct" = correct answers, "time_min" = time in minutes.
+- "percentile" = the official percentage-rank PRINTED on this scorecard. Only set it if a percentile or %ile value is literally visible — do NOT compute or estimate it from raw score, rank, or any other column. AIMCAT, SIMCAT, and CL mocks often show only raw score with no percentile — in that case set percentile to null.
 - Use null for any value not visible on the scorecard. Never guess or compute values.
 - If this is NOT a test scorecard, set is_scorecard to false and every other value to null.
 - Return the raw JSON only — no surrounding text.`;
