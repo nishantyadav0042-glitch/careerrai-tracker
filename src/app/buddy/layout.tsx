@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 
@@ -9,6 +10,12 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
+  // Fast path: role cookie set at login avoids a DB round-trip on every page.
+  const cookieStore = await cookies();
+  const roleCookie = cookieStore.get('user_role')?.value;
+  if (roleCookie === 'buddy') return <>{children}</>;
+
+  // Slow path (first load or cookie missing): verify role from DB.
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')

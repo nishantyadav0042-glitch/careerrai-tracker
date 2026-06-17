@@ -1,17 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Optimize preloading to reduce warnings
   experimental: {
     preloadEntriesOnStart: true,
+    // Tree-shake these icon/component libraries — only bundle what's imported.
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-slot'],
   },
-  // Compress CSS/JS for faster load
   compress: true,
-  // Optimize images
   images: {
     unoptimized: false,
     formats: ['image/webp', 'image/avif'],
   },
+  // Never bundle server-only packages into client JS.
+  serverExternalPackages: ['googleapis', 'web-push'],
 };
 
 export default nextConfig;

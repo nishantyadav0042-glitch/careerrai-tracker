@@ -38,6 +38,7 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
     queryKey: ['streak', studentId],
     enabled: !!studentId,
     ...(initial ? { initialData: initial.streak } : {}),
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('streak_data')
@@ -53,6 +54,7 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
     queryKey: ['has-logged-today', studentId],
     enabled: !!studentId,
     ...(initial ? { initialData: initial.hasLoggedToday } : {}),
+    staleTime: 30_000,
     queryFn: async () => {
       const dateStr = getLogDateString();
       const { data } = await supabase
@@ -69,6 +71,7 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
     queryKey: ['shields-remaining', studentId],
     enabled: !!studentId,
     ...(initial ? { initialData: initial.shieldsRemaining } : {}),
+    staleTime: 30_000,
     queryFn: async () => {
       const today = new Date();
       const resetDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
