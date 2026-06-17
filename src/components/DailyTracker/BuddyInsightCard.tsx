@@ -4,6 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
+interface FeedbackRow {
+  feedback_text: string;
+  feedback_date: string;
+  feedback_type: string;
+}
+
 interface BuddyInsightCardProps {
   studentId: string;
   dailyNudge?: string | null;
@@ -11,13 +17,17 @@ interface BuddyInsightCardProps {
   buddyId?: string | null;
   /** Pre-formatted: "Rajan · 99%ile" or just "Rajan" */
   buddyName?: string | null;
+  /** Latest buddy feedback seeded from server — skips client DB query on mount */
+  initialFeedback?: FeedbackRow | null;
 }
 
-export function BuddyInsightCard({ studentId, dailyNudge, buddyId: buddyIdProp, buddyName: buddyNameProp }: BuddyInsightCardProps) {
+export function BuddyInsightCard({ studentId, dailyNudge, buddyId: buddyIdProp, buddyName: buddyNameProp, initialFeedback }: BuddyInsightCardProps) {
   const supabase = createClient();
 
   const { data } = useQuery({
     queryKey: ['buddy-insight', studentId],
+    ...(initialFeedback !== undefined ? { initialData: { feedback: initialFeedback } } : {}),
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       // Only 1 query — buddy identity already comes from server props
       const { data: feedback } = await supabase
@@ -30,7 +40,6 @@ export function BuddyInsightCard({ studentId, dailyNudge, buddyId: buddyIdProp, 
         .maybeSingle();
       return { feedback };
     },
-    staleTime: 10 * 60 * 1000,
   });
 
   const latestFeedback = data?.feedback;

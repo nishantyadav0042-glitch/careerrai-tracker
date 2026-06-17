@@ -121,11 +121,12 @@ interface DailyTrackerAppProps {
   buddyId?: string | null;
   buddyName?: string | null;
   initialPendingDebrief?: { report_date: string; updated_at: string } | null;
+  initialFeedback?: { feedback_text: string; feedback_date: string; feedback_type: string } | null;
   recovery?: { missedDays: number; previousStreak: number } | null;
   initialLogging?: InitialLogging | null;
 }
 
-export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null, recovery = null, initialLogging = null }: DailyTrackerAppProps) {
+export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null, initialFeedback = null, recovery = null, initialLogging = null }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
   const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
@@ -141,6 +142,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
     queryKey: ['pending-debrief', studentId],
     enabled: !!studentId,
     initialData: initialPendingDebrief ?? undefined,
+    staleTime: 30_000,
     queryFn: async () => {
       const supabase = createClient();
       const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
@@ -307,7 +309,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
       {/* 3. Buddy insight — 1 line */}
       {studentId && (
         <SafeCard>
-          <BuddyInsightCard studentId={studentId} buddyId={buddyId} buddyName={buddyName} dailyNudge={lastNudge} />
+          <BuddyInsightCard studentId={studentId} buddyId={buddyId} buddyName={buddyName} dailyNudge={lastNudge} initialFeedback={initialFeedback} />
         </SafeCard>
       )}
 
