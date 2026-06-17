@@ -5,10 +5,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 import { HeroCard } from './HeroCard';
-import { LoggingModal, type LoggingData } from './LoggingModal';
-import { PendingDebriefCard } from './PendingDebriefCard';
+import type { LoggingData } from './LoggingModal';
+const LoggingModal = dynamic(
+  () => import('./LoggingModal').then((m) => m.LoggingModal),
+  { ssr: false }
+);
+const PendingDebriefCard = dynamic(
+  () => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard),
+  { ssr: false }
+);
 import { BuddyInsightCard } from './BuddyInsightCard';
-import { ProgressSnapshot } from './ProgressSnapshot';
 import { BrainBreakCard } from './BrainBreakCard';
 import { SafeCard } from './SafeCard';
 import type { MockDebriefData } from './MockDebriefModal';
@@ -171,7 +177,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
     submitLog,
   } = useLogging(studentId, initialLogging);
 
-  const { puzzle, attempt, isLoading: puzzleLoading, submitAttempt } = useDailyPuzzle(studentId);
+  const { puzzle, attempt, isLoading: puzzleLoading, submitAttempt } = useDailyPuzzle(studentId, DAILY_PUZZLE_ENABLED);
 
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
     const result = await submitLog(data);
@@ -308,14 +314,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
       {/* 4. Today's session strip */}
       {todaySession && <SessionStrip session={todaySession} />}
 
-      {/* 5. Progress snapshot — 3 numbers */}
-      {studentId && (
-        <SafeCard>
-          <ProgressSnapshot studentId={studentId} />
-        </SafeCard>
-      )}
-
-      {/* 6. Brain Break — disabled: break-containment unvalidated in 60-day cohort */}
+      {/* 5. Brain Break — disabled: break-containment unvalidated in 60-day cohort */}
       {BRAIN_BREAK_ENABLED && studentId && (
         <SafeCard>
           <BrainBreakCard studentId={studentId} />
