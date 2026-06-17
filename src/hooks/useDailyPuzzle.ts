@@ -3,13 +3,14 @@ import { createClient } from '@/lib/supabase/client';
 import { getTodayIST } from '@/lib/utils';
 import type { DailyLrdiPuzzle, LrdiPuzzleAttempt } from '@/types';
 
-export function useDailyPuzzle(studentId: string) {
+export function useDailyPuzzle(studentId: string, enabled = true) {
   const supabase = createClient();
   const queryClient = useQueryClient();
 
   // Fetch today's puzzle
   const { data: todayPuzzle, isLoading: puzzleLoading } = useQuery({
     queryKey: ['daily-puzzle-today'],
+    enabled,
     queryFn: async () => {
       // Puzzles are dated in IST — UTC would request yesterday's puzzle until 5:30 AM
       const today = getTodayIST();
