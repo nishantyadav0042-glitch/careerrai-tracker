@@ -1,23 +1,32 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { BuddyBottomNav } from '@/components/bottom-nav';
 import { NotificationBell } from '@/components/notification-bell';
 import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
-import { getChatUnreadCount } from '@/lib/chat-unread';
+import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 
 export default async function BuddyDashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
+  const cookieStore = await cookies();
+  const roleCookie = cookieStore.get('user_role')?.value;
+
   const admin = createAdminClient();
-  const [{ data: profile }, chatUnread] = await Promise.all([
+
+  // Outer buddy/layout.tsx already verified role === 'buddy' (or cookie did).
+  // Here we only need is_demo + onboarding_completed — no need to re-check role.
+  const [{ data: profile }, chatUnread, notifUnread] = await Promise.all([
     admin.from('profiles').select('role, is_demo, buddy_onboarding_completed').eq('id', user.id).single(),
     getChatUnreadCount(user.id, 'buddy'),
+    getNotifUnreadCount(user.id),
   ]);
 
-  if (profile?.role !== 'buddy') {
+  // Validate role when cookie is absent (first load or expired).
+  if (!roleCookie && profile?.role !== 'buddy') {
     if (profile?.role === 'student') redirect('/student/tracker');
     redirect('/login');
   }
@@ -35,7 +44,7 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
           <div className="flex items-center gap-2">
             {profile?.is_demo && <Badge color="purple">Demo</Badge>}
             <Badge color="orange">Buddy</Badge>
-            <NotificationBell userId={user.id} />
+            <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
           </div>
         </div>
         {children}

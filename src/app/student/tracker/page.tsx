@@ -171,9 +171,12 @@ export default async function DailyTrackerPage() {
                 CRS {profile.cat_percentile}
               </span>
             )}
-            <span className="text-[11px] font-semibold bg-orange-100 text-orange-700 rounded-full px-2.5 py-1">
-              {daysToCat}d to CAT
-            </span>
+            {/* TrajectoryWall shows days+target when dreamCollege is set; only show chip when it isn't */}
+            {!dreamCollege && (
+              <span className="text-[11px] font-semibold bg-orange-100 text-orange-700 rounded-full px-2.5 py-1">
+                {daysToCat}d to CAT
+              </span>
+            )}
           </div>
         </div>
 

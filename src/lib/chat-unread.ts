@@ -1,5 +1,16 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export async function getNotifUnreadCount(userId: string): Promise<number> {
+  const admin = createAdminClient();
+  const { count, error } = await admin
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+  if (error || count === null) return 0;
+  return count;
+}
+
 /**
  * Total unread chat messages for a user (messages addressed to them that they
  * haven't read). Works for both students and buddies: a message is "unread for

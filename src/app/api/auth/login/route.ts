@@ -65,11 +65,18 @@ export async function POST(request: NextRequest) {
   }
 
   const role = profile.role ?? 'student';
-  const dest = role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/tracker';
+  const dest = role === 'buddy' ? '/buddy/home' : role === 'admin' ? '/admin' : '/student/tracker';
 
   const response = NextResponse.redirect(`${origin}${dest}`, { status: 302 });
   pending.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+  });
+  // Cache the role so layouts can skip the DB role-check on every page load.
+  response.cookies.set('user_role', role, {
+    path: '/',
+    sameSite: 'lax',
+    httpOnly: true,
+    maxAge: 60 * 60 * 24 * 30,
   });
 
   return response;

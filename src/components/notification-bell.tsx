@@ -6,24 +6,28 @@ import { createClient } from '@/lib/supabase/client';
 import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
 
-export function NotificationBell({ userId }: { userId: string }) {
+export function NotificationBell({ userId, initialUnreadCount = 0 }: { userId: string; initialUnreadCount?: number }) {
   const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const supabase = createClient();
 
   const loadNotifications = useCallback(async () => {
     const { data } = await supabase
       .from('notifications')
-      .select('*')
+      .select('id, title, body, read, created_at, type, data')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(20);
     if (data) setNotifications(data as Notification[]);
   }, [supabase, userId]);
 
+  // Load only when the bell is first opened — not on every page mount.
   useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    if (open && !loaded) {
+      loadNotifications().then(() => setLoaded(true));
+    }
+  }, [open, loaded, loadNotifications]);
 
   async function markRead(id: string) {
     await supabase.from('notifications').update({ read: true }).eq('id', id);
@@ -35,7 +39,10 @@ export function NotificationBell({ userId }: { userId: string }) {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Once the full list is loaded, use the real count; before that use server-seeded count.
+  const unreadCount = loaded
+    ? notifications.filter((n) => !n.read).length
+    : initialUnreadCount;
 
   return (
     <div className="relative">
@@ -69,7 +76,10 @@ export function NotificationBell({ userId }: { userId: string }) {
               </div>
             </div>
             <div className="max-h-96 overflow-y-auto divide-y divide-stone-100">
-              {notifications.length === 0 && (
+              {!loaded && (
+                <div className="p-6 text-center text-sm text-stone-400">Loading…</div>
+              )}
+              {loaded && notifications.length === 0 && (
                 <div className="p-6 text-center text-sm text-stone-500">You&apos;re all caught up.</div>
               )}
               {notifications.map((n) => (
