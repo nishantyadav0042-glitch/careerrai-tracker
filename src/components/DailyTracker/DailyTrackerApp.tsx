@@ -142,7 +142,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
     queryKey: ['pending-debrief', studentId],
     enabled: !!studentId,
     initialData: initialPendingDebrief ?? undefined,
-    staleTime: 30_000,
+    staleTime: 60 * 1000,
     queryFn: async () => {
       const supabase = createClient();
       const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
@@ -164,7 +164,6 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         .maybeSingle();
       return debrief ? null : mockReport;
     },
-    staleTime: 60 * 1000,
   });
 
   const {
