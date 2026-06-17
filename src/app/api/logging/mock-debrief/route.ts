@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sendPushToUser } from '@/lib/push';
 
 interface DebriefRequest {
   log_date: string;
@@ -132,6 +133,37 @@ export async function POST(request: NextRequest) {
       row.error_buckets,
       prevPercentile
     );
+
+    // Notify buddy that student took a mock (non-blocking)
+    void (async () => {
+      try {
+        const { data: studentProfile } = await admin
+          .from('profiles')
+          .select('full_name, buddy_id, cat_percentile')
+          .eq('id', user.id)
+          .single();
+        const buddyId = studentProfile?.buddy_id;
+        if (!buddyId) return;
+
+        const studentFirst = studentProfile.full_name?.split(' ')[0] ?? 'Student';
+        const percentileStr = body.overall_percentile != null ? ` (${body.overall_percentile}%ile)` : '';
+        const title = `${studentFirst} ne mock diya${percentileStr} — feedback ka wait kar raha hoga.`;
+        const notifBody = 'Mock debrief submitted — feedback within 24h keeps the momentum.';
+
+        await admin.from('notifications').insert({
+          user_id: buddyId, type: 'mock_submitted',
+          title, body: notifBody,
+          data: { url: `/buddy/students/${user.id}`, student_id: user.id }, read: false, channel: 'in_app',
+        });
+
+        const { data: buddyPrefs } = await admin.from('profiles').select('notif_prefs').eq('id', buddyId).single();
+        if ((buddyPrefs?.notif_prefs as Record<string, unknown>)?.push === true) {
+          await sendPushToUser(buddyId, { title, body: notifBody, url: `/buddy/students/${user.id}` });
+        }
+      } catch {
+        // non-fatal
+      }
+    })();
 
     return NextResponse.json({ success: true, insight }, { status: 200 });
   } catch (err) {

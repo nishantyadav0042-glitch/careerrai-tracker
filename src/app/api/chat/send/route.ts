@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
       await sendNotification({
         userId: recipientId,
         type: 'chat',
-        title: `New message from ${senderName}`,
+        title: `${senderName} ne message bheja — waiting for you.`,
         body: preview,
-        channels: ['in_app'],
-        data: { student_id: pair.studentId, buddy_id: pair.buddyId },
+        channels: ['in_app', 'push'],
+        data: { url: '/student/buddy', student_id: pair.studentId, buddy_id: pair.buddyId },
       });
     } catch {
       // non-blocking
