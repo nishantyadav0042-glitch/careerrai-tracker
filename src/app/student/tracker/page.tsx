@@ -94,6 +94,7 @@ export default async function DailyTrackerPage() {
   // For users with neither (e.g. new students), this skips entirely.
   let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
   let existingDebrief: { id: string } | null = null;
+  let initialFeedback: { feedback_text: string; feedback_date: string; feedback_type: string } | null = null;
 
   if (buddyId || recentMock) {
     const results = await Promise.all([
@@ -103,9 +104,13 @@ export default async function DailyTrackerPage() {
       recentMock
         ? admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
         : Promise.resolve(null),
+      buddyId
+        ? admin.from('buddy_feedback').select('feedback_text, feedback_date, feedback_type').eq('student_id', user.id).eq('feedback_type', 'buddy_feedback').order('feedback_date', { ascending: false }).limit(1).maybeSingle().then((r) => r.data)
+        : Promise.resolve(null),
     ]);
     buddyProfile = results[0];
     existingDebrief = results[1];
+    initialFeedback = results[2];
   }
 
   let buddyName: string | null = null;
@@ -225,6 +230,7 @@ export default async function DailyTrackerPage() {
           buddyId={buddyId}
           buddyName={buddyName}
           initialPendingDebrief={serverPendingDebrief}
+          initialFeedback={initialFeedback}
           recovery={recovery}
           initialLogging={initialLogging}
         />
