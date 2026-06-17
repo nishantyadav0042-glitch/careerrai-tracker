@@ -5,6 +5,10 @@
       "schedule": "30 14 * * *"
     },
     {
+      "path": "/api/cron/buddy-ping",
+      "schedule": "30 11 * * *"
+    },
+    {
       "path": "/api/cron/weekly-digest",
       "schedule": "0 4 * * 1"
     },

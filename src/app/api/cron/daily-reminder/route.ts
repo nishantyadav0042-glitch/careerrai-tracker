@@ -2,60 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendDailyReminder } from '@/lib/email';
 import { sendPushToUser } from '@/lib/push';
-
-// Rotating Zomato/Swiggy-style copy — one personality, never the same nag twice in a row.
-const REMINDER_VARIANTS: { title: string; body: (name: string) => string }[] = [
-  {
-    title: 'Aaj padhai hui ya nahi? 👀',
-    body: () => "90 seconds. Log it before your streak files a complaint.",
-  },
-  {
-    title: 'Knock knock. It’s your streak 🔥',
-    body: () => 'It’s getting cold out here. One tap keeps it alive.',
-  },
-  {
-    title: 'Plot twist: toppers log daily 📈',
-    body: (name) => `Be the main character, ${name}. 90 seconds.`,
-  },
-  {
-    title: 'Your books just texted us 📚',
-    body: () => 'They said you two had a moment today. Make it official — log it.',
-  },
-  {
-    title: 'Breaking news 🚨',
-    body: (name) => `${name} studied all day and told no one. Don’t be tonight’s headline.`,
-  },
-  {
-    title: 'CAT won’t wait. Neither will 3 AM ⏰',
-    body: () => 'Log today’s prep — your future IIM self says thanks.',
-  },
-  {
-    title: 'VARC, DILR ya QA? 🤔',
-    body: () => 'Whatever you touched today, it counts. Log it in 90 seconds.',
-  },
-];
-
-function pickVariant(name: string, streak: number) {
-  // Streak-aware copy beats generic copy
-  if (streak >= 7) {
-    return {
-      title: `${streak} days of fire 🔥 Don’t stop now`,
-      body: `Day ${streak + 1} is one tap away, ${name}. Toppers don’t take L’s on technicalities.`,
-    };
-  }
-  if (streak >= 3) {
-    return {
-      title: 'Your streak is on one leg 🦵🔥',
-      body: `${streak} days strong — day ${streak + 1} is 90 seconds away.`,
-    };
-  }
-  // Rotate by day of year so everyone gets fresh copy daily
-  const dayOfYear = Math.floor(
-    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86_400_000
-  );
-  const v = REMINDER_VARIANTS[dayOfYear % REMINDER_VARIANTS.length];
-  return { title: v.title, body: v.body(name) };
-}
+import { pickNotification, type NotifBucket } from '@/lib/notification-engine';
 
 // Called by Vercel Cron at 14:30 UTC = 8:00 PM IST every day
 export async function POST(request: NextRequest) {
@@ -66,34 +13,104 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const todayStart = new Date().toISOString().split('T')[0] + 'T00:00:00+05:30';
+  const since24h = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0];
 
-  // Get all students
+  // Fetch all active students with dream_colleges
   const { data: students } = await admin
     .from('profiles')
-    .select('id, full_name, email, notif_prefs, current_streak')
-    .eq('role', 'student');
+    .select('id, full_name, email, notif_prefs, dream_colleges')
+    .eq('role', 'student')
+    .eq('subscription_status', 'free_beta');
   if (!students?.length) return NextResponse.json({ reminded: 0 });
 
-  // Find students who haven't submitted today
-  const studentIds = students.map(s => s.id);
-  const { data: todayReports } = await admin.from('daily_reports').select('student_id').in('student_id', studentIds).eq('report_date', today);
-  const submittedIds = new Set((todayReports ?? []).map(r => r.student_id));
+  const studentIds = students.map((s) => s.id);
 
-  const pending = students.filter(s => !submittedIds.has(s.id));
+  // Find who hasn't logged today
+  const { data: todayReports } = await admin
+    .from('daily_reports')
+    .select('student_id')
+    .in('student_id', studentIds)
+    .eq('report_date', today);
+  const submittedIds = new Set((todayReports ?? []).map((r) => r.student_id));
+
+  // Get streak data for all students
+  const { data: streakRows } = await admin
+    .from('streak_data')
+    .select('student_id, current_streak')
+    .in('student_id', studentIds);
+  const streakMap = new Map<string, number>(
+    (streakRows ?? []).map((r) => [r.student_id, r.current_streak ?? 0])
+  );
+
+  // Days missed (last 7 days — how many had no report)
+  const { data: recentReports } = await admin
+    .from('daily_reports')
+    .select('student_id, report_date')
+    .in('student_id', studentIds)
+    .gte('report_date', since7d);
+  const reportDaysByStudent = new Map<string, Set<string>>();
+  for (const r of recentReports ?? []) {
+    if (!reportDaysByStudent.has(r.student_id)) reportDaysByStudent.set(r.student_id, new Set());
+    reportDaysByStudent.get(r.student_id)!.add(r.report_date);
+  }
+
+  // Recent notification history per student (for variety engine)
+  const { data: recentNotifs } = await admin
+    .from('notifications')
+    .select('user_id, body, type, created_at')
+    .in('user_id', studentIds)
+    .in('type', ['daily_reminder', 'buddy_ping'])
+    .gte('created_at', new Date(Date.now() - 10 * 86_400_000).toISOString())
+    .order('created_at', { ascending: false });
+
+  // Group by student
+  const notifsByStudent = new Map<string, typeof recentNotifs>();
+  for (const n of recentNotifs ?? []) {
+    if (!notifsByStudent.has(n.user_id)) notifsByStudent.set(n.user_id, []);
+    notifsByStudent.get(n.user_id)!.push(n);
+  }
+
+  const pending = students.filter((s) => !submittedIds.has(s.id));
 
   let reminded = 0;
   for (const s of pending) {
-    const prefs = s.notif_prefs ?? {};
-    const firstName = s.full_name.split(' ')[0];
-    const { title, body } = pickVariant(firstName, s.current_streak ?? 0);
+    const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
+    if (prefs.daily_reminder === false) continue;
 
-    // In-app notification
+    const firstName = s.full_name.split(' ')[0];
+    const dreamCollege = ((s.dream_colleges as string[] | null)?.[0]) ?? null;
+    const streak = streakMap.get(s.id) ?? 0;
+    const reportDays = reportDaysByStudent.get(s.id) ?? new Set();
+    const daysMissed = 7 - reportDays.size; // approximate
+
+    const studentNotifs = notifsByStudent.get(s.id) ?? [];
+    const todayNotifs = studentNotifs.filter((n) => n.created_at >= todayStart);
+    const recentBodies = studentNotifs.slice(0, 10).map((n) => n.body);
+    const lastBucket = (studentNotifs[0]?.type as NotifBucket | null) ?? null;
+
+    const result = pickNotification({
+      name: firstName,
+      dreamCollege,
+      streak,
+      daysMissed,
+      hasWin: false, // wins handled separately
+      lastBucket,
+      recentBodies,
+      dailySendCount: todayNotifs.length,
+      dailyCap: 2,
+    });
+
+    if (result.capped) continue;
+
+    // In-app notification (always)
     await admin.from('notifications').insert({
       user_id: s.id,
       type: 'daily_reminder',
-      title,
-      body,
-      data: { url: '/student/tracker' },
+      title: result.title,
+      body: result.body,
+      data: { url: '/student/tracker', bucket: result.bucket },
       read: false,
       channel: 'in_app',
     });
@@ -106,8 +123,8 @@ export async function POST(request: NextRequest) {
     // Push
     if (prefs.push === true) {
       await sendPushToUser(s.id, {
-        title,
-        body,
+        title: result.title,
+        body: result.body,
         url: '/student/tracker',
       });
     }
@@ -118,5 +135,4 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ reminded, total: students.length, pendingCount: pending.length });
 }
 
-// Allow Vercel cron to call via GET too
 export { POST as GET };
