@@ -5,9 +5,10 @@ import { createClient } from '@/lib/supabase/client';
 import { X } from 'lucide-react';
 import ScreenSocialProof from './screens/screen-social-proof';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
-import ScreenHonesty from './screens/screen-honesty';
+import ScreenExamContext from './screens/screen-exam-context';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenBaselineTest from './screens/screen-baseline-test';
+import ScreenAboutYou from './screens/screen-about-you';
 import ScreenDailyCommitment from './screens/screen-daily-commitment';
 import ScreenLogDayOne from './screens/screen-log-day-one';
 import { cn } from '@/lib/utils';
@@ -24,13 +25,14 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [userId, setUserId] = useState<string | null>(null);
 
   const screens = [
-    { title: 'Meet the Community', component: ScreenSocialProof },
-    { title: 'Your Dream Colleges', component: ScreenDreamColleges },
-    { title: 'Be Honest With Us', component: ScreenHonesty },
-    { title: 'Meet Your Buddy', component: ScreenMeetBuddy },
-    { title: 'Your Baseline Test', component: ScreenBaselineTest },
-    { title: 'Daily Commitment', component: ScreenDailyCommitment },
-    { title: 'Log Day 1', component: ScreenLogDayOne }
+    { title: 'Meet the Community', component: ScreenSocialProof },    // 0
+    { title: 'Your Dream Colleges', component: ScreenDreamColleges }, // 1
+    { title: 'Exam Context', component: ScreenExamContext },           // 2
+    { title: 'Meet Your Buddy', component: ScreenMeetBuddy },         // 3
+    { title: 'Your Baseline', component: ScreenBaselineTest },         // 4
+    { title: 'About You', component: ScreenAboutYou },                // 5
+    { title: 'Daily Commitment', component: ScreenDailyCommitment },  // 6
+    { title: 'Log Day 1', component: ScreenLogDayOne },               // 7
   ];
 
   const CurrentScreen = screens[currentScreen].component;
@@ -51,33 +53,44 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
     // Screen 1 = Dream Colleges; save immediately
     if (currentScreen === 1 && data?.dream_colleges) {
-      supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '').then(() => {});
+      void supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '');
     }
-    // Screen 2 = Honesty; save immediately
+    // Screen 2 = Exam Context; save immediately
     if (currentScreen === 2 && data) {
-      supabase.from('profiles').update({
+      void supabase.from('profiles').update({
         is_repeater: data.is_repeater,
-        starting_percentile: data.starting_percentile ?? null,
+        category: data.category ?? null,
+        exam_target: data.exam_target ?? null,
+        attempt_year: data.attempt_year ?? null,
+        target_percentile: data.target_percentile ?? null,
         hours_available: data.hours_available,
         study_target_hours: data.hours_available,
-      }).eq('id', userId ?? '').then(() => {});
+      }).eq('id', userId ?? '');
     }
-    // Screen 5 (Daily Commitment) — save the target hours
-    if (currentScreen === 5 && data?.studyTargetHours) {
+    // Screen 5 = About You; save immediately
+    if (currentScreen === 5 && data) {
+      void supabase.from('profiles').update({
+        full_name: data.full_name || null,
+        phone: data.phone || null,
+        college: data.college || null,
+        course_year: data.course_year ?? null,
+        is_working_professional: data.is_working_professional ?? false,
+        work_ex_months: data.work_ex_months ?? null,
+        coaching_enrolled: data.coaching_enrolled ?? false,
+      }).eq('id', userId ?? '');
+    }
+    // Screen 6 = Daily Commitment; capture target hours
+    if (currentScreen === 6 && data?.studyTargetHours) {
       setStudyTargetHours(data.studyTargetHours as number);
     }
 
     if (currentScreen < screens.length - 1) {
       setCurrentScreen(currentScreen + 1);
     } else {
-      // Last screen - mark onboarding as complete
+      // Last screen — mark onboarding complete
       setIsLoading(true);
       try {
-        if (!userId) {
-          throw new Error('User ID not found');
-        }
-
-        console.log('Updating onboarding_completed for user:', userId);
+        if (!userId) throw new Error('User ID not found');
 
         const { data: updateResult, error } = await supabase
           .from('profiles')
@@ -86,13 +99,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           .select();
 
         console.log('Update result:', updateResult, 'Error:', error);
-
         if (error) throw error;
 
-        // Wait 2 seconds to ensure DB update propagates
         await new Promise(resolve => setTimeout(resolve, 2000));
-
-        console.log('Calling onComplete after DB update');
         onComplete();
       } catch (err) {
         console.error('Onboarding error:', err);
@@ -103,9 +112,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   };
 
   const handleCompleteWithoutUpdate = async () => {
-    // Only mark onboarding complete if the user has progressed past screen 0.
-    // Closing at screen 0 (without seeing anything) should not permanently
-    // suppress the modal — the user should see it again on next visit.
     if (!userId || currentScreen === 0) {
       onComplete();
       return;
@@ -124,15 +130,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   };
 
   const handleBack = () => {
-    if (currentScreen > 0) {
-      setCurrentScreen(currentScreen - 1);
-    }
+    if (currentScreen > 0) setCurrentScreen(currentScreen - 1);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        {/* Header with Progress */}
+        {/* Header */}
         <div className="bg-white border-b border-stone-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
@@ -140,24 +144,15 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             </h2>
             <div className="flex gap-2">
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleCompleteWithoutUpdate();
-                }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCompleteWithoutUpdate(); }}
                 disabled={isLoading}
                 type="button"
                 className="text-xs px-2 py-1 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded transition disabled:opacity-50 cursor-pointer"
-                title="Skip onboarding"
               >
                 Skip
               </button>
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleCompleteWithoutUpdate();
-                }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCompleteWithoutUpdate(); }}
                 disabled={isLoading}
                 type="button"
                 className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
@@ -168,33 +163,25 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             </div>
           </div>
 
-          {/* Progress Indicator */}
+          {/* Progress */}
           <div className="flex gap-2">
             {screens.map((_, i) => (
               <div
                 key={i}
-                className={cn(
-                  'h-1 flex-1 rounded-full transition-all',
-                  i <= currentScreen ? 'bg-orange-600' : 'bg-stone-200'
-                )}
+                className={cn('h-1 flex-1 rounded-full transition-all', i <= currentScreen ? 'bg-orange-600' : 'bg-stone-200')}
               />
             ))}
           </div>
-          <p className="text-xs text-stone-500 mt-3">
-            Screen {currentScreen + 1}/{screens.length}
-          </p>
+          <p className="text-xs text-stone-500 mt-3">Screen {currentScreen + 1}/{screens.length}</p>
         </div>
 
-        {/* Screen Content */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <p>{error}</p>
               <button
-                onClick={() => {
-                  console.log('Force skipping onboarding...');
-                  handleCompleteWithoutUpdate();
-                }}
+                onClick={() => handleCompleteWithoutUpdate()}
                 type="button"
                 className="mt-2 text-xs underline hover:text-red-900 cursor-pointer"
               >
@@ -211,15 +198,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           />
         </div>
 
-        {/* Navigation Buttons — screen 0 (ScreenSocialProof) manages its own navigation */}
+        {/* Bottom nav — screen 0 (ScreenSocialProof) manages its own navigation */}
         {currentScreen > 0 && (
           <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleBack();
-              }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleBack(); }}
               disabled={isLoading}
               type="button"
               className="flex-1 py-3 px-4 border border-stone-300 text-stone-900 rounded-xl font-medium hover:bg-stone-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
@@ -227,11 +210,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               Back
             </button>
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleNext();
-              }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNext(); }}
               disabled={isLoading}
               type="button"
               className={cn(

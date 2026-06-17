@@ -1,134 +1,49 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { SetupRecorderClient } from './setup-recorder-client';
-import { CheckCircle2 } from 'lucide-react';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { SetupFormClient } from './setup-form-client';
+
+export const metadata = {
+  title: 'Setup your profile · CareerRai',
+};
 
 export default async function BuddySetupPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-
   if (!user) redirect('/login');
 
-  // Check if user is a buddy
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from('profiles')
-    .select('role, intro_audio_url, buddy_bio')
+    .select('role, full_name, cat_percentile, college, buddy_onboarding_completed')
     .eq('id', user.id)
     .single();
 
-  if (profile?.role !== 'buddy') {
-    redirect('/');
-  }
+  if (profile?.role !== 'buddy') redirect('/login');
+
+  // Already complete — go straight to dashboard.
+  if (profile?.buddy_onboarding_completed) redirect('/buddy/home');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-50 to-stone-100 py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <h1
-            className="text-4xl font-bold text-stone-900 mb-2"
-            style={{ fontFamily: 'Georgia, serif' }}
-          >
-            Complete Your Profile
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white">
+      <div className="max-w-md mx-auto px-4 py-8 pb-16">
+        <div className="mb-8">
+          <p className="text-xs font-semibold uppercase tracking-widest text-orange-600">CareerRai</p>
+          <h1 className="text-3xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>
+            Build your profile
           </h1>
-          <p className="text-lg text-stone-600">
-            Help your students get to know you better
+          <p className="text-sm text-stone-500 mt-1">
+            Students read this before accepting a buddy. Make it count.
           </p>
         </div>
-
-        {/* Setup Checklist */}
-        <div className="mb-12 space-y-3">
-          <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-stone-200">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0" />
-            <div>
-              <p className="font-semibold text-stone-900">Account Created</p>
-              <p className="text-sm text-stone-600">You&apos;re set up as an IIM alumni buddy</p>
-            </div>
-          </div>
-
-          <div
-            className={`flex items-center gap-3 p-4 rounded-lg border ${
-              profile?.intro_audio_url
-                ? 'bg-emerald-50 border-emerald-200'
-                : 'bg-orange-50 border-orange-200'
-            }`}
-          >
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white ${
-                profile?.intro_audio_url ? 'bg-emerald-600' : 'bg-orange-600'
-              }`}
-            >
-              2
-            </div>
-            <div>
-              <p className="font-semibold text-stone-900">
-                {profile?.intro_audio_url ? '✓ Audio Intro Recorded' : 'Record Your Intro'}
-              </p>
-              <p className="text-sm text-stone-600">
-                {profile?.intro_audio_url
-                  ? 'Your intro is ready to be heard by students'
-                  : 'Help students meet you through a short audio message'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Audio Recorder */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 border border-stone-200">
-          {profile?.intro_audio_url ? (
-            <div className="text-center py-8">
-              <CheckCircle2 className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-stone-900 mb-2">
-                You&apos;re All Set! 🎉
-              </h2>
-              <p className="text-stone-600 mb-6">
-                Your intro audio has been saved. Students will hear this when they
-                meet you during onboarding.
-              </p>
-
-              <div className="flex gap-3 justify-center">
-                <Link
-                  href="/buddy/students"
-                  className="px-6 py-3 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-all"
-                >
-                  View Your Students
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <SetupRecorderClient buddyId={user.id} />
-          )}
-        </div>
-
-        {/* Info Box */}
-        <div className="mt-12 p-6 bg-blue-50 border border-blue-200 rounded-xl">
-          <h3 className="font-semibold text-blue-900 mb-3">
-            What Makes a Great Buddy Intro?
-          </h3>
-          <ul className="space-y-2 text-sm text-blue-800">
-            <li>
-              ✓ <strong>Be Personal:</strong> Share your name, college, and CAT
-              score/percentile
-            </li>
-            <li>
-              ✓ <strong>Tell Your Story:</strong> How did CAT shape your life? What&apos;s
-              your background?
-            </li>
-            <li>
-              ✓ <strong>Show Your Style:</strong> Students want to know the real you,
-              not a script
-            </li>
-            <li>
-              ✓ <strong>Keep It Right Length:</strong> 30-45 seconds is ideal (shows
-              confidence, not rushed)
-            </li>
-            <li>
-              ✓ <strong>Set Expectations:</strong> What can students expect from you as
-              their buddy?
-            </li>
-          </ul>
-        </div>
+        <SetupFormClient
+          buddyId={user.id}
+          initialProfile={{
+            full_name: profile?.full_name ?? null,
+            cat_percentile: profile?.cat_percentile ?? null,
+            college: profile?.college ?? null,
+          }}
+        />
       </div>
     </div>
   );
