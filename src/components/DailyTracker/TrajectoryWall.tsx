@@ -17,7 +17,6 @@ export function TrajectoryWall({
   targetPercentile,
   logCount,
   mockCount,
-  daysStudied,
 }: TrajectoryWallProps) {
   if (!dreamCollege) return null;
 
@@ -31,18 +30,19 @@ export function TrajectoryWall({
   const gap = Math.max(0, targetPercentile - pctNow);
   const progress = Math.min(100, Math.round((pctNow / targetPercentile) * 100));
 
-  // Trajectory sentence
+  // Trajectory sentence — daysToCat is already visible in the top-right chip,
+  // so don't repeat it in the text.
   let trajectory = '';
   if (logCount === 0) {
     trajectory = 'Log day 1 to start your trajectory.';
   } else if (gap === 0) {
     trajectory = `You're at your target. Time to raise the bar.`;
-  } else if (daysStudied > 0) {
+  } else if (mockCount > 0) {
     const ratePerDay = gap / Math.max(daysToCat, 1);
     if (ratePerDay < 0.05) {
       trajectory = `At current pace, you reach ${targetPercentile}%ile well before the exam.`;
     } else {
-      trajectory = `${gap} percentile points to close in ${daysToCat} days — ${mockCount} mocks logged.`;
+      trajectory = `${gap} percentile points to close — ${mockCount} mocks in the bank.`;
     }
   } else {
     trajectory = `${gap} percentile points between here and ${dreamCollege.split(' ')[1] || dreamCollege}.`;
@@ -75,20 +75,6 @@ export function TrajectoryWall({
             style={{ width: `${progress}%` }}
           />
         </div>
-      </div>
-
-      {/* Mini stats */}
-      <div className="flex items-center gap-3 mt-3 pt-3 border-t border-orange-100">
-        {[
-          { label: 'Days logged', value: logCount },
-          { label: 'Mocks done', value: mockCount },
-          { label: 'Study days', value: daysStudied },
-        ].map(({ label, value }) => (
-          <div key={label} className="flex-1 text-center">
-            <p className="text-base font-bold text-stone-900">{value}</p>
-            <p className="text-[10px] text-stone-500">{label}</p>
-          </div>
-        ))}
       </div>
     </div>
   );

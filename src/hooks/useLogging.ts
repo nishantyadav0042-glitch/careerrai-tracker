@@ -10,6 +10,7 @@ interface LoggingPayload {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
+  log_date?: string; // optional backdate — server validates must be today or yesterday
 }
 
 interface LoggingResponse {
@@ -18,12 +19,12 @@ interface LoggingResponse {
   crs?: number;
   bonus?: string;
   daily_nudge?: string | null;
+  milestone?: string | null;
 }
 
 export interface InitialLogging {
   streak: StreakData | null;
   hasLoggedToday: boolean;
-  shieldsRemaining: number;
 }
 
 export function useLogging(studentId: string, initial?: InitialLogging | null) {
@@ -32,8 +33,6 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackData, setFeedbackData] = useState<LoggingResponse | null>(null);
 
-  // When the server already resolved this data (tracker page), seed it as
-  // initialData so the hero/streak paints instantly with no client round-trip.
   const { data: streakData, isLoading: streakLoading } = useQuery({
     queryKey: ['streak', studentId],
     enabled: !!studentId,
@@ -67,27 +66,8 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
     },
   });
 
-  const { data: shieldsData } = useQuery({
-    queryKey: ['shields-remaining', studentId],
-    enabled: !!studentId,
-    ...(initial ? { initialData: initial.shieldsRemaining } : {}),
-    staleTime: 30_000,
-    queryFn: async () => {
-      const today = new Date();
-      const resetDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-      const { data } = await supabase
-        .from('streak_shields')
-        .select('id')
-        .eq('student_id', studentId)
-        .gte('created_at', new Date(today.getFullYear(), today.getMonth(), 1).toISOString())
-        .lt('created_at', resetDate.toISOString());
-      return Math.max(0, 2 - (data?.length ?? 0));
-    },
-  });
-
   const logMutation = useMutation({
     mutationFn: async (payload: LoggingPayload): Promise<LoggingResponse> => {
-      // The API route authenticates server-side — no need for a client getUser().
       const response = await fetch('/api/logging/log-daily', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,9 +84,7 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
       setShowFeedback(true);
       queryClient.invalidateQueries({ queryKey: ['streak'] });
       queryClient.invalidateQueries({ queryKey: ['has-logged-today'] });
-      queryClient.invalidateQueries({ queryKey: ['shields-remaining'] });
       queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
-      // Refetch immediately so UI reflects the new log without waiting for staleTime
       queryClient.refetchQueries({ queryKey: ['progress-snapshot'] });
     },
   });
@@ -122,7 +100,6 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
     currentStreak: streakData?.current_streak ?? 0,
     maxStreak: streakData?.longest_streak ?? 0,
     hasLoggedToday: hasLoggedToday ?? false,
-    shieldsRemaining: shieldsData ?? 0,
     streakData,
     isLoading: streakLoading,
     isSubmitting: logMutation.isPending,

@@ -7,6 +7,7 @@ import {
   VALID_ENERGY,
   VALID_EMOTIONAL_CHIPS,
 } from '@/lib/streak-utils';
+import { MILESTONE_MESSAGES } from '@/lib/messages';
 
 interface LoggingRequest {
   hours: number;
@@ -14,6 +15,7 @@ interface LoggingRequest {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
+  log_date?: string; // optional backdate — must be today or yesterday (IST)
 }
 
 export async function POST(request: NextRequest) {
@@ -52,7 +54,15 @@ export async function POST(request: NextRequest) {
 
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-    const dateStr = getLogDateString();
+    const todayStr = getLogDateString();
+    const todayDate = new Date(todayStr + 'T00:00:00.000Z');
+    const yesterdayStr = new Date(todayDate.getTime() - 86_400_000).toISOString().split('T')[0];
+
+    // Validate backdate: only today or yesterday allowed.
+    const dateStr = body.log_date ?? todayStr;
+    if (dateStr !== todayStr && dateStr !== yesterdayStr) {
+      return NextResponse.json({ error: 'Can only log today or yesterday' }, { status: 400 });
+    }
 
     const { data: existingLog } = await admin
       .from('daily_reports')
@@ -109,8 +119,12 @@ export async function POST(request: NextRequest) {
 
     const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin, body.emotional_chips);
 
+    // Milestone message beats the random bonus — milestone days are rare and meaningful.
+    const newStreak = (streakUpdated as { current_streak: number }).current_streak;
+    const milestone: string | null = MILESTONE_MESSAGES[newStreak as keyof typeof MILESTONE_MESSAGES] ?? null;
+
     let bonus: string | undefined;
-    if (Math.random() < 0.2) {
+    if (!milestone && Math.random() < 0.2) {
       const bonuses = [
         '3-day streak incoming!',
         'Your buddy will see this!',
@@ -140,7 +154,7 @@ export async function POST(request: NextRequest) {
       day_of_week: nowUtc.getUTCDay(),
     }).catch(console.error);
 
-    return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge }, { status: 200 });
+    return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge, milestone }, { status: 200 });
   } catch (error) {
     console.error('Logging error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

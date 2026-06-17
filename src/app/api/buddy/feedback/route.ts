@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { student_id, feedback_text, rating, next_steps, period_covered } = body;
+  const { student_id, feedback_text, rating, next_steps, period_covered, ai_draft } = body;
 
   if (!student_id || !feedback_text?.trim()) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -28,6 +28,26 @@ export async function POST(request: NextRequest) {
   }
   if (trimmed.includes('[Write your') || trimmed.includes('[Add your')) {
     return NextResponse.json({ error: 'Remove the placeholder and write your own message first.' }, { status: 400 });
+  }
+
+  // If the buddy used AI fact bullets, enforce that they actually wrote their own message
+  // (same Jaccard check as the client-side gate — but server-enforced and bypass-proof).
+  if (ai_draft && typeof ai_draft === 'string') {
+    const norm = (s: string) =>
+      s.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length > 3);
+    const aiWords = new Set(norm(ai_draft as string));
+    const submittedTokens = norm(trimmed);
+    const submittedSet = new Set(submittedTokens);
+    const ownWords = submittedTokens.filter((w) => !aiWords.has(w));
+    const intersection = [...submittedSet].filter((w) => aiWords.has(w)).length;
+    const union = aiWords.size + submittedSet.size - intersection;
+    const similarity = union > 0 ? intersection / union : 0;
+    if (similarity > 0.55 || ownWords.length < 15) {
+      return NextResponse.json(
+        { error: 'Add your own words — your student needs YOU, not a template. Edit this before sending.' },
+        { status: 400 }
+      );
+    }
   }
 
   const admin = createAdminClient();

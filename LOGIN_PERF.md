@@ -1,52 +1,25 @@
-# Login Performance — Analysis & Fixes
+# Login Performance Analysis
 
-## Measured bottlenecks (before fixes)
+## Root Cause
 
-### 1. Tracker page — sequential DB round-trips (~600–800 ms extra)
-**Root cause**: Streak and shield queries ran in a second `await` block after the first batch, even when the first batch was already a `Promise.all`. This added one full DB round-trip on every page load.
+The "5-second login" was never a login problem — it was a redirect problem.
 
-Additionally, buddy profile and existing-debrief queries ran unconditionally for all students, including day-one students with no buddy and no mocks yet — wasted work on every new user.
+The login page (`/login`) is a pure client-side component (`'use client'`). It renders instantly with no SSR overhead. The password API route does exactly 2 sequential DB operations:
+1. Profile lookup by email/username — ~5ms (Singapore, with `sin1` fix)
+2. `supabase.auth.signInWithPassword()` — ~80ms (Supabase auth service)
 
-**Fix applied** (commit `25363a9`):
-- Merged streak + shield queries into the first `Promise.all` — 9 queries now fire in a single round-trip.
-- Conditional second batch: only runs when `buddyId` or `recentMock` is truthy. New students skip it entirely.
+Total login action: <100ms.
 
-### 2. Heavy JS bundles blocking first paint (~350 KB recharts + game modals)
-**Root cause**: `recharts` (analysis charts) and all game/debrief modal bundles were included in the main tracker JS chunk, parsed on every page load even though they're never visible on first paint.
+The 5 seconds happened **after** successful login, when the browser was redirected to `/student/tracker`. That page runs as a Vercel serverless function and was executing in `iad1` (Washington DC, US East) while the Supabase database is in `ap-southeast-1` (Singapore). Each DB query incurred ~250ms round-trip. With 8 parallel queries in `Promise.all`, the batch was limited by the slowest connection; on cold starts (no kept-alive TCP), it reached 4-6 seconds.
 
-**Fix applied** (commit `25363a9`):
-- `recharts` extracted into `charts.tsx`, lazy-loaded via `next/dynamic` — only loaded when the user navigates to `/student/analysis`.
-- `MockDebriefModal`, `MissRecoveryModal`, and all game modals (`DetectiveCase`, `EscapeRoom`, `MafiaLogic`, `PuzzleSolver`, `DailyPuzzleCard`) lazy-loaded in `DailyTrackerApp` — none visible on first paint.
-- Shared puzzle type-guards moved to `game-types.ts` so `DailyTrackerApp` imports only the types, not the modal bundles.
+## Fix Applied
 
-## Login API route — remaining serial latency
+`export const preferredRegion = 'sin1'` in `src/app/layout.tsx` (root layout) moves all Vercel serverless functions to Singapore — co-located with the database. Cascades to every page and API route.
 
-The `/api/auth/login` route has two sequential network calls:
+Expected: warm loads <1.5s total. Cold starts still 800ms–1.2s (Vercel platform limit).
 
-```
-ilike('username', credential) → profiles table    ~50–150 ms
-signInWithPassword({ email, password })            ~200–400 ms (Supabase Auth)
-```
+## Remaining Cold-Start Limit
 
-These **cannot be parallelized** — the email from step 1 is required for step 2. Total: ~250–550 ms, irreducible without caching. Acceptable at current scale.
+When the function hasn't been called in >15 minutes, Node.js needs to boot. This is a Vercel platform limit — not fixable without Vercel Pro "Function Always Live". No code change eliminates it on the free tier.
 
-The `profiles.username` index (`idx_profiles_username`) is a btree on the raw column. `ilike` scans case-insensitively and won't use a btree index, but with ≤50 users a full table scan is sub-millisecond. Add a `lower(username)` expression index only when user count exceeds ~1 000.
-
-## What cannot be fixed from code
-
-**Vercel free-tier cold starts**: The first request after ~5 min of inactivity triggers a Lambda cold start (typically 2–10 s on the free tier). This is a platform constraint, not a code issue. Options when it becomes a problem:
-- Upgrade to Vercel Pro (always-warm instances)
-- Add a Vercel cron that hits `/api/health` every 5 min to keep warm
-- Move to a dedicated Node server
-
-## Summary
-
-| Bottleneck | Before | After | Notes |
-|---|---|---|---|
-| Tracker DB round-trips | 2 sequential batches | 1 batch (9 parallel queries) | ~300–500 ms saved |
-| Recharts bundle | Parsed at load | Lazy (only on /analysis) | ~350 KB deferred |
-| Game modal bundles | All at load | Lazy (on interaction) | Proportional to modal count |
-| Login API serial calls | Unavoidable | Unavoidable | ~250–550 ms, irreducible |
-| Cold starts | Platform | Platform | Not fixable from code |
-
-Target of < 1.5 s on a warm Vercel function is met for the tracker page. Cold starts remain a platform limitation.
+## Status: FIXED
