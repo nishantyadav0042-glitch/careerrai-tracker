@@ -13,36 +13,54 @@ async function requireAdmin() {
   return { admin, userId: user.id };
 }
 
-// Add a number to the allowlist (and optionally assign a buddy) in one action.
 export async function POST(request: NextRequest) {
   const ctx = await requireAdmin();
   if ('error' in ctx) return ctx.error;
   const { admin, userId } = ctx;
 
   try {
-    const { phone: rawPhone, full_name, assigned_buddy_id } = (await request.json()) as {
-      phone?: string; full_name?: string; assigned_buddy_id?: string | null;
+    const { person_type, email: rawEmail, phone: rawPhone, full_name, assigned_buddy_id } = (await request.json()) as {
+      person_type?: string;
+      email?: string;
+      phone?: string | null;
+      full_name?: string;
+      assigned_buddy_id?: string | null;
     };
-    const phone = normalizeIndianPhone(rawPhone);
-    if (!phone) return NextResponse.json({ error: 'Enter a valid 10-digit mobile number.' }, { status: 400 });
-    if (!full_name?.trim()) return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
+
+    const email = rawEmail?.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
+    }
+    if (!full_name?.trim()) {
+      return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
+    }
+
+    const phone = rawPhone ? (normalizeIndianPhone(rawPhone) ?? null) : null;
+    const type = person_type === 'buddy' ? 'buddy' : 'student';
 
     const { error } = await admin.from('student_allowlist').insert({
+      email,
       phone,
       full_name: full_name.trim(),
       added_by: userId,
-      assigned_buddy_id: assigned_buddy_id || null,
+      assigned_buddy_id: type === 'student' ? (assigned_buddy_id || null) : null,
+      person_type: type,
+      status: 'active',
     });
+
     if (error) {
-      if (error.code === '23505') return NextResponse.json({ error: 'That number is already on the list.' }, { status: 409 });
+      if (error.code === '23505') {
+        return NextResponse.json({ error: 'That email is already on the list.' }, { status: 409 });
+      }
       console.error('[allowlist] insert', error);
-      return NextResponse.json({ error: 'Could not add number.' }, { status: 500 });
+      return NextResponse.json({ error: 'Could not add person.' }, { status: 500 });
     }
 
-    // If this student has already logged in, keep their buddy assignment in sync.
-    if (assigned_buddy_id) {
-      await admin.from('profiles').update({ buddy_id: assigned_buddy_id }).eq('phone', phone);
+    // For students with a buddy assignment, keep profile in sync if they've already logged in.
+    if (type === 'student' && assigned_buddy_id) {
+      await admin.from('profiles').update({ buddy_id: assigned_buddy_id }).eq('email', email);
     }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('[allowlist] POST', e);
@@ -50,36 +68,43 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Pause / reactivate, or change the assigned buddy.
 export async function PATCH(request: NextRequest) {
   const ctx = await requireAdmin();
   if ('error' in ctx) return ctx.error;
   const { admin } = ctx;
 
   try {
-    const { id, status, assigned_buddy_id } = (await request.json()) as {
-      id?: string; status?: 'active' | 'paused'; assigned_buddy_id?: string | null;
+    const { id, status, assigned_buddy_id, email: rawEmail } = (await request.json()) as {
+      id?: string;
+      status?: 'active' | 'paused';
+      assigned_buddy_id?: string | null;
+      email?: string;
     };
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
     const patch: Record<string, unknown> = {};
     if (status === 'active' || status === 'paused') patch.status = status;
     if (assigned_buddy_id !== undefined) patch.assigned_buddy_id = assigned_buddy_id || null;
+    if (rawEmail) patch.email = rawEmail.trim().toLowerCase();
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
 
     const { data: row, error } = await admin
       .from('student_allowlist')
       .update(patch)
       .eq('id', id)
-      .select('phone, assigned_buddy_id')
+      .select('email, assigned_buddy_id, person_type')
       .single();
+
     if (error) {
       console.error('[allowlist] patch', error);
       return NextResponse.json({ error: 'Could not update.' }, { status: 500 });
     }
-    if (assigned_buddy_id !== undefined && row?.phone) {
-      await admin.from('profiles').update({ buddy_id: assigned_buddy_id || null }).eq('phone', row.phone);
+
+    // Keep profile buddy assignment in sync for students
+    if (assigned_buddy_id !== undefined && row?.email && row.person_type !== 'buddy') {
+      await admin.from('profiles').update({ buddy_id: assigned_buddy_id || null }).eq('email', row.email);
     }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('[allowlist] PATCH', e);
