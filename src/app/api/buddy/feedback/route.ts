@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { sendPushToUser } from '@/lib/push';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -50,16 +51,18 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Also insert in-app notification for the student
+  // Notify student — in-app + push
+  const notifTitle = 'Tere buddy ne reply kiya 🎯';
+  const notifBody = feedback_text.trim().slice(0, 120);
   await admin.from('notifications').insert({
-    user_id: student_id,
-    type: 'feedback_received',
-    title: 'Your buddy left you feedback 🎯',
-    body: feedback_text.trim().slice(0, 120),
-    data: {},
-    read: false,
-    channel: 'in_app',
+    user_id: student_id, type: 'feedback_received',
+    title: notifTitle, body: notifBody,
+    data: { url: '/student/buddy' }, read: false, channel: 'in_app',
   });
+  const { data: studentPrefs } = await admin.from('profiles').select('notif_prefs').eq('id', student_id).single();
+  if ((studentPrefs?.notif_prefs as Record<string, unknown>)?.push === true) {
+    await sendPushToUser(student_id, { title: notifTitle, body: notifBody, url: '/student/buddy' });
+  }
 
   return NextResponse.json({ feedback: data });
 }
