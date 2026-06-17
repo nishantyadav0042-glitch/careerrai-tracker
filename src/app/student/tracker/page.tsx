@@ -6,7 +6,9 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
 import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
+import { AnchorLine } from '@/components/DailyTracker/AnchorLine';
 import { getLogDateString } from '@/lib/streak-utils';
+import { getCurrentMission, MISSION_TARGET } from '@/lib/missions';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -23,11 +25,6 @@ export default async function DailyTrackerPage() {
   const admin = createAdminClient();
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
 
-  // Month boundaries for shield count — computed once, used in batch 1.
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-
   // Single DB round-trip: all independent queries in one Promise.all.
   const [
     { data: profile },
@@ -38,7 +35,6 @@ export default async function DailyTrackerPage() {
     { data: mocks },
     { data: recentMock },
     { data: streakRow },
-    { data: shieldRows },
   ] = await Promise.all([
     admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile').eq('id', user.id).single(),
     admin
@@ -79,9 +75,7 @@ export default async function DailyTrackerPage() {
       .order('report_date', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    // Streak and shields are independent — no reason to defer them.
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
-    admin.from('streak_shields').select('id').eq('student_id', user.id).gte('created_at', monthStart).lt('created_at', nextMonthStart),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -90,8 +84,7 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
 
-  // Second batch — only runs when there IS a buddy or a recent mock to look up.
-  // For users with neither (e.g. new students), this skips entirely.
+  // Second batch — only runs when there IS a buddy or a recent mock.
   let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
   let existingDebrief: { id: string } | null = null;
   let initialFeedback: { feedback_text: string; feedback_date: string; feedback_type: string } | null = null;
@@ -119,12 +112,10 @@ export default async function DailyTrackerPage() {
       (buddyProfile.cat_percentile != null ? ` · ${Math.round(Number(buddyProfile.cat_percentile))}%ile` : '');
   }
 
-  // Server-side pending debrief: the recent mock exists but has no debrief yet.
   const serverPendingDebrief: { report_date: string; updated_at: string } | null =
     recentMock && !existingDebrief ? recentMock : null;
 
-  // Miss-recovery: has this student lapsed (2+ days since last log, with a prior
-  // streak) and not yet logged today? If so, surface the compassionate restart.
+  // Miss-recovery detection.
   let recovery: { missedDays: number; previousStreak: number } | null = null;
   if (streakRow?.last_log_date && (streakRow.current_streak ?? 0) > 0) {
     const todayStr = getLogDateString();
@@ -132,23 +123,33 @@ export default async function DailyTrackerPage() {
     if (gap >= 2) recovery = { missedDays: gap - 1, previousStreak: streakRow.current_streak as number };
   }
 
-  // Seed the hero/logging card with server data so it paints with no client fetch.
   const initialLogging = {
     streak: (streakRow as StreakData | null) ?? null,
     hasLoggedToday: (logs?.[0]?.report_date ?? null) === getLogDateString(),
-    shieldsRemaining: Math.max(0, 2 - (shieldRows?.length ?? 0)),
   };
 
-  const daysToCat = Math.max(
-    0,
-    Math.ceil((CAT_EXAM_DATE.getTime() - Date.now()) / 86_400_000)
-  );
+  // Monthly mission — computed from already-fetched logs (no extra query).
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const daysInMission = logs?.filter(
+    (l) => (l.report_date as string).startsWith(currentMonthStr) && (l.study_duration as number) > 0
+  ).length ?? 0;
+  const currentMission = getCurrentMission(now.getMonth());
 
-  const hour = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
+  // Yesterday backlog — computed from already-fetched logs.
+  const todayStr = getLogDateString();
+  const todayDate = new Date(todayStr + 'T00:00:00.000Z');
+  const yesterdayDate = new Date(todayDate.getTime() - 86_400_000);
+  const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+  const hasLoggedYesterday = logs?.some((l) => l.report_date === yesterdayStr) ?? false;
+  const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+  const daysToCat = Math.max(0, Math.ceil((CAT_EXAM_DATE.getTime() - now.getTime()) / 86_400_000));
+
+  const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   const h = parseInt(hour);
   const greeting = h < 4 ? 'Burning the midnight oil' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Only surface a session happening within the next 24h
   const nextSession = sessions?.[0] ?? null;
   const todaySession =
     nextSession && new Date(nextSession.scheduled_at).getTime() - Date.now() < 24 * 3_600_000
@@ -158,7 +159,6 @@ export default async function DailyTrackerPage() {
   const hasPendingRequest = (pendingReqs?.length ?? 0) > 0;
   const hasDebriefedBefore = (anyDebrief?.length ?? 0) > 0;
 
-  // Stats for trajectory wall
   const logCount = logs?.length ?? 0;
   const daysStudied = logs?.filter((l) => (l.study_duration as number) > 0).length ?? 0;
   const mockCount = mocks?.length ?? 0;
@@ -172,12 +172,12 @@ export default async function DailyTrackerPage() {
             {greeting}, {firstName}
           </h1>
           <div className="flex items-center gap-1.5 shrink-0">
-            {profile?.cat_percentile != null && (
+            {/* CRS pill only when TrajectoryWall is absent — it already shows current%ile */}
+            {profile?.cat_percentile != null && !dreamCollege && (
               <span className="text-[11px] font-bold bg-stone-900 text-white rounded-full px-2.5 py-1">
                 CRS {profile.cat_percentile}
               </span>
             )}
-            {/* TrajectoryWall shows days+target when dreamCollege is set; only show chip when it isn't */}
             {!dreamCollege && (
               <span className="text-[11px] font-semibold bg-orange-100 text-orange-700 rounded-full px-2.5 py-1">
                 {daysToCat}d to CAT
@@ -186,7 +186,10 @@ export default async function DailyTrackerPage() {
           </div>
         </div>
 
-        {/* Trajectory Wall — dream-anchored, always present once college set */}
+        {/* Emotional anchor line — dost-wala Hinglish, rotates slowly */}
+        <AnchorLine />
+
+        {/* Trajectory Wall — dream-anchored, present once college set */}
         <TrajectoryWall
           dreamCollege={dreamCollege}
           currentPercentile={profile?.cat_percentile as number | null}
@@ -196,7 +199,6 @@ export default async function DailyTrackerPage() {
           daysStudied={daysStudied}
         />
 
-        {/* Important: urgent help / pending session request */}
         {buddyId && (
           <UrgentHelpBanner
             buddyId={buddyId}
@@ -204,7 +206,6 @@ export default async function DailyTrackerPage() {
           />
         )}
 
-        {/* Day one: buddy not yet matched — never a ghost town */}
         {!buddyId && (
           <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
             <div className="flex items-center gap-3">
@@ -233,9 +234,15 @@ export default async function DailyTrackerPage() {
           initialFeedback={initialFeedback}
           recovery={recovery}
           initialLogging={initialLogging}
+          missionName={currentMission.name}
+          missionFocus={currentMission.focus}
+          daysInMission={daysInMission}
+          missionTarget={MISSION_TARGET}
+          hasLoggedYesterday={hasLoggedYesterday}
+          yesterdayStr={yesterdayStr}
+          yesterdayLabel={yesterdayLabel}
         />
 
-        {/* Day one: the debrief promise — sell it before it exists */}
         {!hasDebriefedBefore && (
           <div className="rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50 px-4 py-4 flex items-start gap-3">
             <span className="text-xl leading-none">📋</span>
@@ -247,10 +254,8 @@ export default async function DailyTrackerPage() {
           </div>
         )}
 
-        {/* Add to home screen — gentle nudge, only shows on mobile if not installed */}
         <AddToHomeScreenBanner />
 
-        {/* Footer: feedback link */}
         <p className="text-center text-[11px] text-stone-400 pb-20">
           <a href="mailto:hello@careerrai.com" className="hover:text-stone-600 transition-colors">
             Help us improve · Give feedback

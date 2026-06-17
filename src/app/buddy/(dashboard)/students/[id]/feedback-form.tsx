@@ -327,7 +327,14 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
       const res = await fetch('/api/buddy/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: studentId, feedback_text: fbText.trim(), rating, next_steps: nextSteps, period_covered: 'adhoc' }),
+        body: JSON.stringify({
+          student_id: studentId,
+          feedback_text: fbText.trim(),
+          rating,
+          next_steps: nextSteps,
+          period_covered: 'adhoc',
+          ...(aiBullets ? { ai_draft: aiBullets } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? 'Failed to submit. Try again.'); return; }

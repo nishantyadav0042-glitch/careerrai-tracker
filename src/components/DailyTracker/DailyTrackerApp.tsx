@@ -124,13 +124,38 @@ interface DailyTrackerAppProps {
   initialFeedback?: { feedback_text: string; feedback_date: string; feedback_type: string } | null;
   recovery?: { missedDays: number; previousStreak: number } | null;
   initialLogging?: InitialLogging | null;
+  missionName?: string;
+  missionFocus?: string;
+  daysInMission?: number;
+  missionTarget?: number;
+  hasLoggedYesterday?: boolean;
+  yesterdayStr?: string;   // ISO date for the API
+  yesterdayLabel?: string; // "Jun 16" for the UI
 }
 
-export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy = false, buddyId = null, buddyName = null, initialPendingDebrief = null, initialFeedback = null, recovery = null, initialLogging = null }: DailyTrackerAppProps) {
+export function DailyTrackerApp({
+  studentId = '',
+  todaySession = null,
+  hasBuddy = false,
+  buddyId = null,
+  buddyName = null,
+  initialPendingDebrief = null,
+  initialFeedback = null,
+  recovery = null,
+  initialLogging = null,
+  missionName = '',
+  missionFocus = '',
+  daysInMission = 0,
+  missionTarget = 30,
+  hasLoggedYesterday = true,
+  yesterdayStr = '',
+  yesterdayLabel = '',
+}: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
   const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
   const [currentLogDate, setCurrentLogDate] = useState('');
+  const [logDateOverride, setLogDateOverride] = useState<string | null>(null);
   const [lastNudge, setLastNudge] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(!!recovery);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
@@ -170,7 +195,6 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
     currentStreak,
     maxStreak,
     hasLoggedToday,
-    shieldsRemaining,
     isSubmitting,
     showFeedback,
     feedbackData,
@@ -181,8 +205,10 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
   const { puzzle, attempt, isLoading: puzzleLoading, submitAttempt } = useDailyPuzzle(studentId, DAILY_PUZZLE_ENABLED);
 
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
-    const result = await submitLog(data);
-    if (result?.daily_nudge) setLastNudge(result.daily_nudge);
+    const result = await submitLog({ ...data, ...(logDateOverride ? { log_date: logDateOverride } : {}) });
+    setLogDateOverride(null);
+    if (result?.milestone) setLastNudge(result.milestone);
+    else if (result?.daily_nudge) setLastNudge(result.daily_nudge);
     const mockSelected = data.sections.includes('Mock');
     if (mockSelected) {
       // Compute today's log date (same 3 AM boundary logic)
@@ -272,14 +298,19 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         </div>
       )}
 
-      {/* 1. Hero — Streak + Log */}
+      {/* 1. Hero — Monthly mission ring + streak + log */}
       <HeroCard
+        missionName={missionName}
+        missionFocus={missionFocus}
+        daysInMission={daysInMission}
+        missionTarget={missionTarget}
         currentStreak={currentStreak}
-        maxStreak={maxStreak}
-        onLogClick={() => setIsLogOpen(true)}
+        onLogClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
         isLoading={isSubmitting}
         hasLoggedToday={hasLoggedToday}
-        shieldsRemaining={shieldsRemaining}
+        showLogYesterday={!hasLoggedYesterday}
+        onLogYesterdayClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
+        yesterdayLabel={yesterdayLabel}
       />
 
       {/* 2. Daily Puzzle — hidden until content pipeline is ready */}
