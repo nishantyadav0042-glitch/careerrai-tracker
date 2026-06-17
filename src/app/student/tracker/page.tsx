@@ -246,7 +246,7 @@ export default async function DailyTrackerPage() {
 
         {/* Footer: feedback link */}
         <p className="text-center text-[11px] text-stone-400 pb-20">
-          <a href="mailto:feedback@careerrai.com" className="hover:text-stone-600 transition-colors">
+          <a href="mailto:hello@careerrai.com" className="hover:text-stone-600 transition-colors">
             Help us improve · Give feedback
           </a>
         </p>

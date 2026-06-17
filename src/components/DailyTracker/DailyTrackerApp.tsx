@@ -8,7 +8,6 @@ import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
 import { PendingDebriefCard } from './PendingDebriefCard';
 import { BuddyInsightCard } from './BuddyInsightCard';
-import { ProgressSnapshot } from './ProgressSnapshot';
 import { BrainBreakCard } from './BrainBreakCard';
 import { SafeCard } from './SafeCard';
 import type { MockDebriefData } from './MockDebriefModal';
@@ -308,14 +307,7 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
       {/* 4. Today's session strip */}
       {todaySession && <SessionStrip session={todaySession} />}
 
-      {/* 5. Progress snapshot — 3 numbers */}
-      {studentId && (
-        <SafeCard>
-          <ProgressSnapshot studentId={studentId} />
-        </SafeCard>
-      )}
-
-      {/* 6. Brain Break — disabled: break-containment unvalidated in 60-day cohort */}
+      {/* 5. Brain Break — disabled: break-containment unvalidated in 60-day cohort */}
       {BRAIN_BREAK_ENABLED && studentId && (
         <SafeCard>
           <BrainBreakCard studentId={studentId} />
