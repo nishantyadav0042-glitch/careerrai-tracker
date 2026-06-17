@@ -1,10 +1,26 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Sparkles, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from './types';
+
+function checkAuthorship(aiBulletText: string, submitted: string): string | null {
+  const norm = (s: string): string[] =>
+    s.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length > 3);
+  const aiWords = new Set(norm(aiBulletText));
+  const submittedTokens = norm(submitted);
+  const submittedSet = new Set(submittedTokens);
+  const ownWords = submittedTokens.filter((w) => !aiWords.has(w));
+  const intersection = [...submittedSet].filter((w) => aiWords.has(w)).length;
+  const union = aiWords.size + submittedSet.size - intersection;
+  const similarity = union > 0 ? intersection / union : 0;
+  if (similarity > 0.55 || ownWords.length < 8) {
+    return 'Write this in your own words — your student needs YOU, not a template.';
+  }
+  return null;
+}
 
 interface ChatThreadProps {
   /** The pair these messages belong to. */
@@ -38,6 +54,8 @@ export function ChatThread({
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [aiBullets, setAiBullets] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +113,16 @@ export function ChatThread({
   const send = useCallback(async () => {
     const body = draft.trim();
     if (!body || sending) return;
+
+    // Authorship gate — buddy only, only when AI facts were loaded.
+    if (aiBullets) {
+      const err = checkAuthorship(aiBullets, body);
+      if (err) {
+        setSendError(err);
+        return;
+      }
+    }
+    setSendError(null);
     setSending(true);
 
     // Optimistic message.
@@ -111,6 +139,7 @@ export function ChatThread({
     seenIds.current.add(tempId);
     setMessages((prev) => [...prev, optimistic]);
     setDraft('');
+    setAiBullets(null);
 
     try {
       const res = await fetch('/api/chat/send', {
@@ -134,7 +163,7 @@ export function ChatThread({
     } finally {
       setSending(false);
     }
-  }, [draft, sending, studentId, buddyId, meId, sendStudentId]);
+  }, [draft, sending, aiBullets, studentId, buddyId, meId, sendStudentId]);
 
   const generateDraft = useCallback(async () => {
     if (!sendStudentId || generatingDraft) return;
@@ -148,15 +177,15 @@ export function ChatThread({
       if (!res.ok) return;
       const { draft: generated } = (await res.json()) as { draft: string };
       if (!generated) return;
-      // Don't clobber a half-typed message without asking.
-      if (draft.trim() && !window.confirm('Replace your current message with the generated draft?')) return;
-      setDraft(generated);
+      // Show bullets in the facts panel — do NOT put them in the textarea.
+      setAiBullets(generated);
+      setSendError(null);
     } catch {
       // Silent — buddy still has the empty textarea
     } finally {
       setGeneratingDraft(false);
     }
-  }, [sendStudentId, generatingDraft, draft]);
+  }, [sendStudentId, generatingDraft]);
 
   const isBuddy = !!sendStudentId;
 
@@ -219,8 +248,29 @@ export function ChatThread({
             className="flex items-center gap-1.5 text-xs text-teal-700 hover:text-teal-900 disabled:opacity-40 transition-colors"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            {generatingDraft ? 'Drafting…' : 'Generate draft'}
+            {generatingDraft ? 'Loading facts…' : 'Get reply facts'}
           </button>
+        )}
+
+        {/* AI facts panel — buddy writes their message FROM these, not from the textarea */}
+        {aiBullets && (
+          <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs text-teal-800 relative">
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-teal-700 mb-1.5">Facts to write from</p>
+              <button
+                onClick={() => { setAiBullets(null); setSendError(null); }}
+                className="shrink-0 text-teal-400 hover:text-teal-700 mt-0.5"
+                aria-label="Dismiss facts"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <pre className="whitespace-pre-wrap font-sans leading-relaxed">{aiBullets}</pre>
+          </div>
+        )}
+
+        {sendError && (
+          <p className="text-xs text-red-600 font-medium">{sendError}</p>
         )}
 
         <form
@@ -232,7 +282,7 @@ export function ChatThread({
         >
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); if (sendError) setSendError(null); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -241,7 +291,7 @@ export function ChatThread({
             }}
             rows={1}
             maxLength={2000}
-            placeholder="Type a message…"
+            placeholder={aiBullets ? 'Write your message from the facts above…' : 'Type a message…'}
             className="flex-1 resize-none rounded-2xl border border-stone-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-600/40 focus:border-teal-600 max-h-32"
           />
           <button
