@@ -21,7 +21,23 @@ export default async function DailyTrackerPage() {
   const admin = createAdminClient();
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
 
-  const [{ data: profile }, { data: sessions }, { data: pendingReqs }, { data: anyDebrief }, { data: logs }, { data: mocks }, { data: recentMock }] = await Promise.all([
+  // Month boundaries for shield count — computed once, used in batch 1.
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+
+  // Single DB round-trip: all independent queries in one Promise.all.
+  const [
+    { data: profile },
+    { data: sessions },
+    { data: pendingReqs },
+    { data: anyDebrief },
+    { data: logs },
+    { data: mocks },
+    { data: recentMock },
+    { data: streakRow },
+    { data: shieldRows },
+  ] = await Promise.all([
     admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile').eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -52,7 +68,6 @@ export default async function DailyTrackerPage() {
       .from('mock_debriefs')
       .select('id')
       .eq('student_id', user.id),
-    // Server-side pending debrief detection — no extra client waterfall
     admin
       .from('daily_reports')
       .select('report_date, updated_at')
@@ -62,6 +77,9 @@ export default async function DailyTrackerPage() {
       .order('report_date', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Streak and shields are independent — no reason to defer them.
+    admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
+    admin.from('streak_shields').select('id').eq('student_id', user.id).gte('created_at', monthStart).lt('created_at', nextMonthStart),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -70,22 +88,23 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
 
-  // Second batch — independent follow-ups that each need only first-batch
-  // results, so they run together instead of one-after-another. Streak + shields
-  // are fetched here too so the hero card hydrates with no client round-trip.
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-  const [buddyProfile, existingDebrief, streak, shieldRows] = await Promise.all([
-    buddyId
-      ? admin.from('profiles').select('full_name, cat_percentile').eq('id', buddyId).maybeSingle().then((r) => r.data)
-      : Promise.resolve(null),
-    recentMock
-      ? admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
-      : Promise.resolve(null),
-    admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle().then((r) => r.data),
-    admin.from('streak_shields').select('id').eq('student_id', user.id).gte('created_at', monthStart).lt('created_at', nextMonthStart).then((r) => r.data),
-  ]);
+  // Second batch — only runs when there IS a buddy or a recent mock to look up.
+  // For users with neither (e.g. new students), this skips entirely.
+  let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
+  let existingDebrief: { id: string } | null = null;
+
+  if (buddyId || recentMock) {
+    const results = await Promise.all([
+      buddyId
+        ? admin.from('profiles').select('full_name, cat_percentile').eq('id', buddyId).maybeSingle().then((r) => r.data)
+        : Promise.resolve(null),
+      recentMock
+        ? admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
+        : Promise.resolve(null),
+    ]);
+    buddyProfile = results[0];
+    existingDebrief = results[1];
+  }
 
   let buddyName: string | null = null;
   if (buddyProfile?.full_name) {
@@ -100,15 +119,15 @@ export default async function DailyTrackerPage() {
   // Miss-recovery: has this student lapsed (2+ days since last log, with a prior
   // streak) and not yet logged today? If so, surface the compassionate restart.
   let recovery: { missedDays: number; previousStreak: number } | null = null;
-  if (streak?.last_log_date && (streak.current_streak ?? 0) > 0) {
+  if (streakRow?.last_log_date && (streakRow.current_streak ?? 0) > 0) {
     const todayStr = getLogDateString();
-    const gap = Math.round((Date.parse(todayStr) - Date.parse(streak.last_log_date)) / 86_400_000);
-    if (gap >= 2) recovery = { missedDays: gap - 1, previousStreak: streak.current_streak as number };
+    const gap = Math.round((Date.parse(todayStr) - Date.parse(streakRow.last_log_date)) / 86_400_000);
+    if (gap >= 2) recovery = { missedDays: gap - 1, previousStreak: streakRow.current_streak as number };
   }
 
   // Seed the hero/logging card with server data so it paints with no client fetch.
   const initialLogging = {
-    streak: (streak as StreakData | null) ?? null,
+    streak: (streakRow as StreakData | null) ?? null,
     hasLoggedToday: (logs?.[0]?.report_date ?? null) === getLogDateString(),
     shieldsRemaining: Math.max(0, 2 - (shieldRows?.length ?? 0)),
   };

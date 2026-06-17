@@ -3,27 +3,52 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import dynamic from 'next/dynamic';
 import { HeroCard } from './HeroCard';
 import { LoggingModal, type LoggingData } from './LoggingModal';
-import { MockDebriefModal, type MockDebriefData } from './MockDebriefModal';
 import { PendingDebriefCard } from './PendingDebriefCard';
-import { MissRecoveryModal } from './MissRecoveryModal';
-import dynamic from 'next/dynamic';
-// framer-motion is heavy and the animation only appears AFTER a log submit —
-// keep it out of the initial tracker bundle.
-const FeedbackAnimation = dynamic(
-  () => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation),
-  { ssr: false }
-);
-import { DailyPuzzleCard, type GameType } from './DailyPuzzleCard';
-import { PuzzleSolverModal, type PuzzleContent } from './PuzzleSolverModal';
-import { DetectiveCaseModal, isDetectiveCase } from './DetectiveCaseModal';
-import { EscapeRoomModal, isEscapeRoom } from './EscapeRoomModal';
-import { MafiaLogicModal, isMafiaGame } from './MafiaLogicModal';
 import { BuddyInsightCard } from './BuddyInsightCard';
 import { ProgressSnapshot } from './ProgressSnapshot';
 import { BrainBreakCard } from './BrainBreakCard';
 import { SafeCard } from './SafeCard';
+import type { MockDebriefData } from './MockDebriefModal';
+import type { GameType } from './DailyPuzzleCard';
+import type { PuzzleContent } from './PuzzleSolverModal';
+import { isDetectiveCase, isEscapeRoom, isMafiaGame } from './game-types';
+
+// Heavy modals — only loaded when the user actually opens them.
+const MockDebriefModal = dynamic(
+  () => import('./MockDebriefModal').then((m) => m.MockDebriefModal),
+  { ssr: false }
+);
+const MissRecoveryModal = dynamic(
+  () => import('./MissRecoveryModal').then((m) => m.MissRecoveryModal),
+  { ssr: false }
+);
+const FeedbackAnimation = dynamic(
+  () => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation),
+  { ssr: false }
+);
+const DailyPuzzleCard = dynamic(
+  () => import('./DailyPuzzleCard').then((m) => m.DailyPuzzleCard),
+  { ssr: false }
+);
+const PuzzleSolverModal = dynamic(
+  () => import('./PuzzleSolverModal').then((m) => m.PuzzleSolverModal),
+  { ssr: false }
+);
+const DetectiveCaseModal = dynamic(
+  () => import('./DetectiveCaseModal').then((m) => m.DetectiveCaseModal),
+  { ssr: false }
+);
+const EscapeRoomModal = dynamic(
+  () => import('./EscapeRoomModal').then((m) => m.EscapeRoomModal),
+  { ssr: false }
+);
+const MafiaLogicModal = dynamic(
+  () => import('./MafiaLogicModal').then((m) => m.MafiaLogicModal),
+  { ssr: false }
+);
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
 import { Loader2, Video } from 'lucide-react';
@@ -302,7 +327,8 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         <DetectiveCaseModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
-          content={puzzle.puzzle_content as unknown as Parameters<typeof DetectiveCaseModal>[0]['content']}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content={puzzle.puzzle_content as any}
           explanation={puzzle.explanation}
           caseDate={puzzle.puzzle_date}
           onComplete={handlePuzzleComplete}
@@ -313,7 +339,8 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         <EscapeRoomModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
-          content={puzzle.puzzle_content as unknown as Parameters<typeof EscapeRoomModal>[0]['content']}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content={puzzle.puzzle_content as any}
           caseDate={puzzle.puzzle_date}
           onComplete={handlePuzzleComplete}
         />
@@ -323,7 +350,8 @@ export function DailyTrackerApp({ studentId = '', todaySession = null, hasBuddy 
         <MafiaLogicModal
           isOpen={isPuzzleOpen}
           onClose={() => setIsPuzzleOpen(false)}
-          content={puzzle.puzzle_content as unknown as Parameters<typeof MafiaLogicModal>[0]['content']}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content={puzzle.puzzle_content as any}
           caseDate={puzzle.puzzle_date}
           onComplete={handlePuzzleComplete}
         />

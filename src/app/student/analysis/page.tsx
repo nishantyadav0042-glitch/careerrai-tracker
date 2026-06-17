@@ -4,18 +4,17 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+
+// Recharts is ~350 KB — lazy-load so it doesn't block the page shell.
+const PercentileChart = dynamic(
+  () => import('./charts').then((m) => m.PercentileChart),
+  { ssr: false, loading: () => <div className="h-48 flex items-center justify-center text-xs text-stone-400">Loading chart…</div> }
+);
+const ErrorBucketChart = dynamic(
+  () => import('./charts').then((m) => m.ErrorBucketChart),
+  { ssr: false, loading: () => <div className="h-44 flex items-center justify-center text-xs text-stone-400">Loading chart…</div> }
+);
 
 interface MockDebrief {
   id: string;
@@ -35,14 +34,6 @@ const BUCKET_LABELS = [
   { key: 'panic', emoji: '↩️', label: 'Misread / framing' },
   { key: 'selection', emoji: '✗', label: 'Selection error' },
 ];
-
-const BUCKET_COLORS: Record<string, string> = {
-  conceptual: '#6366f1',
-  silly: '#f59e0b',
-  time: '#ef4444',
-  panic: '#ec4899',
-  selection: '#8b5cf6',
-};
 
 export default function AnalysisPage() {
   const supabase = createClient();
@@ -184,21 +175,7 @@ export default function AnalysisPage() {
                   Percentile trend
                 </h2>
                 <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={percentileData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#78716c' }} />
-                      <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#78716c' }} />
-                      <Tooltip
-                        contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8, color: 'white', fontSize: 12 }}
-                        formatter={(value, name) => [`${value}%ile`, name]}
-                      />
-                      <Line type="monotone" dataKey="percentile" name="Overall" stroke="#ea580c" strokeWidth={2.5} dot={{ fill: '#ea580c', r: 4 }} connectNulls />
-                      <Line type="monotone" dataKey="varc" name="VARC" stroke="#0f766e" strokeWidth={1.5} dot={{ r: 2 }} connectNulls strokeDasharray="4 2" />
-                      <Line type="monotone" dataKey="dilr" name="DILR" stroke="#4338ca" strokeWidth={1.5} dot={{ r: 2 }} connectNulls strokeDasharray="4 2" />
-                      <Line type="monotone" dataKey="qa" name="QA" stroke="#b45309" strokeWidth={1.5} dot={{ r: 2 }} connectNulls strokeDasharray="4 2" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <PercentileChart data={percentileData} />
                 </div>
                 {(() => {
                   // One human sentence — never raw data alone
@@ -252,19 +229,7 @@ export default function AnalysisPage() {
                   Where you lose marks (all mocks)
                 </h2>
                 <div className="h-44">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={bucketData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 10, fill: '#78716c' }} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#44403c' }} width={110} />
-                      <Tooltip contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8, color: 'white', fontSize: 12 }} />
-                      <Bar dataKey="value" name="Errors" radius={[0, 4, 4, 0]}>
-                        {bucketData.map((entry) => (
-                          <Cell key={entry.key} fill={BUCKET_COLORS[entry.key] ?? '#94a3b8'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ErrorBucketChart data={bucketData} />
                 </div>
                 {/* Biggest issue callout */}
                 {bucketData[0]?.value > 0 && (
