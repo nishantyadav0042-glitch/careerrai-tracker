@@ -3,6 +3,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, Mail, KeyRound } from 'lucide-react';
 import Image from 'next/image';
+import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { cn } from '@/lib/utils';
 
 const DEMO_PASSWORD = 'CareerRai2026!';
@@ -313,7 +314,11 @@ function LoginForm() {
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-stone-500">
+        <div className="mt-4">
+          <AddToHomeScreenBanner />
+        </div>
+
+        <p className="mt-4 text-center text-xs text-stone-500">
           Bharat-first peer mentorship · 0% commission
         </p>
       </div>

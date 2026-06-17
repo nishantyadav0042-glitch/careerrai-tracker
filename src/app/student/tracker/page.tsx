@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
 import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
+import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { getLogDateString } from '@/lib/streak-utils';
 import type { StreakData } from '@/types';
 
@@ -226,6 +227,9 @@ export default async function DailyTrackerPage() {
             </p>
           </div>
         )}
+
+        {/* Add to home screen — gentle nudge, only shows on mobile if not installed */}
+        <AddToHomeScreenBanner />
 
         {/* Footer: feedback link */}
         <p className="text-center text-[11px] text-stone-400 pb-20">
