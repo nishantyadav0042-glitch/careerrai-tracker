@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Image from 'next/image';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
@@ -201,10 +202,19 @@ export default async function DailyTrackerPage() {
         {/* Day one: buddy not yet matched — never a ghost town */}
         {!buddyId && (
           <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
-            <p className="text-sm text-teal-900 leading-relaxed">
-              🤝 <strong>Your buddy is being matched</strong> — a mentor who&apos;s walked your exact
-              journey. Meanwhile, log today: your first week of data is what makes their guidance sharp.
-            </p>
+            <div className="flex items-center gap-3">
+              <Image
+                src="/buddy-logo.jpg"
+                alt="CareerRai Buddy"
+                width={48}
+                height={48}
+                className="rounded-full shrink-0 object-cover"
+              />
+              <p className="text-sm text-teal-900 leading-relaxed">
+                <strong>Your buddy is being matched</strong> — a mentor who&apos;s walked your exact
+                journey. Meanwhile, log today: your first week of data is what makes their guidance sharp.
+              </p>
+            </div>
           </div>
         )}
 

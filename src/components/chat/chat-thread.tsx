@@ -190,7 +190,15 @@ export function ChatThread({
   const isBuddy = !!sendStudentId;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)]">
+    /*
+     * Fixed panel: fills the space between the app header (~6rem from top) and
+     * the bottom nav (~3.5rem from bottom). Using fixed + dvh means:
+     *  - No page-level scrollbar (input is always on screen without scrolling)
+     *  - On mobile: when the soft keyboard opens, bottom moves up automatically
+     *    so the input stays just above the keyboard
+     */
+    <div className="fixed left-0 right-0 flex flex-col max-w-2xl mx-auto px-4"
+         style={{ top: '6rem', bottom: '3.5rem' }}>
       {/* Header */}
       <div className="shrink-0 pb-3 mb-1 border-b border-stone-200">
         <h1 className="text-lg font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
@@ -307,3 +315,4 @@ export function ChatThread({
     </div>
   );
 }
+
