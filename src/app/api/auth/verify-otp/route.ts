@@ -10,8 +10,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
-    // Capture the session cookies Supabase sets on a successful verify so we can
-    // attach them to the JSON response (mirrors /api/auth/login).
     const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,43 +30,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'That code is incorrect or expired.' }, { status: 401 });
     }
 
-    // First successful login creates the student's profile from the allowlist
-    // (name + pre-assigned buddy the founder set). Later logins refresh the link.
     const admin = createAdminClient();
+
+    // Look up allowlist entry to get name, buddy assignment, and person type
     const { data: entry } = await admin
       .from('student_allowlist')
-      .select('full_name, assigned_buddy_id')
+      .select('full_name, assigned_buddy_id, person_type')
       .eq('email', email)
+      .eq('status', 'active')
       .maybeSingle();
 
     const { data: existing } = await admin
       .from('profiles')
-      .select('id')
+      .select('id, password_set, role')
       .eq('id', data.user.id)
       .maybeSingle();
 
-    // Hard gate: a brand-new email not on the allowlist cannot create a profile.
+    // Hard gate: brand-new email not on the allowlist cannot create a profile.
     if (!existing && !entry) {
-      return NextResponse.json({ error: 'This email is not on the access list. Contact support to get access.' }, { status: 403 });
+      return NextResponse.json(
+        { error: "This email isn't registered yet. Your admin will add you after onboarding." },
+        { status: 403 }
+      );
     }
+
+    const role = (entry?.person_type === 'buddy' ? 'buddy' : 'student') as 'student' | 'buddy';
+    const normalDest = role === 'buddy' ? '/buddy/students' : '/student/tracker';
 
     if (!existing) {
       await admin.from('profiles').insert({
         id: data.user.id,
-        role: 'student',
-        full_name: entry?.full_name ?? 'Student',
+        role,
+        full_name: entry?.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
         email,
-        buddy_id: entry?.assigned_buddy_id ?? null,
-        subscription_status: 'free_beta',
+        buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
+        subscription_status: role === 'student' ? 'free_beta' : null,
+        password_set: false,
       });
     } else {
       await admin
         .from('profiles')
-        .update({ email, ...(entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}) })
+        .update({
+          email,
+          ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
+        })
         .eq('id', data.user.id);
     }
 
-    const res = NextResponse.json({ ok: true, dest: '/student/tracker' });
+    // Redirect to set-password if they haven't set one yet (first login or recovery)
+    const hasPassword = existing?.password_set === true;
+    const dest = hasPassword ? normalDest : `/set-password?dest=${encodeURIComponent(normalDest)}`;
+
+    const res = NextResponse.json({ ok: true, dest });
     pending.forEach(({ name, value, options }) =>
       res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
     );

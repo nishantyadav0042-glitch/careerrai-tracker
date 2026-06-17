@@ -34,10 +34,10 @@ export default async function AdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profiles = (allProfiles ?? []) as any as Profile[];
 
-  // Phone-OTP access list
+  // People access list (students + buddies)
   const { data: allowlistRows } = await admin
     .from('student_allowlist')
-    .select('id, phone, full_name, status, assigned_buddy_id')
+    .select('id, phone, email, full_name, status, assigned_buddy_id, person_type')
     .order('created_at', { ascending: false });
 
   const students = profiles.filter(p => p.role === 'student');
@@ -317,9 +317,9 @@ export default async function AdminPage() {
           </div>
         </div>
 
-        {/* Student access list (phone-OTP allowlist) */}
+        {/* People access list (students + buddies — OTP allowlist) */}
         <div className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Student access</h2>
+          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">People access</h2>
           <AdminAllowlist
             rows={(allowlistRows ?? []) as AllowlistRow[]}
             buddies={buddies.map((b) => ({ id: b.id, full_name: b.full_name }))}

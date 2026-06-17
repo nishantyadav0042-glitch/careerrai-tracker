@@ -4,28 +4,30 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   // Support both JSON (fetch) and form-encoded (native form POST)
-  let username = '';
+  let credential = ''; // email or username
   let password = '';
   const contentType = request.headers.get('content-type') ?? '';
 
   if (contentType.includes('application/json')) {
     const body = await request.json();
-    username = body.username;
+    credential = body.credential ?? body.username ?? '';
     password = body.password;
   } else {
     const form = await request.formData();
-    username = form.get('username') as string;
+    credential = (form.get('credential') ?? form.get('username') ?? '') as string;
     password = form.get('password') as string;
   }
 
+  credential = credential.trim().toLowerCase();
   const origin = request.nextUrl.origin;
-
-  // Look up email from username (case-insensitive)
   const admin = createAdminClient();
+
+  // Look up profile by email (if credential contains @) or by username
+  const isEmail = credential.includes('@');
   const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('id, email, role')
-    .ilike('username', username) // ilike = case-insensitive
+    .ilike(isEmail ? 'email' : 'username', credential)
     .maybeSingle();
 
   if (profileError || !profile) {
@@ -34,6 +36,9 @@ export async function POST(request: NextRequest) {
   }
 
   const email = profile.email;
+  if (!email) {
+    return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
+  }
 
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
 
@@ -52,7 +57,6 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  // Authenticate with email + password
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
@@ -63,7 +67,6 @@ export async function POST(request: NextRequest) {
   const role = profile.role ?? 'student';
   const dest = role === 'buddy' ? '/buddy/students' : role === 'admin' ? '/admin' : '/student/tracker';
 
-  // Return a redirect — browser follows it and sends the Set-Cookie cookies with the next request
   const response = NextResponse.redirect(`${origin}${dest}`, { status: 302 });
   pending.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
