@@ -18,7 +18,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
     getChatUnreadCount(user.id, 'student'),
   ]);
   if (profile?.role !== 'student') {
-    if (profile?.role === 'buddy') redirect('/buddy/students');
+    if (profile?.role === 'buddy') redirect('/buddy/home');
+    if (profile?.role === 'admin') redirect('/admin');
     redirect('/login');
   }
 
