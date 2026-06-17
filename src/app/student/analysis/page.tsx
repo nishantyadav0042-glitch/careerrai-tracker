@@ -19,6 +19,7 @@ const ErrorBucketChart = dynamic(
 interface MockDebrief {
   id: string;
   taken_on: string;
+  mock_name: string | null;
   overall_percentile: number | null;
   varc: { attempted?: number; correct?: number; time_min?: number; percentile?: number };
   dilr: { attempted?: number; correct?: number; time_min?: number; percentile?: number };
@@ -47,7 +48,7 @@ export default function AnalysisPage() {
 
       const { data: d } = await supabase
         .from('mock_debriefs')
-        .select('*')
+        .select('id, taken_on, mock_name, overall_percentile, varc, dilr, qa, error_buckets, strategy_note')
         .eq('student_id', user.id)
         .order('taken_on', { ascending: true })
         .limit(20);
@@ -247,6 +248,68 @@ export default function AnalysisPage() {
                   Last mock — what you&apos;ll do differently
                 </p>
                 <p className="text-sm text-teal-900 italic">&quot;{latest.strategy_note}&quot;</p>
+              </div>
+            )}
+
+            {/* Latest mock full snapshot — one glance view of the most recent result */}
+            {latest && (
+              <div className="bg-white rounded-2xl border border-stone-200 p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">
+                      Latest mock result
+                    </p>
+                    <p className="text-sm text-stone-700 mt-0.5">
+                      {latest.mock_name ?? 'Mock'} ·{' '}
+                      {new Date(latest.taken_on + 'T00:00:00').toLocaleDateString('en-IN', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  {latest.overall_percentile !== null && (
+                    <div className="text-right shrink-0 ml-4">
+                      <p className="text-3xl font-bold text-stone-900 leading-none">
+                        {Math.round(latest.overall_percentile)}
+                      </p>
+                      <p className="text-[10px] text-stone-400 mt-0.5">overall %ile</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Per-section breakdown */}
+                <div className="grid grid-cols-3 gap-3">
+                  {(
+                    [
+                      { key: 'varc', label: 'VARC', color: 'teal' },
+                      { key: 'dilr', label: 'DILR', color: 'orange' },
+                      { key: 'qa',   label: 'QA',   color: 'indigo' },
+                    ] as const
+                  ).map(({ key, label, color }) => {
+                    const sec = latest[key];
+                    const pct = sec?.percentile ?? null;
+                    const attempted = sec?.attempted ?? null;
+                    const correct = sec?.correct ?? null;
+                    const accuracy = attempted ? Math.round(((correct ?? 0) / attempted) * 100) : null;
+                    const colorMap: Record<string, string> = {
+                      teal: 'bg-teal-50 border-teal-200 text-teal-700',
+                      orange: 'bg-orange-50 border-orange-200 text-orange-700',
+                      indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+                    };
+                    return (
+                      <div key={key} className={`rounded-xl border p-3 ${colorMap[color]}`}>
+                        <p className="text-[11px] font-bold uppercase tracking-wider">{label}</p>
+                        {pct !== null ? (
+                          <p className="text-xl font-bold mt-1 leading-none">{Math.round(pct)}<span className="text-[10px] font-normal ml-0.5">%ile</span></p>
+                        ) : (
+                          <p className="text-xl font-bold mt-1 leading-none text-stone-300">—</p>
+                        )}
+                        {accuracy !== null && (
+                          <p className="text-[10px] mt-1 opacity-70">{correct}/{attempted} · {accuracy}%</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </>
