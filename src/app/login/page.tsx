@@ -90,16 +90,23 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col">
-      {/* Solid orange banner — always visible at the top of the page */}
+      {/* Gradient banner — always visible at the top of the page */}
       <a
         href="/cat-readiness"
-        className="flex items-center justify-between gap-3 w-full bg-orange-600 hover:bg-orange-700 px-4 py-3.5 transition-colors group shrink-0"
+        className="flex items-center justify-between gap-3 w-full px-4 py-3.5 transition-all group shrink-0"
+        style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 60%, #f59e0b 100%)' }}
       >
-        <div>
-          <p className="text-sm font-bold text-white">Free CAT Readiness Test</p>
-          <p className="text-xs text-orange-100 mt-0.5">5 min · no signup · get your real score + free IIM buddy session</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="shrink-0 text-base leading-none">🎯</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-block bg-white/20 border border-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">FREE</span>
+              <p className="text-sm font-bold text-white">CAT Readiness Test</p>
+            </div>
+            <p className="text-xs text-orange-100 mt-0.5">5 min · know exactly where you stand · free IIM buddy call</p>
+          </div>
         </div>
-        <ArrowRight className="w-4 h-4 text-white shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        <ArrowRight className="w-4 h-4 text-white shrink-0 group-hover:translate-x-1 transition-transform" />
       </a>
 
       <div className="flex-1 flex items-center justify-center p-6">
