@@ -101,9 +101,9 @@ function LoginForm() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block bg-white/20 border border-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">FREE</span>
-              <p className="text-sm font-bold text-white">CAT Readiness Test</p>
+              <p className="text-sm font-bold text-white">Claim your free IIM buddy session</p>
             </div>
-            <p className="text-xs text-orange-100 mt-0.5">5 min · know exactly where you stand · free IIM buddy call</p>
+            <p className="text-xs text-orange-100 mt-0.5">2 min · 10 quick taps · no signup needed</p>
           </div>
         </div>
         <ArrowRight className="w-4 h-4 text-white shrink-0 group-hover:translate-x-1 transition-transform" />
