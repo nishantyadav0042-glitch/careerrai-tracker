@@ -1,74 +1,70 @@
+import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendNotification } from '@/lib/notifications';
+import { resolvePair } from '@/lib/chat';
 
-export async function POST(req: NextRequest) {
-  const supabase = await createClient();
+export async function POST(request: NextRequest) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
+  );
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { recipientId, body } = await req.json();
-  if (!recipientId || !body?.trim()) {
-    return NextResponse.json({ error: 'recipientId and body required' }, { status: 400 });
+  let payload: { body?: unknown; studentId?: unknown };
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
+
+  const body = typeof payload.body === 'string' ? payload.body.trim() : '';
+  if (body.length < 1 || body.length > 2000) {
+    return NextResponse.json({ error: 'Message must be 1–2000 characters' }, { status: 400 });
+  }
+  const studentId = typeof payload.studentId === 'string' ? payload.studentId : undefined;
 
   const admin = createAdminClient();
+  const pair = await resolvePair(admin, user.id, studentId);
+  if (!pair) return NextResponse.json({ error: 'Not paired' }, { status: 403 });
 
-  // Verify this is a valid buddy<->student pair
-  const { data: pair } = await admin
-    .from('profiles')
-    .select('id, buddy_id')
-    .eq('id', recipientId)
-    .single();
-
-  const isStudentMessagingBuddy = pair?.buddy_id === user.id;
-  const isValid = isStudentMessagingBuddy || pair?.id === recipientId;
-  if (!isValid) {
-    return NextResponse.json({ error: 'Not authorized to message this user' }, { status: 403 });
-  }
-
-  // Insert the message
   const { data: message, error } = await admin
     .from('chat_messages')
     .insert({
+      student_id: pair.studentId,
+      buddy_id: pair.buddyId,
       sender_id: user.id,
-      recipient_id: recipientId,
-      body: body.trim(),
+      body,
     })
-    .select()
+    .select('id, student_id, buddy_id, sender_id, body, created_at, read_at')
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !message) {
+    return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 });
   }
 
-  // Send notification async (non-blocking)
-  (() => {
+  // Best-effort notification to the recipient (the other member of the pair).
+  const recipientId = user.id === pair.studentId ? pair.buddyId : pair.studentId;
+  void (async () => {
     try {
-      const pairData = {
-        studentId: isStudentMessagingBuddy ? user.id : recipientId,
-        buddyId: isStudentMessagingBuddy ? recipientId : user.id,
-      };
-
-      // Get sender name
-      admin
+      const { data: sender } = await admin
         .from('profiles')
         .select('full_name')
         .eq('id', user.id)
-        .single()
-        .then(({ data: sender }) => {
-          const senderName = sender?.full_name?.split(' ')[0] ?? 'your buddy';
-          const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
-          sendNotification({
-            userId: recipientId,
-            type: 'chat',
-            title: `${senderName} sent you a message.`,
-            body: preview,
-            channels: ['in_app', 'push'],
-            data: { url: '/student/buddy', student_id: pairData.studentId, buddy_id: pairData.buddyId },
-          });
-        });
+        .single();
+      const senderName = sender?.full_name?.split(' ')[0] ?? 'your buddy';
+      const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+      await sendNotification({
+        userId: recipientId,
+        type: 'chat',
+        title: `${senderName} sent you a message.`,
+        body: preview,
+        channels: ['in_app', 'push'],
+        data: { url: '/student/buddy', student_id: pair.studentId, buddy_id: pair.buddyId },
+      });
     } catch {
       // non-blocking
     }
