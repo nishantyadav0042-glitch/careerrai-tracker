@@ -14,6 +14,8 @@ interface VoiceNotePlayerProps {
   buddyCollege?: string | null;
   /** buddy_feedback row id — used to fetch a signed URL and for read receipts + thanks */
   feedbackId?: string;
+  /** Server-pre-signed URL — skips the client-side /api/voice-notes/signed-url fetch */
+  initialSignedUrl?: string;
   /** Show the NEW badge until first play */
   isNew?: boolean;
   /** Already thanked? */
@@ -29,17 +31,18 @@ export function VoiceNotePlayer({
   className,
   buddyCollege,
   feedbackId,
+  initialSignedUrl,
   isNew = false,
   thanked = false,
   canThank = false,
 }: VoiceNotePlayerProps) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<string | null>(initialSignedUrl ?? null);
   const [urlError, setUrlError] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Fetch a fresh signed URL whenever the feedbackId changes.
+  // Fetch a signed URL only when no server-pre-signed URL was provided.
   useEffect(() => {
-    if (!feedbackId) return;
+    if (!feedbackId || initialSignedUrl) return;
     setUrlError(false);
     fetch('/api/voice-notes/signed-url', {
       method: 'POST',
@@ -49,7 +52,7 @@ export function VoiceNotePlayer({
       .then((r) => r.json())
       .then((d) => { if (d.url) setSignedUrl(d.url); else setUrlError(true); })
       .catch(() => { setUrlError(true); });
-  }, [feedbackId]);
+  }, [feedbackId, initialSignedUrl]);
 
   const srcUrl = feedbackId ? signedUrl : (audioUrl ?? null);
   const [currentTime, setCurrentTime] = useState(0);

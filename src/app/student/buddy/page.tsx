@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BuddyFeedbackCard } from '@/app/student/home/buddy-feedback-card';
 import { SessionRequestPanel } from './session-request-panel';
@@ -12,8 +12,7 @@ export const metadata = {
 };
 
 export default async function BuddyCommunicationPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
@@ -27,7 +26,7 @@ export default async function BuddyCommunicationPage() {
   // eslint-disable-next-line react-hooks/purity
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: lastFeedback }] = await Promise.all([
+  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: lastFeedback }, { data: feedbackRows }] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
@@ -71,11 +70,48 @@ export default async function BuddyCommunicationPage() {
           .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // Pre-fetch buddy feedback to avoid a second client-side loading phase
+    buddyId
+      ? admin
+          .from('buddy_feedback')
+          .select(`
+            id,
+            feedback_text,
+            voice_note_url,
+            created_at,
+            buddy_id,
+            read_at,
+            thanked_at,
+            profiles!buddy_feedback_buddy_id_fkey(full_name, college)
+          `)
+          .eq('student_id', user.id)
+          .eq('buddy_id', buddyId)
+          .in('feedback_type', ['buddy_note', 'text'])
+          .neq('buddy_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
   const hasPendingRequest = (pendingRequests?.length ?? 0) > 0;
   const sessions = [...(upcoming ?? []), ...(recentCompleted ?? [])];
+
+  // Pre-sign voice note URLs so VoiceNotePlayer renders immediately with no client-side round-trips.
+  const voiceRows = (feedbackRows ?? []).filter((r) => r.voice_note_url);
+  let signedUrlMap: Record<string, string> = {};
+  if (voiceRows.length > 0) {
+    const toPath = (urlOrPath: string) => {
+      const marker = '/object/public/voice-notes/';
+      const idx = urlOrPath.indexOf(marker);
+      return idx >= 0 ? urlOrPath.slice(idx + marker.length) : urlOrPath;
+    };
+    const paths = voiceRows.map((r) => toPath(r.voice_note_url!));
+    const { data: signed } = await admin.storage.from('voice-notes').createSignedUrls(paths, 3600);
+    if (signed) {
+      signed.forEach((s, i) => { if (s.signedUrl) signedUrlMap[voiceRows[i].id] = s.signedUrl; });
+    }
+  }
 
   // SLA: was there a buddy feedback in the last 48h?
   const lastFeedbackMs = lastFeedback?.created_at ? new Date(lastFeedback.created_at).getTime() : null;
@@ -241,6 +277,9 @@ export default async function BuddyCommunicationPage() {
               studentId={user.id}
               buddyId={buddyId}
               buddyName={buddy?.full_name ?? 'Buddy'}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              initialFeedbacks={(feedbackRows ?? []) as any}
+              initialSignedUrls={signedUrlMap}
             />
           </>
         )}
