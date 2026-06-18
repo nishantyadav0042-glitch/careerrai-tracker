@@ -116,16 +116,14 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
             <Card
               key={student.student_id}
               className={cn(
-                'overflow-hidden border-2 transition-all hover:shadow-lg',
+                'overflow-hidden border-2 transition-all hover:shadow-md bg-white',
                 student.severity === 'critical'
-                  ? 'border-red-300 bg-red-50/50'
+                  ? 'border-red-400'
                   : student.severity === 'warning'
-                  ? 'border-amber-300 bg-amber-50/50'
-                  : 'border-emerald-300 bg-emerald-50/50'
+                  ? 'border-amber-400'
+                  : 'border-emerald-400'
               )}
             >
-              <div className={cn('h-1 bg-gradient-to-r', getSeverityColor(student.severity))} />
-
               <div className="p-5 space-y-3">
                 {/* Header */}
                 <div

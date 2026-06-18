@@ -4,7 +4,6 @@ import { getAuthUser } from '@/lib/auth';
 import { isCalendarConnected } from '@/lib/google-calendar';
 import { BuddyTriageView } from './buddy-triage-view';
 import { StudentVoiceNotesSection } from './student-voice-notes-section';
-import { BuddyAudioResponsesCompact } from '@/components/buddy-audio-responses-compact';
 import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
 import { MeetingWidget } from '@/components/meeting-widget';
 import { GoogleCalendarConnect } from '@/components/google-calendar-connect';
@@ -102,15 +101,7 @@ export default async function BuddyHomePage() {
         />
       )}
 
-      {/* Student voice responses */}
-      <section>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Voice responses from students</p>
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <BuddyAudioResponsesCompact buddyId={user.id} />
-        </div>
-      </section>
-
-      {/* Send voice message */}
+      {/* Quick voice message */}
       <section>
         <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Quick voice message</p>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
@@ -126,7 +117,7 @@ export default async function BuddyHomePage() {
         </div>
       </section>
 
-      {/* Student triage */}
+      {/* Student overview — stat tiles + urgency-ranked cards */}
       <section>
         <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Student overview</p>
         <BuddyTriageView buddyId={user.id} />
