@@ -1,16 +1,17 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, Mic, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, IndianRupee, X } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, IndianRupee, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
 interface NavItem {
   href: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  imgSrc?: string;
   label: string;
-  /** When > 0, shows a small badge on this nav item. */
   badge?: number;
 }
 
@@ -48,7 +49,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                     isActive ? 'text-stone-900 font-semibold' : 'text-stone-600'
                   )}
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
+                  {Icon && <Icon className="w-4 h-4 shrink-0" />}
                   <span className="text-sm">{item.label}</span>
                 </Link>
               );
@@ -73,7 +74,17 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn('w-5 h-5 transition-all', isActive && 'scale-110')} />
+                  {item.imgSrc ? (
+                    <Image
+                      src={item.imgSrc}
+                      alt={item.label}
+                      width={20}
+                      height={20}
+                      className={cn('w-5 h-5 object-contain transition-all', isActive && 'scale-110')}
+                    />
+                  ) : Icon ? (
+                    <Icon className={cn('w-5 h-5 transition-all', isActive && 'scale-110')} />
+                  ) : null}
                   {item.badge !== undefined && item.badge > 0 && (
                     <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                       {item.badge > 9 ? '9+' : item.badge}
@@ -106,7 +117,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
   { href: '/student/analysis', icon: TrendingUp, label: 'Analysis' },
-  { href: '/student/buddy', icon: Mic, label: 'Buddy' },
+  { href: '/student/buddy', imgSrc: '/buddy-nav-icon.jpg', label: 'Buddy' },
   { href: '/student/chat', icon: MessageCircle, label: 'Chat' },
 ];
 
@@ -129,7 +140,6 @@ const BUDDY_MORE: NavItem[] = [
   { href: '/buddy/settings', icon: Settings, label: 'Settings' },
 ];
 
-/** Apply an unread badge to the Chat nav item. */
 function withChatBadge(items: NavItem[], unread: number): NavItem[] {
   if (!unread) return items;
   return items.map((it) => (it.label === 'Chat' ? { ...it, badge: unread } : it));
