@@ -90,9 +90,7 @@ export async function POST(request: NextRequest) {
       overall_percentile: body.overall_percentile ?? null,
     };
 
-    // Fetch the chronologically-previous debrief to compute the delta. Use
-    // taken_on < this date (not just !=) so back-dating a mock compares against
-    // an actually-earlier result, never a newer one.
+    // Fetch the chronologically-previous debrief to compute the delta.
     const { data: prevDebriefs } = await admin
       .from('mock_debriefs')
       .select('overall_percentile')
@@ -110,9 +108,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      // The (student_id, log_date) unique constraint exists, so a conflict
-      // upserts cleanly; this fallback only runs on an unexpected error. Surface
-      // a real failure instead of reporting success.
       const { error: insertError } = await admin.from('mock_debriefs').insert(row);
       if (insertError) {
         console.error('Mock debrief save failed:', error.message, insertError.message);
@@ -147,7 +142,7 @@ export async function POST(request: NextRequest) {
 
         const studentFirst = studentProfile.full_name?.split(' ')[0] ?? 'Student';
         const percentileStr = body.overall_percentile != null ? ` (${body.overall_percentile}%ile)` : '';
-        const title = `${studentFirst} ne mock diya${percentileStr} — feedback ka wait kar raha hoga.`;
+        const title = `${studentFirst} submitted a mock${percentileStr} — they're waiting for your feedback.`;
         const notifBody = 'Mock debrief submitted — feedback within 24h keeps the momentum.';
 
         await admin.from('notifications').insert({

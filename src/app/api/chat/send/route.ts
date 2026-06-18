@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       await sendNotification({
         userId: recipientId,
         type: 'chat',
-        title: `${senderName} ne message bheja — waiting for you.`,
+        title: `${senderName} sent you a message.`,
         body: preview,
         channels: ['in_app', 'push'],
         data: { url: '/student/buddy', student_id: pair.studentId, buddy_id: pair.buddyId },
