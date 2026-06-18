@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 
         const studentFirst = studentProfile.full_name?.split(' ')[0] ?? 'Student';
         const percentileStr = body.overall_percentile != null ? ` (${body.overall_percentile}%ile)` : '';
-        const title = `${studentFirst} ne mock diya${percentileStr} — feedback ka wait kar raha hoga.`;
+        const title = `${studentFirst} submitted a mock${percentileStr} — they're waiting for your feedback.`;
         const notifBody = 'Mock debrief submitted — feedback within 24h keeps the momentum.';
 
         await admin.from('notifications').insert({
