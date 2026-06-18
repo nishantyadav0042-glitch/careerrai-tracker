@@ -19,16 +19,49 @@ interface BuddyFeedback {
   thanked_at: string | null;
 }
 
+// Raw row shape returned by the server (Supabase join result)
+type RawFeedbackRow = {
+  id: string;
+  feedback_text: string | null;
+  voice_note_url: string | null;
+  created_at: string;
+  buddy_id: string;
+  read_at: string | null;
+  thanked_at: string | null;
+  profiles: { full_name?: string; college?: string } | null;
+};
+
+function formatRows(rows: RawFeedbackRow[]): BuddyFeedback[] {
+  return rows.map((f) => ({
+    id: f.id,
+    feedback_text: f.feedback_text,
+    voice_note_url: f.voice_note_url,
+    created_at: f.created_at,
+    buddy_id: f.buddy_id,
+    buddy_name: f.profiles?.full_name || 'Buddy',
+    buddy_college: f.profiles?.college,
+    read_at: f.read_at,
+    thanked_at: f.thanked_at,
+  }));
+}
+
 interface BuddyFeedbackCardProps {
   studentId: string;
   buddyId: string;
   buddyName: string;
+  /** Pre-fetched on the server — avoids a client-side loading flash on first paint */
+  initialFeedbacks?: RawFeedbackRow[];
+  /** Server-pre-signed URLs keyed by feedback id — lets VoiceNotePlayer render without client round-trips */
+  initialSignedUrls?: Record<string, string>;
 }
 
-export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedbackCardProps) {
+export function BuddyFeedbackCard({ studentId, buddyId, buddyName, initialFeedbacks, initialSignedUrls }: BuddyFeedbackCardProps) {
   const supabase = createClient();
-  const [feedbacks, setFeedbacks] = useState<BuddyFeedback[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [feedbacks, setFeedbacks] = useState<BuddyFeedback[]>(() =>
+    initialFeedbacks ? formatRows(initialFeedbacks) : []
+  );
+  // If initial data was supplied by the server, skip the loading state entirely.
+  const [loading, setLoading] = useState(!initialFeedbacks);
   const [showRecorder, setShowRecorder] = useState(false);
 
   const fetchFeedbacks = useCallback(async () => {
@@ -54,26 +87,14 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
         `)
         .eq('student_id', studentId)
         .eq('buddy_id', buddyId)
-        .in('feedback_type', ['buddy_feedback', 'text'])
+        .in('feedback_type', ['buddy_note', 'text'])
         .neq('buddy_id', studentId)
         .order('created_at', { ascending: false })
         .limit(3);
 
       if (error) throw error;
 
-      const formattedData = data?.map((f) => ({
-        id: f.id,
-        feedback_text: f.feedback_text,
-        voice_note_url: f.voice_note_url,
-        created_at: f.created_at,
-        buddy_id: f.buddy_id,
-        buddy_name: (f.profiles as { full_name?: string; college?: string })?.full_name || 'Buddy',
-        buddy_college: (f.profiles as { full_name?: string; college?: string })?.college,
-        read_at: f.read_at,
-        thanked_at: f.thanked_at,
-      })) || [];
-
-      setFeedbacks(formattedData);
+      setFeedbacks(formatRows((data ?? []) as RawFeedbackRow[]));
     } catch (error) {
       console.error('Error fetching feedback:', error);
     } finally {
@@ -81,9 +102,13 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
     }
   }, [buddyId, studentId, supabase]);
 
+  // Only run on mount if no initial data was provided by the server.
   useEffect(() => {
-    fetchFeedbacks();
-  }, [fetchFeedbacks]);
+    if (!initialFeedbacks) {
+      fetchFeedbacks();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
@@ -152,6 +177,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName }: BuddyFeedba
                   buddyCollege={feedback.buddy_college}
                   createdAt={feedback.created_at}
                   feedbackId={feedback.id}
+                  initialSignedUrl={initialSignedUrls?.[feedback.id]}
                   isNew={!feedback.read_at}
                   thanked={!!feedback.thanked_at}
                   canThank

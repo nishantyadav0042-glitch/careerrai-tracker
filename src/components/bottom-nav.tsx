@@ -49,7 +49,11 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                     isActive ? 'text-stone-900 font-semibold' : 'text-stone-600'
                   )}
                 >
-                  {Icon && <Icon className="w-4 h-4 shrink-0" />}
+                  {item.imgSrc ? (
+                    <Image src={item.imgSrc} alt={item.label} width={16} height={16} className="w-4 h-4 object-contain shrink-0" />
+                  ) : Icon ? (
+                    <Icon className="w-4 h-4 shrink-0" />
+                  ) : null}
                   <span className="text-sm">{item.label}</span>
                 </Link>
               );
@@ -80,6 +84,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                       alt={item.label}
                       width={20}
                       height={20}
+                      priority
                       className={cn('w-5 h-5 object-contain transition-all', isActive && 'scale-110')}
                     />
                   ) : Icon ? (
