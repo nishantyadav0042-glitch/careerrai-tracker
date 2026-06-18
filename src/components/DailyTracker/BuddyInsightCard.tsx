@@ -26,7 +26,7 @@ export function BuddyInsightCard({ studentId, dailyNudge, buddyId: buddyIdProp, 
 
   const { data } = useQuery({
     queryKey: ['buddy-insight', studentId],
-    ...(initialFeedback !== undefined ? { initialData: { feedback: initialFeedback } } : {}),
+    ...(initialFeedback != null ? { initialData: { feedback: initialFeedback } } : {}),
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       // Only 1 query — buddy identity already comes from server props

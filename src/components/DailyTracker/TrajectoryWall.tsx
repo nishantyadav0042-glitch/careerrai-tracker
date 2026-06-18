@@ -37,15 +37,15 @@ export function TrajectoryWall({
     trajectory = 'Log day 1 to start your trajectory.';
   } else if (gap === 0) {
     trajectory = `You're at your target. Time to raise the bar.`;
-  } else if (mockCount > 0) {
+  } else {
     const ratePerDay = gap / Math.max(daysToCat, 1);
     if (ratePerDay < 0.05) {
       trajectory = `At current pace, you reach ${targetPercentile}%ile well before the exam.`;
     } else {
-      trajectory = `${gap} percentile points to close — ${mockCount} mocks in the bank.`;
+      trajectory = mockCount > 0
+        ? `${gap} percentile points to close — ${mockCount} mocks in the bank.`
+        : `${gap} percentile points between here and ${dreamCollege.split(' ')[1] || dreamCollege}.`;
     }
-  } else {
-    trajectory = `${gap} percentile points between here and ${dreamCollege.split(' ')[1] || dreamCollege}.`;
   }
 
   return (
