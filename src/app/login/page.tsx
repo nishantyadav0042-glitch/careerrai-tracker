@@ -89,7 +89,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-start py-10 px-6 md:justify-center">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-20 -left-20 w-96 h-96 bg-orange-100 rounded-full opacity-40 blur-3xl" />
         <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-teal-100 rounded-full opacity-40 blur-3xl" />
@@ -116,6 +116,18 @@ function LoginForm() {
           </h1>
           <p className="mt-3 text-sm text-stone-600">Daily prep tracking with your IIM buddy.</p>
         </div>
+
+        {/* CAT Readiness Test — visible above the login form */}
+        <a
+          href="/cat-readiness"
+          className="mb-4 flex items-center justify-between gap-3 w-full bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3.5 hover:bg-orange-100 transition-colors group"
+        >
+          <div>
+            <p className="text-sm font-semibold text-orange-900">Free CAT Readiness Test</p>
+            <p className="text-xs text-orange-700 mt-0.5">5 min · no signup · get a real score + IIM buddy session</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-orange-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        </a>
 
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
