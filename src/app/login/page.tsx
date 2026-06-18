@@ -117,6 +117,18 @@ function LoginForm() {
           <p className="mt-3 text-sm text-stone-600">Daily prep tracking with your IIM buddy.</p>
         </div>
 
+        {/* CAT Readiness Test — visible above the login form */}
+        <a
+          href="/cat-readiness"
+          className="mb-4 flex items-center justify-between gap-3 w-full bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3.5 hover:bg-orange-100 transition-colors group"
+        >
+          <div>
+            <p className="text-sm font-semibold text-orange-900">Free CAT Readiness Test</p>
+            <p className="text-xs text-orange-700 mt-0.5">5 min · no signup · get a real score + IIM buddy session</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-orange-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        </a>
+
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
           {/* Password login (primary) */}
@@ -313,18 +325,6 @@ function LoginForm() {
             </div>
           )}
         </div>
-
-        {/* Secondary entry: CAT Readiness Test */}
-        <a
-          href="/cat-readiness"
-          className="mt-4 flex items-center justify-between gap-3 w-full bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3.5 hover:bg-orange-100 transition-colors group"
-        >
-          <div>
-            <p className="text-sm font-semibold text-orange-900">Free CAT Readiness Test</p>
-            <p className="text-xs text-orange-700 mt-0.5">5 min · no signup · get a real score + IIM buddy session</p>
-          </div>
-          <ArrowRight className="w-4 h-4 text-orange-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-        </a>
 
         <div className="mt-4">
           <AddToHomeScreenBanner />
