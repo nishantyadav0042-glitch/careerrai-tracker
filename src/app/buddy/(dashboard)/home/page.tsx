@@ -19,12 +19,11 @@ export default async function BuddyHomePage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, full_name, intro_audio_url')
+    .select('role, full_name')
     .eq('id', user.id)
     .single();
 
   if (profile?.role !== 'buddy') redirect('/');
-  if (!profile?.intro_audio_url) redirect('/buddy/setup');
 
   const [{ data: students }, calendarConnected, { data: pendingRequests }] = await Promise.all([
     admin
