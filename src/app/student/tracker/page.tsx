@@ -32,7 +32,7 @@ export default async function DailyTrackerPage() {
     { data: pendingReqs },
     { data: anyDebrief },
     { data: logs },
-    { data: mocks },
+    { count: mockCount },
     { data: recentMock },
     { data: streakRow },
   ] = await Promise.all([
@@ -64,7 +64,7 @@ export default async function DailyTrackerPage() {
       .limit(90),
     admin
       .from('mock_debriefs')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('student_id', user.id),
     admin
       .from('daily_reports')
@@ -161,7 +161,7 @@ export default async function DailyTrackerPage() {
 
   const logCount = logs?.length ?? 0;
   const daysStudied = logs?.filter((l) => (l.study_duration as number) > 0).length ?? 0;
-  const mockCount = mocks?.length ?? 0;
+  const totalMocks = mockCount ?? 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -195,7 +195,7 @@ export default async function DailyTrackerPage() {
           currentPercentile={profile?.cat_percentile as number | null}
           targetPercentile={targetPercentile}
           logCount={logCount}
-          mockCount={mockCount}
+          mockCount={totalMocks}
           daysStudied={daysStudied}
         />
 

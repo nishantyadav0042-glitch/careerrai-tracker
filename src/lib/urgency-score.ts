@@ -253,8 +253,7 @@ export async function loadStudentUrgency(
 
 /**
  * Get all assigned students with urgency + efficacy scores, sorted by urgency.
- * Batches the efficacy queries (mock_debriefs, daily_reports) across all students
- * so the buddy home doesn't pay N×query latency.
+ * Uses 6 batched .in() queries regardless of student count — eliminates the N×5 pattern.
  */
 export async function loadBuddyStudents(
   buddyId: string
@@ -271,54 +270,68 @@ export async function loadBuddyStudents(
     if (!students || students.length === 0) return [];
 
     const ids = students.map((s) => s.id);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
 
-    // Batch-fetch the efficacy signals in parallel with the urgency queries.
-    const [urgencyResults, { data: latestDebriefs }, { data: logCounts }] = await Promise.all([
-      Promise.all(
-        students.map(async (student): Promise<StudentUrgencyData | null> => {
-          const data = await loadStudentUrgency(student.id);
-          return data
-            ? {
-                ...data,
-                free_onboarding_used: student.free_onboarding_used ?? false,
-                starting_percentile: student.starting_percentile ?? null,
-                percentileDelta: null,
-                daysSinceLastMock: null,
-                daysSinceLastDebrief: null,
-                isFlat: false,
-              }
-            : null;
-        })
-      ),
-      // Latest mock_debrief per student (one row each, sorted by taken_on desc)
+    // 6 batched queries — constant cost regardless of student count.
+    const [
+      { data: streaks },
+      { data: dropAlerts },
+      { data: feedbacks },
+      { data: latestDebriefs },
+      { data: logCounts },
+    ] = await Promise.all([
+      supabase
+        .from('streak_data')
+        .select('student_id, current_streak, last_log_date')
+        .in('student_id', ids),
+      supabase
+        .from('mock_drop_alerts')
+        .select('student_id')
+        .in('student_id', ids)
+        .gte('triggered_at', sevenDaysAgo),
+      supabase
+        .from('feedback')
+        .select('student_id, created_at')
+        .in('student_id', ids)
+        .order('created_at', { ascending: false }),
       supabase
         .from('mock_debriefs')
         .select('student_id, taken_on, overall_percentile')
         .in('student_id', ids)
         .order('taken_on', { ascending: false }),
-      // Log count in last 14 days for flat-percentile detection
       supabase
         .from('daily_reports')
         .select('student_id, report_date')
         .in('student_id', ids)
-        .gte('report_date', new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0]),
+        .gte('report_date', fourteenDaysAgo),
     ]);
 
-    // Build per-student debrief index (latest per student)
-    const latestDebriefMap: Record<string, { taken_on: string; overall_percentile: number | null }> = {};
-    for (const d of latestDebriefs ?? []) {
-      if (!latestDebriefMap[d.student_id]) latestDebriefMap[d.student_id] = d;
+    // Build lookup maps (all in-memory — no extra queries)
+    const streakMap: Record<string, { current_streak: number; last_log_date: string | null }> = {};
+    for (const s of streaks ?? []) streakMap[s.student_id] = s;
+
+    const dropAlertCountMap: Record<string, number> = {};
+    for (const a of dropAlerts ?? []) {
+      dropAlertCountMap[a.student_id] = (dropAlertCountMap[a.student_id] ?? 0) + 1;
     }
 
-    // Percentile history per student (all debriefs, latest first — already ordered)
+    // Latest feedback per student (results ordered desc — first hit wins)
+    const latestFeedbackMap: Record<string, { created_at: string }> = {};
+    for (const f of feedbacks ?? []) {
+      if (!latestFeedbackMap[f.student_id]) latestFeedbackMap[f.student_id] = f;
+    }
+
+    // Latest debrief + full percentile history per student
+    const latestDebriefMap: Record<string, { taken_on: string; overall_percentile: number | null }> = {};
     const debriefPercentilesByStudent: Record<string, number[]> = {};
     for (const d of latestDebriefs ?? []) {
+      if (!latestDebriefMap[d.student_id]) latestDebriefMap[d.student_id] = d;
       if (d.overall_percentile !== null) {
         (debriefPercentilesByStudent[d.student_id] ??= []).push(d.overall_percentile);
       }
     }
 
-    // Log count per student in last 14 days
     const logCountByStudent: Record<string, number> = {};
     for (const r of logCounts ?? []) {
       logCountByStudent[r.student_id] = (logCountByStudent[r.student_id] ?? 0) + 1;
@@ -327,37 +340,73 @@ export async function loadBuddyStudents(
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const urgencyData: StudentUrgencyData[] = (urgencyResults.filter(Boolean) as StudentUrgencyData[]).map(
-      (item) => {
-        const s = students.find((x) => x.id === item.student_id)!;
-        const latestDebrief = latestDebriefMap[item.student_id];
+    const urgencyData: StudentUrgencyData[] = students.map((student) => {
+      const streak = streakMap[student.id];
+      const latestFeedback = latestFeedbackMap[student.id];
+      const dropAlertCount = dropAlertCountMap[student.id] ?? 0;
+      const latestDebrief = latestDebriefMap[student.id];
 
-        const daysSinceLastMock = latestDebrief
-          ? Math.round((today.getTime() - new Date(latestDebrief.taken_on + 'T00:00:00').getTime()) / 86_400_000)
+      const lastLogDate = streak?.last_log_date ? new Date(streak.last_log_date) : null;
+      lastLogDate?.setHours(0, 0, 0, 0);
+      const streakBroken =
+        !lastLogDate ||
+        (today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24) > 1;
+
+      const daysSinceFeedback = latestFeedback
+        ? Math.floor(
+            (today.getTime() - new Date(latestFeedback.created_at).getTime()) / (1000 * 60 * 60 * 24)
+          )
+        : 999;
+
+      const factors: UrgencyFactors = {
+        streakBroken,
+        mockDropDetected: dropAlertCount > 0,
+        noFeedbackDays: daysSinceFeedback,
+        performanceDropping: false,
+        lowPercentile: (student.cat_percentile ?? 0) < 30,
+      };
+
+      const score = calculateUrgencyScore(factors);
+      const severity = getSeverity(score);
+      const reasons = buildUrgencyReasons(factors);
+
+      const daysSinceLastMock = latestDebrief
+        ? Math.round(
+            (today.getTime() - new Date(latestDebrief.taken_on + 'T00:00:00').getTime()) / 86_400_000
+          )
+        : null;
+
+      const percentileDelta =
+        student.cat_percentile !== null && student.starting_percentile !== null
+          ? Math.round((student.cat_percentile - student.starting_percentile) * 10) / 10
           : null;
 
-        const percentileDelta =
-          s.cat_percentile !== null && s.starting_percentile !== null
-            ? Math.round((s.cat_percentile - s.starting_percentile) * 10) / 10
-            : null;
+      const logsLast14 = logCountByStudent[student.id] ?? 0;
+      const pcts = debriefPercentilesByStudent[student.id] ?? [];
+      const isFlat =
+        logsLast14 >= 14 &&
+        (pcts.length === 0 || (pcts.length >= 2 && pcts[0] - pcts[pcts.length - 1] < 2));
 
-        // Flat: 14+ days logged AND either no debriefs or percentile hasn't moved ≥2pts
-        const logsLast14 = logCountByStudent[item.student_id] ?? 0;
-        const pcts = debriefPercentilesByStudent[item.student_id] ?? [];
-        const isFlat =
-          logsLast14 >= 14 &&
-          (pcts.length === 0 || (pcts.length >= 2 && pcts[0] - pcts[pcts.length - 1] < 2));
-
-        return {
-          ...item,
-          starting_percentile: s.starting_percentile ?? null,
-          percentileDelta,
-          daysSinceLastMock,
-          daysSinceLastDebrief: daysSinceLastMock, // debrief = mock_debrief row
-          isFlat,
-        };
-      }
-    );
+      return {
+        student_id: student.id,
+        student_name: student.full_name,
+        cat_percentile: student.cat_percentile,
+        score,
+        severity,
+        reasons,
+        lastFeedback: latestFeedback?.created_at ?? null,
+        daysSinceFeedback,
+        streakStatus: streakBroken ? 'broken' : 'active',
+        streakDays: streak?.current_streak ?? 0,
+        recentDrops: dropAlertCount,
+        free_onboarding_used: student.free_onboarding_used ?? false,
+        starting_percentile: student.starting_percentile ?? null,
+        percentileDelta,
+        daysSinceLastMock,
+        daysSinceLastDebrief: daysSinceLastMock,
+        isFlat,
+      };
+    });
 
     return urgencyData.sort((a, b) => b.score - a.score);
   } catch (error) {

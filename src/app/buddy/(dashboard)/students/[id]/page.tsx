@@ -131,7 +131,20 @@ export default async function BuddyStudentDetailPage({
     .single();
   if (!student || student.buddy_id !== user.id) notFound();
 
-  const [{ data: reportsRaw }, { data: feedbackRaw }, { data: debriefsRaw }, { data: existingBriefing }] = await Promise.all([
+  // eslint-disable-next-line react-hooks/purity
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  // All 8 queries in one round-trip — eliminates 3 sequential round-trips.
+  const [
+    { data: reportsRaw },
+    { data: feedbackRaw },
+    { data: debriefsRaw },
+    { data: existingBriefing },
+    { data: lastVideoSession },
+    { data: buddyTokens },
+    { data: upcomingSessions },
+    { data: recentCompleted },
+  ] = await Promise.all([
     admin
       .from('daily_reports')
       .select('*')
@@ -143,7 +156,8 @@ export default async function BuddyStudentDetailPage({
       .select('*')
       .eq('student_id', id)
       .eq('feedback_type', 'buddy_feedback')
-      .order('feedback_date', { ascending: false }),
+      .order('feedback_date', { ascending: false })
+      .limit(20),
     admin
       .from('mock_debriefs')
       .select('*')
@@ -156,56 +170,49 @@ export default async function BuddyStudentDetailPage({
       .eq('student_id', id)
       .eq('buddy_id', user.id)
       .maybeSingle(),
+    admin
+      .from('video_sessions')
+      .select('ended_at')
+      .eq('student_id', id)
+      .eq('buddy_id', user.id)
+      .eq('session_status', 'completed')
+      .order('ended_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from('google_oauth_tokens')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    admin
+      .from('video_sessions')
+      .select('id, title, scheduled_at, google_meet_link, session_type')
+      .eq('student_id', id)
+      .eq('buddy_id', user.id)
+      .eq('session_status', 'scheduled')
+      .gte('scheduled_at', new Date().toISOString())
+      .order('scheduled_at', { ascending: true })
+      .limit(3),
+    admin
+      .from('video_sessions')
+      .select('id, title, scheduled_at, session_type')
+      .eq('student_id', id)
+      .eq('buddy_id', user.id)
+      .eq('session_status', 'completed')
+      .gte('scheduled_at', sevenDaysAgo)
+      .order('scheduled_at', { ascending: false })
+      .limit(5),
   ]);
 
   const reports = (reportsRaw ?? []) as DailyReport[];
   const feedback = (feedbackRaw ?? []) as BuddyFeedback[];
   const debriefs = (debriefsRaw ?? []) as MockDebrief[];
 
-  const { data: lastVideoSession } = await admin
-    .from('video_sessions')
-    .select('ended_at')
-    .eq('student_id', id)
-    .eq('buddy_id', user.id)
-    .eq('session_status', 'completed')
-    .order('ended_at', { ascending: false })
-    .limit(1)
-    .single();
-
   const lastSessionDate = lastVideoSession?.ended_at ? new Date(lastVideoSession.ended_at) : null;
   const daysSinceLastSession = lastSessionDate
     ? Math.floor((new Date().getTime() - lastSessionDate.getTime()) / 86_400_000)
     : null;
-
-  const { data: buddyTokens } = await admin
-    .from('google_oauth_tokens')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
   const calendarConnected = !!buddyTokens;
-
-  const { data: upcomingSessions } = await admin
-    .from('video_sessions')
-    .select('id, title, scheduled_at, google_meet_link, session_type')
-    .eq('student_id', id)
-    .eq('buddy_id', user.id)
-    .eq('session_status', 'scheduled')
-    .gte('scheduled_at', new Date().toISOString())
-    .order('scheduled_at', { ascending: true })
-    .limit(3);
-
-  // Completed within 7 days — dashboard cleanup filter (view-only, never deleted)
-  // eslint-disable-next-line react-hooks/purity
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { data: recentCompleted } = await admin
-    .from('video_sessions')
-    .select('id, title, scheduled_at, session_type')
-    .eq('student_id', id)
-    .eq('buddy_id', user.id)
-    .eq('session_status', 'completed')
-    .gte('scheduled_at', sevenDaysAgo)
-    .order('scheduled_at', { ascending: false })
-    .limit(5);
 
   const summary = computeSummary(reports, period);
   const needsAttentionFlags = computeNeedsAttentionFlags(reports, debriefs);
