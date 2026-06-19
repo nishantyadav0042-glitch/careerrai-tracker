@@ -53,7 +53,10 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { cookies: { getAll: () => [], setAll: () => {} } }
     );
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true },
+    });
     if (error) {
       console.error('[request-otp] signInWithOtp error:', error.message);
       return NextResponse.json({ sent: false, message: "Couldn't send the code. Try again." }, { status: 502 });
