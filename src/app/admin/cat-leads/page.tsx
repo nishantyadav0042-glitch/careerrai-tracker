@@ -21,8 +21,9 @@ interface Lead {
 function tierColor(tier: string): 'green' | 'amber' | 'orange' | 'red' | 'stone' {
   const n = parseInt(tier.replace(/\D/g, ''), 10);
   if (n <= 10) return 'green';
-  if (n <= 30) return 'amber';
-  if (n <= 60) return 'orange';
+  if (n <= 25) return 'amber';
+  if (n <= 45) return 'orange';
+  if (n <= 65) return 'red';
   return 'stone';
 }
 
@@ -38,7 +39,8 @@ export default async function CatLeadsPage() {
   const { data: leads, count } = await admin
     .from('cat_test_leads')
     .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(200);
 
   const rows = (leads ?? []) as Lead[];
 
