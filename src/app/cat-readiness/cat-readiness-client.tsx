@@ -119,7 +119,7 @@ function getVerdict(answers: Record<string, number>, overall: number): string {
 function getConsistencyInsight(answers: Record<string, number>): InsightData {
   const daysIdx = answers['q4'];
   const planIdx = answers['q5'];
-  const daysLabel = daysIdx === 0 ? '3 or fewer' : daysIdx === 1 ? '4–7' : daysIdx === 2 ? '8–11' : '12–14';
+  const daysLabel = daysIdx === 0 ? '3 or fewer' : daysIdx === 1 ? '4–7' : daysIdx === 2 ? '8–11' : daysIdx === 3 ? '12–14' : '';
 
   if (planIdx === 3) return {
     tag: 'risk', title: 'Prep running on willpower',

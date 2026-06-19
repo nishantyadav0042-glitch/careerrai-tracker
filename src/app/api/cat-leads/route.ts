@@ -25,6 +25,20 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  // Dedup: same phone can't submit more than once per 24h — prevents spam, idempotent for legit retries
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: existing } = await admin
+    .from('cat_test_leads')
+    .select('id')
+    .eq('phone', phone.trim())
+    .gte('created_at', since24h)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    return NextResponse.json({ ok: true });
+  }
+
   const { error } = await admin.from('cat_test_leads').insert({
     name: name.trim(),
     phone: phone.trim(),
