@@ -184,7 +184,7 @@ export default async function StudentProfilePage() {
 
       <Card className="p-5">
         <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-4">Push notifications</div>
-        <PushToggle initialEnabled={prefs.push ?? false} />
+        <PushToggle initialEnabled={prefs.push ?? false} vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
         <p className="text-xs text-stone-400 mt-2">Get instant alerts on your device even when the app is closed.</p>
       </Card>
 
