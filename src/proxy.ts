@@ -43,7 +43,6 @@ export async function proxy(request: NextRequest) {
   // both validates the JWT and refreshes the token — a separate getSession()
   // call would be a second, redundant round-trip on every request.
   const { data: { user } } = await supabase.auth.getUser();
-  const { pathname } = request.nextUrl;
 
   const isProtected =
     pathname.startsWith('/student') ||
