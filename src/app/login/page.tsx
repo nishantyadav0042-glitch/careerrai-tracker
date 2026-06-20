@@ -1,7 +1,7 @@
 'use client';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Eye, EyeOff, Mail, KeyRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Mail } from 'lucide-react';
 import Image from 'next/image';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { cn } from '@/lib/utils';
@@ -16,7 +16,7 @@ const DEMO_ACCOUNTS = [
   { label: 'Admin', username: 'admin', password: DEMO_PASSWORD },
 ];
 
-type LoginMode = 'password' | 'otp-email' | 'otp-code';
+type LoginMode = 'password' | 'otp-email' | 'link-sent';
 
 function LoginForm() {
   const params = useSearchParams();
@@ -29,7 +29,6 @@ function LoginForm() {
 
   // OTP login state
   const [otpEmail, setOtpEmail] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpMsg, setOtpMsg] = useState<string | null>(null);
 
@@ -53,34 +52,10 @@ function LoginForm() {
       });
       const data = await res.json();
       if (data.sent) {
-        setMode('otp-code');
-        setOtpMsg('Code sent — check your email.');
+        setMode('link-sent');
       } else {
         setOtpMsg(data.message ?? "Couldn't send the code. Try again.");
       }
-    } catch {
-      setOtpMsg('No connection. Try again.');
-    } finally {
-      setOtpLoading(false);
-    }
-  }
-
-  async function verifyOtp(e?: React.FormEvent) {
-    e?.preventDefault();
-    setOtpLoading(true);
-    setOtpMsg(null);
-    try {
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: otpEmail, token: otpCode }),
-      });
-      const data = await res.json();
-      if (res.ok && data.dest) {
-        window.location.href = data.dest;
-        return;
-      }
-      setOtpMsg(data.error ?? 'That code is incorrect or expired.');
     } catch {
       setOtpMsg('No connection. Try again.');
     } finally {
@@ -203,7 +178,7 @@ function LoginForm() {
                   onClick={() => { setMode('otp-email'); setOtpMsg(null); }}
                   className="text-xs text-orange-600 hover:text-orange-700 font-medium"
                 >
-                  First time? Forgot password? → Login with OTP
+                  First time? Forgot password? → Login with email link
                 </button>
               </div>
             </>
@@ -213,8 +188,8 @@ function LoginForm() {
           {mode === 'otp-email' && (
             <form onSubmit={requestOtp} className="space-y-4">
               <div className="text-center mb-2">
-                <p className="text-sm font-semibold text-stone-900">Login with email code</p>
-                <p className="text-xs text-stone-500 mt-1">We'll send a 6-digit code to your email.</p>
+                <p className="text-sm font-semibold text-stone-900">Login with email link</p>
+                <p className="text-xs text-stone-500 mt-1">We'll send a one-click login link to your email.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-800 mb-1.5">Email address</label>
@@ -239,7 +214,7 @@ function LoginForm() {
                 disabled={otpLoading || !otpEmail.includes('@')}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                {otpLoading ? 'Sending…' : <>Send code <ArrowRight className="w-4 h-4" /></>}
+                {otpLoading ? 'Sending…' : <>Send login link <ArrowRight className="w-4 h-4" /></>}
               </button>
 
               <div className="text-center">
@@ -254,47 +229,27 @@ function LoginForm() {
             </form>
           )}
 
-          {/* OTP — enter code */}
-          {mode === 'otp-code' && (
-            <form onSubmit={verifyOtp} className="space-y-4">
-              <div className="text-center mb-2">
-                <p className="text-sm font-semibold text-stone-900">Enter the code</p>
-                <p className="text-xs text-stone-500 mt-1">
-                  Sent to <span className="font-semibold text-stone-700">{otpEmail}</span>
+          {/* Link sent — waiting for user to click email link */}
+          {mode === 'link-sent' && (
+            <div className="space-y-5">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Mail className="w-5 h-5 text-teal-600" />
+                </div>
+                <p className="text-sm font-semibold text-stone-900">Check your inbox</p>
+                <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+                  We sent a login link to{' '}
+                  <span className="font-semibold text-stone-700">{otpEmail}</span>.{' '}
+                  Click it to log in — no code needed.
                 </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-stone-800 mb-1.5">6-digit code</label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="••••••"
-                    required
-                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm tracking-[0.4em] font-mono focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                  />
-                </div>
-              </div>
 
-              {otpMsg && <p className="text-xs text-stone-600">{otpMsg}</p>}
+              {otpMsg && <p className="text-xs text-rose-600 text-center">{otpMsg}</p>}
 
-              <button
-                type="submit"
-                disabled={otpLoading || otpCode.length < 6}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                {otpLoading ? 'Verifying…' : <>Verify &amp; sign in <ArrowRight className="w-4 h-4" /></>}
-              </button>
-
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs pt-1">
                 <button
                   type="button"
-                  onClick={() => { setMode('otp-email'); setOtpCode(''); setOtpMsg(null); }}
+                  onClick={() => { setMode('otp-email'); setOtpMsg(null); }}
                   className="text-stone-500 hover:text-stone-700"
                 >
                   ← Change email
@@ -305,10 +260,10 @@ function LoginForm() {
                   disabled={otpLoading}
                   className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
                 >
-                  Resend code
+                  {otpLoading ? 'Sending…' : 'Resend link'}
                 </button>
               </div>
-            </form>
+            </div>
           )}
 
           {/* Demo accounts — only show on password mode */}
