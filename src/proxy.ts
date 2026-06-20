@@ -2,6 +2,22 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function proxy(request: NextRequest) {
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Supabase sends magic-link emails to its configured Site URL, which may be
+  // the domain root rather than /auth/callback. Intercept the auth params here
+  // and forward them so the callback route can complete the session exchange.
+  const code = searchParams.get('code');
+  const token_hash = searchParams.get('token_hash');
+  const type = searchParams.get('type');
+  if (pathname !== '/auth/callback' && (code || (token_hash && type))) {
+    const callbackUrl = new URL('/auth/callback', request.url);
+    if (code) callbackUrl.searchParams.set('code', code);
+    if (token_hash) callbackUrl.searchParams.set('token_hash', token_hash);
+    if (type) callbackUrl.searchParams.set('type', type);
+    return NextResponse.redirect(callbackUrl);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
