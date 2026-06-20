@@ -47,23 +47,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Supabase sends the OTP via its built-in email provider — no external config needed.
+    // Capture cookies set during signInWithOtp (code_verifier for PKCE) so the browser
+    // can complete the /auth/callback exchange after clicking the email link.
+    const pendingCookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => [], setAll: () => {} } }
+      {
+        cookies: {
+          getAll: () => request.cookies.getAll(),
+          setAll: (cookiesToSet) =>
+            cookiesToSet.forEach(({ name, value, options }) =>
+              pendingCookies.push({ name, value, options: options as Record<string, unknown> })
+            ),
+        },
+      }
     );
+
+    // emailRedirectTo: any path under the project's Site URL is allowed without dashboard changes.
+    const siteOrigin = request.headers.get('origin') ?? new URL(request.url).origin;
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, emailRedirectTo: `${siteOrigin}/auth/callback` },
     });
     if (error) {
       console.error('[request-otp] signInWithOtp error:', error.message);
-      return NextResponse.json({ sent: false, message: "Couldn't send the code. Try again." }, { status: 502 });
+      return NextResponse.json({ sent: false, message: "Couldn't send the link. Try again." }, { status: 502 });
     }
 
     await admin.from('otp_send_events').insert({ email });
-    return NextResponse.json({ sent: true });
+
+    const res = NextResponse.json({ sent: true });
+    pendingCookies.forEach(({ name, value, options }) =>
+      res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
+    );
+    return res;
   } catch (e) {
     console.error('[request-otp] error', e);
     return NextResponse.json({ sent: false, message: 'Something went wrong. Try again.' }, { status: 500 });
