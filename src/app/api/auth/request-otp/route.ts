@@ -72,6 +72,22 @@ export async function POST(request: NextRequest) {
     });
     if (error) {
       console.error('[request-otp] signInWithOtp error:', error.message);
+      // Supabase's shared email service caps sends per hour. Surface a clear
+      // message so users know to wait (and check their inbox) instead of
+      // hammering the button — which only deepens the rate limit.
+      const isRateLimited =
+        error.status === 429 ||
+        /rate limit|over_email_send_rate_limit/i.test(`${error.code ?? ''} ${error.message}`);
+      if (isRateLimited) {
+        return NextResponse.json(
+          {
+            sent: false,
+            message:
+              'Too many emails just now. A login link may already be in your inbox — check there, or wait ~15 min and try again.',
+          },
+          { status: 429 }
+        );
+      }
       return NextResponse.json({ sent: false, message: "Couldn't send the link. Try again." }, { status: 502 });
     }
 
