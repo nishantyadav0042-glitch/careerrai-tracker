@@ -78,9 +78,12 @@ export async function GET(request: NextRequest) {
   }
 
   const role = (entry?.person_type === 'buddy' ? 'buddy' : 'student') as 'student' | 'buddy';
-  const normalDest = role === 'buddy' ? '/buddy/students' : '/student/tracker';
+  const isNewUser = !existing;
+  // New students go to /student/home where the onboarding modal auto-launches.
+  // Returning students skip straight to the tracker.
+  const normalDest = role === 'buddy' ? '/buddy/students' : (isNewUser ? '/student/home' : '/student/tracker');
 
-  if (!existing) {
+  if (isNewUser) {
     await admin.from('profiles').insert({
       id: userId,
       role,
