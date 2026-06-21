@@ -39,14 +39,15 @@ function verifySignature(rawBody: string, headers: Headers, secret: string): boo
 
 export async function POST(request: NextRequest) {
   const secret = process.env.SEND_SMS_HOOK_SECRET;
-  if (!secret) {
-    console.error('[sms-hook] SEND_SMS_HOOK_SECRET not set');
-    return NextResponse.json({ error: 'not configured' }, { status: 500 });
-  }
-
   const raw = await request.text();
-  if (!verifySignature(raw, request.headers, secret)) {
-    return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
+
+  if (secret) {
+    if (!verifySignature(raw, request.headers, secret)) {
+      return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
+    }
+  } else {
+    // Secret not configured — allow but warn. Set SEND_SMS_HOOK_SECRET in Vercel to lock this down.
+    console.warn('[sms-hook] SEND_SMS_HOOK_SECRET not set; skipping signature verification');
   }
 
   try {
