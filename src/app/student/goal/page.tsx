@@ -9,9 +9,7 @@ export const metadata = {
 };
 
 export default async function GoalPage() {
-  const t0 = performance.now();
   const user = await getAuthUser();
-  const tAuth = performance.now();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
@@ -21,17 +19,6 @@ export default async function GoalPage() {
     .select('cat_percentile, study_target_hours, target_percentile')
     .eq('id', user.id)
     .maybeSingle();
-  const tDb = performance.now();
-
-  // TEMP perf instrumentation — surfaces the real execution region + phase
-  // timings in Vercel runtime logs so we can measure each lever. Remove later.
-  console.log(JSON.stringify({
-    tag: 'perf:goal',
-    region: process.env.VERCEL_REGION ?? 'local',
-    auth_ms: Math.round(tAuth - t0),
-    db_ms: Math.round(tDb - tAuth),
-    total_ms: Math.round(tDb - t0),
-  }));
 
   return (
     <GoalEditor
