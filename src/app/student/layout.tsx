@@ -7,12 +7,13 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
+import { OnboardingGate } from './onboarding/onboarding-gate';
 
 function DemoBanner() {
   return (
     <div className="mb-4 flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800">
       <span className="text-sm leading-none">👀</span>
-      <span><span className="font-semibold">Demo — view only.</span> This is a real student's data; changes aren&apos;t saved.</span>
+      <span><span className="font-semibold">Demo — view only.</span> This is a real student&apos;s data; changes aren&apos;t saved.</span>
     </div>
   );
 }
@@ -32,8 +33,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
     const [chatUnread, notifUnread, { data: profile }] = await Promise.all([
       getChatUnreadCount(user.id, 'student'),
       getNotifUnreadCount(user.id),
-      admin.from('profiles').select('is_demo').eq('id', user.id).single(),
+      admin.from('profiles').select('is_demo, onboarding_completed').eq('id', user.id).single(),
     ]);
+
+    // New students must complete profile onboarding (name, college, course,
+    // dream colleges, baseline). Demo accounts are read-only and skip it.
+    const showOnboarding = !profile?.is_demo && profile?.onboarding_completed !== true;
 
     return (
       <div className="min-h-screen bg-stone-50">
@@ -50,13 +55,14 @@ export default async function StudentLayout({ children }: { children: React.Reac
           {children}
         </div>
         <StudentBottomNav chatUnread={chatUnread} />
+        {showOnboarding && <OnboardingGate />}
       </div>
     );
   }
 
   // Slow path (first load or cookie missing): verify role from DB, set cookie.
   const [{ data: profile }, chatUnread, notifUnread] = await Promise.all([
-    admin.from('profiles').select('role, is_demo').eq('id', user.id).single(),
+    admin.from('profiles').select('role, is_demo, onboarding_completed').eq('id', user.id).single(),
     getChatUnreadCount(user.id, 'student'),
     getNotifUnreadCount(user.id),
   ]);
@@ -65,6 +71,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
     if (profile?.role === 'admin') redirect('/admin');
     redirect('/login');
   }
+
+  const showOnboarding = !profile?.is_demo && profile?.onboarding_completed !== true;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -81,6 +89,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
+      {showOnboarding && <OnboardingGate />}
     </div>
   );
 }
