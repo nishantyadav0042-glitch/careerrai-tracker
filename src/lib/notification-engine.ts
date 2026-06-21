@@ -6,30 +6,30 @@ const NO_LOG_VARIANTS: Array<{
   body: (name: string, dreamCollege: string | null, streak: number) => string;
 }> = [
   {
-    title: 'Aise kaise IIM jaoge? 😏',
-    body: (name) => `${name}, aaj ka log abhi bhi pending hai. 90 seconds.`,
+    title: 'Today\'s log is still pending',
+    body: (name) => `${name}, your log for today is still open. It takes 90 seconds.`,
   },
   {
-    title: 'CAT khola ya sirf Telegram?',
-    body: (name) => `${name}, jo padha wo log kar do. 90 seconds.`,
+    title: 'Studied today? Log it before you forget',
+    body: (name) => `${name}, capture what you studied today — 90 seconds is all it takes.`,
   },
   {
-    title: 'Padhai kar li? Log bhi bhar de boss.',
+    title: 'Keep tomorrow\'s plan on track',
     body: (_, dreamCollege) =>
       dreamCollege
-        ? `${dreamCollege} yaad hai? Aaj ka log pending.`
-        : 'Aaj ka session record karo — kal ka track yahaan se hota hai.',
+        ? `${dreamCollege} is the goal — today's log is still pending.`
+        : 'Record today\'s session — tomorrow\'s plan is built from it.',
   },
   {
-    title: 'Streak ko oxygen chahiye 🔥',
+    title: 'Your streak needs today 🔥',
     body: (name, _, streak) =>
       streak > 0
-        ? `${streak} din ki streak — day ${streak + 1} ek log dur hai, ${name}.`
-        : `${name}, pehla log sab se important hota hai. Karo abhi.`,
+        ? `${streak}-day streak — day ${streak + 1} is just one quick log away, ${name}.`
+        : `${name}, the first log is the most important one. Start now.`,
   },
   {
-    title: 'Bas check kar rahe the. 😏',
-    body: (name) => `${name}, buddy bhi wait kar raha hai aaj ke update ka.`,
+    title: 'Your buddy is waiting on today\'s update',
+    body: (name) => `${name}, your buddy is waiting for today's update.`,
   },
 ];
 
