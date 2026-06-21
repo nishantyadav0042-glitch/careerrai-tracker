@@ -11,6 +11,7 @@ import { AdminBroadcast } from './admin-broadcast';
 import { AdminStudentsList } from './admin-students-list';
 import { AdminDataImport } from './admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
+import { AdminTabs, type AdminTab } from './admin-tabs';
 import type { Profile, DailyReport } from '@/types';
 import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, ClipboardList } from 'lucide-react';
 import { computeBuddySLA } from '@/lib/buddy-sla';
@@ -127,6 +128,215 @@ export default async function AdminPage() {
     (videoSessions ?? []) as Array<{ buddy_id: string | null; session_status: string }>
   );
 
+  // ── Tab content sections (grouped to replace the old single long scroll) ──
+
+  const overviewSection = (
+    <div className="space-y-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { icon: Users, label: 'Students', val: students.length, color: 'text-stone-900' },
+          { icon: CheckCircle2, label: 'Reported today', val: submittedToday, color: 'text-emerald-700' },
+          { icon: AlertCircle, label: 'Red flags', val: redFlagCount, color: redFlagCount > 0 ? 'text-rose-600' : 'text-stone-900' },
+          { icon: TrendingUp, label: 'On track', val: onTrack, color: 'text-teal-700' },
+        ].map(({ icon: Icon, label, val, color }) => (
+          <Card key={label} className="p-4 text-center">
+            <Icon className={cn('w-5 h-5 mx-auto mb-1', color)} />
+            <div className={cn('text-2xl font-bold font-mono', color)}>{val}</div>
+            <div className="text-[10px] uppercase tracking-wide text-stone-500 font-semibold mt-0.5">{label}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Red flags panel */}
+      {redFlagCount > 0 && (
+        <Card className="p-5 bg-rose-50 border-rose-200">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className="w-4 h-4 text-rose-600" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-rose-700">Students needing attention</span>
+          </div>
+          <div className="space-y-2">
+            {studentStats.filter(s => s.hasRedFlags).map(({ student, summary, buddy }) => (
+              <div key={student.id} className="flex items-start justify-between bg-white rounded-xl p-3 border border-rose-100">
+                <div>
+                  <div className="font-semibold text-stone-900 text-sm">{student.full_name}</div>
+                  <div className="text-xs text-stone-500">{buddy ? `Buddy: ${buddy.full_name}` : 'No buddy assigned'}</div>
+                  <ul className="mt-1 space-y-0.5">
+                    {summary.redFlags.map((f, i) => (
+                      <li key={i} className="text-xs text-rose-700 flex items-center gap-1"><span>•</span>{f}</li>
+                    ))}
+                  </ul>
+                </div>
+                <Badge color="red">{summary.overallScore}/100</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Churn risk panel */}
+      {churnRisk.length > 0 && (
+        <Card className="p-5 bg-amber-50 border-amber-200">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Churn risk — inactive students</span>
+          </div>
+          <div className="space-y-2">
+            {churnRisk.map(({ student, daysSince, buddy }) => (
+              <div key={student.id} className="flex items-center justify-between bg-white rounded-xl p-3 border border-amber-100">
+                <div>
+                  <div className="font-semibold text-stone-900 text-sm">{student.full_name}</div>
+                  <div className="text-xs text-stone-500">{buddy ? `Buddy: ${buddy.full_name}` : 'No buddy assigned'}</div>
+                </div>
+                <Badge color={daysSince === null || daysSince >= 7 ? 'red' : 'amber'}>
+                  {daysSince === null ? 'Never logged' : `${daysSince}d inactive`}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* System info */}
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="w-4 h-4 text-stone-500" />
+          <span className="text-xs uppercase tracking-widest text-stone-500 font-semibold">System stats</span>
+        </div>
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div><div className="text-stone-500 text-xs">Total users</div><div className="font-bold text-stone-900">{profiles.length}</div></div>
+          <div><div className="text-stone-500 text-xs">Reports (7d)</div><div className="font-bold text-stone-900">{reports.length}</div></div>
+          <div><div className="text-stone-500 text-xs">Active today</div><div className="font-bold text-stone-900">{submittedToday}/{students.length}</div></div>
+        </div>
+      </Card>
+    </div>
+  );
+
+  const studentsSection = (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">All students</h2>
+        <AdminStudentsList students={studentStats} buddies={buddies} />
+      </div>
+
+      {/* Buddy SLA Rankings */}
+      {buddySLARanking.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <BarChart2 className="w-4 h-4 text-stone-500" />
+            <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Buddy SLA — ranked by avg %ile delta</h2>
+          </div>
+          <div className="space-y-2">
+            {buddySLARanking.map((sla, rank) => (
+              <Card key={sla.buddy_id} className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 flex items-center justify-center rounded-full bg-stone-100 text-xs font-bold text-stone-600 flex-shrink-0">
+                    #{rank + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-stone-900 text-sm">{sla.buddy_name}</div>
+                    <div className="text-xs text-stone-500 mt-0.5">{sla.student_count} student{sla.student_count !== 1 ? 's' : ''}</div>
+                  </div>
+                  <div className="flex gap-3 text-right flex-shrink-0">
+                    <div>
+                      <div className={cn('text-lg font-bold', sla.avg_percentile_delta === null ? 'text-stone-400' : sla.avg_percentile_delta >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                        {sla.avg_percentile_delta !== null ? `${sla.avg_percentile_delta > 0 ? '+' : ''}${sla.avg_percentile_delta}` : '—'}
+                      </div>
+                      <div className="text-[10px] text-stone-500">%ile Δ</div>
+                    </div>
+                    <div>
+                      <div className={cn('text-lg font-bold', sla.avg_response_hrs === null ? 'text-stone-400' : sla.avg_response_hrs <= 24 ? 'text-emerald-600' : sla.avg_response_hrs <= 48 ? 'text-amber-600' : 'text-red-600')}>
+                        {sla.avg_response_hrs !== null ? `${sla.avg_response_hrs}h` : '—'}
+                      </div>
+                      <div className="text-[10px] text-stone-500">resp.</div>
+                    </div>
+                    <div>
+                      <div className={cn('text-lg font-bold', sla.session_show_up_rate === null ? 'text-stone-400' : sla.session_show_up_rate >= 80 ? 'text-emerald-600' : sla.session_show_up_rate >= 60 ? 'text-amber-600' : 'text-red-600')}>
+                        {sla.session_show_up_rate !== null ? `${sla.session_show_up_rate}%` : '—'}
+                      </div>
+                      <div className="text-[10px] text-stone-500">show-up</div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const buddiesSection = (
+    <div>
+      <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Buddies</h2>
+      <div className="space-y-2">
+        {buddyStats.map(({ buddy, studentCount, redFlags, feedbackCount, avgResponseHrs }) => {
+          const initials = buddy.full_name[0].toUpperCase();
+          return (
+            <Card key={buddy.id} className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-orange-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  {initials}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-stone-900 text-sm">{buddy.full_name}</span>
+                    <Badge color="orange">Buddy</Badge>
+                    {redFlags > 0 && <Badge color="red">{redFlags} red flag{redFlags > 1 ? 's' : ''}</Badge>}
+                  </div>
+                  <div className="text-xs text-stone-500 mt-0.5">{buddy.email} · {studentCount} student{studentCount !== 1 ? 's' : ''}</div>
+                  <div className="text-xs text-stone-600 mt-1">
+                    {feedbackCount} feedback (14d)
+                    {avgResponseHrs !== null && <> · responds in ~{avgResponseHrs}h</>}
+                    {feedbackCount === 0 && <span className="text-rose-600 font-medium"> · no recent activity</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Users className="w-4 h-4 text-stone-400" />
+                  <span className="text-sm font-bold text-stone-900">{studentCount}</span>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const accessSection = (
+    <div className="space-y-6">
+      {/* People access list (students + buddies — OTP allowlist) */}
+      <div>
+        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">People access</h2>
+        <AdminAllowlist
+          rows={(allowlistRows ?? []) as AllowlistRow[]}
+          buddies={buddies.map((b) => ({ id: b.id, full_name: b.full_name }))}
+        />
+      </div>
+
+      {/* Data Import */}
+      <div>
+        <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Data management</h2>
+        <AdminDataImport />
+      </div>
+    </div>
+  );
+
+  const broadcastSection = (
+    <div>
+      <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Broadcast notification</h2>
+      <AdminBroadcast recipientIds={[...students.map(s => s.id), ...buddies.map(b => b.id)]} />
+    </div>
+  );
+
+  const adminTabs: AdminTab[] = [
+    { id: 'overview', label: 'Overview', badge: redFlagCount, content: overviewSection },
+    { id: 'students', label: 'Students', badge: students.length, content: studentsSection },
+    { id: 'buddies', label: 'Buddies', badge: buddies.length, content: buddiesSection },
+    { id: 'access', label: 'People & Data', content: accessSection },
+    { id: 'broadcast', label: 'Broadcast', content: broadcastSection },
+  ];
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
@@ -134,36 +344,12 @@ export default async function AdminPage() {
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-3">
-            <Link
-              href="/admin/payments"
-              className="flex items-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2 transition-colors"
-            >
-              <IndianRupee className="w-3.5 h-3.5" /> Payments
-            </Link>
-            <Link
-              href="/admin/scholarships"
-              className="flex items-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2 transition-colors"
-            >
-              <Heart className="w-3.5 h-3.5" /> Scholarships
-            </Link>
-            <Link
-              href="/admin/coupons"
-              className="flex items-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2 transition-colors"
-            >
-              <Ticket className="w-3.5 h-3.5" /> Coupons
-            </Link>
-            <Link
-              href="/admin/cat-leads"
-              className="flex items-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2 transition-colors"
-            >
-              <ClipboardList className="w-3.5 h-3.5" /> CAT Leads
-            </Link>
             <Badge color="stone">Admin</Badge>
             <LogoutButton />
           </div>
         </div>
 
-        <div className="px-1 mb-6">
+        <div className="px-1 mb-5">
           <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Admin dashboard</p>
           <h1 className="text-2xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
             CareerRai Overview
@@ -171,191 +357,35 @@ export default async function AdminPage() {
           <p className="text-sm text-stone-500 mt-1">Today: {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
 
-        {/* KPI row */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          {[
-            { icon: Users, label: 'Students', val: students.length, color: 'text-stone-900' },
-            { icon: CheckCircle2, label: 'Reported today', val: submittedToday, color: 'text-emerald-700' },
-            { icon: AlertCircle, label: 'Red flags', val: redFlagCount, color: redFlagCount > 0 ? 'text-rose-600' : 'text-stone-900' },
-            { icon: TrendingUp, label: 'On track', val: onTrack, color: 'text-teal-700' },
-          ].map(({ icon: Icon, label, val, color }) => (
-            <Card key={label} className="p-4 text-center">
-              <Icon className={cn('w-5 h-5 mx-auto mb-1', color)} />
-              <div className={cn('text-2xl font-bold font-mono', color)}>{val}</div>
-              <div className="text-[10px] uppercase tracking-wide text-stone-500 font-semibold mt-0.5">{label}</div>
-            </Card>
-          ))}
+        {/* Quick links to the dedicated admin pages */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+          <Link
+            href="/admin/payments"
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
+          >
+            <IndianRupee className="w-3.5 h-3.5" /> Payments
+          </Link>
+          <Link
+            href="/admin/scholarships"
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
+          >
+            <Heart className="w-3.5 h-3.5" /> Scholarships
+          </Link>
+          <Link
+            href="/admin/coupons"
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
+          >
+            <Ticket className="w-3.5 h-3.5" /> Coupons
+          </Link>
+          <Link
+            href="/admin/cat-leads"
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
+          >
+            <ClipboardList className="w-3.5 h-3.5" /> CAT Leads
+          </Link>
         </div>
 
-        {/* Red flags panel */}
-        {redFlagCount > 0 && (
-          <Card className="p-5 bg-rose-50 border-rose-200 mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle className="w-4 h-4 text-rose-600" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-rose-700">Students needing attention</span>
-            </div>
-            <div className="space-y-2">
-              {studentStats.filter(s => s.hasRedFlags).map(({ student, summary, buddy }) => (
-                <div key={student.id} className="flex items-start justify-between bg-white rounded-xl p-3 border border-rose-100">
-                  <div>
-                    <div className="font-semibold text-stone-900 text-sm">{student.full_name}</div>
-                    <div className="text-xs text-stone-500">{buddy ? `Buddy: ${buddy.full_name}` : 'No buddy assigned'}</div>
-                    <ul className="mt-1 space-y-0.5">
-                      {summary.redFlags.map((f, i) => (
-                        <li key={i} className="text-xs text-rose-700 flex items-center gap-1"><span>•</span>{f}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <Badge color="red">{summary.overallScore}/100</Badge>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Churn risk panel */}
-        {churnRisk.length > 0 && (
-          <Card className="p-5 bg-amber-50 border-amber-200 mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Churn risk — inactive students</span>
-            </div>
-            <div className="space-y-2">
-              {churnRisk.map(({ student, daysSince, buddy }) => (
-                <div key={student.id} className="flex items-center justify-between bg-white rounded-xl p-3 border border-amber-100">
-                  <div>
-                    <div className="font-semibold text-stone-900 text-sm">{student.full_name}</div>
-                    <div className="text-xs text-stone-500">{buddy ? `Buddy: ${buddy.full_name}` : 'No buddy assigned'}</div>
-                  </div>
-                  <Badge color={daysSince === null || daysSince >= 7 ? 'red' : 'amber'}>
-                    {daysSince === null ? 'Never logged' : `${daysSince}d inactive`}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* All students */}
-        <div className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">All students</h2>
-          <AdminStudentsList students={studentStats} buddies={buddies} />
-        </div>
-
-        {/* Buddy SLA Rankings */}
-        {buddySLARanking.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <BarChart2 className="w-4 h-4 text-stone-500" />
-              <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Buddy SLA — ranked by avg %ile delta</h2>
-            </div>
-            <div className="space-y-2">
-              {buddySLARanking.map((sla, rank) => (
-                <Card key={sla.buddy_id} className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 flex items-center justify-center rounded-full bg-stone-100 text-xs font-bold text-stone-600 flex-shrink-0">
-                      #{rank + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-stone-900 text-sm">{sla.buddy_name}</div>
-                      <div className="text-xs text-stone-500 mt-0.5">{sla.student_count} student{sla.student_count !== 1 ? 's' : ''}</div>
-                    </div>
-                    <div className="flex gap-3 text-right flex-shrink-0">
-                      <div>
-                        <div className={cn('text-lg font-bold', sla.avg_percentile_delta === null ? 'text-stone-400' : sla.avg_percentile_delta >= 0 ? 'text-emerald-600' : 'text-red-600')}>
-                          {sla.avg_percentile_delta !== null ? `${sla.avg_percentile_delta > 0 ? '+' : ''}${sla.avg_percentile_delta}` : '—'}
-                        </div>
-                        <div className="text-[10px] text-stone-500">%ile Δ</div>
-                      </div>
-                      <div>
-                        <div className={cn('text-lg font-bold', sla.avg_response_hrs === null ? 'text-stone-400' : sla.avg_response_hrs <= 24 ? 'text-emerald-600' : sla.avg_response_hrs <= 48 ? 'text-amber-600' : 'text-red-600')}>
-                          {sla.avg_response_hrs !== null ? `${sla.avg_response_hrs}h` : '—'}
-                        </div>
-                        <div className="text-[10px] text-stone-500">resp.</div>
-                      </div>
-                      <div>
-                        <div className={cn('text-lg font-bold', sla.session_show_up_rate === null ? 'text-stone-400' : sla.session_show_up_rate >= 80 ? 'text-emerald-600' : sla.session_show_up_rate >= 60 ? 'text-amber-600' : 'text-red-600')}>
-                          {sla.session_show_up_rate !== null ? `${sla.session_show_up_rate}%` : '—'}
-                        </div>
-                        <div className="text-[10px] text-stone-500">show-up</div>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Buddies */}
-        <div className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Buddies</h2>
-          <div className="space-y-2">
-            {buddyStats.map(({ buddy, studentCount, redFlags, feedbackCount, avgResponseHrs }) => {
-              const initials = buddy.full_name[0].toUpperCase();
-              return (
-                <Card key={buddy.id} className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-orange-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                      {initials}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-stone-900 text-sm">{buddy.full_name}</span>
-                        <Badge color="orange">Buddy</Badge>
-                        {redFlags > 0 && <Badge color="red">{redFlags} red flag{redFlags > 1 ? 's' : ''}</Badge>}
-                      </div>
-                      <div className="text-xs text-stone-500 mt-0.5">{buddy.email} · {studentCount} student{studentCount !== 1 ? 's' : ''}</div>
-                      <div className="text-xs text-stone-600 mt-1">
-                        {feedbackCount} feedback (14d)
-                        {avgResponseHrs !== null && <> · responds in ~{avgResponseHrs}h</>}
-                        {feedbackCount === 0 && <span className="text-rose-600 font-medium"> · no recent activity</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4 text-stone-400" />
-                      <span className="text-sm font-bold text-stone-900">{studentCount}</span>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* People access list (students + buddies — OTP allowlist) */}
-        <div className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">People access</h2>
-          <AdminAllowlist
-            rows={(allowlistRows ?? []) as AllowlistRow[]}
-            buddies={buddies.map((b) => ({ id: b.id, full_name: b.full_name }))}
-          />
-        </div>
-
-        {/* Data Import */}
-        <div className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Data management</h2>
-          <AdminDataImport />
-        </div>
-
-        {/* Broadcast notification */}
-        <div className="mb-6">
-          <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Broadcast notification</h2>
-          <AdminBroadcast recipientIds={[...students.map(s => s.id), ...buddies.map(b => b.id)]} />
-        </div>
-
-        {/* System info */}
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <FileText className="w-4 h-4 text-stone-500" />
-            <span className="text-xs uppercase tracking-widest text-stone-500 font-semibold">System stats</span>
-          </div>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div><div className="text-stone-500 text-xs">Total users</div><div className="font-bold text-stone-900">{profiles.length}</div></div>
-            <div><div className="text-stone-500 text-xs">Reports (7d)</div><div className="font-bold text-stone-900">{reports.length}</div></div>
-            <div><div className="text-stone-500 text-xs">Active today</div><div className="font-bold text-stone-900">{submittedToday}/{students.length}</div></div>
-          </div>
-        </Card>
+        <AdminTabs tabs={adminTabs} />
       </div>
     </div>
   );
