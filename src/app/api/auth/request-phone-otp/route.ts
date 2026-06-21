@@ -11,19 +11,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, message: 'Enter a valid 10-digit Indian mobile number.' }, { status: 400 });
     }
 
-    // Gate: phone must be registered in the allowlist
-    const admin = createAdminClient();
-    const { data: entry } = await admin
-      .from('student_allowlist')
-      .select('status')
-      .eq('phone', e164)
-      .maybeSingle();
+    // The registered admin phone always bypasses the allowlist gate.
+    const isAdminPhone = e164 === '+917015269714';
 
-    if (!entry || entry.status !== 'active') {
-      return NextResponse.json(
-        { sent: false, message: "This number isn't registered yet. Your founder will add you after onboarding." },
-        { status: 200 }
-      );
+    // Gate: phone must be registered in the allowlist (admin exempt)
+    const admin = createAdminClient();
+    if (!isAdminPhone) {
+      const { data: entry } = await admin
+        .from('student_allowlist')
+        .select('status')
+        .eq('phone', e164)
+        .maybeSingle();
+
+      if (!entry || entry.status !== 'active') {
+        return NextResponse.json(
+          { sent: false, message: "This number isn't registered yet. Your admin will add you after onboarding." },
+          { status: 200 }
+        );
+      }
     }
 
     // Rate limit: max 3 sends / 30 min, 30s cooldown
