@@ -19,7 +19,9 @@ export const metadata = {
 const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29, 2026
 
 export default async function DailyTrackerPage() {
+  const t0 = performance.now();
   const user = await getAuthUser();
+  const tAuth = performance.now();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
@@ -77,6 +79,14 @@ export default async function DailyTrackerPage() {
       .maybeSingle(),
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
   ]);
+
+  // TEMP perf instrumentation — real region + phase timings in Vercel logs.
+  console.log(JSON.stringify({
+    tag: 'perf:tracker',
+    region: process.env.VERCEL_REGION ?? 'local',
+    auth_ms: Math.round(tAuth - t0),
+    db1_ms: Math.round(performance.now() - tAuth),
+  }));
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
