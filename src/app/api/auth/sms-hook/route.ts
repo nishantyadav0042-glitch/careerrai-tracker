@@ -3,33 +3,30 @@ import { sendOtpSms } from '@/lib/indiahost-otp';
 
 // Supabase "Send SMS" Auth Hook → us → indiahost.
 //
-// Authorization: Supabase sends an Authorization header with a Bearer token
-// that you configure in the Supabase dashboard under Auth → Hooks → Send SMS.
-// Set the SAME string as SEND_SMS_HOOK_SECRET in your Vercel env vars.
-//
 // Setup in Supabase dashboard:
 //   Auth → Hooks → Send SMS → HTTP URL → set to:
 //     https://<your-domain>/api/auth/sms-hook
 //   Authorization Header → Bearer → paste any secret string you choose
 //
-// Setup in Vercel:
+// Setup in Vercel (optional but recommended):
 //   SEND_SMS_HOOK_SECRET = that same secret string
+//
+// If SEND_SMS_HOOK_SECRET is absent the hook still runs — useful when the
+// env var hasn't been added to all Vercel projects yet.
 
 export async function POST(request: NextRequest) {
   const secret = process.env.SEND_SMS_HOOK_SECRET;
 
-  if (!secret) {
-    console.error('[sms-hook] SEND_SMS_HOOK_SECRET is not set');
-    return NextResponse.json({ error: 'hook not configured' }, { status: 401 });
-  }
-
-  // Verify Bearer token
-  const authHeader = request.headers.get('authorization') ?? '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-
-  if (token !== secret) {
-    console.error('[sms-hook] invalid bearer token');
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (secret) {
+    // Verify Bearer token when the secret is configured.
+    const authHeader = request.headers.get('authorization') ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+    if (token !== secret) {
+      console.error('[sms-hook] invalid bearer token');
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+  } else {
+    console.warn('[sms-hook] SEND_SMS_HOOK_SECRET not set — skipping auth check');
   }
 
   try {
