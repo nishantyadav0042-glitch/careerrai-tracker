@@ -4,42 +4,47 @@ import { normalizeIndianPhone } from './phone';
 // Supabase generates and verifies the OTP via the Send SMS auth hook;
 // we just hand indiahost the code Supabase produced and ask it to deliver.
 //
-// Setup in Vercel env vars:
-//   INDIAHOST_OTP_KEY  — your OTP key from the indiahost panel
-//   INDIAHOST_SENDER   — sender ID (optional, defaults to OTPSMS)
+// Exact API format (from the indiahost panel → "How to setup"):
+//   https://otp.indiahost.org/send_otp.php?mobile=+91<10digits>&otp=<otp>&user=<account-email>&key=<key>
+// Note: there is NO sender param. The `user` is the indiahost account email.
 //
-// Setup in Supabase Dashboard:
-//   Authentication → Hooks → Send SMS → URL = https://<your-domain>/api/auth/sms-hook
-//   Set SEND_SMS_HOOK_SECRET to the hook secret shown in the dashboard.
+// Setup in Vercel env vars:
+//   INDIAHOST_OTP_KEY  — your OTP key from the indiahost panel (required)
+//   INDIAHOST_USER     — your indiahost account email (optional; defaults below)
 
-export async function sendOtpSms(e164Phone: string, otp: string): Promise<void> {
+const DEFAULT_INDIAHOST_USER = 'business@careerrai.com';
+
+export function buildIndiahostUrl(e164Phone: string, otp: string): string {
   const key = process.env.INDIAHOST_OTP_KEY;
-  const sender = process.env.INDIAHOST_SENDER ?? 'OTPSMS';
-  if (!key) {
-    throw new Error('INDIAHOST_OTP_KEY not set');
-  }
+  if (!key) throw new Error('INDIAHOST_OTP_KEY not set');
 
-  // Strip leading + so the mobile number is plain digits (e.g. 919876543210)
   const phone = normalizeIndianPhone(e164Phone);
   if (!phone) throw new Error(`Invalid phone number: ${e164Phone}`);
-  const mobile = phone.replace(/^\+/, '');
 
-  // indiahost.org OTP send API
-  const url = new URL('https://otp.indiahost.org/api/send');
-  url.searchParams.set('key', key);
-  url.searchParams.set('mobile', mobile);
+  const user = process.env.INDIAHOST_USER ?? DEFAULT_INDIAHOST_USER;
+
+  // mobile must be in +91XXXXXXXXXX form (URLSearchParams encodes the + as %2B,
+  // which indiahost decodes back to + server-side).
+  const url = new URL('https://otp.indiahost.org/send_otp.php');
+  url.searchParams.set('mobile', phone);
   url.searchParams.set('otp', otp);
-  url.searchParams.set('sender', sender);
+  url.searchParams.set('user', user);
+  url.searchParams.set('key', key);
+  return url.toString();
+}
 
-  const res = await fetch(url.toString(), { method: 'GET' });
+export async function sendOtpSms(e164Phone: string, otp: string): Promise<void> {
+  const res = await fetch(buildIndiahostUrl(e164Phone, otp), { method: 'GET' });
+
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`indiahost OTP send failed: ${res.status} ${body}`);
+    throw new Error(`indiahost OTP send failed: HTTP ${res.status} ${body.slice(0, 200)}`);
   }
 
   const text = await res.text().catch(() => '');
-  // indiahost returns error codes as plain text or JSON; treat non-success strings as errors
-  if (/error|fail|invalid/i.test(text) && !/success|sent|ok/i.test(text)) {
-    throw new Error(`indiahost OTP error: ${text}`);
+  // Only treat a response as failure when it clearly signals an error and shows
+  // no success marker — avoids false negatives breaking an otherwise-good send.
+  if (/\b(error|failed|invalid|not\s*found|unauthor)/i.test(text) && !/\b(success|sent|ok|true|delivered)\b/i.test(text)) {
+    throw new Error(`indiahost OTP error: ${text.slice(0, 200)}`);
   }
 }

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeIndianPhone } from '@/lib/phone';
+import { buildIndiahostUrl } from '@/lib/indiahost-otp';
 
 // TEMPORARY founder-only debug endpoint for diagnosing indiahost SMS delivery.
 // Gated by the OTP key itself (only the founder knows it). Returns the RAW
-// indiahost request + response so we can see exactly why a send is rejected.
+// indiahost request + response so we can see exactly what indiahost says.
 //
-// Usage: /api/auth/sms-debug?phone=9876543210&token=<INDIAHOST_OTP_KEY>&sender=OPTIONAL
+// Usage: /api/auth/sms-debug?phone=9876543210&token=<INDIAHOST_OTP_KEY>
 //
 // DELETE THIS ROUTE once OTP delivery is confirmed working.
 export async function GET(request: NextRequest) {
@@ -20,41 +21,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Unauthorized — token must equal INDIAHOST_OTP_KEY' }, { status: 401 });
   }
 
-  const rawPhone = params.get('phone') ?? '';
-  const e164 = normalizeIndianPhone(rawPhone);
+  const e164 = normalizeIndianPhone(params.get('phone') ?? '');
   if (!e164) {
     return NextResponse.json({ ok: false, error: 'Invalid phone — pass ?phone=<10 digit Indian mobile>' }, { status: 400 });
   }
-  const mobile = e164.replace(/^\+/, '');
-  const sender = params.get('sender') ?? process.env.INDIAHOST_SENDER ?? 'OTPSMS';
+
   const otp = '123456';
-
-  const url = new URL('https://otp.indiahost.org/api/send');
-  url.searchParams.set('key', key);
-  url.searchParams.set('mobile', mobile);
-  url.searchParams.set('otp', otp);
-  url.searchParams.set('sender', sender);
-
-  // Redacted URL for display (hide the key)
-  const redactedUrl = url.toString().replace(encodeURIComponent(key), '***').replace(key, '***');
+  let url: string;
+  try {
+    url = buildIndiahostUrl(e164, otp);
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+  const redactedUrl = url.replace(encodeURIComponent(key), '***').replace(key, '***');
 
   try {
-    const res = await fetch(url.toString(), { method: 'GET' });
+    const res = await fetch(url, { method: 'GET' });
     const body = await res.text().catch(() => '');
     return NextResponse.json({
       ok: res.ok,
       requestUrl: redactedUrl,
-      sender,
-      mobile,
       httpStatus: res.status,
-      responseBody: body,
+      responseBody: body.slice(0, 1000),
     });
   } catch (e) {
     return NextResponse.json({
       ok: false,
       requestUrl: redactedUrl,
-      sender,
-      mobile,
       fetchError: e instanceof Error ? e.message : String(e),
     }, { status: 502 });
   }
