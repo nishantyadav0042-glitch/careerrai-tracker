@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BuddyFeedbackCard } from '@/app/student/home/buddy-feedback-card';
 import { SessionRequestPanel } from './session-request-panel';
-import { Video, Calendar, PhoneCall, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Video, Calendar, PhoneCall, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
@@ -26,7 +26,7 @@ export default async function BuddyCommunicationPage() {
   // eslint-disable-next-line react-hooks/purity
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: lastFeedback }, { data: feedbackRows }] = await Promise.all([
+  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: feedbackRows }] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
@@ -60,16 +60,6 @@ export default async function BuddyCommunicationPage() {
           .order('created_at', { ascending: false })
           .limit(1)
       : Promise.resolve({ data: [] }),
-    // Last buddy feedback received — for SLA adherence indicator
-    buddyId
-      ? admin
-          .from('buddy_feedback')
-          .select('created_at')
-          .eq('student_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
     // Pre-fetch buddy feedback to avoid a second client-side loading phase
     buddyId
       ? admin
@@ -113,10 +103,7 @@ export default async function BuddyCommunicationPage() {
     }
   }
 
-  // SLA: was there a buddy feedback in the last 48h?
-  const lastFeedbackMs = lastFeedback?.created_at ? new Date(lastFeedback.created_at).getTime() : null;
-  const hoursSinceLastFeedback = lastFeedbackMs ? Math.floor((Date.now() - lastFeedbackMs) / 3_600_000) : null;
-  const slaBreached = hoursSinceLastFeedback !== null && hoursSinceLastFeedback > 48;
+  const nextSession = (upcoming ?? [])[0] ?? null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -135,28 +122,24 @@ export default async function BuddyCommunicationPage() {
           )}
         </div>
 
-        {/* Buddy SLA promise */}
+        {/* Weekly video sessions — the core value: learning to analyse your own mocks */}
         {buddyId && (
-          <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${slaBreached ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
-            {slaBreached ? (
-              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            )}
-            <div className="min-w-0">
-              <p className={`text-xs font-semibold ${slaBreached ? 'text-amber-800' : 'text-emerald-800'}`}>
-                {slaBreached
-                  ? `${buddyName} hasn't sent feedback in ${hoursSinceLastFeedback}h`
-                  : `${buddyName} responds within 24h`}
-              </p>
-              <p className={`text-[11px] mt-0.5 ${slaBreached ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {slaBreached
-                  ? 'Send a session request if you need help urgently.'
-                  : hoursSinceLastFeedback !== null
-                  ? `Last feedback ${hoursSinceLastFeedback}h ago`
-                  : 'Your mentor is committed to keeping you on track'}
-              </p>
+          <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white px-4 py-3.5 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Video className="w-4 h-4 text-indigo-600 shrink-0" />
+              <p className="text-sm font-bold text-indigo-900">Weekly 1-on-1 video sessions</p>
             </div>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Most aspirants take 30+ mocks but never learn to analyse one. Every week, {buddyName} breaks your mock down <span className="font-semibold text-stone-800">with you</span> — where you lost marks, why, and exactly what to fix next.
+            </p>
+            {nextSession && (
+              <p className="text-xs font-semibold text-indigo-700 pt-0.5">
+                Next session:{' '}
+                {new Date(nextSession.scheduled_at).toLocaleString('en-IN', {
+                  timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                })}
+              </p>
+            )}
           </div>
         )}
 
@@ -215,6 +198,11 @@ export default async function BuddyCommunicationPage() {
                             {isOrientation && (
                               <span className="shrink-0 text-[9px] font-bold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-full">
                                 FREE
+                              </span>
+                            )}
+                            {!isCompleted && !isOrientation && minsAway <= 7 * 1440 && (
+                              <span className="shrink-0 text-[9px] font-bold bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded-full">
+                                THIS WEEK
                               </span>
                             )}
                           </div>
