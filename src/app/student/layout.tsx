@@ -29,12 +29,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const admin = createAdminClient();
 
   if (roleCookie === 'student') {
-    // Role already verified at login — skip the role DB query, run parallel counts only.
+    // Role cookie present — still fetch role from DB in the same query to catch
+    // stale cookies (e.g. role changed in DB after last login).
     const [chatUnread, notifUnread, { data: profile }] = await Promise.all([
       getChatUnreadCount(user.id, 'student'),
       getNotifUnreadCount(user.id),
-      admin.from('profiles').select('is_demo, onboarding_completed').eq('id', user.id).single(),
+      admin.from('profiles').select('role, is_demo, onboarding_completed').eq('id', user.id).single(),
     ]);
+
+    if (profile?.role === 'admin') redirect('/admin');
+    if (profile?.role === 'buddy') redirect('/buddy/home');
 
     // New students must complete profile onboarding (name, college, course,
     // dream colleges, baseline). Demo accounts are read-only and skip it.
