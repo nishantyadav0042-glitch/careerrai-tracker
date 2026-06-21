@@ -91,6 +91,8 @@ export async function POST(request: NextRequest) {
     pending.forEach(({ name, value, options }) =>
       res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
     );
+    // Real student/buddy login — ensure no stale read-only demo flag remains.
+    res.cookies.set('cr_demo', '', { path: '/', maxAge: 0 });
     return res;
   } catch (e) {
     console.error('[verify-phone-otp] error', e);

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const isEmail = credential.includes('@');
   const { data: profile, error: profileError } = await admin
     .from('profiles')
-    .select('id, email, role')
+    .select('id, email, role, is_demo')
     .ilike(isEmail ? 'email' : 'username', credential)
     .maybeSingle();
 
@@ -78,6 +78,13 @@ export async function POST(request: NextRequest) {
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 30,
   });
+  // Read-only demo flag: set for demo accounts, clear otherwise (so a real
+  // login on a browser that previously ran the demo isn't left view-only).
+  if (profile.is_demo) {
+    response.cookies.set('cr_demo', '1', { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 60 * 60 * 24 });
+  } else {
+    response.cookies.set('cr_demo', '', { path: '/', maxAge: 0 });
+  }
 
   return response;
 }

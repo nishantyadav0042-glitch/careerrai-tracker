@@ -4,6 +4,23 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
+  // Read-only demo: block every mutating API call for a demo session in one
+  // place, so we don't have to guard each route individually. The cr_demo
+  // cookie is set at demo-login. Logout stays allowed so the visitor can leave.
+  if (
+    pathname.startsWith('/api/') &&
+    pathname !== '/api/auth/logout' &&
+    request.cookies.get('cr_demo')?.value === '1'
+  ) {
+    const method = request.method.toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      return NextResponse.json(
+        { error: "This is a view-only demo — changes aren't saved. Sign up to track for real." },
+        { status: 403 }
+      );
+    }
+  }
+
   // Supabase sends magic-link emails to its configured Site URL, which may be
   // the domain root rather than /auth/callback. Intercept the auth params here
   // and forward them so the callback route can complete the session exchange.
