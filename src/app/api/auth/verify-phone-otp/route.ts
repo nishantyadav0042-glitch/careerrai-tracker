@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existing } = await admin
       .from('profiles')
-      .select('id, password_set, role')
+      .select('id, password_set, role, full_name, email')
       .eq('id', data.user.id)
       .maybeSingle();
 
@@ -58,6 +58,13 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+
+    // The handle_new_user DB trigger auto-creates a bare profile (full_name
+    // 'New User', role 'student') the instant verifyOtp creates the auth user.
+    // So a first-time OTP signup arrives here with `existing` already set to
+    // that stub. Detect it so we still apply the real allowlist registration
+    // (name, email, role, buddy) instead of treating them as a returning user.
+    const isStub = !!existing && (!existing.full_name || existing.full_name === 'New User');
 
     // For returning users, trust the role already stored in their profile.
     // entry?.person_type is only reliable for first-time registrations — an
@@ -74,13 +81,13 @@ export async function POST(request: NextRequest) {
             ? 'buddy'
             : 'student'
     ) as 'student' | 'buddy' | 'admin';
-    const isNewUser = !existing;
     const normalDest =
       role === 'admin' ? '/admin' :
       role === 'buddy' ? '/buddy/students' :
-      isNewUser ? '/student/tracker' : '/student/tracker';
+      '/student/tracker';
 
-    if (isNewUser) {
+    if (!existing) {
+      // No profile at all (trigger disabled / edge case) — create from allowlist.
       await admin.from('profiles').insert({
         id: data.user.id,
         role,
@@ -91,7 +98,24 @@ export async function POST(request: NextRequest) {
         subscription_status: role === 'student' ? 'free_beta' : null,
         password_set: false,
       });
+    } else if (isStub) {
+      // Trigger-created stub: apply the real registration from the allowlist —
+      // name, email, role, and (for students) the assigned buddy. This is what
+      // keeps the admin Students tab consistent with People & Data.
+      await admin
+        .from('profiles')
+        .update({
+          role,
+          full_name: entry?.full_name ?? existing.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
+          email: entry?.email ?? existing.email ?? null,
+          phone: e164,
+          buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
+          ...(role === 'student' ? { subscription_status: 'free_beta' } : {}),
+        })
+        .eq('id', data.user.id);
     } else {
+      // Returning user with a real profile — only refresh phone and (if the
+      // admin reassigned them) their buddy. Never clobber their real name.
       await admin
         .from('profiles')
         .update({
