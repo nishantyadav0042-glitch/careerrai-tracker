@@ -8,6 +8,15 @@ import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 
+function DemoBanner() {
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800">
+      <span className="text-sm leading-none">👀</span>
+      <span><span className="font-semibold">Demo — view only.</span> This is a real student's data; changes aren&apos;t saved.</span>
+    </div>
+  );
+}
+
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
   if (!user) redirect('/login');
@@ -37,6 +46,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
               <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
             </div>
           </div>
+          {profile?.is_demo && <DemoBanner />}
           {children}
         </div>
         <StudentBottomNav chatUnread={chatUnread} />
@@ -67,6 +77,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
             <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
           </div>
         </div>
+        {profile?.is_demo && <DemoBanner />}
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />

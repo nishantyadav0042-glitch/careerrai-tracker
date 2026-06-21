@@ -1,26 +1,21 @@
 'use client';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Eye, EyeOff, Mail, Smartphone } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Mail, Smartphone, Sparkles, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { cn } from '@/lib/utils';
 
-const DEMO_PASSWORD = 'CareerRai2026!';
-const DEMO_ACCOUNTS = [
-  { label: 'Aarav — 79→94%ile in 30 days', username: 'aarav', password: DEMO_PASSWORD },
-  { label: 'Priya — first-timer, 62→74%ile', username: 'priya', password: DEMO_PASSWORD },
-  { label: 'Rohan — thriving at 97%ile', username: 'rohan', password: DEMO_PASSWORD },
-  { label: 'Meera — lapsed, needs attention', username: 'meera', password: DEMO_PASSWORD },
-  { label: 'Buddy — Nishant (IIM-A, Bain)', username: 'nishant', password: DEMO_PASSWORD },
-  { label: 'Admin', username: 'admin', password: DEMO_PASSWORD },
-];
-
-type LoginMode = 'password' | 'otp-email' | 'link-sent' | 'otp-phone' | 'otp-phone-verify';
+type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password' | 'otp-email' | 'link-sent';
 
 function LoginForm() {
   const params = useSearchParams();
-  const [mode, setMode] = useState<LoginMode>('password');
+  // OTP is the primary, default login.
+  const [mode, setMode] = useState<LoginMode>('otp-phone');
+
+  // Phone OTP state
+  const [phone, setPhone] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState('');
 
   // Password login state
   const [credential, setCredential] = useState('');
@@ -30,12 +25,9 @@ function LoginForm() {
   // Email OTP state
   const [otpEmail, setOtpEmail] = useState('');
 
-  // Phone OTP state
-  const [phone, setPhone] = useState('');
-  const [phoneOtp, setPhoneOtp] = useState('');
-
   // Shared loading/message state
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgIsError, setMsgIsError] = useState(false);
 
@@ -45,33 +37,21 @@ function LoginForm() {
   function setInfo(m: string) { setMsg(m); setMsgIsError(false); }
   function clearMsg() { setMsg(null); setMsgIsError(false); }
 
-  function fillDemo(acc: (typeof DEMO_ACCOUNTS)[0]) {
-    setCredential(acc.username);
-    setPassword(acc.password);
-    setMode('password');
-    clearMsg();
-  }
-
-  async function requestEmailOtp(e?: React.FormEvent) {
-    e?.preventDefault();
-    setLoading(true);
+  async function startDemo() {
+    setDemoLoading(true);
     clearMsg();
     try {
-      const res = await fetch('/api/auth/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: otpEmail }),
-      });
+      const res = await fetch('/api/auth/demo-login', { method: 'POST' });
       const data = await res.json();
-      if (data.sent) {
-        setMode('link-sent');
+      if (data.ok && data.dest) {
+        window.location.href = data.dest;
       } else {
-        setError(data.message ?? "Couldn't send the code. Try again.");
+        setError(data.error ?? 'Demo is temporarily unavailable.');
+        setDemoLoading(false);
       }
     } catch {
       setError('No connection. Try again.');
-    } finally {
-      setLoading(false);
+      setDemoLoading(false);
     }
   }
 
@@ -122,27 +102,31 @@ function LoginForm() {
     }
   }
 
+  async function requestEmailOtp(e?: React.FormEvent) {
+    e?.preventDefault();
+    setLoading(true);
+    clearMsg();
+    try {
+      const res = await fetch('/api/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: otpEmail }),
+      });
+      const data = await res.json();
+      if (data.sent) {
+        setMode('link-sent');
+      } else {
+        setError(data.message ?? "Couldn't send the link. Try again.");
+      }
+    } catch {
+      setError('No connection. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col">
-      {/* Gradient banner */}
-      <a
-        href="/cat-readiness"
-        className="flex items-center justify-between gap-3 w-full px-4 py-3.5 transition-all group shrink-0"
-        style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 60%, #f59e0b 100%)' }}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 text-base leading-none">🎯</span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-block bg-white/20 border border-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">FREE</span>
-              <p className="text-sm font-bold text-white">Claim your free IIM buddy session</p>
-            </div>
-            <p className="text-xs text-orange-100 mt-0.5">2 min · 10 quick taps · no signup needed</p>
-          </div>
-        </div>
-        <ArrowRight className="w-4 h-4 text-white shrink-0 group-hover:translate-x-1 transition-transform" />
-      </a>
-
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-20 -left-20 w-96 h-96 bg-orange-100 rounded-full opacity-40 blur-3xl" />
@@ -150,7 +134,7 @@ function LoginForm() {
         </div>
 
         <div className="relative w-full max-w-md">
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="flex justify-center mb-5">
               <Image
                 src="/careerrai-logo.png"
@@ -171,12 +155,137 @@ function LoginForm() {
             <p className="mt-3 text-sm text-stone-600">Daily prep tracking with your IIM buddy.</p>
           </div>
 
+          {/* ── Conversion CTA — sits directly above the login box ── */}
+          <a
+            href="/cat-readiness"
+            className="group relative block overflow-hidden rounded-2xl p-[1.5px] mb-4 shadow-lg shadow-orange-900/10"
+            style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 55%, #f59e0b 100%)' }}
+          >
+            <div className="flex items-center justify-between gap-3 rounded-[15px] bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3.5">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 text-lg leading-none">🎯</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-block bg-white/25 border border-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">Free</span>
+                    <p className="text-sm font-bold text-white">Claim your free IIM buddy session</p>
+                  </div>
+                  <p className="text-xs text-orange-50 mt-0.5">2 min · 10 quick taps · no signup needed</p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-white shrink-0 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </a>
+
           <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
-            {/* ── Password login ── */}
+            {/* ── Phone OTP — enter number (PRIMARY) ── */}
+            {mode === 'otp-phone' && (
+              <form onSubmit={requestPhoneOtp} className="space-y-4">
+                <div className="text-center mb-2">
+                  <p className="text-sm font-semibold text-stone-900">Login with mobile OTP</p>
+                  <p className="text-xs text-stone-500 mt-1">We'll send a 6-digit code to your number via SMS.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 text-sm font-medium text-stone-500 select-none">+91</span>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="9876543210"
+                      required
+                      maxLength={10}
+                      autoFocus
+                      className="w-full pl-12 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                    />
+                  </div>
+                </div>
+
+                {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-stone-600')}>{msg}</p>}
+
+                <button
+                  type="submit"
+                  disabled={loading || phone.replace(/\D/g, '').length < 10}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  {loading ? 'Sending…' : <>Send OTP <ArrowRight className="w-4 h-4" /></>}
+                </button>
+
+                <div className="flex items-center justify-center gap-4 pt-1 text-xs">
+                  <button type="button" onClick={() => { setMode('password'); clearMsg(); }} className="text-stone-500 hover:text-stone-800 font-medium">
+                    Login with password
+                  </button>
+                  <span className="text-stone-300">·</span>
+                  <button type="button" onClick={() => { setMode('otp-email'); clearMsg(); }} className="text-stone-500 hover:text-stone-800 font-medium">
+                    Email link
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── Phone OTP — enter code ── */}
+            {mode === 'otp-phone-verify' && (
+              <form onSubmit={verifyPhoneOtp} className="space-y-4">
+                <div className="text-center mb-2">
+                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Smartphone className="w-5 h-5 text-teal-600" />
+                  </div>
+                  <p className="text-sm font-semibold text-stone-900">Enter the OTP</p>
+                  <p className="text-xs text-stone-500 mt-1">Sent to +91 {phone.replace(/\D/g, '').slice(-10)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-800 mb-1.5">6-digit OTP</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={phoneOtp}
+                    onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    required
+                    maxLength={6}
+                    autoFocus
+                    className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                  />
+                </div>
+
+                {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-teal-600')}>{msg}</p>}
+
+                <button
+                  type="submit"
+                  disabled={loading || phoneOtp.length < 4}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  {loading ? 'Verifying…' : <>Verify & sign in <ArrowRight className="w-4 h-4" /></>}
+                </button>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <button type="button" onClick={() => { setMode('otp-phone'); clearMsg(); }} className="text-stone-500 hover:text-stone-700">
+                    ← Change number
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => requestPhoneOtp()}
+                    disabled={loading}
+                    className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                  >
+                    {loading ? 'Sending…' : 'Resend OTP'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── Password login (SECONDARY) ── */}
             {mode === 'password' && (
               <>
                 <form action="/api/auth/login" method="POST" className="space-y-4">
+                  <div className="text-center mb-2">
+                    <p className="text-sm font-semibold text-stone-900">Login with password</p>
+                    <p className="text-xs text-stone-500 mt-1">For buddies, admins & returning students.</p>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-stone-800 mb-1.5">Email or username</label>
                     <div className="relative">
@@ -217,131 +326,23 @@ function LoginForm() {
                   </div>
 
                   {hasError && (
-                    <p className="text-xs text-rose-600">Incorrect credentials. Try a demo account below, or use OTP login.</p>
+                    <p className="text-xs text-rose-600">Incorrect credentials. Try mobile OTP instead.</p>
                   )}
 
                   <button
                     type="submit"
-                    className={cn(
-                      'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all active:scale-[0.98]',
-                      'bg-stone-900 text-white hover:bg-stone-800'
-                    )}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98]"
                   >
                     Sign in <ArrowRight className="w-4 h-4" />
                   </button>
                 </form>
 
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setMode('otp-phone'); clearMsg(); }}
-                    className="flex items-center justify-center gap-1.5 text-xs py-2 px-3 border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 font-medium"
-                  >
-                    <Smartphone className="w-3.5 h-3.5" /> Mobile OTP
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setMode('otp-email'); clearMsg(); }}
-                    className="flex items-center justify-center gap-1.5 text-xs py-2 px-3 border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 font-medium"
-                  >
-                    <Mail className="w-3.5 h-3.5" /> Email link
+                <div className="text-center mt-4">
+                  <button type="button" onClick={() => { setMode('otp-phone'); clearMsg(); }} className="text-xs text-stone-500 hover:text-stone-800 font-medium">
+                    ← Back to mobile OTP
                   </button>
                 </div>
               </>
-            )}
-
-            {/* ── Phone OTP — enter number ── */}
-            {mode === 'otp-phone' && (
-              <form onSubmit={requestPhoneOtp} className="space-y-4">
-                <div className="text-center mb-2">
-                  <p className="text-sm font-semibold text-stone-900">Login with mobile OTP</p>
-                  <p className="text-xs text-stone-500 mt-1">We'll send a 6-digit code to your number via SMS.</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 text-sm font-medium text-stone-500 select-none">+91</span>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="9876543210"
-                      required
-                      maxLength={10}
-                      className="w-full pl-12 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                    />
-                  </div>
-                </div>
-
-                {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-stone-600')}>{msg}</p>}
-
-                <button
-                  type="submit"
-                  disabled={loading || phone.replace(/\D/g, '').length < 10}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98] disabled:opacity-50"
-                >
-                  {loading ? 'Sending…' : <>Send OTP <ArrowRight className="w-4 h-4" /></>}
-                </button>
-
-                <div className="text-center">
-                  <button type="button" onClick={() => { setMode('password'); clearMsg(); }} className="text-xs text-stone-500 hover:text-stone-700">
-                    ← Back to password login
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ── Phone OTP — enter code ── */}
-            {mode === 'otp-phone-verify' && (
-              <form onSubmit={verifyPhoneOtp} className="space-y-4">
-                <div className="text-center mb-2">
-                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Smartphone className="w-5 h-5 text-teal-600" />
-                  </div>
-                  <p className="text-sm font-semibold text-stone-900">Enter the OTP</p>
-                  <p className="text-xs text-stone-500 mt-1">Sent to +91 {phone.replace(/\D/g, '').slice(-10)}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-stone-800 mb-1.5">6-digit OTP</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={phoneOtp}
-                    onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="123456"
-                    required
-                    maxLength={6}
-                    className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                  />
-                </div>
-
-                {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-teal-600')}>{msg}</p>}
-
-                <button
-                  type="submit"
-                  disabled={loading || phoneOtp.length < 4}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm bg-stone-900 text-white hover:bg-stone-800 transition-all active:scale-[0.98] disabled:opacity-50"
-                >
-                  {loading ? 'Verifying…' : <>Verify & sign in <ArrowRight className="w-4 h-4" /></>}
-                </button>
-
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <button type="button" onClick={() => { setMode('otp-phone'); clearMsg(); }} className="text-stone-500 hover:text-stone-700">
-                    ← Change number
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => requestPhoneOtp()}
-                    disabled={loading}
-                    className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
-                  >
-                    {loading ? 'Sending…' : 'Resend OTP'}
-                  </button>
-                </div>
-              </form>
             )}
 
             {/* ── Email OTP — enter email ── */}
@@ -378,8 +379,8 @@ function LoginForm() {
                 </button>
 
                 <div className="text-center">
-                  <button type="button" onClick={() => { setMode('password'); clearMsg(); }} className="text-xs text-stone-500 hover:text-stone-700">
-                    ← Back to password login
+                  <button type="button" onClick={() => { setMode('otp-phone'); clearMsg(); }} className="text-xs text-stone-500 hover:text-stone-700">
+                    ← Back to mobile OTP
                   </button>
                 </div>
               </form>
@@ -417,29 +418,33 @@ function LoginForm() {
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Demo accounts — password mode only */}
-            {mode === 'password' && (
-              <div className="mt-5 pt-5 border-t border-stone-200">
-                <p className="text-xs text-stone-500 text-center mb-3">Try a demo account (click to fill)</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_ACCOUNTS.map((acc) => (
-                    <button
-                      key={acc.username}
-                      type="button"
-                      onClick={() => fillDemo(acc)}
-                      className="text-xs py-2 px-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl text-stone-700 font-medium transition-colors text-left"
-                    >
-                      {acc.label}
-                    </button>
-                  ))}
+          {/* ── Live student demo — premium, read-only ── */}
+          <button
+            type="button"
+            onClick={startDemo}
+            disabled={demoLoading}
+            className="group mt-4 w-full overflow-hidden rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-4 text-left shadow-sm transition-all hover:shadow-md hover:border-teal-300 active:scale-[0.99] disabled:opacity-60"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow">
+                {demoLoading ? <Sparkles className="w-5 h-5 animate-pulse" /> : <PlayCircle className="w-6 h-6" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-stone-900">
+                    {demoLoading ? 'Opening demo…' : 'See a live student demo'}
+                  </p>
+                  <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700">View only</span>
                 </div>
-                <p className="text-[10px] text-stone-400 text-center mt-2">
-                  All demo accounts use password: <span className="font-mono">{DEMO_PASSWORD}</span>
+                <p className="mt-0.5 text-xs text-stone-500">
+                  Step inside a real student's 30-day journey — no signup, nothing to break.
                 </p>
               </div>
-            )}
-          </div>
+              <ArrowRight className="w-4 h-4 shrink-0 text-teal-600 transition-transform group-hover:translate-x-1" />
+            </div>
+          </button>
 
           <div className="mt-4">
             <AddToHomeScreenBanner />

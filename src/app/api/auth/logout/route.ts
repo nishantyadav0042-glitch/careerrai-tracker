@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
   pending.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
   });
+  // Clear the read-only demo flag on the way out.
+  response.cookies.set('cr_demo', '', { path: '/', maxAge: 0 });
 
   return response;
 }
