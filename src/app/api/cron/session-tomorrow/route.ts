@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
+import { authorizedCron } from '@/lib/cron-auth';
 
 // Runs at 06:00 UTC (11:30 AM IST) — catches sessions scheduled for tomorrow IST.
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
 

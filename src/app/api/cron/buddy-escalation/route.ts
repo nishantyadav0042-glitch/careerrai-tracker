@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
+import { authorizedCron } from '@/lib/cron-auth';
 
 // Minimal 1-level escalation: student message OR mock debrief unanswered by buddy for 48h
 // → notify admin. Makes the "buddy responds within 24h" promise real.
 // Runs at 15:30 UTC (9 PM IST) daily.
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
   const since48h = new Date(Date.now() - 48 * 3_600_000).toISOString();

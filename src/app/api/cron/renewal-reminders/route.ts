@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { authorizedCron } from '@/lib/cron-auth';
 
 // Kind dunning: nudge active students before their term ends so the journey
 // never lapses by surprise. Reminds at 7, 3 and 1 days out. Runs daily.
@@ -7,10 +8,7 @@ const THRESHOLDS = [7, 3, 1];
 const MS_PER_DAY = 86_400_000;
 
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
   const now = Date.now();

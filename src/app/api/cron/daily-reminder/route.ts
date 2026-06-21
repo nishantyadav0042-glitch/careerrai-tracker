@@ -3,13 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendDailyReminder } from '@/lib/email';
 import { sendPushToUser } from '@/lib/push';
 import { pickNoLogVariant } from '@/lib/notification-engine';
+import { authorizedCron } from '@/lib/cron-auth';
 
 // Called by Vercel Cron at 14:30 UTC = 8:00 PM IST every day.
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
