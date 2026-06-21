@@ -2,26 +2,48 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2, Clock, Phone, GraduationCap, Briefcase, BookOpen, ChevronDown, ChevronUp, UserX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 
 interface StudentStat {
-  student: Profile;
+  student: Profile & {
+    phone?: string | null;
+    onboarding_completed?: boolean | null;
+    college?: string | null;
+    category?: string | null;
+    is_repeater?: boolean | null;
+    is_working_professional?: boolean | null;
+    work_ex_months?: number | null;
+    coaching_enrolled?: boolean | null;
+    created_at?: string | null;
+  };
   summary: { band: string; overallScore: number; daysSubmitted: number; avgStudy: number };
   buddy?: Profile;
   submittedToday: boolean;
   hasRedFlags: boolean;
 }
 
+interface PendingStudent {
+  id: string;
+  phone: string | null;
+  email: string | null;
+  full_name: string;
+  status: string;
+  assigned_buddy_id: string | null;
+}
+
 export function AdminStudentsList({
   students,
   buddies,
+  pendingStudents = [],
 }: {
   students: StudentStat[];
   buddies: Profile[];
+  pendingStudents?: PendingStudent[];
 }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   async function handleAssign(studentId: string, buddyId: string | null) {
     setLoadingId(studentId);
@@ -31,9 +53,7 @@ export function AdminStudentsList({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: studentId, buddy_id: buddyId }),
       });
-      if (response.ok) {
-        window.location.reload();
-      }
+      if (response.ok) window.location.reload();
     } finally {
       setLoadingId(null);
     }
@@ -41,13 +61,18 @@ export function AdminStudentsList({
 
   return (
     <div className="space-y-2">
+      {/* Active students with profiles */}
       {students.map(({ student, summary, buddy, submittedToday }) => {
         const bandColor = summary.band === 'On track' ? 'green' : summary.band === 'Needs nudging' ? 'amber' : 'red';
-        const initials = student.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+        const nameParts = (student.full_name || 'S').split(' ').filter(Boolean);
+        const initials = nameParts.map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'S';
         const isLoading = loadingId === student.id;
+        const isExpanded = expandedId === student.id;
+        const joinedAt = student.created_at ? new Date(student.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
         return (
           <Card key={student.id} className="p-4">
+            {/* Main row */}
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="w-10 h-10 bg-gradient-to-br from-stone-900 to-stone-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
@@ -58,44 +83,129 @@ export function AdminStudentsList({
                     <span className="font-semibold text-stone-900 text-sm">{student.full_name}</span>
                     <Badge color={bandColor}>{summary.overallScore}/100</Badge>
                     {submittedToday ? (
-                      <Badge color="green">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Today
-                      </Badge>
+                      <Badge color="green"><CheckCircle2 className="w-3 h-3" />Today</Badge>
                     ) : (
-                      <Badge color="amber">
-                        <Clock className="w-3 h-3" />
-                        Pending
-                      </Badge>
+                      <Badge color="amber"><Clock className="w-3 h-3" />Pending</Badge>
+                    )}
+                    {!student.onboarding_completed && (
+                      <Badge color="stone">Setup incomplete</Badge>
                     )}
                   </div>
                   <div className="text-xs text-stone-500 mt-0.5">
-                    {student.exam_target} · {buddy?.full_name.split(' ')[0] || 'No buddy'} · {summary.daysSubmitted}/7 days
+                    {student.exam_target ?? 'CAT'} · {buddy?.full_name?.split(' ')[0] ?? 'No buddy'} · {summary.daysSubmitted}/7 days
                   </div>
                 </div>
               </div>
 
-              {/* Buddy dropdown */}
-              <select
-                value={buddy?.id || ''}
-                onChange={(e) => handleAssign(student.id, e.target.value || null)}
-                disabled={isLoading}
-                className={cn(
-                  'px-3 py-1.5 bg-white border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-600',
-                  isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Buddy dropdown */}
+                <select
+                  value={buddy?.id || ''}
+                  onChange={(e) => handleAssign(student.id, e.target.value || null)}
+                  disabled={isLoading}
+                  className={cn(
+                    'px-3 py-1.5 bg-white border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-600',
+                    isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  )}
+                >
+                  <option value="">Unassigned</option>
+                  {buddies.map((b) => (
+                    <option key={b.id} value={b.id}>{b.full_name}</option>
+                  ))}
+                </select>
+
+                {/* Expand toggle */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : student.id)}
+                  className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400"
+                >
+                  {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Expanded profile details */}
+            {isExpanded && (
+              <div className="mt-3 pt-3 border-t border-stone-100 space-y-2 text-xs text-stone-600">
+                {student.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
+                    <span>{student.phone}</span>
+                  </div>
                 )}
-              >
-                <option value="">Unassigned</option>
-                {buddies.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.full_name}
-                  </option>
-                ))}
-              </select>
+                {student.email && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-400">@</span>
+                    <span>{student.email}</span>
+                  </div>
+                )}
+                {student.college && (
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
+                    <span>{student.college}</span>
+                  </div>
+                )}
+                {student.is_working_professional && (
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
+                    <span>Working professional{student.work_ex_months ? ` · ${Math.floor(student.work_ex_months / 12)}y ${student.work_ex_months % 12}m exp` : ''}</span>
+                  </div>
+                )}
+                {student.coaching_enrolled !== null && student.coaching_enrolled !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
+                    <span>{student.coaching_enrolled ? 'Enrolled in coaching' : 'Self-study'}</span>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                  {student.category && <span className="font-medium text-stone-700">{student.category}</span>}
+                  {student.is_repeater !== null && student.is_repeater !== undefined && (
+                    <span className={student.is_repeater ? 'text-amber-700 font-medium' : ''}>
+                      {student.is_repeater ? 'Repeater' : 'First attempt'}
+                    </span>
+                  )}
+                  {joinedAt && <span className="text-stone-400">Joined {joinedAt}</span>}
+                </div>
+              </div>
+            )}
+          </Card>
+        );
+      })}
+
+      {/* Pending students — in allowlist but never logged in */}
+      {pendingStudents.map((p) => {
+        const nameParts = (p.full_name || 'S').split(' ').filter(Boolean);
+        const initials = nameParts.map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'S';
+        const assignedBuddy = buddies.find(b => b.id === p.assigned_buddy_id);
+
+        return (
+          <Card key={p.id} className="p-4 border-dashed border-stone-300 bg-stone-50/60">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 bg-stone-200 rounded-full flex items-center justify-center text-stone-500 text-sm font-bold flex-shrink-0">
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-stone-700 text-sm">{p.full_name}</span>
+                    <Badge color="stone"><UserX className="w-3 h-3" />Never logged in</Badge>
+                  </div>
+                  <div className="text-xs text-stone-400 mt-0.5 flex items-center gap-3">
+                    {p.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{p.phone}</span>}
+                    {p.email && <span>{p.email}</span>}
+                    {assignedBuddy && <span>Buddy: {assignedBuddy.full_name.split(' ')[0]}</span>}
+                  </div>
+                </div>
+              </div>
+              <Badge color="stone">Invited</Badge>
             </div>
           </Card>
         );
       })}
+
+      {students.length === 0 && pendingStudents.length === 0 && (
+        <div className="text-center py-12 text-stone-400 text-sm">No students yet</div>
+      )}
     </div>
   );
 }
