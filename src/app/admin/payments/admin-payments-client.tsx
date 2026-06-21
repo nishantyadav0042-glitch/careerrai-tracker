@@ -27,6 +27,15 @@ export interface OutgoingRow {
   paymentRef: string | null;
 }
 
+export interface RefundRow {
+  studentId: string;
+  studentName: string;
+  requestedAt: string;
+  daysLogged: number;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNotes: string | null;
+}
+
 type IncomingFilter = 'all' | 'active' | 'expired' | 'free_beta' | 'refund_requested';
 
 const STATUS_BADGE: Record<IncomingRow['status'], { label: string; color: 'green' | 'amber' | 'stone' | 'orange' }> = {
@@ -41,33 +50,41 @@ const rupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
 export function AdminPaymentsClient({
   incoming,
   outgoing,
+  refunds,
   summary,
   period,
 }: {
   incoming: IncomingRow[];
   outgoing: OutgoingRow[];
+  refunds: RefundRow[];
   summary: { activeSubs: number; mrr: number; expiringThisWeek: number };
   period: string;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<'incoming' | 'outgoing'>('incoming');
+  const [tab, setTab] = useState<'incoming' | 'outgoing' | 'refunds'>('incoming');
   const [filter, setFilter] = useState<IncomingFilter>('all');
 
   const filtered = incoming.filter((r) => (filter === 'all' ? true : r.status === filter));
+  const pendingRefunds = refunds.filter((r) => r.status === 'pending').length;
 
   return (
     <div className="space-y-5">
       {/* Tab switch */}
       <div className="flex bg-stone-100 rounded-xl p-1">
-        {(['incoming', 'outgoing'] as const).map((t) => (
+        {(['incoming', 'outgoing', 'refunds'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all relative ${
               tab === t ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'
             }`}
           >
-            {t === 'incoming' ? 'Incoming (students)' : 'Outgoing (buddies)'}
+            {t === 'incoming' ? 'Students' : t === 'outgoing' ? 'Buddies' : 'Refunds'}
+            {t === 'refunds' && pendingRefunds > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {pendingRefunds}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -130,8 +147,10 @@ export function AdminPaymentsClient({
             </div>
           )}
         </>
-      ) : (
+      ) : tab === 'outgoing' ? (
         <OutgoingView rows={outgoing} period={period} onChange={() => router.refresh()} />
+      ) : (
+        <RefundsView rows={refunds} onChange={() => router.refresh()} />
       )}
     </div>
   );
@@ -246,6 +265,85 @@ function OutgoingRowCard({ row, onChange }: { row: OutgoingRow; onChange: () => 
           </>
         )}
       </div>
+    </Card>
+  );
+}
+
+function RefundsView({ rows, onChange }: { rows: RefundRow[]; onChange: () => void }) {
+  if (rows.length === 0) {
+    return <Card className="p-8 text-center text-sm text-stone-500">No refund requests yet.</Card>;
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-stone-500 px-1">Students who met the 20-day condition and requested a refund.</p>
+      {rows.map((r) => <RefundRowCard key={r.studentId} row={r} onChange={onChange} />)}
+    </div>
+  );
+}
+
+function RefundRowCard({ row, onChange }: { row: RefundRow; onChange: () => void }) {
+  const [notes, setNotes] = useState(row.adminNotes ?? '');
+  const [busy, setBusy] = useState(false);
+
+  async function resolve(action: 'approve' | 'reject') {
+    setBusy(true);
+    const res = await fetch('/api/admin/refunds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: row.studentId, action, notes }),
+    });
+    setBusy(false);
+    if (res.ok) onChange();
+    else alert('Could not update refund status.');
+  }
+
+  const statusColor = row.status === 'approved' ? 'green' : row.status === 'rejected' ? 'stone' : 'orange';
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+            {row.studentName}
+            <Badge color={statusColor}>
+              {row.status === 'approved' ? 'Approved' : row.status === 'rejected' ? 'Rejected' : 'Pending'}
+            </Badge>
+          </div>
+          <div className="text-xs text-stone-500 mt-0.5">
+            Requested {new Date(row.requestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            {' · '}<span className="font-semibold text-stone-700">{row.daysLogged} days logged</span>
+          </div>
+        </div>
+      </div>
+      {row.status === 'pending' && (
+        <>
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes (optional)"
+            className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => resolve('approve')}
+              disabled={busy}
+              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors"
+            >
+              Approve refund
+            </button>
+            <button
+              onClick={() => resolve('reject')}
+              disabled={busy}
+              className="flex-1 py-2 bg-stone-200 hover:bg-stone-300 disabled:opacity-50 text-stone-800 text-xs font-bold rounded-lg transition-colors"
+            >
+              Reject
+            </button>
+          </div>
+        </>
+      )}
+      {row.adminNotes && row.status !== 'pending' && (
+        <p className="text-xs text-stone-500 italic">{row.adminNotes}</p>
+      )}
     </Card>
   );
 }
