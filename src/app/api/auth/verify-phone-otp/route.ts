@@ -63,12 +63,16 @@ export async function POST(request: NextRequest) {
     // entry?.person_type is only reliable for first-time registrations — an
     // existing buddy whose phone isn't in the allowlist would otherwise be
     // downgraded to 'student' for the session.
+    // Belt-and-suspenders: the registered admin phone always gets admin role.
+    const isAdminPhone = e164 === '+917015269714';
     const role = (
-      existing?.role === 'buddy' || existing?.role === 'admin'
-        ? existing.role
-        : entry?.person_type === 'buddy'
-          ? 'buddy'
-          : 'student'
+      isAdminPhone
+        ? 'admin'
+        : existing?.role === 'buddy' || existing?.role === 'admin'
+          ? existing.role
+          : entry?.person_type === 'buddy'
+            ? 'buddy'
+            : 'student'
     ) as 'student' | 'buddy' | 'admin';
     const isNewUser = !existing;
     const normalDest =
