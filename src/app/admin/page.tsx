@@ -30,8 +30,8 @@ export default async function AdminPage() {
   const { data: adminProfile } = await admin.from('profiles').select('role, full_name').eq('id', user.id).single();
   if (adminProfile?.role !== 'admin') redirect('/login');
 
-  // Fetch all profiles
-  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, exam_target, buddy_id, cat_percentile, starting_percentile').order('role').order('full_name');
+  // Fetch all profiles — include full profile detail columns for admin view
+  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at').order('role').order('full_name');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profiles = (allProfiles ?? []) as any as Profile[];
 
@@ -43,6 +43,16 @@ export default async function AdminPage() {
 
   const students = profiles.filter(p => p.role === 'student');
   const buddies = profiles.filter(p => p.role === 'buddy');
+
+  // Allowlist students who have never logged in (no matching profile row).
+  // Match by phone — profile.phone stores +91XXXXXXXXXX, allowlist stores the same.
+  const profilePhones = new Set(profiles.map(p => (p as any).phone).filter(Boolean));
+  const pendingStudents = (allowlistRows ?? []).filter(r =>
+    (r.person_type === 'student' || !r.person_type) &&
+    r.phone &&
+    !profilePhones.has(r.phone) &&
+    r.status !== 'paused'
+  );
 
   // Fetch last 7 days reports for all students
   const today = getTodayIST();
@@ -216,7 +226,7 @@ export default async function AdminPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">All students</h2>
-        <AdminStudentsList students={studentStats} buddies={buddies} />
+        <AdminStudentsList students={studentStats} buddies={buddies} pendingStudents={pendingStudents} />
       </div>
 
       {/* Buddy SLA Rankings */}
@@ -331,7 +341,7 @@ export default async function AdminPage() {
 
   const adminTabs: AdminTab[] = [
     { id: 'overview', label: 'Overview', badge: redFlagCount, content: overviewSection },
-    { id: 'students', label: 'Students', badge: students.length, content: studentsSection },
+    { id: 'students', label: 'Students', badge: students.length + pendingStudents.length, content: studentsSection },
     { id: 'buddies', label: 'Buddies', badge: buddies.length, content: buddiesSection },
     { id: 'access', label: 'People & Data', content: accessSection },
     { id: 'broadcast', label: 'Broadcast', content: broadcastSection },
