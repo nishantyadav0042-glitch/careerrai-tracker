@@ -19,21 +19,21 @@ export const CAT_FACTS = [
 
 // Shown in FeedbackAnimation when the streak hits one of these exact values.
 export const MILESTONE_MESSAGES: Record<number, string> = {
-  7:  '7 din lagataar. Yeh wahi consistency hai jo tum dhoondh rahe the.',
-  15: '15 din. Tum prove kar rahe ho — dimaag tha hi, ab discipline bhi hai.',
-  30: 'Poora mahina. Yeh wo version hai jo CAT nikalta hai.',
+  7:  '7 days straight. This is the consistency you were looking for.',
+  15: '15 days in. You\'re proving it — the ability was always there, now the discipline is too.',
+  30: 'A full month. This is the version of you that cracks CAT.',
 };
 
 export function getComebackHeadline(prevStreak: number): string {
   if (prevStreak > 14) {
-    return 'Tu jaanta hai tu kar sakta hai. Bas consistency chahiyi thi — aaj se phir shuru.';
+    return 'You know you can do this. Consistency was the only missing piece — start again today.';
   }
-  return 'Gire the? Sab girte hain. Wapas aana hi farq hai.';
+  return 'Missed a few days? Everyone does. Coming back is what sets you apart.';
 }
 
 export function getComebackBody(prevStreak: number): string {
   if (prevStreak >= 7) {
-    return `${prevStreak}-din ki streak thi. Tumhe pata hai kaise karte hain. Aaj log karo — bas itna kaafi hai.`;
+    return `You had a ${prevStreak}-day streak — you know exactly how this works. Log today; that's all it takes to restart.`;
   }
-  return 'Har wapsi choti hoti hai. Aaj log karo, kal khud ki nazar mein upar jaoge.';
+  return 'Every comeback starts small. Log today, and tomorrow you\'ll be ahead of where you are now.';
 }

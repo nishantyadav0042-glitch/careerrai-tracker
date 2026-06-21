@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const time = new Date(session.scheduled_at).toLocaleTimeString('en-IN', {
       timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true,
     });
-    const title = `Kal ${time} pe session hai — ready rehna.`;
+    const title = `Session tomorrow at ${time} — be ready.`;
     const body = session.title ?? 'CareerRai buddy session';
 
     // Notify student
