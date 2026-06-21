@@ -141,10 +141,10 @@ function LoginForm() {
               />
             </div>
             <h1 className="text-3xl font-bold text-stone-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-              Track every day.<br />
-              <span className="italic text-orange-600">Outwork yesterday.</span>
+              Who&apos;s checking your<br />
+              <span className="italic text-orange-600">CAT prep?</span>
             </h1>
-            <p className="mt-3 text-sm text-stone-600">Daily prep tracking with your IIM buddy.</p>
+            <p className="mt-3 text-sm text-stone-600">Nobody? That&apos;s the problem. Get an IIM senior who does.</p>
           </div>
 
           {/* CTA banner */}
