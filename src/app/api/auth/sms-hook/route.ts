@@ -41,13 +41,16 @@ export async function POST(request: NextRequest) {
   const secret = process.env.SEND_SMS_HOOK_SECRET;
   const raw = await request.text();
 
-  if (secret) {
-    if (!verifySignature(raw, request.headers, secret)) {
-      return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
-    }
-  } else {
-    // Secret not configured — allow but warn. Set SEND_SMS_HOOK_SECRET in Vercel to lock this down.
-    console.warn('[sms-hook] SEND_SMS_HOOK_SECRET not set; skipping signature verification');
+  // Fail closed: if the secret is not configured, reject all calls rather than
+  // skipping verification. An open hook endpoint lets anyone drive OTP deliveries
+  // to arbitrary phones (SMS quota abuse + OTP injection risk).
+  if (!secret) {
+    console.error('[sms-hook] SEND_SMS_HOOK_SECRET is not set — rejecting request. Configure it in Vercel env.');
+    return NextResponse.json({ error: 'hook not configured' }, { status: 401 });
+  }
+
+  if (!verifySignature(raw, request.headers, secret)) {
+    return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
   }
 
   try {

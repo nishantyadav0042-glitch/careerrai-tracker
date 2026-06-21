@@ -59,9 +59,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const role = (entry?.person_type === 'buddy' ? 'buddy' : 'student') as 'student' | 'buddy';
+    // For returning users, trust the role already stored in their profile.
+    // entry?.person_type is only reliable for first-time registrations — an
+    // existing buddy whose phone isn't in the allowlist would otherwise be
+    // downgraded to 'student' for the session.
+    const role = (
+      existing?.role === 'buddy' || existing?.role === 'admin'
+        ? existing.role
+        : entry?.person_type === 'buddy'
+          ? 'buddy'
+          : 'student'
+    ) as 'student' | 'buddy' | 'admin';
     const isNewUser = !existing;
-    const normalDest = role === 'buddy' ? '/buddy/students' : (isNewUser ? '/student/home' : '/student/tracker');
+    const normalDest =
+      role === 'admin' ? '/admin' :
+      role === 'buddy' ? '/buddy/students' :
+      isNewUser ? '/student/tracker' : '/student/tracker';
 
     if (isNewUser) {
       await admin.from('profiles').insert({
@@ -91,7 +104,17 @@ export async function POST(request: NextRequest) {
     pending.forEach(({ name, value, options }) =>
       res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2])
     );
-    // Real student/buddy login — ensure no stale read-only demo flag remains.
+    // Set role cookie so the student/buddy layouts can use the fast-path (no
+    // extra DB round-trip on every page). Mirror what auth/callback sets.
+    if (role === 'student' || role === 'buddy' || role === 'admin') {
+      res.cookies.set('user_role', role, {
+        path: '/',
+        sameSite: 'lax',
+        httpOnly: true,
+        maxAge: 60 * 60 * 24,
+      });
+    }
+    // Real login — ensure no stale read-only demo flag remains.
     res.cookies.set('cr_demo', '', { path: '/', maxAge: 0 });
     return res;
   } catch (e) {

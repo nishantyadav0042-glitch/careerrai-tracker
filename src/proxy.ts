@@ -15,7 +15,7 @@ export async function proxy(request: NextRequest) {
     request.cookies.get('cr_demo')?.value === '1'
   ) {
     const method = request.method.toUpperCase();
-    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    if (method !== 'GET') {
       return NextResponse.json(
         { error: "This is a view-only demo — changes aren't saved. Sign up to track for real." },
         { status: 403 }
@@ -76,7 +76,12 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === '/login' && user) {
     const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = '/student/tracker';
+    // Route to the right home based on role cookie; layout will correct if stale.
+    const roleCookie = request.cookies.get('user_role')?.value;
+    homeUrl.pathname =
+      roleCookie === 'buddy' ? '/buddy/home' :
+      roleCookie === 'admin' ? '/admin' :
+      '/student/tracker';
     return NextResponse.redirect(homeUrl);
   }
 
