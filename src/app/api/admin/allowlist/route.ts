@@ -27,15 +27,21 @@ export async function POST(request: NextRequest) {
       assigned_buddy_id?: string | null;
     };
 
-    const email = rawEmail?.trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
+    // Phone is the primary login credential — required.
+    const phone = rawPhone ? (normalizeIndianPhone(rawPhone) ?? null) : null;
+    if (!phone) {
+      return NextResponse.json({ error: 'A valid 10-digit mobile number is required.' }, { status: 400 });
     }
     if (!full_name?.trim()) {
       return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
     }
 
-    const phone = rawPhone ? (normalizeIndianPhone(rawPhone) ?? null) : null;
+    // Email is optional — only needed for Google Calendar / Meet integration.
+    const email = rawEmail?.trim().toLowerCase() || null;
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'Invalid email address.' }, { status: 400 });
+    }
+
     const type = person_type === 'buddy' ? 'buddy' : 'student';
 
     const { error } = await admin.from('student_allowlist').insert({
@@ -50,15 +56,15 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       if (error.code === '23505') {
-        return NextResponse.json({ error: 'That email is already on the list.' }, { status: 409 });
+        return NextResponse.json({ error: 'That mobile number is already on the list.' }, { status: 409 });
       }
       console.error('[allowlist] insert', error);
       return NextResponse.json({ error: 'Could not add person.' }, { status: 500 });
     }
 
-    // For students with a buddy assignment, keep profile in sync if they've already logged in.
+    // Keep profile buddy assignment in sync if they've already logged in.
     if (type === 'student' && assigned_buddy_id) {
-      await admin.from('profiles').update({ buddy_id: assigned_buddy_id }).eq('email', email);
+      await admin.from('profiles').update({ buddy_id: assigned_buddy_id }).eq('phone', phone);
     }
 
     return NextResponse.json({ ok: true });
@@ -85,14 +91,14 @@ export async function PATCH(request: NextRequest) {
     const patch: Record<string, unknown> = {};
     if (status === 'active' || status === 'paused') patch.status = status;
     if (assigned_buddy_id !== undefined) patch.assigned_buddy_id = assigned_buddy_id || null;
-    if (rawEmail) patch.email = rawEmail.trim().toLowerCase();
+    if (rawEmail !== undefined) patch.email = rawEmail.trim().toLowerCase() || null;
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
 
     const { data: row, error } = await admin
       .from('student_allowlist')
       .update(patch)
       .eq('id', id)
-      .select('email, assigned_buddy_id, person_type')
+      .select('phone, assigned_buddy_id, person_type')
       .single();
 
     if (error) {
@@ -100,9 +106,9 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Could not update.' }, { status: 500 });
     }
 
-    // Keep profile buddy assignment in sync for students
-    if (assigned_buddy_id !== undefined && row?.email && row.person_type !== 'buddy') {
-      await admin.from('profiles').update({ buddy_id: assigned_buddy_id || null }).eq('email', row.email);
+    // Keep profile buddy assignment in sync for students (look up by phone now).
+    if (assigned_buddy_id !== undefined && row?.phone && row.person_type !== 'buddy') {
+      await admin.from('profiles').update({ buddy_id: assigned_buddy_id || null }).eq('phone', row.phone);
     }
 
     return NextResponse.json({ ok: true });
