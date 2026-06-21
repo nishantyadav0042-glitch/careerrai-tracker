@@ -1,36 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import { sendOtpSms } from '@/lib/indiahost-otp';
 
 // Supabase "Send SMS" Auth Hook → us → indiahost.
 //
-// Setup in Supabase dashboard:
-//   Auth → Hooks → Send SMS → HTTP URL → set to:
-//     https://<your-domain>/api/auth/sms-hook
-//   Authorization Header → Bearer → paste any secret string you choose
+// Supabase signs each request with the Standard Webhooks scheme
+// (webhook-id / webhook-timestamp / webhook-signature headers), using the
+// secret configured in the Supabase dashboard:
+//   Auth → Hooks → Send SMS hook → (HTTPS) → Secret = v1,whsec_...
 //
-// Setup in Vercel (optional but recommended):
-//   SEND_SMS_HOOK_SECRET = that same secret string
-//
-// If SEND_SMS_HOOK_SECRET is absent the hook still runs — useful when the
-// env var hasn't been added to all Vercel projects yet.
+// That SAME secret goes into SEND_SMS_HOOK_SECRET on Vercel so we can verify
+// the signature. If SEND_SMS_HOOK_SECRET is absent we skip verification and
+// still deliver — useful while the env var is being rolled out to a project.
+
+function verifyStandardWebhooksSignature(rawBody: string, headers: Headers, secret: string): boolean {
+  const id = headers.get('webhook-id');
+  const timestamp = headers.get('webhook-timestamp');
+  const signatureHeader = headers.get('webhook-signature');
+  if (!id || !timestamp || !signatureHeader) return false;
+
+  const base = secret.replace(/^v1,whsec_/, '').replace(/^whsec_/, '');
+  let secretBytes: Buffer;
+  try {
+    secretBytes = Buffer.from(base, 'base64');
+  } catch {
+    return false;
+  }
+  const expected = crypto
+    .createHmac('sha256', secretBytes)
+    .update(`${id}.${timestamp}.${rawBody}`)
+    .digest('base64');
+
+  // Header is a space-separated list of "v1,<sig>" entries.
+  return signatureHeader
+    .split(' ')
+    .map((part) => (part.includes(',') ? part.split(',')[1] : part))
+    .some((sig) => {
+      try {
+        return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+      } catch {
+        return false;
+      }
+    });
+}
 
 export async function POST(request: NextRequest) {
   const secret = process.env.SEND_SMS_HOOK_SECRET;
+  const raw = await request.text();
 
   if (secret) {
-    // Verify Bearer token when the secret is configured.
-    const authHeader = request.headers.get('authorization') ?? '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-    if (token !== secret) {
-      console.error('[sms-hook] invalid bearer token');
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    // Signature verification is configured — enforce it.
+    if (!verifyStandardWebhooksSignature(raw, request.headers, secret)) {
+      console.error('[sms-hook] signature verification failed');
+      return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
     }
   } else {
-    console.warn('[sms-hook] SEND_SMS_HOOK_SECRET not set — skipping auth check');
+    console.warn('[sms-hook] SEND_SMS_HOOK_SECRET not set — skipping signature check');
   }
 
   try {
-    const raw = await request.text();
     const payload = JSON.parse(raw) as { user?: { phone?: string }; sms?: { otp?: string } };
     const phone = payload.user?.phone;
     const otp = payload.sms?.otp;
