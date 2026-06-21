@@ -35,7 +35,8 @@ function LoginForm() {
 
   function selectRole(role: UserType) {
     setUserType(role);
-    setMode('otp-phone');
+    // Admin uses password-only login — skip OTP entirely.
+    setMode(role === 'admin' ? 'password' : 'otp-phone');
     setPhone(role === 'admin' ? ADMIN_PHONE : '');
     setPhoneOtp('');
     setCredential(role === 'admin' ? ADMIN_PHONE : '');
@@ -392,29 +393,50 @@ function LoginForm() {
                 )}
 
                 {/* Password login */}
-                {mode === 'password' && !isAdminLocked && (
+                {mode === 'password' && (
                   <>
                     <form action="/api/auth/login" method="POST" className="space-y-4">
                       <div>
-                        <p className="text-sm font-semibold text-stone-900 mb-0.5">Login with password</p>
-                        <p className="text-xs text-stone-500">Enter your mobile number and password.</p>
+                        <p className="text-sm font-semibold text-stone-900 mb-0.5">
+                          {isAdminLocked ? 'Admin login' : 'Login with password'}
+                        </p>
+                        <p className="text-xs text-stone-500">
+                          {isAdminLocked ? 'Enter your password to access the admin panel.' : 'Enter your mobile number and password.'}
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
                         <div className="relative flex items-center">
-                          <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                          <input
-                            type="tel"
-                            inputMode="numeric"
-                            name="credential"
-                            value={credential}
-                            onChange={(e) => setCredential(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            placeholder="9876543210"
-                            required
-                            autoComplete="tel"
-                            maxLength={10}
-                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                          />
+                          {isAdminLocked ? (
+                            <>
+                              <span className="absolute left-3 text-sm font-medium text-stone-400 select-none">+91</span>
+                              <input
+                                type="hidden"
+                                name="credential"
+                                value={ADMIN_PHONE}
+                              />
+                              <div className="w-full pl-12 pr-10 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-500 font-mono tracking-wider">
+                                {ADMIN_PHONE}
+                              </div>
+                              <Lock className="absolute right-3 w-4 h-4 text-stone-300" />
+                            </>
+                          ) : (
+                            <>
+                              <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                              <input
+                                type="tel"
+                                inputMode="numeric"
+                                name="credential"
+                                value={credential}
+                                onChange={(e) => setCredential(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                placeholder="9876543210"
+                                required
+                                autoComplete="tel"
+                                maxLength={10}
+                                className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                              />
+                            </>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -427,6 +449,7 @@ function LoginForm() {
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="••••••••"
                             required
+                            autoFocus={isAdminLocked}
                             autoComplete="current-password"
                             className="w-full px-3 py-2.5 pr-10 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
                           />
@@ -441,13 +464,14 @@ function LoginForm() {
                       </div>
 
                       {hasError && (
-                        <p className="text-xs text-rose-600">Incorrect credentials. Try mobile OTP instead.</p>
+                        <p className="text-xs text-rose-600">Incorrect password. Try again.</p>
                       )}
 
                       <button
                         type="submit"
                         className={cn(
                           'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98]',
+                          userType === 'admin' ? 'bg-orange-600 hover:bg-orange-700' :
                           userType === 'student' ? 'bg-stone-900 hover:bg-stone-800' : 'bg-teal-700 hover:bg-teal-800'
                         )}
                       >
@@ -455,15 +479,17 @@ function LoginForm() {
                       </button>
                     </form>
 
-                    <div className="text-center mt-4">
-                      <button
-                        type="button"
-                        onClick={() => { setMode('otp-phone'); clearMsg(); }}
-                        className="text-xs text-stone-500 hover:text-stone-800 font-medium"
-                      >
-                        ← Back to mobile OTP
-                      </button>
-                    </div>
+                    {!isAdminLocked && (
+                      <div className="text-center mt-4">
+                        <button
+                          type="button"
+                          onClick={() => { setMode('otp-phone'); clearMsg(); }}
+                          className="text-xs text-stone-500 hover:text-stone-800 font-medium"
+                        >
+                          ← Back to mobile OTP
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
