@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeSummary } from '@/lib/analytics';
 import { sendBuddyWeeklyDigest } from '@/lib/email';
+import { authorizedCron } from '@/lib/cron-auth';
 import type { DailyReport } from '@/types';
 
 // Called by Vercel Cron at 04:00 UTC = 9:30 AM IST every Monday
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
 

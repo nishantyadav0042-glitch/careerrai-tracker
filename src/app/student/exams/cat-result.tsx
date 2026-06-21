@@ -162,7 +162,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
             <div className="text-sm text-stone-900">
               <p className="font-semibold mb-2">💎 Why CareerRai is Different:</p>
               <ul className="space-y-1 text-xs text-stone-700">
-                <li>✓ <strong>Personalized Buddy</strong>: Not just a test - a real mentor analyzing YOUR data</li>
+                <li>✓ <strong>Personalized Buddy</strong>: Not just a test - a real buddy analyzing YOUR data</li>
                 <li>✓ <strong>Smart Feedback</strong>: AI-powered insights + human touch from your buddy</li>
                 <li>✓ <strong>Real Data</strong>: Percentiles based on actual CAT 2023-2025 results</li>
                 <li>✓ <strong>Growth Timeline</strong>: Know exactly when you&apos;ll hit your target score</li>

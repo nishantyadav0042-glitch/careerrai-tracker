@@ -110,7 +110,7 @@ export default async function BuddyCommunicationPage() {
       <div className="max-w-md mx-auto space-y-6 pb-24">
         {/* Header */}
         <div>
-          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your mentor</p>
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your buddy</p>
           <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>
             {buddy ? buddy.full_name : 'Buddy'}
           </h1>
@@ -147,7 +147,10 @@ export default async function BuddyCommunicationPage() {
           <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
             <p className="text-stone-600 font-medium">No buddy assigned yet</p>
             <p className="text-sm text-stone-400 mt-1">
-              We&apos;re matching you with a mentor — voice notes and sessions will appear here.
+              We&apos;re matching you with a buddy — voice notes and sessions will appear here.
+            </p>
+            <p className="text-sm font-medium text-orange-700 mt-3">
+              Please ask your admin to assign a buddy to you ASAP.
             </p>
           </div>
         ) : (

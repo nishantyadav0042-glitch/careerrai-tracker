@@ -7,7 +7,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // `cr_demo` cookie, which the proxy uses to block all write/mutation API calls.
 //
 // The demo password is kept server-side only (it is NOT printed anywhere public).
-const DEMO_PASSWORD = process.env.DEMO_ACCOUNT_PASSWORD ?? 'CareerRai2026!';
+// Set DEMO_ACCOUNT_PASSWORD in Vercel env — no hardcoded fallback.
+const DEMO_PASSWORD = process.env.DEMO_ACCOUNT_PASSWORD;
 const PREFERRED_DEMO_EMAIL = 'aarav@careerrai.com'; // Aarav: 79→94%ile recovery arc — the best story
 
 export async function POST(request: NextRequest) {
@@ -37,6 +38,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Demo is temporarily unavailable.' }, { status: 503 });
   }
 
+  if (!DEMO_PASSWORD) {
+    console.error('[demo-login] DEMO_ACCOUNT_PASSWORD env var is not set');
+    return NextResponse.json({ error: 'Demo is temporarily unavailable.' }, { status: 503 });
+  }
+
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.signInWithPassword({ email: demo.email, password: DEMO_PASSWORD });
+  const { error } = await supabase.auth.signInWithPassword({ email: demo.email, password: DEMO_PASSWORD! });
   if (error) {
     console.error('[demo-login] sign-in failed:', error.message);
     return NextResponse.json({ error: 'Demo is temporarily unavailable.' }, { status: 503 });

@@ -13,7 +13,14 @@ export default async function BuddyLayout({ children }: { children: React.ReactN
   // Fast path: role cookie set at login avoids a DB round-trip on every page.
   const cookieStore = await cookies();
   const roleCookie = cookieStore.get('user_role')?.value;
-  if (roleCookie === 'buddy') return <>{children}</>;
+  if (roleCookie === 'buddy') {
+    // Still verify from DB to catch stale cookies (role may have changed since last login).
+    const admin = createAdminClient();
+    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role === 'admin') redirect('/admin');
+    if (profile?.role === 'student') redirect('/student/tracker');
+    return <>{children}</>;
+  }
 
   // Slow path (first load or cookie missing): verify role from DB.
   const admin = createAdminClient();

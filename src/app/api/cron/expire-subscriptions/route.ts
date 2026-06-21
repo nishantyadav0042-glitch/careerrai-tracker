@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { authorizedCron } from '@/lib/cron-auth';
 
 // Memberships are one-time purchases, not auto-debit. When a term ends we flip
 // the student from 'active' to 'paused' (data fully preserved) so the membership
 // card re-shows the plan buttons and they can reactivate manually. Runs daily.
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();

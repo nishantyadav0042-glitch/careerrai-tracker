@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
+import { authorizedCron } from '@/lib/cron-auth';
 
 // Founder weekly check-in — personal, from Nishant, not from "the system".
 // Runs every Sunday at 08:00 UTC (1:30 PM IST).
 // At 20 users, sends to all. Scale: move to random 10% once >50 students.
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
 

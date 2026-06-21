@@ -21,9 +21,6 @@ export default async function BuddySetupPage() {
 
   if (profile?.role !== 'buddy') redirect('/login');
 
-  // Already complete — go straight to dashboard.
-  if (profile?.buddy_onboarding_completed) redirect('/buddy/home');
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white">
       <div className="max-w-md mx-auto px-4 py-8 pb-16">
