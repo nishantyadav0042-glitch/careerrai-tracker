@@ -10,8 +10,9 @@ import { BuddyStudentViewClient } from './buddy-student-view-client';
 import { VideoSessionPromptClient } from './video-session-prompt-client';
 import { OrientationCompleteButton } from './orientation-complete-button';
 import { BriefingPanel } from './briefing-panel';
+import { StudentDossier } from '@/components/student-dossier';
 import type { DailyReport, BuddyFeedback } from '@/types';
-import { ArrowLeft, AlertCircle, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowLeft, AlertCircle, TrendingDown, TrendingUp, UserCircle, ChevronDown } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 
 function PeriodTab({ href, label, active }: { href: string; label: string; active: boolean }) {
@@ -126,7 +127,7 @@ export default async function BuddyStudentDetailPage({
 
   const { data: student } = await admin
     .from('profiles')
-    .select('buddy_id, full_name, exam_target, email, cat_percentile')
+    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges')
     .eq('id', id)
     .single();
   if (!student || student.buddy_id !== user.id) notFound();
@@ -255,6 +256,23 @@ export default async function BuddyStudentDetailPage({
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">{student.exam_target ?? 'CAT'} · {student.email}</p>
       </div>
+
+      {/* Student profile dossier — everything they shared in onboarding, so the
+          buddy knows who they're coaching. Collapsed by default. */}
+      <Card className="p-0 overflow-hidden">
+        <details className="group">
+          <summary className="flex items-center justify-between gap-2 p-4 cursor-pointer list-none select-none">
+            <div className="flex items-center gap-2">
+              <UserCircle className="w-4 h-4 text-stone-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-700">Student profile</span>
+            </div>
+            <ChevronDown className="w-4 h-4 text-stone-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="px-4 pb-4 pt-1 border-t border-stone-100">
+            <StudentDossier data={student} />
+          </div>
+        </details>
+      </Card>
 
       {/* Period selector */}
       <div className="flex bg-stone-100 rounded-xl p-1 gap-1">
