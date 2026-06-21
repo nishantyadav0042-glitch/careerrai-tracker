@@ -11,6 +11,7 @@ import { Check, GraduationCap, Clock } from 'lucide-react';
 import type { NotifPrefs } from '@/types';
 import { DreamCollegesCard } from '@/components/dream-colleges-card';
 import { MembershipCard } from '@/components/membership-card';
+import { EditProfileTrigger } from './edit-profile-trigger';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { getActiveScholarship, scholarshipDisplay } from '@/lib/pricing';
 
@@ -70,7 +71,8 @@ export default async function StudentProfilePage() {
     if (active) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(active) };
   }
 
-  const initials = profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+  const displayName = profile.full_name ?? 'Student';
+  const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   const buddyInitials = buddy ? buddy.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '';
   const defaultPrefs: NotifPrefs = { daily_reminder: true, reminder_time: '20:00', email: true, push: false };
   const prefs: NotifPrefs = { ...defaultPrefs, ...(profile.notif_prefs ?? {}) };
@@ -88,9 +90,10 @@ export default async function StudentProfilePage() {
             {initials}
           </div>
           <div>
-            <div className="text-lg font-bold text-stone-900">{profile.full_name}</div>
-            <div className="text-sm text-stone-600">{profile.email}</div>
-            <div className="mt-1"><Badge color="stone">{profile.exam_target ?? 'Student'}</Badge></div>
+            <div className="text-lg font-bold text-stone-900">{displayName}</div>
+            {profile.email && <div className="text-sm text-stone-600">{profile.email}</div>}
+            <div className="mt-1"><Badge color="stone">{profile.exam_target ?? 'CAT Student'}</Badge></div>
+            <EditProfileTrigger />
           </div>
         </div>
       </Card>

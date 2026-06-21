@@ -47,8 +47,13 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
         .eq('id', user.id)
         .single();
       if (data) {
-        if (data.full_name) setFullName(data.full_name);
-        if (data.phone) setPhone(data.phone);
+        if (data.full_name && data.full_name !== 'Student' && data.full_name !== 'Buddy' && data.full_name !== 'New User') {
+          setFullName(data.full_name);
+        }
+        if (data.phone) {
+          // Strip +91 country code so the field shows just the 10-digit number
+          setPhone(data.phone.replace(/^\+91/, ''));
+        }
         if (data.college) setCollege(data.college);
       }
     })();

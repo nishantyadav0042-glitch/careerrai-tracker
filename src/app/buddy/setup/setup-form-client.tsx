@@ -58,7 +58,7 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
     cat_percentile: initialProfile.cat_percentile != null ? String(initialProfile.cat_percentile) : '',
     is_first_timer: true,
     cat_year: '',
-    iim_converted: initialProfile.college ? `IIM ${initialProfile.college}` : '',
+    iim_converted: initialProfile.college ?? '',
     current_company: '',
     biggest_mistake: '',
     younger_self_advice: '',

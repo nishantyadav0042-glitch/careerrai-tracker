@@ -33,7 +33,8 @@ export default async function BuddyProfilePage() {
       .limit(5),
   ]);
 
-  const initials = profile.full_name[0].toUpperCase();
+  const displayName = profile.full_name ?? 'Buddy';
+  const initials = displayName[0].toUpperCase();
   const defaultPrefs: NotifPrefs = { daily_reminder: true, reminder_time: '20:00', email: true, push: false };
   const prefs: NotifPrefs = { ...defaultPrefs, ...(profile.notif_prefs ?? {}) };
 
@@ -59,9 +60,15 @@ export default async function BuddyProfilePage() {
             {initials}
           </div>
           <div>
-            <div className="text-lg font-bold text-stone-900">{profile.full_name}</div>
-            <div className="text-sm text-stone-600">{profile.email}</div>
+            <div className="text-lg font-bold text-stone-900">{displayName}</div>
+            {profile.email && <div className="text-sm text-stone-600">{profile.email}</div>}
             <div className="mt-1"><Badge color="orange">Buddy</Badge></div>
+            <Link
+              href="/buddy/setup"
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-stone-900 transition-colors mt-1"
+            >
+              Edit setup
+            </Link>
           </div>
         </div>
       </Card>
