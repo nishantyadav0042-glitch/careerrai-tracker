@@ -30,8 +30,9 @@ export default async function AdminPage() {
   const { data: adminProfile } = await admin.from('profiles').select('role, full_name').eq('id', user.id).single();
   if (adminProfile?.role !== 'admin') redirect('/login');
 
-  // Fetch all profiles — include full profile detail columns for admin view
-  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at').order('role').order('full_name');
+  // Fetch all profiles — include full onboarding columns so admin can see the
+  // complete student dossier (everything they filled across the 9-step setup).
+  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges').order('role').order('full_name');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profiles = (allProfiles ?? []) as any as Profile[];
 
@@ -46,7 +47,7 @@ export default async function AdminPage() {
 
   // Allowlist students who have never logged in (no matching profile row).
   // Match by phone — profile.phone stores +91XXXXXXXXXX, allowlist stores the same.
-  const profilePhones = new Set(profiles.map(p => (p as any).phone).filter(Boolean));
+  const profilePhones = new Set(profiles.map(p => p.phone).filter(Boolean));
   const pendingStudents = (allowlistRows ?? []).filter(r =>
     (r.person_type === 'student' || !r.person_type) &&
     r.phone &&
