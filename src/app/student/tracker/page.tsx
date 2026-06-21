@@ -227,7 +227,7 @@ export default async function DailyTrackerPage() {
                 className="rounded-full shrink-0 object-cover"
               />
               <p className="text-sm text-teal-900 leading-relaxed">
-                <strong>Your buddy is being matched</strong> — a mentor who&apos;s walked your exact
+                <strong>Your buddy is being matched</strong> — someone who&apos;s walked your exact
                 journey. Meanwhile, log today: your first week of data is what makes their guidance sharp.
               </p>
             </div>

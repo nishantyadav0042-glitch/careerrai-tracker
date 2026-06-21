@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     const description = isOrientation ? [
       `Free Orientation Session — CareerRai`,
       ``,
-      `Mentor: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
+      `Buddy: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
       `Student: ${student.full_name}`,
       ``,
       `This is a FREE orientation session (not a guidance/strategy session).`,
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
     ].join('\n') : [
       `1:1 prep session on CareerRai`,
       ``,
-      `Mentor: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
+      `Buddy: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
       `Student: ${student.full_name}`,
       ``,
       `Agenda: progress check-in, doubts, and next steps for CAT prep.`,
