@@ -3,10 +3,28 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { IndianRupee, Users } from 'lucide-react';
+import { IndianRupee, Users, TrendingUp, Calendar } from 'lucide-react';
+
+function nowIST() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+}
 
 function currentPeriod() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(0, 7);
+  const d = nowIST();
+  return d.toLocaleDateString('en-CA').slice(0, 7); // YYYY-MM
+}
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function lastDayOfMonth(year: number, month: number) {
+  const d = new Date(year, month + 1, 0);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function fmt(n: number) {
+  return '₹' + Math.round(n).toLocaleString('en-IN');
 }
 
 export default async function BuddyEarningsPage() {
@@ -15,7 +33,6 @@ export default async function BuddyEarningsPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  // Buddy reads ONLY their own numbers, and only the amount the founder set.
   const { data: me } = await admin
     .from('profiles')
     .select('agreed_monthly_payout')
@@ -23,11 +40,13 @@ export default async function BuddyEarningsPage() {
     .single();
   const agreed = (me?.agreed_monthly_payout as number | null) ?? null;
 
-  const { count: activeStudents } = await admin
+  const { data: studentRows } = await admin
     .from('profiles')
-    .select('id', { count: 'exact', head: true })
+    .select('id, full_name')
     .eq('buddy_id', user.id)
     .eq('role', 'student');
+  const students = studentRows ?? [];
+  const activeCount = students.length;
 
   const period = currentPeriod();
   const { data: history } = await admin
@@ -39,8 +58,23 @@ export default async function BuddyEarningsPage() {
   const thisPeriod = rows.find((r) => r.period === period);
   const periodStatus: 'pending' | 'paid' = (thisPeriod?.status as 'pending' | 'paid') ?? 'pending';
 
+  // Accumulation math (IST)
+  const now = nowIST();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const dayOfMonth = now.getDate();
+  const totalDays = daysInMonth(year, month);
+  const payoutDate = lastDayOfMonth(year, month);
+
+  const perDay = agreed ? agreed / totalDays : 0;
+  const accrued = Math.round(perDay * dayOfMonth);
+  const day1Amt = Math.round(perDay * 1);
+  const week1Amt = Math.round(perDay * Math.min(7, totalDays));
+  const pctComplete = Math.round((dayOfMonth / totalDays) * 100);
+  const perStudentAccrued = activeCount > 0 ? Math.round(accrued / activeCount) : 0;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-24">
       <div className="px-1">
         <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Earnings</p>
         <h1 className="text-2xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
@@ -56,29 +90,106 @@ export default async function BuddyEarningsPage() {
         </Card>
       ) : (
         <>
-          <Card className="p-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-stone-500 font-medium uppercase tracking-wide">Monthly payout</div>
-                <div className="text-2xl font-bold text-stone-900 font-mono mt-1">₹{agreed.toLocaleString('en-IN')}</div>
-              </div>
-              <div>
-                <div className="text-xs text-stone-500 font-medium uppercase tracking-wide flex items-center gap-1">
-                  <Users className="w-3 h-3" /> Active students
-                </div>
-                <div className="text-2xl font-bold text-stone-900 font-mono mt-1">{activeStudents ?? 0}</div>
-              </div>
+          {/* Accumulating balance — front and center */}
+          <Card className="p-5 bg-gradient-to-br from-stone-900 to-stone-800 border-0">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-4 h-4 text-teal-400" />
+              <p className="text-xs font-semibold uppercase tracking-widest text-teal-400">Earned so far this month</p>
             </div>
-            <div className="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between">
-              <span className="text-sm text-stone-600">This period ({period})</span>
-              <Badge color={periodStatus === 'paid' ? 'green' : 'amber'}>{periodStatus === 'paid' ? 'Paid' : 'Pending'}</Badge>
+            <div className="text-4xl font-bold text-white font-mono mt-2 mb-1">{fmt(accrued)}</div>
+            <p className="text-xs text-stone-400">of {fmt(agreed)} monthly · Day {dayOfMonth} of {totalDays}</p>
+
+            {/* Progress bar */}
+            <div className="mt-4">
+              <div className="w-full bg-stone-700 rounded-full h-2">
+                <div
+                  className="h-2 rounded-full bg-gradient-to-r from-teal-500 to-teal-400 transition-all"
+                  style={{ width: `${pctComplete}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[11px] text-stone-400">{pctComplete}% of month complete</span>
+                <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold">
+                  <Calendar className="w-3 h-3" />
+                  Pays out {payoutDate}
+                </div>
+              </div>
             </div>
           </Card>
 
+          {/* The climb: Day 1 → Week 1 → Today */}
+          <Card className="p-5">
+            <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-4">How your balance has grown</div>
+            <div className="flex items-end justify-between gap-2">
+              {[
+                { label: 'Day 1', amount: day1Amt, height: Math.max(10, Math.round((day1Amt / agreed) * 100)) },
+                { label: 'Week 1', amount: week1Amt, height: Math.max(20, Math.round((week1Amt / agreed) * 100)) },
+                { label: 'Today', amount: accrued, height: Math.max(30, Math.round((accrued / agreed) * 100)), highlight: true },
+              ].map((bar) => (
+                <div key={bar.label} className="flex-1 flex flex-col items-center gap-2">
+                  <span className={`text-xs font-bold font-mono ${bar.highlight ? 'text-teal-700' : 'text-stone-500'}`}>
+                    {fmt(bar.amount)}
+                  </span>
+                  <div
+                    className={`w-full rounded-t-lg ${bar.highlight ? 'bg-gradient-to-t from-teal-600 to-teal-400' : 'bg-stone-200'}`}
+                    style={{ height: `${bar.height * 1.2}px`, minHeight: '12px' }}
+                  />
+                  <span className="text-[10px] text-stone-400 uppercase tracking-wide">{bar.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-stone-400 text-center mt-4">
+              Staying through the month unlocks your full {fmt(agreed)}.
+            </p>
+          </Card>
+
+          {/* Per-student accrual */}
+          {activeCount > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2 px-1 flex items-center gap-1.5">
+                <Users className="w-3 h-3" /> Per student this month
+              </div>
+              <div className="space-y-2">
+                {students.map((s) => (
+                  <Card key={s.id} className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-teal-600 to-teal-800 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {((s.full_name ?? '') || 'S').split(' ').map((n: string) => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?'}
+                      </div>
+                      <span className="text-sm font-medium text-stone-900">{s.full_name ?? 'Student'}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold font-mono text-teal-700">{fmt(perStudentAccrued)}</div>
+                      <div className="text-[10px] text-stone-400">accrued</div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Payout summary */}
+          <Card className="p-4 border-teal-200 bg-teal-50">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="w-4 h-4 text-teal-600" />
+              <span className="text-xs font-semibold text-teal-700 uppercase tracking-wide">This period ({period})</span>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <div>
+                <div className="text-sm font-semibold text-stone-900">Payout on {payoutDate}</div>
+                <div className="text-xs text-stone-500 mt-0.5">{fmt(agreed)} · {activeCount} student{activeCount !== 1 ? 's' : ''}</div>
+              </div>
+              <Badge color={periodStatus === 'paid' ? 'green' : 'amber'}>
+                {periodStatus === 'paid' ? 'Paid' : 'Pending'}
+              </Badge>
+            </div>
+          </Card>
+
+          {/* Payout history */}
           <div>
             <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2 px-1">Payout history</h2>
             {rows.length === 0 ? (
-              <Card className="p-6 text-center text-sm text-stone-500">No payouts recorded yet.</Card>
+              <Card className="p-6 text-center text-sm text-stone-500">No payouts recorded yet — your first is building now.</Card>
             ) : (
               <div className="space-y-2">
                 {rows.map((r) => (
@@ -93,7 +204,7 @@ export default async function BuddyEarningsPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-mono font-semibold text-stone-900">₹{r.agreed_amount.toLocaleString('en-IN')}</div>
+                      <div className="text-sm font-mono font-semibold text-stone-900">{fmt(r.agreed_amount)}</div>
                       <Badge color={r.status === 'paid' ? 'green' : 'amber'}>{r.status === 'paid' ? 'Paid' : 'Pending'}</Badge>
                     </div>
                   </Card>
@@ -103,7 +214,7 @@ export default async function BuddyEarningsPage() {
           </div>
 
           <p className="text-[11px] text-stone-400 text-center px-4">
-            Payouts are sent manually by the CareerRai team via UPI/bank transfer and recorded here.
+            Payouts are sent by the CareerRai team via UPI/bank transfer on the last day of each month.
           </p>
         </>
       )}

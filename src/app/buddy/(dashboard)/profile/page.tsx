@@ -33,8 +33,8 @@ export default async function BuddyProfilePage() {
       .limit(5),
   ]);
 
-  const displayName = profile.full_name ?? 'Buddy';
-  const initials = displayName[0].toUpperCase();
+  const displayName = profile.full_name || 'Buddy';
+  const initials = displayName.split(' ').map((n: string) => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?';
   const defaultPrefs: NotifPrefs = { daily_reminder: true, reminder_time: '20:00', email: true, push: false };
   const prefs: NotifPrefs = { ...defaultPrefs, ...(profile.notif_prefs ?? {}) };
 

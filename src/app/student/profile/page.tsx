@@ -73,7 +73,7 @@ export default async function StudentProfilePage() {
 
   const displayName = profile.full_name ?? 'Student';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
-  const buddyInitials = buddy ? buddy.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '';
+  const buddyInitials = buddy ? (buddy.full_name ?? '').split(' ').map((n: string) => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?' : '';
   const defaultPrefs: NotifPrefs = { daily_reminder: true, reminder_time: '20:00', email: true, push: false };
   const prefs: NotifPrefs = { ...defaultPrefs, ...(profile.notif_prefs ?? {}) };
 

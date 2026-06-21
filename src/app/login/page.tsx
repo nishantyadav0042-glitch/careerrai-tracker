@@ -167,6 +167,17 @@ function LoginForm() {
             </div>
           </a>
 
+          {/* ₹999 + refund trust badge */}
+          {userType === null && (
+            <div className="flex items-start gap-3 bg-stone-900 rounded-xl px-4 py-3 mb-4 shadow-lg">
+              <span className="text-lg shrink-0 mt-0.5">🛡️</span>
+              <div>
+                <p className="text-sm font-bold text-white">Starts at <span className="text-orange-400">₹999/month</span></p>
+                <p className="text-xs text-stone-300 mt-0.5 leading-relaxed">First month: full refund if you don&apos;t feel the value — just log in regularly for 20 days. If we don&apos;t help, you get your money back. No questions asked.</p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
             {/* ── STEP 1: Role picker ── */}
