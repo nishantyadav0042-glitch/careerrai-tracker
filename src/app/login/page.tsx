@@ -1,31 +1,27 @@
 'use client';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Eye, EyeOff, Smartphone, Sparkles, PlayCircle, Lock } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Smartphone, Sparkles, PlayCircle, Lock, ChevronLeft } from 'lucide-react';
 import Image from 'next/image';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { cn } from '@/lib/utils';
 
 type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password';
-type UserType = 'student' | 'buddy' | 'admin';
+type UserType = 'student' | 'buddy' | 'admin' | null;
 
 const ADMIN_PHONE = '7015269714';
 
 function LoginForm() {
   const params = useSearchParams();
-  const [userType, setUserType] = useState<UserType>('student');
+  const [userType, setUserType] = useState<UserType>(null);
   const [mode, setMode] = useState<LoginMode>('otp-phone');
 
-  // Phone OTP state
   const [phone, setPhone] = useState('');
   const [phoneOtp, setPhoneOtp] = useState('');
-
-  // Password login state
   const [credential, setCredential] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
 
-  // Shared loading/message state
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -37,12 +33,20 @@ function LoginForm() {
   function setInfo(m: string) { setMsg(m); setMsgIsError(false); }
   function clearMsg() { setMsg(null); setMsgIsError(false); }
 
-  function switchTab(tab: UserType) {
-    setUserType(tab);
+  function selectRole(role: UserType) {
+    setUserType(role);
     setMode('otp-phone');
-    setPhone(tab === 'admin' ? ADMIN_PHONE : '');
+    setPhone(role === 'admin' ? ADMIN_PHONE : '');
     setPhoneOtp('');
-    setCredential(tab === 'admin' ? ADMIN_PHONE : '');
+    setCredential(role === 'admin' ? ADMIN_PHONE : '');
+    clearMsg();
+  }
+
+  function goBack() {
+    setUserType(null);
+    setMode('otp-phone');
+    setPhone('');
+    setPhoneOtp('');
     clearMsg();
   }
 
@@ -114,26 +118,6 @@ function LoginForm() {
     }
   }
 
-  const tabLabels: Record<UserType, string> = {
-    student: 'Student',
-    buddy: 'Buddy',
-    admin: 'Admin',
-  };
-
-  const tabColors: Record<UserType, string> = {
-    student: 'bg-stone-900 text-white',
-    buddy: 'bg-teal-700 text-white',
-    admin: 'bg-orange-600 text-white',
-  };
-
-  const tabInactive = 'bg-stone-100 text-stone-500 hover:bg-stone-200';
-
-  const submitColor: Record<UserType, string> = {
-    student: 'bg-stone-900 hover:bg-stone-800',
-    buddy: 'bg-teal-700 hover:bg-teal-800',
-    admin: 'bg-orange-600 hover:bg-orange-700',
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col">
       <div className="flex-1 flex items-center justify-center p-6">
@@ -143,6 +127,7 @@ function LoginForm() {
         </div>
 
         <div className="relative w-full max-w-md">
+          {/* Logo + headline */}
           <div className="text-center mb-6">
             <div className="flex justify-center mb-5">
               <Image
@@ -154,17 +139,14 @@ function LoginForm() {
                 priority
               />
             </div>
-            <h1
-              className="text-3xl font-bold text-stone-900 tracking-tight"
-              style={{ fontFamily: 'Georgia, serif' }}
-            >
+            <h1 className="text-3xl font-bold text-stone-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
               Track every day.<br />
               <span className="italic text-orange-600">Outwork yesterday.</span>
             </h1>
             <p className="mt-3 text-sm text-stone-600">Daily prep tracking with your IIM buddy.</p>
           </div>
 
-          {/* ── Conversion CTA ── */}
+          {/* CTA banner */}
           <a
             href="/cat-readiness"
             className="group relative block overflow-hidden rounded-2xl p-[1.5px] mb-4 shadow-lg shadow-orange-900/10"
@@ -185,238 +167,311 @@ function LoginForm() {
             </div>
           </a>
 
-          <div className="bg-white border border-stone-200 rounded-2xl shadow-xl shadow-stone-900/5 overflow-hidden">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
-            {/* ── Role tabs ── */}
-            <div className="flex border-b border-stone-100">
-              {(['student', 'buddy', 'admin'] as UserType[]).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => switchTab(tab)}
-                  className={cn(
-                    'flex-1 py-3 text-sm font-semibold transition-colors',
-                    userType === tab ? tabColors[tab] : tabInactive
-                  )}
-                >
-                  {tab === 'admin' && userType === 'admin' ? (
-                    <span className="flex items-center justify-center gap-1">
-                      <Lock className="w-3 h-3" /> Admin
-                    </span>
-                  ) : tabLabels[tab]}
-                </button>
-              ))}
-            </div>
-
-            <div className="p-6">
-
-              {/* Admin notice */}
-              {userType === 'admin' && mode === 'otp-phone' && (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-800">
-                  <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>Admin access is restricted to an authorised number only.</span>
+            {/* ── STEP 1: Role picker ── */}
+            {userType === null && (
+              <div className="space-y-3">
+                <div className="text-center mb-4">
+                  <p className="text-base font-bold text-stone-900">Who are you?</p>
+                  <p className="text-xs text-stone-500 mt-1">Pick your role to continue</p>
                 </div>
-              )}
 
-              {/* ── Phone OTP — enter number (PRIMARY) ── */}
-              {mode === 'otp-phone' && (
-                <form onSubmit={requestPhoneOtp} className="space-y-4">
-                  <div className="text-center mb-2">
-                    <p className="text-sm font-semibold text-stone-900">Login with mobile OTP</p>
-                    <p className="text-xs text-stone-500 mt-1">
-                      {userType === 'admin'
-                        ? 'An OTP will be sent to the authorised admin number.'
-                        : "We'll send a 6-digit code to your number via SMS."}
-                    </p>
+                <button
+                  type="button"
+                  onClick={() => selectRole('student')}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-stone-200 hover:border-stone-900 hover:bg-stone-50 transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-stone-100 group-hover:bg-stone-900 flex items-center justify-center text-2xl transition-colors shrink-0">
+                    🎓
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-sm font-medium text-stone-500 select-none">+91</span>
-                      {isAdminLocked ? (
-                        <input
-                          type="tel"
-                          value={ADMIN_PHONE}
-                          readOnly
-                          className="w-full pl-12 pr-10 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-500 cursor-not-allowed font-mono tracking-wider"
-                        />
-                      ) : (
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          autoComplete="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                          placeholder="9876543210"
-                          required
-                          maxLength={10}
-                          autoFocus
-                          className="w-full pl-12 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                        />
-                      )}
-                      {isAdminLocked && (
-                        <Lock className="absolute right-3 w-4 h-4 text-stone-400" />
-                      )}
-                    </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-stone-900">Student</p>
+                    <p className="text-xs text-stone-500">I&apos;m preparing for CAT</p>
                   </div>
+                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-stone-900 ml-auto transition-colors" />
+                </button>
 
-                  {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-stone-600')}>{msg}</p>}
+                <button
+                  type="button"
+                  onClick={() => selectRole('buddy')}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-teal-100 hover:border-teal-600 hover:bg-teal-50 transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-teal-50 group-hover:bg-teal-600 flex items-center justify-center text-2xl transition-colors shrink-0">
+                    👤
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-stone-900">Buddy</p>
+                    <p className="text-xs text-stone-500">I&apos;m an IIM mentor</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-teal-600 ml-auto transition-colors" />
+                </button>
 
+                <button
+                  type="button"
+                  onClick={() => selectRole('admin')}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-orange-100 hover:border-orange-600 hover:bg-orange-50 transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-orange-50 group-hover:bg-orange-600 flex items-center justify-center transition-colors shrink-0">
+                    <Lock className="w-5 h-5 text-orange-500 group-hover:text-white transition-colors" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-stone-900">Admin</p>
+                    <p className="text-xs text-stone-500">Restricted access only</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-orange-600 ml-auto transition-colors" />
+                </button>
+              </div>
+            )}
+
+            {/* ── STEP 2: Login form ── */}
+            {userType !== null && (
+              <div>
+                {/* Role header */}
+                <div className="flex items-center gap-3 mb-5 pb-4 border-b border-stone-100">
                   <button
-                    type="submit"
-                    disabled={loading || (!isAdminLocked && activePhone.replace(/\D/g, '').length < 10)}
-                    className={cn(
-                      'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98] disabled:opacity-50',
-                      submitColor[userType]
-                    )}
+                    type="button"
+                    onClick={goBack}
+                    className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
                   >
-                    {loading ? 'Sending…' : <>Send OTP <ArrowRight className="w-4 h-4" /></>}
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
-
-                  {!isAdminLocked && (
-                    <div className="flex items-center justify-center pt-1 text-xs">
-                      <button type="button" onClick={() => { setMode('password'); clearMsg(); }} className="text-stone-500 hover:text-stone-800 font-medium">
-                        Login with password instead
-                      </button>
-                    </div>
-                  )}
-                </form>
-              )}
-
-              {/* ── Phone OTP — enter code ── */}
-              {mode === 'otp-phone-verify' && (
-                <form onSubmit={verifyPhoneOtp} className="space-y-4">
-                  <div className="text-center mb-2">
-                    <div className={cn(
-                      'w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3',
-                      userType === 'admin' ? 'bg-orange-50 border border-orange-200' : 'bg-teal-50 border border-teal-200'
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">
+                      {userType === 'student' ? '🎓' : userType === 'buddy' ? '👤' : '🔐'}
+                    </span>
+                    <span className={cn(
+                      'text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full',
+                      userType === 'student' ? 'bg-stone-100 text-stone-700' :
+                      userType === 'buddy' ? 'bg-teal-100 text-teal-700' :
+                      'bg-orange-100 text-orange-700'
                     )}>
-                      <Smartphone className={cn('w-5 h-5', userType === 'admin' ? 'text-orange-600' : 'text-teal-600')} />
-                    </div>
-                    <p className="text-sm font-semibold text-stone-900">Enter the OTP</p>
-                    <p className="text-xs text-stone-500 mt-1">Sent to +91 {activePhone.replace(/\D/g, '').slice(-10)}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-800 mb-1.5">6-digit OTP</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      value={phoneOtp}
-                      onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="123456"
-                      required
-                      maxLength={6}
-                      autoFocus
-                      className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                    />
-                  </div>
-
-                  {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-teal-600')}>{msg}</p>}
-
-                  <button
-                    type="submit"
-                    disabled={loading || phoneOtp.length < 4}
-                    className={cn(
-                      'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98] disabled:opacity-50',
-                      submitColor[userType]
+                      {userType}
+                    </span>
+                    {isAdminLocked && (
+                      <span className="text-xs text-stone-400">· Authorised number only</span>
                     )}
-                  >
-                    {loading ? 'Verifying…' : <>Verify & sign in <ArrowRight className="w-4 h-4" /></>}
-                  </button>
-
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <button type="button" onClick={() => { setMode('otp-phone'); clearMsg(); }} className="text-stone-500 hover:text-stone-700">
-                      ← Change number
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requestPhoneOtp()}
-                      disabled={loading}
-                      className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
-                    >
-                      {loading ? 'Sending…' : 'Resend OTP'}
-                    </button>
                   </div>
-                </form>
-              )}
+                </div>
 
-              {/* ── Password login (SECONDARY, not shown for admin) ── */}
-              {mode === 'password' && !isAdminLocked && (
-                <>
-                  <form action="/api/auth/login" method="POST" className="space-y-4">
-                    <div className="text-center mb-2">
-                      <p className="text-sm font-semibold text-stone-900">Login with password</p>
-                      <p className="text-xs text-stone-500 mt-1">Enter your mobile number and password.</p>
+                {/* OTP: enter phone */}
+                {mode === 'otp-phone' && (
+                  <form onSubmit={requestPhoneOtp} className="space-y-4">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-900 mb-0.5">Login with mobile OTP</p>
+                      <p className="text-xs text-stone-500">
+                        {isAdminLocked ? 'OTP will be sent to the authorised admin number.' : "We'll send a 6-digit code via SMS."}
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
                       <div className="relative flex items-center">
-                        <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          name="credential"
-                          value={credential}
-                          onChange={(e) => setCredential(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                          placeholder="9876543210"
-                          required
-                          autoComplete="tel"
-                          maxLength={10}
-                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-stone-800 mb-1.5">Password</label>
-                      <div className="relative">
-                        <input
-                          type={showPass ? 'text' : 'password'}
-                          name="password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
-                          required
-                          autoComplete="current-password"
-                          className="w-full px-3 py-2.5 pr-10 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPass((s) => !s)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
-                        >
-                          {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
+                        <span className="absolute left-3 text-sm font-medium text-stone-500 select-none">+91</span>
+                        {isAdminLocked ? (
+                          <input
+                            type="tel"
+                            value={ADMIN_PHONE}
+                            readOnly
+                            className="w-full pl-12 pr-10 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-500 cursor-not-allowed font-mono tracking-wider"
+                          />
+                        ) : (
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder="9876543210"
+                            required
+                            maxLength={10}
+                            autoFocus
+                            className="w-full pl-12 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                          />
+                        )}
+                        {isAdminLocked && <Lock className="absolute right-3 w-4 h-4 text-stone-400" />}
                       </div>
                     </div>
 
-                    {hasError && (
-                      <p className="text-xs text-rose-600">Incorrect credentials. Try mobile OTP instead.</p>
-                    )}
+                    {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-stone-600')}>{msg}</p>}
 
                     <button
                       type="submit"
+                      disabled={loading || (!isAdminLocked && activePhone.replace(/\D/g, '').length < 10)}
                       className={cn(
-                        'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98]',
-                        submitColor[userType]
+                        'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98] disabled:opacity-50',
+                        userType === 'student' ? 'bg-stone-900 hover:bg-stone-800' :
+                        userType === 'buddy' ? 'bg-teal-700 hover:bg-teal-800' :
+                        'bg-orange-600 hover:bg-orange-700'
                       )}
                     >
-                      Sign in <ArrowRight className="w-4 h-4" />
+                      {loading ? 'Sending…' : <>Send OTP <ArrowRight className="w-4 h-4" /></>}
                     </button>
+
+                    {!isAdminLocked && (
+                      <div className="text-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setMode('password'); clearMsg(); }}
+                          className="text-xs text-stone-500 hover:text-stone-800 font-medium"
+                        >
+                          Login with password instead
+                        </button>
+                      </div>
+                    )}
                   </form>
+                )}
 
-                  <div className="text-center mt-4">
-                    <button type="button" onClick={() => { setMode('otp-phone'); clearMsg(); }} className="text-xs text-stone-500 hover:text-stone-800 font-medium">
-                      ← Back to mobile OTP
+                {/* OTP: enter code */}
+                {mode === 'otp-phone-verify' && (
+                  <form onSubmit={verifyPhoneOtp} className="space-y-4">
+                    <div className="text-center mb-2">
+                      <div className={cn(
+                        'w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3',
+                        userType === 'admin' ? 'bg-orange-50 border border-orange-200' :
+                        userType === 'buddy' ? 'bg-teal-50 border border-teal-200' :
+                        'bg-stone-100 border border-stone-200'
+                      )}>
+                        <Smartphone className={cn(
+                          'w-5 h-5',
+                          userType === 'admin' ? 'text-orange-600' :
+                          userType === 'buddy' ? 'text-teal-600' : 'text-stone-700'
+                        )} />
+                      </div>
+                      <p className="text-sm font-semibold text-stone-900">Enter the OTP</p>
+                      <p className="text-xs text-stone-500 mt-1">Sent to +91 {activePhone.replace(/\D/g, '').slice(-10)}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-800 mb-1.5">6-digit OTP</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={phoneOtp}
+                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="123456"
+                        required
+                        maxLength={6}
+                        autoFocus
+                        className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                      />
+                    </div>
+
+                    {msg && <p className={cn('text-xs', msgIsError ? 'text-rose-600' : 'text-teal-600')}>{msg}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={loading || phoneOtp.length < 4}
+                      className={cn(
+                        'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98] disabled:opacity-50',
+                        userType === 'student' ? 'bg-stone-900 hover:bg-stone-800' :
+                        userType === 'buddy' ? 'bg-teal-700 hover:bg-teal-800' :
+                        'bg-orange-600 hover:bg-orange-700'
+                      )}
+                    >
+                      {loading ? 'Verifying…' : <>Verify & sign in <ArrowRight className="w-4 h-4" /></>}
                     </button>
-                  </div>
-                </>
-              )}
 
-            </div>
+                    <div className="flex items-center justify-between text-xs pt-1">
+                      <button
+                        type="button"
+                        onClick={() => { setMode('otp-phone'); clearMsg(); }}
+                        className="text-stone-500 hover:text-stone-700"
+                      >
+                        ← Change number
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => requestPhoneOtp()}
+                        disabled={loading}
+                        className="font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                      >
+                        {loading ? 'Sending…' : 'Resend OTP'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Password login */}
+                {mode === 'password' && !isAdminLocked && (
+                  <>
+                    <form action="/api/auth/login" method="POST" className="space-y-4">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-900 mb-0.5">Login with password</p>
+                        <p className="text-xs text-stone-500">Enter your mobile number and password.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
+                        <div className="relative flex items-center">
+                          <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            name="credential"
+                            value={credential}
+                            onChange={(e) => setCredential(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder="9876543210"
+                            required
+                            autoComplete="tel"
+                            maxLength={10}
+                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-stone-800 mb-1.5">Password</label>
+                        <div className="relative">
+                          <input
+                            type={showPass ? 'text' : 'password'}
+                            name="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            required
+                            autoComplete="current-password"
+                            className="w-full px-3 py-2.5 pr-10 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPass((s) => !s)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                          >
+                            {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {hasError && (
+                        <p className="text-xs text-rose-600">Incorrect credentials. Try mobile OTP instead.</p>
+                      )}
+
+                      <button
+                        type="submit"
+                        className={cn(
+                          'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all active:scale-[0.98]',
+                          userType === 'student' ? 'bg-stone-900 hover:bg-stone-800' : 'bg-teal-700 hover:bg-teal-800'
+                        )}
+                      >
+                        Sign in <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </form>
+
+                    <div className="text-center mt-4">
+                      <button
+                        type="button"
+                        onClick={() => { setMode('otp-phone'); clearMsg(); }}
+                        className="text-xs text-stone-500 hover:text-stone-800 font-medium"
+                      >
+                        ← Back to mobile OTP
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
           </div>
 
-          {/* ── Live student demo ── */}
+          {/* Live demo */}
           <button
             type="button"
             onClick={startDemo}
