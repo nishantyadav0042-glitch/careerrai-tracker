@@ -12,6 +12,7 @@ import type { NotifPrefs } from '@/types';
 import { DreamCollegesCard } from '@/components/dream-colleges-card';
 import { MembershipCard } from '@/components/membership-card';
 import { EditProfileTrigger } from './edit-profile-trigger';
+import { RefundCard } from './refund-card';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { getActiveScholarship, scholarshipDisplay } from '@/lib/pricing';
 
@@ -70,6 +71,24 @@ export default async function StudentProfilePage() {
     const active = await getActiveScholarship(user.id);
     if (active) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(active) };
   }
+
+  // Refund eligibility: count daily_reports in first 30 days
+  const REFUND_DAYS_REQUIRED = 20;
+  const joinedAt = new Date(profile.created_at);
+  const firstMonthEnd = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const isInFirstMonth = new Date() <= new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000);
+  const { count: firstMonthDays } = await admin
+    .from('daily_reports')
+    .select('id', { count: 'exact', head: true })
+    .eq('student_id', user.id)
+    .lte('report_date', firstMonthEnd);
+  const refundDaysLogged = firstMonthDays ?? 0;
+  const refundEligible = refundDaysLogged >= REFUND_DAYS_REQUIRED;
+  const { data: existingRefundReq } = await admin
+    .from('refund_requests')
+    .select('status, requested_at')
+    .eq('student_id', user.id)
+    .maybeSingle();
 
   const displayName = profile.full_name ?? 'Student';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -135,6 +154,16 @@ export default async function StudentProfilePage() {
           renewsAt={(profile.subscription_renews_at as string | null) ?? null}
           fullName={profile.full_name}
           scholarship={scholarship}
+        />
+      )}
+
+      {/* Refund guarantee */}
+      {(isInFirstMonth || existingRefundReq) && (
+        <RefundCard
+          daysLogged={refundDaysLogged}
+          required={REFUND_DAYS_REQUIRED}
+          eligible={refundEligible}
+          existingRequest={existingRefundReq ? { status: existingRefundReq.status as 'pending' | 'approved' | 'rejected', requestedAt: existingRefundReq.requested_at } : null}
         />
       )}
 

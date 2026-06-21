@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { ArrowLeft } from 'lucide-react';
-import { AdminPaymentsClient, type IncomingRow, type OutgoingRow } from './admin-payments-client';
+import { AdminPaymentsClient, type IncomingRow, type OutgoingRow, type RefundRow } from './admin-payments-client';
 
 function currentPeriod() {
   // 'YYYY-MM' in IST
@@ -87,6 +87,22 @@ export default async function AdminPaymentsPage() {
     };
   });
 
+  // Refund requests
+  const { data: refundRows } = await admin
+    .from('refund_requests')
+    .select('student_id, requested_at, days_logged, status, admin_notes')
+    .order('requested_at', { ascending: false });
+
+  const studentMap = new Map(all.map((p) => [p.id, p.full_name as string | null]));
+  const refunds: RefundRow[] = (refundRows ?? []).map((r) => ({
+    studentId: r.student_id,
+    studentName: studentMap.get(r.student_id) ?? 'Unknown',
+    requestedAt: r.requested_at,
+    daysLogged: r.days_logged,
+    status: r.status as RefundRow['status'],
+    adminNotes: r.admin_notes ?? null,
+  }));
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
@@ -105,6 +121,7 @@ export default async function AdminPaymentsPage() {
         <AdminPaymentsClient
           incoming={incoming}
           outgoing={outgoing}
+          refunds={refunds}
           summary={{ activeSubs, mrr: Math.round(mrr), expiringThisWeek }}
           period={period}
         />
