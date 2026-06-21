@@ -149,6 +149,9 @@ export default async function BuddyCommunicationPage() {
             <p className="text-sm text-stone-400 mt-1">
               We&apos;re matching you with a mentor — voice notes and sessions will appear here.
             </p>
+            <p className="text-sm font-medium text-orange-700 mt-3">
+              Please ask your admin to assign a buddy to you ASAP.
+            </p>
           </div>
         ) : (
           <>
