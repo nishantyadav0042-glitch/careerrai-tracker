@@ -4,12 +4,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Read-only demo: block every mutating API call for a demo session in one
-  // place, so we don't have to guard each route individually. The cr_demo
-  // cookie is set at demo-login. Logout stays allowed so the visitor can leave.
+  // Read-only demo: block every mutating *app data* API call for a demo session
+  // in one place, so we don't have to guard each route individually. The cr_demo
+  // cookie is set at demo-login. All of /api/auth/* is exempt — auth is how a
+  // visitor leaves the demo and logs in for real (and those routes clear the
+  // cr_demo cookie themselves), so blocking them would lock people out of login.
   if (
     pathname.startsWith('/api/') &&
-    pathname !== '/api/auth/logout' &&
+    !pathname.startsWith('/api/auth/') &&
     request.cookies.get('cr_demo')?.value === '1'
   ) {
     const method = request.method.toUpperCase();
