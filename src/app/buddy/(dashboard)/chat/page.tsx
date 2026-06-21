@@ -98,7 +98,7 @@ export default async function BuddyChatInboxPage() {
         </Card>
       ) : (
         rows.map((r) => {
-          const initials = r.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+          const initials = (r.full_name ?? '').split(' ').map((n) => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?';
           return (
             <Link key={r.id} href={`/buddy/chat/${r.id}`}>
               <Card className="p-4 cursor-pointer hover:border-stone-400 transition-all">

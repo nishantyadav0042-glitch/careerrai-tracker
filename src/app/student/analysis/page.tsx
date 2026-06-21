@@ -44,7 +44,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { setLoading(false); return; }
 
       const { data: d } = await supabase
         .from('mock_debriefs')

@@ -216,7 +216,7 @@ export default async function BuddyStudentDetailPage({
 
   const summary = computeSummary(reports, period);
   const needsAttentionFlags = computeNeedsAttentionFlags(reports, debriefs);
-  const firstName = student.full_name.split(' ')[0];
+  const firstName = student.full_name?.split(' ')[0] ?? 'Student';
   const baseUrl = `/buddy/students/${id}`;
 
   const latestDebrief = debriefs[0] ?? null;
@@ -394,12 +394,6 @@ export default async function BuddyStudentDetailPage({
             <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-600">
               Sessions with {firstName}
             </h3>
-            <a
-              href={`/buddy/students/${id}/session-history`}
-              className="text-[11px] text-stone-400 hover:text-stone-600 transition-colors"
-            >
-              Full history →
-            </a>
           </div>
 
           {/* Upcoming */}
