@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { sendOtpSms } from '@/lib/msg91';
+import { sendOtpSms } from '@/lib/indiahost-otp';
 
 // Supabase "Send SMS" Auth Hook → us → MSG91.
 // Supabase signs the payload (Standard Webhooks). We verify before delivering so
