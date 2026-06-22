@@ -59,7 +59,7 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
     })();
   }, []);
 
-  const isValid = fullName.trim() !== '';
+  const isValid = fullName.trim() !== '' && college.trim() !== '';
 
   const handleNext = () => {
     if (!isValid) return;
@@ -110,7 +110,7 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
         </div>
 
         <div>
-          <label className={labelClass}>College / University</label>
+          <label className={labelClass}>College / University <span className="text-orange-500">*</span></label>
           <input
             type="text"
             placeholder="e.g. Delhi College of Engineering"

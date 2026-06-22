@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock, Phone, ChevronDown, ChevronUp, UserX } from 'lucide-react';
+import { CheckCircle2, Clock, Phone, ChevronDown, ChevronUp, UserX, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 import { StudentDossier, type StudentDossierData } from '@/components/student-dossier';
@@ -59,6 +59,8 @@ export function AdminStudentsList({
         const initials = nameParts.map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'S';
         const isLoading = loadingId === student.id;
         const isExpanded = expandedId === student.id;
+        const isSparse = student.onboarding_completed &&
+          (!student.college || !student.exam_target || !(student.dream_colleges?.length) || !student.starting_percentile);
 
         return (
           <Card key={student.id} className="p-4">
@@ -79,6 +81,9 @@ export function AdminStudentsList({
                     )}
                     {!student.onboarding_completed && (
                       <Badge color="stone">Setup incomplete</Badge>
+                    )}
+                    {isSparse && (
+                      <Badge color="amber"><AlertCircle className="w-3 h-3" />Profile sparse</Badge>
                     )}
                   </div>
                   <div className="text-xs text-stone-500 mt-0.5">
