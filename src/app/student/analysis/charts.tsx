@@ -41,7 +41,7 @@ export function PercentileChart({ data }: { data: PercentilePoint[] }) {
       <LineChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#78716c' }} />
-        <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#78716c' }} />
+        <YAxis domain={([dataMin]: [number]) => [Math.max(55, Math.floor((dataMin - 5) / 5) * 5), 100]} tick={{ fontSize: 10, fill: '#78716c' }} />
         <Tooltip
           contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8, color: 'white', fontSize: 12 }}
           formatter={(value, name) => [`${value}%ile`, name]}

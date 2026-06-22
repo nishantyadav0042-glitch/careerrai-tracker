@@ -145,6 +145,11 @@ export default async function DailyTrackerPage() {
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
   const daysToCat = Math.max(0, Math.ceil((CAT_EXAM_DATE.getTime() - now.getTime()) / 86_400_000));
+  // Count remaining Sundays (mock-test days) to CAT
+  let weekendsToCat = 0;
+  const d = new Date(now);
+  d.setDate(d.getDate() + (7 - d.getDay()) % 7 || 7); // next Sunday
+  while (d <= CAT_EXAM_DATE) { weekendsToCat++; d.setDate(d.getDate() + 7); }
 
   const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   const h = parseInt(hour);
@@ -163,10 +168,12 @@ export default async function DailyTrackerPage() {
   const daysStudied = logs?.filter((l) => (l.study_duration as number) > 0).length ?? 0;
   const totalMocks = mockCount ?? 0;
 
+  void daysToCat; // computed but only used as a stepping stone for weekendsToCat
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto space-y-5">
-        {/* Header: greeting + CRS pill + days-to-CAT chip */}
+        {/* Header: greeting + CRS pill + weekends-to-CAT chip */}
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
             {greeting}, {firstName}
@@ -178,11 +185,9 @@ export default async function DailyTrackerPage() {
                 CRS {profile.cat_percentile}
               </span>
             )}
-            {!dreamCollege && (
-              <span className="text-[11px] font-semibold bg-orange-100 text-orange-700 rounded-full px-2.5 py-1">
-                {daysToCat}d to CAT
-              </span>
-            )}
+            <span className="text-[11px] font-semibold bg-stone-900 text-white rounded-full px-2.5 py-1 text-center leading-tight">
+              {weekendsToCat} weekends{dreamCollege ? ` · ${dreamCollege.replace(/IIM /,'IIM-').split(' ')[0]}` : ' to CAT'}
+            </span>
           </div>
         </div>
 
