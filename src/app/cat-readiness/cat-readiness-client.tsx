@@ -4,32 +4,72 @@ import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Lock, ArrowRight, MessageCircle } from 'lucide-react';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────
 
 type InsightTag = 'strength' | 'gap' | 'risk';
 interface InsightData { tag: InsightTag; title: string; body: string; }
 interface Question { id: string; text: string; options: string[]; }
 
-// ─── 10 Questions — honest ~2 min ──────────────────────────────────────────────
+// ─── 20 Questions — ~3 min ────────────────────────────────────
 
 const QS: Question[] = [
-  { id:'q1',  text:'Which attempt is this for you?',                                    options:['1st attempt','2nd attempt','3rd attempt','4th+ attempt'] },
-  { id:'q2',  text:"What's your target CAT percentile?",                                options:['Below 90','90–95','95–99','99+'] },
-  { id:'q3',  text:'How long have you been actively preparing?',                        options:['Just started','1–3 months','3–6 months','6+ months'] },
-  { id:'q4',  text:'In the past 2 weeks, how many days did you actually study?',        options:['0–3 days','4–7 days','8–11 days','12–14 days'] },
-  { id:'q5',  text:'Do you follow a written weekly study plan?',                        options:['Yes, and I stick to it','Yes, loosely','Only in my head','No plan at all'] },
-  { id:'q6',  text:"What's your biggest reason for skipping study days?",               options:['Fatigue / burnout','Distractions','No clear plan','Low motivation','Job / college load','I rarely skip'] },
-  { id:'q7',  text:'How many full-length mock tests have you taken so far?',            options:['None yet','1–5','6–15','15+'] },
-  { id:'q8',  text:'After each mock, do you do a detailed error analysis?',             options:['Always — every question','Sometimes','Rarely','Never done this'] },
-  { id:'q9',  text:"Which section costs you the most marks?",                           options:['VARC','DILR','QA','Time management',"I don't know yet"] },
-  { id:'q10', text:'Do you have anyone actively tracking your preparation?',            options:['Yes — a mentor or buddy','A friend / peer group','Family only','Completely solo'] },
+  // Section 1 — Background & Goal
+  { id:'q1',  text:'Which attempt is this for you?',
+    options:['1st attempt','2nd attempt','3rd attempt','4th+ attempt'] },
+  { id:'q2',  text:"What's your target CAT percentile?",
+    options:['Below 90','90–95','95–99','99+'] },
+  { id:'q3',  text:'How long have you been actively preparing?',
+    options:['Just started','1–3 months','3–6 months','6+ months'] },
+
+  // Section 2 — Study Habits & Consistency
+  { id:'q4',  text:'On a typical study day, how many hours do you actually study?',
+    options:['Less than 1 hour','1–2 hours','2–4 hours','4+ hours'] },
+  { id:'q5',  text:'In the past 2 weeks, how many days did you actually study?',
+    options:['0–3 days','4–7 days','8–11 days','12–14 days'] },
+  { id:'q6',  text:"What's your biggest reason for skipping study days?",
+    options:['Fatigue / burnout','Distractions','No clear plan','Low motivation','Job / college load','I rarely skip'] },
+  { id:'q7',  text:'Do you follow a written weekly study plan?',
+    options:['Yes, and I stick to it','Yes, loosely','Only in my head','No plan at all'] },
+
+  // Section 3 — Subject-wise Readiness
+  { id:'q8',  text:'How would you rate your VARC confidence right now?',
+    options:['1 – Very weak','2 – Needs work','3 – Average','4 – Strong','5 – Very strong'] },
+  { id:'q9',  text:'How would you rate your DILR confidence right now?',
+    options:['1 – Very weak','2 – Needs work','3 – Average','4 – Strong','5 – Very strong'] },
+  { id:'q10', text:'How would you rate your QA confidence right now?',
+    options:['1 – Very weak','2 – Needs work','3 – Average','4 – Strong','5 – Very strong'] },
+
+  // Section 4 — Mock Tests & Error Analysis
+  { id:'q11', text:'How many full-length mock tests have you taken so far?',
+    options:['None yet','1–5','6–15','15+'] },
+  { id:'q12', text:"What's your best mock percentile so far?",
+    options:["Haven't taken any mocks",'Below 70','70–90','90–95','95+'] },
+  { id:'q13', text:'After each mock, do you do a detailed error analysis?',
+    options:['Always — every question','Sometimes','Rarely','Never done this'] },
+  { id:'q14', text:'Which area costs you the most marks in mocks?',
+    options:['VARC','DILR','QA','Time management',"I don't know yet"] },
+
+  // Section 5 — Accountability & Support
+  { id:'q15', text:'Do you have anyone actively tracking your preparation?',
+    options:['Yes — a mentor or buddy','A friend / peer group','Family only','Completely solo'] },
+  { id:'q16', text:'When you have a bad week, what do you typically do?',
+    options:['Get straight back — one bad day, not a bad week','Take a short break, then restart','Spiral for a few days before recovering','Struggle to get back — it affects me a lot'] },
+  { id:'q17', text:"Have you spoken to anyone who's cracked CAT at your target percentile?",
+    options:['Yes — they mentor me actively','Yes — once or twice','No, but I want to','No — I prefer to figure it out alone'] },
+  { id:'q18', text:'How confident are you that you will clear CAT this year?',
+    options:['Very confident','Fairly confident — working on it','Not sure yet','Not confident at all'] },
+  { id:'q19', text:"What's your biggest mental block right now?",
+    options:['Fear of failure / judgment','Comparing myself to others','Staying consistent when unmotivated','Uncertainty about the right strategy',"I don't feel mentally blocked"] },
+  { id:'q20', text:'What do you feel you need the most right now?',
+    options:['A structured daily / weekly plan','More mock tests and deeper review','Someone to keep me accountable daily','Subject-specific expert guidance','Mental strength and emotional support'] },
 ];
 
 const SECTIONS = [
-  { title:'Your CAT Journey',      icon:'🎯', qids:['q1','q2','q3'] },
-  { title:'Study Consistency',     icon:'📅', qids:['q4','q5','q6'] },
-  { title:'Mock Tests & Strategy', icon:'📝', qids:['q7','q8','q9'] },
-  { title:'Accountability',        icon:'🤝', qids:['q10'] },
+  { title:'Background & Goal',          icon:'🎯', qids:['q1','q2','q3'] },
+  { title:'Study Habits & Consistency', icon:'📅', qids:['q4','q5','q6','q7'] },
+  { title:'Subject-wise Readiness',     icon:'📚', qids:['q8','q9','q10'] },
+  { title:'Mock Tests & Error Analysis',icon:'📝', qids:['q11','q12','q13','q14'] },
+  { title:'Accountability & Support',   icon:'🤝', qids:['q15','q16','q17','q18','q19','q20'] },
 ];
 
 // ─── Scoring (Consistency 40 / Strategy 40 / Support 20 = 100) ─────────────────
@@ -37,40 +77,71 @@ const SECTIONS = [
 function computeScores(answers: Record<string, number>) {
   // CONSISTENCY (max 40)
   let consistency = 0;
-  const daysIdx = answers['q4'];
-  if (daysIdx === 1) consistency += 8;
-  else if (daysIdx === 2) consistency += 16;
-  else if (daysIdx === 3) consistency += 24;
+  const hoursIdx = answers['q4'];
+  if (hoursIdx === 1) consistency += 5;
+  else if (hoursIdx === 2) consistency += 12;
+  else if (hoursIdx === 3) consistency += 16;
 
-  const planIdx = answers['q5'];
-  if (planIdx === 0) consistency += 16;
-  else if (planIdx === 1) consistency += 10;
-  else if (planIdx === 2) consistency += 4;
-  // max: 24+16 = 40
+  const daysIdx = answers['q5'];
+  if (daysIdx === 1) consistency += 5;
+  else if (daysIdx === 2) consistency += 12;
+  else if (daysIdx === 3) consistency += 16;
+
+  const planIdx = answers['q7'];
+  if (planIdx === 0) consistency += 8;
+  else if (planIdx === 1) consistency += 5;
+  else if (planIdx === 2) consistency += 2;
+  // max: 16+16+8 = 40
 
   // STRATEGY (max 40)
   let strategy = 0;
-  const mocksIdx = answers['q7'];
-  if (mocksIdx === 1) strategy += 8;
-  else if (mocksIdx === 2) strategy += 16;
-  else if (mocksIdx === 3) strategy += 20;
+  const mocksIdx = answers['q11'];
+  if (mocksIdx === 1) strategy += 4;
+  else if (mocksIdx === 2) strategy += 8;
+  else if (mocksIdx === 3) strategy += 10;
 
-  const errorIdx = answers['q8'];
-  if (errorIdx === 0) strategy += 16;
-  else if (errorIdx === 1) strategy += 10;
-  else if (errorIdx === 2) strategy += 5;
+  const percentileIdx = answers['q12'];
+  if (percentileIdx === 1) strategy += 1;
+  else if (percentileIdx === 2) strategy += 3;
+  else if (percentileIdx === 3) strategy += 6;
+  else if (percentileIdx === 4) strategy += 8;
 
-  const weakAreaIdx = answers['q9'];
+  const errorIdx = answers['q13'];
+  if (errorIdx === 0) strategy += 8;
+  else if (errorIdx === 1) strategy += 5;
+  else if (errorIdx === 2) strategy += 2;
+
+  const weakAreaIdx = answers['q14'];
   if (weakAreaIdx !== undefined && weakAreaIdx !== 4) strategy += 4;
-  // max: 20+16+4 = 40
+
+  // Subject confidence: q8+q9+q10 each 0–4, total 0–12 → scaled to 0–10
+  const varcRating = answers['q8']  ?? 0;
+  const dilrRating = answers['q9']  ?? 0;
+  const qaRating   = answers['q10'] ?? 0;
+  strategy += Math.round(((varcRating + dilrRating + qaRating) / 12) * 10);
+  // max: 10+8+8+4+10 = 40
 
   // SUPPORT (max 20)
   let support = 0;
-  const accIdx = answers['q10'];
-  if (accIdx === 0) support += 20;
-  else if (accIdx === 1) support += 13;
-  else if (accIdx === 2) support += 7;
-  // max: 20
+  const accIdx = answers['q15'];
+  if (accIdx === 0) support += 10;
+  else if (accIdx === 1) support += 7;
+  else if (accIdx === 2) support += 3;
+
+  const badWeekIdx = answers['q16'];
+  if (badWeekIdx === 0) support += 4;
+  else if (badWeekIdx === 1) support += 3;
+  else if (badWeekIdx === 2) support += 1;
+
+  const mentorIdx = answers['q17'];
+  if (mentorIdx === 0) support += 4;
+  else if (mentorIdx === 1) support += 2;
+  else if (mentorIdx === 2) support += 1;
+
+  const confIdx = answers['q18'];
+  if (confIdx === 0) support += 2;
+  else if (confIdx === 1) support += 1;
+  // max: 10+4+4+2 = 20
 
   const overall = Math.min(100, consistency + strategy + support);
   return { overall, consistency, strategy, support };
@@ -93,11 +164,11 @@ function getBandLabel(score: number): string {
 }
 
 function getVerdict(answers: Record<string, number>, overall: number): string {
-  const daysIdx    = answers['q4'];
-  const accIdx     = answers['q10'];
-  const targetIdx  = answers['q2'];
-  const errorIdx   = answers['q8'];
-  const mocksIdx   = answers['q7'];
+  const daysIdx   = answers['q5'];
+  const accIdx    = answers['q15'];
+  const targetIdx = answers['q2'];
+  const errorIdx  = answers['q13'];
+  const mocksIdx  = answers['q11'];
 
   if (daysIdx !== undefined && daysIdx <= 1 && overall >= 30)
     return "Discipline, not effort, is your gap. You know what to do — you're just not doing it every day.";
@@ -117,17 +188,26 @@ function getVerdict(answers: Record<string, number>, overall: number): string {
 // ─── Personalised Diagnosis Cards ──────────────────────────────────────────────
 
 function getConsistencyInsight(answers: Record<string, number>): InsightData {
-  const daysIdx = answers['q4'];
-  const planIdx = answers['q5'];
-  const daysLabel = daysIdx === 0 ? '3 or fewer' : daysIdx === 1 ? '4–7' : daysIdx === 2 ? '8–11' : daysIdx === 3 ? '12–14' : '';
+  const hoursIdx = answers['q4'];
+  const daysIdx  = answers['q5'];
+  const planIdx  = answers['q7'];
+  const daysLabel = daysIdx === 0 ? '3 or fewer' : daysIdx === 1 ? '4–7' : daysIdx === 2 ? '8–11' : '12–14';
 
   if (planIdx === 3) return {
     tag: 'risk', title: 'Prep running on willpower',
     body: "No written study plan means your prep runs on motivation. Motivation runs out at Month 3 — a written plan doesn't. Structure beats willpower every time.",
   };
+  if (hoursIdx !== undefined && hoursIdx <= 1 && daysIdx !== undefined && daysIdx <= 1) return {
+    tag: 'risk', title: 'The consistency gap',
+    body: "Less than 2 hours a day and fewer than 7 study days in the last 2 weeks — this gap compounds daily. You don't need more motivation; you need a system that shows up even when you don't feel like it.",
+  };
   if (daysIdx !== undefined && daysIdx <= 1) return {
     tag: 'risk', title: 'The consistency gap',
     body: `${daysLabel} study days in 2 weeks isn't enough to close the gap to your target. You don't need more motivation — you need a system that runs even when motivation doesn't.`,
+  };
+  if (hoursIdx !== undefined && hoursIdx <= 1) return {
+    tag: 'gap', title: 'Study hours are low',
+    body: "You're showing up — but under 2 hours a day won't build the stamina CAT demands. It's not about grinding 8 hours; it's about consistent focused blocks, every single day.",
   };
   if (daysIdx === 3 && planIdx === 0) return {
     tag: 'strength', title: 'Your daily consistency is real',
@@ -144,10 +224,11 @@ function getConsistencyInsight(answers: Record<string, number>): InsightData {
 }
 
 function getStrategyInsight(answers: Record<string, number>): InsightData {
-  const mocksIdx    = answers['q7'];
-  const errorIdx    = answers['q8'];
-  const weakAreaIdx = answers['q9'];
-  const weakLabels  = ['VARC', 'DILR', 'QA', 'time management'];
+  const mocksIdx      = answers['q11'];
+  const percentileIdx = answers['q12'];
+  const errorIdx      = answers['q13'];
+  const weakAreaIdx   = answers['q14'];
+  const weakLabels    = ['VARC', 'DILR', 'QA', 'time management'];
 
   if (mocksIdx === 0) return {
     tag: 'risk', title: 'No full-length mocks yet',
@@ -168,6 +249,10 @@ function getStrategyInsight(answers: Record<string, number>): InsightData {
     tag: 'strength', title: 'Your mock process is right',
     body: `Taking mocks seriously and reviewing every error — you're doing what most skip.${weakAreaIdx !== undefined && weakAreaIdx !== 4 ? ` Knowing your weak section is ${weakLabels[weakAreaIdx]} means you can stop guessing and start targeting.` : ''} This discipline compounds.`,
   };
+  if (percentileIdx !== undefined && percentileIdx >= 3) return {
+    tag: 'strength', title: 'Your mock scores show real progress',
+    body: `A best mock percentile of ${percentileIdx === 3 ? '90–95' : '95+'}%ile — you're in the range. The gap now is consistency of that performance, not capability.`,
+  };
   return {
     tag: 'gap', title: 'The review habit needs depth',
     body: "Mocks only work if you dig into every wrong answer. The score from the mock doesn't matter — what you learn from reviewing it does. One well-reviewed mock beats three ignored ones.",
@@ -175,13 +260,18 @@ function getStrategyInsight(answers: Record<string, number>): InsightData {
 }
 
 function getAccountabilityInsight(answers: Record<string, number>, overall: number): InsightData {
-  const accIdx    = answers['q10'];
-  const targetIdx = answers['q2'];
-  const targets   = ['below 90', '90–95', '95–99', '99+'];
+  const accIdx     = answers['q15'];
+  const badWeekIdx = answers['q16'];
+  const targetIdx  = answers['q2'];
+  const targets    = ['below 90', '90–95', '95–99', '99+'];
 
   if (accIdx === 3 && targetIdx !== undefined && targetIdx >= 2) return {
     tag: 'risk', title: `Solo at the ${targets[targetIdx]}%ile level`,
     body: `Targeting ${targets[targetIdx]}%ile completely alone — every topper had someone who caught them when they slipped. When you go off-track, no one catches it. That's where the percentile points quietly disappear.`,
+  };
+  if (accIdx === 3 && badWeekIdx !== undefined && badWeekIdx >= 2) return {
+    tag: 'risk', title: 'Solo and struggling after setbacks',
+    body: "You're going at it alone — and bad weeks hit hard. That's a dangerous combination. Accountability doesn't just track your progress; it's what gets you back up when you fall.",
   };
   if (accIdx === 3) return {
     tag: 'risk', title: 'Completely solo',
@@ -201,7 +291,7 @@ function getAccountabilityInsight(answers: Record<string, number>, overall: numb
   };
 }
 
-// ─── UI Components ─────────────────────────────────────────────────────────────
+// ─── UI Components ──────────────────────────────────────────────────
 
 const TAG_STYLE: Record<InsightTag, { label: string; pill: string; border: string; bg: string }> = {
   strength: { label: 'Strength 🟢', pill: 'bg-emerald-100 text-emerald-800', border: 'border-emerald-200', bg: 'bg-emerald-50' },
@@ -239,7 +329,7 @@ function RadioPills({ q, val, onSelect }: { q: Question; val: number | undefined
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// ─── Main Component ──────────────────────────────────────────────────────
 
 export function CatReadinessClient() {
   const [step, setStep] = useState<'intro' | 'quiz' | 'score'>('intro');
@@ -299,7 +389,6 @@ export function CatReadinessClient() {
     }
   }
 
-  // biggest named gap for the post-unlock tie-in sentence
   const biggestGap =
     consistencyInsight.tag === 'risk' ? consistencyInsight.title.toLowerCase() :
     strategyInsight.tag    === 'risk' ? strategyInsight.title.toLowerCase()    :
@@ -308,7 +397,7 @@ export function CatReadinessClient() {
     strategyInsight.tag    === 'gap'  ? strategyInsight.title.toLowerCase()    :
     accountabilityInsight.title.toLowerCase();
 
-  // ── INTRO SCREEN ─────────────────────────────────────────────────────────────
+  // ── INTRO SCREEN ───────────────────────────────────────────────────────────────
   if (step === 'intro') {
     return (
       <div className="min-h-screen bg-[#1A1A2E] flex flex-col">
@@ -330,7 +419,7 @@ export function CatReadinessClient() {
           </h1>
 
           <p className="text-stone-400 text-sm text-center leading-relaxed mb-8">
-            Answer {total} quick questions so we match you with the right IIM buddy. Takes 2 minutes — no signup needed.
+            Answer {total} quick questions so we match you with the right IIM buddy. Takes 3 minutes — no signup needed.
           </p>
 
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-8 space-y-3">
@@ -352,13 +441,13 @@ export function CatReadinessClient() {
           >
             Claim my free session <ArrowRight className="w-5 h-5" />
           </button>
-          <p className="text-center text-xs text-stone-600 mt-3">{total} quick taps · ~2 minutes · no spam</p>
+          <p className="text-center text-xs text-stone-600 mt-3">{total} quick taps · ~3 minutes · no spam</p>
         </div>
       </div>
     );
   }
 
-  // ── SCORE SCREEN ─────────────────────────────────────────────────────────────
+  // ── SCORE SCREEN ───────────────────────────────────────────────────────────────
   if (step === 'score') {
     return (
       <div className="min-h-screen bg-stone-50">
@@ -468,7 +557,6 @@ export function CatReadinessClient() {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Session tied to diagnosis */}
               <div className="rounded-2xl p-4 border bg-orange-50 border-orange-200">
                 <p className="text-[11px] font-bold text-orange-700 uppercase tracking-wide mb-1">Your session is matched to your gap</p>
                 <p className="text-sm text-stone-800 leading-snug">
@@ -476,7 +564,6 @@ export function CatReadinessClient() {
                 </p>
               </div>
 
-              {/* Hero claim CTA */}
               <div className="rounded-2xl p-5 text-center shadow-lg shadow-orange-600/20 text-white" style={{ background:'linear-gradient(135deg,#ea580c,#d97706)' }}>
                 <p className="text-base font-black mb-1">Claim my free IIM buddy session</p>
                 <p className="text-xs text-orange-100 mb-4">15 minutes · someone who's cracked CAT · 100% free</p>
@@ -508,7 +595,7 @@ export function CatReadinessClient() {
     );
   }
 
-  // ── QUIZ SCREEN ───────────────────────────────────────────────────────────────
+  // ── QUIZ SCREEN ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="bg-[#1A1A2E] px-5 pt-5 pb-0 sticky top-0 z-10">
@@ -519,7 +606,7 @@ export function CatReadinessClient() {
           >CR</button>
           <div>
             <h1 className="text-white font-bold text-[15px] leading-tight">Claim your free IIM buddy session</h1>
-            <p className="text-stone-400 text-xs mt-0.5">CareerRai · ~2 minutes</p>
+            <p className="text-stone-400 text-xs mt-0.5">CareerRai · ~3 minutes</p>
           </div>
         </div>
         <div className="h-1 bg-white/10 rounded-full overflow-hidden">
