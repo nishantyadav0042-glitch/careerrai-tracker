@@ -1,4 +1,5 @@
 {
+  "regions": ["sin1"],
   "crons": [
     { "path": "/api/cron/daily-reminder",    "schedule": "30 14 * * *"   },
     { "path": "/api/cron/session-tomorrow",  "schedule": "0 6 * * *"     },
