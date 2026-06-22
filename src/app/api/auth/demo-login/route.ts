@@ -2,28 +2,26 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-// One-tap, read-only student demo login. Signs the visitor into a demo student
-// account server-side (no credentials exposed on the public page) and sets the
-// `cr_demo` cookie, which the proxy uses to block all write/mutation API calls.
-//
-// The demo password is kept server-side only (it is NOT printed anywhere public).
-// Set DEMO_ACCOUNT_PASSWORD in Vercel env — no hardcoded fallback.
-const DEMO_PASSWORD = process.env.DEMO_ACCOUNT_PASSWORD;
+// One-tap, read-only student demo login. Uses Supabase admin to generate a
+// short-lived magic-link token, then exchanges it for a real session via
+// verifyOtp — no password env var required.
 const PREFERRED_DEMO_EMAIL = 'aarav@careerrai.com'; // Aarav: 79→94%ile recovery arc — the best story
 
 export async function POST(request: NextRequest) {
   const admin = createAdminClient();
 
   // Prefer Aarav; fall back to any demo student so the button never dead-ends.
-  let demo: { email: string | null } | null = null;
+  let demoEmail: string | null = null;
   const { data: preferred } = await admin
     .from('profiles')
     .select('email')
     .eq('email', PREFERRED_DEMO_EMAIL)
     .eq('is_demo', true)
     .maybeSingle();
-  demo = preferred;
-  if (!demo?.email) {
+
+  if (preferred?.email) {
+    demoEmail = preferred.email;
+  } else {
     const { data: anyDemo } = await admin
       .from('profiles')
       .select('email')
@@ -31,18 +29,25 @@ export async function POST(request: NextRequest) {
       .eq('role', 'student')
       .limit(1)
       .maybeSingle();
-    demo = anyDemo;
+    demoEmail = anyDemo?.email ?? null;
   }
 
-  if (!demo?.email) {
+  if (!demoEmail) {
     return NextResponse.json({ error: 'Demo is temporarily unavailable.' }, { status: 503 });
   }
 
-  if (!DEMO_PASSWORD) {
-    console.error('[demo-login] DEMO_ACCOUNT_PASSWORD env var is not set');
+  // Generate a one-time magic-link token for the demo account (admin-only, server-side).
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email: demoEmail,
+  });
+
+  if (linkError || !linkData?.properties?.email_otp) {
+    console.error('[demo-login] generateLink failed:', linkError?.message);
     return NextResponse.json({ error: 'Demo is temporarily unavailable.' }, { status: 503 });
   }
 
+  // Exchange the OTP for a session via the SSR client so cookies are set correctly.
   const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,9 +63,14 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.signInWithPassword({ email: demo.email, password: DEMO_PASSWORD! });
-  if (error) {
-    console.error('[demo-login] sign-in failed:', error.message);
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    email: demoEmail,
+    token: linkData.properties.email_otp,
+    type: 'magiclink',
+  });
+
+  if (verifyError) {
+    console.error('[demo-login] verifyOtp failed:', verifyError.message);
     return NextResponse.json({ error: 'Demo is temporarily unavailable.' }, { status: 503 });
   }
 
@@ -74,7 +84,7 @@ export async function POST(request: NextRequest) {
     httpOnly: true,
     maxAge: 60 * 60 * 24,
   });
-  // Mark this session as the read-only demo. The proxy blocks mutations on it.
+  // Mark this session as read-only demo — the proxy blocks all write/mutation calls.
   res.cookies.set('cr_demo', '1', {
     path: '/',
     sameSite: 'lax',
