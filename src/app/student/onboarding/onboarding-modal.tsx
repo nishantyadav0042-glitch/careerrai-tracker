@@ -142,25 +142,16 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
               {screens[currentScreen].title}
             </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCompleteWithoutUpdate(); }}
-                disabled={isLoading}
-                type="button"
-                className="text-xs px-2 py-1 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded transition disabled:opacity-50 cursor-pointer"
-              >
-                Skip
-              </button>
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCompleteWithoutUpdate(); }}
-                disabled={isLoading}
-                type="button"
-                className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onComplete(); }}
+              disabled={isLoading}
+              type="button"
+              className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
+              aria-label="Close"
+              title="Close — you can finish this later from your Profile"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Progress */}
