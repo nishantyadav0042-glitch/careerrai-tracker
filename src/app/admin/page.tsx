@@ -8,6 +8,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AdminBroadcast } from './admin-broadcast';
+import { AdminMatchPanel } from './admin-match-panel';
 import { AdminStudentsList } from './admin-students-list';
 import { AdminDataImport } from './admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
@@ -223,8 +224,24 @@ export default async function AdminPage() {
     </div>
   );
 
+  const unmatchedStudents = students.filter(s => !s.buddy_id);
+  const buddyMatchData = buddies.map(b => ({
+    id: b.id,
+    full_name: b.full_name,
+    cat_percentile: (b as Profile & { cat_percentile?: number | null }).cat_percentile ?? null,
+    starting_percentile: (b as Profile & { starting_percentile?: number | null }).starting_percentile ?? null,
+    is_repeater: (b as Profile & { is_repeater?: boolean | null }).is_repeater ?? null,
+    is_working_professional: (b as Profile & { is_working_professional?: boolean | null }).is_working_professional ?? null,
+    studentCount: students.filter(s => s.buddy_id === b.id).length,
+  }));
+
   const studentsSection = (
     <div className="space-y-6">
+      {/* Match panel — only shown when there are unmatched students */}
+      {unmatchedStudents.length > 0 && buddies.length > 0 && (
+        <AdminMatchPanel unmatchedStudents={unmatchedStudents} buddies={buddyMatchData} />
+      )}
+
       <div>
         <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">All students</h2>
         <AdminStudentsList students={studentStats} buddies={buddies} pendingStudents={pendingStudents} />

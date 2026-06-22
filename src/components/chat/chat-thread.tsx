@@ -220,7 +220,7 @@ export function ChatThread({
                   className={cn(
                     'max-w-[78%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap',
                     mine
-                      ? 'bg-orange-600 text-white rounded-br-sm'
+                      ? 'bg-stone-800 text-white rounded-br-sm'
                       : 'bg-stone-100 text-stone-900 rounded-bl-sm'
                   )}
                 >
@@ -228,7 +228,7 @@ export function ChatThread({
                   <span
                     className={cn(
                       'block text-[10px] mt-1 text-right',
-                      mine ? 'text-orange-100' : 'text-stone-400'
+                      mine ? 'text-stone-400' : 'text-stone-400'
                     )}
                   >
                     {new Date(m.created_at).toLocaleTimeString('en-IN', {
@@ -313,4 +313,3 @@ export function ChatThread({
     </div>
   );
 }
-

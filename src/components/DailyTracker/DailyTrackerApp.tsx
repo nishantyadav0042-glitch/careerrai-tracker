@@ -61,7 +61,7 @@ import { Loader2, Video } from 'lucide-react';
 
 // ── Feature flags — disable without deleting (re-enable by changing to true) ──
 // Brain break: unvalidated break-containment hypothesis; hidden for 60-day cohort.
-const BRAIN_BREAK_ENABLED = false;
+const BRAIN_BREAK_ENABLED = true;
 // Daily puzzle: content pipeline not ready; hidden until populated.
 const DAILY_PUZZLE_ENABLED = false;
 
@@ -257,6 +257,8 @@ export function DailyTrackerApp({
     await submitAttempt({ solved: result.solved, timeSeconds: result.timeSeconds, accuracy: result.accuracy });
   };
 
+  void maxStreak; // available for future use in HeroCard
+
   return (
     <div className="space-y-5">
       {/* Miss-recovery — the compassionate restart for a returning student. */}
@@ -346,7 +348,7 @@ export function DailyTrackerApp({
       {/* 4. Today's session strip */}
       {todaySession && <SessionStrip session={todaySession} />}
 
-      {/* 5. Brain Break — disabled: break-containment unvalidated in 60-day cohort */}
+      {/* 5. Brain Break — 90-sec sprint games */}
       {BRAIN_BREAK_ENABLED && studentId && (
         <SafeCard>
           <BrainBreakCard studentId={studentId} />
