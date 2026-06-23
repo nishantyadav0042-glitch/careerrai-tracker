@@ -70,14 +70,19 @@ export async function POST(request: NextRequest) {
       .eq('phone', e164)
       .maybeSingle();
 
-    if (!profile?.email) {
+    if (!profile) {
       console.error('[LOGIN] No profile found for phone:', e164);
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email: profile.email, password });
-    if (error) {
-      console.error('[LOGIN] Phone auth error:', error.message);
+    // Prefer email auth (works for email-identity users like demo buddies).
+    // Fall back to phone auth for phone-identity-only accounts (no email stored).
+    const authResult = profile.email
+      ? await supabase.auth.signInWithPassword({ email: profile.email, password })
+      : await supabase.auth.signInWithPassword({ phone: e164, password });
+
+    if (authResult.error) {
+      console.error('[LOGIN] Phone auth error:', authResult.error.message);
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
     }
 
