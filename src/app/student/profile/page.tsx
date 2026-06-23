@@ -22,73 +22,72 @@ export default async function StudentProfilePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at').eq('id', user.id).single();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at')
+    .eq('id', user.id)
+    .single();
   if (!profile) redirect('/login');
 
-  // Buddy credentials + trust signals
-  let buddy: { full_name: string; college: string | null; cat_percentile: number | null; buddy_bio: string | null } | null = null;
-  let responseHours: number | null = null;
-  if (profile.buddy_id) {
-    const { data: b } = await admin
-      .from('profiles')
-      .select('full_name, college, cat_percentile, buddy_bio')
-      .eq('id', profile.buddy_id)
-      .single();
-    buddy = b;
+  // Compute refund window dates from profile (needed for parallel queries below)
+  const joinedAt = new Date(profile.created_at);
+  const firstMonthEnd = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const isInFirstMonth = new Date() <= new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000);
+  const REFUND_DAYS_REQUIRED = 20;
 
-    // Response rate: avg gap between feedback creation and the day it covers (last 30 days)
-    const { data: recentFeedback } = await admin
-      .from('buddy_feedback')
-      .select('created_at, feedback_date')
-      .eq('buddy_id', profile.buddy_id)
-      // eslint-disable-next-line react-hooks/purity
-      .gte('created_at', new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString())
-      .limit(20);
-    if (recentFeedback && recentFeedback.length > 0) {
-      const gaps = recentFeedback
-        .map((f) => (new Date(f.created_at).getTime() - new Date(f.feedback_date + 'T00:00:00').getTime()) / 3600000)
-        .filter((h) => h >= 0 && h < 24 * 7);
-      if (gaps.length > 0) {
-        responseHours = Math.max(1, Math.round(gaps.reduce((s, h) => s + h, 0) / gaps.length));
-      }
-    }
-  }
-
-  // Progress summary
-  const [{ count: daysLogged }, { data: streak }, { data: latestTest }] = await Promise.all([
+  // Fire all remaining queries in parallel — reduces 7 sequential round-trips to 1 batch.
+  const [
+    buddyResult,
+    buddyFeedbackResult,
+    daysLoggedResult,
+    streakResult,
+    latestTestResult,
+    firstMonthDaysResult,
+    refundReqResult,
+    activeScholarship,
+  ] = await Promise.all([
+    profile.buddy_id
+      ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio').eq('id', profile.buddy_id).single()
+      : Promise.resolve({ data: null }),
+    profile.buddy_id
+      ? admin.from('buddy_feedback').select('created_at, feedback_date').eq('buddy_id', profile.buddy_id).gte('created_at', new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()).limit(20)
+      : Promise.resolve({ data: null }),
     admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id),
     admin.from('streak_data').select('current_streak, longest_streak').eq('student_id', user.id).maybeSingle(),
     admin.from('test_results').select('percentile').eq('student_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id).lte('report_date', firstMonthEnd),
+    admin.from('refund_requests').select('status, requested_at').eq('student_id', user.id).maybeSingle(),
+    paymentsEnabled() ? getActiveScholarship(user.id) : Promise.resolve(null),
   ]);
+
+  const buddy = buddyResult.data as { full_name: string; college: string | null; cat_percentile: number | null; buddy_bio: string | null } | null;
+
+  // Response rate: avg gap between feedback creation and the day it covers (last 30 days)
+  let responseHours: number | null = null;
+  const recentFeedback = buddyFeedbackResult.data as { created_at: string; feedback_date: string }[] | null;
+  if (recentFeedback && recentFeedback.length > 0) {
+    const gaps = recentFeedback
+      .map((f) => (new Date(f.created_at).getTime() - new Date(f.feedback_date + 'T00:00:00').getTime()) / 3600000)
+      .filter((h) => h >= 0 && h < 24 * 7);
+    if (gaps.length > 0) {
+      responseHours = Math.max(1, Math.round(gaps.reduce((s, h) => s + h, 0) / gaps.length));
+    }
+  }
+
+  const { count: daysLogged } = daysLoggedResult;
+  const streak = streakResult.data;
+  const latestTest = latestTestResult.data;
   const bestStreak = streak?.longest_streak ?? 0;
   const latestPercentile: number | null = latestTest?.percentile ?? null;
   const targetPercentile = 90;
   const progressPct = latestPercentile ? Math.min(100, Math.round((latestPercentile / targetPercentile) * 100)) : 0;
 
-  // Founder scholarship (if any) → adjusted per-plan prices for the membership card.
-  let scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null = null;
-  if (paymentsEnabled()) {
-    const active = await getActiveScholarship(user.id);
-    if (active) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(active) };
-  }
-
-  // Refund eligibility: count daily_reports in first 30 days
-  const REFUND_DAYS_REQUIRED = 20;
-  const joinedAt = new Date(profile.created_at);
-  const firstMonthEnd = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const isInFirstMonth = new Date() <= new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000);
-  const { count: firstMonthDays } = await admin
-    .from('daily_reports')
-    .select('id', { count: 'exact', head: true })
-    .eq('student_id', user.id)
-    .lte('report_date', firstMonthEnd);
-  const refundDaysLogged = firstMonthDays ?? 0;
+  const refundDaysLogged = firstMonthDaysResult.count ?? 0;
   const refundEligible = refundDaysLogged >= REFUND_DAYS_REQUIRED;
-  const { data: existingRefundReq } = await admin
-    .from('refund_requests')
-    .select('status, requested_at')
-    .eq('student_id', user.id)
-    .maybeSingle();
+  const existingRefundReq = refundReqResult.data as { status: string; requested_at: string } | null;
+
+  let scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null = null;
+  if (activeScholarship) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(activeScholarship) };
 
   const displayName = profile.full_name ?? 'Student';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
