@@ -432,7 +432,11 @@ export function CatReadinessClient() {
   async function handleGateSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!gateName.trim()) { setGateError('Enter your name.'); return; }
-    if (gatePhone.replace(/\D/g, '').length < 10) { setGateError('Enter a valid 10-digit phone number.'); return; }
+    const phoneDigits = gatePhone.replace(/\D/g, '');
+    if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits)) {
+      setGateError('Enter a valid 10-digit mobile number.');
+      return;
+    }
     setGateSubmitting(true);
     setGateError(null);
     try {
@@ -623,8 +627,8 @@ export function CatReadinessClient() {
                 />
                 <input
                   type="tel" inputMode="numeric" autoComplete="tel" value={gatePhone}
-                  onChange={e => setGatePhone(e.target.value)}
-                  placeholder="10-digit mobile number" required
+                  onChange={e => setGatePhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="10-digit mobile number" required maxLength={10}
                   className="w-full px-3.5 py-3 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20"
                 />
                 {gateError && <p className="text-xs text-rose-600">{gateError}</p>}
