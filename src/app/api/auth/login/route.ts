@@ -59,20 +59,23 @@ export async function POST(request: NextRequest) {
   }
 
   // Phone + password (primary login method)
+  // Always authenticates via email even when credential is a phone number, because
+  // users are created with email identities (not phone identities). Phone is only
+  // used to look up which auth account to sign into.
   const e164 = normalizeIndianPhone(credential);
   if (e164) {
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, role, is_demo')
+      .select('id, email, role, is_demo')
       .eq('phone', e164)
       .maybeSingle();
 
-    if (!profile) {
+    if (!profile?.email) {
       console.error('[LOGIN] No profile found for phone:', e164);
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ phone: e164, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: profile.email, password });
     if (error) {
       console.error('[LOGIN] Phone auth error:', error.message);
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
