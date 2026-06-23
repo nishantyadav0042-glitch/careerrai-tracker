@@ -451,7 +451,7 @@ export function CatReadinessClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: gateName.trim(),
-          phone: gatePhone.trim(),
+          phone: phoneDigits,
           score: overall,
           tier,
           consistency_score: consistency,
