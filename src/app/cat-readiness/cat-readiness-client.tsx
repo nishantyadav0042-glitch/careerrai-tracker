@@ -4,32 +4,75 @@ import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Lock, ArrowRight, MessageCircle } from 'lucide-react';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────
 
 type InsightTag = 'strength' | 'gap' | 'risk';
 interface InsightData { tag: InsightTag; title: string; body: string; }
 interface Question { id: string; text: string; options: string[]; }
 
-// ─── 10 Questions — honest ~2 min ──────────────────────────────────────────────
+// ─── 20 Questions — 6 sections ────────────────────────────────────
 
 const QS: Question[] = [
-  { id:'q1',  text:'Which attempt is this for you?',                                    options:['1st attempt','2nd attempt','3rd attempt','4th+ attempt'] },
-  { id:'q2',  text:"What's your target CAT percentile?",                                options:['Below 90','90–95','95–99','99+'] },
-  { id:'q3',  text:'How long have you been actively preparing?',                        options:['Just started','1–3 months','3–6 months','6+ months'] },
-  { id:'q4',  text:'In the past 2 weeks, how many days did you actually study?',        options:['0–3 days','4–7 days','8–11 days','12–14 days'] },
-  { id:'q5',  text:'Do you follow a written weekly study plan?',                        options:['Yes, and I stick to it','Yes, loosely','Only in my head','No plan at all'] },
-  { id:'q6',  text:"What's your biggest reason for skipping study days?",               options:['Fatigue / burnout','Distractions','No clear plan','Low motivation','Job / college load','I rarely skip'] },
-  { id:'q7',  text:'How many full-length mock tests have you taken so far?',            options:['None yet','1–5','6–15','15+'] },
-  { id:'q8',  text:'After each mock, do you do a detailed error analysis?',             options:['Always — every question','Sometimes','Rarely','Never done this'] },
-  { id:'q9',  text:"Which section costs you the most marks?",                           options:['VARC','DILR','QA','Time management',"I don't know yet"] },
-  { id:'q10', text:'Do you have anyone actively tracking your preparation?',            options:['Yes — a mentor or buddy','A friend / peer group','Family only','Completely solo'] },
+  // Section 1 — Background & Goal
+  { id:'q1',  text:'Which attempt is this for you?',
+    options:['1st attempt','2nd attempt','3rd attempt','4th+ attempt'] },
+  { id:'q2',  text:"What's your target CAT percentile?",
+    options:['Below 90','90–95','95–99','99+'] },
+  { id:'q3',  text:'How long have you been actively preparing?',
+    options:['Just started','1–3 months','3–6 months','6+ months'] },
+
+  // Section 2 — Study Habits & Consistency
+  { id:'q4',  text:'On average, how many hours do you study per day?',
+    options:['Less than 1 hour','1–2 hours','2–4 hours','4+ hours'] },
+  { id:'q5',  text:'In the past 2 weeks, how many days did you actually study?',
+    options:['0–3 days','4–7 days','8–11 days','12–14 days'] },
+  { id:'q6',  text:"What's your biggest reason for skipping study days?",
+    options:['Fatigue / burnout','Distractions','No clear plan','Low motivation','Job / college load','I rarely skip'] },
+  { id:'q7',  text:'Do you follow a written weekly study plan?',
+    options:['Yes, and I stick to it','Yes, loosely','Only in my head','No plan at all'] },
+
+  // Section 3 — Subject-wise Readiness
+  { id:'q8',  text:'Rate your current readiness in VARC (Verbal Ability & Reading Comprehension)',
+    options:['1 – Very weak','2 – Needs work','3 – Average','4 – Strong','5 – Very strong'] },
+  { id:'q9',  text:'Rate your current readiness in DILR (Data Interpretation & Logical Reasoning)',
+    options:['1 – Very weak','2 – Needs work','3 – Average','4 – Strong','5 – Very strong'] },
+  { id:'q10', text:'Rate your current readiness in QA (Quantitative Aptitude)',
+    options:['1 – Very weak','2 – Needs work','3 – Average','4 – Strong','5 – Very strong'] },
+
+  // Section 4 — Mock Tests & Error Analysis
+  { id:'q11', text:'How many full-length mock tests have you taken so far?',
+    options:['None yet','1–5','6–15','15+'] },
+  { id:'q12', text:"Your best recent mock percentile (or score if no percentile yet)?",
+    options:["No mock taken yet",'Below 80%ile','80–90%ile','90–95%ile','95%ile+'] },
+  { id:'q13', text:'After each mock, do you do a detailed error analysis?',
+    options:['Always — every question','Sometimes','Rarely','Never done this'] },
+  { id:'q14', text:'Which area causes the most score drop in your mocks?',
+    options:['VARC','DILR','QA','Time management','Accuracy / silly errors',"Don't know yet"] },
+
+  // Section 5 — Accountability & Support
+  { id:'q15', text:'Do you have anyone actively tracking your preparation?',
+    options:['Yes — a mentor or buddy','A friend / peer group','Family only','Completely solo'] },
+  { id:'q16', text:'When you have a bad week, what do you usually do?',
+    options:['Reset and bounce back fast','Talk to someone and recalibrate','Slow down for a few days','Spiral into self-doubt'] },
+  { id:'q17', text:"Have you identified a specific mentor — someone who cleared CAT in the last 3 years — to guide you?",
+    options:['Yes, and they\'re actively involved','Yes, but only occasionally','No, but I\'m looking for one','No, and I don\'t feel I need one'] },
+
+  // Section 6 — Mental Readiness
+  { id:'q18', text:'How anxious are you about CAT right now?',
+    options:['1 — Zero stress, completely calm','2 — A little nervous, manageable','3 — Moderate anxiety, some impact','4 — High anxiety, it\'s affecting me','5 — Extremely anxious, paralysed'] },
+  { id:'q19', text:'Honestly — do you believe you\'ll hit your target percentile this attempt?',
+    options:['Yes, fully confident','Mostly yes, working on it','Not sure yet','Honestly, no'] },
+  { id:'q20', text:'What is your single biggest fear about this attempt?',
+    options:['Repeating the same mistake as before','Not staying consistent till CAT day','Score not improving despite effort','What others will think if I don\'t make it','Going blank on exam day','No real fear — I\'m ready'] },
 ];
 
 const SECTIONS = [
-  { title:'Your CAT Journey',      icon:'🎯', qids:['q1','q2','q3'] },
-  { title:'Study Consistency',     icon:'📅', qids:['q4','q5','q6'] },
-  { title:'Mock Tests & Strategy', icon:'📝', qids:['q7','q8','q9'] },
-  { title:'Accountability',        icon:'🤝', qids:['q10'] },
+  { title:'Background & Goal',          icon:'🎯', qids:['q1','q2','q3'] },
+  { title:'Study Habits & Consistency', icon:'📅', qids:['q4','q5','q6','q7'] },
+  { title:'Subject-wise Readiness',     icon:'📚', qids:['q8','q9','q10'] },
+  { title:'Mock Tests & Error Analysis',icon:'📝', qids:['q11','q12','q13','q14'] },
+  { title:'Accountability & Support',   icon:'🤝', qids:['q15','q16','q17'] },
+  { title:'Mental Readiness',           icon:'🧠', qids:['q18','q19','q20'] },
 ];
 
 // ─── Scoring (Consistency 40 / Strategy 40 / Support 20 = 100) ─────────────────
@@ -37,40 +80,74 @@ const SECTIONS = [
 function computeScores(answers: Record<string, number>) {
   // CONSISTENCY (max 40)
   let consistency = 0;
-  const daysIdx = answers['q4'];
-  if (daysIdx === 1) consistency += 8;
-  else if (daysIdx === 2) consistency += 16;
-  else if (daysIdx === 3) consistency += 24;
+  const hoursIdx = answers['q4'];
+  if (hoursIdx === 1) consistency += 5;
+  else if (hoursIdx === 2) consistency += 12;
+  else if (hoursIdx === 3) consistency += 16;
 
-  const planIdx = answers['q5'];
-  if (planIdx === 0) consistency += 16;
-  else if (planIdx === 1) consistency += 10;
-  else if (planIdx === 2) consistency += 4;
-  // max: 24+16 = 40
+  const daysIdx = answers['q5'];
+  if (daysIdx === 1) consistency += 5;
+  else if (daysIdx === 2) consistency += 12;
+  else if (daysIdx === 3) consistency += 16;
+
+  const planIdx = answers['q7'];
+  if (planIdx === 0) consistency += 8;
+  else if (planIdx === 1) consistency += 5;
+  else if (planIdx === 2) consistency += 2;
+  // max: 16+16+8 = 40
 
   // STRATEGY (max 40)
   let strategy = 0;
-  const mocksIdx = answers['q7'];
-  if (mocksIdx === 1) strategy += 8;
-  else if (mocksIdx === 2) strategy += 16;
-  else if (mocksIdx === 3) strategy += 20;
+  const mocksIdx = answers['q11'];
+  if (mocksIdx === 1) strategy += 4;
+  else if (mocksIdx === 2) strategy += 8;
+  else if (mocksIdx === 3) strategy += 10;
 
-  const errorIdx = answers['q8'];
-  if (errorIdx === 0) strategy += 16;
-  else if (errorIdx === 1) strategy += 10;
-  else if (errorIdx === 2) strategy += 5;
+  const percentileIdx = answers['q12'];
+  if (percentileIdx === 1) strategy += 1;
+  else if (percentileIdx === 2) strategy += 3;
+  else if (percentileIdx === 3) strategy += 6;
+  else if (percentileIdx === 4) strategy += 8;
 
-  const weakAreaIdx = answers['q9'];
-  if (weakAreaIdx !== undefined && weakAreaIdx !== 4) strategy += 4;
-  // max: 20+16+4 = 40
+  const errorIdx = answers['q13'];
+  if (errorIdx === 0) strategy += 8;
+  else if (errorIdx === 1) strategy += 5;
+  else if (errorIdx === 2) strategy += 2;
+
+  // Q14: knowing your weak area (not "don't know yet" = idx 5) = +4
+  const weakAreaIdx = answers['q14'];
+  if (weakAreaIdx !== undefined && weakAreaIdx !== 5) strategy += 4;
+
+  // Subject confidence: q8+q9+q10 each 0–4 (maps to 1–5), total 0–12 → scaled 0–10
+  const varcRating = answers['q8']  ?? 0;
+  const dilrRating = answers['q9']  ?? 0;
+  const qaRating   = answers['q10'] ?? 0;
+  strategy += Math.round(((varcRating + dilrRating + qaRating) / 12) * 10);
+  // max: 10+8+8+4+10 = 40
 
   // SUPPORT (max 20)
   let support = 0;
-  const accIdx = answers['q10'];
-  if (accIdx === 0) support += 20;
-  else if (accIdx === 1) support += 13;
-  else if (accIdx === 2) support += 7;
-  // max: 20
+  const accIdx = answers['q15'];
+  if (accIdx === 0) support += 8;
+  else if (accIdx === 1) support += 5;
+  else if (accIdx === 2) support += 2;
+
+  const badWeekIdx = answers['q16'];
+  if (badWeekIdx === 0) support += 4;
+  else if (badWeekIdx === 1) support += 3;
+  else if (badWeekIdx === 2) support += 1;
+
+  const mentorIdx = answers['q17'];
+  if (mentorIdx === 0) support += 4;
+  else if (mentorIdx === 1) support += 2;
+  else if (mentorIdx === 2) support += 1;
+
+  // Q19: belief in hitting target
+  const beliefIdx = answers['q19'];
+  if (beliefIdx === 0) support += 4;
+  else if (beliefIdx === 1) support += 2;
+  else if (beliefIdx === 2) support += 1;
+  // max: 8+4+4+4 = 20
 
   const overall = Math.min(100, consistency + strategy + support);
   return { overall, consistency, strategy, support };
@@ -93,11 +170,12 @@ function getBandLabel(score: number): string {
 }
 
 function getVerdict(answers: Record<string, number>, overall: number): string {
-  const daysIdx    = answers['q4'];
-  const accIdx     = answers['q10'];
-  const targetIdx  = answers['q2'];
-  const errorIdx   = answers['q8'];
-  const mocksIdx   = answers['q7'];
+  const daysIdx   = answers['q5'];
+  const accIdx    = answers['q15'];
+  const targetIdx = answers['q2'];
+  const errorIdx  = answers['q13'];
+  const mocksIdx  = answers['q11'];
+  const beliefIdx = answers['q19'];
 
   if (daysIdx !== undefined && daysIdx <= 1 && overall >= 30)
     return "Discipline, not effort, is your gap. You know what to do — you're just not doing it every day.";
@@ -107,6 +185,8 @@ function getVerdict(answers: Record<string, number>, overall: number): string {
     return "You're studying, not preparing. The gap is process, not effort.";
   if (targetIdx !== undefined && targetIdx >= 2 && overall <= 45)
     return `Your target says ${targetIdx === 3 ? '99+' : '95+'}%ile. Your habits say otherwise. Closable — but not on autopilot.`;
+  if (beliefIdx !== undefined && beliefIdx >= 2 && overall >= 50)
+    return "The score says you're capable. The doubt is the real thing to fix.";
   if (overall >= 80) return "You're on the right track. The marginal gains now are about process, not effort.";
   if (overall >= 65) return "Real strengths here — but 1–2 gaps are quietly costing you percentile points.";
   if (overall >= 50) return "You're preparing. You're not yet preparing to win.";
@@ -114,20 +194,56 @@ function getVerdict(answers: Record<string, number>, overall: number): string {
   return "Starting from clarity. That's the only starting point that actually leads somewhere.";
 }
 
+// ─── Derive primary weakness for admin targeting ─────────────────────────────
+
+function getPrimaryWeakSection(
+  answers: Record<string, number>,
+  consistency: number,
+  strategy: number,
+  support: number,
+): string {
+  const varc = answers['q8'] ?? 0;
+  const dilr = answers['q9'] ?? 0;
+  const qa   = answers['q10'] ?? 0;
+
+  // Subject weakness first (very weak = rating idx 0 or 1 out of 4)
+  if (varc === 0 || (varc <= 1 && varc <= dilr && varc <= qa)) return 'VARC';
+  if (dilr === 0 || (dilr <= 1 && dilr <= varc && dilr <= qa)) return 'DILR';
+  if (qa   === 0 || (qa   <= 1 && qa   <= varc && qa   <= dilr)) return 'QA';
+
+  // Lowest section percentage
+  const cPct = consistency / 40;
+  const sPct = strategy / 40;
+  const aPct = support / 20;
+  const min  = Math.min(cPct, sPct, aPct);
+  if (min === cPct) return 'Consistency';
+  if (min === sPct) return 'Strategy';
+  return 'Accountability';
+}
+
 // ─── Personalised Diagnosis Cards ──────────────────────────────────────────────
 
 function getConsistencyInsight(answers: Record<string, number>): InsightData {
-  const daysIdx = answers['q4'];
-  const planIdx = answers['q5'];
-  const daysLabel = daysIdx === 0 ? '3 or fewer' : daysIdx === 1 ? '4–7' : daysIdx === 2 ? '8–11' : daysIdx === 3 ? '12–14' : '';
+  const hoursIdx = answers['q4'];
+  const daysIdx  = answers['q5'];
+  const planIdx  = answers['q7'];
+  const daysLabel = daysIdx === 0 ? '3 or fewer' : daysIdx === 1 ? '4–7' : daysIdx === 2 ? '8–11' : '12–14';
 
   if (planIdx === 3) return {
     tag: 'risk', title: 'Prep running on willpower',
     body: "No written study plan means your prep runs on motivation. Motivation runs out at Month 3 — a written plan doesn't. Structure beats willpower every time.",
   };
+  if (hoursIdx !== undefined && hoursIdx <= 1 && daysIdx !== undefined && daysIdx <= 1) return {
+    tag: 'risk', title: 'The consistency gap',
+    body: "Less than 2 hours a day and fewer than 7 study days in the last 2 weeks — this gap compounds daily. You don't need more motivation; you need a system that shows up even when you don't feel like it.",
+  };
   if (daysIdx !== undefined && daysIdx <= 1) return {
     tag: 'risk', title: 'The consistency gap',
     body: `${daysLabel} study days in 2 weeks isn't enough to close the gap to your target. You don't need more motivation — you need a system that runs even when motivation doesn't.`,
+  };
+  if (hoursIdx !== undefined && hoursIdx <= 1) return {
+    tag: 'gap', title: 'Study hours are low',
+    body: "You're showing up — but under 2 hours a day won't build the stamina CAT demands. It's not about grinding 8 hours; it's about consistent focused blocks, every single day.",
   };
   if (daysIdx === 3 && planIdx === 0) return {
     tag: 'strength', title: 'Your daily consistency is real',
@@ -144,10 +260,11 @@ function getConsistencyInsight(answers: Record<string, number>): InsightData {
 }
 
 function getStrategyInsight(answers: Record<string, number>): InsightData {
-  const mocksIdx    = answers['q7'];
-  const errorIdx    = answers['q8'];
-  const weakAreaIdx = answers['q9'];
-  const weakLabels  = ['VARC', 'DILR', 'QA', 'time management'];
+  const mocksIdx      = answers['q11'];
+  const percentileIdx = answers['q12'];
+  const errorIdx      = answers['q13'];
+  const weakAreaIdx   = answers['q14'];
+  const weakLabels    = ['VARC', 'DILR', 'QA', 'time management', 'accuracy errors'];
 
   if (mocksIdx === 0) return {
     tag: 'risk', title: 'No full-length mocks yet',
@@ -160,13 +277,17 @@ function getStrategyInsight(answers: Record<string, number>): InsightData {
       body: `${mockCount} mocks taken but errors ${errorIdx === 3 ? 'never reviewed' : 'rarely reviewed'}. You're collecting wrong answers without fixing the patterns behind them. Same mistakes, 10 mocks in.`,
     };
   }
-  if (weakAreaIdx === 4) return {
+  if (weakAreaIdx === 5) return {
     tag: 'gap', title: "You don't know where you're losing",
     body: "Not knowing your weakest section is a strategy problem. CAT rewards smart selection — you can't build a strategy around a gap you haven't diagnosed.",
   };
   if (mocksIdx !== undefined && mocksIdx >= 2 && errorIdx === 0) return {
     tag: 'strength', title: 'Your mock process is right',
-    body: `Taking mocks seriously and reviewing every error — you're doing what most skip.${weakAreaIdx !== undefined && weakAreaIdx !== 4 ? ` Knowing your weak section is ${weakLabels[weakAreaIdx]} means you can stop guessing and start targeting.` : ''} This discipline compounds.`,
+    body: `Taking mocks seriously and reviewing every error — you're doing what most skip.${weakAreaIdx !== undefined && weakAreaIdx !== 5 ? ` Knowing your weak area is ${weakLabels[weakAreaIdx]} means you can stop guessing and start targeting.` : ''} This discipline compounds.`,
+  };
+  if (percentileIdx !== undefined && percentileIdx >= 3) return {
+    tag: 'strength', title: 'Your mock scores show real progress',
+    body: `A best mock percentile of ${percentileIdx === 3 ? '90–95' : '95+'}%ile — you're in the range. The gap now is consistency of that performance, not capability.`,
   };
   return {
     tag: 'gap', title: 'The review habit needs depth',
@@ -175,13 +296,18 @@ function getStrategyInsight(answers: Record<string, number>): InsightData {
 }
 
 function getAccountabilityInsight(answers: Record<string, number>, overall: number): InsightData {
-  const accIdx    = answers['q10'];
-  const targetIdx = answers['q2'];
-  const targets   = ['below 90', '90–95', '95–99', '99+'];
+  const accIdx     = answers['q15'];
+  const badWeekIdx = answers['q16'];
+  const targetIdx  = answers['q2'];
+  const targets    = ['below 90', '90–95', '95–99', '99+'];
 
   if (accIdx === 3 && targetIdx !== undefined && targetIdx >= 2) return {
     tag: 'risk', title: `Solo at the ${targets[targetIdx]}%ile level`,
     body: `Targeting ${targets[targetIdx]}%ile completely alone — every topper had someone who caught them when they slipped. When you go off-track, no one catches it. That's where the percentile points quietly disappear.`,
+  };
+  if (accIdx === 3 && badWeekIdx !== undefined && badWeekIdx >= 2) return {
+    tag: 'risk', title: 'Solo and struggling after setbacks',
+    body: "You're going at it alone — and bad weeks hit hard. That's a dangerous combination. Accountability doesn't just track your progress; it's what gets you back up when you fall.",
   };
   if (accIdx === 3) return {
     tag: 'risk', title: 'Completely solo',
@@ -201,7 +327,35 @@ function getAccountabilityInsight(answers: Record<string, number>, overall: numb
   };
 }
 
-// ─── UI Components ─────────────────────────────────────────────────────────────
+function getMentalInsight(answers: Record<string, number>): InsightData | null {
+  const anxietyIdx = answers['q18'];
+  const beliefIdx  = answers['q19'];
+  const fearIdx    = answers['q20'];
+
+  if (anxietyIdx !== undefined && anxietyIdx >= 3) return {
+    tag: 'risk', title: 'Anxiety is costing you performance',
+    body: "High exam anxiety at this stage hurts performance more than low content coverage. The preparation gap and the mental gap need to be fixed together — not separately.",
+  };
+  if (beliefIdx !== undefined && beliefIdx >= 2) return {
+    tag: 'gap', title: "Doubt is the hidden gap",
+    body: "Not fully believing you'll hit your target affects how hard you push, how consistent you are, and how you recover from bad mocks. A clear plan — one that actually addresses your gaps — is what converts doubt into belief.",
+  };
+  if (fearIdx === 0) return {
+    tag: 'gap', title: "Same mistake risk — unaddressed",
+    body: "Fear of repeating the same mistake is only a risk if you haven't diagnosed what that mistake actually was. A post-mortem of your last attempt is not optional — it's the foundation of this one.",
+  };
+  if (fearIdx === 1) return {
+    tag: 'gap', title: "Consistency fear is self-aware — now fix it",
+    body: "Knowing that consistency is your fear is half the battle. The other half is building a system that doesn't rely on willpower — daily check-ins, a written plan, and someone watching.",
+  };
+  if (beliefIdx === 0 && (anxietyIdx === undefined || anxietyIdx <= 1)) return {
+    tag: 'strength', title: "Mentally solid",
+    body: "Low anxiety and full belief in your target — the mental game is right. This is rarer than you think. Protect it by making sure the preparation underneath earns that confidence.",
+  };
+  return null;
+}
+
+// ─── UI Components ──────────────────────────────────────────────────
 
 const TAG_STYLE: Record<InsightTag, { label: string; pill: string; border: string; bg: string }> = {
   strength: { label: 'Strength 🟢', pill: 'bg-emerald-100 text-emerald-800', border: 'border-emerald-200', bg: 'bg-emerald-50' },
@@ -239,7 +393,7 @@ function RadioPills({ q, val, onSelect }: { q: Question; val: number | undefined
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// ─── Main Component ──────────────────────────────────────────────────────
 
 export function CatReadinessClient() {
   const [step, setStep] = useState<'intro' | 'quiz' | 'score'>('intro');
@@ -260,6 +414,7 @@ export function CatReadinessClient() {
   const consistencyInsight    = useMemo(() => getConsistencyInsight(answers), [answers]);
   const strategyInsight       = useMemo(() => getStrategyInsight(answers), [answers]);
   const accountabilityInsight = useMemo(() => getAccountabilityInsight(answers, overall), [answers, overall]);
+  const mentalInsight         = useMemo(() => getMentalInsight(answers), [answers]);
 
   const waNumber    = process.env.NEXT_PUBLIC_DEMO_WHATSAPP ?? '';
   const waMsg       = encodeURIComponent(`Hi! I just took the CareerRai CAT assessment and scored ${overall}/100. I'd like to claim my free IIM buddy session.`);
@@ -281,10 +436,30 @@ export function CatReadinessClient() {
     setGateSubmitting(true);
     setGateError(null);
     try {
+      // VARC/DILR/QA: stored 1-indexed (idx 0 = rating 1)
+      const varcRating = (answers['q8']  ?? 0) + 1;
+      const dilrRating = (answers['q9']  ?? 0) + 1;
+      const qaRating   = (answers['q10'] ?? 0) + 1;
+      const weakSection = getPrimaryWeakSection(answers, consistency, strategy, support);
+
       const res = await fetch('/api/cat-leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: gateName.trim(), phone: gatePhone.trim(), score: overall, tier }),
+        body: JSON.stringify({
+          name: gateName.trim(),
+          phone: gatePhone.trim(),
+          score: overall,
+          tier,
+          consistency_score: consistency,
+          strategy_score: strategy,
+          support_score: support,
+          varc_rating: varcRating,
+          dilr_rating: dilrRating,
+          qa_rating: qaRating,
+          weak_section: weakSection,
+          anxiety_idx: answers['q18'] ?? null,
+          belief_idx: answers['q19'] ?? null,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
@@ -299,16 +474,13 @@ export function CatReadinessClient() {
     }
   }
 
-  // biggest named gap for the post-unlock tie-in sentence
-  const biggestGap =
-    consistencyInsight.tag === 'risk' ? consistencyInsight.title.toLowerCase() :
-    strategyInsight.tag    === 'risk' ? strategyInsight.title.toLowerCase()    :
-    accountabilityInsight.tag === 'risk' ? accountabilityInsight.title.toLowerCase() :
-    consistencyInsight.tag === 'gap'  ? consistencyInsight.title.toLowerCase() :
-    strategyInsight.tag    === 'gap'  ? strategyInsight.title.toLowerCase()    :
-    accountabilityInsight.title.toLowerCase();
+  const primaryInsight =
+    consistencyInsight.tag === 'risk' ? consistencyInsight :
+    strategyInsight.tag    === 'risk' ? strategyInsight    :
+    accountabilityInsight.tag === 'risk' ? accountabilityInsight :
+    consistencyInsight;
 
-  // ── INTRO SCREEN ─────────────────────────────────────────────────────────────
+  // ── INTRO SCREEN ───────────────────────────────────────────────────────────────
   if (step === 'intro') {
     return (
       <div className="min-h-screen bg-[#1A1A2E] flex flex-col">
@@ -330,7 +502,7 @@ export function CatReadinessClient() {
           </h1>
 
           <p className="text-stone-400 text-sm text-center leading-relaxed mb-8">
-            Answer {total} quick questions so we match you with the right IIM buddy. Takes 2 minutes — no signup needed.
+            Answer {total} quick questions so we match you with the right IIM buddy. Takes 3 minutes — no signup needed.
           </p>
 
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-8 space-y-3">
@@ -352,13 +524,13 @@ export function CatReadinessClient() {
           >
             Claim my free session <ArrowRight className="w-5 h-5" />
           </button>
-          <p className="text-center text-xs text-stone-600 mt-3">{total} quick taps · ~2 minutes · no spam</p>
+          <p className="text-center text-xs text-stone-600 mt-3">{total} quick taps · ~3 minutes · no spam</p>
         </div>
       </div>
     );
   }
 
-  // ── SCORE SCREEN ─────────────────────────────────────────────────────────────
+  // ── SCORE SCREEN ───────────────────────────────────────────────────────────────
   if (step === 'score') {
     return (
       <div className="min-h-screen bg-stone-50">
@@ -401,6 +573,7 @@ export function CatReadinessClient() {
                 <InsightCard {...consistencyInsight} />
                 <InsightCard {...strategyInsight} />
                 <InsightCard {...accountabilityInsight} />
+                {mentalInsight && <InsightCard {...mentalInsight} />}
               </div>
               {!gateUnlocked && (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -468,15 +641,13 @@ export function CatReadinessClient() {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Session tied to diagnosis */}
               <div className="rounded-2xl p-4 border bg-orange-50 border-orange-200">
                 <p className="text-[11px] font-bold text-orange-700 uppercase tracking-wide mb-1">Your session is matched to your gap</p>
                 <p className="text-sm text-stone-800 leading-snug">
-                  Your biggest gap is <strong>{biggestGap}</strong>. Your IIM buddy session is designed to fix exactly that — not generic advice, your specific situation.
+                  Your biggest gap is <strong>{primaryInsight.title.toLowerCase()}</strong>. Your IIM buddy session is designed to fix exactly that — not generic advice, your specific situation.
                 </p>
               </div>
 
-              {/* Hero claim CTA */}
               <div className="rounded-2xl p-5 text-center shadow-lg shadow-orange-600/20 text-white" style={{ background:'linear-gradient(135deg,#ea580c,#d97706)' }}>
                 <p className="text-base font-black mb-1">Claim my free IIM buddy session</p>
                 <p className="text-xs text-orange-100 mb-4">15 minutes · someone who's cracked CAT · 100% free</p>
@@ -508,7 +679,7 @@ export function CatReadinessClient() {
     );
   }
 
-  // ── QUIZ SCREEN ───────────────────────────────────────────────────────────────
+  // ── QUIZ SCREEN ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="bg-[#1A1A2E] px-5 pt-5 pb-0 sticky top-0 z-10">
@@ -518,8 +689,8 @@ export function CatReadinessClient() {
             className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center text-white font-black text-sm shrink-0"
           >CR</button>
           <div>
-            <h1 className="text-white font-bold text-[15px] leading-tight">Claim your free IIM buddy session</h1>
-            <p className="text-stone-400 text-xs mt-0.5">CareerRai · ~2 minutes</p>
+            <h1 className="text-white font-bold text-[15px] leading-tight">CAT Preparedness Check</h1>
+            <p className="text-stone-400 text-xs mt-0.5">CareerRai · 20 questions · ~4 minutes</p>
           </div>
         </div>
         <div className="h-1 bg-white/10 rounded-full overflow-hidden">
@@ -559,7 +730,7 @@ export function CatReadinessClient() {
             type="submit"
             className="mt-6 w-full flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white font-bold text-base rounded-2xl transition-all shadow-lg shadow-orange-600/25"
           >
-            See my diagnosis <ArrowRight className="w-5 h-5" />
+            See my CAT readiness score <ArrowRight className="w-5 h-5" />
           </button>
           <p className="text-center text-xs text-stone-400 mt-3">Your answers are private. Never shared publicly.</p>
         </div>

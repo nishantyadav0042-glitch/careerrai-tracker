@@ -9,7 +9,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
-  const { name, phone, score, tier } = payload as Record<string, unknown>;
+  const {
+    name, phone, score, tier,
+    consistency_score, strategy_score, support_score,
+    varc_rating, dilr_rating, qa_rating,
+    weak_section, anxiety_idx, belief_idx,
+  } = payload as Record<string, unknown>;
 
   if (typeof name !== 'string' || name.trim().length < 1) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -44,6 +49,15 @@ export async function POST(request: NextRequest) {
     phone: phone.trim(),
     score,
     tier: tier.trim(),
+    consistency_score: typeof consistency_score === 'number' ? consistency_score : null,
+    strategy_score:    typeof strategy_score    === 'number' ? strategy_score    : null,
+    support_score:     typeof support_score     === 'number' ? support_score     : null,
+    varc_rating:       typeof varc_rating       === 'number' ? varc_rating       : null,
+    dilr_rating:       typeof dilr_rating       === 'number' ? dilr_rating       : null,
+    qa_rating:         typeof qa_rating         === 'number' ? qa_rating         : null,
+    weak_section:      typeof weak_section      === 'string' ? weak_section.trim() : null,
+    anxiety_idx:       typeof anxiety_idx       === 'number' ? anxiety_idx       : null,
+    belief_idx:        typeof belief_idx        === 'number' ? belief_idx        : null,
   });
 
   if (error) {
