@@ -19,8 +19,9 @@ export async function POST(request: NextRequest) {
   if (typeof name !== 'string' || name.trim().length < 1) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 });
   }
-  if (typeof phone !== 'string' || phone.replace(/\D/g, '').length < 10) {
-    return NextResponse.json({ error: 'A valid 10-digit phone number is required' }, { status: 400 });
+  const phoneDigits = typeof phone === 'string' ? phone.replace(/\D/g, '') : '';
+  if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits)) {
+    return NextResponse.json({ error: 'A valid 10-digit mobile number is required' }, { status: 400 });
   }
   if (typeof score !== 'number' || score < 0 || score > 100) {
     return NextResponse.json({ error: 'Invalid score' }, { status: 400 });
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
   const { data: existing } = await admin
     .from('cat_test_leads')
     .select('id')
-    .eq('phone', phone.trim())
+    .eq('phone', phoneDigits)
     .gte('created_at', since24h)
     .limit(1)
     .maybeSingle();
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from('cat_test_leads').insert({
     name: name.trim(),
-    phone: phone.trim(),
+    phone: phoneDigits,
     score,
     tier: tier.trim(),
     consistency_score: typeof consistency_score === 'number' ? consistency_score : null,
