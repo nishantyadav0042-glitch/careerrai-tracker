@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { X } from 'lucide-react';
-import ScreenSocialProof from './screens/screen-social-proof';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
@@ -25,14 +24,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [userId, setUserId] = useState<string | null>(null);
 
   const screens = [
-    { title: 'Meet the Community', component: ScreenSocialProof },    // 0
-    { title: 'Your Dream Colleges', component: ScreenDreamColleges }, // 1
-    { title: 'Exam Context', component: ScreenExamContext },           // 2
-    { title: 'Meet Your Buddy', component: ScreenMeetBuddy },         // 3
-    { title: 'Your Baseline', component: ScreenBaselineTest },         // 4
-    { title: 'About You', component: ScreenAboutYou },                // 5
-    { title: 'Daily Commitment', component: ScreenDailyCommitment },  // 6
-    { title: 'Log Day 1', component: ScreenLogDayOne },               // 7
+    { title: 'Your Dream Colleges', component: ScreenDreamColleges }, // 0
+    { title: 'Exam Context', component: ScreenExamContext },           // 1
+    { title: 'Meet Your Buddy', component: ScreenMeetBuddy },         // 2
+    { title: 'Your Baseline', component: ScreenBaselineTest },         // 3
+    { title: 'About You', component: ScreenAboutYou },                // 4
+    { title: 'Daily Commitment', component: ScreenDailyCommitment },  // 5
+    { title: 'Log Day 1', component: ScreenLogDayOne },               // 6
   ];
 
   const CurrentScreen = screens[currentScreen].component;
@@ -51,12 +49,12 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const handleNext = async (data?: Record<string, unknown>) => {
     if (data) setOnboardingData((prev) => ({ ...prev, ...data }));
 
-    // Screen 1 = Dream Colleges; save immediately
-    if (currentScreen === 1 && data?.dream_colleges) {
+    // Screen 0 = Dream Colleges; save immediately
+    if (currentScreen === 0 && data?.dream_colleges) {
       void supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '');
     }
-    // Screen 2 = Exam Context; save immediately
-    if (currentScreen === 2 && data) {
+    // Screen 1 = Exam Context; save immediately
+    if (currentScreen === 1 && data) {
       void supabase.from('profiles').update({
         is_repeater: data.is_repeater,
         category: data.category ?? null,
@@ -67,8 +65,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         study_target_hours: data.hours_available,
       }).eq('id', userId ?? '');
     }
-    // Screen 5 = About You; save immediately
-    if (currentScreen === 5 && data) {
+    // Screen 4 = About You; save immediately
+    if (currentScreen === 4 && data) {
       void supabase.from('profiles').update({
         full_name: data.full_name || null,
         phone: data.phone || null,
@@ -79,8 +77,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         coaching_enrolled: data.coaching_enrolled ?? false,
       }).eq('id', userId ?? '');
     }
-    // Screen 6 = Daily Commitment; capture target hours
-    if (currentScreen === 6 && data?.studyTargetHours) {
+    // Screen 5 = Daily Commitment; capture target hours
+    if (currentScreen === 5 && data?.studyTargetHours) {
       setStudyTargetHours(data.studyTargetHours as number);
     }
 
@@ -189,9 +187,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           />
         </div>
 
-        {/* Bottom nav — screen 0 (ScreenSocialProof) manages its own navigation */}
-        {currentScreen > 0 && (
-          <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
+        {/* Bottom nav */}
+        <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
+            {currentScreen > 0 ? (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleBack(); }}
               disabled={isLoading}
@@ -200,6 +198,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             >
               Back
             </button>
+            ) : (
+            <div className="flex-1" />
+            )}
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNext(); }}
               disabled={isLoading}
@@ -213,7 +214,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               {isLoading ? 'Loading...' : currentScreen === screens.length - 1 ? 'Enter Dashboard' : 'Next'}
             </button>
           </div>
-        )}
       </div>
     </div>
   );
