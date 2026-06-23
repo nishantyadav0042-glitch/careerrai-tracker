@@ -9,9 +9,13 @@ export async function proxy(request: NextRequest) {
   // cookie is set at demo-login. All of /api/auth/* is exempt — auth is how a
   // visitor leaves the demo and logs in for real (and those routes clear the
   // cr_demo cookie themselves), so blocking them would lock people out of login.
+  // /api/cat-leads is also exempt — the CAT readiness check is a public
+  // lead-capture funnel, not app data; submissions must always save even if the
+  // visitor still carries a demo cookie from a previous session.
   if (
     pathname.startsWith('/api/') &&
     !pathname.startsWith('/api/auth/') &&
+    !pathname.startsWith('/api/cat-leads') &&
     request.cookies.get('cr_demo')?.value === '1'
   ) {
     const method = request.method.toUpperCase();
