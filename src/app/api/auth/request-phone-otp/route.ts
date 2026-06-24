@@ -12,7 +12,9 @@ export async function POST(request: NextRequest) {
     }
 
     // The registered admin phone always bypasses the allowlist gate.
-    const isAdminPhone = e164 === '+917015269714';
+    // Phone stored in ADMIN_PHONE_E164 env var (never hardcoded in source).
+    const adminPhone = process.env.ADMIN_PHONE_E164;
+    const isAdminPhone = !!adminPhone && e164 === adminPhone;
 
     // Gate: phone must be registered in the allowlist (admin exempt)
     const admin = createAdminClient();

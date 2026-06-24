@@ -48,14 +48,16 @@ export async function POST(request: NextRequest) {
   const secret = process.env.SEND_SMS_HOOK_SECRET;
   const raw = await request.text();
 
-  if (secret) {
-    // Signature verification is configured — enforce it.
-    if (!verifyStandardWebhooksSignature(raw, request.headers, secret)) {
-      console.error('[sms-hook] signature verification failed');
-      return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
-    }
-  } else {
-    console.warn('[sms-hook] SEND_SMS_HOOK_SECRET not set — skipping signature check');
+  // Signature verification is always required. A missing secret is a
+  // misconfiguration — reject rather than silently becoming an open SMS relay.
+  if (!secret) {
+    console.error('[sms-hook] SEND_SMS_HOOK_SECRET not configured — rejecting request');
+    return NextResponse.json({ error: 'misconfigured' }, { status: 500 });
+  }
+
+  if (!verifyStandardWebhooksSignature(raw, request.headers, secret)) {
+    console.error('[sms-hook] signature verification failed');
+    return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
   }
 
   try {

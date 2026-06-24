@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   try {
     const { phone: rawPhone, token } = (await request.json()) as { phone?: string; token?: string };
     const e164 = normalizeIndianPhone(rawPhone ?? '');
-    if (!e164 || !token || !/^\d{4,8}$/.test(token.trim())) {
+    if (!e164 || !token || !/^\d{6}$/.test(token.trim())) {
       return NextResponse.json({ error: 'Invalid phone or OTP.' }, { status: 400 });
     }
 
@@ -71,7 +71,9 @@ export async function POST(request: NextRequest) {
     // existing buddy whose phone isn't in the allowlist would otherwise be
     // downgraded to 'student' for the session.
     // Belt-and-suspenders: the registered admin phone always gets admin role.
-    const isAdminPhone = e164 === '+917015269714';
+    // Phone stored in ADMIN_PHONE_E164 env var (never hardcoded in source).
+    const adminPhone = process.env.ADMIN_PHONE_E164;
+    const isAdminPhone = !!adminPhone && e164 === adminPhone;
     const role = (
       isAdminPhone
         ? 'admin'
@@ -139,7 +141,7 @@ export async function POST(request: NextRequest) {
         path: '/',
         sameSite: 'lax',
         httpOnly: true,
-        maxAge: 60 * 60 * 24,
+        maxAge: 60 * 60 * 24 * 30, // 30 days — matches password login in auth/login/route.ts
       });
     }
     // Real login — ensure no stale read-only demo flag remains.

@@ -56,6 +56,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ free: true });
     }
 
+    // Return the existing pending order if one was created in the last 30 minutes.
+    // Prevents duplicate Razorpay orders from double-clicks or multi-tab checkouts.
+    const { data: pendingOrder } = await admin
+      .from('student_payments')
+      .select('razorpay_order_id, amount')
+      .eq('student_id', user.id)
+      .eq('plan', plan)
+      .eq('status', 'created')
+      .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+      .maybeSingle();
+
+    if (pendingOrder?.razorpay_order_id) {
+      return NextResponse.json({
+        orderId:       pendingOrder.razorpay_order_id,
+        amount:        pendingOrder.amount,
+        currency:      'INR',
+        keyId:         process.env.RAZORPAY_KEY_ID,
+        plan,
+        discountLabel: price.label,
+      });
+    }
+
     const order = await createRazorpayOrder(price.finalPaise, `careerrai_${user.id.slice(0, 8)}_${Date.now()}`);
 
     // Record the intent; the webhook flips it to 'paid' after signature verify.
