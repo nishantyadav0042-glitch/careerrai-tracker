@@ -65,19 +65,35 @@ export default async function AdminPage() {
   const studentIds = students.map(s => s.id);
   let reports: DailyReport[] = [];
   if (studentIds.length > 0) {
-    const { data } = await admin.from('daily_reports').select('*').in('student_id', studentIds).gte('report_date', weekAgoStr);
+    const { data } = await admin.from('daily_reports').select('student_id, report_date, study_duration, confidence, stress, sleep_quality, overall_energy, mock_taken, total_accuracy').in('student_id', studentIds).gte('report_date', weekAgoStr);
     reports = (data ?? []) as DailyReport[];
+  }
+
+  // Pre-build Maps — eliminates O(n²) array scans inside the stats loops below
+  const buddyById = new Map(buddies.map(b => [b.id, b]));
+  const studentsByBuddyId = new Map<string, Profile[]>();
+  for (const s of students) {
+    if (s.buddy_id) {
+      if (!studentsByBuddyId.has(s.buddy_id)) studentsByBuddyId.set(s.buddy_id, []);
+      studentsByBuddyId.get(s.buddy_id)!.push(s);
+    }
+  }
+  const reportsByStudentId = new Map<string, DailyReport[]>();
+  for (const r of reports) {
+    if (!reportsByStudentId.has(r.student_id)) reportsByStudentId.set(r.student_id, []);
+    reportsByStudentId.get(r.student_id)!.push(r);
   }
 
   // Compute per-student stats
   const studentStats = students.map((s) => {
-    const reps = reports.filter(r => r.student_id === s.id);
-    const lastReport = reps.sort((a, b) => b.report_date.localeCompare(a.report_date))[0];
+    const reps = reportsByStudentId.get(s.id) ?? [];
+    const lastReport = [...reps].sort((a, b) => b.report_date.localeCompare(a.report_date))[0];
     const summary = computeSummary(reps, 7);
-    const buddy = buddies.find(b => b.id === s.buddy_id);
+    const buddy = buddyById.get(s.buddy_id ?? '');
     const submittedToday = reps.some(r => r.report_date === today);
     return { student: s, summary, lastDate: lastReport?.report_date, buddy, submittedToday, hasRedFlags: summary.redFlags.length > 0 };
   });
+  const studentStatsById = new Map(studentStats.map(ss => [ss.student.id, ss]));
 
   const submittedToday = studentStats.filter(s => s.submittedToday).length;
   const redFlagCount = studentStats.filter(s => s.hasRedFlags).length;
@@ -110,7 +126,7 @@ export default async function AdminPage() {
     .map((s) => {
       const last = lastLogByStudent.get(s.id);
       const daysSince = last ? Math.floor((todayMs - new Date(last + 'T00:00:00').getTime()) / 86400000) : null;
-      const buddy = buddies.find(b => b.id === s.buddy_id);
+      const buddy = buddyById.get(s.buddy_id ?? '');
       return { student: s, daysSince, buddy };
     })
     .filter(({ daysSince }) => daysSince === null || daysSince >= 4)
@@ -118,8 +134,8 @@ export default async function AdminPage() {
 
   // Buddy stats
   const buddyStats = buddies.map(b => {
-    const myStudents = students.filter(s => s.buddy_id === b.id);
-    const myStats = myStudents.map(s => studentStats.find(ss => ss.student.id === s.id)!).filter(Boolean);
+    const myStudents = studentsByBuddyId.get(b.id) ?? [];
+    const myStats = myStudents.map(s => studentStatsById.get(s.id)!).filter(Boolean);
     const redFlags = myStats.filter(s => s.hasRedFlags).length;
     const myFeedback = (recentFeedback ?? []).filter(f => f.buddy_id === b.id);
     const gaps = myFeedback
@@ -232,7 +248,7 @@ export default async function AdminPage() {
     starting_percentile: (b as Profile & { starting_percentile?: number | null }).starting_percentile ?? null,
     is_repeater: (b as Profile & { is_repeater?: boolean | null }).is_repeater ?? null,
     is_working_professional: (b as Profile & { is_working_professional?: boolean | null }).is_working_professional ?? null,
-    studentCount: students.filter(s => s.buddy_id === b.id).length,
+    studentCount: (studentsByBuddyId.get(b.id) ?? []).length,
   }));
 
   const studentsSection = (
