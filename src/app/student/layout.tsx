@@ -8,6 +8,7 @@ import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { OnboardingGate } from './onboarding/onboarding-gate';
+import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
 
 function DemoBanner() {
   return (
@@ -56,6 +57,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
             </div>
           </div>
           {profile?.is_demo && <DemoBanner />}
+          {profile?.is_demo && <DemoWelcomeModal />}
           {children}
         </div>
         <StudentBottomNav chatUnread={chatUnread} />
