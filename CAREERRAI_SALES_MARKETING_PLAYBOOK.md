@@ -91,8 +91,11 @@ Telling a lead the truth up front kills bad-fit deals early and massively raises
 |----------|----------------|------------------------------|------------------------------|
 | **T.I.M.E. / Career Launcher / IMS** (classroom) | Big-brand coaching, batches of 100–200, full content | ~₹35,000–₹55,000+ | *"Great content, but you're one of 200. We're the senior who actually tracks you."* |
 | **iQuanta** (online community coaching) | Online classes + Facebook/community doubt-solving | ~₹15,000–₹30,000 band | *"Community is noise. One dedicated buddy is signal."* |
-| **2IIM, CATKing, Rodha, Unacademy CAT** | Online courses, recorded + live, some mentoring add-ons | ~₹8,000–₹40,000 range | *"You're buying lectures. We're selling accountability + mock analysis."* |
-| **Personal/peer mentorship offerings** | Ad-hoc 1:1 mentoring, often per-session | Often ₹500–₹2,000 **per session** | *"That's ₹1,000 a session, ad hoc. We're a whole season of weekly sessions + daily tracking for less than two of those."* |
+| **CATKing** (verified ✅) | 3-tier online: Self-Study / Turbo (CAT-only) / Intensive (+OMET +GD-PI) | **₹9,999 / ₹19,999 / ₹24,999** *(list price; often discounted)* | *"₹20k for live group lectures and a doubt forum. We're a personal IIM mentor for a quarter of that."* |
+| **2IIM, Rodha, Unacademy CAT** | Online courses, recorded + live, some mentoring add-ons | ~₹8,000–₹40,000 range *(verify)* | *"You're buying lectures. We're selling accountability + mock analysis."* |
+| **Personal/peer mentorship offerings** | Ad-hoc 1:1 mentoring, often per-session | Often ₹500–₹2,000 **per session** *(verify)* | *"That's ₹1,000 a session, ad hoc. We're a whole season of weekly sessions + daily tracking for less than two of those."* |
+
+> ✅ **Verified by research (June 2026):** CATKing's online tiers are **₹9,999 / ₹19,999 / ₹24,999** (list prices — Indian edtech routinely discounts below MRP, so confirm the live offer). **Strategically important:** the research pass actively tried and *failed* to substantiate that CATKing (or other big brands) offer a genuine **1:1 IIM-alumni mentor who tracks you daily** — those claims were refuted. **Translation: your core differentiator — an accountable human buddy — appears largely uncontested in this market. Lean on it even harder.**
 
 **The pricing story you tell:** coaching is a ₹40,000 content firehose; ad-hoc mentoring is ₹1,000+ *per call* with no accountability between calls. **CareerRai is a whole season of daily tracking + weekly IIM mentorship for ₹2,499–₹4,499** — i.e. the *gap* the market leaves wide open: **affordable, personal, accountable.**
 
@@ -284,6 +287,6 @@ Memorize these. Each = **acknowledge → reframe → evidence → re-ask.**
 ---
 
 ### Caveats & next steps
-- **Competitor prices (§5) are directional — re-verify before quoting.** A live web-research pass was run alongside this document; treat its cited figures, when available, as the source of truth over the bands here.
+- **Competitor prices (§5) are directional — re-verify before quoting.** A live, adversarially-verified web-research pass was run alongside this document. It surfaced only one fully-verified competitor figure — **CATKing at ₹9,999 / ₹19,999 / ₹24,999** (now in §5) — and, more usefully, **could not find any big-brand competitor offering a true 1:1 IIM-mentor-tracks-you-daily model**, suggesting your differentiator is uncontested. Prices for iQuanta, 2IIM, T.I.M.E., IMS and Career Launcher were *not* verifiable in this pass — confirm them directly on each site before quoting.
 - **Confirm your real close rate and avg plan value after week 1**, then re-tune §11. The model lives or dies on those two numbers.
 - Two things will move conversion more than anything else: **(1) WhatsApp within 5 minutes with the demo link, and (2) anchoring on the 6-month plan.** If you do nothing else in this document, do those two.
