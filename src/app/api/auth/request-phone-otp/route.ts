@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Robust parse: a blank env var (Number('')===0) must NOT disable all logins.
     const parsedCeiling = Number(process.env.DAILY_OTP_CEILING);
     const DAILY_OTP_CEILING = Number.isFinite(parsedCeiling) && parsedCeiling > 0 ? parsedCeiling : 800;
-    if (!isAdminPhoneE164(e164)) {
+    if (!(await isAdminPhoneE164(e164))) {
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { count: globalToday } = await admin
         .from('otp_send_events')
