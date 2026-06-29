@@ -11,27 +11,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, message: 'Enter a valid 10-digit Indian mobile number.' }, { status: 400 });
     }
 
-    // The registered admin phone always bypasses the allowlist gate.
-    const isAdminPhone = e164 === '+917015269714';
-
-    // Gate: phone must be registered in the allowlist (admin exempt)
     const admin = createAdminClient();
-    if (!isAdminPhone) {
-      const { data: entry } = await admin
-        .from('student_allowlist')
-        .select('status')
-        .eq('phone', e164)
-        .maybeSingle();
 
-      if (!entry || entry.status !== 'active') {
-        return NextResponse.json(
-          { sent: false, message: "This number isn't registered yet. Your admin will add you after onboarding." },
-          { status: 200 }
-        );
-      }
+    // Freemium self-signup: ANY valid Indian mobile may request an OTP and get a
+    // free student account — we no longer reject numbers that aren't allowlisted.
+    // The allowlist now only *assigns* a non-student role (buddy/admin) or a
+    // pre-paid student at verify time; it is no longer an access gate here.
+
+    // Abuse / cost guard. Self-signup makes /request-phone-otp an open tap on a
+    // paid SMS vendor (indiahost, ~1000-OTP plan, single vendor). Two ceilings:
+    //   1. per-phone: 3 sends / 30 min + 30s cooldown (below).
+    //   2. global daily: stop before the vendor quota is exhausted by abuse.
+    const DAILY_OTP_CEILING = Number(process.env.DAILY_OTP_CEILING ?? 800);
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: globalToday } = await admin
+      .from('otp_send_events')
+      .select('*', { count: 'exact', head: true })
+      .gte('sent_at', dayAgo);
+    if ((globalToday ?? 0) >= DAILY_OTP_CEILING) {
+      console.error(`[request-phone-otp] daily OTP ceiling hit (${globalToday}/${DAILY_OTP_CEILING})`);
+      return NextResponse.json(
+        { sent: false, message: "We're experiencing very high signups right now. Please try again in a little while." },
+        { status: 429 }
+      );
     }
 
-    // Rate limit: max 3 sends / 30 min, 30s cooldown
+    // Rate limit: max 3 sends / 30 min, 30s cooldown (per phone)
     const now = Date.now();
     const since = new Date(now - 30 * 60 * 1000).toISOString();
     const { data: recent } = await admin

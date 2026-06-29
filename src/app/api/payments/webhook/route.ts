@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { PLANS, isPlanId } from '@/lib/plans';
+import { grantPremiumAndQueueBuddy, revokePremium } from '@/lib/premium';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
 // Client-side "payment success" callbacks are never trusted.
 export async function POST(request: NextRequest) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   if (!secret) {
-    console.error('[rzp-webhook] RAZORPAY_WEBHOOK_SECRET not set');
-    return NextResponse.json({ error: 'not configured' }, { status: 500 });
+    // Return 200 so Razorpay stops retrying — this is a config error, not transient.
+    // Alert must be fixed in Vercel env; retrying will never help.
+    console.error('[rzp-webhook] RAZORPAY_WEBHOOK_SECRET not configured — event dropped');
+    return NextResponse.json({ ok: true, warning: 'not configured' }, { status: 200 });
   }
 
   const raw = await request.text();
@@ -38,40 +41,49 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         if (row && row.status !== 'paid') {
-          await admin
-            .from('student_payments')
-            .update({ status: 'paid', paid_at: new Date().toISOString(), razorpay_payment_id: paymentId ?? null })
-            .eq('id', row.id);
-
           const months = isPlanId(row.plan) ? PLANS[row.plan].months : 1;
           const renews = new Date();
           renews.setMonth(renews.getMonth() + months);
 
-          await admin
-            .from('profiles')
-            .update({
-              subscription_status: 'active',
-              subscription_plan: row.plan,
-              subscription_renews_at: renews.toISOString(),
-            })
-            .eq('id', row.student_id);
+          // Single atomic DB transaction: marks payment paid, activates
+          // subscription, and burns the coupon. If any step fails the webhook
+          // returns 500 and Razorpay retries — the guard above re-checks status
+          // so only the truly-failed ops run on retry.
+          const { error: activateErr } = await admin.rpc('activate_payment', {
+            p_payment_id:          row.id,
+            p_student_id:          row.student_id,
+            p_plan:                row.plan,
+            p_renews_at:           renews.toISOString(),
+            p_razorpay_payment_id: paymentId ?? null,
+            p_coupon_code:         row.coupon_code ?? null,
+          });
 
-          // Burn the coupon now that the payment is confirmed (so abandoned
-          // orders never consume one). Idempotent via the unique redemption row.
-          if (row.coupon_code) {
-            const { data: coupon } = await admin
-              .from('coupons')
-              .select('id')
-              .eq('code', row.coupon_code)
-              .maybeSingle();
-            if (coupon) {
-              const { error: redErr } = await admin
-                .from('coupon_redemptions')
-                .insert({ coupon_id: coupon.id, student_id: row.student_id, payment_id: row.id });
-              if (!redErr) await admin.rpc('increment_coupon_use', { p_coupon_id: coupon.id });
-            }
+          if (activateErr) {
+            console.error('[rzp-webhook] activate_payment failed:', activateErr.message);
+            return NextResponse.json({ error: 'db error' }, { status: 500 });
           }
+
+          // Freemium upgrade: flip is_premium, queue a buddy, confirm in-app.
+          // Idempotent — safe on Razorpay retries (the status guard above stops
+          // activate_payment re-running; these are no-ops the second time).
+          await grantPremiumAndQueueBuddy(admin, row.student_id);
         }
+      }
+    }
+
+    // Refund → downgrade to free (keep the account + all their logs).
+    if (event.event === 'refund.processed' || event.event === 'refund.created') {
+      const refundEntity = (event as { payload?: { refund?: { entity?: { payment_id?: string } } } })
+        .payload?.refund?.entity;
+      const refundedPaymentId = refundEntity?.payment_id;
+      if (refundedPaymentId) {
+        const admin = createAdminClient();
+        const { data: row } = await admin
+          .from('student_payments')
+          .select('student_id')
+          .eq('razorpay_payment_id', refundedPaymentId)
+          .maybeSingle();
+        if (row?.student_id) await revokePremium(admin, row.student_id);
       }
     }
 

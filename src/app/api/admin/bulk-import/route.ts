@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logAdminAction } from '@/lib/audit';
+import { normalizeIndianPhone } from '@/lib/phone';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface ImportRow {
@@ -26,11 +27,32 @@ interface ImportResult {
   buddyErrors: Array<{ email: string; error: string }>;
 }
 
+// RFC 4180-compliant CSV line parser — handles quoted fields containing commas.
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; } // escaped quote
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
 function parseCSV(text: string): ImportRow[] {
   const lines = text.trim().split('\n');
   if (lines.length < 2) throw new Error('CSV must have header row + at least 1 data row');
 
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
   const requiredHeaders = ['full_name', 'email', 'phone', 'role'];
 
   for (const h of requiredHeaders) {
@@ -43,7 +65,7 @@ function parseCSV(text: string): ImportRow[] {
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
 
-    const values = lines[i].split(',').map(v => v.trim());
+    const values = parseCSVLine(lines[i]);
 
     // Helper to safely get value from headers
     const getValue = (colName: string) => {
@@ -70,7 +92,12 @@ function parseCSV(text: string): ImportRow[] {
 function validateRow(row: ImportRow, rowNum: number): string | null {
   if (!row.full_name) return `Row ${rowNum}: Missing full_name`;
   if (!row.email || !row.email.includes('@')) return `Row ${rowNum}: Invalid email`;
-  if (!row.phone) return `Row ${rowNum}: Missing phone`;
+  // Normalize phone to E.164 in-place so the profile is always stored correctly.
+  // Raw values like "9876543210" or "09876543210" are accepted and normalised;
+  // anything that doesn't parse as a valid Indian mobile is rejected here.
+  const e164 = normalizeIndianPhone(row.phone);
+  if (!e164) return `Row ${rowNum}: Invalid phone '${row.phone}' — must be a 10-digit Indian mobile`;
+  row.phone = e164;
   if (!['student', 'buddy'].includes(row.role)) return `Row ${rowNum}: Role must be 'student' or 'buddy'`;
   if (row.role === 'student' && !row.exam_target) return `Row ${rowNum}: Students must have exam_target (CAT)`;
   if (row.password && row.password.length < 8) return `Row ${rowNum}: Password must be at least 8 characters`;

@@ -5,6 +5,8 @@ import { BuddyFeedbackCard } from '@/app/student/home/buddy-feedback-card';
 import { SessionRequestPanel } from './session-request-panel';
 import { Video, Calendar, PhoneCall, Clock } from 'lucide-react';
 import Link from 'next/link';
+import { isPremium } from '@/lib/access';
+import { LockedBuddyHub } from '@/components/locked-buddy-hub';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -18,9 +20,15 @@ export default async function BuddyCommunicationPage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, buddy_id')
+    .select('full_name, buddy_id, is_premium')
     .eq('id', user.id)
     .single();
+
+  // Freemium paywall: the real buddy hub is premium-only. Free users get the
+  // locked "buddy-taste" state with the unlock CTA.
+  if (!isPremium(profile)) {
+    return <LockedBuddyHub variant="buddy" />;
+  }
 
   const buddyId = profile?.buddy_id ?? null;
   // eslint-disable-next-line react-hooks/purity

@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { ChatThread } from '@/components/chat/chat-thread';
 import { fetchPairMessages } from '@/lib/chat';
+import { isPremium } from '@/lib/access';
+import { LockedBuddyHub } from '@/components/locked-buddy-hub';
 
 export const metadata = {
   title: 'Chat · CareerRai',
@@ -16,9 +18,14 @@ export default async function StudentChatPage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, buddy_id')
+    .select('full_name, buddy_id, is_premium')
     .eq('id', user.id)
     .single();
+
+  // Freemium paywall: chatting with the buddy is premium-only.
+  if (!isPremium(profile)) {
+    return <LockedBuddyHub variant="chat" />;
+  }
 
   const buddyId = profile?.buddy_id ?? null;
 

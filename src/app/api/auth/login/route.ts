@@ -58,10 +58,10 @@ export async function POST(request: NextRequest) {
     return response;
   }
 
-  // Phone + password (primary login method).
-  // Users created with email identities (e.g. demo buddies) are authenticated
-  // via email even when they log in with a phone number. Users created with
-  // phone identities only (e.g. the admin account) are authenticated via phone.
+  // Phone + password (primary login method)
+  // Always authenticates via email even when credential is a phone number, because
+  // users are created with email identities (not phone identities). Phone is only
+  // used to look up which auth account to sign into.
   const e164 = normalizeIndianPhone(credential);
   if (e164) {
     const { data: profile } = await admin

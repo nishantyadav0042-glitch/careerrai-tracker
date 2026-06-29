@@ -88,12 +88,13 @@ export function computeStreak(reports: DailyReport[]): number {
 }
 
 export function getHeatmapData(reports: DailyReport[], days = 14) {
+  const byDate = new Map(reports.map(r => [r.report_date, r]));
   const result = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const ds = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const found = reports.find((r) => r.report_date === ds);
+    const found = byDate.get(ds);
     result.push({ date: ds, hours: found?.study_duration ?? 0, submitted: !!found });
   }
   return result;

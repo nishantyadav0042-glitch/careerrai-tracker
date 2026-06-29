@@ -18,34 +18,48 @@ export async function POST(request: NextRequest) {
   if (!students?.length) return NextResponse.json({ flagged: 0 });
 
   const studentIds = students.map(s => s.id);
-  const { data: reports } = await admin.from('daily_reports').select('*').in('student_id', studentIds).gte('report_date', weekAgoStr);
+  const { data: reports } = await admin.from('daily_reports').select('student_id, report_date, study_duration, confidence, stress, sleep_quality, overall_energy, mock_taken, total_accuracy').in('student_id', studentIds).gte('report_date', weekAgoStr);
   const allReports = (reports ?? []) as DailyReport[];
 
-  let flagged = 0;
-  for (const student of students) {
-    if (!student.buddy_id) continue;
-    const reps = allReports.filter(r => r.student_id === student.id);
-    const summary = computeSummary(reps, 7);
-    if (summary.redFlags.length === 0) continue;
+  // Pre-build reports Map and batch-fetch all buddy profiles — eliminates N per-student DB round-trips
+  const reportsByStudentId = new Map<string, DailyReport[]>();
+  for (const r of allReports) {
+    if (!reportsByStudentId.has(r.student_id)) reportsByStudentId.set(r.student_id, []);
+    reportsByStudentId.get(r.student_id)!.push(r);
+  }
 
-    // Check if we already sent a flag alert in last 24h
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+  const buddyIdsNeeded = [...new Set(students.filter(s => s.buddy_id).map(s => s.buddy_id!))];
+  const buddyById = new Map<string, { full_name: string; email: string | null }>();
+  if (buddyIdsNeeded.length > 0) {
+    const { data: buddyProfiles } = await admin.from('profiles').select('id, full_name, email').in('id', buddyIdsNeeded);
+    for (const b of buddyProfiles ?? []) buddyById.set(b.id, { full_name: b.full_name, email: b.email });
+  }
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayIso = yesterday.toISOString();
+
+  // Process all students concurrently — dedup checks and inserts run in parallel
+  const results = await Promise.all(students.map(async student => {
+    if (!student.buddy_id) return false;
+    const reps = reportsByStudentId.get(student.id) ?? [];
+    const summary = computeSummary(reps, 7);
+    if (summary.redFlags.length === 0) return false;
+
     const { data: recentAlert } = await admin
       .from('notifications')
       .select('id')
       .eq('user_id', student.buddy_id)
       .eq('type', 'red_flag')
       .contains('data', { student_id: student.id })
-      .gte('created_at', yesterday.toISOString())
-      .single();
+      .gte('created_at', yesterdayIso)
+      .maybeSingle();
 
-    if (recentAlert) continue; // Already alerted today
+    if (recentAlert) return false;
 
-    const { data: buddy } = await admin.from('profiles').select('full_name, email').eq('id', student.buddy_id).single();
-    if (!buddy) continue;
+    const buddy = buddyById.get(student.buddy_id);
+    if (!buddy) return false;
 
-    // In-app alert to buddy
     await admin.from('notifications').insert({
       user_id: student.buddy_id,
       type: 'red_flag',
@@ -56,15 +70,14 @@ export async function POST(request: NextRequest) {
       channel: 'in_app',
     });
 
-    // Email alert
     if (buddy.email) {
       await sendRedFlagAlert(buddy.email, buddy.full_name.split(' ')[0], student.full_name, summary.redFlags);
     }
 
-    flagged++;
-  }
+    return true;
+  }));
 
-  return NextResponse.json({ flagged });
+  return NextResponse.json({ flagged: results.filter(Boolean).length });
 }
 
 export { POST as GET };
