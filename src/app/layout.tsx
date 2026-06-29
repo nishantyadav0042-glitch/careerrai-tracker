@@ -11,9 +11,16 @@ export const metadata: Metadata = {
   description: 'Daily prep tracking with your IIM buddy.',
   icons: {
     icon: '/careerrai-monogram.png',
-    apple: '/careerrai-monogram.png',
+    // Square, opaque 180×180 — used as the iOS Home-Screen icon when a student
+    // adds the app via Share → Add to Home Screen (iOS ignores the manifest icons).
+    apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'CareerRai',
+  },
 };
 
 export const viewport: Viewport = {

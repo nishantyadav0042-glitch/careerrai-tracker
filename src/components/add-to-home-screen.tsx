@@ -41,9 +41,15 @@ export function AddToHomeScreenBanner({ onDismiss }: { onDismiss?: () => void })
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- platform detection must run client-side after mount */
     if (isStandalone()) return; // Already installed
     const p = detectPlatform();
     setPlatform(p);
+
+    // Once the app is installed, hide any install promotion (research: listen for
+    // the Chromium-only `appinstalled` event and remove the prompt).
+    const onInstalled = () => { setInstalled(true); setVisible(false); };
+    window.addEventListener('appinstalled', onInstalled);
 
     if (p === 'android') {
       const handler = (e: BeforeInstallPromptEvent) => {
@@ -52,11 +58,16 @@ export function AddToHomeScreenBanner({ onDismiss }: { onDismiss?: () => void })
         setVisible(true);
       };
       window.addEventListener('beforeinstallprompt', handler);
-      return () => window.removeEventListener('beforeinstallprompt', handler);
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handler);
+        window.removeEventListener('appinstalled', onInstalled);
+      };
     } else if (p === 'ios') {
       setVisible(true);
     }
     // On desktop/other, don't show
+    return () => window.removeEventListener('appinstalled', onInstalled);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   async function install() {
@@ -93,7 +104,7 @@ export function AddToHomeScreenBanner({ onDismiss }: { onDismiss?: () => void })
           </li>
           <li className="flex items-start gap-2">
             <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">2</span>
-            <span>Scroll down and tap <strong>"Add to Home Screen"</strong> <Plus className="w-3.5 h-3.5 inline mx-0.5" /></span>
+            <span>Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong> <Plus className="w-3.5 h-3.5 inline mx-0.5" /></span>
           </li>
           <li className="flex items-start gap-2">
             <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">3</span>

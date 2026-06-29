@@ -1,8 +1,9 @@
-﻿{
+{
+  "id": "/",
   "name": "CareerRai - Daily Prep Tracker",
   "short_name": "CareerRai",
-  "description": "Track your daily exam prep with your buddy",
-  "start_url": "/student/home",
+  "description": "Track your daily CAT exam prep with an IIM buddy who keeps you accountable.",
+  "start_url": "/student/home?source=pwa",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -10,23 +11,22 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/careerrai-logo.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/careerrai-logo.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    }
-  ],
-  "screenshots": [
+    },
     {
-      "src": "/careerrai-logo.png",
-      "sizes": "540x720",
-      "type": "image/png"
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["education", "productivity"],
