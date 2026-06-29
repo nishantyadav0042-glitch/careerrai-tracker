@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
+import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 
 // Freemium self-signup. Two fields (Name + Phone), phone-OTP, no password,
 // no allowlist. On success the visitor lands straight in the free app.
@@ -154,6 +155,11 @@ export default function StartPage() {
             </button>
           </form>
         )}
+
+        {/* Install the app right from the ad landing (Add to Home Screen). */}
+        <div className="mt-6">
+          <AddToHomeScreenBanner />
+        </div>
       </div>
     </div>
   );
