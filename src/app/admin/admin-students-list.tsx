@@ -64,59 +64,58 @@ export function AdminStudentsList({
 
         return (
           <Card key={student.id} className="p-4">
-            {/* Main row */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-10 h-10 bg-gradient-to-br from-stone-900 to-stone-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                  {initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-stone-900 text-sm">{student.full_name}</span>
-                    <Badge color={bandColor}>{summary.overallScore}/100</Badge>
-                    {submittedToday ? (
-                      <Badge color="green"><CheckCircle2 className="w-3 h-3" />Today</Badge>
-                    ) : (
-                      <Badge color="amber"><Clock className="w-3 h-3" />Pending</Badge>
-                    )}
-                    {!student.onboarding_completed && (
-                      <Badge color="stone">Setup incomplete</Badge>
-                    )}
-                    {isSparse && (
-                      <Badge color="amber"><AlertCircle className="w-3 h-3" />Profile sparse</Badge>
-                    )}
-                  </div>
-                  <div className="text-xs text-stone-500 mt-0.5">
-                    {student.exam_target ?? 'CAT'} · {buddy?.full_name?.split(' ')[0] ?? 'No buddy'} · {summary.daysSubmitted}/7 days
-                  </div>
-                </div>
+            {/* Header: avatar + name + expand toggle */}
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-stone-900 to-stone-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                {initials}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-stone-900 text-sm truncate">{student.full_name}</span>
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : student.id)}
+                    className="-mt-1 -mr-1 p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 flex-shrink-0"
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                  >
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Buddy dropdown */}
-                <select
-                  value={buddy?.id || ''}
-                  onChange={(e) => handleAssign(student.id, e.target.value || null)}
-                  disabled={isLoading}
-                  className={cn(
-                    'px-3 py-1.5 bg-white border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-600',
-                    isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                {/* Status badges — wrap cleanly on their own line */}
+                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                  <Badge color={bandColor}>{summary.overallScore}/100</Badge>
+                  {submittedToday ? (
+                    <Badge color="green"><CheckCircle2 className="w-3 h-3" />Today</Badge>
+                  ) : (
+                    <Badge color="amber"><Clock className="w-3 h-3" />Pending</Badge>
                   )}
-                >
-                  <option value="">Unassigned</option>
-                  {buddies.map((b) => (
-                    <option key={b.id} value={b.id}>{b.full_name}</option>
-                  ))}
-                </select>
+                  {!student.onboarding_completed && <Badge color="stone">Setup incomplete</Badge>}
+                  {isSparse && <Badge color="amber"><AlertCircle className="w-3 h-3" />Profile sparse</Badge>}
+                </div>
 
-                {/* Expand toggle */}
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : student.id)}
-                  className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400"
-                >
-                  {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
+                <div className="text-xs text-stone-500 mt-1">
+                  {student.exam_target ?? 'CAT'} · {summary.daysSubmitted}/7 days logged
+                </div>
               </div>
+            </div>
+
+            {/* Buddy assignment — its own full-width row, never squeezing the name */}
+            <div className="mt-3 flex items-center gap-2">
+              <label className="text-xs font-medium text-stone-400 flex-shrink-0">Buddy</label>
+              <select
+                value={buddy?.id || ''}
+                onChange={(e) => handleAssign(student.id, e.target.value || null)}
+                disabled={isLoading}
+                className={cn(
+                  'flex-1 min-w-0 px-3 py-2 bg-white border border-stone-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-600',
+                  isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                )}
+              >
+                <option value="">Unassigned</option>
+                {buddies.map((b) => (
+                  <option key={b.id} value={b.id}>{b.full_name}</option>
+                ))}
+              </select>
             </div>
 
             {/* Expanded full dossier — everything the student filled in setup */}
