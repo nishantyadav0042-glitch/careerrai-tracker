@@ -109,9 +109,6 @@ export function UnlockBuddyButton({
     }
   }
 
-  const journeyPlans = (Object.keys(PLANS) as PlanId[]).filter((id) => PLANS[id].journey);
-  const fallbackPlans = (Object.keys(PLANS) as PlanId[]).filter((id) => !PLANS[id].journey);
-
   return (
     <>
       <Button variant={variant} size={size} className={className} onClick={openSheet}>
@@ -157,7 +154,7 @@ export function UnlockBuddyButton({
                 </ul>
 
                 <div className="mt-5 space-y-2">
-                  {journeyPlans.map((id) => (
+                  {(Object.keys(PLANS) as PlanId[]).map((id) => (
                     <button
                       key={id}
                       onClick={() => pay(id)}
@@ -178,17 +175,6 @@ export function UnlockBuddyButton({
                       <span className="shrink-0 pl-3 text-sm font-bold text-orange-600">
                         {busy === id ? 'Starting…' : PLANS[id].display}
                       </span>
-                    </button>
-                  ))}
-
-                  {fallbackPlans.map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => pay(id)}
-                      disabled={busy !== null}
-                      className="mt-1 w-full text-center text-xs text-stone-500 transition-colors hover:text-stone-800 disabled:opacity-50"
-                    >
-                      {busy === id ? 'Starting…' : `ya month-to-month — ${PLANS[id].display}/mo`}
                     </button>
                   ))}
                 </div>
