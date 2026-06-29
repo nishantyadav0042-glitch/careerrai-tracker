@@ -1,9 +1,11 @@
-﻿// Service Worker — push notifications + PWA installability (v2)
-
-// A 'fetch' handler must exist for the app to satisfy PWA install criteria in
-// Chrome. We don't cache the app shell (the app is online-first), so this is a
-// pass-through to the network — its mere presence makes the app installable.
-self.addEventListener('fetch', () => {});
+﻿// Service Worker — push notifications (v3)
+//
+// DELIBERATELY no 'fetch' handler. A fetch handler (even a no-op) makes the SW
+// intercept every navigation/asset request, which left users stuck on a stale
+// cached build after each deploy ("none of these are deployed"). Without one the
+// SW never touches loads, so every page is fetched fresh from the network — and
+// the app is still installable in modern Chrome with just a registered SW +
+// manifest (the fetch-handler requirement was dropped years ago).
 
 self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received:', event);
