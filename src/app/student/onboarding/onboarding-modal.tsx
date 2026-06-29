@@ -84,25 +84,39 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     if (currentScreen < screens.length - 1) {
       setCurrentScreen(currentScreen + 1);
     } else {
-      // Last screen — mark onboarding complete
+      // Last screen — persist EVERYTHING the user entered in ONE awaited write.
+      // The per-screen saves above are best-effort (fire-and-forget); this is the
+      // source of truth, so a failed/raced intermediate save can never leave the
+      // profile as "New User" or drop the college/goals.
       setIsLoading(true);
       try {
         if (!userId) throw new Error('User ID not found');
 
-        const { data: updateResult, error } = await supabase
-          .from('profiles')
-          .update({ onboarding_completed: true, study_target_hours: studyTargetHours })
-          .eq('id', userId)
-          .select();
+        const merged: Record<string, unknown> = { ...onboardingData, ...(data ?? {}) };
+        const update: Record<string, unknown> = {
+          onboarding_completed: true,
+          study_target_hours: studyTargetHours,
+        };
+        if (typeof merged.full_name === 'string' && merged.full_name.trim()) update.full_name = merged.full_name.trim();
+        if (merged.college) update.college = merged.college;
+        if (merged.dream_colleges) update.dream_colleges = merged.dream_colleges;
+        if (merged.target_percentile != null) update.target_percentile = merged.target_percentile;
+        if (merged.attempt_year != null) update.attempt_year = merged.attempt_year;
+        if (merged.is_repeater != null) update.is_repeater = merged.is_repeater;
+        if (merged.category != null) update.category = merged.category;
+        if (typeof merged.is_working_professional === 'boolean') update.is_working_professional = merged.is_working_professional;
+        if (merged.work_ex_months != null) update.work_ex_months = merged.work_ex_months;
+        if (typeof merged.coaching_enrolled === 'boolean') update.coaching_enrolled = merged.coaching_enrolled;
+        if (merged.course_year != null) update.course_year = merged.course_year;
 
-        console.log('Update result:', updateResult, 'Error:', error);
+        const { error } = await supabase.from('profiles').update(update).eq('id', userId).select();
         if (error) throw error;
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 1200));
         onComplete();
       } catch (err) {
         console.error('Onboarding error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to complete onboarding. Try closing and reopening.');
+        setError(err instanceof Error ? err.message : 'Failed to complete onboarding. Please try again.');
         setIsLoading(false);
       }
     }
