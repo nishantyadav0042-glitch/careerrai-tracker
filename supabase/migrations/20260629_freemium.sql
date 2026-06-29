@@ -13,23 +13,17 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS signup_source  TEXT;  -- 's
 
 CREATE INDEX IF NOT EXISTS idx_profiles_is_premium ON public.profiles(is_premium) WHERE is_premium = TRUE;
 
--- Backfill: anyone currently on an active subscription is premium, so the new
--- paywall never locks out an existing payer. subscription_status was added by a
--- later migration; guard the backfill so it no-ops if the column is absent.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'subscription_status'
-  ) THEN
-    UPDATE public.profiles
-       SET is_premium = TRUE,
-           premium_since = COALESCE(premium_since, created_at)
-     WHERE role = 'student'
-       AND is_premium = FALSE
-       AND subscription_status = 'active';
-  END IF;
-END $$;
+-- Backfill / GRANDFATHER: every student that already exists predates freemium,
+-- so flip them ALL to premium. The new paywall must only ever affect NEW
+-- self-signups (which default is_premium=false at the column level) — never an
+-- existing student mid-relationship with a buddy. This also keeps the demo
+-- account (a student row) premium, so the sales demo shows the REAL buddy
+-- experience, not a locked card.
+UPDATE public.profiles
+   SET is_premium = TRUE,
+       premium_since = COALESCE(premium_since, created_at)
+ WHERE role = 'student'
+   AND is_premium = FALSE;
 
 -- ── buddy_assignment_queue: a paid student waits here until a buddy is assigned ─
 CREATE TABLE IF NOT EXISTS public.buddy_assignment_queue (
