@@ -9,6 +9,7 @@ import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
 import { FirstLoginTour } from '@/components/first-login-tour';
+import { PushGate } from '@/components/push-gate';
 
 function DemoBanner() {
   return (
@@ -27,7 +28,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const [chatUnread, notifUnread, { data: profile }, { data: engagement }] = await Promise.all([
     getChatUnreadCount(user.id, 'student'),
     getNotifUnreadCount(user.id),
-    admin.from('profiles').select('role, is_demo, is_premium, onboarding_completed').eq('id', user.id).single(),
+    admin.from('profiles').select('role, is_demo, is_premium, onboarding_completed, notif_prefs').eq('id', user.id).single(),
     admin.from('student_engagement').select('tour_completed').eq('student_id', user.id).maybeSingle(),
   ]);
 
@@ -45,6 +46,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const showTour = !isDemo && !profile?.is_premium && engagement?.tour_completed !== true;
   // Profile-data onboarding (dream colleges, baseline, etc.) comes AFTER the tour.
   const showOnboarding = !isDemo && profile?.onboarding_completed !== true;
+  // Mandatory push step — AFTER tour + onboarding. Shown to every non-demo student
+  // who hasn't turned push on yet (notif_prefs.push !== true). Enabling sets that
+  // flag, so the gate appears at most once per student and then never again.
+  const pushEnabled = (profile?.notif_prefs as { push?: boolean } | null)?.push === true;
+  const showPushGate = !isDemo && !showTour && !showOnboarding && !pushEnabled;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -62,7 +68,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {showTour ? <FirstLoginTour /> : showOnboarding && <OnboardingGate />}
+      {showTour ? <FirstLoginTour /> : showOnboarding ? <OnboardingGate /> : showPushGate && <PushGate />}
     </div>
   );
 }
