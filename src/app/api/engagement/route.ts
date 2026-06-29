@@ -24,11 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-
-  // Ensure a row exists (self-signup seeds one, but be defensive for older accounts).
-  await admin
-    .from('student_engagement')
-    .upsert({ student_id: user.id }, { onConflict: 'student_id', ignoreDuplicates: true });
+  const now = new Date().toISOString();
 
   if (event === 'buddy_cta_click') {
     // Atomic increment via RPC; fall back to a read-modify-write if the fn is absent.
@@ -56,10 +52,11 @@ export async function POST(request: NextRequest) {
       event === 'tour_completed' ? { tour_completed: true } :
       event === 'mock_opened' ? { mock_opened: true } :
       { sample_debrief_viewed: true };
+    // Upsert (not update) so the flag persists even if no row existed yet —
+    // otherwise a 0-row update could let the mandatory tour re-show on reload.
     await admin
       .from('student_engagement')
-      .update({ ...flag, updated_at: new Date().toISOString() })
-      .eq('student_id', user.id);
+      .upsert({ student_id: user.id, ...flag, updated_at: now }, { onConflict: 'student_id' });
   }
 
   return NextResponse.json({ ok: true });

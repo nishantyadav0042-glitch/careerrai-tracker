@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
+import { isAdminPhoneE164 } from '@/lib/admin-config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,18 +23,23 @@ export async function POST(request: NextRequest) {
     // paid SMS vendor (indiahost, ~1000-OTP plan, single vendor). Two ceilings:
     //   1. per-phone: 3 sends / 30 min + 30s cooldown (below).
     //   2. global daily: stop before the vendor quota is exhausted by abuse.
-    const DAILY_OTP_CEILING = Number(process.env.DAILY_OTP_CEILING ?? 800);
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count: globalToday } = await admin
-      .from('otp_send_events')
-      .select('*', { count: 'exact', head: true })
-      .gte('sent_at', dayAgo);
-    if ((globalToday ?? 0) >= DAILY_OTP_CEILING) {
-      console.error(`[request-phone-otp] daily OTP ceiling hit (${globalToday}/${DAILY_OTP_CEILING})`);
-      return NextResponse.json(
-        { sent: false, message: "We're experiencing very high signups right now. Please try again in a little while." },
-        { status: 429 }
-      );
+    // The admin phone is exempt — the founder must always be able to log in.
+    // Robust parse: a blank env var (Number('')===0) must NOT disable all logins.
+    const parsedCeiling = Number(process.env.DAILY_OTP_CEILING);
+    const DAILY_OTP_CEILING = Number.isFinite(parsedCeiling) && parsedCeiling > 0 ? parsedCeiling : 800;
+    if (!isAdminPhoneE164(e164)) {
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count: globalToday } = await admin
+        .from('otp_send_events')
+        .select('*', { count: 'exact', head: true })
+        .gte('sent_at', dayAgo);
+      if ((globalToday ?? 0) >= DAILY_OTP_CEILING) {
+        console.error(`[request-phone-otp] daily OTP ceiling hit (${globalToday}/${DAILY_OTP_CEILING})`);
+        return NextResponse.json(
+          { sent: false, message: "We're experiencing very high signups right now. Please try again in a little while." },
+          { status: 429 }
+        );
+      }
     }
 
     // Rate limit: max 3 sends / 30 min, 30s cooldown (per phone)

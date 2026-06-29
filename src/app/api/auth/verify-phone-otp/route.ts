@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
+import { isAdminPhoneE164 } from '@/lib/admin-config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,8 +74,7 @@ export async function POST(request: NextRequest) {
     // downgraded to 'student' for the session.
     // Belt-and-suspenders: the registered admin phone always gets admin role.
     // Phone stored in ADMIN_PHONE_E164 env var (never hardcoded in source).
-    const adminPhone = process.env.ADMIN_PHONE_E164;
-    const isAdminPhone = !!adminPhone && e164 === adminPhone;
+    const isAdminPhone = isAdminPhoneE164(e164);
     const role = (
       isAdminPhone
         ? 'admin'
@@ -128,6 +128,13 @@ export async function POST(request: NextRequest) {
           ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
         })
         .eq('id', data.user.id);
+    }
+
+    // Admin phone: guarantee the DB role is 'admin' so /admin (which re-checks
+    // the DB role, not just the session) lets them straight in — even if this
+    // number's profile pre-existed as a student.
+    if (isAdminPhone) {
+      await admin.from('profiles').update({ role: 'admin' }).eq('id', data.user.id);
     }
 
     // Seed the engagement row for students (idempotent) — drives the sales-ready
