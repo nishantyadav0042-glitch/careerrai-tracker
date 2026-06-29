@@ -2,11 +2,14 @@ import webpush from 'web-push';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getServerConfig } from '@/lib/server-config';
 
-// VAPID keys resolve from env first, then the server_config table — so push can
-// be configured entirely from the DB without a Vercel env edit + redeploy.
+// VAPID keypair is sourced from the server_config table (DB-authoritative) so the
+// public key the client subscribes with and the private key the server signs with
+// are ALWAYS a matched pair — env vars are deliberately not consulted for the keys
+// to avoid an env-public / DB-private mismatch that silently breaks push. (Email
+// is not part of the keypair, so it may still come from env.)
 async function getVapidConfigured() {
-  const pub = await getServerConfig('VAPID_PUBLIC_KEY', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY');
-  const priv = await getServerConfig('VAPID_PRIVATE_KEY', 'VAPID_PRIVATE_KEY');
+  const pub = await getServerConfig('VAPID_PUBLIC_KEY');
+  const priv = await getServerConfig('VAPID_PRIVATE_KEY');
   const email = (await getServerConfig('VAPID_EMAIL', 'VAPID_EMAIL')) ?? 'mailto:admin@careerrai.com';
   if (!pub || !priv) return false;
   webpush.setVapidDetails(email, pub, priv);
