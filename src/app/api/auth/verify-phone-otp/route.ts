@@ -5,7 +5,10 @@ import { normalizeIndianPhone } from '@/lib/phone';
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone: rawPhone, token } = (await request.json()) as { phone?: string; token?: string };
+    const { phone: rawPhone, token, name: rawName } = (await request.json()) as { phone?: string; token?: string; name?: string };
+    // Name comes from the /start self-signup form (allowlist users get their name
+    // from the allowlist entry instead). Trim + cap to a sane length.
+    const selfName = (rawName ?? '').trim().slice(0, 80) || null;
     const e164 = normalizeIndianPhone(rawPhone ?? '');
     if (!e164 || !token || !/^\d{6}$/.test(token.trim())) {
       return NextResponse.json({ error: 'Invalid phone or OTP.' }, { status: 400 });
@@ -52,12 +55,10 @@ export async function POST(request: NextRequest) {
       .eq('id', data.user.id)
       .maybeSingle();
 
-    if (!existing && !entry) {
-      return NextResponse.json(
-        { error: "This number isn't registered. Your admin will add you after onboarding." },
-        { status: 403 }
-      );
-    }
+    // Freemium: no allowlist entry = self-signup → create a brand-new FREE
+    // student (was previously rejected with 403). The allowlist now only assigns
+    // a buddy/admin role or a pre-paid student, never gates access.
+    const signupSource = entry ? 'allowlist' : 'self_serve';
 
     // The handle_new_user DB trigger auto-creates a bare profile (full_name
     // 'New User', role 'student') the instant verifyOtp creates the auth user.
@@ -93,11 +94,13 @@ export async function POST(request: NextRequest) {
       await admin.from('profiles').insert({
         id: data.user.id,
         role,
-        full_name: entry?.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
+        full_name: entry?.full_name ?? selfName ?? (role === 'buddy' ? 'Buddy' : 'Student'),
         email: entry?.email ?? null,
         phone: e164,
         buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
         subscription_status: role === 'student' ? 'free_beta' : null,
+        is_premium: false,
+        signup_source: role === 'student' ? signupSource : null,
         password_set: false,
       });
     } else if (isStub) {
@@ -108,11 +111,11 @@ export async function POST(request: NextRequest) {
         .from('profiles')
         .update({
           role,
-          full_name: entry?.full_name ?? existing.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
+          full_name: entry?.full_name ?? selfName ?? existing.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
           email: entry?.email ?? existing.email ?? null,
           phone: e164,
           buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
-          ...(role === 'student' ? { subscription_status: 'free_beta' } : {}),
+          ...(role === 'student' ? { subscription_status: 'free_beta', signup_source: signupSource } : {}),
         })
         .eq('id', data.user.id);
     } else {
@@ -125,6 +128,14 @@ export async function POST(request: NextRequest) {
           ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
         })
         .eq('id', data.user.id);
+    }
+
+    // Seed the engagement row for students (idempotent) — drives the sales-ready
+    // trigger (§D). Safe to call on every login; only inserts once.
+    if (role === 'student') {
+      await admin
+        .from('student_engagement')
+        .upsert({ student_id: data.user.id }, { onConflict: 'student_id', ignoreDuplicates: true });
     }
 
     const hasPassword = existing?.password_set === true;
