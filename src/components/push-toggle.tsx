@@ -36,6 +36,22 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
   const [denied, setDenied] = useState(false);
   const [iosNeedsInstall, setIosNeedsInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  async function sendTest() {
+    setTesting(true);
+    setTestMsg(null);
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' });
+      const data = await res.json();
+      setTestMsg(res.ok && data.ok ? 'Sent! You should see a notification in a second.' : (data.message ?? 'Could not send the test.'));
+    } catch {
+      setTestMsg('Could not send the test. Check your connection.');
+    } finally {
+      setTesting(false);
+    }
+  }
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- browser-capability detection must run client-side after mount */
@@ -146,6 +162,19 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
         </button>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
+      {enabled && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={sendTest}
+            disabled={testing}
+            className="text-xs font-medium text-teal-700 underline underline-offset-2 hover:text-teal-800 disabled:opacity-50"
+          >
+            {testing ? 'Sending…' : 'Send a test alert'}
+          </button>
+          {testMsg && <span className="text-xs text-stone-500">{testMsg}</span>}
+        </div>
+      )}
     </div>
   );
 }
