@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
-import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
+import { InstallAppButton } from '@/components/install-app-button';
 import { OpenInBrowser } from '@/components/open-in-browser';
 
 // Freemium self-signup. Two fields (Name + Phone), phone-OTP, no password,
@@ -160,9 +160,9 @@ export default function StartPage() {
           </form>
         )}
 
-        {/* Install the app right from the ad landing (Add to Home Screen). */}
+        {/* Prominent install push — below the signup form so lead capture stays primary. */}
         <div className="mt-6">
-          <AddToHomeScreenBanner />
+          <InstallAppButton variant="banner" />
         </div>
       </div>
     </div>
