@@ -9,6 +9,8 @@ import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { AnchorLine } from '@/components/DailyTracker/AnchorLine';
 import { getLogDateString } from '@/lib/streak-utils';
 import { getCurrentMission, MISSION_TARGET } from '@/lib/missions';
+import { isPremium } from '@/lib/access';
+import { LockedBuddyCard } from '@/components/locked-buddy-card';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -36,7 +38,7 @@ export default async function DailyTrackerPage() {
     { data: recentMock },
     { data: streakRow },
   ] = await Promise.all([
-    admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile').eq('id', user.id).single(),
+    admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo').eq('id', user.id).single(),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')
@@ -80,6 +82,7 @@ export default async function DailyTrackerPage() {
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
+  const isPremiumUser = isPremium(profile);
   const dreamColleges = (profile?.dream_colleges as string[] | null) ?? [];
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
@@ -211,7 +214,13 @@ export default async function DailyTrackerPage() {
           />
         )}
 
-        {!buddyId && (
+        {/* Free user → the locked buddy-taste card (the upgrade hook).
+            Paid-but-unassigned → "being matched". Premium-with-buddy → neither. */}
+        {!buddyId && !isPremiumUser && (
+          <LockedBuddyCard streak={(streakRow?.current_streak as number | null) ?? 0} />
+        )}
+
+        {!buddyId && isPremiumUser && (
           <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
             <div className="flex items-center gap-3">
               <Image

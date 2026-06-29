@@ -74,6 +74,16 @@ INSERT INTO public.student_engagement (student_id, signed_up_at)
 SELECT id, created_at FROM public.profiles WHERE role = 'student'
 ON CONFLICT (student_id) DO NOTHING;
 
+-- ── increment_buddy_cta: atomic +1 on the hottest buying signal ────────────────
+CREATE OR REPLACE FUNCTION public.increment_buddy_cta(p_student_id UUID)
+RETURNS VOID AS $$
+  INSERT INTO public.student_engagement (student_id, buddy_cta_clicks, updated_at)
+  VALUES (p_student_id, 1, NOW())
+  ON CONFLICT (student_id)
+  DO UPDATE SET buddy_cta_clicks = public.student_engagement.buddy_cta_clicks + 1,
+                updated_at = NOW();
+$$ LANGUAGE sql SECURITY DEFINER;
+
 -- ── handle_new_user: new self-signups default to free, no buddy ────────────────
 -- is_premium already defaults FALSE at the column level, so the existing trigger
 -- needs no change for the flag. This is here only to document intent and stay
