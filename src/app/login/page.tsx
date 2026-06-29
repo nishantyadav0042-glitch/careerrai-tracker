@@ -3,7 +3,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, Smartphone, Sparkles, PlayCircle, ChevronLeft } from 'lucide-react';
 import Image from 'next/image';
-import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
+import { InstallAppButton } from '@/components/install-app-button';
 import { cn } from '@/lib/utils';
 
 type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password';
@@ -474,7 +474,7 @@ function LoginForm() {
           </button>
 
           <div className="mt-4">
-            <AddToHomeScreenBanner />
+            <InstallAppButton />
           </div>
 
           <p className="mt-6 text-center text-xs text-stone-500">
