@@ -33,7 +33,7 @@ export default async function AdminPage() {
 
   // Fetch all profiles — include full onboarding columns so admin can see the
   // complete student dossier (everything they filled across the 9-step setup).
-  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges').order('role').order('full_name');
+  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, is_demo, signup_source').order('created_at', { ascending: false });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profiles = (allProfiles ?? []) as any as Profile[];
 
@@ -84,14 +84,35 @@ export default async function AdminPage() {
     reportsByStudentId.get(r.student_id)!.push(r);
   }
 
-  // Compute per-student stats
+  // Compute per-student stats. Join metadata (label + "new" flag) is computed here
+  // on the server so the admin list can sort newest-first and badge fresh signups
+  // without a client-side Date() that would cause a hydration mismatch.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
   const studentStats = students.map((s) => {
     const reps = reportsByStudentId.get(s.id) ?? [];
     const lastReport = [...reps].sort((a, b) => b.report_date.localeCompare(a.report_date))[0];
     const summary = computeSummary(reps, 7);
     const buddy = buddyById.get(s.buddy_id ?? '');
     const submittedToday = reps.some(r => r.report_date === today);
-    return { student: s, summary, lastDate: lastReport?.report_date, buddy, submittedToday, hasRedFlags: summary.redFlags.length > 0 };
+    const createdAt = (s as Profile & { created_at?: string }).created_at;
+    const joinedMs = createdAt ? new Date(createdAt).getTime() : 0;
+    const daysSinceJoin = joinedMs ? Math.floor((nowMs - joinedMs) / 86400000) : null;
+    const joinedLabel = createdAt
+      ? new Date(createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : null;
+    return {
+      student: s,
+      summary,
+      lastDate: lastReport?.report_date,
+      buddy,
+      submittedToday,
+      hasRedFlags: summary.redFlags.length > 0,
+      isDemo: !!(s as Profile & { is_demo?: boolean }).is_demo,
+      joinedLabel,
+      daysSinceJoin,
+      isNew: daysSinceJoin !== null && daysSinceJoin <= 7,
+    };
   });
   const studentStatsById = new Map(studentStats.map(ss => [ss.student.id, ss]));
 
