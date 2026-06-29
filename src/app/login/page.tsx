@@ -174,15 +174,6 @@ function LoginForm() {
             </div>
           </a>
 
-          {/* ₹999 + refund trust badge — always visible */}
-          <div className="flex items-start gap-3 bg-stone-900 rounded-xl px-4 py-3 mb-4 shadow-lg">
-            <span className="text-lg shrink-0 mt-0.5">🛡️</span>
-            <div>
-              <p className="text-sm font-bold text-white">Starts at <span className="text-orange-400">₹999/month</span></p>
-              <p className="text-xs text-stone-300 mt-0.5 leading-relaxed">First month: full refund if you don&apos;t feel the value — just log in regularly for 20 days. If we don&apos;t help, you get your money back. No questions asked.</p>
-            </div>
-          </div>
-
           <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
             {/* ── STEP 1: Role picker ── */}
@@ -484,53 +475,6 @@ function LoginForm() {
 
           <div className="mt-4">
             <AddToHomeScreenBanner />
-          </div>
-
-          {/* Our IIM Buddies */}
-          <div className="mt-8">
-            <h2 className="text-lg font-bold text-stone-900 mb-1 text-center" style={{ fontFamily: 'Georgia, serif' }}>
-              Our IIM Buddies
-            </h2>
-            <p className="text-xs text-center text-stone-500 mb-4">IIM graduates. CAT crackers. Your elder sibling in the exam.</p>
-            <div className="space-y-3">
-              {([
-                { emoji: '🎓', title: 'IIM graduates who cracked CAT', desc: 'Every buddy cleared CAT — 95th+ percentile. They know the exact moves that work, not just the theory.' },
-                { emoji: '❤️', title: 'Elder sibling energy, not a teacher', desc: 'No scripted lectures. Honest feedback, daily check-ins, and someone who actually cares if you show up.' },
-                { emoji: '📊', title: 'Strategy built around your gaps', desc: 'Your buddy studies your mocks, spots your patterns, and adjusts the plan week by week — not batch by batch.' },
-              ] as { emoji: string; title: string; desc: string }[]).map(({ emoji, title, desc }) => (
-                <div key={title} className="flex gap-3 p-4 bg-white border border-stone-200 rounded-xl shadow-sm">
-                  <span className="text-xl shrink-0 mt-0.5">{emoji}</span>
-                  <div>
-                    <p className="text-sm font-bold text-stone-900">{title}</p>
-                    <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* What happens after you sign up */}
-          <div className="mt-8">
-            <h2 className="text-lg font-bold text-stone-900 mb-1 text-center" style={{ fontFamily: 'Georgia, serif' }}>
-              What happens after you sign up
-            </h2>
-            <p className="text-xs text-center text-stone-500 mb-4">Your buddy&apos;s role + your journey — in one clear sequence.</p>
-            <div className="space-y-3">
-              {([
-                { step: '01', title: 'You get matched', desc: 'We pair you with an IIM buddy whose CAT profile fits your weak areas — not randomly, intentionally.' },
-                { step: '02', title: 'Your buddy tracks you daily', desc: 'Log your study hours each day. Your buddy sees it, nudges you when you slip, and keeps you honest.' },
-                { step: '03', title: 'Weekly strategy sessions', desc: 'Review mock results together, spot the real gaps, and adjust the plan — every week till CAT day.' },
-                { step: '04', title: 'You stay consistent', desc: "Consistency beats intensity. One honest plan, one IIM senior holding you to it — that's the actual edge." },
-              ] as { step: string; title: string; desc: string }[]).map(({ step, title, desc }) => (
-                <div key={step} className="flex gap-4 p-4 bg-stone-50 border border-stone-100 rounded-xl">
-                  <span className="text-xs font-black text-orange-500 shrink-0 mt-0.5 tabular-nums w-5">{step}</span>
-                  <div>
-                    <p className="text-sm font-bold text-stone-900">{title}</p>
-                    <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           <p className="mt-6 text-center text-xs text-stone-500">

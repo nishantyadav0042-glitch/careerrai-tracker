@@ -12,9 +12,18 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const subscription = await request.json();
+  // Accept both { subscription } and a bare subscription body for safety.
+  const body = await request.json();
+  const subscription = body?.subscription ?? body;
+  if (!subscription?.endpoint) {
+    return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
+  }
+
   const admin = createAdminClient();
-  await admin.from('profiles').update({ push_subscription: subscription, notif_prefs: { push: true } }).eq('id', user.id);
+  // Merge push:true into existing prefs — never clobber daily_reminder/email/time.
+  const { data: profile } = await admin.from('profiles').select('notif_prefs').eq('id', user.id).single();
+  const notif_prefs = { ...(profile?.notif_prefs as Record<string, unknown> ?? {}), push: true };
+  await admin.from('profiles').update({ push_subscription: subscription, notif_prefs }).eq('id', user.id);
 
   return NextResponse.json({ ok: true });
 }

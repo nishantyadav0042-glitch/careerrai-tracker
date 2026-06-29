@@ -1,10 +1,13 @@
 import webpush from 'web-push';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getServerConfig } from '@/lib/server-config';
 
-function getVapidConfigured() {
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  const email = process.env.VAPID_EMAIL ?? 'mailto:admin@careerrai.com';
+// VAPID keys resolve from env first, then the server_config table — so push can
+// be configured entirely from the DB without a Vercel env edit + redeploy.
+async function getVapidConfigured() {
+  const pub = await getServerConfig('VAPID_PUBLIC_KEY', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY');
+  const priv = await getServerConfig('VAPID_PRIVATE_KEY', 'VAPID_PRIVATE_KEY');
+  const email = (await getServerConfig('VAPID_EMAIL', 'VAPID_EMAIL')) ?? 'mailto:admin@careerrai.com';
   if (!pub || !priv) return false;
   webpush.setVapidDetails(email, pub, priv);
   return true;
@@ -14,8 +17,8 @@ export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; url?: string }
 ) {
-  if (!getVapidConfigured()) {
-    console.log(`[Push stub] To: ${userId} | ${payload.title}`);
+  if (!(await getVapidConfigured())) {
+    console.warn(`[push] VAPID not configured — skipped push to ${userId}: ${payload.title}`);
     return;
   }
 

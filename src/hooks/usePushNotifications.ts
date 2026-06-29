@@ -65,11 +65,12 @@ export function usePushNotifications() {
         scope: '/',
       });
 
-      // Get VAPID public key (stored in env)
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidPublicKey) {
-        throw new Error('VAPID public key not configured');
-      }
+      // Get VAPID public key from the server (env or DB-backed config) so push
+      // works without a build-time NEXT_PUBLIC_ env var.
+      const keyRes = await fetch('/api/push/vapid-public-key');
+      if (!keyRes.ok) throw new Error('Push is not configured on the server yet');
+      const { key: vapidPublicKey } = await keyRes.json();
+      if (!vapidPublicKey) throw new Error('VAPID public key not configured');
 
       // Subscribe to push
       const subscription = await registration.pushManager.subscribe({
@@ -84,10 +85,7 @@ export function usePushNotifications() {
       await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          subscription: subscription.toJSON(),
-        }),
+        body: JSON.stringify({ subscription: subscription.toJSON() }),
       });
 
       setIsSubscribed(true);
