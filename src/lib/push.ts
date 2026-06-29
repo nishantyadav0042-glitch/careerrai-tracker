@@ -16,28 +16,35 @@ async function getVapidConfigured() {
   return true;
 }
 
+export interface PushResult { ok: boolean; reason?: string }
+
 export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; url?: string }
-) {
+): Promise<PushResult> {
   if (!(await getVapidConfigured())) {
     console.warn(`[push] VAPID not configured — skipped push to ${userId}: ${payload.title}`);
-    return;
+    return { ok: false, reason: 'vapid_not_configured' };
   }
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from('profiles').select('push_subscription').eq('id', userId).single();
-  if (!profile?.push_subscription) return;
+  if (!profile?.push_subscription) return { ok: false, reason: 'no_subscription' };
 
   try {
     await webpush.sendNotification(
       profile.push_subscription as webpush.PushSubscription,
       JSON.stringify(payload)
     );
+    return { ok: true };
   } catch (err: unknown) {
-    // Subscription expired — clean it up
-    if (typeof err === 'object' && err !== null && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
+    const statusCode = typeof err === 'object' && err !== null && 'statusCode' in err
+      ? (err as { statusCode: number }).statusCode : undefined;
+    // Subscription expired/invalid — clean it up so we stop trying.
+    if (statusCode === 410 || statusCode === 404) {
       await admin.from('profiles').update({ push_subscription: null }).eq('id', userId);
     }
+    console.error(`[push] send failed (status ${statusCode}) for ${userId}`);
+    return { ok: false, reason: `send_failed_${statusCode ?? 'unknown'}` };
   }
 }
