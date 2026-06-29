@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     // downgraded to 'student' for the session.
     // Belt-and-suspenders: the registered admin phone always gets admin role.
     // Phone stored in ADMIN_PHONE_E164 env var (never hardcoded in source).
-    const isAdminPhone = isAdminPhoneE164(e164);
+    const isAdminPhone = await isAdminPhoneE164(e164);
     const role = (
       isAdminPhone
         ? 'admin'
