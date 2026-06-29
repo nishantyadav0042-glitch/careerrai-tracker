@@ -36,7 +36,12 @@ function whatsappLink(phone: string | null | undefined, name: string): string | 
   const digits = phone.replace(/[^0-9]/g, '');
   if (digits.length < 10) return null;
   const firstName = (name || '').split(' ')[0] || 'there';
-  const text = encodeURIComponent(`Hi ${firstName}, this is CareerRai 👋 Welcome aboard! I'm here to help you with your CAT prep.`);
+  // Include the install link in the message. Tapping it from WhatsApp opens in the
+  // phone's DEFAULT browser (Safari/Chrome) — where the app can actually be
+  // installed — unlike the Instagram in-app browser.
+  const text = encodeURIComponent(
+    `Hi ${firstName}, this is CareerRai 👋 Welcome aboard! Install the app on your phone here: https://careerrai-daily.vercel.app/start — then add it to your Home Screen for one-tap access. I'm here to help with your CAT prep.`
+  );
   return `https://wa.me/${digits}?text=${text}`;
 }
 

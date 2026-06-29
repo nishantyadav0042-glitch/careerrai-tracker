@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
+import { OpenInBrowser } from '@/components/open-in-browser';
 
 // Freemium self-signup. Two fields (Name + Phone), phone-OTP, no password,
 // no allowlist. On success the visitor lands straight in the free app.
@@ -74,6 +75,9 @@ export default function StartPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white flex flex-col items-center px-4 py-10">
+      {/* Instagram/Facebook in-app browser can't install PWAs — prompt the user to
+          open in real Safari/Chrome first. Renders only inside an in-app browser. */}
+      <OpenInBrowser />
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-6"><Logo /></div>
 
