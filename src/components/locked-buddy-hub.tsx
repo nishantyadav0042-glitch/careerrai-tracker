@@ -3,7 +3,7 @@ import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 
 // Full-page locked state shown on /student/buddy and /student/chat for free
 // users — instead of the real hub. Makes the gap felt and offers the unlock.
-export function LockedBuddyHub({ variant }: { variant: 'buddy' | 'chat' }) {
+export function LockedBuddyHub({ variant, fullName }: { variant: 'buddy' | 'chat'; fullName?: string }) {
   const heading = variant === 'chat' ? 'Chat aapke IIM buddy se 🔒' : 'Aapka IIM buddy 🔒';
   const sub =
     variant === 'chat'
@@ -31,7 +31,7 @@ export function LockedBuddyHub({ variant }: { variant: 'buddy' | 'chat' }) {
         <p className="mt-0.5 text-[11px] text-stone-400">21-din try karo, value na mile toh full refund.</p>
       </div>
 
-      <UnlockBuddyButton variant="primary" size="lg" className="w-full">
+      <UnlockBuddyButton variant="primary" size="lg" className="w-full" fullName={fullName}>
         Unlock your buddy →
       </UnlockBuddyButton>
     </div>

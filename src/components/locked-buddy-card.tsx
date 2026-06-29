@@ -5,7 +5,7 @@ import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 // would, and makes the buddy's *absence* felt — escalating copy as the streak
 // grows (the day-3 "nobody checked on you" nudge from the spec). The unlock CTA
 // fires the hot buying signal.
-export function LockedBuddyCard({ streak = 0 }: { streak?: number }) {
+export function LockedBuddyCard({ streak = 0, fullName }: { streak?: number; fullName?: string }) {
   // Day-3+ : name the gap. Earlier: plant the idea.
   const headline =
     streak >= 3
@@ -36,7 +36,7 @@ export function LockedBuddyCard({ streak = 0 }: { streak?: number }) {
           <p className="mt-0.5 text-xs leading-relaxed text-stone-600">{body}</p>
         </div>
       </div>
-      <UnlockBuddyButton variant="primary" size="md" className="mt-3 w-full">
+      <UnlockBuddyButton variant="primary" size="md" className="mt-3 w-full" fullName={fullName}>
         Unlock your buddy →
       </UnlockBuddyButton>
     </div>

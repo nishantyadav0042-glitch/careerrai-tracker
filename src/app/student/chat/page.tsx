@@ -24,7 +24,7 @@ export default async function StudentChatPage() {
 
   // Freemium paywall: chatting with the buddy is premium-only.
   if (!isPremium(profile)) {
-    return <LockedBuddyHub variant="chat" />;
+    return <LockedBuddyHub variant="chat" fullName={profile?.full_name ?? undefined} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;

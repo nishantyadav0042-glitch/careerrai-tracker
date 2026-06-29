@@ -27,7 +27,7 @@ export default async function BuddyCommunicationPage() {
   // Freemium paywall: the real buddy hub is premium-only. Free users get the
   // locked "buddy-taste" state with the unlock CTA.
   if (!isPremium(profile)) {
-    return <LockedBuddyHub variant="buddy" />;
+    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;
