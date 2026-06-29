@@ -5,6 +5,7 @@ import { paymentsEnabled } from '@/lib/feature-flags';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { createRazorpayOrder } from '@/lib/razorpay';
 import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
+import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 
 export async function POST(request: NextRequest) {
   if (!paymentsEnabled()) return NextResponse.json({ error: 'Payments are not enabled.' }, { status: 403 });
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
         subscription_plan: plan,
         subscription_renews_at: renews.toISOString(),
       }).eq('id', user.id);
+
+      // Freemium: a free (scholarship/coupon) activation still unlocks the buddy.
+      await grantPremiumAndQueueBuddy(admin, user.id);
 
       // Burn the coupon (per-student + global) when one made it free.
       if (price.couponId) {

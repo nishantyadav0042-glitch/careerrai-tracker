@@ -44,6 +44,13 @@ export async function POST(request: NextRequest) {
         .update({ buddy_cta_clicks: (row?.buddy_cta_clicks ?? 0) + 1, updated_at: new Date().toISOString() })
         .eq('student_id', user.id);
     }
+    // Reaching for the locked buddy is the hottest signal — flag sales-ready now
+    // so the founder calls them that same evening (don't wait for the daily cron).
+    await admin
+      .from('student_engagement')
+      .update({ sales_ready: true, sales_ready_at: new Date().toISOString() })
+      .eq('student_id', user.id)
+      .eq('sales_ready', false);
   } else {
     const flag =
       event === 'tour_completed' ? { tour_completed: true } :

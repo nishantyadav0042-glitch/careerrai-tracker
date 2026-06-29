@@ -14,7 +14,7 @@ import { AdminDataImport } from './admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import { AdminTabs, type AdminTab } from './admin-tabs';
 import type { Profile, DailyReport } from '@/types';
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, ClipboardList } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, ClipboardList, PhoneCall } from 'lucide-react';
 import { computeBuddySLA } from '@/lib/buddy-sla';
 import { cn } from '@/lib/utils';
 
@@ -426,6 +426,12 @@ export default async function AdminPage() {
             className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
           >
             <ClipboardList className="w-3.5 h-3.5" /> CAT Leads
+          </Link>
+          <Link
+            href="/admin/sales-queue"
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg px-3 py-2.5 transition-colors"
+          >
+            <PhoneCall className="w-3.5 h-3.5" /> Sales Queue
           </Link>
         </div>
 

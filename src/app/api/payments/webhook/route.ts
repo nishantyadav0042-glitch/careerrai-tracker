@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { PLANS, isPlanId } from '@/lib/plans';
+import { grantPremiumAndQueueBuddy, revokePremium } from '@/lib/premium';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
 // Client-side "payment success" callbacks are never trusted.
@@ -61,7 +62,28 @@ export async function POST(request: NextRequest) {
             console.error('[rzp-webhook] activate_payment failed:', activateErr.message);
             return NextResponse.json({ error: 'db error' }, { status: 500 });
           }
+
+          // Freemium upgrade: flip is_premium, queue a buddy, confirm in-app.
+          // Idempotent — safe on Razorpay retries (the status guard above stops
+          // activate_payment re-running; these are no-ops the second time).
+          await grantPremiumAndQueueBuddy(admin, row.student_id);
         }
+      }
+    }
+
+    // Refund → downgrade to free (keep the account + all their logs).
+    if (event.event === 'refund.processed' || event.event === 'refund.created') {
+      const refundEntity = (event as { payload?: { refund?: { entity?: { payment_id?: string } } } })
+        .payload?.refund?.entity;
+      const refundedPaymentId = refundEntity?.payment_id;
+      if (refundedPaymentId) {
+        const admin = createAdminClient();
+        const { data: row } = await admin
+          .from('student_payments')
+          .select('student_id')
+          .eq('razorpay_payment_id', refundedPaymentId)
+          .maybeSingle();
+        if (row?.student_id) await revokePremium(admin, row.student_id);
       }
     }
 
