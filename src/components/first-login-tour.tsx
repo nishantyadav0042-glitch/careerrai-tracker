@@ -226,7 +226,7 @@ export function FirstLoginTour() {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-gradient-to-b from-white via-orange-50/30 to-white">
+    <div className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-white bg-gradient-to-b from-orange-50 to-white">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-8 pt-6">
         {/* Progress */}
         <div className="flex gap-1.5">
