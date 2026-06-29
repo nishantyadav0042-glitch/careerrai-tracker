@@ -46,9 +46,9 @@ export function SampleDebrief() {
 
       <div className="mt-3 rounded-xl bg-purple-50 px-3 py-2">
         <p className="text-xs leading-relaxed text-purple-900">
-          <span className="font-semibold">Buddy&apos;s note:</span> DILR me 4 questions sirf time ki wajah se
-          chhoot gaye — selection galat thi, knowledge nahi. Is hafte: pehle 5 min sirf set <em>chunne</em> me
-          lagao. QA strong hai, usse mat chhedo.
+          <span className="font-semibold">Buddy&apos;s note:</span> In DILR, 4 questions slipped purely because of
+          time — the set selection was off, not your knowledge. This week: spend the first 5 minutes only on <em>choosing</em>
+          {' '}the right set. QA is strong, so leave it as is.
         </p>
       </div>
     </div>

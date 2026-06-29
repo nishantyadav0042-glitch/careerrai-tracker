@@ -9,12 +9,12 @@ export function LockedBuddyCard({ streak = 0, fullName }: { streak?: number; ful
   // Day-3+ : name the gap. Earlier: plant the idea.
   const headline =
     streak >= 3
-      ? `${streak} din ho gaye 👏 — par dhyaan do`
-      : 'Aapka IIM buddy 🔒';
+      ? `${streak} days in 👏 — but stay sharp`
+      : 'Your IIM buddy 🔒';
   const body =
     streak >= 3
-      ? 'Kisi ne check nahi kiya aaj aapne kya kiya. Wahi ek cheez — ek senior jo roz aapko track kare — November me farq daalti hai.'
-      : 'Ek real IIM senior jo roz aapke logs dekhe, har mock aapke saath decode kare, aur har hafte aapse mile. Abhi locked hai.';
+      ? 'No one checked in on what you did today. That one thing — a senior who tracks you daily — is what makes the difference come November.'
+      : 'A real IIM senior who reviews your logs daily, decodes every mock with you, and meets you every week. Locked for now.';
 
   return (
     <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white p-4">

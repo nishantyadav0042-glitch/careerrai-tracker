@@ -38,7 +38,7 @@ export async function grantPremiumAndQueueBuddy(
     user_id: studentId,
     type: 'membership',
     title: '🎉 Buddy unlocked!',
-    body: 'Aapka IIM senior 24 ghante ke andar assign ho raha hai — woh khud aapko message karega. Tab tak aaj ka log bhar do. 💪',
+    body: "Your IIM senior is being assigned within 24 hours — they'll message you directly. In the meantime, log today's session. 💪",
     data: { url: '/student/buddy' },
     read: false,
     channel: 'in_app',

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { X } from 'lucide-react';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
@@ -109,24 +108,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     }
   };
 
-  const handleCompleteWithoutUpdate = async () => {
-    if (!userId || currentScreen === 0) {
-      onComplete();
-      return;
-    }
-    try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ onboarding_completed: true })
-        .eq('id', userId);
-      if (updateError) throw updateError;
-      await new Promise(resolve => setTimeout(resolve, 500));
-      onComplete();
-    } catch {
-      setError('Could not save your progress. Please try again.');
-    }
-  };
-
   const handleBack = () => {
     if (currentScreen > 0) setCurrentScreen(currentScreen - 1);
   };
@@ -140,16 +121,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
               {screens[currentScreen].title}
             </h2>
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onComplete(); }}
-              disabled={isLoading}
-              type="button"
-              className="text-stone-400 hover:text-stone-600 transition disabled:opacity-50 cursor-pointer"
-              aria-label="Close"
-              title="Close — you can finish this later from your Profile"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Progress */}
@@ -169,13 +140,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <p>{error}</p>
-              <button
-                onClick={() => handleCompleteWithoutUpdate()}
-                type="button"
-                className="mt-2 text-xs underline hover:text-red-900 cursor-pointer"
-              >
-                Click here to skip
-              </button>
             </div>
           )}
 
@@ -186,34 +150,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             isLoading={isLoading}
           />
         </div>
-
-        {/* Bottom nav */}
-        <div className="border-t border-stone-200 p-6 bg-stone-50 flex gap-3">
-            {currentScreen > 0 ? (
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleBack(); }}
-              disabled={isLoading}
-              type="button"
-              className="flex-1 py-3 px-4 border border-stone-300 text-stone-900 rounded-xl font-medium hover:bg-stone-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Back
-            </button>
-            ) : (
-            <div className="flex-1" />
-            )}
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNext(); }}
-              disabled={isLoading}
-              type="button"
-              className={cn(
-                'flex-1 py-3 px-4 rounded-xl font-medium transition-all active:scale-[0.98] cursor-pointer',
-                'bg-orange-600 text-white hover:bg-orange-700',
-                'disabled:opacity-50 disabled:cursor-not-allowed'
-              )}
-            >
-              {isLoading ? 'Loading...' : currentScreen === screens.length - 1 ? 'Enter Dashboard' : 'Next'}
-            </button>
-          </div>
       </div>
     </div>
   );

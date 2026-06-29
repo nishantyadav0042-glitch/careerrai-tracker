@@ -276,7 +276,7 @@ const SLIDES = [
   { id: 'progress', label: 'Progress', icon: '📈', component: SlideProgress },
 ];
 
-export default function ScreenSocialProof({ onNext, isLoading }: Props) {
+export default function ScreenSocialProof({ onNext, onBack, canGoBack, isLoading }: Props) {
   const [slide, setSlide] = useState(0);
   const Slide = SLIDES[slide].component;
 
@@ -328,14 +328,25 @@ export default function ScreenSocialProof({ onNext, isLoading }: Props) {
             See {SLIDES[slide + 1].label} <ChevronRight className="inline w-4 h-4 ml-0.5" />
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={() => onNext()}
-            disabled={isLoading}
-            className="flex-1 py-3 rounded-xl font-semibold text-sm bg-orange-600 text-white hover:bg-orange-700 transition-all active:scale-[0.98] disabled:opacity-50"
-          >
-            I want this too →
-          </button>
+          <>
+            {canGoBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="py-3 px-4 rounded-xl border border-stone-300 text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+              >
+                Back
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onNext()}
+              disabled={isLoading}
+              className="flex-1 py-3 rounded-xl font-semibold text-sm bg-orange-600 text-white hover:bg-orange-700 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              I want this too →
+            </button>
+          </>
         )}
 
         {/* Slide dots */}

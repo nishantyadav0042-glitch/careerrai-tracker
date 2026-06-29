@@ -25,8 +25,8 @@ export default function StartPage() {
   async function requestOtp(e?: React.FormEvent) {
     e?.preventDefault();
     setError(null);
-    if (name.trim().length < 2) { setError('Apna naam likho.'); return; }
-    if (phone.length !== 10 || !/^[6-9]/.test(phone)) { setError('Sahi 10-digit mobile number daalo.'); return; }
+    if (name.trim().length < 2) { setError('Please enter your name.'); return; }
+    if (phone.length !== 10 || !/^[6-9]/.test(phone)) { setError('Please enter a valid 10-digit mobile number.'); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/request-phone-otp', {
@@ -38,10 +38,10 @@ export default function StartPage() {
       if (data.sent) {
         setStep('otp');
       } else {
-        setError(data.message ?? 'OTP bhej nahi paaye. Dobara try karo.');
+        setError(data.message ?? "We couldn't send the OTP. Please try again.");
       }
     } catch {
-      setError('Connection issue. Dobara try karo.');
+      setError('Connection issue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -50,7 +50,7 @@ export default function StartPage() {
   async function verifyOtp(e?: React.FormEvent) {
     e?.preventDefault();
     setError(null);
-    if (!/^\d{6}$/.test(otp)) { setError('6-digit code daalo.'); return; }
+    if (!/^\d{6}$/.test(otp)) { setError('Please enter the 6-digit code.'); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/verify-phone-otp', {
@@ -62,10 +62,10 @@ export default function StartPage() {
       if (data.ok && data.dest) {
         window.location.href = data.dest;
       } else {
-        setError(data.error ?? 'Code galat ya expire ho gaya.');
+        setError(data.error ?? 'That code is incorrect or has expired.');
       }
     } catch {
-      setError('Connection issue. Dobara try karo.');
+      setError('Connection issue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -79,18 +79,18 @@ export default function StartPage() {
         {step === 'form' ? (
           <form onSubmit={requestOtp} className="space-y-5">
             <div className="text-center space-y-1.5">
-              <h1 className="text-xl font-bold text-stone-900">Apni CAT prep track karna shuru karo — app bilkul free 🎯</h1>
-              <p className="text-sm text-stone-600">Ek IIM senior se tracking baad me; pehle app khud try karo.</p>
+              <h1 className="text-xl font-bold text-stone-900">Start tracking your CAT prep — the app is completely free 🎯</h1>
+              <p className="text-sm text-stone-600">An IIM senior comes later; first, try the app for yourself.</p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Naam</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Name</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Aapka naam"
+                  placeholder="Your name"
                   className="w-full rounded-xl border border-stone-300 px-4 py-3 text-sm focus:border-stone-900 focus:outline-none"
                   autoFocus
                 />
@@ -108,25 +108,25 @@ export default function StartPage() {
                     className="w-full rounded-xl py-3 pr-4 text-sm focus:outline-none"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-stone-400">OTP se verify, 10 second.</p>
+                <p className="mt-1 text-[11px] text-stone-400">Verify by OTP, takes 10 seconds.</p>
               </div>
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <Button type="submit" variant="primary" size="lg" className="w-full" disabled={loading}>
-              {loading ? 'Bhej rahe hain…' : 'Free access lo →'}
+              {loading ? 'Sending…' : 'Get free access →'}
             </Button>
             <p className="text-center text-[11px] text-stone-400">
-              Hum coaching nahi hain. Aapka data sirf aapki prep ke liye.
+              We&apos;re not a coaching institute. Your data is used only for your prep.
             </p>
           </form>
         ) : (
           <form onSubmit={verifyOtp} className="space-y-5">
             <div className="text-center space-y-1.5">
-              <h1 className="text-xl font-bold text-stone-900">Code daalo 📲</h1>
+              <h1 className="text-xl font-bold text-stone-900">Enter the code 📲</h1>
               <p className="text-sm text-stone-600">
-                +91 {phone} pe ek 6-digit code bheja hai — daalo aur seedha andar aao.
+                We&apos;ve sent a 6-digit code to +91 {phone} — enter it to head straight in.
               </p>
             </div>
 
@@ -143,14 +143,14 @@ export default function StartPage() {
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <Button type="submit" variant="primary" size="lg" className="w-full" disabled={loading}>
-              {loading ? 'Verify ho raha hai…' : 'Andar aao →'}
+              {loading ? 'Verifying…' : 'Continue →'}
             </Button>
             <button
               type="button"
               onClick={() => { setStep('form'); setOtp(''); setError(null); }}
               className="w-full text-center text-xs text-stone-500 hover:text-stone-700"
             >
-              ← Number badalna hai
+              ← Change number
             </button>
           </form>
         )}

@@ -249,23 +249,35 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
       </p>
 
       {/* Submit Button */}
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          handleSubmit();
-        }}
-        disabled={!canSubmit || isSubmitting || isLoading}
-        type="button"
-        className={cn(
-          'w-full py-3 rounded-xl font-medium transition-all active:scale-[0.98]',
-          canSubmit
-            ? 'bg-orange-600 text-white hover:bg-orange-700 cursor-pointer'
-            : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+      <div className="flex gap-3">
+        {canGoBack && (
+          <button
+            onClick={onBack}
+            type="button"
+            disabled={isSubmitting || isLoading}
+            className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-50"
+          >
+            Back
+          </button>
         )}
-      >
-        {isSubmitting || isLoading ? 'Submitting...' : 'Submit and Enter Dashboard'}
-      </button>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSubmit();
+          }}
+          disabled={!canSubmit || isSubmitting || isLoading}
+          type="button"
+          className={cn(
+            'flex-1 py-3 rounded-xl font-medium transition-all active:scale-[0.98]',
+            canSubmit
+              ? 'bg-orange-600 text-white hover:bg-orange-700 cursor-pointer'
+              : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+          )}
+        >
+          {isSubmitting || isLoading ? 'Submitting...' : 'Submit and Enter Dashboard'}
+        </button>
+      </div>
 
       {/* Helper Text */}
       {!canSubmit && (
