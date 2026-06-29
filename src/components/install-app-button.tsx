@@ -41,7 +41,7 @@ function isStandalone(): boolean {
  * Android/Chrome → fires the native install prompt. iOS / browsers without a
  * native prompt → opens step-by-step Add-to-Home-Screen instructions.
  */
-export function InstallAppButton() {
+export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'banner' }) {
   // Start hidden to avoid showing to users who already installed; reveal after
   // the client check. (Most login-page visitors aren't installed, so it shows.)
   const [hidden, setHidden] = useState(true);
@@ -73,22 +73,47 @@ export function InstallAppButton() {
 
   if (hidden) return null;
 
+  // Prominent orange banner (top of login) vs. subtle card (anywhere else).
+  const trigger = variant === 'banner' ? (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="group relative block w-full overflow-hidden rounded-2xl p-[1.5px] shadow-lg shadow-orange-900/10"
+      style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 55%, #f59e0b 100%)' }}
+    >
+      <div className="flex items-center justify-between gap-3 rounded-[15px] bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3.5">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20 border border-white/30 text-white">
+            <Download className="w-5 h-5" />
+          </span>
+          <div className="min-w-0 text-left">
+            <p className="text-sm font-bold text-white">Install the CareerRai app</p>
+            <p className="text-xs text-orange-50 mt-0.5">Just ~3 MB · installs in seconds · one-tap access</p>
+          </div>
+        </div>
+        <span className="text-xs font-bold text-orange-700 bg-white rounded-lg px-3 py-1.5 shrink-0 group-active:scale-95 transition-transform">Install</span>
+      </div>
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="group w-full flex items-center gap-3 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4 text-left shadow-sm transition-all hover:shadow-md hover:border-orange-300 active:scale-[0.99]"
+    >
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow">
+        <Download className="w-5 h-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-stone-900">Install the CareerRai app</p>
+        <p className="mt-0.5 text-xs text-stone-500">Just ~3 MB · add it to your home screen for one-tap access.</p>
+      </div>
+      <Smartphone className="w-4 h-4 shrink-0 text-orange-600" />
+    </button>
+  );
+
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
-        className="group w-full flex items-center gap-3 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4 text-left shadow-sm transition-all hover:shadow-md hover:border-orange-300 active:scale-[0.99]"
-      >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow">
-          <Download className="w-5 h-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-stone-900">Install the CareerRai app</p>
-          <p className="mt-0.5 text-xs text-stone-500">Add it to your home screen for one-tap access — works offline-friendly.</p>
-        </div>
-        <Smartphone className="w-4 h-4 shrink-0 text-orange-600" />
-      </button>
+      {trigger}
 
       {showSteps && (
         <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowSteps(false)}>

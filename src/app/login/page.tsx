@@ -153,26 +153,10 @@ function LoginForm() {
             </div>
           </div>
 
-          {/* CTA banner */}
-          <a
-            href="/cat-readiness"
-            className="group relative block overflow-hidden rounded-2xl p-[1.5px] mb-4 shadow-lg shadow-orange-900/10"
-            style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 55%, #f59e0b 100%)' }}
-          >
-            <div className="flex items-center justify-between gap-3 rounded-[15px] bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3.5">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="shrink-0 text-lg leading-none">🎯</span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-block bg-white/25 border border-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">Free</span>
-                    <p className="text-sm font-bold text-white">Claim your free IIM buddy session</p>
-                  </div>
-                  <p className="text-xs text-orange-50 mt-0.5">2 min · 10 quick taps · no signup needed</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-white shrink-0 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </a>
+          {/* Install-app CTA — prime real estate, pushes students to install the app */}
+          <div className="mb-4">
+            <InstallAppButton variant="banner" />
+          </div>
 
           <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
@@ -472,10 +456,6 @@ function LoginForm() {
               <ArrowRight className="w-4 h-4 shrink-0 text-teal-600 transition-transform group-hover:translate-x-1" />
             </div>
           </button>
-
-          <div className="mt-4">
-            <InstallAppButton />
-          </div>
 
           <p className="mt-6 text-center text-xs text-stone-500">
             Bharat-first peer mentorship · 0% commission
