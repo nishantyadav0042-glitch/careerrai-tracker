@@ -1,7 +1,7 @@
 'use client';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Eye, EyeOff, Smartphone, Sparkles, PlayCircle, Lock, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Smartphone, Sparkles, PlayCircle, ChevronLeft, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { cn } from '@/lib/utils';
@@ -225,21 +225,6 @@ function LoginForm() {
                     <p className="text-xs text-stone-500">I&apos;m an IIM mentor</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-teal-600 ml-auto transition-colors" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => selectRole('admin')}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-orange-100 hover:border-orange-600 hover:bg-orange-50 transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-orange-50 group-hover:bg-orange-600 flex items-center justify-center transition-colors shrink-0">
-                    <Lock className="w-5 h-5 text-orange-500 group-hover:text-white transition-colors" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-stone-900">Admin</p>
-                    <p className="text-xs text-stone-500">Restricted access only</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-orange-600 ml-auto transition-colors" />
                 </button>
               </div>
             )}

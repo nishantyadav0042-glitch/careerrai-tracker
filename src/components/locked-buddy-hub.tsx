@@ -1,38 +1,116 @@
 import { SampleDebrief } from '@/components/sample-debrief';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
+import { Users, Target, LineChart, MessageCircle, ShieldCheck, Check } from 'lucide-react';
 
-// Full-page locked state shown on /student/buddy and /student/chat for free
-// users — instead of the real hub. Makes the gap felt and offers the unlock.
+// The buddy upsell — a full-page SALES ASSET shown on /student/buddy and
+// /student/chat for free users instead of the real hub. Sells the one thing
+// that's paywalled: a 1:1 IIM-alumni mentor. Every line is a conversion lever.
 export function LockedBuddyHub({ variant, fullName }: { variant: 'buddy' | 'chat'; fullName?: string }) {
-  const heading = variant === 'chat' ? 'Chat aapke IIM buddy se 🔒' : 'Aapka IIM buddy 🔒';
-  const sub =
-    variant === 'chat'
-      ? 'Jab atko, seedha apne senior se baat karo — text aur voice. Yeh premium me unlock hota hai.'
-      : 'Daily tracking, weekly 1-on-1 session, aur har mock ka analysis — ek real IIM senior ke saath.';
+  const heading = variant === 'chat' ? 'Chat is part of your IIM buddy 🔒' : 'Unlock your IIM buddy 🔒';
+
+  // The core value props — framed as outcomes, not features.
+  const props = [
+    {
+      icon: Users,
+      title: '1-on-1, never a group',
+      body: 'A senior who knows your name, your weak section and your last mock — not one of 200 in a batch.',
+    },
+    {
+      icon: Target,
+      title: 'A personalised strategy',
+      body: 'Built around YOUR gaps and re-tuned every week — not the same plan handed to everyone.',
+    },
+    {
+      icon: LineChart,
+      title: 'Every mock decoded with you',
+      body: 'They sit with your scorecard and name each error — silly, time, concept — so the next mock actually moves.',
+    },
+    {
+      icon: MessageCircle,
+      title: 'Daily accountability',
+      body: 'They see your logs, nudge you when you slip, and keep you honest right up to CAT.',
+    },
+  ];
 
   return (
-    <div className="mx-auto max-w-md space-y-5 px-1 py-6">
+    <div className="mx-auto max-w-md space-y-6 px-1 py-6">
+      {/* Hero */}
       <div className="text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-purple-100 text-3xl">
-          🔒
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-purple-100 text-3xl">🔒</div>
+        <h1 className="text-xl font-bold text-stone-900">{heading}</h1>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-stone-600">
+          The app keeps you consistent. An <span className="font-semibold text-stone-800">IIM senior</span> is what
+          turns consistency into a <span className="font-semibold text-stone-800">call letter</span>.
+        </p>
+        {/* Social proof */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 font-semibold text-teal-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> 200+ IIM mentors
+          </span>
+          <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-medium text-stone-600">
+            Every buddy cleared CAT · 95%ile+
+          </span>
         </div>
-        <h1 className="text-lg font-bold text-stone-900">{heading}</h1>
-        <p className="mx-auto mt-1 max-w-xs text-sm text-stone-600">{sub}</p>
       </div>
 
-      <p className="text-center text-xs font-medium text-stone-400">
-        Yeh hai woh jo aapko har mock pe milega 👇
-      </p>
-      <SampleDebrief />
+      {/* Why a buddy — value props */}
+      <div className="space-y-2.5">
+        {props.map((p) => (
+          <div key={p.title} className="flex gap-3 rounded-2xl border border-stone-200 bg-white p-3.5">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-50">
+              <p.icon className="h-4 w-4 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-stone-900">{p.title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-stone-600">{p.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
 
-      <div className="rounded-2xl bg-stone-50 px-4 py-3 text-center">
-        <span className="text-2xl font-bold text-stone-900">₹999</span>
-        <span className="text-sm text-stone-500">/month</span>
-        <p className="mt-0.5 text-[11px] text-stone-400">21-din try karo, value na mile toh full refund.</p>
+      {/* Proof of the product — the sample debrief */}
+      <div>
+        <p className="mb-2 text-center text-xs font-medium text-stone-400">
+          Yeh hai woh jo aapko har mock pe milega 👇
+        </p>
+        <SampleDebrief />
+      </div>
+
+      {/* Group vs 1:1 contrast — the wedge */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
+          <p className="font-semibold text-stone-500">Coaching batch</p>
+          <ul className="mt-1.5 space-y-1 text-stone-500">
+            <li>200 students, 1 teacher</li>
+            <li>Same plan for everyone</li>
+            <li>No one tracks you</li>
+          </ul>
+        </div>
+        <div className="rounded-2xl border-2 border-purple-200 bg-purple-50 p-3">
+          <p className="font-semibold text-purple-700">Your IIM buddy</p>
+          <ul className="mt-1.5 space-y-1 text-purple-900">
+            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0" /> Just you, 1-on-1</li>
+            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0" /> Plan built for you</li>
+            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0" /> Tracked daily</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Price + guarantee */}
+      <div className="rounded-2xl bg-stone-900 px-4 py-4 text-center">
+        <p className="text-sm text-stone-300">Your IIM buddy, start at</p>
+        <p className="mt-0.5">
+          <span className="text-3xl font-bold text-white">₹999</span>
+          <span className="text-sm text-stone-400">/month</span>
+        </p>
+        <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-stone-400">
+          <ShieldCheck className="h-3.5 w-3.5 text-orange-400" />
+          21-din try karo — value na mile toh full refund. No auto-debit.
+        </p>
       </div>
 
       <UnlockBuddyButton variant="primary" size="lg" className="w-full" fullName={fullName}>
-        Unlock your buddy →
+        Unlock your IIM buddy →
       </UnlockBuddyButton>
     </div>
   );
