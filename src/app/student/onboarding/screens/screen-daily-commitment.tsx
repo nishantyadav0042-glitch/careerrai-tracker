@@ -84,18 +84,29 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
       </p>
 
       {/* Submit Button */}
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onNext({ studyTargetHours: selected });
-        }}
-        disabled={isLoading}
-        type="button"
-        className="w-full py-3 bg-orange-600 text-white rounded-xl font-medium hover:bg-orange-700 transition-all disabled:opacity-50 active:scale-[0.98] cursor-pointer"
-      >
-        This is my commitment
-      </button>
+      <div className="flex gap-3">
+        {canGoBack && (
+          <button
+            onClick={onBack}
+            type="button"
+            className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+          >
+            Back
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onNext({ studyTargetHours: selected });
+          }}
+          disabled={isLoading}
+          type="button"
+          className="flex-1 py-3 bg-orange-600 text-white rounded-xl font-medium hover:bg-orange-700 transition-all disabled:opacity-50 active:scale-[0.98] cursor-pointer"
+        >
+          This is my commitment
+        </button>
+      </div>
     </div>
   );
 }

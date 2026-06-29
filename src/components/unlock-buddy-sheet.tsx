@@ -74,17 +74,17 @@ export function UnlockBuddyButton({
       if (res.status === 403) { setCallMe(true); return; }
 
       const data = await res.json();
-      if (!res.ok) { setMessage(data.error ?? 'Checkout shuru nahi ho paaya. Dobara try karo.'); return; }
+      if (!res.ok) { setMessage(data.error ?? 'Checkout could not start. Please try again.'); return; }
 
       // A scholarship/coupon already made it free → premium activated server-side.
       if (data.free) {
-        setMessage('Ho gaya! Aapka buddy unlock ho raha hai — refresh kar rahe hain…');
+        setMessage('Done! Your buddy is being unlocked — refreshing…');
         setTimeout(() => window.location.reload(), 1500);
         return;
       }
 
       const ok = await loadRazorpay();
-      if (!ok || !window.Razorpay) { setMessage('Payment window load nahi hua. Dobara try karo.'); return; }
+      if (!ok || !window.Razorpay) { setMessage('The payment window failed to load. Please try again.'); return; }
 
       const rzp = new window.Razorpay({
         key: data.keyId,
@@ -97,13 +97,13 @@ export function UnlockBuddyButton({
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; reassure + refresh.
-          setMessage('Payment ho gaya — aapka buddy confirm kar rahe hain… 🎉');
+          setMessage('Payment received — confirming your buddy… 🎉');
           setTimeout(() => window.location.reload(), 4000);
         },
       });
       rzp.open();
     } catch {
-      setMessage('Kuch galat ho gaya. Dobara try karo.');
+      setMessage('Something went wrong. Please try again.');
     } finally {
       setBusy(null);
     }
@@ -132,27 +132,27 @@ export function UnlockBuddyButton({
             {callMe ? (
               <div className="py-4 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl">✅</div>
-                <h2 className="text-lg font-bold text-stone-900">Ho gaya! 🙌</h2>
+                <h2 className="text-lg font-bold text-stone-900">All set! 🙌</h2>
                 <p className="mt-1 text-sm text-stone-600">
-                  Hamari team aapko jaldi call karke aapka IIM buddy set up karegi. Tab tak — aaj ka log
-                  bhar do, taaki aapke buddy ke paas data ready ho. 💪
+                  Our team will call you shortly to set up your IIM buddy. In the meantime, log
+                  today&apos;s session so your buddy has your data ready. 💪
                 </p>
                 <Button variant="primary" size="md" className="mt-5 w-full" onClick={() => setOpen(false)}>
-                  Theek hai
+                  Got it
                 </Button>
               </div>
             ) : (
               <>
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl">🔓</div>
-                <h2 className="text-center text-lg font-bold text-stone-900">Apna IIM buddy unlock karo</h2>
+                <h2 className="text-center text-lg font-bold text-stone-900">Unlock your IIM buddy</h2>
                 <p className="mt-1 text-center text-sm text-stone-600">
-                  Ek <span className="font-semibold text-stone-800">real IIM senior</span> jo roz aapko track kare,
-                  har mock aapke saath decode kare, aur har hafte aapse mile.
+                  A <span className="font-semibold text-stone-800">real IIM senior</span> who tracks you daily,
+                  decodes every mock with you, and meets you every week.
                 </p>
 
                 <ul className="mt-4 space-y-2 text-sm text-stone-700">
-                  <li className="flex gap-2"><span>🎯</span> Roz aapke logs dekhke kal ka plan</li>
-                  <li className="flex gap-2"><span>📊</span> Har mock aapke saath decode — har error named</li>
+                  <li className="flex gap-2"><span>🎯</span> A plan for tomorrow, built from today&apos;s logs</li>
+                  <li className="flex gap-2"><span>📊</span> Every mock decoded with you — each error named</li>
                   <li className="flex gap-2"><span>🎥</span> Weekly 1-on-1 video session</li>
                 </ul>
 
@@ -194,7 +194,7 @@ export function UnlockBuddyButton({
                 </div>
 
                 <p className="mt-3 text-center text-[11px] text-stone-400">
-                  21-din try karo, value na mile toh full refund. No auto-debit, ever.
+                  21-day trial — full refund if you don&apos;t see the value. No auto-debit, ever.
                 </p>
 
                 {message && <p className="mt-3 text-center text-xs text-stone-600">{message}</p>}
@@ -204,7 +204,7 @@ export function UnlockBuddyButton({
                   onClick={() => setOpen(false)}
                   className="mt-2 w-full text-center text-xs text-stone-400 hover:text-stone-600"
                 >
-                  Abhi nahi
+                  Not now
                 </button>
               </>
             )}

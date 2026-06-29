@@ -71,7 +71,7 @@ export function LockedBuddyHub({ variant, fullName }: { variant: 'buddy' | 'chat
       {/* Proof of the product — the sample debrief */}
       <div>
         <p className="mb-2 text-center text-xs font-medium text-stone-400">
-          Yeh hai woh jo aapko har mock pe milega 👇
+          Here&apos;s what you get on every mock 👇
         </p>
         <SampleDebrief />
       </div>
@@ -105,7 +105,7 @@ export function LockedBuddyHub({ variant, fullName }: { variant: 'buddy' | 'chat
         </p>
         <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-stone-400">
           <ShieldCheck className="h-3.5 w-3.5 text-orange-400" />
-          21-din try karo — value na mile toh full refund. No auto-debit.
+          21-day trial — full refund if you don&apos;t see the value. No auto-debit.
         </p>
       </div>
 
