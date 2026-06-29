@@ -32,9 +32,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
   ]);
 
   // Route non-students to their own home (handles stale role cookies too).
+  // Only redirect when the profile actually loaded — a transient null read must
+  // degrade to rendering (the old fast path did), never bounce to /login, which
+  // the proxy would send straight back here → an infinite redirect loop.
   if (profile?.role === 'admin') redirect('/admin');
   if (profile?.role === 'buddy') redirect('/buddy/home');
-  if (profile?.role !== 'student') redirect('/login');
+  if (profile && profile.role !== 'student') redirect('/login');
 
   const isDemo = !!profile?.is_demo;
   // First-login tour: mandatory, one-time, for free non-demo students who haven't

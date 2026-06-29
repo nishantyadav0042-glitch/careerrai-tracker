@@ -5,27 +5,34 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // row is handled by the caller (activate_payment RPC or the free-path insert);
 // this layers the freemium concerns on top: flip is_premium, queue a buddy, notify.
 
-/** Flip a student to premium, queue a buddy (once), and confirm in-app. Idempotent. */
+/** Flip a student to premium, queue a buddy (once), and confirm in-app. Idempotent:
+ *  a no-op if the student is already premium, so Razorpay's double delivery
+ *  (payment.captured + order.paid) and re-grants never duplicate the queue row
+ *  or the "Buddy unlocked!" notification. */
 export async function grantPremiumAndQueueBuddy(
   admin: SupabaseClient,
   studentId: string,
 ): Promise<void> {
-  await admin
+  // Atomic gate: flip to premium ONLY if not already premium, and report whether
+  // this call is the one that did it. A concurrent second delivery sees 0 rows.
+  const { data: flipped } = await admin
     .from('profiles')
     .update({ is_premium: true, premium_since: new Date().toISOString() })
-    .eq('id', studentId);
+    .eq('id', studentId)
+    .eq('is_premium', false)
+    .select('id');
 
-  // Queue a buddy only if there isn't already a pending request (unique partial
-  // index also enforces this; the check keeps it quiet on retries).
-  const { data: pending } = await admin
-    .from('buddy_assignment_queue')
-    .select('id')
-    .eq('student_id', studentId)
-    .eq('status', 'pending')
-    .maybeSingle();
-  if (!pending) {
-    await admin.from('buddy_assignment_queue').insert({ student_id: studentId, status: 'pending' });
-  }
+  // Already premium (another delivery won the race) → nothing more to do.
+  if (!flipped || flipped.length === 0) return;
+
+  // First grant for this student → queue a buddy and confirm in-app, once.
+  await admin.from('buddy_assignment_queue').insert({ student_id: studentId, status: 'pending' });
+
+  // They've converted — drop them off the founder's sales-call queue.
+  await admin
+    .from('student_engagement')
+    .update({ sales_ready: false })
+    .eq('student_id', studentId);
 
   await admin.from('notifications').insert({
     user_id: studentId,

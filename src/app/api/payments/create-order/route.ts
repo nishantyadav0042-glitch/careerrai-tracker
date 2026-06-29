@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
       .eq('plan', plan)
       .eq('status', 'created')
       .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (pendingOrder?.razorpay_order_id) {
