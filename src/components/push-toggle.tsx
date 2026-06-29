@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, Check, X, Loader2 } from 'lucide-react';
 
 // Web Push requires the applicationServerKey as a Uint8Array.
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -29,6 +29,9 @@ function isStandalone(): boolean {
 // from /api/push/vapid-public-key so it matches the private key the server signs
 // with (both are DB-authoritative). Passing a build-time env key here caused a
 // key mismatch that made every push silently fail.
+type StepStatus = 'running' | 'ok' | 'fail';
+interface DiagStep { label: string; status: StepStatus; detail?: string }
+
 export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidKey?: string }) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [loading, setLoading] = useState(false);
@@ -38,6 +41,9 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
   const [error, setError] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  // Live, on-device diagnostic of the subscribe pipeline. Each tap rebuilds it so
+  // a real device can SEE exactly which step fails instead of a silent dead toggle.
+  const [steps, setSteps] = useState<DiagStep[]>([]);
 
   async function sendTest() {
     setTesting(true);
@@ -45,7 +51,14 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
     try {
       const res = await fetch('/api/push/test', { method: 'POST' });
       const data = await res.json();
-      setTestMsg(res.ok && data.ok ? 'Sent! You should see a notification in a second.' : (data.message ?? 'Could not send the test.'));
+      if (res.ok && data.ok) {
+        setTestMsg('Sent! You should see a notification in a second.');
+      } else {
+        // Surface the server's exact reason (no_subscription / vapid_not_configured /
+        // send_failed_<code>) so a failed delivery is diagnosable, not silent.
+        const reason = data.reason ? ` (${data.reason})` : '';
+        setTestMsg((data.message ?? 'Could not send the test.') + reason);
+      }
     } catch {
       setTestMsg('Could not send the test. Check your connection.');
     } finally {
@@ -79,38 +92,73 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
     return <p className="text-xs text-stone-400">Push notifications aren&apos;t supported in this browser.</p>;
   }
 
+  // Step helpers — push a running step, then mark it ok/fail. Rendered live so the
+  // user (and we, from a screenshot) can see exactly where push breaks.
+  function startStep(label: string) {
+    setSteps((prev) => [...prev, { label, status: 'running' }]);
+  }
+  function endStep(status: StepStatus, detail?: string) {
+    setSteps((prev) => prev.map((s, i) => (i === prev.length - 1 ? { ...s, status, detail } : s)));
+  }
+
   async function enablePush() {
+    setSteps([]);
+
     // 1. Permission
+    startStep('Asking for notification permission');
     const permission = await Notification.requestPermission();
-    if (permission === 'denied') { setDenied(true); return; }
-    if (permission !== 'granted') return; // dismissed — leave off, no error
+    if (permission === 'denied') {
+      endStep('fail', 'You blocked notifications. Tap the lock icon in the address bar → allow.');
+      setDenied(true);
+      return;
+    }
+    if (permission !== 'granted') {
+      endStep('fail', 'Permission dismissed — tap the toggle again and choose Allow.');
+      return;
+    }
+    endStep('ok', 'Granted');
 
     // 2. The public key — from the server (DB) so it matches the signing key.
-    const keyRes = await fetch('/api/push/vapid-public-key');
-    if (!keyRes.ok) { setError('Push isn’t configured on the server yet.'); return; }
+    startStep('Getting the server push key');
+    const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
+    if (!keyRes.ok) { endStep('fail', `Server key not configured (HTTP ${keyRes.status}).`); setError('Push isn’t configured on the server yet.'); return; }
     const { key: publicKey } = await keyRes.json();
-    if (!publicKey) { setError('Push isn’t configured on the server yet.'); return; }
+    if (!publicKey) { endStep('fail', 'Server returned an empty key.'); setError('Push isn’t configured on the server yet.'); return; }
+    endStep('ok');
 
     // 3. Subscribe on the (globally-registered) service worker.
+    startStep('Connecting the service worker');
     await navigator.serviceWorker.register('/sw.js'); // no-op if already registered
     const reg = await navigator.serviceWorker.ready;
+    endStep('ok');
+
+    startStep('Subscribing with your browser');
     // Drop any stale subscription that was bound to a different key.
     const existing = await reg.pushManager.getSubscription();
     if (existing) {
       try { await existing.unsubscribe(); } catch { /* ignore */ }
     }
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+    let sub: PushSubscription;
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    } catch (e) {
+      endStep('fail', e instanceof Error ? e.message : 'Your browser/network blocked the push service.');
+      throw e;
+    }
+    endStep('ok');
 
     // 4. Persist.
+    startStep('Saving to your account');
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: sub.toJSON() }),
     });
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    if (!res.ok) { endStep('fail', `Server returned ${res.status}.`); throw new Error(`Server returned ${res.status}`); }
+    endStep('ok', 'Subscribed — now tap “Send a test alert”.');
     setEnabled(true);
   }
 
@@ -162,6 +210,25 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
         </button>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
+
+      {steps.length > 0 && (
+        <ul className="space-y-1 rounded-lg bg-stone-50 border border-stone-200 p-3">
+          {steps.map((s, i) => (
+            <li key={i} className="flex items-start gap-2 text-xs">
+              <span className="mt-0.5 shrink-0">
+                {s.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-stone-400 animate-spin" />}
+                {s.status === 'ok' && <Check className="w-3.5 h-3.5 text-teal-600" />}
+                {s.status === 'fail' && <X className="w-3.5 h-3.5 text-red-500" />}
+              </span>
+              <span className="min-w-0">
+                <span className={s.status === 'fail' ? 'text-red-600 font-medium' : 'text-stone-700'}>{s.label}</span>
+                {s.detail && <span className="block text-stone-500">{s.detail}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {enabled && (
         <div className="flex items-center gap-3">
           <button
