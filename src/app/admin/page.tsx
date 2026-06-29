@@ -13,6 +13,7 @@ import { AdminStudentsList } from './admin-students-list';
 import { AdminDataImport } from './admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import { AdminTabs, type AdminTab } from './admin-tabs';
+import { PushGate } from '@/components/push-gate';
 import type { Profile, DailyReport } from '@/types';
 import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, ClipboardList, PhoneCall } from 'lucide-react';
 import { computeBuddySLA } from '@/lib/buddy-sla';
@@ -28,8 +29,11 @@ export default async function AdminPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: adminProfile } = await admin.from('profiles').select('role, full_name').eq('id', user.id).single();
+  const { data: adminProfile } = await admin.from('profiles').select('role, full_name, notif_prefs').eq('id', user.id).single();
   if (adminProfile?.role !== 'admin') redirect('/login');
+
+  // Mandatory push for the admin too — this is how new-signup alerts reach them.
+  const adminPushEnabled = (adminProfile?.notif_prefs as { push?: boolean } | null)?.push === true;
 
   // Fetch all profiles — include full onboarding columns so admin can see the
   // complete student dossier (everything they filled across the 9-step setup).
@@ -458,6 +462,7 @@ export default async function AdminPage() {
 
         <AdminTabs tabs={adminTabs} />
       </div>
+      {!adminPushEnabled && <PushGate variant="staff" />}
     </div>
   );
 }
