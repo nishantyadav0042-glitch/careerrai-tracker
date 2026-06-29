@@ -24,6 +24,27 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// Wait briefly for Chrome to fire beforeinstallprompt (it can arrive a moment
+// after the page loads). Resolves the event if it shows up within the timeout,
+// else null — so a slightly-late prompt still gives a true one-tap install
+// instead of falling back to manual steps.
+function waitForInstallPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent | null> {
+  if (deferredPrompt) return Promise.resolve(deferredPrompt);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: BeforeInstallPromptEvent | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      window.removeEventListener('cr-installable', onReady);
+      resolve(v);
+    };
+    const onReady = () => finish(deferredPrompt);
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    window.addEventListener('cr-installable', onReady);
+  });
+}
+
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -47,6 +68,7 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   const [hidden, setHidden] = useState(true);
   const [ios, setIos] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [working, setWorking] = useState(false);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
@@ -60,14 +82,23 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   }, []);
 
   async function handleClick() {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+    // iOS never exposes a prompt — go straight to the Add-to-Home-Screen steps.
+    if (ios) { setShowSteps(true); return; }
+
+    let prompt = deferredPrompt;
+    if (!prompt) {
+      // Give Chrome a moment to fire the install event (one-tap install).
+      setWorking(true);
+      prompt = await waitForInstallPrompt(3000);
+      setWorking(false);
+    }
+    if (prompt) {
+      await prompt.prompt();
+      await prompt.userChoice;
       deferredPrompt = null;
       return;
     }
-    // No native prompt available (iOS always; Android before criteria/event) →
-    // coach the manual install instead of doing nothing.
+    // Genuinely no native prompt (criteria not met / older browser) → manual steps.
     setShowSteps(true);
   }
 
@@ -78,7 +109,8 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
     <button
       type="button"
       onClick={handleClick}
-      className="group relative block w-full overflow-hidden rounded-2xl p-[1.5px] shadow-lg shadow-orange-900/10"
+      disabled={working}
+      className="group relative block w-full overflow-hidden rounded-2xl p-[1.5px] shadow-lg shadow-orange-900/10 disabled:opacity-90"
       style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 55%, #f59e0b 100%)' }}
     >
       <div className="flex items-center justify-between gap-3 rounded-[15px] bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3.5">
@@ -91,7 +123,9 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
             <p className="text-xs text-orange-50 mt-0.5">Just ~3 MB · installs in seconds · one-tap access</p>
           </div>
         </div>
-        <span className="text-xs font-bold text-orange-700 bg-white rounded-lg px-3 py-1.5 shrink-0 group-active:scale-95 transition-transform">Install</span>
+        <span className="text-xs font-bold text-orange-700 bg-white rounded-lg px-3 py-1.5 shrink-0 group-active:scale-95 transition-transform">
+          {working ? '…' : 'Install'}
+        </span>
       </div>
     </button>
   ) : (

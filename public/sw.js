@@ -1,11 +1,16 @@
-﻿// Service Worker — push notifications (v3)
+﻿// Service Worker — push notifications + installability (v4)
 //
-// DELIBERATELY no 'fetch' handler. A fetch handler (even a no-op) makes the SW
-// intercept every navigation/asset request, which left users stuck on a stale
-// cached build after each deploy ("none of these are deployed"). Without one the
-// SW never touches loads, so every page is fetched fresh from the network — and
-// the app is still installable in modern Chrome with just a registered SW +
-// manifest (the fetch-handler requirement was dropped years ago).
+// Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
+// site has a service worker with a REAL fetch handler. So we add one — but it is
+// strictly NETWORK-ONLY: it caches nothing and always goes to the network, which
+// means deploys are never stale (the reason an earlier version had no handler at
+// all). This gives us both: clean one-click install AND always-fresh builds.
+self.addEventListener('fetch', (event) => {
+  // Only GET requests; let POST/PUT/etc. (API calls) pass through untouched.
+  if (event.request.method !== 'GET') return;
+  // Pure network pass-through — no cache read or write, so never stale.
+  event.respondWith(fetch(event.request).catch(() => Response.error()));
+});
 
 self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received:', event);
