@@ -217,7 +217,10 @@ export default async function DailyTrackerPage() {
         {/* Free user → the locked buddy-taste card (the upgrade hook).
             Paid-but-unassigned → "being matched". Premium-with-buddy → neither. */}
         {!buddyId && !isPremiumUser && (
-          <LockedBuddyCard streak={(streakRow?.current_streak as number | null) ?? 0} />
+          <LockedBuddyCard
+            streak={(streakRow?.current_streak as number | null) ?? 0}
+            fullName={profile?.full_name ?? undefined}
+          />
         )}
 
         {!buddyId && isPremiumUser && (
