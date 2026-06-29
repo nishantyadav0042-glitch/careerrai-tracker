@@ -1,5 +1,9 @@
-﻿// Service Worker for Push Notifications
-// This handles push notification events from the server
+﻿// Service Worker — push notifications + PWA installability (v2)
+
+// A 'fetch' handler must exist for the app to satisfy PWA install criteria in
+// Chrome. We don't cache the app shell (the app is online-first), so this is a
+// pass-through to the network — its mere presence makes the app installable.
+self.addEventListener('fetch', () => {});
 
 self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received:', event);
