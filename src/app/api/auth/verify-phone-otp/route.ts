@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
+import { sendNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -143,6 +144,31 @@ export async function POST(request: NextRequest) {
       await admin
         .from('student_engagement')
         .upsert({ student_id: data.user.id }, { onConflict: 'student_id', ignoreDuplicates: true });
+    }
+
+    // Alert the admin(s) the moment a brand-new student self-signs up, so the team
+    // can reach out fast (the admin Students tab now lists them newest-first with a
+    // one-tap WhatsApp button). Fires only on a genuinely new self-serve signup —
+    // not on returning logins. Best-effort: wrapped so it never blocks/breaks auth.
+    if ((isStub || !existing) && role === 'student' && signupSource === 'self_serve') {
+      try {
+        const newName = entry?.full_name ?? selfName ?? 'A new student';
+        const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+        await Promise.all(
+          (admins ?? []).map((a) =>
+            sendNotification({
+              userId: a.id,
+              type: 'new_signup',
+              title: '🎉 New student joined CareerRai',
+              body: `${newName} (${e164}) just signed up — tap to add them on WhatsApp.`,
+              data: { url: '/admin', phone: e164 },
+              channels: ['in_app', 'push'],
+            })
+          )
+        );
+      } catch (notifyErr) {
+        console.error('[verify-phone-otp] admin signup notify failed', notifyErr);
+      }
     }
 
     const hasPassword = existing?.password_set === true;
