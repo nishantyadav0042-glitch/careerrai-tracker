@@ -1,48 +1,10 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { GoogleCalendarConnectBtn } from '@/components/google-calendar-connect-btn';
+import { Video } from 'lucide-react';
 
 export default function StudentSettingsPage() {
   const supabase = createClient();
-  const [isConnected, setIsConnected] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const checkGoogleCalendarStatus = useCallback(async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('google_calendar_connected')
-        .eq('id', user.id)
-        .single();
-
-      setIsConnected(profile?.google_calendar_connected ?? false);
-    } catch (error) {
-      console.error('Error checking calendar connection:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    checkGoogleCalendarStatus();
-  }, [checkGoogleCalendarStatus]);
-
-  const handleSuccess = () => {
-    setIsConnected(true);
-  };
-
-  const handleDisconnect = () => {
-    setIsConnected(false);
-  };
 
   return (
     <div className="min-h-screen bg-stone-50 p-4 sm:p-6">
@@ -50,20 +12,17 @@ export default function StudentSettingsPage() {
         <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-8">Settings</h1>
 
         <div className="bg-white rounded-lg border border-stone-200 p-6 space-y-6">
-          {/* Calendar Integration Section */}
+          {/* Sessions & reminders — students don't need to connect Google.
+              The Meet link is delivered in-app (notification + dashboard), so we
+              don't send students through Google's OAuth screen at all. */}
           <div className="border-b border-stone-100 pb-6">
-            <h2 className="text-lg font-semibold text-stone-900 mb-2">Calendar Integration</h2>
-            <p className="text-sm text-stone-600 mb-4">
-              Connect your Google Calendar to receive automated reminders and sync your schedule with your buddy.
-            </p>
-
-            {!loading && (
-              <GoogleCalendarConnectBtn
-                isConnected={isConnected}
-                onConnectSuccess={handleSuccess}
-                onDisconnectSuccess={handleDisconnect}
-              />
-            )}
+            <h2 className="text-lg font-semibold text-stone-900 mb-2">Sessions &amp; reminders</h2>
+            <div className="flex items-start gap-3 rounded-xl bg-teal-50 border border-teal-100 p-4">
+              <Video className="w-5 h-5 text-teal-700 shrink-0 mt-0.5" />
+              <p className="text-sm text-stone-700">
+                When your buddy books a 1:1, the <span className="font-semibold">Google Meet link appears right here in the app</span> — in your notifications and on your dashboard. Nothing to connect, nothing to set up.
+              </p>
+            </div>
           </div>
 
           {/* Account Section */}
