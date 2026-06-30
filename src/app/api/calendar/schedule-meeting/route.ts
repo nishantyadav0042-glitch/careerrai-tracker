@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createDailyRoom } from '@/lib/daily';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -106,7 +107,12 @@ export async function POST(request: NextRequest) {
         : `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`
     );
 
-    const meetLink = createVideoLink();
+    // Prefer a Daily.co room (best quality, one server key, no per-user auth);
+    // fall back to a no-account Jitsi link if Daily isn't configured or errors,
+    // so scheduling never breaks.
+    const end = new Date(start.getTime() + durationMinutes * 60_000);
+    const roomExp = new Date(end.getTime() + 6 * 60 * 60 * 1000); // expire 6h after the session
+    const meetLink = (await createDailyRoom({ expiresAt: roomExp })) ?? createVideoLink();
 
     // ── Persist session ──────────────────────────────────────────
     const { data: session, error: sessionError } = await admin
