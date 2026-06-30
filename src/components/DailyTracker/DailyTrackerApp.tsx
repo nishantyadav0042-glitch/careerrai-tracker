@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
@@ -67,6 +67,7 @@ const DAILY_PUZZLE_ENABLED = false;
 
 function SessionStrip({ session }: { session: TodaySession }) {
   const startsAt = new Date(session.scheduled_at);
+  // eslint-disable-next-line react-hooks/purity
   const minsAway = Math.round((startsAt.getTime() - Date.now()) / 60_000);
   const joinable = minsAway <= 15 && !!session.google_meet_link;
 
@@ -190,6 +191,20 @@ export function DailyTrackerApp({
       return debrief ? null : mockReport;
     },
   });
+
+  // Force the mock debrief: if a mock was logged but isn't debriefed yet, open
+  // the debrief automatically — on first load and on every later visit — until
+  // the student fills it. It stays closeable (so nobody is bricked); closing it
+  // just brings back the loud pending-debrief card, and it reopens next visit.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (pendingDebrief && !isDebriefOpen) {
+      setCurrentLogDate(pendingDebrief.report_date);
+      setIsDebriefOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDebrief]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const {
     currentStreak,
