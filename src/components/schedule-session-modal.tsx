@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect } from 'react';
-import { X, Copy, CheckCircle2, Calendar, Video } from 'lucide-react';
+import { X, Copy, CheckCircle2, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface SchedulableStudent {
@@ -16,7 +16,8 @@ interface ScheduleSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
   students: SchedulableStudent[];
-  calendarConnected: boolean;
+  /** No longer used for gating — sessions need no Google connection. Kept optional for callers. */
+  calendarConnected?: boolean;
   onScheduled?: () => void;
   /** Preselect a student (e.g. opened from a student card) */
   defaultStudentId?: string;
@@ -34,7 +35,6 @@ export function ScheduleSessionModal({
   isOpen,
   onClose,
   students,
-  calendarConnected,
   onScheduled,
   defaultStudentId,
 }: ScheduleSessionModalProps) {
@@ -93,7 +93,7 @@ export function ScheduleSessionModal({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Couldn't reach Google Calendar — try again.");
+        setError(data.error || "Couldn't create the session — try again.");
         return;
       }
       setMeetLink(data.meetLink);
@@ -161,7 +161,7 @@ export function ScheduleSessionModal({
                   </button>
                 </div>
                 <p className="text-xs text-stone-500">
-                  Calendar invites sent to both of you 📅
+                  Your student gets this join link in their app — share it anywhere too 🔗
                 </p>
                 <button
                   onClick={onClose}
@@ -170,29 +170,6 @@ export function ScheduleSessionModal({
                 >
                   Done
                 </button>
-              </div>
-            ) : !calendarConnected ? (
-              /* ── Blocking state: Google not connected ────── */
-              <div className="space-y-4 text-center py-2">
-                <div className="w-14 h-14 mx-auto rounded-full bg-orange-100 flex items-center justify-center">
-                  <Calendar className="w-7 h-7 text-[#E8652D]" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-stone-900">
-                    Connect Google Calendar first
-                  </p>
-                  <p className="text-xs text-stone-500 mt-1">
-                    Sessions create real Google Meet links and calendar invites —
-                    takes 30 seconds, one time.
-                  </p>
-                </div>
-                <a
-                  href="/api/google/auth?redirect=/buddy/home"
-                  className="block w-full py-3 rounded-xl text-white font-semibold transition-colors hover:opacity-90"
-                  style={{ backgroundColor: '#E8652D', minHeight: 48, lineHeight: '24px' }}
-                >
-                  Connect Google Calendar
-                </a>
               </div>
             ) : (
               /* ── Form ────────────────────────────────────── */

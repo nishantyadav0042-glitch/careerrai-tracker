@@ -1,12 +1,10 @@
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
-import { isCalendarConnected } from '@/lib/google-calendar';
 import { BuddyTriageView } from './buddy-triage-view';
 import { StudentVoiceNotesSection } from './student-voice-notes-section';
 import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
 import { MeetingWidget } from '@/components/meeting-widget';
-import { GoogleCalendarConnect } from '@/components/google-calendar-connect';
 import { UrgentRequestsPanel } from './urgent-requests-panel';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -24,13 +22,12 @@ export default async function BuddyHomePage() {
 
   if (profile?.role !== 'buddy') redirect('/');
 
-  const [{ data: students }, calendarConnected, { data: pendingRequests }] = await Promise.all([
+  const [{ data: students }, { data: pendingRequests }] = await Promise.all([
     admin
       .from('profiles')
       .select('id, full_name')
       .eq('buddy_id', user.id)
       .order('full_name'),
-    isCalendarConnected(user.id),
     admin
       .from('session_requests')
       .select('id, student_id, message, created_at, profiles!session_requests_student_id_fkey(full_name)')
@@ -80,13 +77,7 @@ export default async function BuddyHomePage() {
       <MeetingWidget
         role="buddy"
         students={students ?? []}
-        calendarConnected={calendarConnected}
       />
-
-      {/* Calendar connect CTA */}
-      {!calendarConnected && (
-        <GoogleCalendarConnect connected={false} redirectPath="/buddy/home" />
-      )}
 
       {/* 🚨 URGENT: Session requests from students */}
       {(pendingRequests?.length ?? 0) > 0 && (

@@ -3,9 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isCalendarConnected } from '@/lib/google-calendar';
 import { MeetingWidget } from '@/components/meeting-widget';
-import { GoogleCalendarConnect } from '@/components/google-calendar-connect';
 
 export default async function BuddySchedulePage() {
   const supabase = await createClient();
@@ -20,19 +18,11 @@ export default async function BuddySchedulePage() {
     .single();
   if (profile?.role !== 'buddy') redirect('/');
 
-  const [{ data: students }, connected, { data: tokens }] = await Promise.all([
-    admin
-      .from('profiles')
-      .select('id, full_name')
-      .eq('buddy_id', user.id)
-      .order('full_name'),
-    isCalendarConnected(user.id),
-    admin
-      .from('google_oauth_tokens')
-      .select('google_email')
-      .eq('user_id', user.id)
-      .maybeSingle(),
-  ]);
+  const { data: students } = await admin
+    .from('profiles')
+    .select('id, full_name')
+    .eq('buddy_id', user.id)
+    .order('full_name');
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -46,21 +36,15 @@ export default async function BuddySchedulePage() {
           </Link>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-stone-900">Sessions</h1>
-            <p className="text-sm text-stone-600">Schedule GMeet sessions with your students</p>
+            <p className="text-sm text-stone-600">Schedule video sessions with your students</p>
           </div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        <GoogleCalendarConnect
-          connected={connected}
-          googleEmail={tokens?.google_email}
-          redirectPath="/buddy/schedule"
-        />
         <MeetingWidget
           role="buddy"
           students={students ?? []}
-          calendarConnected={connected}
         />
       </div>
     </div>

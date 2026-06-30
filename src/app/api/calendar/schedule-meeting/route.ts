@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import type { calendar_v3 } from 'googleapis';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  getCalendarClient,
-  extractMeetLink,
-  CalendarNotConnectedError,
-} from '@/lib/google-calendar';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -22,11 +16,19 @@ interface ScheduleMeetingRequest {
 }
 
 /**
+ * A video room link that needs ZERO accounts, ZERO OAuth and ZERO verification —
+ * for the buddy or the student. A unique Jitsi room both sides just tap to join
+ * in the browser. (Replaced Google Meet, which forced every buddy to connect a
+ * Google account and pass Google's app-verification wall.)
+ */
+function createVideoLink(): string {
+  return `https://meet.jit.si/CareerRai-${randomUUID()}`;
+}
+
+/**
  * POST /api/calendar/schedule-meeting
- * Creates a Google Calendar event with a REAL Meet link on the buddy's
- * calendar (in-process — no internal HTTP), mirrors it to the student's
- * calendar when they're connected, persists to video_sessions, and
- * notifies the student in-app.
+ * Buddy schedules a 1:1. Creates a video room link, saves the session, and
+ * notifies the student in-app (where the join link lives). No Google needed.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,14 +42,11 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: buddy } = await admin
       .from('profiles')
-      .select('full_name, role, college, email')
+      .select('full_name, role')
       .eq('id', user.id)
       .single();
     if (!buddy || buddy.role !== 'buddy') {
-      return NextResponse.json(
-        { error: 'Only buddies can schedule sessions.' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Only buddies can schedule sessions.' }, { status: 403 });
     }
 
     // ── Validate input ───────────────────────────────────────────
@@ -66,10 +65,7 @@ export async function POST(request: NextRequest) {
       );
     }
     if (!ALLOWED_DURATIONS.includes(durationMinutes)) {
-      return NextResponse.json(
-        { error: 'Duration must be 20, 30, 45 or 60 minutes.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Duration must be 20, 30, 45 or 60 minutes.' }, { status: 400 });
     }
     if (!ALLOWED_SESSION_TYPES.includes(sessionType)) {
       return NextResponse.json({ error: 'Invalid session type.' }, { status: 400 });
@@ -80,186 +76,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid start time.' }, { status: 400 });
     }
     if (start.getTime() < Date.now() + 60_000) {
-      return NextResponse.json(
-        { error: 'Pick a time in the future.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Pick a time in the future.' }, { status: 400 });
     }
-    const end = new Date(start.getTime() + durationMinutes * 60_000);
 
     // ── Student must belong to this buddy ────────────────────────
     const { data: student } = await admin
       .from('profiles')
-      .select('full_name, email, buddy_id, free_onboarding_used')
+      .select('full_name, buddy_id, free_onboarding_used')
       .eq('id', studentId)
       .single();
     if (!student) {
       return NextResponse.json({ error: 'Student not found.' }, { status: 404 });
     }
     if (student.buddy_id !== user.id) {
-      return NextResponse.json(
-        { error: 'This student is not assigned to you.' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'This student is not assigned to you.' }, { status: 403 });
     }
-    // Guard: only one free orientation per student.
-    if (sessionType === 'onboarding' && student.free_onboarding_used) {
+
+    const isOrientation = sessionType === 'onboarding';
+    if (isOrientation && student.free_onboarding_used) {
       return NextResponse.json(
         { error: 'This student has already completed their free orientation.' },
         { status: 409 }
       );
     }
 
-    // ── Buddy's calendar client ──────────────────────────────────
-    let buddyCalendar: calendar_v3.Calendar;
-    let buddyGoogleEmail: string | null;
-    try {
-      const client = await getCalendarClient(user.id);
-      buddyCalendar = client.calendar;
-      buddyGoogleEmail = client.googleEmail;
-    } catch (err) {
-      if (err instanceof CalendarNotConnectedError) {
-        return NextResponse.json(
-          { error: 'Connect Google Calendar in Settings first.', code: 'NOT_CONNECTED' },
-          { status: 403 }
-        );
-      }
-      throw err;
-    }
-
-    // ── Build event ──────────────────────────────────────────────
-    const isOrientation = sessionType === 'onboarding';
     const title = body.title?.trim() || (
       isOrientation
         ? `Free Orientation — CareerRai with ${buddy.full_name.split(' ')[0]}`
         : `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`
     );
 
-    // Student's Google-connected email wins; profiles.email is the fallback.
-    // Missing email never blocks the meeting — the in-app widget covers it.
-    const { data: studentTokens } = await admin
-      .from('google_oauth_tokens')
-      .select('google_email')
-      .eq('user_id', studentId)
-      .maybeSingle();
-    const studentEmail = studentTokens?.google_email || student.email || null;
-
-    const attendees: calendar_v3.Schema$EventAttendee[] = [];
-    if (buddyGoogleEmail) attendees.push({ email: buddyGoogleEmail });
-    if (studentEmail) {
-      attendees.push({ email: studentEmail, displayName: student.full_name });
-    }
-
-    const description = isOrientation ? [
-      `Free Orientation Session — CareerRai`,
-      ``,
-      `Buddy: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
-      `Student: ${student.full_name}`,
-      ``,
-      `This is a FREE orientation session (not a guidance/strategy session).`,
-      `Agenda: how CareerRai works, how the daily log and mock debrief catch preparation gaps,`,
-      `how the trajectory wall predicts target percentile, and what your buddy will do each week.`,
-      ``,
-      `${process.env.NEXT_PUBLIC_APP_URL}`,
-    ].join('\n') : [
-      `1:1 prep session on CareerRai`,
-      ``,
-      `Buddy: ${buddy.full_name}${buddy.college ? ` (IIM ${buddy.college} Alumni)` : ' (IIM Alumni)'}`,
-      `Student: ${student.full_name}`,
-      ``,
-      `Agenda: progress check-in, doubts, and next steps for CAT prep.`,
-      ``,
-      `${process.env.NEXT_PUBLIC_APP_URL}`,
-    ].join('\n');
-
-    const eventBody = (requestId: string): calendar_v3.Schema$Event => ({
-      summary: title,
-      description,
-      start: { dateTime: start.toISOString(), timeZone: 'Asia/Kolkata' },
-      end: { dateTime: end.toISOString(), timeZone: 'Asia/Kolkata' },
-      attendees: attendees.length ? attendees : undefined,
-      conferenceData: {
-        createRequest: {
-          requestId,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
-        },
-      },
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'popup', minutes: 30 },
-          { method: 'popup', minutes: 10 },
-          { method: 'email', minutes: 60 },
-        ],
-      },
-    });
-
-    // ── Create on buddy's calendar; retry once with fresh requestId ──
-    let event: calendar_v3.Schema$Event | null = null;
-    let meetLink: string | null = null;
-    for (let attempt = 0; attempt < 2 && !meetLink; attempt++) {
-      const { data } = await buddyCalendar.events.insert({
-        calendarId: 'primary',
-        conferenceDataVersion: 1,
-        sendUpdates: 'all',
-        requestBody: eventBody(randomUUID()),
-      });
-      event = data;
-      meetLink = extractMeetLink(data);
-
-      // The conference is occasionally still pending in the insert
-      // response — one fetch usually resolves it.
-      if (!meetLink && data.id) {
-        await new Promise((r) => setTimeout(r, 800));
-        const { data: fetched } = await buddyCalendar.events.get({
-          calendarId: 'primary',
-          eventId: data.id,
-        });
-        meetLink = extractMeetLink(fetched);
-        if (meetLink) event = fetched;
-      }
-
-      if (!meetLink && data.id) {
-        // clean up the linkless event before retrying
-        await buddyCalendar.events
-          .delete({ calendarId: 'primary', eventId: data.id, sendUpdates: 'none' })
-          .catch(() => {});
-        event = null;
-      }
-    }
-
-    if (!meetLink || !event?.id) {
-      return NextResponse.json(
-        { error: "Google didn't return a Meet link — try again in a moment." },
-        { status: 502 }
-      );
-    }
-
-    // ── Mirror onto student's calendar (non-fatal) ───────────────
-    let studentEventId: string | null = null;
-    try {
-      const { calendar: studentCalendar } = await getCalendarClient(studentId);
-      const { data: mirror } = await studentCalendar.events.insert({
-        calendarId: 'primary',
-        sendUpdates: 'none',
-        requestBody: {
-          summary: title,
-          description: `${description}\n\nJoin: ${meetLink}`,
-          start: { dateTime: start.toISOString(), timeZone: 'Asia/Kolkata' },
-          end: { dateTime: end.toISOString(), timeZone: 'Asia/Kolkata' },
-          reminders: {
-            useDefault: false,
-            overrides: [
-              { method: 'popup', minutes: 30 },
-              { method: 'popup', minutes: 10 },
-            ],
-          },
-        },
-      });
-      studentEventId = mirror.id ?? null;
-    } catch {
-      // Student hasn't connected Google — invite email (if any) covers them.
-    }
+    const meetLink = createVideoLink();
 
     // ── Persist session ──────────────────────────────────────────
     const { data: session, error: sessionError } = await admin
@@ -272,26 +119,17 @@ export async function POST(request: NextRequest) {
         duration_minutes: durationMinutes,
         session_status: 'scheduled',
         session_type: isOrientation ? 'onboarding' : 'guidance',
-        google_event_id: event.id,
-        google_meet_link: meetLink,
-        student_google_event_id: studentEventId,
+        google_meet_link: meetLink, // reused as the generic "join link" column
       })
       .select('id')
       .single();
 
     if (sessionError || !session) {
       console.error('video_sessions insert failed:', sessionError);
-      // Roll back the calendar event so we don't strand a meeting
-      await buddyCalendar.events
-        .delete({ calendarId: 'primary', eventId: event.id, sendUpdates: 'all' })
-        .catch(() => {});
-      return NextResponse.json(
-        { error: "Couldn't save the session — try again." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Couldn't save the session — try again." }, { status: 500 });
     }
 
-    // ── Notify student in-app (non-fatal) ────────────────────────
+    // ── Notify student in-app (this is where they get the join link) ──
     const istTime = start.toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
       weekday: 'short',
@@ -310,7 +148,7 @@ export async function POST(request: NextRequest) {
           ? `🎯 Free Orientation with ${buddy.full_name.split(' ')[0]}`
           : `📅 Session with ${buddy.full_name.split(' ')[0]}`,
         body: isOrientation
-          ? `${istTime} IST — your free orientation is booked. You'll see exactly how CareerRai works.`
+          ? `${istTime} IST — your free orientation is booked. Join from your dashboard.`
           : `${istTime} IST — your buddy booked a 1:1. Join from your dashboard.`,
         data: { sessionId: session.id, meetLink, sessionType: isOrientation ? 'onboarding' : 'guidance' },
       })
@@ -322,41 +160,9 @@ export async function POST(request: NextRequest) {
       success: true,
       meetingId: session.id,
       meetLink,
-      invitesSent: attendees.length > 0,
     });
   } catch (error) {
-    // Surface Google API errors precisely instead of a generic 500
-    const apiError = error as {
-      message?: string;
-      errors?: Array<{ reason?: string; message?: string }>;
-      response?: { data?: { error?: { errors?: Array<{ reason?: string }>; message?: string } } };
-    };
-    const reason =
-      apiError.errors?.[0]?.reason ||
-      apiError.response?.data?.error?.errors?.[0]?.reason;
-    const detail =
-      apiError.response?.data?.error?.message || apiError.message || String(error);
-    console.error('schedule-meeting error:', reason, detail);
-
-    if (reason === 'accessNotConfigured' || detail.includes('SERVICE_DISABLED') || detail.includes('has not been used in project')) {
-      return NextResponse.json(
-        {
-          error:
-            'Google Calendar API is disabled in the app’s Google Cloud project. Founder: enable it at console.cloud.google.com → APIs & Services → Google Calendar API → Enable, then retry.',
-          code: 'CALENDAR_API_DISABLED',
-        },
-        { status: 502 }
-      );
-    }
-    if (reason === 'insufficientPermissions' || detail.includes('insufficient')) {
-      return NextResponse.json(
-        { error: 'Google Calendar permissions are missing — disconnect and reconnect Google Calendar in Settings.', code: 'INSUFFICIENT_SCOPE' },
-        { status: 403 }
-      );
-    }
-    return NextResponse.json(
-      { error: "Couldn't reach Google Calendar — try again." },
-      { status: 500 }
-    );
+    console.error('schedule-meeting error:', error);
+    return NextResponse.json({ error: "Couldn't create the session — try again." }, { status: 500 });
   }
 }

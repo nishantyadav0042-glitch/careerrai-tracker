@@ -42,7 +42,7 @@ export function VideoSessionPromptClient({
               : 'Book your next session'}
           </p>
           <p className={`text-xs mt-0.5 ${overdue ? 'text-stone-400' : 'text-stone-500'}`}>
-            A 30-min GMeet keeps {firstName} on track
+            A 30-min video call keeps {firstName} on track
           </p>
         </div>
         <button
