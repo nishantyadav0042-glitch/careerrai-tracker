@@ -1,48 +1,10 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { GoogleCalendarConnectBtn } from '@/components/google-calendar-connect-btn';
+import { Video } from 'lucide-react';
 
 export default function BuddySettingsPage() {
   const supabase = createClient();
-  const [isConnected, setIsConnected] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const checkGoogleCalendarStatus = useCallback(async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('google_calendar_connected')
-        .eq('id', user.id)
-        .single();
-
-      setIsConnected(profile?.google_calendar_connected ?? false);
-    } catch (error) {
-      console.error('Error checking calendar connection:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    checkGoogleCalendarStatus();
-  }, [checkGoogleCalendarStatus]);
-
-  const handleSuccess = () => {
-    setIsConnected(true);
-  };
-
-  const handleDisconnect = () => {
-    setIsConnected(false);
-  };
 
   return (
     <div className="min-h-screen bg-stone-50 p-4 sm:p-6">
@@ -50,29 +12,17 @@ export default function BuddySettingsPage() {
         <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-8">Settings</h1>
 
         <div className="bg-white rounded-lg border border-stone-200 p-6 space-y-6">
-          {/* Calendar Integration Section */}
+          {/* Video sessions — no Google connection needed. The schedule flow
+              creates a ready-to-join video link and delivers it to the student
+              in-app, so buddies never have to connect or verify a Google account. */}
           <div className="border-b border-stone-100 pb-6">
-            <h2 className="text-lg font-semibold text-stone-900 mb-2">Calendar Integration</h2>
-            <p className="text-sm text-stone-600 mb-4">
-              Connect your Google Calendar to automatically schedule sessions with students and generate Google Meet links.
-            </p>
-
-            {!loading && (
-              <GoogleCalendarConnectBtn
-                isConnected={isConnected}
-                onConnectSuccess={handleSuccess}
-                onDisconnectSuccess={handleDisconnect}
-              />
-            )}
-          </div>
-
-          {/* Sessions Section */}
-          <div className="border-b border-stone-100 pb-6">
-            <h2 className="text-lg font-semibold text-stone-900 mb-2">Video Sessions</h2>
-            <p className="text-sm text-stone-600">
-              Your scheduled sessions will appear on your home page. Sessions require Google Calendar to be connected
-              for automatic Meet link generation.
-            </p>
+            <h2 className="text-lg font-semibold text-stone-900 mb-2">Video sessions</h2>
+            <div className="flex items-start gap-3 rounded-xl bg-teal-50 border border-teal-100 p-4">
+              <Video className="w-5 h-5 text-teal-700 shrink-0 mt-0.5" />
+              <p className="text-sm text-stone-700">
+                When you schedule a session, CareerRai creates a <span className="font-semibold">ready-to-join video link</span> instantly — no Google account, no setup. Both you and your student just tap to join, and the link also appears on your home page.
+              </p>
+            </div>
           </div>
 
           {/* Account Section */}
