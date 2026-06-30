@@ -21,7 +21,10 @@ export interface LoggingData {
 }
 
 const HOURS_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
-const SECTIONS = ['VARC', 'DILR', 'QA', 'Mock', 'Revision'];
+// 'Mock' is no longer a study chip — it's now an explicit Yes/No question below,
+// so it can't be missed. We still send 'Mock' inside `sections` on submit so the
+// server (mock_taken = sections.includes('Mock')) and debrief flow are unchanged.
+const SECTIONS = ['VARC', 'DILR', 'QA', 'Revision'];
 const ENERGY_OPTIONS = [
   { emoji: '🙏', label: 'Drained', value: '🙏' },
   { emoji: '💪', label: 'Solid', value: '💪' },
@@ -36,6 +39,7 @@ export function LoggingModal({
 }: LoggingModalProps) {
   const [hours, setHours] = useState<number | null>(null);
   const [sections, setSections] = useState<string[]>([]);
+  const [mockTaken, setMockTaken] = useState<boolean | null>(null);
   const [energy, setEnergy] = useState<string | null>(null);
   const [emotionalChips, setEmotionalChips] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
@@ -49,7 +53,10 @@ export function LoggingModal({
     }
   };
 
-  const isValid = hours !== null && sections.length > 0 && energy !== null;
+  // Must answer the mock question; must have logged a study area OR a mock.
+  const isValid =
+    hours !== null && energy !== null && mockTaken !== null &&
+    (mockTaken === true || sections.length > 0);
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -57,9 +64,14 @@ export function LoggingModal({
     navigator.vibrate?.(50);
     try {
       setError(null);
+      // Fold the explicit mock answer back into `sections` so the server and the
+      // debrief redirect keep working off sections.includes('Mock').
+      const finalSections = mockTaken
+        ? [...sections.filter((s) => s !== 'Mock'), 'Mock']
+        : sections.filter((s) => s !== 'Mock');
       const result = await onSubmit({
         hours,
-        sections,
+        sections: finalSections,
         energy,
         notes: notes.trim() || undefined,
         emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
@@ -67,6 +79,7 @@ export function LoggingModal({
       // Reset form
       setHours(null);
       setSections([]);
+      setMockTaken(null);
       setEnergy(null);
       setEmotionalChips([]);
       setNotes('');
@@ -132,10 +145,51 @@ export function LoggingModal({
             )}
           </div>
 
+          {/* Mock test — explicit, unmissable Yes/No (drives the debrief redirect) */}
+          <div className="rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
+            <label className="block text-sm font-bold text-white mb-1">
+              Did you take a mock test today?
+            </label>
+            <p className="text-xs text-zinc-400 mb-3">
+              Your mock scores drive your analysis and your buddy&apos;s plan — log every single one.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMockTaken(false)}
+                className={cn(
+                  'py-3 rounded-xl font-semibold text-sm transition-all active:scale-95',
+                  mockTaken === false
+                    ? 'bg-zinc-700 text-white ring-2 ring-zinc-500'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                )}
+              >
+                No, not today
+              </button>
+              <button
+                type="button"
+                onClick={() => setMockTaken(true)}
+                className={cn(
+                  'py-3 rounded-xl font-semibold text-sm transition-all active:scale-95',
+                  mockTaken === true
+                    ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                )}
+              >
+                Yes, I gave a mock
+              </button>
+            </div>
+            {mockTaken === true && (
+              <p className="text-xs text-teal-400 mt-2 font-medium">
+                ✓ Next you&apos;ll log your mock scores — VARC / DILR / QA + percentile.
+              </p>
+            )}
+          </div>
+
           {/* Sections */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Sections today
+              Sections studied <span className="normal-case font-normal text-zinc-600">(optional if you only gave a mock)</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {SECTIONS.map((section) => (
@@ -145,9 +199,7 @@ export function LoggingModal({
                   className={cn(
                     'px-4 py-2 rounded-full font-semibold text-sm transition-all active:scale-95',
                     sections.includes(section)
-                      ? section === 'Mock'
-                        ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
-                        : 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
+                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
                       : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                   )}
                 >
@@ -155,11 +207,6 @@ export function LoggingModal({
                 </button>
               ))}
             </div>
-            {sections.includes('Mock') && (
-              <p className="text-xs text-teal-400 mt-2 font-medium">
-                ✓ Mock selected — debrief form appears after logging
-              </p>
-            )}
           </div>
 
           {/* Energy */}
@@ -225,7 +272,7 @@ export function LoggingModal({
             )}
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Logging...' : sections.includes('Mock') ? 'Log & Debrief →' : 'Log Day'}
+            {isSubmitting ? 'Logging...' : mockTaken ? 'Log & Debrief →' : 'Log Day'}
           </button>
           <p className="text-[11px] text-zinc-600 text-center mt-2">15 seconds. The app answers back.</p>
         </div>
