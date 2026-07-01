@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, GraduationCap, User, Settings, Users, IndianRupee, X } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, Target, User, Settings, Users, IndianRupee, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -121,6 +121,9 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
 
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
+  // Mocks are the #1 signal — promoted to a primary, always-visible tab (was
+  // buried under "More" as "Exams", which is why students couldn't find it).
+  { href: '/student/exams', icon: Target, label: 'Mocks' },
   { href: '/student/analysis', icon: TrendingUp, label: 'Analysis' },
   { href: '/student/buddy', imgSrc: '/buddy-nav-icon.jpg', label: 'Buddy' },
   { href: '/student/chat', icon: MessageCircle, label: 'Chat' },
@@ -128,7 +131,6 @@ const STUDENT_MAIN: NavItem[] = [
 
 const STUDENT_MORE: NavItem[] = [
   { href: '/student/reports', icon: FileText, label: 'History' },
-  { href: '/student/exams', icon: GraduationCap, label: 'Exams' },
   { href: '/student/profile', icon: User, label: 'Profile' },
   { href: '/student/settings', icon: Settings, label: 'Settings' },
 ];
