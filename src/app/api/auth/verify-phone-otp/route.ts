@@ -7,7 +7,11 @@ import { sendNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone: rawPhone, token, name: rawName } = (await request.json()) as { phone?: string; token?: string; name?: string };
+    const { phone: rawPhone, token, name: rawName, userType } = (await request.json()) as { phone?: string; token?: string; name?: string; userType?: string };
+    // Which role the person chose on the login screen ('student' | 'buddy').
+    // Honored ONLY for brand-new signups (below) — it must never downgrade an
+    // existing buddy/admin or silently convert an existing real student.
+    const wantsBuddy = userType === 'buddy';
     // Name comes from the /start self-signup form (allowlist users get their name
     // from the allowlist entry instead). Trim + cap to a sane length.
     const selfName = (rawName ?? '').trim().slice(0, 80) || null;
@@ -83,7 +87,13 @@ export async function POST(request: NextRequest) {
           ? existing.role
           : entry?.person_type === 'buddy'
             ? 'buddy'
-            : 'student'
+            // Honor the "Buddy" choice from the login picker for a brand-new signup
+            // (no profile yet, or just the trigger stub) so a buddy lands in the
+            // buddy flow + buddy setup instead of the student onboarding. Existing
+            // real students are never auto-converted.
+            : (wantsBuddy && (isStub || !existing))
+              ? 'buddy'
+              : 'student'
     ) as 'student' | 'buddy' | 'admin';
     const normalDest =
       role === 'admin' ? '/admin' :
