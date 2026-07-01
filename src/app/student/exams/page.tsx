@@ -74,9 +74,9 @@ export default function ExamsPage() {
   return (
     <div className="space-y-5 pb-24">
       <div className="px-1">
-        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Diagnostics</p>
-        <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>Where do you stand?</h1>
-        <p className="text-sm text-stone-500 mt-1">Self-assessment · results are private to you and your buddy</p>
+        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold">Mock Tests</p>
+        <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>Your mocks</h1>
+        <p className="text-sm text-stone-500 mt-1">Log every mock — it&apos;s the #1 signal for your percentile and your buddy&apos;s plan.</p>
       </div>
 
       {TESTS.map((test) => {
