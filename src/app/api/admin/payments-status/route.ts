@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { isRequestAdmin } from '@/lib/require-admin';
 
 // Health check for the Razorpay payment gateway. Reports whether the keys are
 // configured, valid, and in test/live mode — WITHOUT ever returning the keys.
 // Runs on production (where Razorpay is reachable) so we can confirm setup.
 export async function GET() {
+  if (!(await isRequestAdmin())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const enabled = process.env.NEXT_PUBLIC_PAYMENTS_ENABLED === 'true';
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
