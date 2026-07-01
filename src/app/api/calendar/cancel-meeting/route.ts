@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getCalendarClient, CalendarNotConnectedError } from '@/lib/google-calendar';
 
 /**
  * POST /api/calendar/cancel-meeting
- * Buddy cancels a scheduled session: deletes the Google event(s) with
- * sendUpdates:'all' and marks the row cancelled.
+ * Buddy cancels a scheduled session: marks the row cancelled and notifies the
+ * student in-app. (Sessions use Daily/Jitsi links now — there is no calendar
+ * event to delete; the DB confirmed zero legacy Google-event sessions.)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: session } = await admin
       .from('video_sessions')
-      .select('id, buddy_id, student_id, title, google_event_id, student_google_event_id, session_status')
+      .select('id, buddy_id, student_id, title, session_status')
       .eq('id', meetingId)
       .single();
 
@@ -44,37 +44,6 @@ export async function POST(request: NextRequest) {
     }
     if (session.session_status === 'cancelled') {
       return NextResponse.json({ success: true, alreadyCancelled: true });
-    }
-
-    // Delete the buddy's Google event (emails attendees). Non-fatal if the
-    // event is already gone or Calendar got disconnected.
-    if (session.google_event_id) {
-      try {
-        const { calendar } = await getCalendarClient(user.id);
-        await calendar.events.delete({
-          calendarId: 'primary',
-          eventId: session.google_event_id,
-          sendUpdates: 'all',
-        });
-      } catch (err) {
-        if (!(err instanceof CalendarNotConnectedError)) {
-          console.error('Buddy event delete failed (continuing):', err);
-        }
-      }
-    }
-
-    // Delete the mirror on the student's calendar
-    if (session.student_google_event_id) {
-      try {
-        const { calendar } = await getCalendarClient(session.student_id);
-        await calendar.events.delete({
-          calendarId: 'primary',
-          eventId: session.student_google_event_id,
-          sendUpdates: 'none',
-        });
-      } catch {
-        // student disconnected or event gone — fine
-      }
     }
 
     const { error: updateError } = await admin
