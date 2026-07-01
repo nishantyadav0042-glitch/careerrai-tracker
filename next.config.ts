@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     formats: ['image/webp', 'image/avif'],
   },
   // Never bundle server-only packages into client JS.
-  serverExternalPackages: ['googleapis', 'web-push'],
+  serverExternalPackages: ['web-push'],
 };
 
 export default nextConfig;

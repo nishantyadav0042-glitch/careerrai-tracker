@@ -1,5 +1,6 @@
 {
   "regions": ["sin1"],
+  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ]",
   "crons": [
     { "path": "/api/cron/daily-reminder",    "schedule": "30 14 * * *"   },
     { "path": "/api/cron/session-tomorrow",  "schedule": "0 6 * * *"     },
