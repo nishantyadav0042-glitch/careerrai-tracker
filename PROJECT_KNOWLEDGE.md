@@ -182,6 +182,8 @@ Two config sources, resolved by `getServerConfig(key, envVar?)` in `src/lib/serv
 - **Instagram/Facebook in-app browsers can't install a PWA** — the escape-to-real-browser step is mandatory for ad traffic.
 - **Payments dormant** unless `NEXT_PUBLIC_PAYMENTS_ENABLED=true` in Vercel, even with valid keys.
 - **Onboarding "Log Day 1"** screen still uses the older topic chips (incl. "Mock Test") — not yet aligned with the main daily log's explicit mock question.
+- **DB type rule — percentiles/scores are decimals.** CAT students enter decimals (76.2, 99.5). Any column a user-facing form writes a percentile/score into MUST be `numeric`, never `smallint`/`integer` (a decimal into an int column 500s with "invalid input syntax for type smallint" — this hard-broke student onboarding on 2026-07-02). All existing percentile/score columns were migrated to `numeric(5,2)` (profiles baseline/target/first-attempt, daily_reports mock scores, test_results). When adding a new numeric column or form input, match the column type to what the input allows, and never swallow the Supabase error — surface `error.message`.
+- **Retry-safe writes.** Any client write that can run twice (onboarding steps, log submissions) must be an `upsert` on its natural key, not a bare `insert` — a failed later step + retry otherwise dies on the unique constraint.
 
 ---
 
