@@ -7,6 +7,15 @@ import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 import { StudentDossier, type StudentDossierData } from '@/components/student-dossier';
 
+// Buddy rows carry their storefront-setup answers so the admin can match on
+// expertise (strongest section, who they help best), not just a name.
+export type BuddyInfo = Profile & {
+  strongest_section?: string | null;
+  student_types_helped?: string[] | null;
+  iim_converted?: string | null;
+  cat_percentile?: number | null;
+};
+
 interface StudentStat {
   student: Profile & StudentDossierData & { onboarding_completed?: boolean | null; phone?: string | null; created_at?: string };
   summary: { band: string; overallScore: number; daysSubmitted: number; avgStudy: number };
@@ -45,13 +54,43 @@ function whatsappLink(phone: string | null | undefined, name: string): string | 
   return `https://wa.me/${digits}?text=${text}`;
 }
 
+// One-line buddy credential for the dropdown: "Shreya — IIM Indore · strong DILR".
+function buddyOptionLabel(b: BuddyInfo): string {
+  const bits = [b.iim_converted, b.strongest_section ? `strong ${b.strongest_section}` : null].filter(Boolean);
+  return bits.length ? `${b.full_name} — ${bits.join(' · ')}` : b.full_name;
+}
+
+// The student facts that actually drive a buddy match, shown WITHOUT expanding:
+// profile type (fresher/repeater, student/WP), target, hours, weakest section.
+function matchFacts(s: StudentStat['student']): string[] {
+  const facts: string[] = [];
+  if (s.is_repeater === true) facts.push('Repeater');
+  else if (s.is_repeater === false) facts.push('First attempt');
+  if (s.is_working_professional === true) facts.push('Working professional');
+  else if (s.is_working_professional === false) facts.push('Student');
+  if (s.coaching_enrolled === true) facts.push('Has coaching');
+  else if (s.coaching_enrolled === false) facts.push('Self-study');
+  if (s.target_percentile != null) facts.push(`Target ${s.target_percentile}%ile`);
+  const sections = [
+    { name: 'VARC', val: s.baseline_varc },
+    { name: 'DILR', val: s.baseline_dilr },
+    { name: 'QA', val: s.baseline_qa },
+  ].filter((x): x is { name: string; val: number } => x.val != null);
+  if (sections.length >= 2) {
+    const weakest = sections.reduce((a, b) => (b.val < a.val ? b : a));
+    facts.push(`Weakest: ${weakest.name} (${weakest.val})`);
+  }
+  if (s.hours_available != null) facts.push(`${s.hours_available}h/day`);
+  return facts;
+}
+
 export function AdminStudentsList({
   students,
   buddies,
   pendingStudents = [],
 }: {
   students: StudentStat[];
-  buddies: Profile[];
+  buddies: BuddyInfo[];
   pendingStudents?: PendingStudent[];
 }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -84,6 +123,8 @@ export function AdminStudentsList({
     const isExpanded = expandedId === student.id;
     const isSparse = student.onboarding_completed &&
       (!student.college || !student.exam_target || !(student.dream_colleges?.length) || !student.starting_percentile);
+    const facts = matchFacts(student);
+    const selectedBuddy = buddies.find((b) => b.id === buddy?.id);
     const wa = whatsappLink(student.phone, student.full_name);
     const joinedAgo = daysSinceJoin === null || daysSinceJoin === undefined
       ? null
@@ -111,10 +152,9 @@ export function AdminStudentsList({
               </div>
               <button
                 onClick={() => setExpandedId(isExpanded ? null : student.id)}
-                className="-mt-1 -mr-1 p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 flex-shrink-0"
-                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                className="-mt-1 -mr-1 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-stone-100 text-stone-500 text-[11px] font-semibold flex-shrink-0"
               >
-                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                Full profile {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             </div>
 
@@ -136,6 +176,23 @@ export function AdminStudentsList({
             </div>
           </div>
         </div>
+
+        {/* Match strip — the profile facts that decide which buddy fits, no expand needed */}
+        {facts.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {facts.map((f) => (
+              <span
+                key={f}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-[11px] font-medium',
+                  f.startsWith('Weakest') ? 'bg-red-50 text-red-700' : 'bg-stone-100 text-stone-600'
+                )}
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Contact row — phone + one-tap WhatsApp (real signups only) */}
         {student.phone && student.phone.trim().startsWith('+') && (
@@ -173,10 +230,18 @@ export function AdminStudentsList({
           >
             <option value="">Unassigned</option>
             {buddies.map((b) => (
-              <option key={b.id} value={b.id}>{b.full_name}</option>
+              <option key={b.id} value={b.id}>{buddyOptionLabel(b)}</option>
             ))}
           </select>
         </div>
+
+        {/* Who the assigned buddy helps best — sanity check for the match */}
+        {selectedBuddy && (selectedBuddy.student_types_helped?.length ?? 0) > 0 && (
+          <div className="mt-1.5 text-[11px] text-stone-500">
+            <span className="font-semibold text-stone-600">{selectedBuddy.full_name.split(' ')[0]}</span> helps best:{' '}
+            {selectedBuddy.student_types_helped!.join(', ')}
+          </div>
+        )}
 
         {/* Expanded full dossier — everything the student filled in setup */}
         {isExpanded && (

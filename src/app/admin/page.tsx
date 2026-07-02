@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { AdminBroadcast } from './admin-broadcast';
 import { AdminMatchPanel } from './admin-match-panel';
 import { AdminStudentsList } from './admin-students-list';
+import { AdminBuddiesList, type BuddyDossierData } from './admin-buddies-list';
 import { AdminDataImport } from './admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import { AdminTabs, type AdminTab } from './admin-tabs';
@@ -37,7 +38,7 @@ export default async function AdminPage() {
 
   // Fetch all profiles — include full onboarding columns so admin can see the
   // complete student dossier (everything they filled across the 9-step setup).
-  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, is_demo, signup_source').order('created_at', { ascending: false });
+  const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, is_demo, signup_source, strongest_section, student_types_helped, iim_converted, first_attempt_percentile, cat_year, current_company, biggest_mistake, younger_self_advice, how_i_work').order('created_at', { ascending: false });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profiles = (allProfiles ?? []) as any as Profile[];
 
@@ -338,37 +339,17 @@ export default async function AdminPage() {
   const buddiesSection = (
     <div>
       <h2 className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3 px-1">Buddies</h2>
-      <div className="space-y-2">
-        {buddyStats.map(({ buddy, studentCount, redFlags, feedbackCount, avgResponseHrs }) => {
-          const initials = buddy.full_name[0].toUpperCase();
-          return (
-            <Card key={buddy.id} className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-orange-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                  {initials}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-stone-900 text-sm">{buddy.full_name}</span>
-                    <Badge color="orange">Buddy</Badge>
-                    {redFlags > 0 && <Badge color="red">{redFlags} red flag{redFlags > 1 ? 's' : ''}</Badge>}
-                  </div>
-                  <div className="text-xs text-stone-500 mt-0.5">{buddy.email} · {studentCount} student{studentCount !== 1 ? 's' : ''}</div>
-                  <div className="text-xs text-stone-600 mt-1">
-                    {feedbackCount} feedback (14d)
-                    {avgResponseHrs !== null && <> · responds in ~{avgResponseHrs}h</>}
-                    {feedbackCount === 0 && <span className="text-rose-600 font-medium"> · no recent activity</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4 text-stone-400" />
-                  <span className="text-sm font-bold text-stone-900">{studentCount}</span>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      <AdminBuddiesList
+        rows={buddyStats.map(({ buddy, studentCount, redFlags, feedbackCount, avgResponseHrs, students: myStudents }) => ({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          buddy: buddy as any as BuddyDossierData,
+          studentCount,
+          redFlags,
+          feedbackCount,
+          avgResponseHrs,
+          students: myStudents.map((s) => ({ id: s.id, full_name: s.full_name })),
+        }))}
+      />
     </div>
   );
 
