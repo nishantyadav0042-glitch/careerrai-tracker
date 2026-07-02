@@ -116,7 +116,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         onComplete();
       } catch (err) {
         console.error('Onboarding error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to complete onboarding. Please try again.');
+        // Supabase PostgrestError may not be an Error instance — read .message
+        // off any shape so the student (and we) see the real reason.
+        const message = (err as { message?: string })?.message;
+        setError(message ?? 'Failed to complete onboarding. Please try again.');
         setIsLoading(false);
       }
     }

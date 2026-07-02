@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error('[baseline] update error:', error);
-    return NextResponse.json({ error: 'Failed to save baseline' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message ? `Failed to save baseline: ${error.message}` : 'Failed to save baseline' },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true, locked: !isAdmin });
