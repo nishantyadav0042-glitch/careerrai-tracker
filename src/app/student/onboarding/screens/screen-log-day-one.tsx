@@ -33,6 +33,7 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [feeling, setFeeling] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadUser() {
@@ -64,6 +65,7 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
     }
 
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       if (!userId) return;
@@ -89,8 +91,10 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
         stress = 1;
       }
 
-      // Create daily report with all fields to match database schema
-      const { error: reportError } = await supabase.from('daily_reports').insert({
+      // Upsert (not insert): if a previous attempt already logged today and a
+      // later onboarding step failed, retrying must not die on the
+      // (student_id, report_date) unique constraint.
+      const { error: reportError } = await supabase.from('daily_reports').upsert({
         student_id: userId,
         report_date: todayString,
         study_duration: hoursValue,
@@ -110,7 +114,7 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
         overall_energy: 3, // Default middle value
         notes: null,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'student_id,report_date' });
 
       if (reportError) {
         console.error('Daily report insert error:', reportError);
@@ -134,6 +138,8 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
       }, 1500);
     } catch (error) {
       console.error('Error submitting log:', error);
+      const message = (error as { message?: string })?.message;
+      setSubmitError(message ? `Couldn't save your log: ${message}` : "Couldn't save your log. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -242,6 +248,12 @@ export default function ScreenLogDayOne({ onNext, onBack, canGoBack, isLoading }
           </div>
         </div>
       </div>
+
+      {submitError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <p>{submitError}</p>
+        </div>
+      )}
 
       {/* Motivation */}
       <p className="text-xs text-stone-600 text-center italic">
