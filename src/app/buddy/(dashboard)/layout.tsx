@@ -8,6 +8,7 @@ import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { PushGate } from '@/components/push-gate';
+import { BuddyFirstLoginGuide } from '@/components/buddy-first-login-guide';
 
 export default async function BuddyDashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -21,7 +22,7 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
   // Outer buddy/layout.tsx already verified role === 'buddy' (or cookie did).
   // Here we only need is_demo + onboarding_completed — no need to re-check role.
   const [{ data: profile }, chatUnread, notifUnread] = await Promise.all([
-    admin.from('profiles').select('role, is_demo, buddy_onboarding_completed, notif_prefs').eq('id', user.id).single(),
+    admin.from('profiles').select('role, is_demo, buddy_onboarding_completed, buddy_tour_completed, notif_prefs').eq('id', user.id).single(),
     getChatUnreadCount(user.id, 'buddy'),
     getNotifUnreadCount(user.id),
   ]);
@@ -37,8 +38,10 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
     redirect('/buddy/setup');
   }
 
-  // Mandatory push step for buddies (non-demo) who haven't turned it on yet —
-  // so they're alerted to student messages and risk flags in real time.
+  // One-time "what a buddy does" playbook right after setup, then the
+  // mandatory push step (so they're alerted to student messages and risk
+  // flags in real time). Same precedence as the student layout: guide first.
+  const showBuddyGuide = !profile?.is_demo && profile?.buddy_tour_completed !== true;
   const buddyPushEnabled = (profile?.notif_prefs as { push?: boolean } | null)?.push === true;
   const showBuddyPushGate = !profile?.is_demo && !buddyPushEnabled;
 
@@ -56,7 +59,7 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
         {children}
       </div>
       <BuddyBottomNav chatUnread={chatUnread} />
-      {showBuddyPushGate && <PushGate variant="staff" />}
+      {showBuddyGuide ? <BuddyFirstLoginGuide /> : showBuddyPushGate && <PushGate variant="staff" />}
     </div>
   );
 }
