@@ -88,7 +88,7 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
         <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">Personal</p>
 
         <div>
-          <label className={labelClass}>Full name</label>
+          <label className={labelClass}>Full name <span className="text-orange-500">*</span></label>
           <input
             type="text"
             placeholder="e.g. Rohan Sharma"

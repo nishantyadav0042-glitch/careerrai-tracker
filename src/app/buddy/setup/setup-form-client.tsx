@@ -14,6 +14,7 @@ interface Props {
 }
 
 interface Fields {
+  full_name: string;
   first_attempt_percentile: string;
   cat_percentile: string;
   is_first_timer: boolean;
@@ -53,7 +54,12 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  // Placeholder names from signup must never survive setup — students see this name.
+  const isPlaceholderName = !initialProfile.full_name ||
+    ['New User', 'Buddy', 'Student'].includes(initialProfile.full_name);
+
   const [fields, setFields] = useState<Fields>({
+    full_name: isPlaceholderName ? '' : (initialProfile.full_name ?? ''),
     first_attempt_percentile: '',
     cat_percentile: initialProfile.cat_percentile != null ? String(initialProfile.cat_percentile) : '',
     is_first_timer: true,
@@ -81,7 +87,7 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
   };
 
   const stepValid = (): boolean => {
-    if (step === 0) return fields.cat_percentile.trim() !== '';
+    if (step === 0) return fields.full_name.trim() !== '' && fields.cat_percentile.trim() !== '';
     if (step === 3) return fields.strongest_section !== '';
     if (step === 4) return fields.how_i_work.trim() !== '';
     return true;
@@ -106,6 +112,7 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
       const { error } = await supabase
         .from('profiles')
         .update({
+          full_name: fields.full_name.trim(),
           first_attempt_percentile: !fields.is_first_timer && fields.first_attempt_percentile.trim() !== ''
             ? parseFloat(fields.first_attempt_percentile)
             : null,
@@ -176,6 +183,18 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
       {step === 0 && (
         <div className="space-y-5">
           <p className="text-sm text-stone-500">This becomes the first thing students read about you.</p>
+
+          <div>
+            <label className={labelClass}>Your full name <span className="text-orange-600">*</span></label>
+            <input
+              type="text"
+              placeholder="e.g. Arjun Mehta"
+              value={fields.full_name}
+              onChange={(e) => setField('full_name', e.target.value)}
+              className={inputClass}
+            />
+            <p className="text-xs text-stone-400 mt-1">Students see this on every message and call.</p>
+          </div>
 
           <div>
             <label className={labelClass}>Your path</label>
