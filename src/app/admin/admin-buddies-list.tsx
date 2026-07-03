@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, ChevronDown, ChevronUp, Trophy, Calendar, Briefcase, Target, MessageCircle } from 'lucide-react';
+import { Users, ChevronDown, ChevronUp, Trophy, Calendar, Briefcase, Target, MessageCircle, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Everything a buddy fills in storefront setup, so the admin can match on
@@ -22,6 +22,7 @@ export interface BuddyDossierData {
   how_i_work?: string | null;
   biggest_mistake?: string | null;
   younger_self_advice?: string | null;
+  linkedin_url?: string | null;
 }
 
 export interface BuddyRow {
@@ -94,12 +95,24 @@ export function AdminBuddiesList({ rows }: { rows: BuddyRow[] }) {
               ))}
             </div>
 
-            <button
-              onClick={() => setExpandedId(isExpanded ? null : buddy.id)}
-              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-stone-500 hover:text-stone-700"
-            >
-              Full profile {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : buddy.id)}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-stone-500 hover:text-stone-700"
+              >
+                Full profile {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {buddy.linkedin_url && (
+                <a
+                  href={buddy.linkedin_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0a66c2] hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />LinkedIn
+                </a>
+              )}
+            </div>
 
             {isExpanded && (
               <div className="mt-3 pt-3 border-t border-stone-100 space-y-3 text-sm">

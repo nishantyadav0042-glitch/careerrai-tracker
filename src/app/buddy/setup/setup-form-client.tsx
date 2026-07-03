@@ -21,6 +21,7 @@ interface Fields {
   cat_year: string;
   iim_converted: string;
   current_company: string;
+  linkedin_url: string;
   biggest_mistake: string;
   younger_self_advice: string;
   strongest_section: string;
@@ -66,6 +67,7 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
     cat_year: '',
     iim_converted: initialProfile.college ?? '',
     current_company: '',
+    linkedin_url: '',
     biggest_mistake: '',
     younger_self_advice: '',
     strongest_section: '',
@@ -120,6 +122,12 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
           cat_year: fields.cat_year.trim() !== '' ? parseInt(fields.cat_year, 10) : null,
           iim_converted: fields.iim_converted.trim() || null,
           current_company: fields.current_company.trim() || null,
+          // Normalize: accept a pasted URL or a bare handle; store a full https URL.
+          linkedin_url: fields.linkedin_url.trim()
+            ? (fields.linkedin_url.trim().startsWith('http')
+                ? fields.linkedin_url.trim()
+                : `https://${fields.linkedin_url.trim().replace(/^\/+/, '')}`)
+            : null,
           biggest_mistake: fields.biggest_mistake.trim() || null,
           younger_self_advice: fields.younger_self_advice.trim() || null,
           strongest_section: fields.strongest_section || null,
@@ -290,6 +298,18 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
               onChange={(e) => setField('current_company', e.target.value)}
               className={inputClass}
             />
+          </div>
+
+          <div>
+            <label className={labelClass}>LinkedIn profile</label>
+            <input
+              type="url"
+              placeholder="e.g. linkedin.com/in/yourname"
+              value={fields.linkedin_url}
+              onChange={(e) => setField('linkedin_url', e.target.value)}
+              className={inputClass}
+            />
+            <p className="text-xs text-stone-400 mt-1">Students trust a face they can verify. Optional but strongly recommended.</p>
           </div>
         </div>
       )}
