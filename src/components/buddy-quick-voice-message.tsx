@@ -53,8 +53,15 @@ export function BuddyQuickVoiceMessage({
     fetchStudents();
   }, [fetchStudents]);
 
-  if (loading || students.length === 0) {
-    return null;
+  if (loading) return null;
+
+  if (students.length === 0) {
+    return (
+      <div className="flex items-center gap-2.5 px-3 sm:px-4 py-3 bg-stone-50 border border-dashed border-stone-300 rounded-lg sm:rounded-xl text-stone-500">
+        <Mic className="w-4 h-4 flex-shrink-0" />
+        <p className="text-xs sm:text-sm">No students assigned yet — voice messages unlock once a student is paired with you.</p>
+      </div>
+    );
   }
 
   if (isRecording && selectedStudent) {

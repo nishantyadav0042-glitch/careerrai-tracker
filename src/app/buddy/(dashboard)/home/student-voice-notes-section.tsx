@@ -69,7 +69,9 @@ export function StudentVoiceNotesSection({ buddyId }: StudentVoiceNotesSectionPr
       </div>
 
       {/* Students List - Mobile Optimized */}
-      {loading ? null : students.length === 0 ? null : (
+      {loading ? null : students.length === 0 ? (
+        <p className="text-xs sm:text-sm text-stone-400 italic">No students assigned yet.</p>
+      ) : (
         <div className="grid gap-1.5 sm:gap-2.5">
           {students.map((student) => (
             <Link

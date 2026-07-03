@@ -136,6 +136,7 @@ const STUDENT_MORE: NavItem[] = [
 ];
 
 const BUDDY_MAIN: NavItem[] = [
+  { href: '/buddy/home', icon: Home, label: 'Home' },
   { href: '/buddy/students', icon: Users, label: 'Students' },
   { href: '/buddy/chat', icon: MessageCircle, label: 'Chat' },
   { href: '/buddy/trends', icon: TrendingUp, label: 'Trends' },
