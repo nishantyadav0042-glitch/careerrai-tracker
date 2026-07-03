@@ -15,6 +15,8 @@ import { EditProfileTrigger } from './edit-profile-trigger';
 import { RefundCard } from './refund-card';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { getActiveScholarship, scholarshipDisplay } from '@/lib/pricing';
+import { rankBuddies, matchReason, type MatchBuddy, type MatchStudent } from '@/lib/buddy-match';
+import { RecommendedBuddies, type RecommendedBuddy } from '@/components/recommended-buddies';
 
 export default async function StudentProfilePage() {
   const supabase = await createClient();
@@ -24,7 +26,7 @@ export default async function StudentProfilePage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at')
+    .select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at, baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater')
     .eq('id', user.id)
     .single();
   if (!profile) redirect('/login');
@@ -45,6 +47,7 @@ export default async function StudentProfilePage() {
     firstMonthDaysResult,
     refundReqResult,
     activeScholarship,
+    showcaseBuddiesResult,
   ] = await Promise.all([
     profile.buddy_id
       ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio').eq('id', profile.buddy_id).single()
@@ -58,6 +61,13 @@ export default async function StudentProfilePage() {
     admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id).lte('report_date', firstMonthEnd),
     admin.from('refund_requests').select('status, requested_at').eq('student_id', user.id).maybeSingle(),
     paymentsEnabled() ? getActiveScholarship(user.id) : Promise.resolve(null),
+    // Free students browse real, setup-complete buddies; contact is what they pay for.
+    profile.buddy_id
+      ? Promise.resolve({ data: null })
+      : admin.from('profiles')
+          .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
+          .eq('role', 'buddy').eq('is_demo', false).eq('buddy_onboarding_completed', true)
+          .not('cat_percentile', 'is', null),
   ]);
 
   const buddy = buddyResult.data as { full_name: string; college: string | null; cat_percentile: number | null; buddy_bio: string | null } | null;
@@ -88,6 +98,12 @@ export default async function StudentProfilePage() {
 
   let scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null = null;
   if (activeScholarship) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(activeScholarship) };
+
+  // Rank showcase buddies for this student (weakest section + profile type)
+  const showcaseRaw = (showcaseBuddiesResult.data ?? []) as unknown as MatchBuddy[];
+  const recommendedBuddies: RecommendedBuddy[] = rankBuddies(profile as MatchStudent, showcaseRaw)
+    .slice(0, 4)
+    .map((b) => ({ ...b, reason: matchReason(profile as MatchStudent, b) }));
 
   const displayName = profile.full_name ?? 'Student';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -166,7 +182,11 @@ export default async function StudentProfilePage() {
         />
       )}
 
+      {/* Free students: browse real mentors — the product behind the paywall */}
+      {!profile.buddy_id && <RecommendedBuddies buddies={recommendedBuddies} studentName={displayName} />}
+
       {/* Buddy Trust Signals */}
+      {buddy && (
       <Card className="p-5">
         <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3">Your Buddy</div>
         {buddy ? (
@@ -210,6 +230,7 @@ export default async function StudentProfilePage() {
           </div>
         )}
       </Card>
+      )}
 
       <NotifPrefsPanel initial={prefs} label1="Daily reminder" label2="Email notifications" />
 

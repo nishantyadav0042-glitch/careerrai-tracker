@@ -15,7 +15,7 @@ export default async function BuddySetupPage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, full_name, cat_percentile, college, buddy_onboarding_completed')
+    .select('role, full_name, cat_percentile, college, buddy_onboarding_completed, first_attempt_percentile, cat_year, iim_converted, current_company, biggest_mistake, younger_self_advice, strongest_section, student_types_helped, how_i_work, linkedin_url, avatar_url')
     .eq('id', user.id)
     .single();
 
@@ -39,6 +39,17 @@ export default async function BuddySetupPage() {
             full_name: profile?.full_name ?? null,
             cat_percentile: profile?.cat_percentile ?? null,
             college: profile?.college ?? null,
+            first_attempt_percentile: profile?.first_attempt_percentile ?? null,
+            cat_year: profile?.cat_year ?? null,
+            iim_converted: profile?.iim_converted ?? null,
+            current_company: profile?.current_company ?? null,
+            biggest_mistake: profile?.biggest_mistake ?? null,
+            younger_self_advice: profile?.younger_self_advice ?? null,
+            strongest_section: profile?.strongest_section ?? null,
+            student_types_helped: profile?.student_types_helped ?? null,
+            how_i_work: profile?.how_i_work ?? null,
+            linkedin_url: profile?.linkedin_url ?? null,
+            avatar_url: profile?.avatar_url ?? null,
           }}
         />
       </div>

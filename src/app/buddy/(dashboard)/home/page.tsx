@@ -16,11 +16,25 @@ export default async function BuddyHomePage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, full_name')
+    .select('role, full_name, is_demo, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
     .eq('id', user.id)
     .single();
 
   if (profile?.role !== 'buddy') redirect('/');
+
+  // Students now browse buddy profiles before subscribing — an incomplete
+  // profile is money left on the table. Nudge until every field is filled.
+  const missingItems = [
+    !profile.avatar_url && 'photo',
+    !profile.linkedin_url && 'LinkedIn',
+    !profile.iim_converted && 'IIM/college',
+    !profile.strongest_section && 'strongest section',
+    !profile.how_i_work && 'working style',
+    !profile.biggest_mistake && 'your story',
+    !profile.current_company && 'company',
+  ].filter(Boolean) as string[];
+  const completenessPct = Math.round(((7 - missingItems.length) / 7) * 100);
+  const showProfileNudge = !profile.is_demo && missingItems.length > 0;
 
   const [{ data: students }, { data: pendingRequests }] = await Promise.all([
     admin
@@ -72,6 +86,29 @@ export default async function BuddyHomePage() {
           </form>
         </div>
       </div>
+
+      {/* Profile completeness — students pick buddies from these profiles */}
+      {showProfileNudge && (
+        <Link
+          href="/buddy/setup"
+          className="block rounded-xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100/70 transition-colors"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-amber-900">Your profile is {completenessPct}% complete</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Students choose their buddy from these profiles. Missing: {missingItems.join(', ')}.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white">
+              Complete it →
+            </span>
+          </div>
+          <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-amber-200/70">
+            <div className="h-full rounded-full bg-amber-600" style={{ width: `${completenessPct}%` }} />
+          </div>
+        </Link>
+      )}
 
       {/* Next session widget */}
       <MeetingWidget

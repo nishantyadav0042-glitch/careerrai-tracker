@@ -10,6 +10,17 @@ interface Props {
     full_name: string | null;
     cat_percentile: number | null;
     college: string | null;
+    first_attempt_percentile: number | null;
+    cat_year: number | null;
+    iim_converted: string | null;
+    current_company: string | null;
+    biggest_mistake: string | null;
+    younger_self_advice: string | null;
+    strongest_section: string | null;
+    student_types_helped: string[] | null;
+    how_i_work: string | null;
+    linkedin_url: string | null;
+    avatar_url: string | null;
   };
 }
 
@@ -59,21 +70,49 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
   const isPlaceholderName = !initialProfile.full_name ||
     ['New User', 'Buddy', 'Student'].includes(initialProfile.full_name);
 
+  // Prefill everything so a buddy can come back and EDIT their profile —
+  // the form doubles as first-time setup and later profile editing.
   const [fields, setFields] = useState<Fields>({
     full_name: isPlaceholderName ? '' : (initialProfile.full_name ?? ''),
-    first_attempt_percentile: '',
+    first_attempt_percentile: initialProfile.first_attempt_percentile != null ? String(initialProfile.first_attempt_percentile) : '',
     cat_percentile: initialProfile.cat_percentile != null ? String(initialProfile.cat_percentile) : '',
-    is_first_timer: true,
-    cat_year: '',
-    iim_converted: initialProfile.college ?? '',
-    current_company: '',
-    linkedin_url: '',
-    biggest_mistake: '',
-    younger_self_advice: '',
-    strongest_section: '',
-    student_types_helped: [],
-    how_i_work: '',
+    is_first_timer: initialProfile.first_attempt_percentile == null,
+    cat_year: initialProfile.cat_year != null ? String(initialProfile.cat_year) : '',
+    iim_converted: initialProfile.iim_converted ?? initialProfile.college ?? '',
+    current_company: initialProfile.current_company ?? '',
+    linkedin_url: initialProfile.linkedin_url ?? '',
+    biggest_mistake: initialProfile.biggest_mistake ?? '',
+    younger_self_advice: initialProfile.younger_self_advice ?? '',
+    strongest_section: initialProfile.strongest_section ?? '',
+    student_types_helped: initialProfile.student_types_helped ?? [],
+    how_i_work: initialProfile.how_i_work ?? '',
   });
+
+  // Photo upload — stored immediately in the avatars bucket; the URL is saved
+  // with the rest of the profile on Complete.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatar_url);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setPhotoError('Photo must be under 5 MB.'); return; }
+    setUploadingPhoto(true);
+    setPhotoError('');
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${buddyId}/avatar-${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+      if (error) { setPhotoError(error.message); return; }
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      setAvatarUrl(data.publicUrl);
+    } catch {
+      setPhotoError('Upload failed. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const setField = <K extends keyof Fields>(key: K, value: Fields[K]) => {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -115,6 +154,7 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
         .from('profiles')
         .update({
           full_name: fields.full_name.trim(),
+          avatar_url: avatarUrl,
           first_attempt_percentile: !fields.is_first_timer && fields.first_attempt_percentile.trim() !== ''
             ? parseFloat(fields.first_attempt_percentile)
             : null,
@@ -191,6 +231,29 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
       {step === 0 && (
         <div className="space-y-5">
           <p className="text-sm text-stone-500">This becomes the first thing students read about you.</p>
+
+          <div>
+            <label className={labelClass}>Your photo</label>
+            <div className="flex items-center gap-4">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="Your photo" className="w-16 h-16 rounded-full object-cover border-2 border-orange-200" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-stone-100 border-2 border-dashed border-stone-300 flex items-center justify-center text-stone-400 text-xl">
+                  📷
+                </div>
+              )}
+              <label className={cn(
+                'cursor-pointer rounded-xl border-2 border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:border-stone-300 transition-all',
+                uploadingPhoto && 'opacity-50 pointer-events-none'
+              )}>
+                {uploadingPhoto ? 'Uploading…' : avatarUrl ? 'Change photo' : 'Upload photo'}
+                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              </label>
+            </div>
+            <p className="text-xs text-stone-400 mt-1.5">Profiles with a real photo get far more student interest.</p>
+            {photoError && <p className="text-xs text-red-600 mt-1">{photoError}</p>}
+          </div>
 
           <div>
             <label className={labelClass}>Your full name <span className="text-orange-600">*</span></label>

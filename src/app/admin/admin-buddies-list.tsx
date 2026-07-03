@@ -23,6 +23,7 @@ export interface BuddyDossierData {
   biggest_mistake?: string | null;
   younger_self_advice?: string | null;
   linkedin_url?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface BuddyRow {
@@ -56,9 +57,14 @@ export function AdminBuddiesList({ rows }: { rows: BuddyRow[] }) {
         return (
           <Card key={buddy.id} className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-orange-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                {initials}
-              </div>
+              {buddy.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={buddy.avatar_url} alt={buddy.full_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-orange-700 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  {initials}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-stone-900 text-sm">{buddy.full_name}</span>
