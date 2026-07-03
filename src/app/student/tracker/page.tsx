@@ -11,6 +11,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { getCurrentMission, MISSION_TARGET } from '@/lib/missions';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
+import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -108,6 +109,12 @@ export default async function DailyTrackerPage() {
     existingDebrief = results[1];
     initialFeedback = results[2];
   }
+
+  // Free, buddyless students see a REAL matched mentor on the very first
+  // screen they open — the highest-visibility spot in the app.
+  const topBuddy = (!buddyId && !isPremiumUser)
+    ? (await getRecommendedBuddiesForStudent(admin, user.id))[0] ?? null
+    : null;
 
   let buddyName: string | null = null;
   if (buddyProfile?.full_name) {
@@ -220,6 +227,7 @@ export default async function DailyTrackerPage() {
           <LockedBuddyCard
             streak={(streakRow?.current_streak as number | null) ?? 0}
             fullName={profile?.full_name ?? undefined}
+            topBuddy={topBuddy}
           />
         )}
 

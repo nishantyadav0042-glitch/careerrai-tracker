@@ -1,11 +1,55 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
+import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 
-// The dashboard "buddy-taste" hook for free users. Sits where a real buddy card
-// would, and makes the buddy's *absence* felt — escalating copy as the streak
-// grows (the day-3 "nobody checked on you" nudge from the spec). The unlock CTA
-// fires the hot buying signal.
-export function LockedBuddyCard({ streak = 0, fullName }: { streak?: number; fullName?: string }) {
+// The dashboard "buddy-taste" hook for free users — the very first thing a
+// student sees, so it leads with a REAL matched mentor (photo/name/why-for-you)
+// whenever one exists, instead of a generic locked silhouette. Falls back to
+// the generic copy only when no buddy is showcase-eligible yet.
+export function LockedBuddyCard({
+  streak = 0, fullName, topBuddy,
+}: {
+  streak?: number;
+  fullName?: string;
+  topBuddy?: RecommendedBuddyResult | null;
+}) {
+  if (topBuddy) {
+    const initials = (topBuddy.full_name || 'B').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+    return (
+      <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white p-4">
+        <div className="flex items-start gap-3">
+          {topBuddy.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={topBuddy.avatar_url} alt={topBuddy.full_name} className="w-12 h-12 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center text-white text-sm font-bold shrink-0">
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-stone-900">Recommended for you: {topBuddy.full_name}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-stone-600">
+              {topBuddy.reason ?? (topBuddy.cat_percentile != null ? `CAT ${Number(topBuddy.cat_percentile)}%ile mentor` : 'A real IIM senior mentor')}
+              {' — '}browse their full profile free, subscribe to connect.
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Link
+            href="/student/buddy"
+            className="flex-1 flex items-center justify-center rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+          >
+            See profile
+          </Link>
+          <UnlockBuddyButton variant="primary" size="md" className="flex-1" fullName={fullName}>
+            Unlock →
+          </UnlockBuddyButton>
+        </div>
+      </div>
+    );
+  }
+
   // Day-3+ : name the gap. Earlier: plant the idea.
   const headline =
     streak >= 3

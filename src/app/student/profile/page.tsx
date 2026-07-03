@@ -160,6 +160,11 @@ export default async function StudentProfilePage() {
         <ShareProgressButton daysLogged={daysLogged ?? 0} bestStreak={bestStreak} percentile={latestPercentile} />
       </Card>
 
+      {/* Free students: browse real mentors — the product behind the paywall.
+          Placed right after the header, above everything else, so it's never
+          buried under progress stats / membership / refund cards. */}
+      {!profile.buddy_id && <RecommendedBuddies buddies={recommendedBuddies} studentName={displayName} />}
+
       <DreamCollegesCard initial={(profile.dream_colleges as string[] | null) ?? []} />
 
       {paymentsEnabled() && (
@@ -181,9 +186,6 @@ export default async function StudentProfilePage() {
           existingRequest={existingRefundReq ? { status: existingRefundReq.status as 'pending' | 'approved' | 'rejected', requestedAt: existingRefundReq.requested_at } : null}
         />
       )}
-
-      {/* Free students: browse real mentors — the product behind the paywall */}
-      {!profile.buddy_id && <RecommendedBuddies buddies={recommendedBuddies} studentName={displayName} />}
 
       {/* Buddy Trust Signals */}
       {buddy && (
