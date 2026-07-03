@@ -32,9 +32,15 @@ export async function sendPushToUser(
   if (!profile?.push_subscription) return { ok: false, reason: 'no_subscription' };
 
   try {
+    // Every push needs a UNIQUE tag. sw.js falls back to a single shared tag when
+    // none is set — per the Web Push spec, two notifications sharing a tag
+    // silently collapse into one with no sound/vibration on the second, so a
+    // chat-message push followed by a streak-risk push would erase the chat one
+    // unheard. A per-send tag guarantees every push actually alerts the device.
+    const tagged = { ...payload, tag: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
     await webpush.sendNotification(
       profile.push_subscription as webpush.PushSubscription,
-      JSON.stringify(payload)
+      JSON.stringify(tagged)
     );
     return { ok: true };
   } catch (err: unknown) {

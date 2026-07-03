@@ -35,6 +35,11 @@ self.addEventListener('push', (event) => {
     badge: '/careerrai-logo.png',
     icon: '/careerrai-logo.png',
     tag: notificationData.tag || 'careerrai-notification',
+    // Per the Web Push spec, two notifications sharing a tag collapse into one
+    // and the second is SILENT (no sound/vibration) unless renotify is true.
+    // The server now sends a unique tag per push, but this stays as a safety
+    // net for any caller that ever reuses one.
+    renotify: true,
     requireInteraction: notificationData.requireInteraction || false,
     data: notificationData.data || {},
     ...notificationData,
