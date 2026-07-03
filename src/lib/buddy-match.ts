@@ -67,3 +67,33 @@ export function rankBuddies(student: MatchStudent, buddies: MatchBuddy[]): Match
   };
   return [...buddies].sort((a, b) => score(b) - score(a));
 }
+
+export interface RecommendedBuddyResult extends MatchBuddy {
+  reason: string | null;
+}
+
+// Server-only: fetches this student's profile + all showcase-eligible buddies
+// (real, setup-complete, non-demo) and returns the ranked top 4 with match
+// reasons. Shared by every screen that shows the buddy showcase to a free
+// student — profile page, and the paywall screens (buddy tab, chat tab).
+export async function getRecommendedBuddiesForStudent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  studentId: string
+): Promise<RecommendedBuddyResult[]> {
+  const [{ data: student }, { data: buddies }] = await Promise.all([
+    admin.from('profiles')
+      .select('baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater')
+      .eq('id', studentId).single(),
+    admin.from('profiles')
+      .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
+      .eq('role', 'buddy').eq('is_demo', false).eq('buddy_onboarding_completed', true)
+      .not('cat_percentile', 'is', null),
+  ]);
+  if (!student || !buddies?.length) return [];
+
+  const matchStudent = student as MatchStudent;
+  return rankBuddies(matchStudent, buddies as MatchBuddy[])
+    .slice(0, 4)
+    .map((b) => ({ ...b, reason: matchReason(matchStudent, b) }));
+}

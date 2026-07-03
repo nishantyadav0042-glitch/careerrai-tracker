@@ -5,6 +5,7 @@ import { ChatThread } from '@/components/chat/chat-thread';
 import { fetchPairMessages } from '@/lib/chat';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyHub } from '@/components/locked-buddy-hub';
+import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 
 export const metadata = {
   title: 'Chat · CareerRai',
@@ -24,7 +25,8 @@ export default async function StudentChatPage() {
 
   // Freemium paywall: chatting with the buddy is premium-only.
   if (!isPremium(profile)) {
-    return <LockedBuddyHub variant="chat" fullName={profile?.full_name ?? undefined} />;
+    const recommendedBuddies = await getRecommendedBuddiesForStudent(admin, user.id);
+    return <LockedBuddyHub variant="chat" fullName={profile?.full_name ?? undefined} recommendedBuddies={recommendedBuddies} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;

@@ -7,6 +7,7 @@ import { Video, Calendar, PhoneCall, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyHub } from '@/components/locked-buddy-hub';
+import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -27,7 +28,8 @@ export default async function BuddyCommunicationPage() {
   // Freemium paywall: the real buddy hub is premium-only. Free users get the
   // locked "buddy-taste" state with the unlock CTA.
   if (!isPremium(profile)) {
-    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} />;
+    const recommendedBuddies = await getRecommendedBuddiesForStudent(admin, user.id);
+    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} recommendedBuddies={recommendedBuddies} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;
@@ -97,7 +99,7 @@ export default async function BuddyCommunicationPage() {
 
   // Pre-sign voice note URLs so VoiceNotePlayer renders immediately with no client-side round-trips.
   const voiceRows = (feedbackRows ?? []).filter((r) => r.voice_note_url);
-  let signedUrlMap: Record<string, string> = {};
+  const signedUrlMap: Record<string, string> = {};
   if (voiceRows.length > 0) {
     const toPath = (urlOrPath: string) => {
       const marker = '/object/public/voice-notes/';

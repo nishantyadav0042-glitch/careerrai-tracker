@@ -1,11 +1,21 @@
 import { SampleDebrief } from '@/components/sample-debrief';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
+import { RecommendedBuddies } from '@/components/recommended-buddies';
+import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import { Users, Target, LineChart, MessageCircle, ShieldCheck, Check } from 'lucide-react';
 
 // The buddy upsell — a full-page SALES ASSET shown on /student/buddy and
 // /student/chat for free users instead of the real hub. Sells the one thing
 // that's paywalled: a 1:1 IIM-alumni mentor. Every line is a conversion lever.
-export function LockedBuddyHub({ variant, fullName }: { variant: 'buddy' | 'chat'; fullName?: string }) {
+// Real mentor profiles (when any exist) lead the page — a face beats a bullet
+// list — with the generic value props as backup underneath.
+export function LockedBuddyHub({
+  variant, fullName, recommendedBuddies = [],
+}: {
+  variant: 'buddy' | 'chat';
+  fullName?: string;
+  recommendedBuddies?: RecommendedBuddyResult[];
+}) {
   const heading = variant === 'chat' ? 'Chat is part of your IIM buddy 🔒' : 'Unlock your IIM buddy 🔒';
 
   // The core value props — framed as outcomes, not features.
@@ -42,16 +52,21 @@ export function LockedBuddyHub({ variant, fullName }: { variant: 'buddy' | 'chat
           The app keeps you consistent. An <span className="font-semibold text-stone-800">IIM senior</span> is what
           turns consistency into a <span className="font-semibold text-stone-800">call letter</span>.
         </p>
-        {/* Social proof */}
+        {/* Social proof — honest: no invented mentor count */}
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
           <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 font-semibold text-teal-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> 200+ IIM mentors
+            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> Verified IIM alumni mentors
           </span>
           <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-medium text-stone-600">
             Every buddy cleared CAT · 95%ile+
           </span>
         </div>
       </div>
+
+      {/* Real mentors, ranked for this student — a face beats a bullet list */}
+      {recommendedBuddies.length > 0 && (
+        <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
+      )}
 
       {/* Why a buddy — value props */}
       <div className="space-y-2.5">
