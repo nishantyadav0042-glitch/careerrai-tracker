@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { type MatchBuddy } from '@/lib/buddy-match';
-import { GraduationCap, Briefcase, ExternalLink, Sparkles, Lock } from 'lucide-react';
+import { Briefcase, ExternalLink, Sparkles, Lock } from 'lucide-react';
 
 // The free-tier buddy showcase: real, verified IIM-alumni mentors the student
 // can browse for free — messaging/booking is what the subscription unlocks.
@@ -37,6 +37,15 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
           const initials = (b.full_name || 'B').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
           const journey = journeyLabel(b);
           const firstName = b.full_name.split(' ')[0];
+          // "Who is this?" must be answered in the first two lines: name, then
+          // college + percentile immediately below — not buried in a badge row.
+          const subtitle = [b.iim_converted, journey ? `CAT ${journey}` : null].filter(Boolean).join(' · ');
+          // "Recommended for what?" must ALWAYS have an answer — students with
+          // no baseline data yet (fresh signups) produce a null match reason,
+          // which previously just hid the line instead of falling back.
+          const reasonText = b.reason ?? (b.cat_percentile != null
+            ? `Verified ${Number(b.cat_percentile)}%ile IIM alumni mentor`
+            : 'Handpicked IIM alumni mentor');
 
           return (
             <div key={b.id} className="rounded-2xl border border-stone-200 p-4">
@@ -58,21 +67,18 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
                       </span>
                     )}
                   </div>
-                  {journey && <div className="text-xs font-semibold text-teal-700 mt-0.5">CAT {journey}</div>}
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    {b.iim_converted && (
-                      <Badge color="blue"><GraduationCap className="w-3 h-3 inline mr-1" />{b.iim_converted}</Badge>
-                    )}
-                    {b.strongest_section && <Badge color="green">Strong: {b.strongest_section}</Badge>}
-                  </div>
+                  {subtitle && <p className="text-xs font-semibold text-teal-700 mt-0.5">{subtitle}</p>}
+                  {b.strongest_section && (
+                    <div className="mt-1.5">
+                      <Badge color="green">Strong: {b.strongest_section}</Badge>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {b.reason && (
-                <div className="mt-2.5 rounded-lg bg-orange-50 px-3 py-1.5 text-[11px] font-semibold text-orange-700">
-                  Why for {studentName ? studentName.split(' ')[0] : 'you'}: {b.reason}
-                </div>
-              )}
+              <div className="mt-2.5 rounded-lg bg-orange-50 px-3 py-1.5 text-[11px] font-semibold text-orange-700">
+                Recommended for {studentName ? studentName.split(' ')[0] : 'you'}: {reasonText}
+              </div>
 
               {b.current_company && (
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-stone-600">
