@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
 import { buddyBriefCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
+import { refreshBriefingIfStale } from '@/lib/buddy-briefing';
 
 // 03:30 UTC = 09:00 IST. The buddy's ONE scheduled push of the day: who logged
 // yesterday, who's going quiet. Buddies get few notifications by design — this
@@ -47,10 +48,22 @@ export async function POST(request: NextRequest) {
   const buddyById = new Map((buddyProfiles ?? []).map((b) => [b.id, b]));
 
   let sent = 0;
+  let briefingsRefreshed = 0;
   for (const [buddyId, roster] of byBuddy) {
-    if (already.has(buddyId)) continue;
     const buddy = buddyById.get(buddyId);
     if (!buddy || buddy.is_demo) continue;
+
+    // AI copilot freshness pass: any student who logged yesterday gets their
+    // facts-briefing refreshed BEFORE the buddy opens the app, not after —
+    // ambient, not opt-in. Runs regardless of the push-dedupe below.
+    for (const s of roster) {
+      if ((reportDates.get(s.id) ?? []).includes(yesterday)) {
+        await refreshBriefingIfStale(s.id, buddyId).catch(() => {});
+        briefingsRefreshed++;
+      }
+    }
+
+    if (already.has(buddyId)) continue;
 
     const loggedYesterday = roster.filter((s) => (reportDates.get(s.id) ?? []).includes(yesterday)).length;
     // "At risk" = no log yesterday AND none the day before.
@@ -74,7 +87,7 @@ export async function POST(request: NextRequest) {
     sent++;
   }
 
-  return NextResponse.json({ sent, buddies: byBuddy.size });
+  return NextResponse.json({ sent, buddies: byBuddy.size, briefingsRefreshed });
 }
 
 export { POST as GET };

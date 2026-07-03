@@ -10,6 +10,7 @@ import {
 import { MILESTONE_MESSAGES } from '@/lib/messages';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { sendPushToUser } from '@/lib/push';
+import { generateBuddyBriefing } from '@/lib/buddy-briefing';
 
 interface LoggingRequest {
   hours: number;
@@ -160,9 +161,13 @@ export async function POST(request: NextRequest) {
     notifyBuddy(user.id, profile.buddy_id, { hours: body.hours, energy: body.energy }).catch(console.error);
     if (body.sections.includes('Mock')) {
       notifyBuddyMock(user.id, profile.buddy_id, dateStr).catch(console.error);
+      // AI copilot: regenerate the buddy's facts-briefing NOW, so it's already
+      // waiting — the mock-debrief moment is the highest-leverage use of it.
+      if (profile.buddy_id) void generateBuddyBriefing(user.id, profile.buddy_id).catch(console.error);
     }
     if (body.emotional_chips && body.emotional_chips.length > 0 && !body.emotional_chips.includes('all_good')) {
       notifyBuddyEmotional(user.id, profile.buddy_id, body.emotional_chips).catch(console.error);
+      if (profile.buddy_id) void generateBuddyBriefing(user.id, profile.buddy_id).catch(console.error);
     }
     // #10 product analytics: hour_of_day + day_of_week drive retention heatmaps;
     // is_first_today distinguishes new logs from edits for funnel analysis.
