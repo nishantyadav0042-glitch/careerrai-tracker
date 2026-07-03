@@ -72,18 +72,7 @@ const STREAK_RISK_VARIANTS: Variant[] = [
   },
 ];
 
-/* ── 13:00 IST — growth nudges (free users, max ONE per day, priority-picked) ─ */
-
-const ACTIVATION_VARIANTS: Variant[] = [
-  {
-    title: 'Account bana, prep kab? 😄',
-    body: ({ name }) => `${name}, pehla log 90 sec ka hai. CAT waale roz dikhte hain — aaj se?`,
-  },
-  {
-    title: 'Ek chhota sa start? ✨',
-    body: ({ name }) => `${name}, aaj sirf 1 cheez: apna pehla daily log. Baaki hum dekh lenge.`,
-  },
-];
+/* ── 13:00 IST — growth nudges (students past their first 7 days, max ONE/day) */
 
 const UPGRADE_MOCK_VARIANTS: Variant[] = [
   {
@@ -118,6 +107,54 @@ const MOCK_NUDGE_VARIANTS: Variant[] = [
   },
 ];
 
+/* ── First 7 days — the hardest window. A linear day-by-day arc, not a random
+   pool, because this is a journey with a finish line ("habit locked"), not an
+   indefinite nag. Two touches/day max while onboarding: a morning nudge and an
+   evening one (replacing the generic reminder) — then the normal system takes
+   over once day 7 is reached. `done` fires immediately after that day's log;
+   `pending` fires from the morning/evening crons while it's still open. ────── */
+
+interface OnboardingCopy { title: string; body: (name: string) => string }
+interface OnboardingDay { pending: OnboardingCopy; done: OnboardingCopy }
+
+export const ONBOARDING_DAYS: Record<number, OnboardingDay> = {
+  1: {
+    pending: { title: 'Pehla kadam abhi baaki hai 🚀', body: (n) => `${n}, sirf 90 seconds. Aaj ka pehla log — shuruaat yahin se hoti hai.` },
+    done: { title: 'Day 1 done! 🎉', body: (n) => `Shuruaat ho gayi, ${n}. 6 din aur — habit yahin se banti hai.` },
+  },
+  2: {
+    pending: { title: 'Kal shuru kiya tha, aaj bhi? 💪', body: (n) => `${n}, Day 2 ka log abhi baaki hai. Do din lagatar — chalo karte hain.` },
+    done: { title: 'Day 2 ✅ — 2 din lagatar!', body: (n) => `Pattern bann raha hai, ${n}. Kal Day 3 — mat rukna.` },
+  },
+  3: {
+    pending: { title: 'Day 3 ka log baaki hai', body: (n) => `${n}, teesra din — yahi wo point hai jahan log rukte hain. Tum mat rukna.` },
+    done: { title: 'Day 3 — halfway to habit 🔥', body: (n) => `3 din ho gaye, ${n}. Ab aadat banna shuru ho rahi hai.` },
+  },
+  4: {
+    pending: { title: 'Day 4 — peeche mat hato', body: (n) => `${n}, 3 din ki mehnat hai. Aaj ka log karo, chain mat todo.` },
+    done: { title: 'Day 4 ✅', body: (n) => `4/7, ${n}. Teen din aur — habit lock hone waali hai.` },
+  },
+  5: {
+    pending: { title: 'Day 5 — bas 2 din aur', body: (n) => `${n}, itna aage aake rukna? Aaj ka log 90 seconds ka hai.` },
+    done: { title: 'Day 5 — 2 din baaki 🎯', body: (n) => `${n}, itni consistency rare hai. Weekend mein bhi mat rukna.` },
+  },
+  6: {
+    pending: { title: 'Day 6 — kal last din hai', body: (n) => `${n}, kal 7 poore honge. Aaj mat chhodo, itna paas hoke.` },
+    done: { title: 'Day 6 — kal 7 poore! 🔥', body: (n) => `${n}, ek din aur — pura hafta complete karoge.` },
+  },
+  7: {
+    pending: { title: 'Aaj 7th din — habit lock din', body: (n) => `${n}, poora hafta ban sakta hai aaj. Bas ek log — mat chuko.` },
+    done: { title: '7/7 — HABIT LOCKED 🔒🎉', body: (n) => `${n}, ek hafta lagatar. Ab yeh routine hai, task nahi. Proud of you.` },
+  },
+};
+
+export function onboardingCopy(dayNumber: number, phase: 'pending' | 'done', name: string): { title: string; body: string } | null {
+  const day = ONBOARDING_DAYS[dayNumber];
+  if (!day) return null;
+  const c = day[phase];
+  return { title: c.title, body: c.body(name) };
+}
+
 /* ── 09:00 IST — buddy morning brief (professional, no emoji, only if actionable) */
 
 export function buddyBriefCopy(loggedYesterday: number, total: number, atRiskNames: string[]): { title: string; body: string } {
@@ -151,10 +188,9 @@ export function pickStreakRiskVariant(ctx: CopyContext, recentTitles: string[]) 
   return pick(STREAK_RISK_VARIANTS, ctx, recentTitles);
 }
 
-export type GrowthNudgeType = 'activation' | 'upgrade_mock' | 'upgrade_progress' | 'mock_nudge';
+export type GrowthNudgeType = 'upgrade_mock' | 'upgrade_progress' | 'mock_nudge';
 
 const GROWTH_VARIANTS: Record<GrowthNudgeType, Variant[]> = {
-  activation: ACTIVATION_VARIANTS,
   upgrade_mock: UPGRADE_MOCK_VARIANTS,
   upgrade_progress: UPGRADE_PROGRESS_VARIANTS,
   mock_nudge: MOCK_NUDGE_VARIANTS,
@@ -162,7 +198,6 @@ const GROWTH_VARIANTS: Record<GrowthNudgeType, Variant[]> = {
 
 // Where each nudge should land the student (the sub-goal screen).
 export const GROWTH_NUDGE_URLS: Record<GrowthNudgeType, string> = {
-  activation: '/student/tracker',
   upgrade_mock: '/student/profile',     // recommended-buddies showcase lives here
   upgrade_progress: '/student/profile',
   mock_nudge: '/student/exams',

@@ -7,12 +7,15 @@ import {
 import { authorizedCron } from '@/lib/cron-auth';
 
 // 07:30 UTC = 13:00 IST (lunch break — the Zomato slot). Growth nudges for
-// free students: activation, upgrade, mock discipline. HARD RULES so this
-// never becomes spam:
+// students PAST their first 7 days: upgrade, mock discipline. The first-week
+// activation arc (onboarding-morning + the onboarding branch of daily-reminder)
+// owns brand-new students entirely — this cron explicitly skips anyone still
+// inside that window so the two systems never double-message the same day.
+// HARD RULES so this never becomes spam:
 //   1. At most ONE growth push per student per day (highest priority wins).
 //   2. Upgrade nudges at most every 3 days; mock nudge at most every 7.
 //   3. Demo accounts and students with a buddy never get upgrade nudges.
-const GROWTH_TYPES: GrowthNudgeType[] = ['activation', 'upgrade_mock', 'upgrade_progress', 'mock_nudge'];
+const GROWTH_TYPES: GrowthNudgeType[] = ['upgrade_mock', 'upgrade_progress', 'mock_nudge'];
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -82,12 +85,13 @@ export async function POST(request: NextRequest) {
       ? (now - new Date(logs.lastMockAt + 'T00:00:00+05:30').getTime()) / 86_400_000
       : Infinity;
 
-    // Priority order: get them STARTED > convert mock-takers > convert consistent
-    // loggers > mock discipline. Exactly one (or none) fires.
+    // Still inside the first-7-days window — the onboarding arc owns them.
+    if (logs.total < 7 && signupDays <= 14) continue;
+
+    // Priority order: convert mock-takers > convert consistent loggers > mock
+    // discipline. Exactly one (or none) fires.
     let type: GrowthNudgeType | null = null;
-    if (logs.total === 0 && signupDays >= 1 && signupDays <= 6) {
-      type = 'activation';
-    } else if (noBuddy && hasDebrief.has(s.id) && !sentWithin(s.id, 'upgrade_mock', 3) && !sentWithin(s.id, 'upgrade_progress', 3)) {
+    if (noBuddy && hasDebrief.has(s.id) && !sentWithin(s.id, 'upgrade_mock', 3) && !sentWithin(s.id, 'upgrade_progress', 3)) {
       type = 'upgrade_mock';
     } else if (noBuddy && logs.total >= 3 && !sentWithin(s.id, 'upgrade_progress', 3) && !sentWithin(s.id, 'upgrade_mock', 3)) {
       type = 'upgrade_progress';

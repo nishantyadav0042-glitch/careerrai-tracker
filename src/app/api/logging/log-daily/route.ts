@@ -8,6 +8,8 @@ import {
   VALID_EMOTIONAL_CHIPS,
 } from '@/lib/streak-utils';
 import { MILESTONE_MESSAGES } from '@/lib/messages';
+import { onboardingCopy } from '@/lib/notification-engine';
+import { sendPushToUser } from '@/lib/push';
 
 interface LoggingRequest {
   hours: number;
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, buddy_id')
+      .select('id, buddy_id, full_name, created_at, notif_prefs')
       .eq('id', user.id)
       .single();
 
@@ -132,6 +134,27 @@ export async function POST(request: NextRequest) {
         'Solid consistency — keep it up!',
       ];
       bonus = bonuses[Math.floor(Math.random() * bonuses.length)];
+    }
+
+    // First-7-days celebration: an immediate "Day X done" push right after the
+    // log that completed that day — the positive-reinforcement half of the
+    // onboarding arc (the morning/evening crons own the "still pending" half).
+    if (!existingLog && profile.created_at && Date.now() - new Date(profile.created_at).getTime() <= 14 * 86_400_000) {
+      void (async () => {
+        const { count: loggedDayCount } = await admin
+          .from('daily_reports')
+          .select('id', { count: 'exact', head: true })
+          .eq('student_id', user.id);
+        const dayNumber = loggedDayCount ?? 0;
+        const copy = onboardingCopy(dayNumber, 'done', profile.full_name?.split(' ')[0] ?? 'there');
+        if (!copy) return;
+        await admin.from('notifications').insert({
+          user_id: user.id, type: 'onboarding_done', title: copy.title, body: copy.body,
+          data: { url: '/student/tracker' }, read: false, channel: 'in_app',
+        });
+        const prefs = (profile.notif_prefs ?? {}) as Record<string, unknown>;
+        if (prefs.push === true) await sendPushToUser(user.id, { ...copy, url: '/student/tracker' });
+      })().catch(console.error);
     }
 
     notifyBuddy(user.id, profile.buddy_id, { hours: body.hours, energy: body.energy }).catch(console.error);
