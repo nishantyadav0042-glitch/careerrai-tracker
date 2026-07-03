@@ -11,6 +11,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { getCurrentMission, MISSION_TARGET } from '@/lib/missions';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
+import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import type { StreakData } from '@/types';
 
@@ -110,11 +111,12 @@ export default async function DailyTrackerPage() {
     initialFeedback = results[2];
   }
 
-  // Free, buddyless students see a REAL matched mentor on the very first
-  // screen they open — the highest-visibility spot in the app.
-  const topBuddy = (!buddyId && !isPremiumUser)
-    ? (await getRecommendedBuddiesForStudent(admin, user.id))[0] ?? null
-    : null;
+  // Free, buddyless students see REAL matched mentors on the very first
+  // screen they open — most never reach the Buddy tab, so this can't be a
+  // teaser-with-a-link, it has to be the actual showcase, right here.
+  const recommendedBuddies = (!buddyId && !isPremiumUser)
+    ? await getRecommendedBuddiesForStudent(admin, user.id)
+    : [];
 
   let buddyName: string | null = null;
   if (buddyProfile?.full_name) {
@@ -221,14 +223,20 @@ export default async function DailyTrackerPage() {
           />
         )}
 
-        {/* Free user → the locked buddy-taste card (the upgrade hook).
-            Paid-but-unassigned → "being matched". Premium-with-buddy → neither. */}
+        {/* Free user → real matched mentors, right here on the first screen —
+            most students never reach the Buddy tab, so this can't wait for a
+            click. Falls back to the generic locked pitch only when there are
+            zero showcase-eligible buddies yet. Paid-but-unassigned → "being
+            matched" below. Premium-with-buddy → neither. */}
         {!buddyId && !isPremiumUser && (
-          <LockedBuddyCard
-            streak={(streakRow?.current_streak as number | null) ?? 0}
-            fullName={profile?.full_name ?? undefined}
-            topBuddy={topBuddy}
-          />
+          recommendedBuddies.length > 0
+            ? <RecommendedBuddies buddies={recommendedBuddies} studentName={profile?.full_name ?? undefined} />
+            : (
+              <LockedBuddyCard
+                streak={(streakRow?.current_streak as number | null) ?? 0}
+                fullName={profile?.full_name ?? undefined}
+              />
+            )
         )}
 
         {!buddyId && isPremiumUser && (
