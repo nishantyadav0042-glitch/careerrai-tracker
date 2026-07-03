@@ -3,6 +3,9 @@
   "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ]",
   "crons": [
     { "path": "/api/cron/daily-reminder",    "schedule": "30 14 * * *"   },
+    { "path": "/api/cron/streak-risk",       "schedule": "0 16 * * *"    },
+    { "path": "/api/cron/growth-nudges",     "schedule": "30 7 * * *"    },
+    { "path": "/api/cron/buddy-brief",       "schedule": "30 3 * * *"    },
     { "path": "/api/cron/session-tomorrow",  "schedule": "0 6 * * *"     },
     { "path": "/api/cron/buddy-escalation",  "schedule": "30 15 * * *"   },
     { "path": "/api/cron/nishant-weekly",    "schedule": "0 8 * * 0"     },

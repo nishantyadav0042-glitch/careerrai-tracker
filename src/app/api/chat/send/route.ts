@@ -57,13 +57,19 @@ export async function POST(request: NextRequest) {
         .single();
       const senderName = sender?.full_name?.split(' ')[0] ?? 'your buddy';
       const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+      // Deep-link each side to THEIR chat screen — a buddy tapping the push
+      // must land on the buddy chat, not the student page.
+      const recipientIsBuddy = recipientId === pair.buddyId;
       await sendNotification({
         userId: recipientId,
         type: 'chat',
-        title: `${senderName} sent you a message.`,
+        title: `${senderName} sent you a message 💬`,
         body: preview,
         channels: ['in_app', 'push'],
-        data: { url: '/student/buddy', student_id: pair.studentId, buddy_id: pair.buddyId },
+        data: {
+          url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy',
+          student_id: pair.studentId, buddy_id: pair.buddyId,
+        },
       });
     } catch {
       // non-blocking
