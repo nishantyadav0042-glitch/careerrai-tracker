@@ -15,9 +15,16 @@ interface RoutineTask {
   isImplementationIntention?: boolean;
 }
 
+interface Mission {
+  id: string;
+  label: string;
+  reasons: string[];
+}
+
 interface RoutineResponse {
   routine: { phase: string; tasks: RoutineTask[]; est_minutes: number };
   whySummary: string;
+  mission: Mission;
   completions: { task_id: string; is_emergency: boolean }[];
   currentStreak: number;
   isCatchUp: boolean;
@@ -107,7 +114,7 @@ export function TodaysRoutineCard() {
   }
   if (!data) return null;
 
-  const { routine, whySummary, currentStreak, isCatchUp } = data;
+  const { routine, whySummary, mission, currentStreak, isCatchUp } = data;
   const tasks = emergencyMode ? routine.tasks.slice(0, 1) : routine.tasks;
   const totalMinutes = emergencyMode ? tasks[0]?.estMinutes ?? 0 : routine.est_minutes;
   const hours = Math.floor(totalMinutes / 60);
@@ -139,6 +146,28 @@ export function TodaysRoutineCard() {
         </div>
       ) : (
         <>
+          {/* Only rendered when there's an actual signal behind it (reasons
+              non-empty) — a mission box that just repeats "today's routine"
+              with nothing underneath is filler, not evidence. Every reason
+              shown here is the same signal a buddy would see, nothing hidden
+              behind a score the student can't inspect. */}
+          {mission.reasons.length > 0 && (
+            <div className="mb-3.5 rounded-xl border border-orange-200 bg-orange-50/70 px-3.5 py-3">
+              <p className="text-[10px] uppercase tracking-widest text-orange-600 font-bold mb-1">Today&apos;s Mission</p>
+              <p className="text-sm font-bold text-stone-900 mb-1.5">{mission.label}</p>
+              <ul className="space-y-0.5">
+                {mission.reasons.map((r) => (
+                  <li key={r} className="text-xs text-orange-800 flex gap-1.5">
+                    <span aria-hidden>✓</span><span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+              {mission.id === 'mock-analysis' && (
+                <p className="text-[11px] text-orange-700/80 mt-1.5">You can analyze it from today&apos;s log.</p>
+              )}
+            </div>
+          )}
+
           {/* Answers "how did you plan this" up front — the same personalized
               output looks arbitrary if a student can't see what drove it. */}
           <p className="text-xs text-stone-400 mb-3">{whySummary}</p>

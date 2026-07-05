@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type HistoryInput } from '@/lib/routine-engine';
+import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal } from '@/lib/mission-engine';
 import { getLogDateString } from '@/lib/streak-utils';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
@@ -76,9 +77,13 @@ export async function GET() {
     });
   }
 
+  // Computed unconditionally (not just on generation) — the Mission below
+  // needs fresh section-recency signals every request, the same way
+  // whySummary is recomputed fresh rather than frozen at generation time.
+  const history = await buildHistory(admin, user.id);
+
   let routine = existing;
   if (!routine) {
-    const history = await buildHistory(admin, user.id);
     const generated = generateRoutine(routineProfile, new Date(), history);
     const { data: inserted, error } = await admin
       .from('daily_routines')
@@ -117,9 +122,35 @@ export async function GET() {
     ?? (routineProfile.isWorkingProfessional ? 1.5 : 2.5);
   const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday);
 
+  // Today's Mission — a small, explainable scoring layer (same additive
+  // pattern as buddy-match.ts's rankBuddies) on top of data that already
+  // exists. Deliberately not a rewrite of the routine itself: this can
+  // outrank the default weakest-section task (e.g. a mock sitting unanalyzed
+  // for 2 days) without needing a new event-sourcing pipeline underneath it.
+  const weak = routineProfile.weakestSection ?? 'DILR';
+  const { daysSincePendingMock, pendingMockName } = await buildMissionInputs(admin, user.id, today);
+  const mission = pickMission([
+    {
+      id: 'mock-analysis',
+      label: pendingMockName ? `Analyze ${pendingMockName}` : 'Analyze your last mock',
+      signals: [mockPendingAnalysisSignal(daysSincePendingMock)],
+    },
+    {
+      id: 'weak-revision',
+      label: `Revise ${weak}`,
+      signals: [revisionOverdueSignal(weak, history.daysSinceLastPracticed[weak])],
+    },
+    {
+      id: 'routine-baseline',
+      label: "Today's routine",
+      signals: [baselineRoutineSignal()],
+    },
+  ]);
+
   return NextResponse.json({
     routine,
     whySummary,
+    mission,
     completions: completions ?? [],
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,
@@ -181,4 +212,37 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
     }
   }
   return { daysSinceLastPracticed: daysSince };
+}
+
+// "Mock pending analysis" — a mock was logged (daily_reports.mock_taken)
+// but no matching mock_debriefs row exists for that date yet. Mirrors the
+// same taken_on/log_date correlation the mock-debrief route itself writes
+// (unique on student_id, log_date), so this stays consistent with how a
+// debrief is actually recorded rather than inventing a second definition.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildMissionInputs(admin: any, studentId: string, today: string): Promise<{ daysSincePendingMock: number | null; pendingMockName: string | null }> {
+  const [{ data: recentReports }, { data: recentDebriefs }] = await Promise.all([
+    admin
+      .from('daily_reports')
+      .select('report_date, mock_taken, mock_name')
+      .eq('student_id', studentId)
+      .order('report_date', { ascending: false })
+      .limit(14),
+    admin
+      .from('mock_debriefs')
+      .select('taken_on')
+      .eq('student_id', studentId)
+      .order('taken_on', { ascending: false })
+      .limit(5),
+  ]);
+
+  const debriefDates = new Set((recentDebriefs ?? []).map((d: { taken_on: string }) => d.taken_on));
+  const lastMockReport = (recentReports ?? []).find((r: { mock_taken: boolean | null }) => r.mock_taken);
+  if (!lastMockReport || debriefDates.has(lastMockReport.report_date)) {
+    return { daysSincePendingMock: null, pendingMockName: null };
+  }
+  return {
+    daysSincePendingMock: Math.round((Date.parse(today) - Date.parse(lastMockReport.report_date)) / 86_400_000),
+    pendingMockName: (lastMockReport.mock_name as string | null) ?? null,
+  };
 }
