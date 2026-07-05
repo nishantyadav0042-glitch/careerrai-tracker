@@ -17,6 +17,7 @@ interface RoutineTask {
 
 interface RoutineResponse {
   routine: { phase: string; tasks: RoutineTask[]; est_minutes: number };
+  whySummary: string;
   completions: { task_id: string; is_emergency: boolean }[];
   currentStreak: number;
   isCatchUp: boolean;
@@ -101,7 +102,7 @@ export function TodaysRoutineCard() {
   }
   if (!data) return null;
 
-  const { routine, currentStreak, isCatchUp } = data;
+  const { routine, whySummary, currentStreak, isCatchUp } = data;
   const tasks = emergencyMode ? routine.tasks.slice(0, 1) : routine.tasks;
   const totalMinutes = emergencyMode ? tasks[0]?.estMinutes ?? 0 : routine.est_minutes;
   const hours = Math.floor(totalMinutes / 60);
@@ -133,6 +134,10 @@ export function TodaysRoutineCard() {
         </div>
       ) : (
         <>
+          {/* Answers "how did you plan this" up front — the same personalized
+              output looks arbitrary if a student can't see what drove it. */}
+          <p className="text-xs text-stone-400 mb-3">{whySummary}</p>
+
           {emergencyAcknowledged && (
             <div className="mb-3.5 rounded-xl bg-orange-50 border border-orange-200 px-3.5 py-2.5">
               <p className="text-sm font-bold text-orange-900">Minimum done for today ✓</p>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateRoutine, type RoutineProfile, type Section, type HistoryInput } from '@/lib/routine-engine';
+import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type HistoryInput } from '@/lib/routine-engine';
 import { getLogDateString } from '@/lib/streak-utils';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
@@ -99,8 +99,18 @@ export async function GET() {
     ? Math.round((Date.parse(today) - Date.parse(streak.last_log_date as string)) / 86_400_000)
     : null;
 
+  // Recomputed fresh each request (cheap, pure) rather than stored on the row —
+  // it's the "how did you plan this" answer, and should reflect the student's
+  // CURRENT setup even if they update it after today's task list was frozen.
+  const nowDay = new Date().getDay();
+  const isWeekendToday = nowDay === 0 || nowDay === 6;
+  const hoursToday = (isWeekendToday ? routineProfile.weekendHours : routineProfile.weekdayHours)
+    ?? (routineProfile.isWorkingProfessional ? 1.5 : 2.5);
+  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday);
+
   return NextResponse.json({
     routine,
+    whySummary,
     completions: completions ?? [],
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,

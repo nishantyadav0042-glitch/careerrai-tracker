@@ -40,6 +40,7 @@ export interface GeneratedRoutine {
   phase: Phase;
   tasks: RoutineTask[];
   estMinutes: number;
+  whySummary: string;
 }
 
 // CAT is always the last Sunday of November of a given year. Reuses the same
@@ -98,12 +99,25 @@ export function implementationIntention(
 
 // Plain, non-conditional reason for the secondary tasks — deliberately NOT
 // if-then framed. The evidence supports one vivid, personal trigger, not
-// diluting the pattern across a whole checklist.
-export function sectionReason(section: Section, lastPracticedDaysAgo: number | null): string {
-  if (lastPracticedDaysAgo == null) return `${section} — first pass`;
+// diluting the pattern across a whole checklist. Varied by position so two
+// "first pass" days in a row don't read as copy-pasted next to each other.
+export function sectionReason(section: Section, lastPracticedDaysAgo: number | null, ordinal: 'second' | 'third'): string {
+  if (lastPracticedDaysAgo == null) {
+    return ordinal === 'second' ? `${section} — rounding out today's set` : `${section} — closes today's session`;
+  }
   if (lastPracticedDaysAgo === 0) return `${section} — done earlier today too`;
   if (lastPracticedDaysAgo === 1) return `${section} — last done yesterday`;
   return `${section} — last done ${lastPracticedDaysAgo} days ago`;
+}
+
+// The "how did you plan this" answer, made visible instead of implicit. A
+// student who tapped a 2-second setup prompt days ago has no reason to
+// remember it drove today's list — without this line the same personalized
+// output reads as an arbitrary generic template.
+export function personalizationSummary(profile: RoutineProfile, isWeekendToday: boolean, hours: number): string {
+  const hoursLabel = `${hours}h ${isWeekendToday ? 'today (weekend)' : 'today'}`;
+  const weakLabel = profile.weakestSection ? `${profile.weakestSection} is your focus` : 'balanced across sections';
+  return `Built from your setup: ${weakLabel} · ${hoursLabel}`;
 }
 
 export interface HistoryInput {
@@ -139,15 +153,15 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
     isImplementationIntention: true,
   });
 
-  for (const section of nonWeak) {
+  nonWeak.forEach((section, i) => {
     tasks.push({
       id: `${section.toLowerCase()}-set`,
       section,
       label: `${section} — practice set`,
       estMinutes: Math.round(totalMinutes * otherShare),
-      reason: sectionReason(section, history.daysSinceLastPracticed[section]),
+      reason: sectionReason(section, history.daysSinceLastPracticed[section], i === 0 ? 'second' : 'third'),
     });
-  }
+  });
 
   // Phase-specific closing task, in do-order (last).
   if (phase === 'intensive') {
@@ -177,7 +191,8 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
   }
 
   const estMinutes = tasks.reduce((s, t) => s + t.estMinutes, 0);
-  return { phase, tasks, estMinutes };
+  const whySummary = personalizationSummary(profile, weekend, hours);
+  return { phase, tasks, estMinutes, whySummary };
 }
 
 // The single highest-priority task — what Emergency Mode collapses to.
