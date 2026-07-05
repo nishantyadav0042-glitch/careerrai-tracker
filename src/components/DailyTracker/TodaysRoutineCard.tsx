@@ -25,6 +25,7 @@ interface RoutineResponse {
 
 interface NeedsSetupResponse {
   needsSetup: true;
+  weakestSection: 'VARC' | 'DILR' | 'QA' | null;
   needsWeekendHours: boolean;
 }
 
@@ -96,7 +97,11 @@ export function TodaysRoutineCard() {
     return (
       <Card className="p-5">
         <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Routine</p>
-        <QuickRoutineSetup needsWeekendHours={needsSetup.needsWeekendHours} onDone={load} />
+        <QuickRoutineSetup
+          initialWeakest={needsSetup.weakestSection}
+          needsWeekendHours={needsSetup.needsWeekendHours}
+          onDone={load}
+        />
       </Card>
     );
   }

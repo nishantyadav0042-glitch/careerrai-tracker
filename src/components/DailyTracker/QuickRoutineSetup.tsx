@@ -2,25 +2,52 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 
 type Section = 'VARC' | 'DILR' | 'QA';
 
-// The ONE mandatory tap before the routine engine can personalize anything —
-// weakest section drives ~40% of the daily time budget. Weekend hours is a
-// single optional follow-up, skippable, because it only refines an already-
-// reasonable default. Total worst case: 2 taps. Best case (skip weekends): 1.
-export function QuickRoutineSetup({ needsWeekendHours, onDone }: { needsWeekendHours: boolean; onDone: () => void }) {
-  const [weakest, setWeakest] = useState<Section | null>(null);
+// Reuses the same topic taxonomy already shown in daily logging — "weakest
+// section" alone is too coarse (every CAT aspirant already knows to study
+// VARC/DILR/QA); naming the actual toughest topic is what makes the routine
+// feel precise instead of a generic template.
+const TOPICS_BY_SECTION: Record<Section, string[]> = {
+  VARC: VERBAL_TOPICS,
+  DILR: LRDI_TOPICS,
+  QA: QUANT_TOPICS,
+};
+
+// Up to 3 taps total: weakest section, toughest topic within it (skippable),
+// weekend hours (skippable). Any step already answered is skipped — a
+// returning student who set their section before this shipped only sees the
+// topic tap, not the whole flow again.
+export function QuickRoutineSetup({
+  initialWeakest,
+  needsWeekendHours,
+  onDone,
+}: {
+  initialWeakest: Section | null;
+  needsWeekendHours: boolean;
+  onDone: () => void;
+}) {
+  const [weakest, setWeakest] = useState<Section | null>(initialWeakest);
+  const [topic, setTopic] = useState<string | null>(null);
+  const [topicAnswered, setTopicAnswered] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  async function submit(weekendHours?: number) {
+  const needsTopic = !!weakest && !topicAnswered;
+
+  async function submit(finalTopic: string | null, weekendHours?: number) {
     if (!weakest || saving) return;
     setSaving(true);
     try {
       await fetch('/api/routine/quick-setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weakest_section: weakest, ...(weekendHours != null ? { weekend_hours: weekendHours } : {}) }),
+        body: JSON.stringify({
+          weakest_section: weakest,
+          weak_topic: finalTopic ?? '',
+          ...(weekendHours != null ? { weekend_hours: weekendHours } : {}),
+        }),
       });
       onDone();
     } finally {
@@ -30,7 +57,17 @@ export function QuickRoutineSetup({ needsWeekendHours, onDone }: { needsWeekendH
 
   function pickWeakest(s: Section) {
     setWeakest(s);
-    if (!needsWeekendHours) submit(); // single tap, done — no follow-up to show
+  }
+
+  function chooseTopic(t: string) {
+    setTopic(t);
+    setTopicAnswered(true);
+    if (!needsWeekendHours) submit(t);
+  }
+
+  function skipTopic() {
+    setTopicAnswered(true);
+    if (!needsWeekendHours) submit(null);
   }
 
   return (
@@ -51,6 +88,33 @@ export function QuickRoutineSetup({ needsWeekendHours, onDone }: { needsWeekendH
             ))}
           </div>
         </>
+      ) : needsTopic ? (
+        <>
+          <p className="text-sm font-bold text-stone-900 mb-0.5">Which part of {weakest} is toughest?</p>
+          <p className="text-xs text-stone-500 mb-3">This is what makes today&apos;s tasks specific, not generic.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {TOPICS_BY_SECTION[weakest].map((t) => (
+              <button
+                key={t}
+                disabled={saving}
+                onClick={() => chooseTopic(t)}
+                className={cn(
+                  'rounded-xl border-2 border-stone-200 py-2.5 px-2 text-xs font-semibold text-stone-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all active:scale-95',
+                  saving && 'opacity-50'
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={skipTopic}
+            disabled={saving}
+            className="mt-2.5 text-xs text-stone-400 hover:text-stone-600"
+          >
+            Not sure — mix it up
+          </button>
+        </>
       ) : (
         <>
           <p className="text-sm font-bold text-stone-900 mb-0.5">Do you study more on weekends?</p>
@@ -64,7 +128,7 @@ export function QuickRoutineSetup({ needsWeekendHours, onDone }: { needsWeekendH
               <button
                 key={label}
                 disabled={saving}
-                onClick={() => (hours == null ? submit() : submit(hours))}
+                onClick={() => submit(topic, hours ?? undefined)}
                 className={cn(
                   'rounded-xl border-2 border-stone-200 py-3 px-1 text-xs font-semibold text-stone-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all active:scale-95',
                   saving && 'opacity-50'
@@ -75,7 +139,7 @@ export function QuickRoutineSetup({ needsWeekendHours, onDone }: { needsWeekendH
             ))}
           </div>
           <button
-            onClick={() => submit()}
+            onClick={() => submit(topic)}
             disabled={saving}
             className="mt-2.5 text-xs text-stone-400 hover:text-stone-600"
           >

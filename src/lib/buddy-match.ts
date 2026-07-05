@@ -38,13 +38,43 @@ export function weakestSection(s: MatchStudent): string | null {
   return sections.reduce((a, b) => (b.val < a.val ? b : a)).name;
 }
 
+// A buddy's own percentile jump between attempts, if she is a repeater
+// herself (first_attempt_percentile set). This is real journey data, not a
+// self-checked box, so it's the most truthful signal available and should
+// outrank "student_types_helped" whenever it's relevant and substantial.
+function buddyImprovement(buddy: MatchBuddy): number | null {
+  if (buddy.first_attempt_percentile == null || buddy.cat_percentile == null) return null;
+  return Number(buddy.cat_percentile) - Number(buddy.first_attempt_percentile);
+}
+
 export function matchReason(student: MatchStudent, buddy: MatchBuddy): string | null {
   const weak = weakestSection(student);
   if (weak && buddy.strongest_section === weak) return `Strong in ${weak} — your weakest section`;
+
+  const isRepeaterBuddy = buddy.first_attempt_percentile != null;
+  const improvement = buddyImprovement(buddy);
+
+  // A repeater buddy's own comeback is the most specific, most relevant
+  // match for a repeater student — more grounded than the generic
+  // self-checked "Repeaters" box, and it's what she actually lived.
+  if (student.is_repeater && isRepeaterBuddy && improvement != null && improvement >= 3) {
+    return `Improved ${buddy.first_attempt_percentile}→${buddy.cat_percentile}%ile on the second attempt — been where you are`;
+  }
+
   const types = buddy.student_types_helped ?? [];
   if (student.is_working_professional && types.includes('Working Professionals')) return 'Mentors working professionals like you';
   if (student.is_repeater && types.includes('Repeaters')) return 'Specialises in repeaters';
-  if (student.is_repeater === false && types.includes('Freshers')) return 'Great with first-time aspirants';
+  // A buddy who herself needed a second attempt isn't a "first-timer success
+  // story" — only claim this for buddies who cracked it on their first try,
+  // so the copy never contradicts the buddy's own actual journey.
+  if (student.is_repeater === false && types.includes('Freshers') && !isRepeaterBuddy) {
+    return 'Great with first-time aspirants';
+  }
+  // Fallback: a dramatic comeback is a compelling, always-true signal even
+  // for a student who isn't a repeater themselves.
+  if (improvement != null && improvement >= 5) {
+    return `Improved ${buddy.first_attempt_percentile}→${buddy.cat_percentile}%ile on the second attempt`;
+  }
   return null;
 }
 
@@ -53,10 +83,13 @@ export function rankBuddies(student: MatchStudent, buddies: MatchBuddy[]): Match
   const score = (b: MatchBuddy): number => {
     let s = 0;
     if (weak && b.strongest_section === weak) s += 40;
+    const isRepeaterBuddy = b.first_attempt_percentile != null;
+    const improvement = buddyImprovement(b);
     const types = b.student_types_helped ?? [];
     if (student.is_working_professional && types.includes('Working Professionals')) s += 20;
-    if (student.is_repeater && types.includes('Repeaters')) s += 20;
-    if (student.is_repeater === false && types.includes('Freshers')) s += 10;
+    if (student.is_repeater && isRepeaterBuddy && improvement != null && improvement >= 3) s += 25;
+    else if (student.is_repeater && types.includes('Repeaters')) s += 20;
+    if (student.is_repeater === false && types.includes('Freshers') && !isRepeaterBuddy) s += 10;
     // Profile completeness — complete profiles convert, sparse ones don't
     if (b.avatar_url) s += 8;
     if (b.linkedin_url) s += 6;

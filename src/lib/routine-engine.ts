@@ -15,6 +15,10 @@ export interface RoutineProfile {
   weekendHours: number | null;
   weakestSection: Section | null;
   strongestSection: Section | null;
+  // Self-reported toughest topic *within* weakestSection (e.g. "Reading
+  // Comprehension" within VARC) — see topics-constants.ts for the taxonomy.
+  // null = not answered; the section-only copy is the fallback.
+  weakTopic: string | null;
   coachingEnrolled: boolean | null;
   attemptYear: number | null;
 }
@@ -84,17 +88,22 @@ function isWeekend(d: Date): boolean {
 // tied to the one moment it DOES know: this session.
 export function implementationIntention(
   section: Section,
+  topic: string | null,
   lastPracticedDaysAgo: number | null,
   phase: Phase
 ): string {
+  // Section alone is too coarse to feel personal — every CAT aspirant
+  // already knows they need VARC/DILR/QA. The topic (if answered) is what
+  // makes the cue concrete enough to actually act on.
+  const target = topic ? `${section} — ${topic}` : section;
   if (lastPracticedDaysAgo == null) {
     return phase === 'foundation'
-      ? `If you study today, start with ${section} — first pass, before anything else`
-      : `If you study today, start with ${section} — day one counts`;
+      ? `If you study today, start with ${target} — first pass, before anything else`
+      : `If you study today, start with ${target} — day one counts`;
   }
-  if (lastPracticedDaysAgo === 0) return `If you study today, keep ${section} going — that's the momentum`;
-  if (lastPracticedDaysAgo === 1) return `If you study today, start with ${section} — you did it yesterday too`;
-  return `If you study today, start with ${section} — it's been ${lastPracticedDaysAgo} days`;
+  if (lastPracticedDaysAgo === 0) return `If you study today, keep ${target} going — that's the momentum`;
+  if (lastPracticedDaysAgo === 1) return `If you study today, start with ${target} — you did it yesterday too`;
+  return `If you study today, start with ${target} — it's been ${lastPracticedDaysAgo} days`;
 }
 
 // Plain, non-conditional reason for the secondary tasks — deliberately NOT
@@ -116,7 +125,11 @@ export function sectionReason(section: Section, lastPracticedDaysAgo: number | n
 // output reads as an arbitrary generic template.
 export function personalizationSummary(profile: RoutineProfile, isWeekendToday: boolean, hours: number): string {
   const hoursLabel = `${hours}h ${isWeekendToday ? 'today (weekend)' : 'today'}`;
-  const weakLabel = profile.weakestSection ? `${profile.weakestSection} is your focus` : 'balanced across sections';
+  const weakLabel = profile.weakestSection
+    ? profile.weakTopic
+      ? `${profile.weakestSection} (${profile.weakTopic}) is your focus`
+      : `${profile.weakestSection} is your focus`
+    : 'balanced across sections';
   return `Built from your setup: ${weakLabel} · ${hoursLabel}`;
 }
 
@@ -144,12 +157,17 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
   const weakShare = 0.40;
   const otherShare = (1 - weakShare) / nonWeak.length;
 
+  const weakTopic = profile.weakTopic;
+  const priorityLabel = weakTopic
+    ? (phase === 'foundation' ? `${weak} — ${weakTopic}: concept + practice` : `${weak} — ${weakTopic}: targeted practice`)
+    : (phase === 'foundation' ? `${weak} — concept + practice set` : `${weak} — targeted practice set`);
+
   tasks.push({
     id: `${weak.toLowerCase()}-priority`,
     section: weak,
-    label: phase === 'foundation' ? `${weak} — concept + practice set` : `${weak} — targeted practice set`,
+    label: priorityLabel,
     estMinutes: Math.round(totalMinutes * weakShare),
-    reason: implementationIntention(weak, history.daysSinceLastPracticed[weak], phase),
+    reason: implementationIntention(weak, weakTopic, history.daysSinceLastPracticed[weak], phase),
     isImplementationIntention: true,
   });
 

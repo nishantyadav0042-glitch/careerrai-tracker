@@ -21,7 +21,7 @@ export async function GET() {
     .select(`
       is_working_professional, is_repeater, target_percentile,
       hours_available, study_target_hours, weekend_hours_available,
-      self_reported_weakest_section, self_reported_strongest_section,
+      self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
       baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year
     `)
     .eq('id', user.id)
@@ -35,6 +35,10 @@ export async function GET() {
   const strongest = (profile.self_reported_strongest_section as Section | null)
     ?? computeStrongestFromBaseline(profile);
 
+  // null = never asked, '' = asked and explicitly skipped, string = answered.
+  const weakTopicRaw = profile.self_reported_weak_topic as string | null;
+  const weakTopic = weakTopicRaw ? weakTopicRaw : null;
+
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
@@ -43,6 +47,7 @@ export async function GET() {
     weekendHours: profile.weekend_hours_available as number | null,
     weakestSection: weakest,
     strongestSection: strongest,
+    weakTopic,
     coachingEnrolled: profile.coaching_enrolled as boolean | null,
     attemptYear: profile.attempt_year as number | null,
   };
@@ -56,13 +61,17 @@ export async function GET() {
     .maybeSingle();
 
   // Minimum-friction onboarding: weakest section drives ~40% of the day's time
-  // budget, so it's the one thing worth a single explicit tap rather than a
-  // guessed default. Don't generate (and don't burn today's one-shot slot on
-  // a guess) until the student has answered it — everything else has a
-  // reasonable silent fallback and is never worth blocking on.
-  if (!existing && weakest == null) {
+  // budget, and the topic within it is what makes the routine feel precise
+  // rather than "everyone already knows to study VARC/DILR/QA" generic — so
+  // both are worth one explicit tap each, rather than a guessed default.
+  // weakTopicRaw === '' means the student was already asked and explicitly
+  // skipped it — respect that, don't nag every day. Only re-offer while it's
+  // genuinely unanswered (null). Everything else has a reasonable silent
+  // fallback and is never worth blocking on.
+  if (!existing && (weakest == null || weakTopicRaw == null)) {
     return NextResponse.json({
       needsSetup: true,
+      weakestSection: weakest,
       needsWeekendHours: profile.weekend_hours_available == null,
     });
   }
