@@ -22,7 +22,7 @@ export async function GET() {
       is_working_professional, is_repeater, target_percentile,
       hours_available, study_target_hours, weekend_hours_available,
       self_reported_weakest_section, self_reported_strongest_section,
-      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled
+      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year
     `)
     .eq('id', user.id)
     .single();
@@ -44,6 +44,7 @@ export async function GET() {
     weakestSection: weakest,
     strongestSection: strongest,
     coachingEnrolled: profile.coaching_enrolled as boolean | null,
+    attemptYear: profile.attempt_year as number | null,
   };
 
   // Existing routine for today?
@@ -53,6 +54,18 @@ export async function GET() {
     .eq('student_id', user.id)
     .eq('routine_date', today)
     .maybeSingle();
+
+  // Minimum-friction onboarding: weakest section drives ~40% of the day's time
+  // budget, so it's the one thing worth a single explicit tap rather than a
+  // guessed default. Don't generate (and don't burn today's one-shot slot on
+  // a guess) until the student has answered it — everything else has a
+  // reasonable silent fallback and is never worth blocking on.
+  if (!existing && weakest == null) {
+    return NextResponse.json({
+      needsSetup: true,
+      needsWeekendHours: profile.weekend_hours_available == null,
+    });
+  }
 
   let routine = existing;
   if (!routine) {

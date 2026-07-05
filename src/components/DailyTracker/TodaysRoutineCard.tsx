@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Check, Clock, Zap, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { QuickRoutineSetup } from './QuickRoutineSetup';
 
 interface RoutineTask {
   id: string;
@@ -20,8 +21,14 @@ interface RoutineResponse {
   isCatchUp: boolean;
 }
 
+interface NeedsSetupResponse {
+  needsSetup: true;
+  needsWeekendHours: boolean;
+}
+
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
+  const [needsSetup, setNeedsSetup] = useState<NeedsSetupResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [emergencyMode, setEmergencyMode] = useState(false);
   // Full completion is a real terminal state (checklist replaced by the closure
@@ -37,7 +44,13 @@ export function TodaysRoutineCard() {
     try {
       const res = await fetch('/api/routine/today');
       if (!res.ok) return;
-      const json = (await res.json()) as RoutineResponse;
+      const json = (await res.json()) as RoutineResponse | NeedsSetupResponse;
+      if ('needsSetup' in json) {
+        setNeedsSetup(json);
+        setData(null);
+        return;
+      }
+      setNeedsSetup(null);
       setData(json);
       setCompletedIds(new Set(json.completions.map((c) => c.task_id)));
     } finally {
@@ -74,6 +87,14 @@ export function TodaysRoutineCard() {
       <Card className="p-5 animate-pulse">
         <div className="h-4 w-32 bg-stone-200 rounded mb-3" />
         <div className="h-16 bg-stone-100 rounded" />
+      </Card>
+    );
+  }
+  if (needsSetup) {
+    return (
+      <Card className="p-5">
+        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Routine</p>
+        <QuickRoutineSetup needsWeekendHours={needsSetup.needsWeekendHours} onDone={load} />
       </Card>
     );
   }

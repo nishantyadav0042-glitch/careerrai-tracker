@@ -16,6 +16,7 @@ export interface RoutineProfile {
   weakestSection: Section | null;
   strongestSection: Section | null;
   coachingEnrolled: boolean | null;
+  attemptYear: number | null;
 }
 
 export interface RoutineTask {
@@ -32,22 +33,32 @@ export interface GeneratedRoutine {
   estMinutes: number;
 }
 
-// CAT is always the last Sunday of November. Reuses the same convention
-// already live on the Home tab (student/tracker/page.tsx CAT_EXAM_DATE) so
-// phase boundaries and the countdown never disagree with each other.
-export function catExamDate(now: Date): Date {
-  const year = now.getMonth() >= 10 ? now.getFullYear() : now.getFullYear();
+// CAT is always the last Sunday of November of a given year. Reuses the same
+// convention already live on the Home tab (student/tracker/page.tsx
+// CAT_EXAM_DATE) so phase boundaries and the countdown never disagree.
+export function catExamDate(year: number): Date {
   const nov30 = new Date(year, 10, 30);
   const lastSunday = new Date(nov30);
   lastSunday.setDate(30 - nov30.getDay());
   return lastSunday;
 }
 
-export function getPhase(now: Date): Phase {
-  const month = now.getMonth(); // 0-indexed
-  if (month === 10) return 'revision';       // November
-  if (month === 8 || month === 9) return 'intensive'; // Sep, Oct
-  return 'foundation';                        // everything else (Jul, Aug, and off-season)
+// Phase is relative to THIS student's own exam date, not a hardcoded calendar
+// assumption that every student targets the same November. attemptYear comes
+// from profiles.attempt_year; when absent, or when that year's CAT has
+// already passed (e.g. a repeater who hasn't updated it post-exam yet), rolls
+// forward to the next upcoming CAT automatically rather than mislabeling a
+// post-exam student as still in "foundation" for a cycle that's already over.
+export function getPhase(now: Date, attemptYear?: number | null): Phase {
+  let year = attemptYear ?? now.getFullYear();
+  if (now > catExamDate(year)) year += 1;
+
+  if (now.getFullYear() === year) {
+    const month = now.getMonth(); // 0-indexed
+    if (month === 10 && now <= catExamDate(year)) return 'revision'; // Nov, up to exam day
+    if (month === 8 || month === 9) return 'intensive';               // Sep, Oct
+  }
+  return 'foundation'; // everything else, including multi-year-out early prep
 }
 
 function isWeekend(d: Date): boolean {
@@ -79,7 +90,7 @@ export interface HistoryInput {
 }
 
 export function generateRoutine(profile: RoutineProfile, now: Date, history: HistoryInput): GeneratedRoutine {
-  const phase = getPhase(now);
+  const phase = getPhase(now, profile.attemptYear);
   const weekend = isWeekend(now);
   const hours = (weekend ? profile.weekendHours : profile.weekdayHours) ?? (profile.isWorkingProfessional ? 1.5 : 2.5);
   const totalMinutes = Math.max(30, Math.round(hours * 60));
