@@ -112,7 +112,7 @@ export function QuickRoutineSetup({
             disabled={saving}
             className="mt-2.5 text-xs text-stone-400 hover:text-stone-600"
           >
-            Not sure — mix it up
+            Not sure — use the highest-weightage topic instead
           </button>
         </>
       ) : (

@@ -15,8 +15,22 @@ const TOPICS_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string[]> = {
   QA: QUANT_TOPICS,
 };
 
+// A "skip" tap must never mean "give up on topic-level personalization
+// forever" — that regressed straight back to the generic section-only
+// routine this feature exists to fix. Skipping instead picks the
+// highest-weightage topic in that section as a real, defensible default
+// (Reading Comprehension carries the most weight in VARC, Arithmetic in QA,
+// Data Interpretation in DILR) — the student still gets a specific topic,
+// they just didn't have to choose it themselves.
+const DEFAULT_TOPIC_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string> = {
+  VARC: VERBAL_TOPICS[0],
+  DILR: LRDI_TOPICS[0],
+  QA: QUANT_TOPICS[0],
+};
+
 // POST /api/routine/quick-setup — weakest section + toughest topic within it
-// (topic skippable via weak_topic: ''), plus an optional weekend-hours
+// (skippable, defaults to that section's highest-weightage topic rather than
+// dropping personalization entirely), plus an optional weekend-hours
 // refinement, captured just-in-time on first use of the routine card rather
 // than as an extra step in the main onboarding wizard.
 export async function POST(request: NextRequest) {
@@ -41,10 +55,12 @@ export async function POST(request: NextRequest) {
     self_reported_strongest_section: strongest[0],
   };
   if (typeof body.weak_topic === 'string') {
-    const validTopics = TOPICS_BY_SECTION[weakest as (typeof VALID_SECTIONS)[number]];
+    const section = weakest as (typeof VALID_SECTIONS)[number];
+    const validTopics = TOPICS_BY_SECTION[section];
     if (body.weak_topic === '') {
-      // Explicit skip — student was asked, don't re-prompt on future visits.
-      updates.self_reported_weak_topic = '';
+      // Explicit skip — still resolves to a real topic (see
+      // DEFAULT_TOPIC_BY_SECTION above), never to nothing.
+      updates.self_reported_weak_topic = DEFAULT_TOPIC_BY_SECTION[section];
     } else if (validTopics.includes(body.weak_topic)) {
       updates.self_reported_weak_topic = body.weak_topic;
     } else {

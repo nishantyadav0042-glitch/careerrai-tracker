@@ -36,7 +36,10 @@ export async function GET() {
   const strongest = (profile.self_reported_strongest_section as Section | null)
     ?? computeStrongestFromBaseline(profile);
 
-  // null = never asked, '' = asked and explicitly skipped, string = answered.
+  // null = never asked. Skipping the topic tap in quick-setup still resolves
+  // to a real default topic (see DEFAULT_TOPIC_BY_SECTION in
+  // /api/routine/quick-setup) rather than an empty string — a "not sure" tap
+  // must never mean zero topic-level personalization.
   const weakTopicRaw = profile.self_reported_weak_topic as string | null;
   const weakTopic = weakTopicRaw ? weakTopicRaw : null;
 
@@ -64,11 +67,9 @@ export async function GET() {
   // Minimum-friction onboarding: weakest section drives ~40% of the day's time
   // budget, and the topic within it is what makes the routine feel precise
   // rather than "everyone already knows to study VARC/DILR/QA" generic — so
-  // both are worth one explicit tap each, rather than a guessed default.
-  // weakTopicRaw === '' means the student was already asked and explicitly
-  // skipped it — respect that, don't nag every day. Only re-offer while it's
-  // genuinely unanswered (null). Everything else has a reasonable silent
-  // fallback and is never worth blocking on.
+  // both are worth one explicit tap each, rather than a guessed default. Only
+  // re-offer while genuinely unanswered (null) — once answered (even via the
+  // skip-to-default path), don't nag on future visits.
   if (!existing && (weakest == null || weakTopicRaw == null)) {
     return NextResponse.json({
       needsSetup: true,
