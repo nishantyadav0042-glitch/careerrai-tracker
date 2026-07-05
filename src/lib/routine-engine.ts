@@ -25,6 +25,15 @@ export interface RoutineTask {
   label: string;
   estMinutes: number;
   reason: string | null;
+  // True only for the single priority task. Backed by a real meta-analysis
+  // (Wang, Wang & Gai 2021, Frontiers in Psychology, N=15,907): explicit
+  // if-then implementation intentions have a real, domain-general effect on
+  // goal attainment (g=0.336), academic goals included. The same analysis
+  // found interactive/personalized delivery beats static delivery (g=0.465
+  // vs 0.277) — a deterministic engine can't be "interactive," so this is
+  // applied to exactly ONE vivid, personal trigger rather than diluted
+  // across every task, which is the closest a static list gets to that gap.
+  isImplementationIntention?: boolean;
 }
 
 export interface GeneratedRoutine {
@@ -66,19 +75,33 @@ function isWeekend(d: Date): boolean {
   return day === 0 || day === 6;
 }
 
-// Reason line: pure date-math on the student's OWN history, never an LLM call.
-// Falls back to a phase-appropriate line when there's no history yet (day 1).
-export function priorityReason(
+// The ONE explicit if-then implementation intention per day — see the
+// isImplementationIntention doc comment above for why only the priority task
+// gets this treatment. Pure date-math on the student's OWN history, never an
+// LLM call. "If you open the app today" is the honest trigger a deterministic
+// engine can offer — it doesn't know time-of-day or context, so the cue is
+// tied to the one moment it DOES know: this session.
+export function implementationIntention(
   section: Section,
   lastPracticedDaysAgo: number | null,
   phase: Phase
 ): string {
   if (lastPracticedDaysAgo == null) {
     return phase === 'foundation'
-      ? `Building your ${section} foundation — first pass`
-      : `${section} — start here today`;
+      ? `If you study today, start with ${section} — first pass, before anything else`
+      : `If you study today, start with ${section} — day one counts`;
   }
-  if (lastPracticedDaysAgo === 0) return `${section} — keep today's momentum going`;
+  if (lastPracticedDaysAgo === 0) return `If you study today, keep ${section} going — that's the momentum`;
+  if (lastPracticedDaysAgo === 1) return `If you study today, start with ${section} — you did it yesterday too`;
+  return `If you study today, start with ${section} — it's been ${lastPracticedDaysAgo} days`;
+}
+
+// Plain, non-conditional reason for the secondary tasks — deliberately NOT
+// if-then framed. The evidence supports one vivid, personal trigger, not
+// diluting the pattern across a whole checklist.
+export function sectionReason(section: Section, lastPracticedDaysAgo: number | null): string {
+  if (lastPracticedDaysAgo == null) return `${section} — first pass`;
+  if (lastPracticedDaysAgo === 0) return `${section} — done earlier today too`;
   if (lastPracticedDaysAgo === 1) return `${section} — last done yesterday`;
   return `${section} — last done ${lastPracticedDaysAgo} days ago`;
 }
@@ -112,7 +135,8 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
     section: weak,
     label: phase === 'foundation' ? `${weak} — concept + practice set` : `${weak} — targeted practice set`,
     estMinutes: Math.round(totalMinutes * weakShare),
-    reason: priorityReason(weak, history.daysSinceLastPracticed[weak], phase),
+    reason: implementationIntention(weak, history.daysSinceLastPracticed[weak], phase),
+    isImplementationIntention: true,
   });
 
   for (const section of nonWeak) {
@@ -121,7 +145,7 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
       section,
       label: `${section} — practice set`,
       estMinutes: Math.round(totalMinutes * otherShare),
-      reason: priorityReason(section, history.daysSinceLastPracticed[section], phase),
+      reason: sectionReason(section, history.daysSinceLastPracticed[section]),
     });
   }
 

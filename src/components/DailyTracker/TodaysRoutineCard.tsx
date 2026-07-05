@@ -12,6 +12,7 @@ interface RoutineTask {
   label: string;
   estMinutes: number;
   reason: string | null;
+  isImplementationIntention?: boolean;
 }
 
 interface RoutineResponse {
@@ -146,6 +147,12 @@ export function TodaysRoutineCard() {
           <div className="space-y-2">
             {tasks.map((task) => {
               const done = completedIds.has(task.id);
+              // The priority task carries the one if-then implementation
+              // intention (see routine-engine.ts) — given a step-by-step list
+              // can't be "interactive" the way a coach is, vividness here is
+              // the compensating lever, so it gets real visual weight, not
+              // the same gray subtitle every other task gets.
+              const vivid = task.isImplementationIntention && !done;
               return (
                 <button
                   key={task.id}
@@ -153,12 +160,14 @@ export function TodaysRoutineCard() {
                   disabled={busyTaskId === task.id}
                   className={cn(
                     'w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-all active:scale-[0.99]',
-                    done ? 'border-teal-200 bg-teal-50' : 'border-stone-200 bg-white hover:border-stone-300'
+                    done ? 'border-teal-200 bg-teal-50'
+                      : vivid ? 'border-orange-300 bg-orange-50/60 hover:border-orange-400'
+                      : 'border-stone-200 bg-white hover:border-stone-300'
                   )}
                 >
                   <span className={cn(
                     'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                    done ? 'border-teal-600 bg-teal-600' : 'border-stone-300'
+                    done ? 'border-teal-600 bg-teal-600' : vivid ? 'border-orange-500' : 'border-stone-300'
                   )}>
                     {done && <Check className="w-3 h-3 text-white" />}
                   </span>
@@ -167,7 +176,9 @@ export function TodaysRoutineCard() {
                       {task.label}
                     </p>
                     {task.reason && !done && (
-                      <p className="text-xs text-stone-500 mt-0.5">{task.reason}</p>
+                      <p className={cn('text-xs mt-0.5', vivid ? 'font-semibold text-orange-700' : 'text-stone-500')}>
+                        {task.reason}
+                      </p>
                     )}
                   </div>
                   <span className="shrink-0 text-xs font-medium text-stone-400">{task.estMinutes}m</span>
