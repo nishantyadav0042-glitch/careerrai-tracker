@@ -88,6 +88,12 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
     how_i_work: initialProfile.how_i_work ?? '',
   });
 
+  // Buddies who cracked CAT before 2018 (or any year outside the quick-pick
+  // list) get a free-text fallback instead of being blocked entirely.
+  const [showOtherYear, setShowOtherYear] = useState(
+    initialProfile.cat_year != null && !CAT_YEAR_OPTIONS.includes(String(initialProfile.cat_year))
+  );
+
   // Photo upload — stored immediately in the avatars bucket; the URL is saved
   // with the rest of the profile on Complete.
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatar_url);
@@ -332,13 +338,30 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
               {CAT_YEAR_OPTIONS.map((y) => (
                 <button
                   key={y}
-                  onClick={() => setField('cat_year', y)}
-                  className={pillClass(fields.cat_year === y)}
+                  onClick={() => { setShowOtherYear(false); setField('cat_year', y); }}
+                  className={pillClass(!showOtherYear && fields.cat_year === y)}
                 >
                   {y}
                 </button>
               ))}
+              <button
+                onClick={() => { setShowOtherYear(true); if (CAT_YEAR_OPTIONS.includes(fields.cat_year)) setField('cat_year', ''); }}
+                className={pillClass(showOtherYear)}
+              >
+                Before 2018 / Other
+              </button>
             </div>
+            {showOtherYear && (
+              <input
+                type="number"
+                min={1990}
+                max={new Date().getFullYear()}
+                placeholder="e.g. 2015"
+                value={fields.cat_year}
+                onChange={(e) => setField('cat_year', e.target.value)}
+                className={cn(inputClass, 'mt-2')}
+              />
+            )}
           </div>
 
           <div>
