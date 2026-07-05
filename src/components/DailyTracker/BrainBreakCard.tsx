@@ -329,9 +329,14 @@ export function BrainBreakCard({ studentId }: BrainBreakCardProps) {
   const [score, setScore] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 3-play-per-day limit via localStorage
+  // 3-play-per-day limit via localStorage — this component renders during SSR
+  // (no `window`/`localStorage` there), so guard every access; the real gate
+  // only matters once the client has hydrated anyway.
   const todayKey = `bb_plays_${new Date().toISOString().split('T')[0]}`;
-  const playsToday = () => parseInt(localStorage.getItem(todayKey) ?? '0', 10);
+  const playsToday = () => {
+    if (typeof window === 'undefined') return 0;
+    return parseInt(localStorage.getItem(todayKey) ?? '0', 10);
+  };
   const canPlay = playsToday() < 3;
 
   const startGame = (id: GameId) => {

@@ -65,7 +65,17 @@ export async function proxy(request: NextRequest) {
   // Keep the session fresh so Server Components can read auth state. getUser()
   // both validates the JWT and refreshes the token — a separate getSession()
   // call would be a second, redundant round-trip on every request.
-  const { data: { user } } = await supabase.auth.getUser();
+  // A stale/invalid refresh token (e.g. the account was deleted server-side
+  // while this browser still held a session cookie) throws AuthApiError here
+  // instead of resolving — without this catch that's an unhandled 500 for the
+  // visitor. Treat it exactly like "not logged in": the existing redirect-to-
+  // login below already handles that correctly.
+  let user = null;
+  try {
+    ({ data: { user } } = await supabase.auth.getUser());
+  } catch {
+    user = null;
+  }
 
   const isProtected =
     pathname.startsWith('/student') ||
