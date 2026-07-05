@@ -24,7 +24,12 @@ export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [emergencyMode, setEmergencyMode] = useState(false);
-  const [dayClosed, setDayClosed] = useState(false);
+  // Full completion is a real terminal state (checklist replaced by the closure
+  // message). Emergency-minimum is NOT — per spec it must stay "distinct from
+  // full completion, not hidden": acknowledge it, then keep the rest of the
+  // list visible in case the student wants to keep going.
+  const [fullyDone, setFullyDone] = useState(false);
+  const [emergencyAcknowledged, setEmergencyAcknowledged] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,7 +59,11 @@ export function TodaysRoutineCard() {
       if (!res.ok) return;
       const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; emergencyMinimumDone: boolean };
       setCompletedIds(new Set(json.completedTaskIds));
-      if (json.fullyDone || json.emergencyMinimumDone) setDayClosed(true);
+      if (json.fullyDone) setFullyDone(true);
+      else if (json.emergencyMinimumDone) {
+        setEmergencyAcknowledged(true);
+        setEmergencyMode(false); // reveal the rest of the list, don't hide it
+      }
     } finally {
       setBusyTaskId(null);
     }
@@ -79,7 +88,7 @@ export function TodaysRoutineCard() {
 
   return (
     <Card className="p-5">
-      {isCatchUp && !dayClosed && (
+      {isCatchUp && !fullyDone && (
         <div className="mb-4 rounded-xl bg-teal-50 border border-teal-200 px-3.5 py-2.5">
           <p className="text-sm font-bold text-teal-900">Welcome back 👋</p>
           <p className="text-xs text-teal-700 mt-0.5">Ignore the gap — here&apos;s today&apos;s priority.</p>
@@ -95,13 +104,19 @@ export function TodaysRoutineCard() {
         )}
       </div>
 
-      {dayClosed ? (
+      {fullyDone ? (
         <div className="py-6 text-center">
           <p className="text-lg font-bold text-stone-900">Today done. 🎉</p>
           <p className="text-sm text-stone-500 mt-1">Tomorrow&apos;s routine is ready.</p>
         </div>
       ) : (
         <>
+          {emergencyAcknowledged && (
+            <div className="mb-3.5 rounded-xl bg-orange-50 border border-orange-200 px-3.5 py-2.5">
+              <p className="text-sm font-bold text-orange-900">Minimum done for today ✓</p>
+              <p className="text-xs text-orange-700 mt-0.5">Your streak is safe. Keep going below if you have more time.</p>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-sm text-stone-600 mb-4">
             <Clock className="w-4 h-4 text-stone-400" />
             <span>Est. {timeLabel}</span>

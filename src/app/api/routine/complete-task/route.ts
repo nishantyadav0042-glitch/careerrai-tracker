@@ -67,19 +67,37 @@ export async function POST(request: NextRequest) {
   let dayClosed = false;
   if ((fullyDone || emergencyMinimumDone) && completions && completions.length > 0) {
     const completedTasks = tasks.filter((t) => completedIds.has(t.id));
-    const minutesDone = completedTasks.reduce((s, t) => s + t.estMinutes, 0);
-    const sections = [...new Set(completedTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))]
+    const routineMinutes = completedTasks.reduce((s, t) => s + t.estMinutes, 0);
+    const routineSections = [...new Set(completedTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))]
       .filter((s): s is string => (VALID_SECTIONS as readonly string[]).includes(s));
-    const mockTaken = completedTasks.some((t) => /mock/i.test(t.label));
+    const routineMockTaken = completedTasks.some((t) => /mock/i.test(t.label));
+
+    // upsert_log_and_streak OVERWRITES study_duration/topics_covered/mock_taken/
+    // notes — it has no merge semantics. The manual daily log (LoggingModal) and
+    // this routine card both write through it, so if a student already logged
+    // today by hand (e.g. a real mock this morning) before touching the routine
+    // tonight, a blind overwrite here would erase that entry. Merge instead:
+    // never let the routine's write shrink what's already recorded.
+    const { data: existingLog } = await admin
+      .from('daily_reports')
+      .select('study_duration, topics_covered, mock_taken, notes')
+      .eq('student_id', user.id)
+      .eq('report_date', today)
+      .maybeSingle();
+
+    const mergedHours = Math.max(1, Math.round(routineMinutes / 60), existingLog?.study_duration ?? 0);
+    const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...routineSections])];
+    const mergedMockTaken = routineMockTaken || !!existingLog?.mock_taken;
+    const mergedNotes = existingLog?.notes ?? (emergencyMinimumDone && !fullyDone ? 'Emergency-mode minimum day' : null);
 
     const { error: rpcError } = await admin.rpc('upsert_log_and_streak', {
       p_student_id: user.id,
       p_report_date: today,
-      p_study_duration: Math.max(1, Math.round(minutesDone / 60)),
-      p_topics_covered: sections,
+      p_study_duration: mergedHours,
+      p_topics_covered: mergedSections,
       p_mood_emoji: '💪',
-      p_mock_taken: mockTaken,
-      p_notes: emergencyMinimumDone && !fullyDone ? 'Emergency-mode minimum day' : null,
+      p_mock_taken: mergedMockTaken,
+      p_notes: mergedNotes,
       p_emotional_chips: [],
     });
     dayClosed = !rpcError;
