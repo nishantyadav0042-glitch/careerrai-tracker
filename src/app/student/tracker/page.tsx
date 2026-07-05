@@ -11,6 +11,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { getCurrentMission, MISSION_TARGET } from '@/lib/missions';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
+import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import type { StreakData } from '@/types';
@@ -205,6 +206,10 @@ export default async function DailyTrackerPage() {
 
         {/* Emotional anchor line — dost-wala Hinglish, rotates slowly */}
         <AnchorLine />
+
+        {/* Today's Routine — the hero: removes the "what should I study today"
+            decision entirely. Deterministic, no LLM call. */}
+        <TodaysRoutineCard />
 
         {/* Trajectory Wall — dream-anchored, present once college set */}
         <TrajectoryWall
