@@ -4,6 +4,16 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Flame } from 'lucide-react';
 import Link from 'next/link';
 
+interface WindowStats {
+  daysStudied: number;
+  tasksCompleted: number;
+  minutesStudied: number;
+  topicsTouched: number;
+  sectionCounts: { VARC: number; DILR: number; QA: number; General: number };
+  confidenceCounts: { green: number; yellow: number; red: number };
+  mocksLogged: number;
+}
+
 interface BlueprintData {
   narrative: string;
   source: 'ai' | 'fallback';
@@ -16,6 +26,12 @@ interface BlueprintData {
   coverageTally: { not_started: number; started: number; completed: number; strong: number };
   currentStreak: number;
   targetPercentile: number | null;
+  prepMemory: {
+    last30: WindowStats;
+    last7: WindowStats;
+    mockTrend: { count: number; latestPercentile: number | null; previousPercentile: number | null };
+  };
+  weeklyEvolution: string[];
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -67,8 +83,10 @@ export default function BlueprintPage() {
     );
   }
 
-  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile } = data;
+  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution } = data;
   const coverageTotal = coverageTally.not_started + coverageTally.started + coverageTally.completed + coverageTally.strong;
+  const { last30, mockTrend } = prepMemory;
+  const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -139,6 +157,63 @@ export default function BlueprintPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Preparation Memory (Engine v2, Part 5) — what's actually happened,
+            not just what's planned. Only renders once there's real history;
+            a brand-new student sees no card rather than a padded-out zero
+            state, matching the "never fabricate a fact" rule everywhere else
+            on this page. */}
+        {hasMemory && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Preparation memory · last 30 days</h2>
+            <div className="grid grid-cols-3 gap-2 text-center mb-4">
+              <div>
+                <p className="text-lg font-bold text-stone-900">{last30.daysStudied}</p>
+                <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Days studied</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-stone-900">{Math.round(last30.minutesStudied / 6) / 10}h</p>
+                <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Time studied</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-stone-900">{last30.topicsTouched}</p>
+                <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Topics touched</p>
+              </div>
+            </div>
+            {(last30.confidenceCounts.green + last30.confidenceCounts.yellow + last30.confidenceCounts.red) > 0 && (
+              <div className="flex items-center justify-center gap-4 text-sm border-t border-stone-100 pt-3 mb-3">
+                <span>🟢 {last30.confidenceCounts.green}</span>
+                <span>🟡 {last30.confidenceCounts.yellow}</span>
+                <span>🔴 {last30.confidenceCounts.red}</span>
+              </div>
+            )}
+            {mockTrend.latestPercentile != null && (
+              <p className="text-xs text-stone-600 border-t border-stone-100 pt-3">
+                Last mock: <span className="font-semibold text-stone-800">{mockTrend.latestPercentile}%ile</span>
+                {mockTrend.previousPercentile != null && (
+                  <> (was {mockTrend.previousPercentile}%ile — {mockTrend.latestPercentile > mockTrend.previousPercentile ? 'up' : mockTrend.latestPercentile < mockTrend.previousPercentile ? 'down' : 'unchanged'})</>
+                )}
+                {' · '}{mockTrend.count} logged this month
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Weekly evolution (Engine v2, Part 6) — a plain-arithmetic diff
+            against last week, not AI narration. Omitted entirely once there
+            are fewer than two weeks of history to compare. */}
+        {weeklyEvolution.length > 0 && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">This week vs last week</h2>
+            <ul className="space-y-1.5">
+              {weeklyEvolution.map((line) => (
+                <li key={line} className="text-sm text-stone-700 flex gap-1.5">
+                  <span aria-hidden className="text-orange-500">•</span><span>{line}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
