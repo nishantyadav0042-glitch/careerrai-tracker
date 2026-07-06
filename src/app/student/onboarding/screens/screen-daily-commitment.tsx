@@ -11,7 +11,7 @@ interface ScreenDailyCommitmentProps {
   isLoading: boolean;
 }
 
-const COMMITMENT_OPTIONS = [
+const WEEKDAY_OPTIONS = [
   { label: '1 hour', value: 1, description: 'Starting out' },
   { label: '1.5 hours', value: 1.5, description: 'Moderate' },
   { label: '2 hours', value: 2, description: 'Recommended', isDefault: true },
@@ -20,18 +20,27 @@ const COMMITMENT_OPTIONS = [
   { label: '5+ hours', value: 5, description: 'Full-time' }
 ];
 
+const WEEKEND_OPTIONS = [
+  { label: '2 hours', value: 2 },
+  { label: '3 hours', value: 3 },
+  { label: '4 hours', value: 4, isDefault: true },
+  { label: '6 hours', value: 6 },
+  { label: '8+ hours', value: 8 },
+];
+
 export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoading }: ScreenDailyCommitmentProps) {
-  const [selected, setSelected] = useState<number>(2); // Default 2 hours
+  const [weekday, setWeekday] = useState<number>(2);
+  const [weekend, setWeekend] = useState<number>(4);
 
   return (
     <div className="space-y-6">
       {/* Subtitle */}
       <div>
-        <p className="text-sm text-orange-600 font-semibold uppercase tracking-wider">One Honest Question</p>
-        <p className="text-xs text-stone-500 mt-1">This becomes your daily target</p>
+        <p className="text-sm text-orange-600 font-semibold uppercase tracking-wider">Two Honest Questions</p>
+        <p className="text-xs text-stone-500 mt-1">This becomes your weekly workload</p>
       </div>
 
-      {/* Question */}
+      {/* Weekday question */}
       <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl p-6 border border-orange-100">
         <h3 className="text-lg font-bold text-stone-900 text-center mb-2">
           How many hours can you realistically study on a typical weekday?
@@ -41,30 +50,57 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
         </p>
       </div>
 
-      {/* Hour Picker */}
       <div className="grid grid-cols-2 gap-3">
-        {COMMITMENT_OPTIONS.map((option) => (
+        {WEEKDAY_OPTIONS.map((option) => (
           <button
             key={option.value}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              setSelected(option.value);
+              setWeekday(option.value);
             }}
             type="button"
             className={cn(
               'p-4 rounded-xl transition-all border-2 text-center',
-              selected === option.value
+              weekday === option.value
                 ? 'bg-orange-600 border-orange-600 text-white shadow-lg'
                 : 'bg-white border-stone-200 text-stone-900 hover:border-stone-300'
             )}
           >
             <div className="text-lg font-bold">{option.label}</div>
-            <div className={cn('text-xs mt-1', selected === option.value ? 'text-orange-100' : 'text-stone-500')}>
+            <div className={cn('text-xs mt-1', weekday === option.value ? 'text-orange-100' : 'text-stone-500')}>
               {option.description}
             </div>
           </button>
         ))}
+      </div>
+
+      {/* Weekend question */}
+      <div>
+        <h3 className="text-sm font-bold text-stone-900 text-center mb-3">
+          And on a weekend day?
+        </h3>
+        <div className="grid grid-cols-3 gap-2">
+          {WEEKEND_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setWeekend(option.value);
+              }}
+              type="button"
+              className={cn(
+                'py-3 rounded-xl transition-all border-2 text-center text-sm font-bold',
+                weekend === option.value
+                  ? 'bg-orange-600 border-orange-600 text-white shadow-lg'
+                  : 'bg-white border-stone-200 text-stone-900 hover:border-stone-300'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Info Message */}
@@ -77,11 +113,6 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
           </p>
         </div>
       </div>
-
-      {/* Context */}
-      <p className="text-xs text-stone-500 text-center italic">
-        Most successful students study 2-3 hours daily during prep season. Quality over quantity.
-      </p>
 
       {/* Submit Button */}
       <div className="flex gap-3">
@@ -98,7 +129,7 @@ export default function ScreenDailyCommitment({ onNext, onBack, canGoBack, isLoa
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onNext({ studyTargetHours: selected });
+            onNext({ studyTargetHours: weekday, weekendHours: weekend });
           }}
           disabled={isLoading}
           type="button"

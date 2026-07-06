@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import ScreenBlueprintIntro from './screens/screen-blueprint-intro';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenAboutYou from './screens/screen-about-you';
@@ -12,41 +13,40 @@ import ScreenBiggestBlocker from './screens/screen-biggest-blocker';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenBaselineTest from './screens/screen-baseline-test';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
+import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
-import { cn } from '@/lib/utils';
+import ScreenBlueprintContract from './screens/screen-blueprint-contract';
+import { BlueprintPanel } from './components/blueprint-panel';
+import { BLUEPRINT_SECTIONS, computeBlueprintPreview, type SectionId } from '@/lib/blueprint-builder';
 
 interface OnboardingModalProps {
   onComplete: () => void;
 }
 
-// Onboarding IS Blueprint generation now — every screen here either feeds
-// the planning engine directly or explains a real signal it's about to
-// use. What used to be split into a 7-screen wizard here plus a SEPARATE
-// "quick setup" gate discovered later on the homepage (weakest section,
-// topic, stage, blocker) is now one flow, ending in a real reveal of the
-// Blueprint the engine already built — not a "form submitted" screen.
+// This is the Blueprint Builder, not "onboarding" — the distinction isn't
+// cosmetic. Every screen either feeds the planning engine directly or shows
+// a real signal it's about to use; the 4 labeled sections below map 1:1 to
+// routine-engine/topic-selector/mission-engine's actual inputs (see
+// blueprint-builder.ts for the field-by-field trace). What used to be a
+// flat "Screen 7/13" wizard is now framed as building something the student
+// watches assemble, ending in a Blueprint reveal and a personal contract —
+// not a form-submitted acknowledgment.
+interface Screen {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component: React.ComponentType<any>;
+  sectionId: SectionId | null;
+  extraProps?: Record<string, unknown>;
+}
+
 export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const supabase = createClient();
   const [currentScreen, setCurrentScreen] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-
-  const screens = [
-    { title: 'Your Dream Colleges', component: ScreenDreamColleges }, // 0
-    { title: 'Exam Context', component: ScreenExamContext },           // 1
-    { title: 'About You', component: ScreenAboutYou },                 // 2
-    { title: 'Daily Commitment', component: ScreenDailyCommitment },   // 3
-    { title: 'Your Toughest Section', component: ScreenWeakFocus },    // 4
-    { title: 'Where You Are', component: ScreenCurrentStage },         // 5
-    { title: 'Your Biggest Blocker', component: ScreenBiggestBlocker },// 6
-    { title: 'Topic Coverage', component: ScreenTopicCoverage },       // 7
-    { title: 'Your Baseline', component: ScreenBaselineTest },         // 8
-    { title: 'Meet Your Buddy', component: ScreenMeetBuddy },          // 9
-    { title: 'Your Blueprint', component: ScreenBlueprintReveal },     // 10
-  ];
-
-  const CurrentScreen = screens[currentScreen].component;
+  const [studyTargetHours, setStudyTargetHours] = useState<number>(2);
+  const [weekendHours, setWeekendHours] = useState<number>(4);
+  const [onboardingData, setOnboardingData] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     async function getUser() {
@@ -56,22 +56,65 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     getUser();
   }, [supabase]);
 
-  const [studyTargetHours, setStudyTargetHours] = useState<number>(2);
-  const [onboardingData, setOnboardingData] = useState<Record<string, unknown>>({});
+  const preview = computeBlueprintPreview({
+    attempt_year: onboardingData.attempt_year as number | undefined,
+    is_repeater: onboardingData.is_repeater as boolean | undefined,
+    is_working_professional: onboardingData.is_working_professional as boolean | undefined,
+    course_year: onboardingData.course_year as number | undefined,
+    weakest_section: onboardingData.weakest_section as string | undefined,
+    weak_topic: onboardingData.weak_topic as string | undefined,
+    studyTargetHours: onboardingData.studyTargetHours as number | undefined,
+    weekendHours: onboardingData.weekendHours as number | undefined,
+  });
+
+  const screens: Screen[] = [
+    { component: ScreenBlueprintIntro, sectionId: null },        // 0
+    { component: ScreenDreamColleges, sectionId: 'position' },   // 1
+    { component: ScreenExamContext, sectionId: 'position' },     // 2
+    { component: ScreenAboutYou, sectionId: 'position' },        // 3
+    { component: ScreenWeakFocus, sectionId: 'preparation' },    // 4
+    { component: ScreenCurrentStage, sectionId: 'preparation' }, // 5
+    { component: ScreenBiggestBlocker, sectionId: 'preparation' }, // 6
+    { component: ScreenBaselineTest, sectionId: 'preparation' }, // 7
+    { component: ScreenDailyCommitment, sectionId: 'time' },     // 8
+    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 9
+    { component: ScreenMeetBuddy, sectionId: null },             // 10
+    { component: ScreenBuildAnimation, sectionId: null },        // 11
+    { component: ScreenBlueprintReveal, sectionId: null },       // 12
+    {
+      component: ScreenBlueprintContract,
+      sectionId: null,
+      extraProps: { archetypeLabel: preview.archetypeBadge, weeklyLoadHours: preview.weeklyLoadHours },
+    }, // 13
+  ];
+
+  const currentScreenMeta = screens[currentScreen];
+  const CurrentScreen = currentScreenMeta.component;
+  const activeSection = currentScreenMeta.sectionId
+    ? BLUEPRINT_SECTIONS.find((s) => s.id === currentScreenMeta.sectionId)
+    : null;
+  const isFirstOfSection =
+    activeSection != null &&
+    (currentScreen === 0 || screens[currentScreen - 1].sectionId !== currentScreenMeta.sectionId);
+  const coverageSectionOrder = BLUEPRINT_SECTIONS.find((s) => s.id === 'coverage')!.order;
+  // Section index for the panel's progress dots: while in a labeled section,
+  // its own order; once past Coverage (buddy/build/reveal/contract), show
+  // all sections as complete — there's nothing left for the panel to track.
+  const panelSectionIndex = activeSection ? activeSection.order : coverageSectionOrder;
 
   const handleNext = async (data?: Record<string, unknown>) => {
     if (data) setOnboardingData((prev) => ({ ...prev, ...data }));
     setError(null);
 
     try {
-      // Screen 0 = Dream Colleges
-      if (currentScreen === 0 && data?.dream_colleges) {
+      // Screen 1 = Dream Colleges
+      if (currentScreen === 1 && data?.dream_colleges) {
         setIsLoading(true);
         const { error: e } = await supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 1 = Exam Context
-      if (currentScreen === 1 && data) {
+      // Screen 2 = Exam Context
+      if (currentScreen === 2 && data) {
         setIsLoading(true);
         const { error: e } = await supabase.from('profiles').update({
           is_repeater: data.is_repeater,
@@ -82,8 +125,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         }).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 2 = About You
-      if (currentScreen === 2 && data) {
+      // Screen 3 = About You
+      if (currentScreen === 3 && data) {
         setIsLoading(true);
         const { error: e } = await supabase.from('profiles').update({
           full_name: data.full_name || null,
@@ -96,22 +139,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         }).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 3 = Daily Commitment
-      if (currentScreen === 3 && data?.studyTargetHours) {
-        const hours = data.studyTargetHours as number;
-        setStudyTargetHours(hours);
-        setIsLoading(true);
-        const { error: e } = await supabase.from('profiles').update({
-          study_target_hours: hours,
-          hours_available: hours,
-        }).eq('id', userId ?? '');
-        if (e) throw e;
-      }
       // Screen 6 = Biggest Blocker — the last of the 3 taps (weak focus, stage,
       // blocker); all 4 fields are now known, so persist them in ONE call
       // through the same tested endpoint the old post-onboarding "quick
-      // setup" gate used. Awaited (not fire-and-forget) because the very
-      // next screen (Topic Coverage) seeds itself from current_stage.
+      // setup" gate used. Awaited (not fire-and-forget) because Topic
+      // Coverage (screen 9) seeds itself from current_stage.
       if (currentScreen === 6 && data?.biggest_blocker) {
         const merged = { ...onboardingData, ...data };
         setIsLoading(true);
@@ -130,12 +162,26 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           throw new Error(json?.error ?? 'Could not save your focus and blocker.');
         }
       }
+      // Screen 8 = Daily Commitment (weekday + weekend hours)
+      if (currentScreen === 8 && data?.studyTargetHours) {
+        const hours = data.studyTargetHours as number;
+        const weekend = (data.weekendHours as number | undefined) ?? weekendHours;
+        setStudyTargetHours(hours);
+        setWeekendHours(weekend);
+        setIsLoading(true);
+        const { error: e } = await supabase.from('profiles').update({
+          study_target_hours: hours,
+          hours_available: hours,
+          weekend_hours_available: weekend,
+        }).eq('id', userId ?? '');
+        if (e) throw e;
+      }
 
       if (currentScreen < screens.length - 1) {
         setCurrentScreen(currentScreen + 1);
         setIsLoading(false);
       } else {
-        // Last screen (Blueprint Reveal) — persist everything the user
+        // Last screen (Blueprint Contract) — persist everything the user
         // entered in one final awaited write. The per-screen saves above are
         // already awaited, but this is still the source of truth for the
         // profile fields, so a partial failure earlier can never leave
@@ -146,6 +192,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         const update: Record<string, unknown> = {
           onboarding_completed: true,
           study_target_hours: studyTargetHours,
+          weekend_hours_available: weekendHours,
         };
         if (typeof merged.full_name === 'string' && merged.full_name.trim()) update.full_name = merged.full_name.trim();
         if (merged.college) update.college = merged.college;
@@ -165,7 +212,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         onComplete();
       }
     } catch (err) {
-      console.error('Onboarding error:', err);
+      console.error('Blueprint Builder error:', err);
       const message = (err as { message?: string })?.message;
       setError(message ?? 'Something went wrong. Please try again.');
       setIsLoading(false);
@@ -180,23 +227,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="bg-white border-b border-stone-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-              {screens[currentScreen].title}
-            </h2>
-          </div>
-
-          {/* Progress */}
-          <div className="flex gap-1.5">
-            {screens.map((_, i) => (
-              <div
-                key={i}
-                className={cn('h-1 flex-1 rounded-full transition-all', i <= currentScreen ? 'bg-orange-600' : 'bg-stone-200')}
-              />
-            ))}
-          </div>
-          <p className="text-xs text-stone-500 mt-3">Screen {currentScreen + 1}/{screens.length}</p>
+        <div className="bg-white border-b border-stone-200 p-6 pb-4">
+          <h2 className="text-lg font-bold text-stone-900 mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+            Build Your CAT Blueprint
+          </h2>
+          {activeSection && isFirstOfSection && (
+            <p className="text-sm text-orange-600 font-semibold">{activeSection.eyebrow}</p>
+          )}
         </div>
 
         {/* Content */}
@@ -207,11 +244,14 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             </div>
           )}
 
+          {currentScreenMeta.sectionId && <BlueprintPanel preview={preview} sectionIndex={panelSectionIndex} coverageSectionIndex={coverageSectionOrder} totalSections={BLUEPRINT_SECTIONS.length} />}
+
           <CurrentScreen
             onNext={handleNext}
             onBack={handleBack}
             canGoBack={currentScreen > 0}
             isLoading={isLoading}
+            {...(currentScreenMeta.extraProps ?? {})}
           />
         </div>
       </div>

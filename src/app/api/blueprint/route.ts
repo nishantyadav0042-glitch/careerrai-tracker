@@ -40,7 +40,7 @@ export async function GET() {
   const [{ data: profile }] = await Promise.all([
     admin.from('profiles')
       .select(`
-        full_name, target_percentile, attempt_year, is_working_professional, is_repeater,
+        full_name, target_percentile, attempt_year, exam_target, is_working_professional, is_repeater,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
         current_stage, biggest_blocker, created_at
       `)
@@ -111,6 +111,8 @@ export async function GET() {
   return NextResponse.json({
     narrative,
     source,
+    examTarget: profile.exam_target ?? null,
+    attemptYear: profile.attempt_year ?? null,
     phase,
     weeksRemaining,
     weakestSection: weak,
