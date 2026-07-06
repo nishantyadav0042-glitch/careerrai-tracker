@@ -90,6 +90,11 @@ export async function GET() {
     return NextResponse.json({
       needsSetup: true,
       weakestSection: weakest,
+      // Fixes a real bug: without this, the setup component had no way to
+      // know a topic was already saved, so it re-asked the topic question
+      // every time setup re-triggered for an unrelated missing field (e.g.
+      // biggest_blocker) — even for a student who'd already answered it.
+      weakTopic,
       currentStage,
       biggestBlocker,
       needsWeekendHours: profile.weekend_hours_available == null,

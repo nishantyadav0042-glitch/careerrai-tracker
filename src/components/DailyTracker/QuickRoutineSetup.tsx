@@ -39,20 +39,26 @@ const BLOCKER_OPTIONS: { value: Blocker; label: string }[] = [
 // before a step shipped only sees what's still missing, not the whole flow.
 export function QuickRoutineSetup({
   initialWeakest,
+  initialWeakTopic,
   initialStage,
   initialBlocker,
   needsWeekendHours,
   onDone,
 }: {
   initialWeakest: Section | null;
+  initialWeakTopic: string | null;
   initialStage: Stage | null;
   initialBlocker: Blocker | null;
   needsWeekendHours: boolean;
   onDone: () => void;
 }) {
   const [weakest, setWeakest] = useState<Section | null>(initialWeakest);
-  const [topic, setTopic] = useState<string | null>(null);
-  const [topicAnswered, setTopicAnswered] = useState(false);
+  const [topic, setTopic] = useState<string | null>(initialWeakTopic);
+  // Bug fix: without seeding this from the server's already-saved topic, this
+  // always started false, so the topic question got re-asked every time
+  // setup re-triggered for an unrelated missing field (stage, blocker) even
+  // for a student who'd already answered it.
+  const [topicAnswered, setTopicAnswered] = useState(!!initialWeakTopic);
   const [stage, setStage] = useState<Stage | null>(initialStage);
   const [blocker, setBlocker] = useState<Blocker | null>(initialBlocker);
   const [saving, setSaving] = useState(false);

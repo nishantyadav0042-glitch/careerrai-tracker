@@ -49,6 +49,7 @@ interface RoutineResponse {
 interface NeedsSetupResponse {
   needsSetup: true;
   weakestSection: 'VARC' | 'DILR' | 'QA' | null;
+  weakTopic: string | null;
   currentStage: 'not_started' | 'concepts' | 'questions' | 'sectionals' | 'mocks' | null;
   biggestBlocker: 'inconsistency' | 'dont_know_what' | 'mock_anxiety' | 'time_wasting' | null;
   needsWeekendHours: boolean;
@@ -124,6 +125,7 @@ export function TodaysRoutineCard() {
         <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Routine</p>
         <QuickRoutineSetup
           initialWeakest={needsSetup.weakestSection}
+          initialWeakTopic={needsSetup.weakTopic}
           initialStage={needsSetup.currentStage}
           initialBlocker={needsSetup.biggestBlocker}
           needsWeekendHours={needsSetup.needsWeekendHours}
