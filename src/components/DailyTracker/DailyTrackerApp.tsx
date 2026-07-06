@@ -125,10 +125,10 @@ interface DailyTrackerAppProps {
   initialFeedback?: { feedback_text: string; feedback_date: string; feedback_type: string } | null;
   recovery?: { missedDays: number; previousStreak: number } | null;
   initialLogging?: InitialLogging | null;
-  missionName?: string;
-  missionFocus?: string;
-  daysInMission?: number;
-  missionTarget?: number;
+  themeName?: string;
+  themeFocus?: string;
+  daysInTheme?: number;
+  themeTarget?: number;
   hasLoggedYesterday?: boolean;
   yesterdayStr?: string;   // ISO date for the API
   yesterdayLabel?: string; // "Jun 16" for the UI
@@ -144,10 +144,10 @@ export function DailyTrackerApp({
   initialFeedback = null,
   recovery = null,
   initialLogging = null,
-  missionName = '',
-  missionFocus = '',
-  daysInMission = 0,
-  missionTarget = 30,
+  themeName = '',
+  themeFocus = '',
+  daysInTheme = 0,
+  themeTarget = 30,
   hasLoggedYesterday = true,
   yesterdayStr = '',
   yesterdayLabel = '',
@@ -315,12 +315,12 @@ export function DailyTrackerApp({
         </div>
       )}
 
-      {/* 1. Hero — Monthly mission ring + streak + log */}
+      {/* 1. Hero — Monthly theme ring + streak + log */}
       <HeroCard
-        missionName={missionName}
-        missionFocus={missionFocus}
-        daysInMission={daysInMission}
-        missionTarget={missionTarget}
+        themeName={themeName}
+        themeFocus={themeFocus}
+        daysInTheme={daysInTheme}
+        themeTarget={themeTarget}
         currentStreak={currentStreak}
         onLogClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
         isLoading={isSubmitting}

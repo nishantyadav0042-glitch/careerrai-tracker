@@ -1,10 +1,17 @@
-export interface Mission {
+// Monthly Theme — a calendar-month label + 30-day progress ring on the
+// homepage HeroCard. Deliberately NOT "Mission": that name belongs to
+// mission-engine.ts, the deterministic per-student engine that picks which
+// task Today's Routine leads with. This is a much simpler, unrelated
+// concept — a fixed monthly theme shown to every student regardless of
+// their own phase or archetype, purely to give the streak ring a label.
+
+export interface MonthlyTheme {
   name: string;
   focus: string;
 }
 
-// Edit here to rename missions — no component changes needed.
-const MISSION_MAP: Record<number, Mission> = {
+// Edit here to rename monthly themes — no component changes needed.
+const MONTHLY_THEME_MAP: Record<number, MonthlyTheme> = {
   0:  { name: 'Foundation January',   focus: 'Lock the daily habit'             },
   1:  { name: 'Momentum February',    focus: 'Build consistency streaks'         },
   2:  { name: 'Accuracy March',       focus: 'Cut silly mistakes'                },
@@ -19,8 +26,8 @@ const MISSION_MAP: Record<number, Mission> = {
   11: { name: 'Review December',      focus: 'Analyse, reflect, plan'            },
 };
 
-export const MISSION_TARGET = 30;
+export const MONTHLY_THEME_TARGET = 30;
 
-export function getCurrentMission(month: number = new Date().getMonth()): Mission {
-  return MISSION_MAP[month] ?? MISSION_MAP[0];
+export function getCurrentMonthlyTheme(month: number = new Date().getMonth()): MonthlyTheme {
+  return MONTHLY_THEME_MAP[month] ?? MONTHLY_THEME_MAP[0];
 }

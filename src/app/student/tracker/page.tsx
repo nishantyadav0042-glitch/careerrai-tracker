@@ -8,7 +8,7 @@ import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { AnchorLine } from '@/components/DailyTracker/AnchorLine';
 import { getLogDateString } from '@/lib/streak-utils';
-import { getCurrentMission, MISSION_TARGET } from '@/lib/missions';
+import { getCurrentMonthlyTheme, MONTHLY_THEME_TARGET } from '@/lib/monthly-theme';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
@@ -162,13 +162,13 @@ export default async function DailyTrackerPage() {
     hasLoggedToday: (logs?.[0]?.report_date ?? null) === getLogDateString(),
   };
 
-  // Monthly mission — computed from already-fetched logs (no extra query).
+  // Monthly theme — computed from already-fetched logs (no extra query).
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const daysInMission = logs?.filter(
+  const daysInTheme = logs?.filter(
     (l) => (l.report_date as string).startsWith(currentMonthStr) && (l.study_duration as number) > 0
   ).length ?? 0;
-  const currentMission = getCurrentMission(now.getMonth());
+  const currentTheme = getCurrentMonthlyTheme(now.getMonth());
 
   // Yesterday backlog — computed from already-fetched logs.
   const todayStr = getLogDateString();
@@ -300,10 +300,10 @@ export default async function DailyTrackerPage() {
           initialFeedback={initialFeedback}
           recovery={recovery}
           initialLogging={initialLogging}
-          missionName={currentMission.name}
-          missionFocus={currentMission.focus}
-          daysInMission={daysInMission}
-          missionTarget={MISSION_TARGET}
+          themeName={currentTheme.name}
+          themeFocus={currentTheme.focus}
+          daysInTheme={daysInTheme}
+          themeTarget={MONTHLY_THEME_TARGET}
           hasLoggedYesterday={hasLoggedYesterday}
           yesterdayStr={yesterdayStr}
           yesterdayLabel={yesterdayLabel}

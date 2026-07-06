@@ -8,10 +8,10 @@ const RING_R = 42;
 const CIRCUMFERENCE = 2 * Math.PI * RING_R;
 
 interface HeroCardProps {
-  missionName: string;
-  missionFocus: string;
-  daysInMission: number;
-  missionTarget: number;
+  themeName: string;
+  themeFocus: string;
+  daysInTheme: number;
+  themeTarget: number;
   currentStreak: number;
   onLogClick: () => void;
   isLoading?: boolean;
@@ -22,10 +22,10 @@ interface HeroCardProps {
 }
 
 export function HeroCard({
-  missionName,
-  missionFocus,
-  daysInMission,
-  missionTarget,
+  themeName,
+  themeFocus,
+  daysInTheme,
+  themeTarget,
   currentStreak,
   onLogClick,
   isLoading = false,
@@ -38,18 +38,18 @@ export function HeroCard({
 
   useEffect(() => {
     // Defer to next frame so CSS transition fires
-    const id = requestAnimationFrame(() => setAnimatedDays(daysInMission));
+    const id = requestAnimationFrame(() => setAnimatedDays(daysInTheme));
     return () => cancelAnimationFrame(id);
-  }, [daysInMission]);
+  }, [daysInTheme]);
 
-  const dashoffset = CIRCUMFERENCE * (1 - Math.min(animatedDays, missionTarget) / missionTarget);
+  const dashoffset = CIRCUMFERENCE * (1 - Math.min(animatedDays, themeTarget) / themeTarget);
 
   return (
     <div className="w-full rounded-2xl bg-gradient-to-br from-orange-600 to-orange-700 text-white p-5 shadow-lg space-y-4">
-      {/* Mission header */}
+      {/* Monthly theme header */}
       <div>
-        <p className="text-xs uppercase tracking-widest opacity-80 font-semibold">{missionName}</p>
-        <p className="text-[11px] opacity-55 mt-0.5">{missionFocus}</p>
+        <p className="text-xs uppercase tracking-widest opacity-80 font-semibold">{themeName}</p>
+        <p className="text-[11px] opacity-55 mt-0.5">{themeFocus}</p>
       </div>
 
       {/* Ring + streak side-by-side */}
@@ -70,8 +70,8 @@ export function HeroCard({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold leading-none">{daysInMission}</span>
-            <span className="text-[9px] uppercase tracking-wider opacity-65 mt-0.5">/ {missionTarget}</span>
+            <span className="text-2xl font-bold leading-none">{daysInTheme}</span>
+            <span className="text-[9px] uppercase tracking-wider opacity-65 mt-0.5">/ {themeTarget}</span>
           </div>
         </div>
 
@@ -85,7 +85,7 @@ export function HeroCard({
           <p className="text-[11px] opacity-55 leading-snug">
             {currentStreak === 0
               ? 'Log today to start your run'
-              : `Days in a row · ${daysInMission}/${missionTarget} this month`}
+              : `Days in a row · ${daysInTheme}/${themeTarget} this month`}
           </p>
         </div>
       </div>
