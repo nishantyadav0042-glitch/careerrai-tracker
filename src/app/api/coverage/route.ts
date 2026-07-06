@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, TOPIC_METADATA } from '@/lib/topics-constants';
 
 const VALID_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
 const VALID_STATUSES = ['not_started', 'started', 'completed', 'strong'] as const;
@@ -23,6 +23,13 @@ const STAGE_DEFAULT_STATUS: Record<string, (typeof VALID_STATUSES)[number]> = {
   mocks: 'completed',
 };
 
+// Prerequisite-informed order, not raw array/DB order — a topic like
+// Geometry reading before Arithmetic in the grid would silently contradict
+// the sequencing this same metadata is meant to encode.
+function bySequence<T extends { topic: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (TOPIC_METADATA[a.topic]?.sequenceRank ?? 99) - (TOPIC_METADATA[b.topic]?.sequenceRank ?? 99));
+}
+
 // GET /api/coverage — the Coverage Matrix. Seeds all 14 topics from the
 // student's current_stage on first view (persisted immediately so later
 // edits are updates, not blind inserts); returns the stored grid on every
@@ -40,7 +47,7 @@ export async function GET() {
     .eq('student_id', user.id);
 
   if (existing && existing.length > 0) {
-    return NextResponse.json({ matrix: existing });
+    return NextResponse.json({ matrix: bySequence(existing) });
   }
 
   const { data: profile } = await admin
@@ -65,7 +72,7 @@ export async function GET() {
     .select('section, topic, status, updated_at');
   if (error || !inserted) return NextResponse.json({ error: 'Could not seed coverage matrix' }, { status: 500 });
 
-  return NextResponse.json({ matrix: inserted });
+  return NextResponse.json({ matrix: bySequence(inserted) });
 }
 
 // POST /api/coverage — update one topic's status. One tap cycles a topic to

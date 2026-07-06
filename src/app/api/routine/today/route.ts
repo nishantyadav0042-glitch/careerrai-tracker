@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
@@ -146,6 +147,10 @@ export async function GET() {
   // outrank the default weakest-section task (e.g. a mock sitting unanalyzed
   // for 2 days) without needing a new event-sourcing pipeline underneath it.
   const weak = routineProfile.weakestSection ?? 'DILR';
+  // Topic-specific decay rate (e.g. Reading Comprehension needs revisiting
+  // every 4 days, Vocabulary every 10) instead of one flat threshold for
+  // every topic — see TOPIC_METADATA in topics-constants.ts.
+  const weakRevisionFrequency = (weakTopic && TOPIC_METADATA[weakTopic]?.revisionFrequencyDays) || undefined;
   const { daysSincePendingMock, pendingMockName } = await buildMissionInputs(admin, user.id, today);
   const mission = pickMission([
     {
@@ -156,7 +161,7 @@ export async function GET() {
     {
       id: 'weak-revision',
       label: `Revise ${weak}`,
-      signals: [revisionOverdueSignal(weak, history.daysSinceLastPracticed[weak]), blockerBiasSignal(biggestBlocker, 'weak-revision')],
+      signals: [revisionOverdueSignal(weak, history.daysSinceLastPracticed[weak], weakRevisionFrequency), blockerBiasSignal(biggestBlocker, 'weak-revision')],
     },
     {
       id: 'routine-baseline',

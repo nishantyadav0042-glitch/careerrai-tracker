@@ -59,7 +59,12 @@ export function mockPendingAnalysisSignal(daysSincePendingMock: number | null): 
 // The weakest section's revision — this is the existing default the routine
 // engine already leads with. Always eligible (mirrors current behavior); the
 // mock-analysis signal above is what can now outrank it when it's overdue.
-export function revisionOverdueSignal(section: string, daysSinceLastPracticed: number | null): MissionSignal {
+// revisionFrequencyDays defaults to 3 (the prior flat constant) for callers
+// that don't have topic metadata to hand; today/route.ts passes the actual
+// weak topic's TOPIC_METADATA.revisionFrequencyDays so a topic that decays
+// fast (e.g. Reading Comprehension, 4 days) is flagged overdue sooner than
+// one that doesn't (e.g. Vocabulary, 10 days) — not one threshold for all.
+export function revisionOverdueSignal(section: string, daysSinceLastPracticed: number | null, revisionFrequencyDays = 3): MissionSignal {
   const base = 25;
   if (daysSinceLastPracticed == null) {
     return { active: true, points: base, reason: `${section} hasn't been practiced yet` };
@@ -67,7 +72,7 @@ export function revisionOverdueSignal(section: string, daysSinceLastPracticed: n
   if (daysSinceLastPracticed === 0) {
     return { active: true, points: base, reason: `${section} — keep today's momentum going` };
   }
-  const overdueBonus = Math.min(Math.max(daysSinceLastPracticed - 3, 0), 4) * 5;
+  const overdueBonus = Math.min(Math.max(daysSinceLastPracticed - revisionFrequencyDays, 0), 4) * 5;
   return {
     active: true,
     points: base + overdueBonus,
