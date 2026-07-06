@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Check, Clock, Zap, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -179,6 +180,9 @@ export function TodaysRoutineCard() {
             </div>
           </>
         )}
+        <Link href="/student/blueprint" className="mt-3 inline-block text-xs font-semibold text-orange-600 hover:text-orange-700">
+          View your full Study Blueprint →
+        </Link>
       </div>
 
       {isCatchUp && !fullyDone && (
