@@ -10,14 +10,12 @@ interface Props {
     exam_target: string;
     attempt_year: number;
     target_percentile: number;
-    hours_available: number;
   }) => void;
   onBack: () => void;
   canGoBack: boolean;
   isLoading: boolean;
 }
 
-const HOUR_OPTIONS = [1, 2, 3, 4, 5, 6];
 const CATEGORY_OPTIONS = ['General', 'OBC', 'SC', 'ST', 'EWS'];
 const EXAM_OPTIONS = ['CAT', 'XAT', 'NMAT', 'Other'];
 const YEAR_OPTIONS = [2025, 2026, 2027];
@@ -28,7 +26,6 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
   const [examTarget, setExamTarget] = useState<string | null>(null);
   const [attemptYear, setAttemptYear] = useState<number | null>(null);
   const [targetPercentile, setTargetPercentile] = useState<string>('');
-  const [hoursAvailable, setHoursAvailable] = useState<number | null>(null);
 
   const parsedPercentile = parseFloat(targetPercentile);
   const percentileValid =
@@ -42,8 +39,7 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
     category !== null &&
     examTarget !== null &&
     attemptYear !== null &&
-    percentileValid &&
-    hoursAvailable !== null;
+    percentileValid;
 
   const handleNext = () => {
     if (!isValid) return;
@@ -53,7 +49,6 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
       exam_target: examTarget!,
       attempt_year: attemptYear!,
       target_percentile: parsedPercentile,
-      hours_available: hoursAvailable!,
     });
   };
 
@@ -177,28 +172,6 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
         {targetPercentile.trim() !== '' && !percentileValid && (
           <p className="text-xs text-red-600 mt-1">Enter a percentile between 50 and 99.99</p>
         )}
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">
-          Realistic study hours per day
-        </label>
-        <div className="grid grid-cols-6 gap-1.5">
-          {HOUR_OPTIONS.map((h) => (
-            <button
-              key={h}
-              onClick={() => setHoursAvailable(h)}
-              className={cn(
-                'py-3 rounded-xl font-bold text-sm transition-all active:scale-95 border-2',
-                hoursAvailable === h
-                  ? 'border-orange-500 bg-orange-50 text-orange-700'
-                  : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'
-              )}
-            >
-              {h}h
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex gap-3 pt-2">
