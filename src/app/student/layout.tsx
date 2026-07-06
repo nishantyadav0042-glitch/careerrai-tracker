@@ -41,12 +41,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (profile && profile.role !== 'student') redirect('/login');
 
   const isDemo = !!profile?.is_demo;
-  // First-login tour: mandatory, one-time, for free non-demo students who haven't
-  // seen it. Grandfathered/existing users are premium, so they never get it.
-  const showTour = !isDemo && !profile?.is_premium && engagement?.tour_completed !== true;
-  // Profile-data onboarding (dream colleges, baseline, etc.) comes AFTER the tour.
+  // The Blueprint Builder is the FIRST thing after login — before the tour,
+  // before anything else. The first 120 seconds are the product: a student
+  // who logs in and sees a generic homepage instead of their Blueprint being
+  // built never comes back. It stays until completed — no skip, no dismiss.
   const showOnboarding = !isDemo && profile?.onboarding_completed !== true;
-  // Mandatory push step — AFTER tour + onboarding. Shown to every non-demo student
+  // First-login tour: one-time, for free non-demo students, AFTER the
+  // Blueprint exists — a tour of an app whose core object hasn't been built
+  // yet is a tour of nothing.
+  const showTour = !isDemo && !showOnboarding && !profile?.is_premium && engagement?.tour_completed !== true;
+  // Mandatory push step — AFTER Blueprint + tour. Shown to every non-demo student
   // who hasn't turned push on yet (notif_prefs.push !== true). Enabling sets that
   // flag, so the gate appears at most once per student and then never again.
   const pushEnabled = (profile?.notif_prefs as { push?: boolean } | null)?.push === true;
@@ -68,7 +72,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {showTour ? <FirstLoginTour /> : showOnboarding ? <OnboardingGate /> : showPushGate && <PushGate />}
+      {showOnboarding ? <OnboardingGate /> : showTour ? <FirstLoginTour /> : showPushGate && <PushGate />}
     </div>
   );
 }
