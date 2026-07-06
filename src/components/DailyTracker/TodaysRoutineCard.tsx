@@ -21,10 +21,24 @@ interface Mission {
   reasons: string[];
 }
 
+interface RoadmapPhase {
+  id: string;
+  label: string;
+  weekRange: string;
+  objective: string;
+}
+
+interface Roadmap {
+  weeksRemaining: number;
+  currentIndex: number;
+  phases: RoadmapPhase[];
+}
+
 interface RoutineResponse {
   routine: { phase: string; tasks: RoutineTask[]; est_minutes: number };
   whySummary: string;
   mission: Mission;
+  roadmap: Roadmap;
   completions: { task_id: string; is_emergency: boolean }[];
   currentStreak: number;
   isCatchUp: boolean;
@@ -116,7 +130,8 @@ export function TodaysRoutineCard() {
   }
   if (!data) return null;
 
-  const { routine, whySummary, mission, currentStreak, isCatchUp } = data;
+  const { routine, whySummary, mission, roadmap, currentStreak, isCatchUp } = data;
+  const currentPhase = roadmap.phases[roadmap.currentIndex];
   const tasks = emergencyMode ? routine.tasks.slice(0, 1) : routine.tasks;
   const totalMinutes = emergencyMode ? tasks[0]?.estMinutes ?? 0 : routine.est_minutes;
   const hours = Math.floor(totalMinutes / 60);
@@ -125,6 +140,36 @@ export function TodaysRoutineCard() {
 
   return (
     <Card className="p-5">
+      {/* Your CAT Roadmap — the 5-phase canonical strategy this routine
+          executes, and where this student actually sits in it. Position is
+          anchored to weeks-to-exam, then advanced (never regressed) by the
+          current-stage tap — same rule the routine's own phase uses. */}
+      <div className="mb-4 pb-4 border-b border-stone-100">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your CAT Roadmap</p>
+          <span className="text-xs font-semibold text-stone-500">{roadmap.weeksRemaining}w to CAT</span>
+        </div>
+        <div className="flex gap-1 mb-2">
+          {roadmap.phases.map((p, i) => (
+            <div
+              key={p.id}
+              className={cn(
+                'h-1.5 flex-1 rounded-full',
+                i < roadmap.currentIndex ? 'bg-orange-300'
+                  : i === roadmap.currentIndex ? 'bg-orange-500'
+                  : 'bg-stone-200'
+              )}
+            />
+          ))}
+        </div>
+        {currentPhase && (
+          <>
+            <p className="text-sm font-bold text-stone-900">{currentPhase.label} <span className="font-normal text-stone-400">· {currentPhase.weekRange}</span></p>
+            <p className="text-xs text-stone-500 mt-0.5">{currentPhase.objective}</p>
+          </>
+        )}
+      </div>
+
       {isCatchUp && !fullyDone && (
         <div className="mb-4 rounded-xl bg-teal-50 border border-teal-200 px-3.5 py-2.5">
           <p className="text-sm font-bold text-teal-900">Welcome back 👋</p>

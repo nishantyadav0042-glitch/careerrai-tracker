@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal } from '@/lib/mission-engine';
+import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { getLogDateString } from '@/lib/streak-utils';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
@@ -157,10 +158,25 @@ export async function GET() {
     },
   ]);
 
+  // Your CAT Roadmap — the first visible piece of the Study Plan Generator
+  // design (see docs/product-vision-notes.md). Anchored to weeks REMAINING
+  // to the exam (attempt_year always known), then advanced — never
+  // regressed — by the same current_stage signal that already overrides
+  // getPhase(). Purely presentational for now: it does not change what
+  // tasks get generated, only where the student sees themselves on the
+  // 5-phase canonical strategy.
+  const weeksRemaining = weeksToExam(new Date(), routineProfile.attemptYear);
+  const roadmap = {
+    weeksRemaining,
+    currentIndex: currentRoadmapIndex(weeksRemaining, routineProfile.currentStage),
+    phases: ROADMAP_PHASES,
+  };
+
   return NextResponse.json({
     routine,
     whySummary,
     mission,
+    roadmap,
     completions: completions ?? [],
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,
