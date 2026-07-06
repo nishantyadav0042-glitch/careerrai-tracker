@@ -88,6 +88,7 @@ export async function computePrepMemory(
   const windowDaysElapsed = Math.max(1, Math.min(30, daysSinceSignup));
   const windowStart = addDays(today, -(windowDaysElapsed - 1));
   const { daysWithCompletion, daysEmergencyOnly } = consistencyBreakdown(completionRecords, windowStart, today);
+  const healthWindow = windowStats(completionRecords, mockDates, windowStart, today);
   const gaps = sectionGapDays(completionRecords, today);
   const revisionMultiplier = archetypeRevisionMultiplier(archetype);
   const { due, completed } = revisionDueStats(
@@ -109,6 +110,7 @@ export async function computePrepMemory(
       windowDaysElapsed,
       daysWithCompletion,
       daysEmergencyOnly,
+      confidenceCounts: healthWindow.confidenceCounts,
       sectionGaps: gaps,
       revisionDue: due,
       revisionCompleted: completed,

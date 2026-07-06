@@ -125,16 +125,24 @@ export function weeklyEvolutionLines(thisWeek: WindowStats, lastWeek: WindowStat
 
 // ─── Preparation Health % ───────────────────────────────────────────────────
 // A single 0-100 composite, rolling 30 days (or since signup if shorter).
-// Three deterministic components, same additive-score architecture as every
+// Four deterministic components, same additive-score architecture as every
 // other engine in this codebase — the breakdown IS the explanation, never a
 // black-box number:
-//   Consistency (45%)       — days with a completion ÷ days elapsed;
+//   Consistency (35%)       — days with a completion ÷ days elapsed;
 //                             emergency-only days count at half weight.
-//   Balance (35%)           — full credit unless a section goes untouched
+//   Confidence quality (25%) — of the tasks tapped with a confidence signal
+//                             in the window, how many were "nailed it" vs
+//                             "shaky" vs "lost." A student who shows up every
+//                             day but taps red on everything is active, not
+//                             actually preparing well — this is the signal
+//                             that tells the two apart. Untagged windows (no
+//                             topic-linked completions to tap) get half
+//                             credit rather than a penalty or a free pass.
+//   Balance (25%)           — full credit unless a section goes untouched
 //                             beyond 4 consecutive days, then a proportional
 //                             deduction (makes single-section farming a
 //                             losing strategy, not a shortcut to a high score).
-//   Revision discipline (20%) — of the topics actually overdue for revision
+//   Revision discipline (15%) — of the topics actually overdue for revision
 //                             (already 'completed'/'strong', past their
 //                             revisionFrequencyDays), how many got revised
 //                             in the window.
@@ -202,13 +210,14 @@ export function revisionDueStats(
 export interface HealthScore {
   status: 'provisional' | 'ready';
   score: number | null;
-  components: { consistency: number; balance: number; revisionDiscipline: number } | null;
+  components: { consistency: number; confidenceQuality: number; balance: number; revisionDiscipline: number } | null;
 }
 
 export function computeHealthScore(input: {
   windowDaysElapsed: number;
   daysWithCompletion: number;
   daysEmergencyOnly: number;
+  confidenceCounts: { green: number; yellow: number; red: number };
   sectionGaps: Record<Section, number | null>;
   revisionDue: number;
   revisionCompleted: number;
@@ -216,28 +225,34 @@ export function computeHealthScore(input: {
   if (input.windowDaysElapsed < 7) return { status: 'provisional', score: null, components: null };
 
   const effectiveDays = input.daysWithCompletion - 0.5 * input.daysEmergencyOnly;
-  const consistency = Math.max(0, Math.min(45, (effectiveDays / input.windowDaysElapsed) * 45));
+  const consistency = Math.max(0, Math.min(35, (effectiveDays / input.windowDaysElapsed) * 35));
+
+  const taggedTotal = input.confidenceCounts.green + input.confidenceCounts.yellow + input.confidenceCounts.red;
+  const confidenceQuality = taggedTotal === 0
+    ? 12.5
+    : ((input.confidenceCounts.green * 1 + input.confidenceCounts.yellow * 0.5) / taggedTotal) * 25;
 
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
-  let balance = 35;
+  let balance = 25;
   for (const s of sections) {
     const gap = input.sectionGaps[s] ?? input.windowDaysElapsed;
     if (gap > 4) {
       const severity = Math.min(1, (gap - 4) / 10);
-      balance -= severity * (35 / sections.length);
+      balance -= severity * (25 / sections.length);
     }
   }
   balance = Math.max(0, balance);
 
   const revisionDiscipline = input.revisionDue === 0
-    ? 20
-    : Math.max(0, Math.min(20, (input.revisionCompleted / input.revisionDue) * 20));
+    ? 15
+    : Math.max(0, Math.min(15, (input.revisionCompleted / input.revisionDue) * 15));
 
   return {
     status: 'ready',
-    score: Math.round(consistency + balance + revisionDiscipline),
+    score: Math.round(consistency + confidenceQuality + balance + revisionDiscipline),
     components: {
       consistency: Math.round(consistency),
+      confidenceQuality: Math.round(confidenceQuality),
       balance: Math.round(balance),
       revisionDiscipline: Math.round(revisionDiscipline),
     },

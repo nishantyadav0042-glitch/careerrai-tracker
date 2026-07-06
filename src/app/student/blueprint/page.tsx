@@ -35,7 +35,7 @@ interface BlueprintData {
   healthScore: {
     status: 'provisional' | 'ready';
     score: number | null;
-    components: { consistency: number; balance: number; revisionDiscipline: number } | null;
+    components: { consistency: number; confidenceQuality: number; balance: number; revisionDiscipline: number } | null;
   };
   blueprintConfidence: { score: number; reasons: string[] };
   topicMemory: {
@@ -143,9 +143,12 @@ export default function BlueprintPage() {
         </div>
 
         {/* Preparation Health — ONE composite number, not a multi-metric
-            dashboard: Consistency + Balance + Revision discipline, rolling
-            30 days. Provisional (no number) under a week of history — a
-            score from 2 days of data would be worse than no score. */}
+            dashboard: Consistency + Confidence quality + Balance + Revision
+            discipline, rolling 30 days. Confidence quality is what keeps this
+            from measuring pure activity — showing up every day tapping "lost"
+            on everything scores lower than showing up less but improving.
+            Provisional (no number) under a week of history — a score from 2
+            days of data would be worse than no score. */}
         <div className="bg-white rounded-2xl border border-stone-200 p-5">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Preparation health</h2>
           {healthScore.status === 'provisional' ? (
@@ -156,17 +159,21 @@ export default function BlueprintPage() {
                 <span className="text-3xl font-bold text-stone-900">{healthScore.score}</span>
                 <span className="text-sm text-stone-400">/ 100</span>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center border-t border-stone-100 pt-3">
+              <div className="grid grid-cols-4 gap-2 text-center border-t border-stone-100 pt-3">
                 <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.consistency}<span className="text-stone-400 font-normal">/45</span></p>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.consistency}<span className="text-stone-400 font-normal">/35</span></p>
                   <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Consistency</p>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.balance}<span className="text-stone-400 font-normal">/35</span></p>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.confidenceQuality}<span className="text-stone-400 font-normal">/25</span></p>
+                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Confidence</p>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.balance}<span className="text-stone-400 font-normal">/25</span></p>
                   <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Balance</p>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.revisionDiscipline}<span className="text-stone-400 font-normal">/20</span></p>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.revisionDiscipline}<span className="text-stone-400 font-normal">/15</span></p>
                   <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Revision</p>
                 </div>
               </div>
