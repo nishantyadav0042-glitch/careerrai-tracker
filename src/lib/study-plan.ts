@@ -13,6 +13,8 @@ export interface RoadmapPhase {
   label: string;
   weekRange: string;
   objective: string;
+  dailyFocus: string;
+  weeklyFocus: string;
 }
 
 export const ROADMAP_PHASES: RoadmapPhase[] = [
@@ -21,30 +23,40 @@ export const ROADMAP_PHASES: RoadmapPhase[] = [
     label: 'Orientation & Diagnostic',
     weekRange: 'Weeks 1–2',
     objective: 'Establish an honest starting point — not a guessed one.',
+    dailyFocus: 'A light diagnostic set per section — not a full mock, which this early measures panic, not skill.',
+    weeklyFocus: 'One diagnostic sectional per section by the end of week 2.',
   },
   {
     id: 'foundation',
     label: 'Foundation',
     weekRange: 'Weeks 3–12',
     objective: 'Every topic reaches "can attempt correctly" at least once.',
+    dailyFocus: 'One concept block + one untimed practice set, biased toward your weakest section.',
+    weeklyFocus: 'Close out one "Never Started" topic per section.',
   },
   {
     id: 'strengthening',
     label: 'Strengthening',
     weekRange: 'Weeks 13–22',
     objective: 'Untimed correctness becomes timed accuracy under real pressure.',
+    dailyFocus: 'Timed topic-level sets (20–25 min, CAT-realistic mix) replace untimed practice.',
+    weeklyFocus: 'One sectional mock per section, always followed by a mandatory debrief.',
   },
   {
     id: 'mock_intensive',
     label: 'Mock Intensive',
     weekRange: 'Weeks 23–30',
     objective: 'Full-length mock cadence, with mandatory analysis after every one.',
+    dailyFocus: 'Targeted repair — whatever your last mock’s error buckets say is weakest leads the day.',
+    weeklyFocus: 'One full-length mock, non-negotiable debrief within 48 hours.',
   },
   {
     id: 'revision_sprint',
     label: 'Revision & Sprint',
     weekRange: 'Weeks 31–34',
     objective: 'Zero new topics — pure retrieval and exam-day conditioning.',
+    dailyFocus: 'Error-log drilling and timed micro-sets on your own historical mistakes. No new topics.',
+    weeklyFocus: 'Mock frequency tapers down, trading volume for sleep and mental conditioning.',
   },
 ];
 

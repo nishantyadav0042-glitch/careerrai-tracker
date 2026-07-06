@@ -26,6 +26,8 @@ interface RoadmapPhase {
   label: string;
   weekRange: string;
   objective: string;
+  dailyFocus: string;
+  weeklyFocus: string;
 }
 
 interface Roadmap {
@@ -169,6 +171,10 @@ export function TodaysRoutineCard() {
           <>
             <p className="text-sm font-bold text-stone-900">{currentPhase.label} <span className="font-normal text-stone-400">· {currentPhase.weekRange}</span></p>
             <p className="text-xs text-stone-500 mt-0.5">{currentPhase.objective}</p>
+            <div className="mt-2 space-y-1">
+              <p className="text-xs text-stone-600"><span className="font-semibold text-stone-500">Daily:</span> {currentPhase.dailyFocus}</p>
+              <p className="text-xs text-stone-600"><span className="font-semibold text-stone-500">Weekly:</span> {currentPhase.weeklyFocus}</p>
+            </div>
           </>
         )}
       </div>
