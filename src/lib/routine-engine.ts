@@ -4,7 +4,7 @@
 // TypeScript so it can be read, argued with, and changed like content, not
 // like a black box.
 
-import { DEFAULT_TOPIC_BY_SECTION } from './topics-constants';
+import type { TopicChoice } from './topic-selector';
 
 export type Section = 'VARC' | 'DILR' | 'QA';
 export type Phase = 'foundation' | 'intensive' | 'revision';
@@ -22,9 +22,9 @@ export interface RoutineProfile {
   weekendHours: number | null;
   weakestSection: Section | null;
   strongestSection: Section | null;
-  // Self-reported toughest topic *within* weakestSection (e.g. "Reading
-  // Comprehension" within VARC) — see topics-constants.ts for the taxonomy.
-  // null = not answered; the section-only copy is the fallback.
+  // Self-reported toughest topic *within* weakestSection — now just ONE
+  // input into the Topic Selector (topic-selector.ts), not an override. See
+  // chooseTopicForSection's selfReportedBonus.
   weakTopic: string | null;
   // null = never asked. See getPhase() — this can only push the phase
   // forward relative to the calendar default, never pull it back.
@@ -36,6 +36,11 @@ export interface RoutineProfile {
 export interface RoutineTask {
   id: string;
   section: Section | 'General';
+  // Structured topic, not just embedded in the label string — this is what
+  // lets future days compute real per-topic revision recency instead of
+  // only per-section. null only for phase-closing tasks with no single topic
+  // (a full mock, a general revision block).
+  topic: string | null;
   label: string;
   estMinutes: number;
   reason: string | null;
@@ -110,55 +115,57 @@ function isWeekend(d: Date): boolean {
   return day === 0 || day === 6;
 }
 
+// Archetype planning parameters — ONE engine, coefficients per archetype,
+// never a forked codebase per archetype (see docs/product-vision-notes.md).
+// Revision cadence is the concrete, real difference: a repeater relearns
+// faster (and forgets faster under second-attempt pressure) so their cycle
+// tightens; a working professional's daily time is scarcer so a topic isn't
+// flagged overdue as quickly. This is read by both the Topic Selector
+// (below, via today/route.ts) and the Mission Engine's revision signal.
+export function archetypeRevisionMultiplier(profile: { isRepeater: boolean; isWorkingProfessional: boolean }): number {
+  if (profile.isRepeater) return 0.7;
+  if (profile.isWorkingProfessional) return 1.4;
+  return 1.0;
+}
+
 // The ONE explicit if-then implementation intention per day — see the
 // isImplementationIntention doc comment above for why only the priority task
-// gets this treatment. Pure date-math on the student's OWN history, never an
-// LLM call. "If you open the app today" is the honest trigger a deterministic
-// engine can offer — it doesn't know time-of-day or context, so the cue is
-// tied to the one moment it DOES know: this session.
-export function implementationIntention(
-  section: Section,
-  topic: string | null,
-  lastPracticedDaysAgo: number | null,
-  phase: Phase
-): string {
-  // Section alone is too coarse to feel personal — every CAT aspirant
-  // already knows they need VARC/DILR/QA. The topic (if answered) is what
-  // makes the cue concrete enough to actually act on.
-  const target = topic ? `${section} — ${topic}` : section;
-  if (lastPracticedDaysAgo == null) {
-    return phase === 'foundation'
-      ? `If you study today, start with ${target} — first pass, before anything else`
-      : `If you study today, start with ${target} — day one counts`;
+// gets this treatment. "If you open the app today" is the honest trigger a
+// deterministic engine can offer — it doesn't know time-of-day or context, so
+// the cue is tied to the one moment it DOES know: this session. The specific
+// clause now comes from the Topic Selector's own reasoning (coverage status,
+// revision-due, prerequisites) instead of a flat per-section day-count, so
+// the cue is topic-specific, not just section-specific.
+export function implementationIntention(section: Section, topic: string, topicReasons: string[], phase: Phase): string {
+  const target = `${section} — ${topic}`;
+  if (topicReasons.length > 0) {
+    return `If you study today, start with ${target} — ${topicReasons[0]}`;
   }
-  if (lastPracticedDaysAgo === 0) return `If you study today, keep ${target} going — that's the momentum`;
-  if (lastPracticedDaysAgo === 1) return `If you study today, start with ${target} — you did it yesterday too`;
-  return `If you study today, start with ${target} — it's been ${lastPracticedDaysAgo} days`;
+  return phase === 'foundation'
+    ? `If you study today, start with ${target} — first pass, before anything else`
+    : `If you study today, start with ${target} — day one counts`;
 }
 
 // Plain, non-conditional reason for the secondary tasks — deliberately NOT
 // if-then framed. The evidence supports one vivid, personal trigger, not
-// diluting the pattern across a whole checklist. Varied by position so two
-// "first pass" days in a row don't read as copy-pasted next to each other.
-export function sectionReason(section: Section, topic: string, lastPracticedDaysAgo: number | null, ordinal: 'second' | 'third'): string {
+// diluting the pattern across a whole checklist.
+export function sectionReason(section: Section, topic: string, topicReasons: string[], ordinal: 'second' | 'third'): string {
   const target = `${section} — ${topic}`;
-  if (lastPracticedDaysAgo == null) {
-    return ordinal === 'second' ? `${target} — rounding out today's set` : `${target} — closes today's session`;
-  }
-  if (lastPracticedDaysAgo === 0) return `${target} — done earlier today too`;
-  if (lastPracticedDaysAgo === 1) return `${target} — last done yesterday`;
-  return `${target} — last done ${lastPracticedDaysAgo} days ago`;
+  if (topicReasons.length > 0) return `${target} — ${topicReasons[0]}`;
+  return ordinal === 'second' ? `${target} — rounding out today's set` : `${target} — closes today's session`;
 }
 
 // The "how did you plan this" answer, made visible instead of implicit. A
 // student who tapped a 2-second setup prompt days ago has no reason to
 // remember it drove today's list — without this line the same personalized
-// output reads as an arbitrary generic template.
-export function personalizationSummary(profile: RoutineProfile, isWeekendToday: boolean, hours: number): string {
+// output reads as an arbitrary generic template. Takes the ACTUAL chosen
+// topic (the Topic Selector's output), which may differ from the raw
+// self-report once Coverage Matrix/revision data starts to matter.
+export function personalizationSummary(profile: RoutineProfile, isWeekendToday: boolean, hours: number, weakTopicChosen: string | null): string {
   const hoursLabel = `${hours}h ${isWeekendToday ? 'today (weekend)' : 'today'}`;
   const weakLabel = profile.weakestSection
-    ? profile.weakTopic
-      ? `${profile.weakestSection} (${profile.weakTopic}) is your focus`
+    ? weakTopicChosen
+      ? `${profile.weakestSection} (${weakTopicChosen}) is your focus`
       : `${profile.weakestSection} is your focus`
     : 'balanced across sections';
   return `Built from your setup: ${weakLabel} · ${hoursLabel}`;
@@ -166,14 +173,33 @@ export function personalizationSummary(profile: RoutineProfile, isWeekendToday: 
 
 export interface HistoryInput {
   // Days since this section last appeared in a completed task, per section.
-  // null = never practiced.
+  // null = never practiced. Still used by the Mission Engine's per-section
+  // signal — a separate, coarser consumer than the Topic Selector below.
   daysSinceLastPracticed: Record<Section, number | null>;
 }
 
-export function generateRoutine(profile: RoutineProfile, now: Date, history: HistoryInput): GeneratedRoutine {
+export function generateRoutine(
+  profile: RoutineProfile,
+  now: Date,
+  history: HistoryInput,
+  // One TopicChoice per section, computed by the caller (today/route.ts)
+  // from the Topic Selector — Coverage Matrix + prerequisites + weightage +
+  // revision-due + (for the weak section only) the self-report bonus. This
+  // is what replaced the old static "same topic for every student" default
+  // for the two non-weakest sections.
+  topicChoices: Record<Section, TopicChoice>
+): GeneratedRoutine {
   const phase = getPhase(now, profile.attemptYear, profile.currentStage);
   const weekend = isWeekend(now);
-  const hours = (weekend ? profile.weekendHours : profile.weekdayHours) ?? (profile.isWorkingProfessional ? 1.5 : 2.5);
+  // Weekday and weekend fallbacks are now genuinely different per archetype
+  // (previously both used the same constant regardless of which day it
+  // was) — a working professional's realistic weekend capacity is higher
+  // than their weekday capacity, which the old single fallback couldn't
+  // express.
+  const hours = (weekend ? profile.weekendHours : profile.weekdayHours)
+    ?? (weekend
+      ? (profile.isWorkingProfessional ? 4 : 3)
+      : (profile.isWorkingProfessional ? 1.5 : 2.5));
   const totalMinutes = Math.max(30, Math.round(hours * 60));
 
   const weak = profile.weakestSection ?? 'DILR';
@@ -188,32 +214,30 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
   const weakShare = 0.40;
   const otherShare = (1 - weakShare) / nonWeak.length;
 
-  const weakTopic = profile.weakTopic;
-  const priorityLabel = weakTopic
-    ? (phase === 'foundation' ? `${weak} — ${weakTopic}: concept + practice` : `${weak} — ${weakTopic}: targeted practice`)
-    : (phase === 'foundation' ? `${weak} — concept + practice set` : `${weak} — targeted practice set`);
+  const weakChoice = topicChoices[weak];
+  const priorityLabel = phase === 'foundation'
+    ? `${weak} — ${weakChoice.topic}: concept + practice`
+    : `${weak} — ${weakChoice.topic}: targeted practice`;
 
   tasks.push({
     id: `${weak.toLowerCase()}-priority`,
     section: weak,
+    topic: weakChoice.topic,
     label: priorityLabel,
     estMinutes: Math.round(totalMinutes * weakShare),
-    reason: implementationIntention(weak, weakTopic, history.daysSinceLastPracticed[weak], phase),
+    reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
   });
 
   nonWeak.forEach((section, i) => {
-    // These two sections never get their own onboarding tap (only the
-    // weakest section does) — the highest-weightage topic is the same
-    // defensible default already used when a student skips that tap, so
-    // every task names a real topic, not just the priority one.
-    const topic = DEFAULT_TOPIC_BY_SECTION[section];
+    const choice = topicChoices[section];
     tasks.push({
       id: `${section.toLowerCase()}-set`,
       section,
-      label: `${section} — ${topic}: practice set`,
+      topic: choice.topic,
+      label: `${section} — ${choice.topic}: practice set`,
       estMinutes: Math.round(totalMinutes * otherShare),
-      reason: sectionReason(section, topic, history.daysSinceLastPracticed[section], i === 0 ? 'second' : 'third'),
+      reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });
   });
 
@@ -222,6 +246,7 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
     tasks.push({
       id: 'mock-or-review',
       section: 'General',
+      topic: null,
       label: profile.isRepeater ? 'Mock analysis — review your last attempt' : 'Sectional mock',
       estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
       reason: 'Intensive phase — mocks are the #1 signal now',
@@ -230,6 +255,7 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
     tasks.push({
       id: 'revision-block',
       section: strong ?? weak,
+      topic: null,
       label: `Revise ${strong ?? weak} — keep it sharp, don't drift`,
       estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
       reason: 'Revision phase — protect your strengths, don\'t just chase weaknesses',
@@ -238,6 +264,7 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
     tasks.push({
       id: 'repeater-review',
       section: weak,
+      topic: null,
       label: `Review yesterday's ${weak} mistakes`,
       estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
       reason: 'Repeaters improve fastest by closing yesterday\'s gaps, not opening new ground',
@@ -245,7 +272,7 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
   }
 
   const estMinutes = tasks.reduce((s, t) => s + t.estMinutes, 0);
-  const whySummary = personalizationSummary(profile, weekend, hours);
+  const whySummary = personalizationSummary(profile, weekend, hours, weakChoice.topic);
   return { phase, tasks, estMinutes, whySummary };
 }
 

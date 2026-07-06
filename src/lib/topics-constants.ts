@@ -49,9 +49,11 @@ export const LRDI_TOPICS = [
 //   revisionFrequencyDays  how many days before this topic typically needs
 //                         revisiting — feeds the Mission Engine's revision
 //                         signal instead of one flat constant for every topic
-//   sequenceRank          order within its section (1 = earliest) — a
-//                         simple prerequisite-informed ranking, not a full
-//                         dependency graph
+//   sequenceRank          order within its section (1 = earliest)
+//   prerequisites          topic keys (within the same section) that should
+//                         be at least "started" before this one is a good
+//                         pick — a real edge list, not a rank-order proxy.
+//                         Empty array = no prerequisite, safe to lead with.
 export interface TopicMetadata {
   section: 'VARC' | 'DILR' | 'QA';
   difficulty: 1 | 2 | 3 | 4 | 5;
@@ -59,31 +61,35 @@ export interface TopicMetadata {
   weightage: 1 | 2 | 3 | 4 | 5;
   revisionFrequencyDays: number;
   sequenceRank: number;
+  prerequisites: string[];
 }
 
 export const TOPIC_METADATA: Record<string, TopicMetadata> = {
   // QA — Arithmetic and Number Systems first (foundational, highest
-  // weightage); Geometry and Modern Math benefit from that fluency.
-  'Arithmetic':            { section: 'QA', difficulty: 2, estimatedHours: 25, weightage: 5, revisionFrequencyDays: 5, sequenceRank: 1 },
-  'Number Systems':        { section: 'QA', difficulty: 3, estimatedHours: 20, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 2 },
-  'Algebra':               { section: 'QA', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 3 },
-  'Geometry':              { section: 'QA', difficulty: 4, estimatedHours: 20, weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4 },
-  'Modern Math':           { section: 'QA', difficulty: 4, estimatedHours: 15, weightage: 2, revisionFrequencyDays: 8, sequenceRank: 5 },
+  // weightage, no prerequisite); Algebra/Geometry/Modern Math lean on that
+  // fluency, so they carry a real prerequisite edge, not just a rank number.
+  'Arithmetic':            { section: 'QA', difficulty: 2, estimatedHours: 25, weightage: 5, revisionFrequencyDays: 5, sequenceRank: 1, prerequisites: [] },
+  'Number Systems':        { section: 'QA', difficulty: 3, estimatedHours: 20, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 2, prerequisites: [] },
+  'Algebra':               { section: 'QA', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: ['Arithmetic'] },
+  'Geometry':              { section: 'QA', difficulty: 4, estimatedHours: 20, weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4, prerequisites: ['Arithmetic'] },
+  'Modern Math':           { section: 'QA', difficulty: 4, estimatedHours: 15, weightage: 2, revisionFrequencyDays: 8, sequenceRank: 5, prerequisites: ['Algebra'] },
 
   // VARC — RC carries most of the section's marks and decays fastest
   // without regular reading, so it leads on both weightage and cadence.
-  'Reading Comprehension': { section: 'VARC', difficulty: 3, estimatedHours: 30, weightage: 5, revisionFrequencyDays: 4, sequenceRank: 1 },
-  'Para Summary':          { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 2 },
-  'Para Jumbles':          { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3 },
-  'Sentence Correction':   { section: 'VARC', difficulty: 2, estimatedHours: 10, weightage: 2, revisionFrequencyDays: 7, sequenceRank: 4 },
-  'Vocabulary':            { section: 'VARC', difficulty: 2, estimatedHours: 8,  weightage: 1, revisionFrequencyDays: 10, sequenceRank: 5 },
+  // Para Summary genuinely builds on RC comprehension skill; the rest are
+  // independent skills with no real prerequisite.
+  'Reading Comprehension': { section: 'VARC', difficulty: 3, estimatedHours: 30, weightage: 5, revisionFrequencyDays: 4, sequenceRank: 1, prerequisites: [] },
+  'Para Summary':          { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 2, prerequisites: ['Reading Comprehension'] },
+  'Para Jumbles':          { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: [] },
+  'Sentence Correction':   { section: 'VARC', difficulty: 2, estimatedHours: 10, weightage: 2, revisionFrequencyDays: 7, sequenceRank: 4, prerequisites: [] },
+  'Vocabulary':            { section: 'VARC', difficulty: 2, estimatedHours: 8,  weightage: 1, revisionFrequencyDays: 10, sequenceRank: 5, prerequisites: [] },
 
-  // DILR — DI and LR are the roughly-equal-weight core; Puzzles & Case
-  // Study are denser variants that build on that base.
-  'Data Interpretation':   { section: 'DILR', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 1 },
-  'Logical Reasoning':     { section: 'DILR', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 2 },
-  'Puzzles & Games':       { section: 'DILR', difficulty: 4, estimatedHours: 18, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3 },
-  'Case Study':            { section: 'DILR', difficulty: 4, estimatedHours: 15, weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4 },
+  // DILR — DI and LR are the roughly-equal-weight core with no prerequisite;
+  // Puzzles & Case Study are denser variants that build on that base.
+  'Data Interpretation':   { section: 'DILR', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 1, prerequisites: [] },
+  'Logical Reasoning':     { section: 'DILR', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 2, prerequisites: [] },
+  'Puzzles & Games':       { section: 'DILR', difficulty: 4, estimatedHours: 18, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: ['Logical Reasoning'] },
+  'Case Study':            { section: 'DILR', difficulty: 4, estimatedHours: 15, weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4, prerequisites: ['Data Interpretation'] },
 };
 
 // Highest-weightage topic in a section, ties broken by earliest sequence —

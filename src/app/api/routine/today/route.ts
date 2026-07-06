@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
+import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
+import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
-import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
+
+const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -101,14 +104,16 @@ export async function GET() {
     });
   }
 
-  // Computed unconditionally (not just on generation) — the Mission below
-  // needs fresh section-recency signals every request, the same way
-  // whySummary is recomputed fresh rather than frozen at generation time.
+  // Computed unconditionally (not just on generation) — the Mission and the
+  // fresh whySummary below both need current recency/coverage data every
+  // request, the same reasoning as whySummary already being recomputed
+  // fresh rather than frozen at generation time.
   const history = await buildHistory(admin, user.id);
+  const topicChoices = await buildTopicChoices(admin, user.id, routineProfile, history);
 
   let routine = existing;
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history);
+    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
@@ -139,23 +144,31 @@ export async function GET() {
 
   // Recomputed fresh each request (cheap, pure) rather than stored on the row —
   // it's the "how did you plan this" answer, and should reflect the student's
-  // CURRENT setup even if they update it after today's task list was frozen.
+  // CURRENT setup (and Coverage Matrix / revision state) even if today's task
+  // list was already frozen.
   const nowDay = new Date().getDay();
   const isWeekendToday = nowDay === 0 || nowDay === 6;
   const hoursToday = (isWeekendToday ? routineProfile.weekendHours : routineProfile.weekdayHours)
-    ?? (routineProfile.isWorkingProfessional ? 1.5 : 2.5);
-  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday);
+    ?? (isWeekendToday
+      ? (routineProfile.isWorkingProfessional ? 4 : 3)
+      : (routineProfile.isWorkingProfessional ? 1.5 : 2.5));
+  const weak = routineProfile.weakestSection ?? 'DILR';
+  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday, topicChoices[weak].topic);
 
   // Today's Mission — a small, explainable scoring layer (same additive
   // pattern as buddy-match.ts's rankBuddies) on top of data that already
   // exists. Deliberately not a rewrite of the routine itself: this can
   // outrank the default weakest-section task (e.g. a mock sitting unanalyzed
   // for 2 days) without needing a new event-sourcing pipeline underneath it.
-  const weak = routineProfile.weakestSection ?? 'DILR';
-  // Topic-specific decay rate (e.g. Reading Comprehension needs revisiting
-  // every 4 days, Vocabulary every 10) instead of one flat threshold for
-  // every topic — see TOPIC_METADATA in topics-constants.ts.
-  const weakRevisionFrequency = (weakTopic && TOPIC_METADATA[weakTopic]?.revisionFrequencyDays) || undefined;
+  // Revision frequency is the ACTUAL topic the selector chose (which may
+  // differ from the raw self-report once Coverage Matrix data matters), and
+  // is adjusted by the same archetype multiplier the selector itself used —
+  // a repeater's topic is flagged overdue sooner, a working professional's later.
+  const weakTopicChosen = topicChoices[weak].topic;
+  const revisionMultiplier = archetypeRevisionMultiplier(routineProfile);
+  const weakRevisionFrequency = TOPIC_METADATA[weakTopicChosen]
+    ? TOPIC_METADATA[weakTopicChosen].revisionFrequencyDays * revisionMultiplier
+    : undefined;
   const { daysSincePendingMock, pendingMockName } = await buildMissionInputs(admin, user.id, today);
   const mission = pickMission([
     {
@@ -221,7 +234,7 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildHistory(admin: any, studentId: string): Promise<HistoryInput> {
+async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }> {
   const { data: pastRoutines } = await admin
     .from('daily_routines')
     .select('routine_date, tasks')
@@ -242,6 +255,12 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   }
 
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
+  // Per-topic recency, keyed by topic name — only populated going forward,
+  // since it reads the `topic` field routine-engine.ts now stores on every
+  // task (older rows generated before this shipped won't have it, and
+  // simply won't match here, which is the correct honest behavior for data
+  // that didn't exist yet).
+  const daysSinceByTopic: Record<string, number | null> = {};
   const today = getLogDateString();
   for (const r of (pastRoutines ?? [])) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
@@ -249,12 +268,50 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
     for (const t of (r.tasks as any[])) {
       if (!completedTaskIds.has(t.id)) continue;
       const section = t.section as Section;
-      if (!['VARC', 'DILR', 'QA'].includes(section)) continue;
-      if (daysSince[section] != null) continue; // already found the most recent
-      daysSince[section] = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
+      const daysAgo = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
+      if (['VARC', 'DILR', 'QA'].includes(section) && daysSince[section] == null) {
+        daysSince[section] = daysAgo;
+      }
+      const topic = t.topic as string | null | undefined;
+      if (topic && daysSinceByTopic[topic] == null) {
+        daysSinceByTopic[topic] = daysAgo;
+      }
     }
   }
-  return { daysSinceLastPracticed: daysSince };
+  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic };
+}
+
+// The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for
+// this student, then picks one topic per section using chooseTopicForSection
+// (topic-selector.ts) — Coverage Matrix + prerequisites + weightage +
+// revision-due + (weak section only) the self-reported bonus. This is what
+// replaced the old behavior where the two non-weakest sections used the
+// exact same static topic for every student in the product.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildTopicChoices(admin: any, studentId: string, profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }): Promise<Record<Section, TopicChoice>> {
+  const { data: coverageRows } = await admin
+    .from('topic_coverage')
+    .select('topic, status')
+    .eq('student_id', studentId);
+
+  const coverageByTopic = new Map<string, CoverageStatus>();
+  for (const row of coverageRows ?? []) coverageByTopic.set(row.topic, row.status as CoverageStatus);
+
+  const revisionMultiplier = archetypeRevisionMultiplier(profile);
+  const sections: Section[] = ['VARC', 'DILR', 'QA'];
+  const result = {} as Record<Section, TopicChoice>;
+
+  for (const section of sections) {
+    const isWeakSection = section === profile.weakestSection;
+    const candidates = TOPICS_BY_SECTION[section].map((topic) => ({
+      topic,
+      coverageStatus: coverageByTopic.get(topic) ?? null,
+      daysSinceLastPracticed: history.daysSinceLastPracticedByTopic[topic] ?? null,
+      selfReportedBonus: isWeakSection && topic === profile.weakTopic,
+    }));
+    result[section] = chooseTopicForSection(candidates, revisionMultiplier);
+  }
+  return result;
 }
 
 // "Mock pending analysis" — a mock was logged (daily_reports.mock_taken)
