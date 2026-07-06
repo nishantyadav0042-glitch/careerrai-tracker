@@ -282,3 +282,64 @@ export function computeBlueprintConfidence(input: {
   }
   return { score: Math.max(30, score), reasons: reasons.slice(0, 3) };
 }
+
+// ─── Blueprint Memory ───────────────────────────────────────────────────────
+// "Did I / when did I" — a plain read over full history (not windowed to 30
+// days like the rest of this file), answering questions a student would
+// otherwise have to remember themselves. Pure queries over topic_coverage +
+// completions, same as everything else here — no accuracy claims, since this
+// is about study history, not mock performance.
+export interface TopicMemoryEntry {
+  topic: string;
+  status: string; // CoverageStatus, or 'not_started' when the topic has no row at all
+  firstTouchedDaysAgo: number | null;
+  timesTouched: number;
+  lastTouchedDaysAgo: number | null;
+  revisionOverdue: boolean;
+}
+
+export function buildTopicMemory(
+  allTopics: string[],
+  allCompletions: CompletionRecord[],
+  coverageRows: TopicCoverageRow[],
+  today: string,
+  revisionMultiplier: number
+): TopicMemoryEntry[] {
+  const coverageByTopic = new Map(coverageRows.map((r) => [r.topic, r]));
+
+  return allTopics.map((topic) => {
+    const coverageRow = coverageByTopic.get(topic);
+    const status = coverageRow?.status ?? 'not_started';
+
+    const dates = allCompletions.filter((c) => c.topic === topic).map((c) => c.routineDate).sort();
+    const firstDate = dates[0] ?? null;
+    const lastCompletionDate = dates[dates.length - 1] ?? null;
+
+    // "Last touched" also counts a manual Coverage Matrix edit, not just a
+    // completed task — whichever signal is more recent wins.
+    let lastTouchedDaysAgo: number | null = null;
+    if (lastCompletionDate) lastTouchedDaysAgo = Math.round((Date.parse(today) - Date.parse(lastCompletionDate)) / 86_400_000);
+    if (coverageRow?.updatedAt) {
+      const coverageDaysAgo = Math.round((Date.parse(today) - Date.parse(coverageRow.updatedAt)) / 86_400_000);
+      if (lastTouchedDaysAgo == null || coverageDaysAgo < lastTouchedDaysAgo) lastTouchedDaysAgo = coverageDaysAgo;
+    }
+
+    let revisionOverdue = false;
+    if ((status === 'completed' || status === 'strong') && coverageRow?.updatedAt) {
+      const meta = TOPIC_METADATA[topic];
+      if (meta) {
+        const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(coverageRow.updatedAt)) / 86_400_000);
+        revisionOverdue = daysSinceUpdate > meta.revisionFrequencyDays * revisionMultiplier;
+      }
+    }
+
+    return {
+      topic,
+      status,
+      firstTouchedDaysAgo: firstDate ? Math.round((Date.parse(today) - Date.parse(firstDate)) / 86_400_000) : null,
+      timesTouched: dates.length,
+      lastTouchedDaysAgo,
+      revisionOverdue,
+    };
+  });
+}

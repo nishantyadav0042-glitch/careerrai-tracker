@@ -4,10 +4,12 @@
 
 import { archetypeRevisionMultiplier, type Section } from './routine-engine';
 import { getLogDateString } from './streak-utils';
+import { TOPIC_METADATA } from './topics-constants';
 import {
   windowStats, mockTrend, weeklyEvolutionLines,
   consistencyBreakdown, sectionGapDays, revisionDueStats, computeHealthScore,
-  type CompletionRecord, type WindowStats, type MockTrend, type HealthScore,
+  buildTopicMemory,
+  type CompletionRecord, type WindowStats, type MockTrend, type HealthScore, type TopicMemoryEntry,
 } from './prep-memory';
 
 function addDays(dateStr: string, delta: number): string {
@@ -112,4 +114,25 @@ export async function computePrepMemory(
       revisionCompleted: completed,
     }),
   };
+}
+
+// Blueprint Memory — "did I / when did I," over the student's FULL history,
+// not the rolling 30-day window everything else in this file uses. A
+// separate query on purpose: "first studied 54 days ago" needs to look
+// further back than Preparation Health ever does.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function computeTopicMemory(admin: any, studentId: string, archetype: { isRepeater: boolean; isWorkingProfessional: boolean }): Promise<TopicMemoryEntry[]> {
+  const today = getLogDateString();
+  const [allCompletions, { data: coverageRows }] = await Promise.all([
+    buildCompletionRecords(admin, studentId, '2000-01-01'),
+    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
+  ]);
+
+  return buildTopicMemory(
+    Object.keys(TOPIC_METADATA),
+    allCompletions,
+    (coverageRows ?? []).map((r: { topic: string; status: string; updated_at: string }) => ({ topic: r.topic, status: r.status, updatedAt: r.updated_at })),
+    today,
+    archetypeRevisionMultiplier(archetype)
+  );
 }

@@ -38,6 +38,14 @@ interface BlueprintData {
     components: { consistency: number; balance: number; revisionDiscipline: number } | null;
   };
   blueprintConfidence: { score: number; reasons: string[] };
+  topicMemory: {
+    topic: string;
+    status: string;
+    firstTouchedDaysAgo: number | null;
+    timesTouched: number;
+    lastTouchedDaysAgo: number | null;
+    revisionOverdue: boolean;
+  }[];
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -59,9 +67,26 @@ const BLOCKER_LABEL: Record<string, string> = {
 // deterministic engines (routine-engine, mission-engine, study-plan); the
 // narrative line only organizes and phrases them (same "explain, never
 // decide" boundary as the buddy briefing) — it never proposes its own plan.
+const STATUS_LABEL: Record<string, string> = {
+  not_started: 'Never studied',
+  started: 'Studying',
+  completed: 'Completed once',
+  strong: 'Strong',
+};
+
+function memoryLine(entry: BlueprintData['topicMemory'][number]): string {
+  if (entry.firstTouchedDaysAgo == null) return "Haven't started this yet.";
+  const parts = [`First studied ${entry.firstTouchedDaysAgo}d ago`];
+  if (entry.timesTouched > 1) parts.push(`revisited ${entry.timesTouched - 1}x`);
+  if (entry.lastTouchedDaysAgo != null) parts.push(`last touched ${entry.lastTouchedDaysAgo}d ago`);
+  if (entry.revisionOverdue) parts.push('revision overdue');
+  return parts.join(' · ');
+}
+
 export default function BlueprintPage() {
   const [data, setData] = useState<BlueprintData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [memorySearch, setMemorySearch] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -89,7 +114,8 @@ export default function BlueprintPage() {
     );
   }
 
-  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution, healthScore, blueprintConfidence } = data;
+  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution, healthScore, blueprintConfidence, topicMemory } = data;
+  const filteredMemory = topicMemory.filter((m) => m.topic.toLowerCase().includes(memorySearch.toLowerCase()));
   const coverageTotal = coverageTally.not_started + coverageTally.started + coverageTally.completed + coverageTally.strong;
   const { last30, mockTrend } = prepMemory;
   const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
@@ -265,6 +291,34 @@ export default function BlueprintPage() {
             </ul>
           </div>
         )}
+
+        {/* Blueprint Memory — "did I / when did I," over the student's full
+            history (not just the last 30 days like the cards above). Pure
+            read over Coverage Matrix + completions, no accuracy claims. */}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Study memory</h2>
+          <input
+            type="text"
+            value={memorySearch}
+            onChange={(e) => setMemorySearch(e.target.value)}
+            placeholder="Search a topic — e.g. Geometry"
+            className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-orange-200"
+          />
+          <ul className="space-y-2 max-h-72 overflow-y-auto">
+            {filteredMemory.map((entry) => (
+              <li key={entry.topic} className="flex items-start justify-between gap-3 text-sm">
+                <div>
+                  <p className="font-semibold text-stone-800">{entry.topic}</p>
+                  <p className="text-xs text-stone-500">{memoryLine(entry)}</p>
+                </div>
+                <span className="shrink-0 text-[10px] font-semibold text-stone-400 uppercase tracking-wide mt-0.5">{STATUS_LABEL[entry.status] ?? entry.status}</span>
+              </li>
+            ))}
+            {filteredMemory.length === 0 && (
+              <li className="text-xs text-stone-400">No topic matches &quot;{memorySearch}&quot;.</li>
+            )}
+          </ul>
+        </div>
       </div>
     </div>
   );
