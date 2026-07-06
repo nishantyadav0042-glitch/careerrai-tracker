@@ -5,46 +5,7 @@ import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
-import { getLogDateString } from '@/lib/streak-utils';
-import { windowStats, mockTrend, weeklyEvolutionLines, type CompletionRecord } from '@/lib/prep-memory';
-
-function addDays(dateStr: string, delta: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().split('T')[0];
-}
-
-interface RoutineTaskShape { id: string; section: Section | 'General'; topic: string | null; estMinutes: number }
-
-// Preparation Memory v1's DB-facing wiring: cross-references
-// routine_task_completions (which only stores task_id + routine_date) back
-// to the section/topic/estMinutes each task actually was, by matching
-// against the daily_routines row for that same date — the same join pattern
-// buildHistory() in /api/routine/today already uses.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildCompletionRecords(admin: any, studentId: string, sinceDate: string): Promise<CompletionRecord[]> {
-  const [{ data: routines }, { data: completions }] = await Promise.all([
-    admin.from('daily_routines').select('routine_date, tasks').eq('student_id', studentId).gte('routine_date', sinceDate),
-    admin.from('routine_task_completions').select('routine_date, task_id, confidence').eq('student_id', studentId).gte('routine_date', sinceDate),
-  ]);
-
-  const tasksByDate = new Map<string, RoutineTaskShape[]>();
-  for (const r of (routines ?? [])) tasksByDate.set(r.routine_date, r.tasks as RoutineTaskShape[]);
-
-  const records: CompletionRecord[] = [];
-  for (const c of (completions ?? [])) {
-    const task = tasksByDate.get(c.routine_date)?.find((t) => t.id === c.task_id);
-    if (!task) continue; // completion outlived its routine row — shouldn't happen, but skip rather than fabricate
-    records.push({
-      routineDate: c.routine_date,
-      section: task.section,
-      topic: task.topic,
-      estMinutes: task.estMinutes,
-      confidence: (c.confidence as CompletionRecord['confidence']) ?? null,
-    });
-  }
-  return records;
-}
+import { computePrepMemory } from '@/lib/prep-memory-data';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -74,13 +35,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const today = getLogDateString();
-  const last30Start = addDays(today, -29);
-  const last7Start = addDays(today, -6);
-  const priorWeekStart = addDays(today, -13);
-  const priorWeekEnd = addDays(today, -7);
 
-  const [{ data: profile }, { data: coverage }, { data: streak }, completionRecords, { data: debriefs }] = await Promise.all([
+  const [{ data: profile }, { data: coverage }, { data: streak }, { prepMemory, weeklyEvolution }] = await Promise.all([
     admin.from('profiles')
       .select(`
         full_name, target_percentile, attempt_year, is_working_professional, is_repeater,
@@ -90,25 +46,9 @@ export async function GET() {
       .eq('id', user.id).single(),
     admin.from('topic_coverage').select('status').eq('student_id', user.id),
     admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
-    buildCompletionRecords(admin, user.id, last30Start),
-    admin.from('mock_debriefs').select('taken_on, overall_percentile').eq('student_id', user.id).gte('taken_on', last30Start).order('taken_on', { ascending: false }),
+    computePrepMemory(admin, user.id),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-
-  // Preparation Memory v1 (Engine v2, Part 5): what's actually happened, read
-  // straight from tables that already exist — no new event log. Weekly
-  // Evolution (Part 6) is the same data sliced into the two most recent
-  // adjacent 7-day windows and diffed.
-  const mockDates = (debriefs ?? []).map((d: { taken_on: string }) => d.taken_on);
-  const last30 = windowStats(completionRecords, mockDates, last30Start, today);
-  const last7 = windowStats(completionRecords, mockDates, last7Start, today);
-  const priorWeek = windowStats(completionRecords, mockDates, priorWeekStart, priorWeekEnd);
-  const prepMemory = {
-    last30,
-    last7,
-    mockTrend: mockTrend((debriefs ?? []).map((d: { overall_percentile: number | null }) => ({ overallPercentile: d.overall_percentile }))),
-  };
-  const weeklyEvolution = weeklyEvolutionLines(last7, priorWeek);
 
   const weak = profile.self_reported_weakest_section as Section | null;
   const weakTopic = profile.self_reported_weak_topic as string | null;

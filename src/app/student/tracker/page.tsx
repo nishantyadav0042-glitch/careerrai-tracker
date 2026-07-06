@@ -15,6 +15,8 @@ import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { resolveCatExamDate } from '@/lib/routine-engine';
+import { computePrepMemory } from '@/lib/prep-memory-data';
+import { StudyPlanSnapshot } from '@/components/DailyTracker/StudyPlanSnapshot';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -39,6 +41,8 @@ export default async function DailyTrackerPage() {
     { count: mockCount },
     { data: recentMock },
     { data: streakRow },
+    { data: coverage },
+    { prepMemory, weeklyEvolution },
   ] = await Promise.all([
     admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo, attempt_year').eq('id', user.id).single(),
     admin
@@ -80,6 +84,8 @@ export default async function DailyTrackerPage() {
       .limit(1)
       .maybeSingle(),
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
+    admin.from('topic_coverage').select('status').eq('student_id', user.id),
+    computePrepMemory(admin, user.id),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -89,6 +95,11 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
   const attemptYear = (profile?.attempt_year as number | null) ?? null;
+  const coverageTally = { not_started: 0, started: 0, completed: 0, strong: 0 };
+  for (const row of coverage ?? []) {
+    const status = row.status as keyof typeof coverageTally;
+    coverageTally[status] = (coverageTally[status] ?? 0) + 1;
+  }
 
   // Second batch — only runs when there IS a buddy or a recent mock.
   let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
@@ -211,6 +222,11 @@ export default async function DailyTrackerPage() {
         {/* Today's Routine — the hero: removes the "what should I study today"
             decision entirely. Deterministic, no LLM call. */}
         <TodaysRoutineCard />
+
+        {/* Study Plan Dashboard, condensed — Coverage snapshot, Preparation
+            Memory, and Weekly Evolution right on the homepage instead of only
+            on the separate Blueprint page one tap away. */}
+        <StudyPlanSnapshot coverageTally={coverageTally} last30={prepMemory.last30} weeklyEvolution={weeklyEvolution} />
 
         {/* Trajectory Wall — dream-anchored, present once college set */}
         <TrajectoryWall
