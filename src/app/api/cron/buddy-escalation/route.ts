@@ -20,10 +20,9 @@ export async function POST(request: NextRequest) {
   const [{ data: unansweredChats }, { data: unansweredMocks }] = await Promise.all([
     admin
       .from('chat_messages')
-      .select('id, student_id, buddy_id, created_at, body')
+      .select('id, student_id, buddy_id, sender_id, created_at, body')
       .is('read_at', null)
-      .lte('created_at', since48h)
-      .not('sender_id', 'eq', 'buddy_id'),
+      .lte('created_at', since48h),
     admin
       .from('mock_debriefs')
       .select('id, student_id, taken_on, created_at')
@@ -32,10 +31,18 @@ export async function POST(request: NextRequest) {
 
   type EscalationItem = { key: string; title: string; body: string; student_id: string; buddy_id: string };
 
+  // PostgREST filters compare a column against a literal value, not another
+  // column — `.not('sender_id', 'eq', 'buddy_id')` sent the literal string
+  // "buddy_id" and Postgres rejected it as an invalid uuid. Fetch sender_id
+  // alongside student_id/buddy_id instead and do the column-to-column
+  // comparison here: only messages the STUDENT sent (not the buddy) count
+  // as "unanswered."
+  const chatsFromStudents = (unansweredChats ?? []).filter((msg) => msg.sender_id !== msg.buddy_id);
+
   // Process all chats and mocks concurrently — each item runs its own dedup check in parallel
   const [chatResults, mockResults] = await Promise.all([
     // 1. Chat messages from students unanswered >48h
-    Promise.all((unansweredChats ?? []).map(async msg => {
+    Promise.all(chatsFromStudents.map(async msg => {
       const [{ data: student }, { data: buddy }] = await Promise.all([
         admin.from('profiles').select('full_name').eq('id', msg.student_id).single(),
         admin.from('profiles').select('full_name').eq('id', msg.buddy_id).single(),
