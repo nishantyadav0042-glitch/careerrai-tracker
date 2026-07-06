@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
+import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 
-interface RoutineTaskShape { id: string; section: string; label: string; estMinutes: number }
+const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'yellow', 'red'];
+
+interface RoutineTaskShape { id: string; section: string; topic: string | null; label: string; estMinutes: number }
 
 // POST /api/routine/complete-task — ticks a task (toggle). When the day's
 // routine is fully done (or the single Emergency-Mode task is done), this
@@ -15,8 +18,11 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { task_id: taskId, is_emergency: isEmergency } = (await request.json()) as { task_id?: string; is_emergency?: boolean };
+  const { task_id: taskId, is_emergency: isEmergency, confidence } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string };
   if (!taskId || typeof taskId !== 'string') return NextResponse.json({ error: 'task_id required' }, { status: 400 });
+  if (confidence !== undefined && !VALID_CONFIDENCE.includes(confidence as ConfidenceSignal)) {
+    return NextResponse.json({ error: 'confidence must be green, yellow, or red' }, { status: 400 });
+  }
 
   const admin = createAdminClient();
   const today = getLogDateString();
@@ -48,7 +54,27 @@ export async function POST(request: NextRequest) {
   } else {
     await admin.from('routine_task_completions').insert({
       student_id: user.id, routine_date: today, task_id: taskId, is_emergency: !!isEmergency,
+      confidence: confidence ?? null,
     });
+
+    // Confidence-aware planning: a real 🟢/🟡/🔴 tap on a topic-bearing task
+    // feeds straight back into the Coverage Matrix — the same table the
+    // Topic Selector reads for tomorrow's choice — rather than only ever
+    // being editable from a separate self-audit screen.
+    const completedTask = tasks.find((t) => t.id === taskId);
+    if (confidence && completedTask?.topic) {
+      const { data: coverageRow } = await admin
+        .from('topic_coverage')
+        .select('status')
+        .eq('student_id', user.id)
+        .eq('topic', completedTask.topic)
+        .maybeSingle();
+      const newStatus = applyConfidenceSignal((coverageRow?.status as CoverageStatus | undefined) ?? null, confidence as ConfidenceSignal);
+      await admin.from('topic_coverage').upsert(
+        { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
+        { onConflict: 'student_id,section,topic' }
+      );
+    }
   }
 
   const { data: completions } = await admin

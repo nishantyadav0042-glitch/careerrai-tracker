@@ -10,11 +10,19 @@ import { QuickRoutineSetup } from './QuickRoutineSetup';
 interface RoutineTask {
   id: string;
   section: string;
+  topic: string | null;
   label: string;
   estMinutes: number;
   reason: string | null;
   isImplementationIntention?: boolean;
 }
+
+type ConfidenceSignal = 'green' | 'yellow' | 'red';
+const CONFIDENCE_OPTIONS: { value: ConfidenceSignal; emoji: string; label: string }[] = [
+  { value: 'green', emoji: '🟢', label: 'Nailed it' },
+  { value: 'yellow', emoji: '🟡', label: 'Okay' },
+  { value: 'red', emoji: '🔴', label: 'Still shaky' },
+];
 
 interface Mission {
   id: string;
@@ -69,6 +77,11 @@ export function TodaysRoutineCard() {
   const [emergencyAcknowledged, setEmergencyAcknowledged] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Confidence-aware planning: a topic-bearing task asks "how did that go?"
+  // instead of completing on the first tap — one deliberate tap either way,
+  // just choosing which of 3 outcomes rather than a plain checkbox, and the
+  // answer feeds the Coverage Matrix the Topic Selector reads for tomorrow.
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -90,18 +103,19 @@ export function TodaysRoutineCard() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function toggleTask(taskId: string) {
+  async function toggleTask(taskId: string, confidence?: ConfidenceSignal) {
     if (busyTaskId) return;
     setBusyTaskId(taskId);
     try {
       const res = await fetch('/api/routine/complete-task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, is_emergency: emergencyMode }),
+        body: JSON.stringify({ task_id: taskId, is_emergency: emergencyMode, ...(confidence ? { confidence } : {}) }),
       });
       if (!res.ok) return;
       const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; emergencyMinimumDone: boolean };
       setCompletedIds(new Set(json.completedTaskIds));
+      setExpandedTaskId(null);
       if (json.fullyDone) setFullyDone(true);
       else if (json.emergencyMinimumDone) {
         setEmergencyAcknowledged(true);
@@ -110,6 +124,12 @@ export function TodaysRoutineCard() {
     } finally {
       setBusyTaskId(null);
     }
+  }
+
+  function handleTaskTap(task: RoutineTask, done: boolean) {
+    if (done) { toggleTask(task.id); return; } // un-complete, no confidence involved
+    if (task.topic) { setExpandedTaskId((cur) => (cur === task.id ? null : task.id)); return; }
+    toggleTask(task.id); // no topic to attach a confidence signal to — complete outright
   }
 
   if (loading) {
@@ -254,36 +274,58 @@ export function TodaysRoutineCard() {
               // the compensating lever, so it gets real visual weight, not
               // the same gray subtitle every other task gets.
               const vivid = task.isImplementationIntention && !done;
+              const expanded = expandedTaskId === task.id && !done;
               return (
-                <button
-                  key={task.id}
-                  onClick={() => toggleTask(task.id)}
-                  disabled={busyTaskId === task.id}
-                  className={cn(
-                    'w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-all active:scale-[0.99]',
-                    done ? 'border-teal-200 bg-teal-50'
-                      : vivid ? 'border-orange-300 bg-orange-50/60 hover:border-orange-400'
-                      : 'border-stone-200 bg-white hover:border-stone-300'
-                  )}
-                >
-                  <span className={cn(
-                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                    done ? 'border-teal-600 bg-teal-600' : vivid ? 'border-orange-500' : 'border-stone-300'
-                  )}>
-                    {done && <Check className="w-3 h-3 text-white" />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className={cn('text-sm font-semibold', done ? 'text-teal-800 line-through' : 'text-stone-900')}>
-                      {task.label}
-                    </p>
-                    {task.reason && !done && (
-                      <p className={cn('text-xs mt-0.5', vivid ? 'font-semibold text-orange-700' : 'text-stone-500')}>
-                        {task.reason}
-                      </p>
+                <div key={task.id}>
+                  <button
+                    onClick={() => handleTaskTap(task, done)}
+                    disabled={busyTaskId === task.id}
+                    className={cn(
+                      'w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-all active:scale-[0.99]',
+                      done ? 'border-teal-200 bg-teal-50'
+                        : expanded ? 'border-orange-400 bg-orange-50/60'
+                        : vivid ? 'border-orange-300 bg-orange-50/60 hover:border-orange-400'
+                        : 'border-stone-200 bg-white hover:border-stone-300',
+                      expanded && 'rounded-b-none border-b-0'
                     )}
-                  </div>
-                  <span className="shrink-0 text-xs font-medium text-stone-400">{task.estMinutes}m</span>
-                </button>
+                  >
+                    <span className={cn(
+                      'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                      done ? 'border-teal-600 bg-teal-600' : vivid || expanded ? 'border-orange-500' : 'border-stone-300'
+                    )}>
+                      {done && <Check className="w-3 h-3 text-white" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={cn('text-sm font-semibold', done ? 'text-teal-800 line-through' : 'text-stone-900')}>
+                        {task.label}
+                      </p>
+                      {task.reason && !done && (
+                        <p className={cn('text-xs mt-0.5', vivid ? 'font-semibold text-orange-700' : 'text-stone-500')}>
+                          {task.reason}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-xs font-medium text-stone-400">{task.estMinutes}m</span>
+                  </button>
+                  {expanded && (
+                    <div className="rounded-b-xl border border-t-0 border-orange-400 bg-orange-50/60 px-3 pb-3 pt-1">
+                      <p className="text-xs font-semibold text-orange-800 mb-2">How did that go?</p>
+                      <div className="flex gap-2">
+                        {CONFIDENCE_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => toggleTask(task.id, opt.value)}
+                            disabled={busyTaskId === task.id}
+                            className="flex-1 flex flex-col items-center gap-0.5 rounded-lg border border-orange-200 bg-white py-2 text-xs font-medium text-stone-700 hover:border-orange-400 active:scale-[0.97] transition-all"
+                          >
+                            <span className="text-lg leading-none">{opt.emoji}</span>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

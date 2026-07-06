@@ -92,7 +92,16 @@ const PHASE_RANK: Record<Phase, number> = { foundation: 0, intensive: 1, revisio
 // already passed (e.g. a repeater who hasn't updated it post-exam yet), rolls
 // forward to the next upcoming CAT automatically rather than mislabeling a
 // post-exam student as still in "foundation" for a cycle that's already over.
-export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage | null): Phase {
+// A repeater has already been through one full prep cycle by definition — so
+// absent an explicit current_stage self-report, defaulting them to the
+// calendar's "foundation" would misrepresent someone who has already covered
+// the basics once. This only fills the gap when stage is unknown: an
+// explicit stage answer (even 'not_started', meaning "haven't restarted THIS
+// cycle yet") is more specific real data and always wins over the archetype
+// guess, exactly like STAGE_MIN_PHASE always wins over the calendar guess.
+const ARCHETYPE_PHASE_FLOOR: Phase = 'intensive';
+
+export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage | null, isRepeater?: boolean): Phase {
   let year = attemptYear ?? now.getFullYear();
   if (now > catExamDate(year)) year += 1;
 
@@ -106,7 +115,9 @@ export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage |
   if (stage) {
     const stageMin = STAGE_MIN_PHASE[stage];
     if (PHASE_RANK[stageMin] > PHASE_RANK[calendarPhase]) return stageMin;
+    return calendarPhase;
   }
+  if (isRepeater && PHASE_RANK[ARCHETYPE_PHASE_FLOOR] > PHASE_RANK[calendarPhase]) return ARCHETYPE_PHASE_FLOOR;
   return calendarPhase;
 }
 
@@ -189,7 +200,7 @@ export function generateRoutine(
   // for the two non-weakest sections.
   topicChoices: Record<Section, TopicChoice>
 ): GeneratedRoutine {
-  const phase = getPhase(now, profile.attemptYear, profile.currentStage);
+  const phase = getPhase(now, profile.attemptYear, profile.currentStage, profile.isRepeater);
   const weekend = isWeekend(now);
   // Weekday and weekend fallbacks are now genuinely different per archetype
   // (previously both used the same constant regardless of which day it
@@ -243,14 +254,41 @@ export function generateRoutine(
 
   // Phase-specific closing task, in do-order (last).
   if (phase === 'intensive') {
-    tasks.push({
-      id: 'mock-or-review',
-      section: 'General',
-      topic: null,
-      label: profile.isRepeater ? 'Mock analysis — review your last attempt' : 'Sectional mock',
-      estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-      reason: 'Intensive phase — mocks are the #1 signal now',
-    });
+    // Mock timing genuinely differs by archetype, not just the label on one
+    // shared task: a repeater already has mocks on file, so reviewing one is
+    // real signal-extraction work regardless of how little time today has —
+    // it gets the daily slot every day. A working professional's weekday
+    // capacity is too tight for a fresh timed sectional/full mock, so on
+    // weekdays they get lighter targeted practice instead and the actual
+    // mock waits for the weekend, when hours are realistically available.
+    if (profile.isRepeater) {
+      tasks.push({
+        id: 'mock-or-review',
+        section: 'General',
+        topic: null,
+        label: 'Mock analysis — review your last attempt',
+        estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
+        reason: 'Intensive phase — mocks are the #1 signal now',
+      });
+    } else if (profile.isWorkingProfessional && !weekend) {
+      tasks.push({
+        id: 'weekday-sectional',
+        section: weak,
+        topic: null,
+        label: `${weak} — timed sectional practice`,
+        estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
+        reason: 'Weekday capacity is tight — full mocks wait for the weekend',
+      });
+    } else {
+      tasks.push({
+        id: 'mock-or-review',
+        section: 'General',
+        topic: null,
+        label: 'Sectional mock',
+        estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
+        reason: 'Intensive phase — mocks are the #1 signal now',
+      });
+    }
   } else if (phase === 'revision') {
     tasks.push({
       id: 'revision-block',

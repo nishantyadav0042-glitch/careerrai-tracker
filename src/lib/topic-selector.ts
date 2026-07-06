@@ -101,3 +101,25 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
   const winner = scored[0];
   return { topic: winner.topic, score: winner.score, reasons: winner.reasons.slice(0, 2) };
 }
+
+export type ConfidenceSignal = 'green' | 'yellow' | 'red';
+
+const STATUS_ORDER: CoverageStatus[] = ['not_started', 'started', 'completed', 'strong'];
+
+// Confidence-aware planning: a real signal captured right after a task is
+// done feeds straight back into the same Coverage Matrix the Topic Selector
+// itself reads above — so the plan adapts to how prep is actually going,
+// not just to taps made once at setup or a separate self-audit visit.
+//   green  — advance one level, never past 'strong'
+//   yellow — acknowledges the attempt; only moves an untouched topic to
+//            'started', never advances or regresses one already in progress
+//   red    — a real regression signal: struggling on a topic marked
+//            'completed'/'strong' means it isn't holding, so it drops back
+//            to 'started' — never all the way to 'not_started', since the
+//            attempt itself is still real signal
+export function applyConfidenceSignal(current: CoverageStatus | null, confidence: ConfidenceSignal): CoverageStatus {
+  const rank = STATUS_ORDER.indexOf(current ?? 'not_started');
+  if (confidence === 'green') return STATUS_ORDER[Math.min(rank + 1, STATUS_ORDER.length - 1)];
+  if (confidence === 'red') return 'started';
+  return rank === 0 ? 'started' : STATUS_ORDER[rank];
+}
