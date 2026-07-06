@@ -1,5 +1,10 @@
 import Image from 'next/image';
 
+// Natural aspect ratio (width/height) of /careerrai-monogram.png — the arrow
+// mark is wider than it is tall, so a fixed-height render needs a matching
+// width to avoid Next/Image's intrinsic-size mismatch warning.
+const MONOGRAM_ASPECT = 600 / 558;
+
 export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const h = size === 'lg' ? 40 : size === 'sm' ? 22 : 28;
   const textSize = size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-base';
@@ -9,7 +14,7 @@ export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
       <Image
         src="/careerrai-monogram.png"
         alt="CareerRai"
-        width={h}
+        width={Math.round(h * MONOGRAM_ASPECT)}
         height={h}
         style={{ height: h, width: 'auto' }}
         priority

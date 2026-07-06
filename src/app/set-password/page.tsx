@@ -59,7 +59,7 @@ function SetPasswordForm() {
       <div className="relative w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-5">
-            <Image src="/careerrai-logo.png" alt="CareerRai" width={80} height={80} style={{ height: 80, width: 'auto' }} priority />
+            <Image src="/careerrai-logo.png" alt="CareerRai — By the students, for the students" width={85} height={80} style={{ height: 80, width: 'auto' }} priority />
           </div>
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-orange-100 mb-4">
             <Lock className="w-6 h-6 text-orange-600" />

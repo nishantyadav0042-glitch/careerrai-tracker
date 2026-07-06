@@ -129,8 +129,8 @@ function LoginForm() {
             <div className="flex justify-center mb-5">
               <Image
                 src="/careerrai-logo.png"
-                alt="CareerRai"
-                width={124}
+                alt="CareerRai — By the students, for the students"
+                width={132}
                 height={124}
                 style={{ height: 124, width: 'auto' }}
                 priority
