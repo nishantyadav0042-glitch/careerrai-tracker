@@ -7,6 +7,11 @@
 export type Section = 'VARC' | 'DILR' | 'QA';
 export type Phase = 'foundation' | 'intensive' | 'revision';
 
+// Self-reported prep stage — see getPhase() below for how this can advance
+// (never regress) the calendar-derived phase. Values match the Study Plan
+// Generator onboarding design exactly.
+export type Stage = 'not_started' | 'concepts' | 'questions' | 'sectionals' | 'mocks';
+
 export interface RoutineProfile {
   isWorkingProfessional: boolean;
   isRepeater: boolean;
@@ -19,6 +24,9 @@ export interface RoutineProfile {
   // Comprehension" within VARC) — see topics-constants.ts for the taxonomy.
   // null = not answered; the section-only copy is the fallback.
   weakTopic: string | null;
+  // null = never asked. See getPhase() — this can only push the phase
+  // forward relative to the calendar default, never pull it back.
+  currentStage: Stage | null;
   coachingEnrolled: boolean | null;
   attemptYear: number | null;
 }
@@ -57,22 +65,42 @@ export function catExamDate(year: number): Date {
   return lastSunday;
 }
 
+// A student already at sectionals/mocks shouldn't get "concept + practice"
+// framing just because their exam is still far off on the calendar — but the
+// reverse must never happen: a student who hasn't started 3 weeks out still
+// needs the calendar's urgency, not a false "foundation" demotion. So stage
+// can only push the phase forward, never pull it back.
+const STAGE_MIN_PHASE: Record<Stage, Phase> = {
+  not_started: 'foundation',
+  concepts: 'foundation',
+  questions: 'foundation',
+  sectionals: 'intensive',
+  mocks: 'intensive',
+};
+const PHASE_RANK: Record<Phase, number> = { foundation: 0, intensive: 1, revision: 2 };
+
 // Phase is relative to THIS student's own exam date, not a hardcoded calendar
 // assumption that every student targets the same November. attemptYear comes
 // from profiles.attempt_year; when absent, or when that year's CAT has
 // already passed (e.g. a repeater who hasn't updated it post-exam yet), rolls
 // forward to the next upcoming CAT automatically rather than mislabeling a
 // post-exam student as still in "foundation" for a cycle that's already over.
-export function getPhase(now: Date, attemptYear?: number | null): Phase {
+export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage | null): Phase {
   let year = attemptYear ?? now.getFullYear();
   if (now > catExamDate(year)) year += 1;
 
+  let calendarPhase: Phase = 'foundation'; // everything else, including multi-year-out early prep
   if (now.getFullYear() === year) {
     const month = now.getMonth(); // 0-indexed
-    if (month === 10 && now <= catExamDate(year)) return 'revision'; // Nov, up to exam day
-    if (month === 8 || month === 9) return 'intensive';               // Sep, Oct
+    if (month === 10 && now <= catExamDate(year)) calendarPhase = 'revision'; // Nov, up to exam day
+    else if (month === 8 || month === 9) calendarPhase = 'intensive';         // Sep, Oct
   }
-  return 'foundation'; // everything else, including multi-year-out early prep
+
+  if (stage) {
+    const stageMin = STAGE_MIN_PHASE[stage];
+    if (PHASE_RANK[stageMin] > PHASE_RANK[calendarPhase]) return stageMin;
+  }
+  return calendarPhase;
 }
 
 function isWeekend(d: Date): boolean {
@@ -140,7 +168,7 @@ export interface HistoryInput {
 }
 
 export function generateRoutine(profile: RoutineProfile, now: Date, history: HistoryInput): GeneratedRoutine {
-  const phase = getPhase(now, profile.attemptYear);
+  const phase = getPhase(now, profile.attemptYear, profile.currentStage);
   const weekend = isWeekend(now);
   const hours = (weekend ? profile.weekendHours : profile.weekdayHours) ?? (profile.isWorkingProfessional ? 1.5 : 2.5);
   const totalMinutes = Math.max(30, Math.round(hours * 60));

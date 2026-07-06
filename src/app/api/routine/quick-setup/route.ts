@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 
 const VALID_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
+const VALID_STAGES = ['not_started', 'concepts', 'questions', 'sectionals', 'mocks'] as const;
 
 // Reuses the same topic taxonomy already shown in daily logging (quick-log
 // sheet) rather than inventing a second one — "weakest section" alone was
@@ -30,18 +31,22 @@ const DEFAULT_TOPIC_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string> 
 
 // POST /api/routine/quick-setup — weakest section + toughest topic within it
 // (skippable, defaults to that section's highest-weightage topic rather than
-// dropping personalization entirely), plus an optional weekend-hours
-// refinement, captured just-in-time on first use of the routine card rather
-// than as an extra step in the main onboarding wizard.
+// dropping personalization entirely), current prep stage (fixes phase being
+// calendar-only), plus an optional weekend-hours refinement — all captured
+// just-in-time on first use of the routine card rather than as an extra step
+// in the main onboarding wizard.
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = (await request.json()) as { weakest_section?: string; weak_topic?: string; weekend_hours?: number };
+  const body = (await request.json()) as { weakest_section?: string; weak_topic?: string; weekend_hours?: number; current_stage?: string };
   const weakest = body.weakest_section;
   if (!weakest || !(VALID_SECTIONS as readonly string[]).includes(weakest)) {
     return NextResponse.json({ error: 'weakest_section must be VARC, DILR, or QA' }, { status: 400 });
+  }
+  if (body.current_stage != null && !(VALID_STAGES as readonly string[]).includes(body.current_stage)) {
+    return NextResponse.json({ error: 'current_stage is not a recognised value' }, { status: 400 });
   }
 
   const strongest = (VALID_SECTIONS as readonly string[]).filter((s) => s !== weakest);
@@ -69,6 +74,9 @@ export async function POST(request: NextRequest) {
   }
   if (typeof body.weekend_hours === 'number' && body.weekend_hours >= 0 && body.weekend_hours <= 16) {
     updates.weekend_hours_available = body.weekend_hours;
+  }
+  if (typeof body.current_stage === 'string') {
+    updates.current_stage = body.current_stage;
   }
 
   const { error } = await admin.from('profiles').update(updates).eq('id', user.id);

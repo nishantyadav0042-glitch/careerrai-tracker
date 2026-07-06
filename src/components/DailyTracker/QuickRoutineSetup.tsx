@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 
 type Section = 'VARC' | 'DILR' | 'QA';
+type Stage = 'not_started' | 'concepts' | 'questions' | 'sectionals' | 'mocks';
 
 // Reuses the same topic taxonomy already shown in daily logging — "weakest
 // section" alone is too coarse (every CAT aspirant already knows to study
@@ -16,27 +17,39 @@ const TOPICS_BY_SECTION: Record<Section, string[]> = {
   QA: QUANT_TOPICS,
 };
 
-// Up to 3 taps total: weakest section, toughest topic within it (skippable),
-// weekend hours (skippable). Any step already answered is skipped — a
-// returning student who set their section before this shipped only sees the
-// topic tap, not the whole flow again.
+const STAGE_OPTIONS: { value: Stage; label: string }[] = [
+  { value: 'not_started', label: "Haven't started" },
+  { value: 'concepts', label: 'Learning concepts' },
+  { value: 'questions', label: 'Solving questions' },
+  { value: 'sectionals', label: 'Taking sectionals' },
+  { value: 'mocks', label: 'Taking full mocks' },
+];
+
+// Up to 4 taps total: weakest section, toughest topic within it (skippable),
+// current prep stage, weekend hours (skippable). Any step already answered
+// is skipped — a returning student who set earlier fields before a step
+// shipped only sees what's still missing, not the whole flow again.
 export function QuickRoutineSetup({
   initialWeakest,
+  initialStage,
   needsWeekendHours,
   onDone,
 }: {
   initialWeakest: Section | null;
+  initialStage: Stage | null;
   needsWeekendHours: boolean;
   onDone: () => void;
 }) {
   const [weakest, setWeakest] = useState<Section | null>(initialWeakest);
   const [topic, setTopic] = useState<string | null>(null);
   const [topicAnswered, setTopicAnswered] = useState(false);
+  const [stage, setStage] = useState<Stage | null>(initialStage);
   const [saving, setSaving] = useState(false);
 
   const needsTopic = !!weakest && !topicAnswered;
+  const needsStage = !!weakest && !needsTopic && !stage;
 
-  async function submit(finalTopic: string | null, weekendHours?: number) {
+  async function submit(finalTopic: string | null, finalStage: Stage | null, weekendHours?: number) {
     if (!weakest || saving) return;
     setSaving(true);
     try {
@@ -46,6 +59,7 @@ export function QuickRoutineSetup({
         body: JSON.stringify({
           weakest_section: weakest,
           weak_topic: finalTopic ?? '',
+          ...(finalStage ? { current_stage: finalStage } : {}),
           ...(weekendHours != null ? { weekend_hours: weekendHours } : {}),
         }),
       });
@@ -62,12 +76,17 @@ export function QuickRoutineSetup({
   function chooseTopic(t: string) {
     setTopic(t);
     setTopicAnswered(true);
-    if (!needsWeekendHours) submit(t);
+    if (stage && !needsWeekendHours) submit(t, stage);
   }
 
   function skipTopic() {
     setTopicAnswered(true);
-    if (!needsWeekendHours) submit(null);
+    if (stage && !needsWeekendHours) submit(null, stage);
+  }
+
+  function chooseStage(s: Stage) {
+    setStage(s);
+    if (!needsWeekendHours) submit(topic, s);
   }
 
   return (
@@ -115,6 +134,26 @@ export function QuickRoutineSetup({
             Not sure — use the highest-weightage topic instead
           </button>
         </>
+      ) : needsStage ? (
+        <>
+          <p className="text-sm font-bold text-stone-900 mb-0.5">Where are you right now?</p>
+          <p className="text-xs text-stone-500 mb-3">One tap — makes sure today&apos;s routine matches your real stage, not just the calendar.</p>
+          <div className="grid grid-cols-1 gap-2">
+            {STAGE_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                disabled={saving}
+                onClick={() => chooseStage(value)}
+                className={cn(
+                  'rounded-xl border-2 border-stone-200 py-2.5 px-3 text-left text-sm font-semibold text-stone-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all active:scale-95',
+                  saving && 'opacity-50'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
       ) : (
         <>
           <p className="text-sm font-bold text-stone-900 mb-0.5">Do you study more on weekends?</p>
@@ -128,7 +167,7 @@ export function QuickRoutineSetup({
               <button
                 key={label}
                 disabled={saving}
-                onClick={() => submit(topic, hours ?? undefined)}
+                onClick={() => submit(topic, stage, hours ?? undefined)}
                 className={cn(
                   'rounded-xl border-2 border-stone-200 py-3 px-1 text-xs font-semibold text-stone-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all active:scale-95',
                   saving && 'opacity-50'
@@ -139,7 +178,7 @@ export function QuickRoutineSetup({
             ))}
           </div>
           <button
-            onClick={() => submit(topic)}
+            onClick={() => submit(topic, stage)}
             disabled={saving}
             className="mt-2.5 text-xs text-stone-400 hover:text-stone-600"
           >

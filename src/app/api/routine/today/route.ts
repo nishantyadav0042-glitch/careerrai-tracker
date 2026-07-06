@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type HistoryInput } from '@/lib/routine-engine';
+import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal } from '@/lib/mission-engine';
 import { getLogDateString } from '@/lib/streak-utils';
 
@@ -23,7 +23,7 @@ export async function GET() {
       is_working_professional, is_repeater, target_percentile,
       hours_available, study_target_hours, weekend_hours_available,
       self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year
+      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage
     `)
     .eq('id', user.id)
     .single();
@@ -43,6 +43,12 @@ export async function GET() {
   const weakTopicRaw = profile.self_reported_weak_topic as string | null;
   const weakTopic = weakTopicRaw ? weakTopicRaw : null;
 
+  // null = never asked. One tap, cheap, and it fixes a real gap: phase used
+  // to come from the calendar alone, so a student already mock-testing and
+  // one who hasn't started got identical "foundation" framing if their
+  // attempt_year matched. See getPhase()'s advance-only override.
+  const currentStage = profile.current_stage as Stage | null;
+
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
@@ -52,6 +58,7 @@ export async function GET() {
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
+    currentStage,
     coachingEnrolled: profile.coaching_enrolled as boolean | null,
     attemptYear: profile.attempt_year as number | null,
   };
@@ -65,15 +72,17 @@ export async function GET() {
     .maybeSingle();
 
   // Minimum-friction onboarding: weakest section drives ~40% of the day's time
-  // budget, and the topic within it is what makes the routine feel precise
-  // rather than "everyone already knows to study VARC/DILR/QA" generic — so
-  // both are worth one explicit tap each, rather than a guessed default. Only
-  // re-offer while genuinely unanswered (null) — once answered (even via the
-  // skip-to-default path), don't nag on future visits.
-  if (!existing && (weakest == null || weakTopicRaw == null)) {
+  // budget, the topic within it is what makes the routine feel precise rather
+  // than "everyone already knows to study VARC/DILR/QA" generic, and current
+  // stage is what stops phase from being calendar-only — each is worth one
+  // explicit tap, rather than a guessed default. Only re-offer while
+  // genuinely unanswered (null) — once answered (even via a skip-to-default
+  // path), don't nag on future visits.
+  if (!existing && (weakest == null || weakTopicRaw == null || currentStage == null)) {
     return NextResponse.json({
       needsSetup: true,
       weakestSection: weakest,
+      currentStage,
       needsWeekendHours: profile.weekend_hours_available == null,
     });
   }
