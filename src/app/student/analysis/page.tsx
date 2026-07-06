@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { CoverageMatrix } from '@/components/Analysis/CoverageMatrix';
 
 // Recharts is ~350 KB — lazy-load so it doesn't block the page shell.
 const PercentileChart = dynamic(
@@ -141,6 +142,8 @@ export default function AnalysisPage() {
             <p className="text-sm text-stone-500">What the data says about you</p>
           </div>
         </div>
+
+        <CoverageMatrix />
 
         {debriefs.length === 0 ? (
           <>
