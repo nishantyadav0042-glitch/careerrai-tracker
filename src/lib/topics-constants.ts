@@ -30,6 +30,17 @@ export const LRDI_TOPICS = [
   'Puzzles & Games',
 ];
 
+// Single source of truth for "which topic if none was self-reported" —
+// used both when a student skips the weak-topic tap (quick-setup route) and
+// for the two non-weakest sections in the daily routine, which never get an
+// onboarding tap of their own (routine-engine.ts). Each is that section's
+// highest-weightage topic — a real, defensible default, never a blank one.
+export const DEFAULT_TOPIC_BY_SECTION: Record<'VARC' | 'DILR' | 'QA', string> = {
+  VARC: VERBAL_TOPICS[0],
+  DILR: LRDI_TOPICS[0],
+  QA: QUANT_TOPICS[0],
+};
+
 // Mock tests and practice
 export const PRACTICE_TOPICS = [
   'Full-Length Mock',

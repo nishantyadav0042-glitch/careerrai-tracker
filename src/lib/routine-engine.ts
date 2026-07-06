@@ -4,6 +4,8 @@
 // TypeScript so it can be read, argued with, and changed like content, not
 // like a black box.
 
+import { DEFAULT_TOPIC_BY_SECTION } from './topics-constants';
+
 export type Section = 'VARC' | 'DILR' | 'QA';
 export type Phase = 'foundation' | 'intensive' | 'revision';
 
@@ -138,13 +140,14 @@ export function implementationIntention(
 // if-then framed. The evidence supports one vivid, personal trigger, not
 // diluting the pattern across a whole checklist. Varied by position so two
 // "first pass" days in a row don't read as copy-pasted next to each other.
-export function sectionReason(section: Section, lastPracticedDaysAgo: number | null, ordinal: 'second' | 'third'): string {
+export function sectionReason(section: Section, topic: string, lastPracticedDaysAgo: number | null, ordinal: 'second' | 'third'): string {
+  const target = `${section} — ${topic}`;
   if (lastPracticedDaysAgo == null) {
-    return ordinal === 'second' ? `${section} — rounding out today's set` : `${section} — closes today's session`;
+    return ordinal === 'second' ? `${target} — rounding out today's set` : `${target} — closes today's session`;
   }
-  if (lastPracticedDaysAgo === 0) return `${section} — done earlier today too`;
-  if (lastPracticedDaysAgo === 1) return `${section} — last done yesterday`;
-  return `${section} — last done ${lastPracticedDaysAgo} days ago`;
+  if (lastPracticedDaysAgo === 0) return `${target} — done earlier today too`;
+  if (lastPracticedDaysAgo === 1) return `${target} — last done yesterday`;
+  return `${target} — last done ${lastPracticedDaysAgo} days ago`;
 }
 
 // The "how did you plan this" answer, made visible instead of implicit. A
@@ -200,12 +203,17 @@ export function generateRoutine(profile: RoutineProfile, now: Date, history: His
   });
 
   nonWeak.forEach((section, i) => {
+    // These two sections never get their own onboarding tap (only the
+    // weakest section does) — the highest-weightage topic is the same
+    // defensible default already used when a student skips that tap, so
+    // every task names a real topic, not just the priority one.
+    const topic = DEFAULT_TOPIC_BY_SECTION[section];
     tasks.push({
       id: `${section.toLowerCase()}-set`,
       section,
-      label: `${section} — practice set`,
+      label: `${section} — ${topic}: practice set`,
       estMinutes: Math.round(totalMinutes * otherShare),
-      reason: sectionReason(section, history.daysSinceLastPracticed[section], i === 0 ? 'second' : 'third'),
+      reason: sectionReason(section, topic, history.daysSinceLastPracticed[section], i === 0 ? 'second' : 'third'),
     });
   });
 

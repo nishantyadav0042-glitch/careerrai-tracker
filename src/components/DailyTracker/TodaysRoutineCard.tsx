@@ -145,12 +145,13 @@ export function TodaysRoutineCard() {
       {/* Your CAT Roadmap — the 5-phase canonical strategy this routine
           executes, and where this student actually sits in it. Position is
           anchored to weeks-to-exam, then advanced (never regressed) by the
-          current-stage tap — same rule the routine's own phase uses. */}
+          current-stage tap — same rule the routine's own phase uses.
+          Deliberately does NOT show its own weeks/days-to-exam number — the
+          header badge and the "Road to IIM" card each already show one, and
+          three independently-rounded countdowns on one screen is exactly
+          the "messy, inconsistent" complaint this would otherwise repeat. */}
       <div className="mb-4 pb-4 border-b border-stone-100">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your CAT Roadmap</p>
-          <span className="text-xs font-semibold text-stone-500">{roadmap.weeksRemaining}w to CAT</span>
-        </div>
+        <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2">Your CAT Roadmap</p>
         <div className="flex gap-1 mb-2">
           {roadmap.phases.map((p, i) => (
             <div

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, DEFAULT_TOPIC_BY_SECTION } from '@/lib/topics-constants';
 
 const VALID_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
 const VALID_STAGES = ['not_started', 'concepts', 'questions', 'sectionals', 'mocks'] as const;
@@ -15,19 +15,6 @@ const TOPICS_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string[]> = {
   VARC: VERBAL_TOPICS,
   DILR: LRDI_TOPICS,
   QA: QUANT_TOPICS,
-};
-
-// A "skip" tap must never mean "give up on topic-level personalization
-// forever" — that regressed straight back to the generic section-only
-// routine this feature exists to fix. Skipping instead picks the
-// highest-weightage topic in that section as a real, defensible default
-// (Reading Comprehension carries the most weight in VARC, Arithmetic in QA,
-// Data Interpretation in DILR) — the student still gets a specific topic,
-// they just didn't have to choose it themselves.
-const DEFAULT_TOPIC_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string> = {
-  VARC: VERBAL_TOPICS[0],
-  DILR: LRDI_TOPICS[0],
-  QA: QUANT_TOPICS[0],
 };
 
 // POST /api/routine/quick-setup — weakest section + toughest topic within it
@@ -69,7 +56,7 @@ export async function POST(request: NextRequest) {
     const validTopics = TOPICS_BY_SECTION[section];
     if (body.weak_topic === '') {
       // Explicit skip — still resolves to a real topic (see
-      // DEFAULT_TOPIC_BY_SECTION above), never to nothing.
+      // DEFAULT_TOPIC_BY_SECTION in topics-constants.ts), never to nothing.
       updates.self_reported_weak_topic = DEFAULT_TOPIC_BY_SECTION[section];
     } else if (validTopics.includes(body.weak_topic)) {
       updates.self_reported_weak_topic = body.weak_topic;
