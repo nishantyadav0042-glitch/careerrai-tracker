@@ -5,6 +5,7 @@ import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants
 
 const VALID_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
 const VALID_STAGES = ['not_started', 'concepts', 'questions', 'sectionals', 'mocks'] as const;
+const VALID_BLOCKERS = ['inconsistency', 'dont_know_what', 'mock_anxiety', 'time_wasting'] as const;
 
 // Reuses the same topic taxonomy already shown in daily logging (quick-log
 // sheet) rather than inventing a second one — "weakest section" alone was
@@ -32,21 +33,25 @@ const DEFAULT_TOPIC_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string> 
 // POST /api/routine/quick-setup — weakest section + toughest topic within it
 // (skippable, defaults to that section's highest-weightage topic rather than
 // dropping personalization entirely), current prep stage (fixes phase being
-// calendar-only), plus an optional weekend-hours refinement — all captured
-// just-in-time on first use of the routine card rather than as an extra step
-// in the main onboarding wizard.
+// calendar-only), biggest blocker (seeds the Mission Score Engine's
+// cold-start bias — see mission-engine.ts), plus an optional weekend-hours
+// refinement — all captured just-in-time on first use of the routine card
+// rather than as an extra step in the main onboarding wizard.
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = (await request.json()) as { weakest_section?: string; weak_topic?: string; weekend_hours?: number; current_stage?: string };
+  const body = (await request.json()) as { weakest_section?: string; weak_topic?: string; weekend_hours?: number; current_stage?: string; biggest_blocker?: string };
   const weakest = body.weakest_section;
   if (!weakest || !(VALID_SECTIONS as readonly string[]).includes(weakest)) {
     return NextResponse.json({ error: 'weakest_section must be VARC, DILR, or QA' }, { status: 400 });
   }
   if (body.current_stage != null && !(VALID_STAGES as readonly string[]).includes(body.current_stage)) {
     return NextResponse.json({ error: 'current_stage is not a recognised value' }, { status: 400 });
+  }
+  if (body.biggest_blocker != null && !(VALID_BLOCKERS as readonly string[]).includes(body.biggest_blocker)) {
+    return NextResponse.json({ error: 'biggest_blocker is not a recognised value' }, { status: 400 });
   }
 
   const strongest = (VALID_SECTIONS as readonly string[]).filter((s) => s !== weakest);
@@ -77,6 +82,9 @@ export async function POST(request: NextRequest) {
   }
   if (typeof body.current_stage === 'string') {
     updates.current_stage = body.current_stage;
+  }
+  if (typeof body.biggest_blocker === 'string') {
+    updates.biggest_blocker = body.biggest_blocker;
   }
 
   const { error } = await admin.from('profiles').update(updates).eq('id', user.id);

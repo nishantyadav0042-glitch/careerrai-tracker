@@ -6,6 +6,7 @@ import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants
 
 type Section = 'VARC' | 'DILR' | 'QA';
 type Stage = 'not_started' | 'concepts' | 'questions' | 'sectionals' | 'mocks';
+type Blocker = 'inconsistency' | 'dont_know_what' | 'mock_anxiety' | 'time_wasting';
 
 // Reuses the same topic taxonomy already shown in daily logging — "weakest
 // section" alone is too coarse (every CAT aspirant already knows to study
@@ -25,18 +26,27 @@ const STAGE_OPTIONS: { value: Stage; label: string }[] = [
   { value: 'mocks', label: 'Taking full mocks' },
 ];
 
-// Up to 4 taps total: weakest section, toughest topic within it (skippable),
-// current prep stage, weekend hours (skippable). Any step already answered
-// is skipped — a returning student who set earlier fields before a step
-// shipped only sees what's still missing, not the whole flow again.
+const BLOCKER_OPTIONS: { value: Blocker; label: string }[] = [
+  { value: 'inconsistency', label: "Can't stay consistent" },
+  { value: 'dont_know_what', label: "Don't know what to study" },
+  { value: 'mock_anxiety', label: 'Mocks scare me' },
+  { value: 'time_wasting', label: 'I waste too much time' },
+];
+
+// Up to 5 taps total: weakest section, toughest topic within it (skippable),
+// current prep stage, biggest blocker, weekend hours (skippable). Any step
+// already answered is skipped — a returning student who set earlier fields
+// before a step shipped only sees what's still missing, not the whole flow.
 export function QuickRoutineSetup({
   initialWeakest,
   initialStage,
+  initialBlocker,
   needsWeekendHours,
   onDone,
 }: {
   initialWeakest: Section | null;
   initialStage: Stage | null;
+  initialBlocker: Blocker | null;
   needsWeekendHours: boolean;
   onDone: () => void;
 }) {
@@ -44,12 +54,14 @@ export function QuickRoutineSetup({
   const [topic, setTopic] = useState<string | null>(null);
   const [topicAnswered, setTopicAnswered] = useState(false);
   const [stage, setStage] = useState<Stage | null>(initialStage);
+  const [blocker, setBlocker] = useState<Blocker | null>(initialBlocker);
   const [saving, setSaving] = useState(false);
 
   const needsTopic = !!weakest && !topicAnswered;
   const needsStage = !!weakest && !needsTopic && !stage;
+  const needsBlocker = !!weakest && !needsTopic && !needsStage && !blocker;
 
-  async function submit(finalTopic: string | null, finalStage: Stage | null, weekendHours?: number) {
+  async function submit(finalTopic: string | null, finalStage: Stage | null, finalBlocker: Blocker | null, weekendHours?: number) {
     if (!weakest || saving) return;
     setSaving(true);
     try {
@@ -60,6 +72,7 @@ export function QuickRoutineSetup({
           weakest_section: weakest,
           weak_topic: finalTopic ?? '',
           ...(finalStage ? { current_stage: finalStage } : {}),
+          ...(finalBlocker ? { biggest_blocker: finalBlocker } : {}),
           ...(weekendHours != null ? { weekend_hours: weekendHours } : {}),
         }),
       });
@@ -76,17 +89,22 @@ export function QuickRoutineSetup({
   function chooseTopic(t: string) {
     setTopic(t);
     setTopicAnswered(true);
-    if (stage && !needsWeekendHours) submit(t, stage);
+    if (stage && blocker && !needsWeekendHours) submit(t, stage, blocker);
   }
 
   function skipTopic() {
     setTopicAnswered(true);
-    if (stage && !needsWeekendHours) submit(null, stage);
+    if (stage && blocker && !needsWeekendHours) submit(null, stage, blocker);
   }
 
   function chooseStage(s: Stage) {
     setStage(s);
-    if (!needsWeekendHours) submit(topic, s);
+    if (blocker && !needsWeekendHours) submit(topic, s, blocker);
+  }
+
+  function chooseBlocker(b: Blocker) {
+    setBlocker(b);
+    if (!needsWeekendHours) submit(topic, stage, b);
   }
 
   return (
@@ -154,6 +172,26 @@ export function QuickRoutineSetup({
             ))}
           </div>
         </>
+      ) : needsBlocker ? (
+        <>
+          <p className="text-sm font-bold text-stone-900 mb-0.5">What&apos;s your biggest blocker right now?</p>
+          <p className="text-xs text-stone-500 mb-3">One tap — this shapes what today&apos;s Mission leads with.</p>
+          <div className="grid grid-cols-1 gap-2">
+            {BLOCKER_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                disabled={saving}
+                onClick={() => chooseBlocker(value)}
+                className={cn(
+                  'rounded-xl border-2 border-stone-200 py-2.5 px-3 text-left text-sm font-semibold text-stone-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all active:scale-95',
+                  saving && 'opacity-50'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
       ) : (
         <>
           <p className="text-sm font-bold text-stone-900 mb-0.5">Do you study more on weekends?</p>
@@ -167,7 +205,7 @@ export function QuickRoutineSetup({
               <button
                 key={label}
                 disabled={saving}
-                onClick={() => submit(topic, stage, hours ?? undefined)}
+                onClick={() => submit(topic, stage, blocker, hours ?? undefined)}
                 className={cn(
                   'rounded-xl border-2 border-stone-200 py-3 px-1 text-xs font-semibold text-stone-700 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all active:scale-95',
                   saving && 'opacity-50'
@@ -178,7 +216,7 @@ export function QuickRoutineSetup({
             ))}
           </div>
           <button
-            onClick={() => submit(topic, stage)}
+            onClick={() => submit(topic, stage, blocker)}
             disabled={saving}
             className="mt-2.5 text-xs text-stone-400 hover:text-stone-600"
           >

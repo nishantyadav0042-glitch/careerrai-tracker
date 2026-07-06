@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
-import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal } from '@/lib/mission-engine';
+import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { getLogDateString } from '@/lib/streak-utils';
 
@@ -24,7 +24,7 @@ export async function GET() {
       is_working_professional, is_repeater, target_percentile,
       hours_available, study_target_hours, weekend_hours_available,
       self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage
+      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker
     `)
     .eq('id', user.id)
     .single();
@@ -49,6 +49,12 @@ export async function GET() {
   // one who hasn't started got identical "foundation" framing if their
   // attempt_year matched. See getPhase()'s advance-only override.
   const currentStage = profile.current_stage as Stage | null;
+
+  // null = never asked. Seeds the Mission Score Engine's cold-start bias —
+  // see blockerBiasSignal in mission-engine.ts. Required, no skip: unlike
+  // the topic tap, there's no defensible universal default for "what's
+  // blocking you," so this is asked once and answered, not defaulted.
+  const biggestBlocker = profile.biggest_blocker as Blocker | null;
 
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
@@ -79,11 +85,12 @@ export async function GET() {
   // explicit tap, rather than a guessed default. Only re-offer while
   // genuinely unanswered (null) — once answered (even via a skip-to-default
   // path), don't nag on future visits.
-  if (!existing && (weakest == null || weakTopicRaw == null || currentStage == null)) {
+  if (!existing && (weakest == null || weakTopicRaw == null || currentStage == null || biggestBlocker == null)) {
     return NextResponse.json({
       needsSetup: true,
       weakestSection: weakest,
       currentStage,
+      biggestBlocker,
       needsWeekendHours: profile.weekend_hours_available == null,
     });
   }
@@ -144,17 +151,17 @@ export async function GET() {
     {
       id: 'mock-analysis',
       label: pendingMockName ? `Analyze ${pendingMockName}` : 'Analyze your last mock',
-      signals: [mockPendingAnalysisSignal(daysSincePendingMock)],
+      signals: [mockPendingAnalysisSignal(daysSincePendingMock), blockerBiasSignal(biggestBlocker, 'mock-analysis')],
     },
     {
       id: 'weak-revision',
       label: `Revise ${weak}`,
-      signals: [revisionOverdueSignal(weak, history.daysSinceLastPracticed[weak])],
+      signals: [revisionOverdueSignal(weak, history.daysSinceLastPracticed[weak]), blockerBiasSignal(biggestBlocker, 'weak-revision')],
     },
     {
       id: 'routine-baseline',
       label: "Today's routine",
-      signals: [baselineRoutineSignal()],
+      signals: [baselineRoutineSignal(), blockerBiasSignal(biggestBlocker, 'routine-baseline')],
     },
   ]);
 

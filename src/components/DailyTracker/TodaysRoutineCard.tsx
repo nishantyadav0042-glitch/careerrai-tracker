@@ -48,6 +48,7 @@ interface NeedsSetupResponse {
   needsSetup: true;
   weakestSection: 'VARC' | 'DILR' | 'QA' | null;
   currentStage: 'not_started' | 'concepts' | 'questions' | 'sectionals' | 'mocks' | null;
+  biggestBlocker: 'inconsistency' | 'dont_know_what' | 'mock_anxiety' | 'time_wasting' | null;
   needsWeekendHours: boolean;
 }
 
@@ -122,6 +123,7 @@ export function TodaysRoutineCard() {
         <QuickRoutineSetup
           initialWeakest={needsSetup.weakestSection}
           initialStage={needsSetup.currentStage}
+          initialBlocker={needsSetup.biggestBlocker}
           needsWeekendHours={needsSetup.needsWeekendHours}
           onDone={load}
         />

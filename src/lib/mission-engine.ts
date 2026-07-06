@@ -81,3 +81,36 @@ export function revisionOverdueSignal(section: string, daysSinceLastPracticed: n
 export function baselineRoutineSignal(): MissionSignal {
   return { active: true, points: 15, reason: null };
 }
+
+export type Blocker = 'inconsistency' | 'dont_know_what' | 'mock_anxiety' | 'time_wasting';
+export type MissionCandidateId = 'mock-analysis' | 'weak-revision' | 'routine-baseline';
+
+// The cold-start prior: before any real behavioral signal exists (no mock
+// history, no revision recency), the one onboarding tap about what's
+// actually blocking a student is the only evidence available. Modest and
+// additive on purpose — this never outweighs a strong real signal (a mock
+// sitting unanalyzed for 3 days still wins), it only breaks early ties in a
+// direction the student told us mattered. mock_anxiety is the one negative
+// case: it doesn't add pressure toward more mock work, it makes that
+// candidate need a stronger real signal to win, and (deliberately) carries
+// no reason bullet — a bias against something isn't evidence for something.
+const BLOCKER_BIAS: Record<Blocker, Partial<Record<MissionCandidateId, { points: number; reason: string | null }>>> = {
+  inconsistency: {
+    'routine-baseline': { points: 15, reason: "You said staying consistent is the real fight — showing up today counts more than intensity" },
+  },
+  dont_know_what: {
+    'weak-revision': { points: 10, reason: "You said not knowing what to study is the blocker — this is the one thing to focus on" },
+  },
+  mock_anxiety: {
+    'mock-analysis': { points: -10, reason: null },
+  },
+  time_wasting: {
+    'mock-analysis': { points: 10, reason: "You said time management is the issue — analysis builds strategy faster than raw practice volume" },
+  },
+};
+
+export function blockerBiasSignal(blocker: Blocker | null, candidateId: MissionCandidateId): MissionSignal {
+  const bump = blocker ? BLOCKER_BIAS[blocker]?.[candidateId] : undefined;
+  if (!bump) return { active: false, points: 0, reason: null };
+  return { active: true, points: bump.points, reason: bump.reason };
+}
