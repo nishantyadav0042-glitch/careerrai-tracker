@@ -32,6 +32,12 @@ interface BlueprintData {
     mockTrend: { count: number; latestPercentile: number | null; previousPercentile: number | null };
   };
   weeklyEvolution: string[];
+  healthScore: {
+    status: 'provisional' | 'ready';
+    score: number | null;
+    components: { consistency: number; balance: number; revisionDiscipline: number } | null;
+  };
+  blueprintConfidence: { score: number; reasons: string[] };
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -83,7 +89,7 @@ export default function BlueprintPage() {
     );
   }
 
-  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution } = data;
+  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution, healthScore, blueprintConfidence } = data;
   const coverageTotal = coverageTally.not_started + coverageTally.started + coverageTally.completed + coverageTally.strong;
   const { last30, mockTrend } = prepMemory;
   const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
@@ -107,6 +113,38 @@ export default function BlueprintPage() {
             <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500">
               <Flame className="w-3.5 h-3.5 text-orange-500" />{currentStreak}-day streak
             </p>
+          )}
+        </div>
+
+        {/* Preparation Health — ONE composite number, not a multi-metric
+            dashboard: Consistency + Balance + Revision discipline, rolling
+            30 days. Provisional (no number) under a week of history — a
+            score from 2 days of data would be worse than no score. */}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Preparation health</h2>
+          {healthScore.status === 'provisional' ? (
+            <p className="text-sm text-stone-500">Calculating — complete your first week to unlock this.</p>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-2 mb-3">
+                <span className="text-3xl font-bold text-stone-900">{healthScore.score}</span>
+                <span className="text-sm text-stone-400">/ 100</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center border-t border-stone-100 pt-3">
+                <div>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.consistency}<span className="text-stone-400 font-normal">/45</span></p>
+                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Consistency</p>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.balance}<span className="text-stone-400 font-normal">/35</span></p>
+                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Balance</p>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.revisionDiscipline}<span className="text-stone-400 font-normal">/20</span></p>
+                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Revision</p>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -136,6 +174,17 @@ export default function BlueprintPage() {
               <div className="flex justify-between"><dt className="text-stone-500">Target</dt><dd className="font-semibold text-stone-800">{targetPercentile}%ile</dd></div>
             )}
           </dl>
+          <div className="mt-3 border-t border-stone-100 pt-3 flex items-center justify-between">
+            <span className="text-xs text-stone-500">Blueprint confidence</span>
+            <span className="text-sm font-bold text-stone-800">{blueprintConfidence.score}%</span>
+          </div>
+          {blueprintConfidence.reasons.length > 0 && (
+            <ul className="mt-1.5 space-y-1">
+              {blueprintConfidence.reasons.map((r) => (
+                <li key={r} className="text-[11px] text-stone-400 leading-snug">{r}</li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {coverageTotal > 0 && (

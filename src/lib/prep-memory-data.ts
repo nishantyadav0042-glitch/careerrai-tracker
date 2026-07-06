@@ -2,9 +2,13 @@
 // student homepage (/student/tracker) so both read the identical join and
 // window logic instead of two copies drifting apart.
 
-import type { Section } from './routine-engine';
+import { archetypeRevisionMultiplier, type Section } from './routine-engine';
 import { getLogDateString } from './streak-utils';
-import { windowStats, mockTrend, weeklyEvolutionLines, type CompletionRecord, type WindowStats, type MockTrend } from './prep-memory';
+import {
+  windowStats, mockTrend, weeklyEvolutionLines,
+  consistencyBreakdown, sectionGapDays, revisionDueStats, computeHealthScore,
+  type CompletionRecord, type WindowStats, type MockTrend, type HealthScore,
+} from './prep-memory';
 
 function addDays(dateStr: string, delta: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
@@ -22,7 +26,7 @@ interface RoutineTaskShape { id: string; section: Section | 'General'; topic: st
 async function buildCompletionRecords(admin: any, studentId: string, sinceDate: string): Promise<CompletionRecord[]> {
   const [{ data: routines }, { data: completions }] = await Promise.all([
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', studentId).gte('routine_date', sinceDate),
-    admin.from('routine_task_completions').select('routine_date, task_id, confidence').eq('student_id', studentId).gte('routine_date', sinceDate),
+    admin.from('routine_task_completions').select('routine_date, task_id, confidence, is_emergency').eq('student_id', studentId).gte('routine_date', sinceDate),
   ]);
 
   const tasksByDate = new Map<string, RoutineTaskShape[]>();
@@ -38,6 +42,7 @@ async function buildCompletionRecords(admin: any, studentId: string, sinceDate: 
       topic: task.topic,
       estMinutes: task.estMinutes,
       confidence: (c.confidence as CompletionRecord['confidence']) ?? null,
+      isEmergency: !!c.is_emergency,
     });
   }
   return records;
@@ -46,27 +51,50 @@ async function buildCompletionRecords(admin: any, studentId: string, sinceDate: 
 export interface PrepMemoryResult {
   prepMemory: { last30: WindowStats; last7: WindowStats; mockTrend: MockTrend };
   weeklyEvolution: string[];
+  healthScore: HealthScore;
 }
 
 // Single entry point for both /api/blueprint and the tracker homepage —
 // same data, same windows, same arithmetic, no second definition to drift.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function computePrepMemory(admin: any, studentId: string): Promise<PrepMemoryResult> {
+// archetype/signupDate feed Preparation Health's window length (rolling 30
+// days or since signup, whichever is shorter) and revision-due cadence (the
+// same per-archetype multiplier the Topic Selector and Mission Engine use).
+export async function computePrepMemory(
+  admin: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  studentId: string,
+  archetype: { isRepeater: boolean; isWorkingProfessional: boolean },
+  signupDate: string | null
+): Promise<PrepMemoryResult> {
   const today = getLogDateString();
   const last30Start = addDays(today, -29);
   const last7Start = addDays(today, -6);
   const priorWeekStart = addDays(today, -13);
   const priorWeekEnd = addDays(today, -7);
 
-  const [completionRecords, { data: debriefs }] = await Promise.all([
+  const [completionRecords, { data: debriefs }, { data: coverageRows }] = await Promise.all([
     buildCompletionRecords(admin, studentId, last30Start),
     admin.from('mock_debriefs').select('taken_on, overall_percentile').eq('student_id', studentId).gte('taken_on', last30Start).order('taken_on', { ascending: false }),
+    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
   ]);
 
   const mockDates = (debriefs ?? []).map((d: { taken_on: string }) => d.taken_on);
   const last30 = windowStats(completionRecords, mockDates, last30Start, today);
   const last7 = windowStats(completionRecords, mockDates, last7Start, today);
   const priorWeek = windowStats(completionRecords, mockDates, priorWeekStart, priorWeekEnd);
+
+  const daysSinceSignup = signupDate ? Math.round((Date.parse(today) - Date.parse(signupDate)) / 86_400_000) : 30;
+  const windowDaysElapsed = Math.max(1, Math.min(30, daysSinceSignup));
+  const windowStart = addDays(today, -(windowDaysElapsed - 1));
+  const { daysWithCompletion, daysEmergencyOnly } = consistencyBreakdown(completionRecords, windowStart, today);
+  const gaps = sectionGapDays(completionRecords, today);
+  const revisionMultiplier = archetypeRevisionMultiplier(archetype);
+  const { due, completed } = revisionDueStats(
+    (coverageRows ?? []).map((r: { topic: string; status: string; updated_at: string }) => ({ topic: r.topic, status: r.status, updatedAt: r.updated_at })),
+    completionRecords,
+    today,
+    revisionMultiplier,
+    windowStart
+  );
 
   return {
     prepMemory: {
@@ -75,5 +103,13 @@ export async function computePrepMemory(admin: any, studentId: string): Promise<
       mockTrend: mockTrend((debriefs ?? []).map((d: { overall_percentile: number | null }) => ({ overallPercentile: d.overall_percentile }))),
     },
     weeklyEvolution: weeklyEvolutionLines(last7, priorWeek),
+    healthScore: computeHealthScore({
+      windowDaysElapsed,
+      daysWithCompletion,
+      daysEmergencyOnly,
+      sectionGaps: gaps,
+      revisionDue: due,
+      revisionCompleted: completed,
+    }),
   };
 }

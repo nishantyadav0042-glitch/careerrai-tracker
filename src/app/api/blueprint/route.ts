@@ -6,6 +6,7 @@ import { type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
 import { computePrepMemory } from '@/lib/prep-memory-data';
+import { computeBlueprintConfidence } from '@/lib/prep-memory';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -36,19 +37,26 @@ export async function GET() {
 
   const admin = createAdminClient();
 
-  const [{ data: profile }, { data: coverage }, { data: streak }, { prepMemory, weeklyEvolution }] = await Promise.all([
+  const [{ data: profile }] = await Promise.all([
     admin.from('profiles')
       .select(`
         full_name, target_percentile, attempt_year, is_working_professional, is_repeater,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        current_stage, biggest_blocker
+        current_stage, biggest_blocker, created_at
       `)
       .eq('id', user.id).single(),
-    admin.from('topic_coverage').select('status').eq('student_id', user.id),
-    admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
-    computePrepMemory(admin, user.id),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+
+  const [{ data: coverage }, { data: streak }, { prepMemory, weeklyEvolution, healthScore }] = await Promise.all([
+    admin.from('topic_coverage').select('status').eq('student_id', user.id),
+    admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
+    computePrepMemory(
+      admin, user.id,
+      { isRepeater: !!profile.is_repeater, isWorkingProfessional: !!profile.is_working_professional },
+      (profile.created_at as string | null)?.split('T')[0] ?? null
+    ),
+  ]);
 
   const weak = profile.self_reported_weakest_section as Section | null;
   const weakTopic = profile.self_reported_weak_topic as string | null;
@@ -61,6 +69,15 @@ export async function GET() {
 
   const coverageTally = { not_started: 0, started: 0, completed: 0, strong: 0 } as Record<string, number>;
   for (const row of coverage ?? []) coverageTally[row.status as string] = (coverageTally[row.status as string] ?? 0) + 1;
+  const coverageTotal = coverageTally.not_started + coverageTally.started + coverageTally.completed + coverageTally.strong;
+
+  const blueprintConfidence = computeBlueprintConfidence({
+    mockCount: prepMemory.mockTrend.count,
+    coverageTotal,
+    hasStage: stage != null,
+    hasWeakTopic: weakTopic != null,
+    daysStudiedLast30: prepMemory.last30.daysStudied,
+  });
 
   const facts = [
     `Target CAT year: ${profile.attempt_year ?? 'not set'}`,
@@ -107,6 +124,8 @@ export async function GET() {
     targetPercentile: profile.target_percentile,
     prepMemory,
     weeklyEvolution,
+    healthScore,
+    blueprintConfidence,
   });
 }
 

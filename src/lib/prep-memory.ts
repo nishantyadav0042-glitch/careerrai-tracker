@@ -9,6 +9,7 @@
 // caller resolves "today" once and passes date-window boundaries in.
 
 import type { Section } from './routine-engine';
+import { TOPIC_METADATA } from './topics-constants';
 
 export interface CompletionRecord {
   routineDate: string; // YYYY-MM-DD
@@ -16,6 +17,7 @@ export interface CompletionRecord {
   topic: string | null;
   estMinutes: number;
   confidence: 'green' | 'yellow' | 'red' | null;
+  isEmergency: boolean;
 }
 
 export interface WindowStats {
@@ -119,4 +121,164 @@ export function weeklyEvolutionLines(thisWeek: WindowStats, lastWeek: WindowStat
   }
 
   return lines;
+}
+
+// ─── Preparation Health % ───────────────────────────────────────────────────
+// A single 0-100 composite, rolling 30 days (or since signup if shorter).
+// Three deterministic components, same additive-score architecture as every
+// other engine in this codebase — the breakdown IS the explanation, never a
+// black-box number:
+//   Consistency (45%)       — days with a completion ÷ days elapsed;
+//                             emergency-only days count at half weight.
+//   Balance (35%)           — full credit unless a section goes untouched
+//                             beyond 4 consecutive days, then a proportional
+//                             deduction (makes single-section farming a
+//                             losing strategy, not a shortcut to a high score).
+//   Revision discipline (20%) — of the topics actually overdue for revision
+//                             (already 'completed'/'strong', past their
+//                             revisionFrequencyDays), how many got revised
+//                             in the window.
+// Provisional (no number shown) under 7 days of history — a fabricated
+// score from 2 days of data would be worse than no score at all.
+
+export function consistencyBreakdown(
+  completions: CompletionRecord[],
+  startInclusive: string,
+  endInclusive: string
+): { daysWithCompletion: number; daysEmergencyOnly: number } {
+  const inWindow = (d: string) => d >= startInclusive && d <= endInclusive;
+  const byDate = new Map<string, CompletionRecord[]>();
+  for (const c of completions) {
+    if (!inWindow(c.routineDate)) continue;
+    if (!byDate.has(c.routineDate)) byDate.set(c.routineDate, []);
+    byDate.get(c.routineDate)!.push(c);
+  }
+  let daysEmergencyOnly = 0;
+  for (const dayRecords of byDate.values()) {
+    if (dayRecords.every((r) => r.isEmergency)) daysEmergencyOnly += 1;
+  }
+  return { daysWithCompletion: byDate.size, daysEmergencyOnly };
+}
+
+export function sectionGapDays(completions: CompletionRecord[], today: string): Record<Section, number | null> {
+  const sections: Section[] = ['VARC', 'DILR', 'QA'];
+  const result = {} as Record<Section, number | null>;
+  for (const s of sections) {
+    const dates = completions.filter((c) => c.section === s).map((c) => c.routineDate);
+    if (dates.length === 0) { result[s] = null; continue; }
+    const mostRecent = dates.reduce((a, b) => (b > a ? b : a));
+    result[s] = Math.round((Date.parse(today) - Date.parse(mostRecent)) / 86_400_000);
+  }
+  return result;
+}
+
+export interface TopicCoverageRow { topic: string; status: string; updatedAt: string }
+
+export function revisionDueStats(
+  coverageRows: TopicCoverageRow[],
+  completions: CompletionRecord[],
+  today: string,
+  revisionMultiplier: number,
+  windowStart: string
+): { due: number; completed: number } {
+  const touchedTopicsInWindow = new Set(
+    completions.filter((c) => c.routineDate >= windowStart && c.routineDate <= today && c.topic).map((c) => c.topic as string)
+  );
+  let due = 0;
+  let completed = 0;
+  for (const row of coverageRows) {
+    if (row.status !== 'completed' && row.status !== 'strong') continue;
+    const meta = TOPIC_METADATA[row.topic];
+    if (!meta) continue;
+    const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
+    if (daysSinceUpdate > meta.revisionFrequencyDays * revisionMultiplier) {
+      due += 1;
+      if (touchedTopicsInWindow.has(row.topic)) completed += 1;
+    }
+  }
+  return { due, completed };
+}
+
+export interface HealthScore {
+  status: 'provisional' | 'ready';
+  score: number | null;
+  components: { consistency: number; balance: number; revisionDiscipline: number } | null;
+}
+
+export function computeHealthScore(input: {
+  windowDaysElapsed: number;
+  daysWithCompletion: number;
+  daysEmergencyOnly: number;
+  sectionGaps: Record<Section, number | null>;
+  revisionDue: number;
+  revisionCompleted: number;
+}): HealthScore {
+  if (input.windowDaysElapsed < 7) return { status: 'provisional', score: null, components: null };
+
+  const effectiveDays = input.daysWithCompletion - 0.5 * input.daysEmergencyOnly;
+  const consistency = Math.max(0, Math.min(45, (effectiveDays / input.windowDaysElapsed) * 45));
+
+  const sections: Section[] = ['VARC', 'DILR', 'QA'];
+  let balance = 35;
+  for (const s of sections) {
+    const gap = input.sectionGaps[s] ?? input.windowDaysElapsed;
+    if (gap > 4) {
+      const severity = Math.min(1, (gap - 4) / 10);
+      balance -= severity * (35 / sections.length);
+    }
+  }
+  balance = Math.max(0, balance);
+
+  const revisionDiscipline = input.revisionDue === 0
+    ? 20
+    : Math.max(0, Math.min(20, (input.revisionCompleted / input.revisionDue) * 20));
+
+  return {
+    status: 'ready',
+    score: Math.round(consistency + balance + revisionDiscipline),
+    components: {
+      consistency: Math.round(consistency),
+      balance: Math.round(balance),
+      revisionDiscipline: Math.round(revisionDiscipline),
+    },
+  };
+}
+
+// ─── Blueprint confidence score ─────────────────────────────────────────────
+// How much to trust the plan itself — separate from Health (which measures
+// behavior, not data completeness). Additive penalty from 100, same
+// architecture as every other score in this codebase: every deduction has a
+// reason, and every reason names the concrete action that would remove it.
+export interface BlueprintConfidence { score: number; reasons: string[] }
+
+export function computeBlueprintConfidence(input: {
+  mockCount: number;
+  coverageTotal: number;
+  hasStage: boolean;
+  hasWeakTopic: boolean;
+  daysStudiedLast30: number;
+}): BlueprintConfidence {
+  let score = 100;
+  const reasons: string[] = [];
+  if (input.mockCount === 0) {
+    score -= 15;
+    reasons.push('No mock logged yet — your baseline percentile is still an estimate.');
+  }
+  if (input.coverageTotal === 0) {
+    score -= 15;
+    reasons.push("Coverage Matrix not mapped yet — the plan is using calendar defaults, not your actual progress.");
+  }
+  if (!input.hasStage) {
+    score -= 10;
+    reasons.push('Prep stage never confirmed — phase is calendar-only.');
+  }
+  if (!input.hasWeakTopic) {
+    score -= 5;
+    reasons.push('Toughest topic never specified — using the section default instead.');
+  }
+  if (input.daysStudiedLast30 < 7) {
+    score -= 15;
+    reasons.push("Less than a week of tracked activity — too early to confirm the plan is working.");
+  }
+  return { score: Math.max(30, score), reasons: reasons.slice(0, 3) };
 }

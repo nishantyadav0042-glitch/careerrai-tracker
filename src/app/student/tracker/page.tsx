@@ -31,9 +31,16 @@ export default async function DailyTrackerPage() {
   const admin = createAdminClient();
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
 
-  // Single DB round-trip: all independent queries in one Promise.all.
+  // Profile fetched first (not folded into the batch below) — computePrepMemory
+  // needs its archetype fields (is_repeater/is_working_professional/created_at)
+  // as INPUT, so it can't run in the same parallel batch that fetches them.
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo, attempt_year, is_repeater, is_working_professional, created_at')
+    .eq('id', user.id).single();
+
+  // Everything else: one parallel round-trip.
   const [
-    { data: profile },
     { data: sessions },
     { data: pendingReqs },
     { data: anyDebrief },
@@ -44,7 +51,6 @@ export default async function DailyTrackerPage() {
     { data: coverage },
     { prepMemory, weeklyEvolution },
   ] = await Promise.all([
-    admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo, attempt_year').eq('id', user.id).single(),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')
@@ -85,7 +91,11 @@ export default async function DailyTrackerPage() {
       .maybeSingle(),
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
     admin.from('topic_coverage').select('status').eq('student_id', user.id),
-    computePrepMemory(admin, user.id),
+    computePrepMemory(
+      admin, user.id,
+      { isRepeater: !!profile?.is_repeater, isWorkingProfessional: !!profile?.is_working_professional },
+      (profile?.created_at as string | null)?.split('T')[0] ?? null
+    ),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
