@@ -101,14 +101,26 @@ const PHASE_RANK: Record<Phase, number> = { foundation: 0, intensive: 1, revisio
 // guess, exactly like STAGE_MIN_PHASE always wins over the calendar guess.
 const ARCHETYPE_PHASE_FLOOR: Phase = 'intensive';
 
-export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage | null, isRepeater?: boolean): Phase {
+// The exam date THIS student actually cares about — resolves attempt_year
+// with the "roll forward if that year's CAT already passed" rule below, so
+// every on-screen countdown (goal editor, tracker header, trajectory wall,
+// CAT context card) reads the same date as the phase engine instead of each
+// screen hardcoding its own fixed year that drifts once that year's exam
+// has passed or a student's attempt_year differs from the calendar default.
+export function resolveCatExamDate(now: Date, attemptYear?: number | null): Date {
   let year = attemptYear ?? now.getFullYear();
   if (now > catExamDate(year)) year += 1;
+  return catExamDate(year);
+}
+
+export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage | null, isRepeater?: boolean): Phase {
+  const examDate = resolveCatExamDate(now, attemptYear);
+  const year = examDate.getFullYear();
 
   let calendarPhase: Phase = 'foundation'; // everything else, including multi-year-out early prep
   if (now.getFullYear() === year) {
     const month = now.getMonth(); // 0-indexed
-    if (month === 10 && now <= catExamDate(year)) calendarPhase = 'revision'; // Nov, up to exam day
+    if (month === 10 && now <= examDate) calendarPhase = 'revision'; // Nov, up to exam day
     else if (month === 8 || month === 9) calendarPhase = 'intensive';         // Sep, Oct
   }
 

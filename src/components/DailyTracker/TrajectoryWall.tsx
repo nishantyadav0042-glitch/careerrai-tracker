@@ -1,6 +1,6 @@
 'use client';
 
-const CAT_DATE = new Date(2026, 10, 29);
+import { resolveCatExamDate } from '@/lib/routine-engine';
 
 interface TrajectoryWallProps {
   dreamCollege: string | null;
@@ -9,6 +9,7 @@ interface TrajectoryWallProps {
   logCount: number;
   mockCount: number;
   daysStudied: number;
+  attemptYear: number | null;
 }
 
 export function TrajectoryWall({
@@ -17,13 +18,14 @@ export function TrajectoryWall({
   targetPercentile,
   logCount,
   mockCount,
+  attemptYear,
 }: TrajectoryWallProps) {
   if (!dreamCollege) return null;
 
   const daysToCat = Math.max(
     0,
     // eslint-disable-next-line react-hooks/purity
-    Math.ceil((CAT_DATE.getTime() - Date.now()) / 86_400_000)
+    Math.ceil((resolveCatExamDate(new Date(), attemptYear).getTime() - Date.now()) / 86_400_000)
   );
 
   const pctNow = currentPercentile ?? 50;

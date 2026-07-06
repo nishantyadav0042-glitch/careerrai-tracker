@@ -4,19 +4,20 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { ArrowLeft, Target, TrendingUp, Clock } from 'lucide-react';
-
-const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29, 2026
+import { resolveCatExamDate } from '@/lib/routine-engine';
 
 export function GoalEditor({
   userId,
   currentCRS,
   initialTarget,
   initialStudyHours,
+  attemptYear,
 }: {
   userId: string;
   currentCRS: number | null;
   initialTarget: number;
   initialStudyHours: number;
+  attemptYear: number | null;
 }) {
   const supabase = createClient();
   const [targetPercentile, setTargetPercentile] = useState<number>(initialTarget);
@@ -24,7 +25,8 @@ export function GoalEditor({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const daysToCat = Math.max(0, Math.ceil((CAT_EXAM_DATE.getTime() - Date.now()) / 86_400_000));
+  const examDate = resolveCatExamDate(new Date(), attemptYear);
+  const daysToCat = Math.max(0, Math.ceil((examDate.getTime() - Date.now()) / 86_400_000));
 
   async function save() {
     setSaving(true);
@@ -61,9 +63,9 @@ export function GoalEditor({
         <div className="bg-stone-900 text-white rounded-2xl p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-widest text-stone-400 font-semibold">Days to CAT 2026</p>
+              <p className="text-xs uppercase tracking-widest text-stone-400 font-semibold">Days to CAT {examDate.getFullYear()}</p>
               <p className="text-5xl font-bold mt-1 font-mono">{daysToCat}</p>
-              <p className="text-sm text-stone-400 mt-1">Nov 29, 2026</p>
+              <p className="text-sm text-stone-400 mt-1">{examDate.toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
             <Target className="w-12 h-12 text-orange-400 opacity-80" />
           </div>

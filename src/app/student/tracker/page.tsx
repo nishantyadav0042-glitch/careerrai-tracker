@@ -14,14 +14,13 @@ import { LockedBuddyCard } from '@/components/locked-buddy-card';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
+import { resolveCatExamDate } from '@/lib/routine-engine';
 import type { StreakData } from '@/types';
 
 export const metadata = {
   title: 'CareerRai',
   description: 'Your CAT prep command centre',
 };
-
-const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29, 2026
 
 export default async function DailyTrackerPage() {
   const user = await getAuthUser();
@@ -41,7 +40,7 @@ export default async function DailyTrackerPage() {
     { data: recentMock },
     { data: streakRow },
   ] = await Promise.all([
-    admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo').eq('id', user.id).single(),
+    admin.from('profiles').select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo, attempt_year').eq('id', user.id).single(),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')
@@ -89,6 +88,7 @@ export default async function DailyTrackerPage() {
   const dreamColleges = (profile?.dream_colleges as string[] | null) ?? [];
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
+  const attemptYear = (profile?.attempt_year as number | null) ?? null;
 
   // Second batch — only runs when there IS a buddy or a recent mock.
   let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
@@ -157,12 +157,13 @@ export default async function DailyTrackerPage() {
   const hasLoggedYesterday = logs?.some((l) => l.report_date === yesterdayStr) ?? false;
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
-  const daysToCat = Math.max(0, Math.ceil((CAT_EXAM_DATE.getTime() - now.getTime()) / 86_400_000));
+  const examDate = resolveCatExamDate(now, attemptYear);
+  const daysToCat = Math.max(0, Math.ceil((examDate.getTime() - now.getTime()) / 86_400_000));
   // Count remaining Sundays (mock-test days) to CAT
   let weekendsToCat = 0;
   const d = new Date(now);
   d.setDate(d.getDate() + (7 - d.getDay()) % 7 || 7); // next Sunday
-  while (d <= CAT_EXAM_DATE) { weekendsToCat++; d.setDate(d.getDate() + 7); }
+  while (d <= examDate) { weekendsToCat++; d.setDate(d.getDate() + 7); }
 
   const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   const h = parseInt(hour);
@@ -219,6 +220,7 @@ export default async function DailyTrackerPage() {
           logCount={logCount}
           mockCount={totalMocks}
           daysStudied={daysStudied}
+          attemptYear={attemptYear}
         />
 
         {buddyId && (

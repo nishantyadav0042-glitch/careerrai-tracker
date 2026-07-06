@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
+import { resolveCatExamDate } from '@/lib/routine-engine';
 
 export interface PerformanceTrend {
   dates: string[];
@@ -221,14 +222,14 @@ export async function assessCATReadiness(studentId: string): Promise<CATReadines
     // Get student profile
     const { data: profile } = await supabase
       .from('profiles')
-      .select('cat_percentile')
+      .select('cat_percentile, attempt_year')
       .eq('id', studentId)
       .single();
 
     const currentPercentile = profile?.cat_percentile || 0;
     const targetPercentile = 90; // Target for competitive college
-    const examDate = new Date(2026, 10, 29); // Nov 29, 2026
     const today = new Date();
+    const examDate = resolveCatExamDate(today, profile?.attempt_year ?? null);
     const daysToExam = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
     // Get recent test trend

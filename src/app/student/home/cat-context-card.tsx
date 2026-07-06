@@ -3,19 +3,19 @@
 import { Card } from '@/components/ui/card';
 import { Calendar, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-// CAT exam date (hardcoded)
-const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29, 2026
+import { resolveCatExamDate } from '@/lib/routine-engine';
 
 interface CATContextCardProps {
   className?: string;
+  attemptYear: number | null;
 }
 
-export function CATContextCard({ className }: CATContextCardProps) {
+export function CATContextCard({ className, attemptYear }: CATContextCardProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const examDate = resolveCatExamDate(today, attemptYear);
 
-  const daysRemaining = Math.ceil((CAT_EXAM_DATE.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const daysRemaining = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   // Dynamic message based on days remaining
   const getMessage = () => {
@@ -81,7 +81,7 @@ export function CATContextCard({ className }: CATContextCardProps) {
           {/* Exam Date */}
           <div className="flex items-center gap-2 text-xs opacity-75">
             <Calendar className="w-3 h-3" />
-            <span>Exam: {CAT_EXAM_DATE.toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+            <span>Exam: {examDate.toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
           </div>
         </div>
       </div>
