@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => Promise<void>;
@@ -21,14 +22,27 @@ interface ContractSnapshot {
   weeksRemaining: number;
 }
 
+// Implementation-intention window — Gollwitzer & Sheeran's meta-analysis
+// (94 experiments, d = .65): an if-then plan that names WHEN beats a generic
+// pledge for follow-through. One tap here turns the contract's commitment
+// line from "I'll study" into "If it's <window>, I open today's mission."
+type StudyWindow = 'early_morning' | 'daytime' | 'evening' | 'late_night';
+const WINDOW_OPTIONS: { value: StudyWindow; label: string; ifThen: string }[] = [
+  { value: 'early_morning', label: 'Early morning', ifThen: "it's early morning, before the day starts" },
+  { value: 'daytime',       label: 'Daytime',       ifThen: "it's my daytime study slot" },
+  { value: 'evening',       label: 'Evening',       ifThen: "it's evening, after classes or work" },
+  { value: 'late_night',    label: 'Late night',    ifThen: "it's late night, when things go quiet" },
+];
+
 // The emotional close — not a legal contract, a commitment the student
-// makes to themselves, restated back at them with their own real numbers.
-// This is the last screen before onComplete() actually fires. Coverage/phase
-// come from the same /api/blueprint read the Reveal screen just used;
-// archetype and weekly load come straight from the wizard's own state
-// (the modal already has them — no reason to refetch what it just wrote).
+// makes to themselves, restated back at them with their own real numbers
+// plus their own named study window. This is the last screen before
+// onComplete() actually fires. Coverage/phase come from the same
+// /api/blueprint read the Reveal screen just used; archetype and weekly
+// load come straight from the wizard's own state.
 export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLabel, weeklyLoadHours }: Props) {
   const [data, setData] = useState<ContractSnapshot | null>(null);
+  const [window, setWindow] = useState<StudyWindow | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -52,6 +66,8 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
     })();
   }, []);
 
+  const chosen = WINDOW_OPTIONS.find((w) => w.value === window) ?? null;
+
   return (
     <div className="space-y-6 text-center">
       <div className="flex flex-col items-center gap-2">
@@ -74,17 +90,45 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         )}
       </div>
 
+      <div className="text-left">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
+          When will you usually show up?
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {WINDOW_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setWindow(value)}
+              className={cn(
+                'rounded-xl border-2 py-2.5 px-3 text-sm font-semibold transition-all active:scale-95',
+                window === value
+                  ? 'border-orange-500 bg-orange-50 text-orange-700'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <p className="text-sm text-stone-600 leading-relaxed px-2">
-        From here, you never have to decide &quot;what should I study today.&quot;
-        CareerRai will plan, adapt, track, and improve your preparation every single day.
+        {chosen ? (
+          <>
+            <span className="font-semibold text-stone-800">If {chosen.ifThen}, I open today&apos;s mission.</span>{' '}
+            That&apos;s the whole deal — CareerRai plans, adapts, and tracks everything else, every single day.
+          </>
+        ) : (
+          <>From here, you never have to decide &quot;what should I study today.&quot; CareerRai will plan, adapt, track, and improve your preparation every single day.</>
+        )}
       </p>
 
       <button
-        onClick={() => onNext({ onboardingCompleted: true })}
-        disabled={isLoading}
+        onClick={() => onNext({ onboardingCompleted: true, study_window: window })}
+        disabled={isLoading || window === null}
         className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
       >
-        {isLoading ? 'Finishing up…' : "Let's begin →"}
+        {isLoading ? 'Finishing up…' : window === null ? 'Pick your study window first' : "Let's begin →"}
       </button>
     </div>
   );

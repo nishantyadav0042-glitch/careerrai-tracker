@@ -208,6 +208,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (merged.work_ex_months != null) update.work_ex_months = merged.work_ex_months;
         if (typeof merged.coaching_enrolled === 'boolean') update.coaching_enrolled = merged.coaching_enrolled;
         if (merged.course_year != null) update.course_year = merged.course_year;
+        if (typeof merged.study_window === 'string') update.study_window = merged.study_window;
 
         const { error: finalError } = await supabase.from('profiles').update(update).eq('id', userId).select();
         if (finalError) throw finalError;
