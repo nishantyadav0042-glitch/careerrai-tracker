@@ -1,34 +1,82 @@
 /**
- * Comprehensive topics list for student daily activity tracking
- * Organized by CAT exam sections and learning modes
- * Used across daily logs, quick logs, and onboarding
+ * CareerRai's locked Knowledge Graph — the ~56 learning units every engine
+ * runs on (Blueprint, Daily Missions, Health, Revision Queue, Buddy Panel,
+ * AI explanations). Deliberately capped: adding nodes makes every future
+ * engine noisier. Organized by CAT exam sections (VARC / DILR / QA, with QA
+ * in five clusters) plus three habit tracks (Mock Preparation / Revision /
+ * Reading Habit) that carry no exam-topic metadata but are part of the
+ * student's declared preparation map.
  */
 
-// Quantitative Aptitude subsections
-export const QUANT_TOPICS = [
-  'Arithmetic',
-  'Algebra',
-  'Geometry',
-  'Modern Math',
-  'Number Systems',
-];
-
-// Verbal & Reading Comprehension subsections
+// Verbal Ability & Reading Comprehension — 9 units
 export const VERBAL_TOPICS = [
   'Reading Comprehension',
-  'Sentence Correction',
   'Para Jumbles',
   'Para Summary',
+  'Odd One Out',
+  'Sentence Completion',
   'Vocabulary',
+  'Grammar',
+  'Editorial Reading',
+  'Reading Speed Practice',
 ];
 
-// Logical Reasoning & Data Interpretation
+// Data Interpretation & Logical Reasoning — 9 units
 export const LRDI_TOPICS = [
-  'Logical Reasoning',
-  'Data Interpretation',
-  'Case Study',
-  'Puzzles & Games',
+  'Tables',
+  'Charts',
+  'Caselets',
+  'Arrangements',
+  'Games & Tournaments',
+  'Selection & Distribution',
+  'Binary Logic',
+  'Venn / Sets',
+  'Hybrid DILR Sets',
 ];
+
+// Quantitative Aptitude — 28 units across five clusters. The flat list is
+// what section-keyed engines consume; QA_GROUPS below is the display
+// clustering (never a second taxonomy — same strings, grouped).
+export const QA_GROUPS: { label: string; units: string[] }[] = [
+  { label: 'Arithmetic', units: ['Percentages', 'Profit & Loss', 'Ratio & Proportion', 'Average', 'Mixtures', 'Time & Work', 'Pipes & Cisterns', 'Time Speed Distance', 'SI & CI'] },
+  { label: 'Algebra', units: ['Linear Equations', 'Quadratic Equations', 'Functions', 'Inequalities', 'Logarithms', 'Progressions'] },
+  { label: 'Geometry', units: ['Lines & Angles', 'Triangles', 'Quadrilaterals', 'Circles', 'Mensuration', 'Coordinate Geometry'] },
+  { label: 'Modern Math', units: ['Permutation & Combination', 'Probability', 'Set Theory'] },
+  { label: 'Number System', units: ['Divisibility', 'HCF & LCM', 'Remainders', 'Base System'] },
+];
+export const QUANT_TOPICS = QA_GROUPS.flatMap((g) => g.units);
+
+// Habit tracks — declared in the Blueprint like everything else, but not
+// exam topics: no weightage/prerequisite metadata, engines skip them.
+// 'Daily Editorials' (habit) is deliberately named differently from VARC's
+// 'Editorial Reading' (skill unit) — unit names are globally unique because
+// several maps key on the unit string alone.
+export const MOCK_PREP_UNITS = ['Sectional Tests', 'Full Length Mocks', 'Mock Analysis', 'Error Log'];
+export const REVISION_UNITS = ['QA Revision', 'VARC Revision', 'DILR Revision', 'Formula Revision'];
+export const READING_HABIT_UNITS = ['Daily Editorials', 'Business & Economy Reading', 'Long-form Reading'];
+
+// The complete graph, in canonical display order — what the Blueprint
+// Builder's preparation-mapping screen and the Analysis matrix render.
+export type CoverageSectionId = 'VARC' | 'DILR' | 'QA' | 'MOCKS' | 'REVISION' | 'READING';
+export interface KnowledgeSection {
+  id: CoverageSectionId;
+  label: string;
+  groups: { label: string | null; units: string[] }[];
+}
+export const KNOWLEDGE_GRAPH: KnowledgeSection[] = [
+  { id: 'VARC', label: 'VARC', groups: [{ label: null, units: VERBAL_TOPICS }] },
+  { id: 'DILR', label: 'DILR', groups: [{ label: null, units: LRDI_TOPICS }] },
+  { id: 'QA', label: 'QA', groups: QA_GROUPS },
+  { id: 'MOCKS', label: 'Mock Preparation', groups: [{ label: null, units: MOCK_PREP_UNITS }] },
+  { id: 'REVISION', label: 'Revision', groups: [{ label: null, units: REVISION_UNITS }] },
+  { id: 'READING', label: 'Reading Habit', groups: [{ label: null, units: READING_HABIT_UNITS }] },
+];
+
+// Canonical position of every unit — coverage rows sort by this, so the
+// grid always renders in graph order regardless of DB row order.
+export const UNIT_ORDER: Record<string, number> = Object.fromEntries(
+  KNOWLEDGE_GRAPH.flatMap((s) => s.groups).flatMap((g) => g.units).map((u, i) => [u, i])
+);
 
 // CAT topic metadata — the content facts every planning rule should read
 // from, rather than hardcoding topic names or ordering directly. This is
@@ -65,31 +113,69 @@ export interface TopicMetadata {
 }
 
 export const TOPIC_METADATA: Record<string, TopicMetadata> = {
-  // QA — Arithmetic and Number Systems first (foundational, highest
-  // weightage, no prerequisite); Algebra/Geometry/Modern Math lean on that
-  // fluency, so they carry a real prerequisite edge, not just a rank number.
-  'Arithmetic':            { section: 'QA', difficulty: 2, estimatedHours: 25, weightage: 5, revisionFrequencyDays: 5, sequenceRank: 1, prerequisites: [] },
-  'Number Systems':        { section: 'QA', difficulty: 3, estimatedHours: 20, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 2, prerequisites: [] },
-  'Algebra':               { section: 'QA', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: ['Arithmetic'] },
-  'Geometry':              { section: 'QA', difficulty: 4, estimatedHours: 20, weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4, prerequisites: ['Arithmetic'] },
-  'Modern Math':           { section: 'QA', difficulty: 4, estimatedHours: 15, weightage: 2, revisionFrequencyDays: 8, sequenceRank: 5, prerequisites: ['Algebra'] },
+  // ── VARC — RC carries most of the section's marks and decays fastest
+  // without regular reading; Editorial Reading is the feeder habit-skill
+  // that keeps it alive. Para Summary and speed work genuinely build on RC.
+  'Reading Comprehension':     { section: 'VARC', difficulty: 3, estimatedHours: 30, weightage: 5, revisionFrequencyDays: 4,  sequenceRank: 1, prerequisites: [] },
+  'Para Jumbles':              { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6,  sequenceRank: 2, prerequisites: [] },
+  'Para Summary':              { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6,  sequenceRank: 3, prerequisites: ['Reading Comprehension'] },
+  'Odd One Out':               { section: 'VARC', difficulty: 3, estimatedHours: 8,  weightage: 2, revisionFrequencyDays: 7,  sequenceRank: 4, prerequisites: [] },
+  'Sentence Completion':       { section: 'VARC', difficulty: 2, estimatedHours: 8,  weightage: 2, revisionFrequencyDays: 7,  sequenceRank: 5, prerequisites: [] },
+  'Vocabulary':                { section: 'VARC', difficulty: 2, estimatedHours: 8,  weightage: 1, revisionFrequencyDays: 10, sequenceRank: 6, prerequisites: [] },
+  'Grammar':                   { section: 'VARC', difficulty: 2, estimatedHours: 10, weightage: 1, revisionFrequencyDays: 8,  sequenceRank: 7, prerequisites: [] },
+  'Editorial Reading':         { section: 'VARC', difficulty: 1, estimatedHours: 10, weightage: 4, revisionFrequencyDays: 3,  sequenceRank: 8, prerequisites: [] },
+  'Reading Speed Practice':    { section: 'VARC', difficulty: 2, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 4,  sequenceRank: 9, prerequisites: ['Reading Comprehension'] },
 
-  // VARC — RC carries most of the section's marks and decays fastest
-  // without regular reading, so it leads on both weightage and cadence.
-  // Para Summary genuinely builds on RC comprehension skill; the rest are
-  // independent skills with no real prerequisite.
-  'Reading Comprehension': { section: 'VARC', difficulty: 3, estimatedHours: 30, weightage: 5, revisionFrequencyDays: 4, sequenceRank: 1, prerequisites: [] },
-  'Para Summary':          { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 2, prerequisites: ['Reading Comprehension'] },
-  'Para Jumbles':          { section: 'VARC', difficulty: 3, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: [] },
-  'Sentence Correction':   { section: 'VARC', difficulty: 2, estimatedHours: 10, weightage: 2, revisionFrequencyDays: 7, sequenceRank: 4, prerequisites: [] },
-  'Vocabulary':            { section: 'VARC', difficulty: 2, estimatedHours: 8,  weightage: 1, revisionFrequencyDays: 10, sequenceRank: 5, prerequisites: [] },
+  // ── DILR — Tables/Charts/Arrangements are the equal-weight core with no
+  // prerequisite; caselets, games, and hybrid sets build on that base.
+  'Tables':                    { section: 'DILR', difficulty: 2, estimatedHours: 10, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 1, prerequisites: [] },
+  'Charts':                    { section: 'DILR', difficulty: 2, estimatedHours: 10, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 2, prerequisites: [] },
+  'Caselets':                  { section: 'DILR', difficulty: 3, estimatedHours: 10, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: ['Tables'] },
+  'Arrangements':              { section: 'DILR', difficulty: 3, estimatedHours: 12, weightage: 5, revisionFrequencyDays: 5, sequenceRank: 4, prerequisites: [] },
+  'Games & Tournaments':       { section: 'DILR', difficulty: 4, estimatedHours: 12, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 5, prerequisites: ['Arrangements'] },
+  'Selection & Distribution':  { section: 'DILR', difficulty: 3, estimatedHours: 10, weightage: 4, revisionFrequencyDays: 6, sequenceRank: 6, prerequisites: ['Arrangements'] },
+  'Binary Logic':              { section: 'DILR', difficulty: 4, estimatedHours: 8,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 7, prerequisites: [] },
+  'Venn / Sets':               { section: 'DILR', difficulty: 3, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 7, sequenceRank: 8, prerequisites: [] },
+  'Hybrid DILR Sets':          { section: 'DILR', difficulty: 5, estimatedHours: 12, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 9, prerequisites: ['Tables', 'Arrangements'] },
 
-  // DILR — DI and LR are the roughly-equal-weight core with no prerequisite;
-  // Puzzles & Case Study are denser variants that build on that base.
-  'Data Interpretation':   { section: 'DILR', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 1, prerequisites: [] },
-  'Logical Reasoning':     { section: 'DILR', difficulty: 3, estimatedHours: 22, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 2, prerequisites: [] },
-  'Puzzles & Games':       { section: 'DILR', difficulty: 4, estimatedHours: 18, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 3, prerequisites: ['Logical Reasoning'] },
-  'Case Study':            { section: 'DILR', difficulty: 4, estimatedHours: 15, weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4, prerequisites: ['Data Interpretation'] },
+  // ── QA / Arithmetic — Percentages and Ratio are the two roots nearly
+  // everything else in the cluster hangs off.
+  'Percentages':               { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 5, revisionFrequencyDays: 5, sequenceRank: 1,  prerequisites: [] },
+  'Profit & Loss':             { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 2,  prerequisites: ['Percentages'] },
+  'Ratio & Proportion':        { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 3,  prerequisites: [] },
+  'Average':                   { section: 'QA', difficulty: 2, estimatedHours: 6,  weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4,  prerequisites: [] },
+  'Mixtures':                  { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 5,  prerequisites: ['Ratio & Proportion'] },
+  'Time & Work':               { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 6,  prerequisites: ['Ratio & Proportion'] },
+  'Pipes & Cisterns':          { section: 'QA', difficulty: 3, estimatedHours: 4,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 7,  prerequisites: ['Time & Work'] },
+  'Time Speed Distance':       { section: 'QA', difficulty: 3, estimatedHours: 10, weightage: 4, revisionFrequencyDays: 5, sequenceRank: 8,  prerequisites: ['Ratio & Proportion'] },
+  'SI & CI':                   { section: 'QA', difficulty: 2, estimatedHours: 6,  weightage: 3, revisionFrequencyDays: 7, sequenceRank: 9,  prerequisites: ['Percentages'] },
+
+  // ── QA / Algebra
+  'Linear Equations':          { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 10, prerequisites: [] },
+  'Quadratic Equations':       { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 11, prerequisites: ['Linear Equations'] },
+  'Functions':                 { section: 'QA', difficulty: 4, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 12, prerequisites: ['Quadratic Equations'] },
+  'Inequalities':              { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 13, prerequisites: ['Linear Equations'] },
+  'Logarithms':                { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 14, prerequisites: [] },
+  'Progressions':              { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 15, prerequisites: [] },
+
+  // ── QA / Geometry
+  'Lines & Angles':            { section: 'QA', difficulty: 2, estimatedHours: 6,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 16, prerequisites: [] },
+  'Triangles':                 { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 17, prerequisites: ['Lines & Angles'] },
+  'Quadrilaterals':            { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 18, prerequisites: ['Triangles'] },
+  'Circles':                   { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 19, prerequisites: ['Triangles'] },
+  'Mensuration':               { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 20, prerequisites: ['Triangles'] },
+  'Coordinate Geometry':       { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 21, prerequisites: ['Lines & Angles'] },
+
+  // ── QA / Modern Math
+  'Permutation & Combination': { section: 'QA', difficulty: 4, estimatedHours: 10, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 22, prerequisites: [] },
+  'Probability':               { section: 'QA', difficulty: 4, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 23, prerequisites: ['Permutation & Combination'] },
+  'Set Theory':                { section: 'QA', difficulty: 2, estimatedHours: 5,  weightage: 2, revisionFrequencyDays: 8, sequenceRank: 24, prerequisites: [] },
+
+  // ── QA / Number System
+  'Divisibility':              { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 25, prerequisites: [] },
+  'HCF & LCM':                 { section: 'QA', difficulty: 2, estimatedHours: 5,  weightage: 3, revisionFrequencyDays: 7, sequenceRank: 26, prerequisites: ['Divisibility'] },
+  'Remainders':                { section: 'QA', difficulty: 4, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 27, prerequisites: ['Divisibility'] },
+  'Base System':               { section: 'QA', difficulty: 4, estimatedHours: 5,  weightage: 2, revisionFrequencyDays: 8, sequenceRank: 28, prerequisites: [] },
 };
 
 // Highest-weightage topic in a section, ties broken by earliest sequence —

@@ -1,11 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+import { KNOWLEDGE_GRAPH, type CoverageSectionId } from '@/lib/topics-constants';
 
-type Section = 'VARC' | 'DILR' | 'QA';
-type Status = 'not_started' | 'started' | 'completed' | 'strong';
+// Student-declared states only — exam_ready (🟢) is earned through
+// confidence signals and mock evidence, never self-assigned, and
+// revision-due (🟠) is derived. This screen is "where are you in your
+// preparation journey," not "how good are you" — journey positions are
+// easier to answer honestly than ability ratings.
+type DeclaredStatus = 'not_started' | 'learning' | 'practicing';
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => void;
@@ -14,61 +19,40 @@ interface Props {
   isLoading: boolean;
 }
 
-const SECTION_ORDER: Section[] = ['VARC', 'DILR', 'QA'];
-const TOPICS_BY_SECTION: Record<Section, string[]> = {
-  VARC: VERBAL_TOPICS,
-  DILR: LRDI_TOPICS,
-  QA: QUANT_TOPICS,
-};
-const SECTION_FULL_NAME: Record<Section, string> = {
-  VARC: 'Verbal Ability & Reading Comprehension',
-  DILR: 'Data Interpretation & Logical Reasoning',
-  QA: 'Quantitative Aptitude',
-};
-
-// Explicit four-state choice per topic — visible labels, one tap each, no
-// tap-to-cycle guesswork. Everything starts at "Not yet" because that's the
-// only honest default: nothing here is inferred from stage or anything
-// else. One earlier version marked all 14 topics "completed" from a single
-// "I'm solving questions" tap — a fabricated coverage picture. Never again.
-const STATUS_OPTIONS: { value: Status; label: string; active: string }[] = [
-  { value: 'not_started', label: 'Not yet',   active: 'bg-stone-600 border-stone-600 text-white' },
-  { value: 'started',     label: 'Started',   active: 'bg-amber-500 border-amber-500 text-white' },
-  { value: 'completed',   label: 'Done once', active: 'bg-teal-600 border-teal-600 text-white' },
-  { value: 'strong',      label: 'Strong',    active: 'bg-orange-600 border-orange-600 text-white' },
+const STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; active: string }[] = [
+  { value: 'not_started', dot: '⚪', label: "Haven't started", active: 'bg-stone-600 border-stone-600 text-white' },
+  { value: 'learning',    dot: '🟡', label: 'Learning concepts', active: 'bg-amber-500 border-amber-500 text-white' },
+  { value: 'practicing',  dot: '🔵', label: 'Practicing questions', active: 'bg-blue-600 border-blue-600 text-white' },
 ];
 
+// Everything starts collapsed — never all ~56 units at once. A section
+// header shows its declared tally; expanding reveals its units (QA expands
+// once more into its five clusters). Untouched units stay ⚪ by default, so
+// "expand nothing, continue" is itself an honest, valid answer.
 export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoading }: Props) {
-  const [sectionIdx, setSectionIdx] = useState(0);
-  const [statuses, setStatuses] = useState<Record<string, Status>>({});
+  const [statuses, setStatuses] = useState<Record<string, DeclaredStatus>>({});
+  const [openSection, setOpenSection] = useState<CoverageSectionId | null>('VARC');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const section = SECTION_ORDER[sectionIdx];
-  const topics = TOPICS_BY_SECTION[section];
-  const keyOf = (s: Section, t: string) => `${s}:${t}`;
-  const statusOf = (s: Section, t: string): Status => statuses[keyOf(s, t)] ?? 'not_started';
+  const statusOf = (unit: string): DeclaredStatus => statuses[unit] ?? 'not_started';
+  const allUnits = KNOWLEDGE_GRAPH.flatMap((s) => s.groups.flatMap((g) => g.units));
+  const touched = allUnits.filter((u) => statusOf(u) !== 'not_started');
 
-  const allTopicsCount = SECTION_ORDER.reduce((n, s) => n + TOPICS_BY_SECTION[s].length, 0);
-  const touchedCount = Object.values(statuses).filter((v) => v !== 'not_started').length;
-
-  const setStatus = (s: Section, t: string, v: Status) => {
-    setStatuses((prev) => ({ ...prev, [keyOf(s, t)]: v }));
+  const sectionTally = (sectionId: CoverageSectionId) => {
+    const units = KNOWLEDGE_GRAPH.find((s) => s.id === sectionId)!.groups.flatMap((g) => g.units);
+    const learning = units.filter((u) => statusOf(u) === 'learning').length;
+    const practicing = units.filter((u) => statusOf(u) === 'practicing').length;
+    return { total: units.length, learning, practicing };
   };
 
-  const handleContinue = async () => {
-    if (sectionIdx < SECTION_ORDER.length - 1) {
-      setSectionIdx(sectionIdx + 1);
-      return;
-    }
-    // Last section — persist the WHOLE declared grid in one call, including
-    // explicit not_started rows, so the engine knows "mapped and empty" from
-    // "never mapped."
+  const handleSave = async () => {
     setSaving(true);
     setError(null);
     try {
-      const matrix = SECTION_ORDER.flatMap((s) =>
-        TOPICS_BY_SECTION[s].map((t) => ({ section: s, topic: t, status: statusOf(s, t) }))
+      const matrix = KNOWLEDGE_GRAPH.flatMap((s) =>
+        s.groups.flatMap((g) => g.units.map((unit) => ({ section: s.id, topic: unit, status: statusOf(unit) })))
       );
       const res = await fetch('/api/coverage', {
         method: 'POST',
@@ -77,95 +61,118 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error((json as { error?: string })?.error ?? 'Could not save your coverage.');
+        throw new Error((json as { error?: string })?.error ?? 'Could not save your preparation map.');
       }
-      const doneCount = matrix.filter((m) => m.status === 'completed' || m.status === 'strong').length;
-      const startedCount = matrix.filter((m) => m.status === 'started').length;
-      onNext({ coverage_done: doneCount, coverage_started: startedCount, coverage_total: matrix.length });
+      onNext({
+        coverage_practicing: matrix.filter((m) => m.status === 'practicing').length,
+        coverage_learning: matrix.filter((m) => m.status === 'learning').length,
+        coverage_total: matrix.length,
+      });
     } catch (err) {
-      setError((err as { message?: string })?.message ?? 'Could not save your coverage.');
+      setError((err as { message?: string })?.message ?? 'Could not save your preparation map.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleBack = () => {
-    if (sectionIdx > 0) setSectionIdx(sectionIdx - 1);
-    else onBack();
+  const renderUnit = (unit: string) => {
+    const current = statusOf(unit);
+    return (
+      <div key={unit} className="rounded-xl border border-stone-200 p-2.5">
+        <p className="text-[13px] font-semibold text-stone-800 mb-1.5">{unit}</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {STATUS_OPTIONS.map(({ value, dot, label, active }) => (
+            <button
+              key={value}
+              disabled={saving || isLoading}
+              onClick={() => setStatuses((prev) => ({ ...prev, [unit]: value }))}
+              className={cn(
+                'rounded-lg border py-1.5 px-1 text-[10px] font-semibold leading-tight transition-all active:scale-95',
+                current === value ? active : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'
+              )}
+            >
+              {dot} {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-sm text-stone-600 leading-relaxed">
-          Be brutally honest — <span className="font-semibold text-stone-800">&ldquo;Not yet&rdquo; on everything is a perfectly good answer.</span>{' '}
-          Your plan is only as real as this screen.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-sm text-stone-600 leading-relaxed">
+        Where are you currently with these topics? Open only what you&apos;ve touched —{' '}
+        <span className="font-semibold text-stone-800">leaving everything &ldquo;Haven&apos;t started&rdquo; is a perfectly honest answer.</span>
+      </p>
 
-      {/* Section stepper: VARC → DILR → QA */}
-      <div className="flex items-center gap-2">
-        {SECTION_ORDER.map((s, i) => (
-          <div key={s} className="flex-1">
-            <div className={cn('h-1 rounded-full mb-1', i < sectionIdx ? 'bg-teal-500' : i === sectionIdx ? 'bg-orange-500' : 'bg-stone-200')} />
-            <p className={cn('text-[10px] font-bold text-center', i === sectionIdx ? 'text-orange-600' : 'text-stone-400')}>{s}</p>
-          </div>
-        ))}
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">{section}</p>
-        <p className="text-[11px] text-stone-400">{SECTION_FULL_NAME[section]}</p>
-      </div>
-
-      <div className="space-y-3">
-        {topics.map((topic) => {
-          const current = statusOf(section, topic);
+      <div className="space-y-2">
+        {KNOWLEDGE_GRAPH.map((section) => {
+          const isOpen = openSection === section.id;
+          const tally = sectionTally(section.id);
+          const declared = tally.learning + tally.practicing;
           return (
-            <div key={topic} className="rounded-xl border border-stone-200 p-3">
-              <p className="text-sm font-semibold text-stone-800 mb-2">{topic}</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {STATUS_OPTIONS.map(({ value, label, active }) => (
-                  <button
-                    key={value}
-                    disabled={saving || isLoading}
-                    onClick={() => setStatus(section, topic, value)}
-                    className={cn(
-                      'rounded-lg border py-1.5 px-1 text-[11px] font-semibold transition-all active:scale-95',
-                      current === value ? active : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+            <div key={section.id} className="rounded-xl border border-stone-200 overflow-hidden">
+              <button
+                onClick={() => setOpenSection(isOpen ? null : section.id)}
+                className="w-full flex items-center justify-between px-3.5 py-3 bg-stone-50 hover:bg-stone-100 transition-colors"
+              >
+                <span className="text-sm font-bold text-stone-800">{section.label}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-[11px] text-stone-500">
+                    {declared > 0
+                      ? `${tally.practicing > 0 ? `🔵 ${tally.practicing}  ` : ''}${tally.learning > 0 ? `🟡 ${tally.learning}  ` : ''}of ${tally.total}`
+                      : `${tally.total} units`}
+                  </span>
+                  <ChevronDown className={cn('w-4 h-4 text-stone-400 transition-transform', isOpen && 'rotate-180')} />
+                </span>
+              </button>
+              {isOpen && (
+                <div className="p-2.5 space-y-2">
+                  {section.groups.map((group) =>
+                    group.label == null ? (
+                      group.units.map(renderUnit)
+                    ) : (
+                      <div key={group.label} className="rounded-xl border border-stone-100 overflow-hidden">
+                        <button
+                          onClick={() => setOpenGroups((prev) => ({ ...prev, [group.label!]: !prev[group.label!] }))}
+                          className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-stone-50 transition-colors"
+                        >
+                          <span className="text-xs font-bold text-stone-600">{group.label}</span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-[10px] text-stone-400">{group.units.length} units</span>
+                            <ChevronDown className={cn('w-3.5 h-3.5 text-stone-400 transition-transform', openGroups[group.label] && 'rotate-180')} />
+                          </span>
+                        </button>
+                        {openGroups[group.label] && <div className="p-2 space-y-2">{group.units.map(renderUnit)}</div>}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      {touchedCount > 0 && (
-        <p className="text-xs text-stone-500 text-center">
-          {touchedCount} of {allTopicsCount} topics marked so far
-        </p>
+      {touched.length > 0 && (
+        <p className="text-xs text-stone-500 text-center">{touched.length} of {allUnits.length} units marked</p>
       )}
 
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
-      )}
+      {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-3 pt-1">
-        {(canGoBack || sectionIdx > 0) && (
-          <button onClick={handleBack} disabled={saving} className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">
+        {canGoBack && (
+          <button onClick={onBack} disabled={saving} className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">
             Back
           </button>
         )}
         <button
-          onClick={handleContinue}
+          onClick={handleSave}
           disabled={saving || isLoading}
           className="flex-1 py-3 rounded-xl font-semibold text-sm bg-orange-600 text-white hover:bg-orange-700 transition-all active:scale-[0.98] disabled:opacity-50"
         >
-          {saving ? 'Saving…' : sectionIdx < SECTION_ORDER.length - 1 ? `Next: ${SECTION_ORDER[sectionIdx + 1]} →` : 'Lock my coverage →'}
+          {saving ? 'Saving…' : 'Lock my preparation map →'}
         </button>
       </div>
     </div>

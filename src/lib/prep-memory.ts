@@ -143,7 +143,7 @@ export function weeklyEvolutionLines(thisWeek: WindowStats, lastWeek: WindowStat
 //                             deduction (makes single-section farming a
 //                             losing strategy, not a shortcut to a high score).
 //   Revision discipline (15%) — of the topics actually overdue for revision
-//                             (already 'completed'/'strong', past their
+//                             (already 'practicing'/'exam_ready', past their
 //                             revisionFrequencyDays), how many got revised
 //                             in the window.
 // Provisional (no number shown) under 7 days of history — a fabricated
@@ -195,7 +195,7 @@ export function revisionDueStats(
   let due = 0;
   let completed = 0;
   for (const row of coverageRows) {
-    if (row.status !== 'completed' && row.status !== 'strong') continue;
+    if (row.status !== 'practicing' && row.status !== 'exam_ready') continue;
     const meta = TOPIC_METADATA[row.topic];
     if (!meta) continue;
     const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
@@ -340,7 +340,7 @@ export function buildTopicMemory(
     }
 
     let revisionOverdue = false;
-    if ((status === 'completed' || status === 'strong') && coverageRow?.updatedAt) {
+    if ((status === 'practicing' || status === 'exam_ready') && coverageRow?.updatedAt) {
       const meta = TOPIC_METADATA[topic];
       if (meta) {
         const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(coverageRow.updatedAt)) / 86_400_000);

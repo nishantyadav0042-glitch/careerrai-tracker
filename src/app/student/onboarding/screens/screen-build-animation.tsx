@@ -16,15 +16,16 @@ interface Props {
 // the sequence finishes; nothing here blocks on a network call, since the
 // Blueprint itself was already being written to the DB screen-by-screen.
 const STEPS = [
-  'Analyzing your preparation…',
-  'Finding your strongest scoring opportunities…',
-  'Balancing QA, VARC & DILR…',
-  'Planning revision cycles…',
-  'Calculating your weekly workload…',
-  'Preparing your first mission…',
+  '✓ Mapping your preparation…',
+  '✓ Calculating your study capacity…',
+  '✓ Building your personalized Blueprint…',
+  '✓ Planning your revision strategy…',
+  '✓ Optimizing your path till CAT…',
 ];
 
-const STEP_MS = 650;
+// ~5-7 seconds total — long enough to feel like real work, short enough
+// to never feel like a fake loading screen.
+const STEP_MS = 1150;
 
 export default function ScreenBuildAnimation({ onNext }: Props) {
   const [stepIndex, setStepIndex] = useState(0);

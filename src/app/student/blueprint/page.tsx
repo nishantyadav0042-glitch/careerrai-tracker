@@ -23,7 +23,7 @@ interface BlueprintData {
   weakTopic: string | null;
   currentStage: string | null;
   biggestBlocker: string | null;
-  coverageTally: { not_started: number; started: number; completed: number; strong: number };
+  coverageTally: { not_started: number; learning: number; practicing: number; exam_ready: number };
   currentStreak: number;
   targetPercentile: number | null;
   prepMemory: {
@@ -68,20 +68,19 @@ const BLOCKER_LABEL: Record<string, string> = {
 // narrative line only organizes and phrases them (same "explain, never
 // decide" boundary as the buddy briefing) — it never proposes its own plan.
 const STATUS_LABEL: Record<string, string> = {
-  not_started: 'Never studied',
-  started: 'Studying',
-  completed: 'Completed once',
-  strong: 'Strong',
+  not_started: '○ Not started',
+  learning: '◔ Learning',
+  practicing: '◑ Practicing',
+  exam_ready: '⬤ Exam ready',
 };
 
 function memoryLine(entry: BlueprintData['topicMemory'][number]): string {
   if (entry.firstTouchedDaysAgo == null) {
-    // No logged practice in the app. The status can still be completed/
-    // strong/started — that's the student's own Blueprint declaration, not
-    // app history, so say exactly that instead of contradicting the badge
-    // ("Completed once" next to "haven't started this yet").
-    if (entry.status === 'completed' || entry.status === 'strong') return 'You marked this covered before joining — no practice logged in the app yet.';
-    if (entry.status === 'started') return 'You marked this in progress — no practice logged in the app yet.';
+    // No logged practice in the app. The status can still be practicing/
+    // learning — that's the student's own Blueprint declaration, not app
+    // history, so say exactly that instead of contradicting the badge.
+    if (entry.status === 'practicing' || entry.status === 'exam_ready') return 'You marked this as practice-level before joining — no practice logged in the app yet.';
+    if (entry.status === 'learning') return 'You marked this as learning — no practice logged in the app yet.';
     return "Haven't started this yet.";
   }
   const parts = [`First studied ${entry.firstTouchedDaysAgo}d ago`];
@@ -124,7 +123,7 @@ export default function BlueprintPage() {
 
   const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution, healthScore, blueprintConfidence, topicMemory } = data;
   const filteredMemory = topicMemory.filter((m) => m.topic.toLowerCase().includes(memorySearch.toLowerCase()));
-  const coverageTotal = coverageTally.not_started + coverageTally.started + coverageTally.completed + coverageTally.strong;
+  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.exam_ready;
   const { last30, mockTrend } = prepMemory;
   const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
 
@@ -236,10 +235,10 @@ export default function BlueprintPage() {
             </div>
             <div className="grid grid-cols-4 gap-2 text-center">
               {([
-                ['Never started', coverageTally.not_started, 'text-stone-400'],
-                ['Started', coverageTally.started, 'text-amber-600'],
-                ['Completed', coverageTally.completed, 'text-teal-600'],
-                ['Strong', coverageTally.strong, 'text-orange-600'],
+                ['⚪ Not started', coverageTally.not_started, 'text-stone-400'],
+                ['🟡 Learning', coverageTally.learning, 'text-amber-600'],
+                ['🔵 Practicing', coverageTally.practicing, 'text-blue-600'],
+                ['🟢 Exam ready', coverageTally.exam_ready, 'text-teal-600'],
               ] as const).map(([label, count, color]) => (
                 <div key={label}>
                   <p className={`text-lg font-bold ${color}`}>{count}</p>

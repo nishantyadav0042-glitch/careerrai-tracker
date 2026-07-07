@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, TOPIC_METADATA } from '@/lib/topics-constants';
+import { KNOWLEDGE_GRAPH, UNIT_ORDER } from '@/lib/topics-constants';
 
-const VALID_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
-const VALID_STATUSES = ['not_started', 'started', 'completed', 'strong'] as const;
+// All six Knowledge Graph sections — three exam sections plus the three
+// habit tracks (Mock Preparation / Revision / Reading Habit).
+const VALID_SECTIONS = KNOWLEDGE_GRAPH.map((s) => s.id);
+// Student-declared states + the system-earned exam_ready (writable here
+// only via the single-topic path used by confidence upgrades; the Builder's
+// bulk path never sends it — see the matrix validation below).
+const VALID_STATUSES = ['not_started', 'learning', 'practicing', 'exam_ready'] as const;
 
-const TOPICS_BY_SECTION: Record<(typeof VALID_SECTIONS)[number], string[]> = {
-  VARC: VERBAL_TOPICS,
-  DILR: LRDI_TOPICS,
-  QA: QUANT_TOPICS,
-};
+const TOPICS_BY_SECTION: Record<string, string[]> = Object.fromEntries(
+  KNOWLEDGE_GRAPH.map((s) => [s.id, s.groups.flatMap((g) => g.units)])
+);
 
-// Prerequisite-informed order, not raw array/DB order — a topic like
-// Geometry reading before Arithmetic in the grid would silently contradict
-// the sequencing this same metadata is meant to encode.
-function bySequence<T extends { topic: string }>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => (TOPIC_METADATA[a.topic]?.sequenceRank ?? 99) - (TOPIC_METADATA[b.topic]?.sequenceRank ?? 99));
+// Canonical Knowledge Graph order, not raw DB order — the grid always
+// renders sections and units the way the graph defines them.
+function byGraphOrder<T extends { topic: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (UNIT_ORDER[a.topic] ?? 999) - (UNIT_ORDER[b.topic] ?? 999));
 }
 
 // GET /api/coverage — the Coverage Matrix. First view seeds every topic at
@@ -39,11 +41,11 @@ export async function GET() {
     .eq('student_id', user.id);
 
   if (existing && existing.length > 0) {
-    return NextResponse.json({ matrix: bySequence(existing) });
+    return NextResponse.json({ matrix: byGraphOrder(existing) });
   }
 
-  const seedRows = (VALID_SECTIONS as readonly string[]).flatMap((section) =>
-    TOPICS_BY_SECTION[section as (typeof VALID_SECTIONS)[number]].map((topic) => ({
+  const seedRows = VALID_SECTIONS.flatMap((section) =>
+    TOPICS_BY_SECTION[section].map((topic) => ({
       student_id: user.id,
       section,
       topic,
@@ -57,15 +59,18 @@ export async function GET() {
     .select('section, topic, status, updated_at');
   if (error || !inserted) return NextResponse.json({ error: 'Could not seed coverage matrix' }, { status: 500 });
 
-  return NextResponse.json({ matrix: bySequence(inserted) });
+  return NextResponse.json({ matrix: byGraphOrder(inserted) });
 }
 
 interface MatrixEntry { section?: string; topic?: string; status?: string }
 
-function validateEntry({ section, topic, status }: MatrixEntry): string | null {
-  if (!section || !(VALID_SECTIONS as readonly string[]).includes(section)) return 'section must be VARC, DILR, or QA';
-  if (!topic || !TOPICS_BY_SECTION[section as (typeof VALID_SECTIONS)[number]].includes(topic)) return 'topic is not valid for section';
+function validateEntry({ section, topic, status }: MatrixEntry, allowExamReady: boolean): string | null {
+  if (!section || !(VALID_SECTIONS as string[]).includes(section)) return 'section is not a Knowledge Graph section';
+  if (!topic || !TOPICS_BY_SECTION[section].includes(topic)) return 'topic is not valid for section';
   if (!status || !(VALID_STATUSES as readonly string[]).includes(status)) return 'status is not a recognised value';
+  // exam_ready is system-earned (confidence signals), never self-declared —
+  // the Builder's bulk write may only carry the three student states.
+  if (!allowExamReady && status === 'exam_ready') return 'exam_ready cannot be self-declared';
   return null;
 }
 
@@ -81,11 +86,11 @@ export async function POST(request: NextRequest) {
   const body = (await request.json()) as MatrixEntry & { matrix?: MatrixEntry[] };
 
   if (Array.isArray(body.matrix)) {
-    if (body.matrix.length === 0 || body.matrix.length > 50) {
-      return NextResponse.json({ error: 'matrix must have 1-50 entries' }, { status: 400 });
+    if (body.matrix.length === 0 || body.matrix.length > 80) {
+      return NextResponse.json({ error: 'matrix must have 1-80 entries' }, { status: 400 });
     }
     for (const entry of body.matrix) {
-      const problem = validateEntry(entry);
+      const problem = validateEntry(entry, false);
       if (problem) return NextResponse.json({ error: `${entry.section ?? '?'}/${entry.topic ?? '?'}: ${problem}` }, { status: 400 });
     }
     const now = new Date().toISOString();
@@ -101,15 +106,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { section, topic, status } = body;
-  if (!section || !(VALID_SECTIONS as readonly string[]).includes(section)) {
-    return NextResponse.json({ error: 'section must be VARC, DILR, or QA' }, { status: 400 });
-  }
-  if (!topic || !TOPICS_BY_SECTION[section as (typeof VALID_SECTIONS)[number]].includes(topic)) {
-    return NextResponse.json({ error: 'topic is not valid for section' }, { status: 400 });
-  }
-  if (!status || !(VALID_STATUSES as readonly string[]).includes(status)) {
-    return NextResponse.json({ error: 'status is not a recognised value' }, { status: 400 });
-  }
+  // Single-topic path: the Analysis page tap cycles student states only —
+  // exam_ready still cannot be self-assigned from any UI.
+  const problem = validateEntry(body, false);
+  if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
   const admin = createAdminClient();
   const { error } = await admin

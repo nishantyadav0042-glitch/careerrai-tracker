@@ -17,7 +17,7 @@ interface BlueprintSnapshot {
   weakestSection: string | null;
   weakTopic: string | null;
   targetPercentile: number | null;
-  coverageTally: { not_started: number; started: number; completed: number; strong: number };
+  coverageTally: { not_started: number; learning: number; practicing: number; exam_ready: number };
   blueprintConfidence: { score: number; reasons: string[] };
 }
 
@@ -71,7 +71,7 @@ export default function ScreenBlueprintReveal({ onNext, isLoading }: ScreenBluep
     );
   }
 
-  const coverageTotal = data.coverageTally.not_started + data.coverageTally.started + data.coverageTally.completed + data.coverageTally.strong;
+  const coverageTotal = data.coverageTally.not_started + data.coverageTally.learning + data.coverageTally.practicing + data.coverageTally.exam_ready;
 
   return (
     <div className="space-y-5">
@@ -99,10 +99,10 @@ export default function ScreenBlueprintReveal({ onNext, isLoading }: ScreenBluep
         {coverageTotal > 0 && (
           <div className="border-t border-stone-100 pt-3 grid grid-cols-4 gap-2 text-center">
             {([
-              ['New', data.coverageTally.not_started, 'text-stone-400'],
-              ['Started', data.coverageTally.started, 'text-amber-600'],
-              ['Done', data.coverageTally.completed, 'text-teal-600'],
-              ['Strong', data.coverageTally.strong, 'text-orange-600'],
+              ['⚪ Not started', data.coverageTally.not_started, 'text-stone-400'],
+              ['🟡 Learning', data.coverageTally.learning, 'text-amber-600'],
+              ['🔵 Practicing', data.coverageTally.practicing, 'text-blue-600'],
+              ['🟢 Exam ready', data.coverageTally.exam_ready, 'text-teal-600'],
             ] as const).map(([label, count, color]) => (
               <div key={label}>
                 <p className={cn('text-base font-bold', color)}>{count}</p>

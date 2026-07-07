@@ -35,8 +35,8 @@ export interface BlueprintPreviewInput {
   weak_topic?: string | null;
   studyTargetHours?: number | null;
   weekendHours?: number | null;
-  coverage_done?: number | null;
-  coverage_started?: number | null;
+  coverage_practicing?: number | null;
+  coverage_learning?: number | null;
   coverage_total?: number | null;
 }
 
@@ -87,15 +87,17 @@ function weeklyLoadHours(input: BlueprintPreviewInput): number | null {
 // ─── Live projection (the Noom pattern, deterministic) ─────────────────────
 // A rough completion forecast that visibly updates as answers land — first
 // when weekly hours are known (assumes nothing covered yet), again after
-// coverage is declared (recomputed from what's actually left). The constants
-// are deliberately coarse and the copy says "≈": this is a pace estimate,
-// not a promise. ~12 focused hours to take an untouched CAT topic to "done
-// once," half that to finish a started one — spread across the ~14-topic
-// taxonomy this lands in the 150-180h total prep range commonly cited for
-// CAT, and it's stated here once so there's a single place to tune it.
-const HOURS_PER_UNTOUCHED_TOPIC = 12;
-const HOURS_PER_STARTED_TOPIC = 6;
-const TOTAL_TOPICS = 14;
+// the preparation map is declared (recomputed from what's actually left).
+// The constants are deliberately coarse and the copy says "≈": this is a
+// pace estimate, not a promise. ~5 focused hours to take one granular
+// Knowledge Graph unit from untouched to practicing, 3 to finish one still
+// at learning, 1.5 to polish one already practicing — across the 46 exam
+// units this lands in the 200-250h total-prep range, stated once here so
+// there's a single place to tune it.
+const HOURS_PER_UNTOUCHED_UNIT = 5;
+const HOURS_PER_LEARNING_UNIT = 3;
+const HOURS_PER_PRACTICING_UNIT = 1.5;
+export const EXAM_UNIT_COUNT = 46; // VARC 9 + DILR 9 + QA 28
 
 export interface CoverageProjection {
   weeks: number;           // ≈ weeks to finish remaining coverage at this load
@@ -105,36 +107,33 @@ export interface CoverageProjection {
 export function projectCoverageWeeks(input: BlueprintPreviewInput): CoverageProjection | null {
   const load = weeklyLoadHours(input);
   if (load == null || load <= 0) return null;
-  const total = input.coverage_total ?? TOTAL_TOPICS;
+  const total = input.coverage_total ?? EXAM_UNIT_COUNT;
   const declared = input.coverage_total != null;
-  const done = declared ? (input.coverage_done ?? 0) : 0;
-  const started = declared ? (input.coverage_started ?? 0) : 0;
-  const untouched = Math.max(0, total - done - started);
-  const hoursLeft = untouched * HOURS_PER_UNTOUCHED_TOPIC + started * HOURS_PER_STARTED_TOPIC;
+  const practicing = declared ? (input.coverage_practicing ?? 0) : 0;
+  const learning = declared ? (input.coverage_learning ?? 0) : 0;
+  const untouched = Math.max(0, total - practicing - learning);
+  const hoursLeft = untouched * HOURS_PER_UNTOUCHED_UNIT + learning * HOURS_PER_LEARNING_UNIT + practicing * HOURS_PER_PRACTICING_UNIT;
   return { weeks: Math.max(1, Math.ceil(hoursLeft / load)), basedOnDeclared: declared };
 }
 
 function projectionBadge(input: BlueprintPreviewInput): string | null {
   const p = projectCoverageWeeks(input);
   if (p == null) return null;
-  if (p.basedOnDeclared) {
-    const done = input.coverage_done ?? 0;
-    if (done >= (input.coverage_total ?? TOTAL_TOPICS)) return 'Coverage complete — revision mode';
-    return `Remaining topics ≈ ${p.weeks} week${p.weeks === 1 ? '' : 's'} at your pace`;
-  }
+  if (p.basedOnDeclared) return `Remaining syllabus ≈ ${p.weeks} week${p.weeks === 1 ? '' : 's'} at your pace`;
   return `Full syllabus ≈ ${p.weeks} weeks at this pace`;
 }
 
 // coverageBadge unlocks once the student has explicitly declared the whole
-// grid (Section 4) — the exact per-topic statuses they tapped, never an
-// inferred count. Feeds topic-selector.ts's coverage-status scoring.
+// grid — the exact per-unit statuses they tapped, never an inferred count.
+// Feeds topic-selector.ts's coverage-status scoring.
 function coverageBadge(input: BlueprintPreviewInput): string | null {
   if (input.coverage_total == null) return null;
-  const done = input.coverage_done ?? 0;
-  const started = input.coverage_started ?? 0;
-  if (done === 0 && started === 0) return `Coverage: starting fresh (0/${input.coverage_total})`;
-  const parts = [`${done} done`];
-  if (started > 0) parts.push(`${started} in progress`);
+  const practicing = input.coverage_practicing ?? 0;
+  const learning = input.coverage_learning ?? 0;
+  if (practicing === 0 && learning === 0) return `Starting fresh — all ${input.coverage_total} units ahead`;
+  const parts: string[] = [];
+  if (practicing > 0) parts.push(`${practicing} practicing`);
+  if (learning > 0) parts.push(`${learning} learning`);
   return `Coverage: ${parts.join(' · ')} of ${input.coverage_total}`;
 }
 

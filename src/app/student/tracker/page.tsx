@@ -105,7 +105,7 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
   const attemptYear = (profile?.attempt_year as number | null) ?? null;
-  const coverageTally = { not_started: 0, started: 0, completed: 0, strong: 0 };
+  const coverageTally = { not_started: 0, learning: 0, practicing: 0, exam_ready: 0 };
   for (const row of coverage ?? []) {
     const status = row.status as keyof typeof coverageTally;
     coverageTally[status] = (coverageTally[status] ?? 0) + 1;

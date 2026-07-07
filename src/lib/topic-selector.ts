@@ -13,7 +13,15 @@
 
 import { TOPIC_METADATA } from './topics-constants';
 
-export type CoverageStatus = 'not_started' | 'started' | 'completed' | 'strong';
+// Student-controlled states (declared in the Blueprint Builder):
+//   not_started (⚪ Haven't Started) · learning (🟡 Learning Concepts) ·
+//   practicing (🔵 Practicing Questions)
+// System-controlled state (never a self-report option):
+//   exam_ready (🟢) — earned through confidence signals (applyConfidenceSignal
+//   below), mock evidence, and revision discipline.
+// 🟠 Revision Due is DERIVED (practicing/exam_ready + past the topic's
+// revision cadence), never stored — see prep-memory's revisionOverdue.
+export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'exam_ready';
 
 export interface TopicCandidateInput {
   topic: string;
@@ -40,16 +48,16 @@ export interface TopicChoice {
 const COVERAGE_POINTS: Record<CoverageStatus | 'unknown', number> = {
   unknown: 26,
   not_started: 30,
-  started: 20,
-  completed: 10,
-  strong: 2,
+  learning: 20,
+  practicing: 10,
+  exam_ready: 2,
 };
 
 function coverageReason(topic: string, status: CoverageStatus | null): string | null {
-  if (status == null) return `${topic} hasn't been logged in your Coverage Matrix yet`;
+  if (status == null) return `${topic} hasn't been mapped in your Blueprint yet`;
   if (status === 'not_started') return `${topic} — never started`;
-  if (status === 'started') return `${topic} — started, not yet completed`;
-  return null; // "completed"/"strong" only explained via revision-due below, not coverage alone
+  if (status === 'learning') return `${topic} — you're still learning the concepts`;
+  return null; // "practicing"/"exam_ready" only explained via revision-due below, not coverage alone
 }
 
 // revisionMultiplier: the archetype coefficient from
@@ -104,22 +112,23 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
 
 export type ConfidenceSignal = 'green' | 'yellow' | 'red';
 
-const STATUS_ORDER: CoverageStatus[] = ['not_started', 'started', 'completed', 'strong'];
+const STATUS_ORDER: CoverageStatus[] = ['not_started', 'learning', 'practicing', 'exam_ready'];
 
-// Confidence-aware planning: a real signal captured right after a task is
-// done feeds straight back into the same Coverage Matrix the Topic Selector
-// itself reads above — so the plan adapts to how prep is actually going,
-// not just to taps made once at setup or a separate self-audit visit.
-//   green  — advance one level, never past 'strong'
+// Confidence-aware planning — this is where "CareerRai upgrades topics
+// automatically" lives: the student only ever declares up to 'practicing'
+// in the Blueprint; 'exam_ready' is EARNED here, from a green tap on a
+// topic already at 'practicing'. Signals feed the same Coverage grid the
+// Topic Selector reads for tomorrow's plan.
+//   green  — advance one level, up to and including 'exam_ready'
 //   yellow — acknowledges the attempt; only moves an untouched topic to
-//            'started', never advances or regresses one already in progress
+//            'learning', never advances or regresses one already in progress
 //   red    — a real regression signal: struggling on a topic marked
-//            'completed'/'strong' means it isn't holding, so it drops back
-//            to 'started' — never all the way to 'not_started', since the
-//            attempt itself is still real signal
+//            'practicing'/'exam_ready' means it isn't holding, so it drops
+//            back to 'learning' — never all the way to 'not_started', since
+//            the attempt itself is still real signal
 export function applyConfidenceSignal(current: CoverageStatus | null, confidence: ConfidenceSignal): CoverageStatus {
   const rank = STATUS_ORDER.indexOf(current ?? 'not_started');
   if (confidence === 'green') return STATUS_ORDER[Math.min(rank + 1, STATUS_ORDER.length - 1)];
-  if (confidence === 'red') return 'started';
-  return rank === 0 ? 'started' : STATUS_ORDER[rank];
+  if (confidence === 'red') return 'learning';
+  return rank === 0 ? 'learning' : STATUS_ORDER[rank];
 }

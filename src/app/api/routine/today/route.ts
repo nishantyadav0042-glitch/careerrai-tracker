@@ -232,7 +232,7 @@ function computeWeakestFromCoverage(rows: { section: string; status: string }[])
   for (const s of tieOrder) {
     const sectionRows = rows.filter((r) => r.section === s);
     if (sectionRows.length === 0) continue;
-    const gap = sectionRows.reduce((sum, r) => sum + (r.status === 'not_started' ? 2 : r.status === 'started' ? 1 : 0), 0);
+    const gap = sectionRows.reduce((sum, r) => sum + (r.status === 'not_started' ? 2 : r.status === 'learning' ? 1 : 0), 0);
     const score = gap / sectionRows.length;
     if (best == null || score > best.score) best = { s, score };
   }

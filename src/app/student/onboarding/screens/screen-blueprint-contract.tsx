@@ -51,12 +51,12 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         if (!res.ok) return;
         const json = await res.json();
         const coverageTotal =
-          json.coverageTally.not_started + json.coverageTally.started + json.coverageTally.completed + json.coverageTally.strong;
+          json.coverageTally.not_started + json.coverageTally.learning + json.coverageTally.practicing + json.coverageTally.exam_ready;
         setData({
           examTarget: json.examTarget ?? null,
           attemptYear: json.attemptYear ?? null,
           coverageTotal,
-          coverageDone: json.coverageTally.completed + json.coverageTally.strong,
+          coverageDone: json.coverageTally.practicing + json.coverageTally.exam_ready,
           phaseLabel: json.phase.label,
           weeksRemaining: json.weeksRemaining,
         });

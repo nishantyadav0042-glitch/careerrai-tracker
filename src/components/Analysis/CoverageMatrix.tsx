@@ -2,39 +2,58 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { KNOWLEDGE_GRAPH, TOPIC_METADATA } from '@/lib/topics-constants';
 
-type Section = 'VARC' | 'DILR' | 'QA';
-type Status = 'not_started' | 'started' | 'completed' | 'strong';
+type Status = 'not_started' | 'learning' | 'practicing' | 'exam_ready';
 
 interface CoverageRow {
-  section: Section;
+  section: string;
   topic: string;
   status: Status;
+  updated_at: string;
 }
 
-const SECTION_ORDER: Section[] = ['VARC', 'DILR', 'QA'];
+// Student-controlled cycle only — exam_ready (🟢) is earned through
+// confidence signals on completed tasks, never set by a tap here, and
+// tapping an exam_ready topic deliberately does nothing (the system gave
+// that status; the system takes it away via a red confidence signal).
+const STUDENT_CYCLE: Status[] = ['not_started', 'learning', 'practicing'];
 
-// One tap cycles a topic through this order — no dropdown, no modal, just
-// tap-to-advance. Never Started -> Started -> Completed -> Strong -> back.
-const STATUS_CYCLE: Status[] = ['not_started', 'started', 'completed', 'strong'];
+// The mastery ring: one glyph per state, growth you can see — more
+// motivating than a percentage and honest about who set it.
+const STATUS_GLYPH: Record<Status, string> = {
+  not_started: '○',
+  learning: '◔',
+  practicing: '◑',
+  exam_ready: '⬤',
+};
 const STATUS_LABEL: Record<Status, string> = {
-  not_started: 'Never started',
-  started: 'Started',
-  completed: 'Completed',
-  strong: 'Strong',
+  not_started: 'Not started',
+  learning: 'Learning',
+  practicing: 'Practicing',
+  exam_ready: 'Exam ready',
 };
 const STATUS_STYLE: Record<Status, string> = {
   not_started: 'bg-stone-100 text-stone-500 border-stone-200',
-  started: 'bg-amber-50 text-amber-700 border-amber-200',
-  completed: 'bg-teal-50 text-teal-700 border-teal-200',
-  strong: 'bg-orange-50 text-orange-700 border-orange-300',
+  learning: 'bg-amber-50 text-amber-700 border-amber-200',
+  practicing: 'bg-blue-50 text-blue-700 border-blue-200',
+  exam_ready: 'bg-teal-50 text-teal-700 border-teal-300',
 };
+// Derived, never stored: a practicing/exam_ready topic past its revision
+// cadence shows ◕ Revision due in place of its normal state.
+const REVISION_DUE_STYLE = 'bg-orange-50 text-orange-700 border-orange-300';
 
-// The Coverage Matrix (Study Plan Generator Bible Part 4) — reuses the same
-// 14-topic taxonomy already shown in daily logging, no second one invented.
-// Shows exactly what the student declared in the Blueprint Builder (or
-// not_started if they haven't) — never a stage-inferred guess. Each chip
-// shows its status label, so the state is readable, not a color code.
+function isRevisionDue(row: CoverageRow): boolean {
+  if (row.status !== 'practicing' && row.status !== 'exam_ready') return false;
+  const meta = TOPIC_METADATA[row.topic];
+  if (!meta) return false;
+  const daysSince = Math.round((Date.now() - Date.parse(row.updated_at)) / 86_400_000);
+  return daysSince > meta.revisionFrequencyDays;
+}
+
+// The preparation map (Knowledge Graph coverage) — shows exactly what the
+// student declared in the Blueprint Builder plus what the system has since
+// upgraded, grouped the way the graph defines it.
 export function CoverageMatrix() {
   const [rows, setRows] = useState<CoverageRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,12 +73,12 @@ export function CoverageMatrix() {
   useEffect(() => { load(); }, [load]);
 
   async function cycleTopic(row: CoverageRow) {
+    if (row.status === 'exam_ready') return; // system-earned, not tappable
     const key = `${row.section}:${row.topic}`;
     if (busy) return;
     setBusy(key);
-    const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(row.status) + 1) % STATUS_CYCLE.length];
-    // Optimistic — this is a low-stakes single-tap toggle, not worth a
-    // round-trip delay before the chip visibly updates.
+    const nextStatus = STUDENT_CYCLE[(STUDENT_CYCLE.indexOf(row.status) + 1) % STUDENT_CYCLE.length];
+    // Optimistic — a low-stakes single-tap toggle, not worth a round-trip delay.
     setRows((prev) => prev.map((r) => (r.section === row.section && r.topic === row.topic ? { ...r, status: nextStatus } : r)));
     try {
       await fetch('/api/coverage', {
@@ -82,37 +101,47 @@ export function CoverageMatrix() {
   }
   if (rows.length === 0) return null;
 
+  const rowsByTopic = new Map(rows.map((r) => [r.topic, r]));
+
   return (
     <div className="bg-white rounded-2xl border border-stone-200 p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">Coverage Matrix</h2>
-      <p className="text-xs text-stone-400 mb-4">Tap a topic to update it — cycles Never started → Started → Completed → Strong.</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">Preparation Map</h2>
+      <p className="text-xs text-stone-400 mb-4">
+        Tap to update: ○ Not started → ◔ Learning → ◑ Practicing. ◕ Revision due and ⬤ Exam ready are set by CareerRai, not by tapping.
+      </p>
       <div className="space-y-4">
-        {SECTION_ORDER.map((section) => (
-          <div key={section}>
-            <p className="text-xs font-bold text-stone-700 mb-1.5">{section}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {rows.filter((r) => r.section === section).map((row) => {
-                const key = `${row.section}:${row.topic}`;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => cycleTopic(row)}
-                    disabled={busy === key}
-                    title={STATUS_LABEL[row.status]}
-                    className={cn(
-                      'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-95',
-                      STATUS_STYLE[row.status],
-                      busy === key && 'opacity-50'
-                    )}
-                  >
-                    {row.topic}
-                    <span className="ml-1 opacity-70 font-normal">· {STATUS_LABEL[row.status]}</span>
-                  </button>
-                );
-              })}
+        {KNOWLEDGE_GRAPH.map((section) => {
+          const sectionRows = section.groups.flatMap((g) => g.units).map((u) => rowsByTopic.get(u)).filter((r): r is CoverageRow => r != null);
+          if (sectionRows.length === 0) return null;
+          return (
+            <div key={section.id}>
+              <p className="text-xs font-bold text-stone-700 mb-1.5">{section.label}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {sectionRows.map((row) => {
+                  const key = `${row.section}:${row.topic}`;
+                  const revDue = isRevisionDue(row);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => cycleTopic(row)}
+                      disabled={busy === key}
+                      title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-95',
+                        revDue ? REVISION_DUE_STYLE : STATUS_STYLE[row.status],
+                        busy === key && 'opacity-50',
+                        row.status === 'exam_ready' && 'cursor-default'
+                      )}
+                    >
+                      <span className="mr-1">{revDue ? '◕' : STATUS_GLYPH[row.status]}</span>
+                      {row.topic}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
