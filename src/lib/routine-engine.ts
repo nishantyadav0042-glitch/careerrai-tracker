@@ -165,25 +165,17 @@ export function archetypeRevisionMultiplier(profile: { isRepeater: boolean; isWo
 // revision-due, prerequisites) instead of a flat per-section day-count, so
 // the cue is topic-specific, not just section-specific.
 export function implementationIntention(section: Section, topic: string, topicReasons: string[], phase: Phase): string {
-  // The card already shows "SECTION — TOPIC" as the task title, so the
-  // reason never repeats it — it's pure coaching.
-  if (topicReasons.length > 0) {
-    return `Start here — ${topicReasons[0]}`;
-  }
-  return phase === 'foundation'
-    ? 'Start here — first pass, before anything else'
-    : 'Start here — day one counts';
+  // Keywords only — the "Start Here" chip carries the priority framing.
+  if (topicReasons.length > 0) return topicReasons[0];
+  return phase === 'foundation' ? 'First pass' : 'Highest-leverage today';
 }
 
 // Plain, non-conditional reason for the secondary tasks — deliberately NOT
 // if-then framed. The evidence supports one vivid, personal trigger, not
 // diluting the pattern across a whole checklist.
 export function sectionReason(section: Section, topic: string, topicReasons: string[], ordinal: 'second' | 'third'): string {
-  if (topicReasons.length > 0) {
-    const r = topicReasons[0];
-    return r.charAt(0).toUpperCase() + r.slice(1);
-  }
-  return ordinal === 'second' ? "Rounds out today's set" : "Closes today's session";
+  if (topicReasons.length > 0) return topicReasons[0];
+  return ordinal === 'second' ? 'Daily balance' : 'Closes the day';
 }
 
 // The "how did you plan this" answer, made visible instead of implicit. A
@@ -263,8 +255,8 @@ export function generateRoutine(
     topic: weakChoice.topic,
     label: `${weak} — ${weakChoice.topic}`,
     target: phase === 'foundation'
-      ? `Learn the concept, then solve ${priorityQuestions} questions`
-      : `Solve ${priorityQuestions} questions, timed`,
+      ? `Learn ${weakChoice.topic}, solve ${priorityQuestions} questions`
+      : `Solve ${priorityQuestions} ${weakChoice.topic} questions`,
     estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
@@ -278,7 +270,7 @@ export function generateRoutine(
       section,
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
-      target: `Solve ${questionTarget(minutes, false)} questions`,
+      target: `Solve ${questionTarget(minutes, false)} ${choice.topic} questions`,
       estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });
@@ -301,7 +293,7 @@ export function generateRoutine(
         label: 'Mock analysis',
         target: 'Re-open your last mock, log 3 mistakes',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-        reason: 'Your mistakes are worth more marks than new topics right now',
+        reason: 'Mistakes > new topics',
       });
     } else if (profile.isWorkingProfessional && !weekend) {
       tasks.push({
@@ -311,7 +303,7 @@ export function generateRoutine(
         label: `${weak} — timed sectional`,
         target: 'One timed set — accuracy over volume',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-        reason: 'Weekday capacity is tight — the full mock waits for your weekend',
+        reason: 'Full mock waits for weekend',
       });
     } else {
       tasks.push({
@@ -321,7 +313,7 @@ export function generateRoutine(
         label: 'Sectional mock',
         target: 'One timed sectional, exam conditions',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-        reason: 'Mocks are the #1 signal in this phase — skip one and you fly blind',
+        reason: 'Mocks = #1 signal now',
       });
     }
   } else if (phase === 'revision') {
@@ -332,7 +324,7 @@ export function generateRoutine(
       label: `${strong ?? weak} rapid recall`,
       target: '15-minute recall — formulas and set-ups from memory',
       estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
-      reason: 'Protect your strengths — losing marks you own hurts double',
+      reason: 'Protect your strengths',
     });
   } else if (profile.isRepeater) {
     tasks.push({
@@ -342,7 +334,7 @@ export function generateRoutine(
       label: `Yesterday's ${weak} mistakes`,
       target: 'Rework each one until it cracks',
       estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
-      reason: "Closing yesterday's gaps beats opening new ground — you know this",
+      reason: "Close yesterday's gaps first",
     });
   }
 

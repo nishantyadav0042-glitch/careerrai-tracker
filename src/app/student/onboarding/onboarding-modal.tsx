@@ -219,7 +219,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         {/* Header */}
         <div className="bg-white border-b border-stone-200 p-6 pb-4">
           <h2 className="text-lg font-bold text-stone-900 mb-1" style={{ fontFamily: 'Georgia, serif' }}>
-            Build Your CAT Blueprint
+            Build My CAT Plan
           </h2>
           {activeSection && isFirstOfSection && (
             <>

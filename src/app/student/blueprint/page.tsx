@@ -136,8 +136,8 @@ export default function BlueprintPage() {
             <ArrowLeft className="w-5 h-5 text-stone-600" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your Study Blueprint</h1>
-            <p className="text-sm text-stone-500">The plan, not just today&apos;s task list</p>
+            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My CAT Plan</h1>
+            <p className="text-sm text-stone-500">Your journey to CAT day</p>
           </div>
         </div>
 

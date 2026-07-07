@@ -22,7 +22,7 @@ export default function ScreenBlueprintIntro({ onNext, isLoading }: Props) {
           <Sparkles className="w-7 h-7 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-stone-900 leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
-          Let&apos;s build your<br />CAT Blueprint
+          Let&apos;s build your<br />CAT Plan
         </h1>
         <p className="text-sm text-stone-500">The only thing you need before starting CAT prep. 2–4 minutes.</p>
       </div>

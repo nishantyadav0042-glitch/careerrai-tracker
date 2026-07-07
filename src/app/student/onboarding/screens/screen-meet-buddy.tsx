@@ -86,7 +86,7 @@ export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }
           <p className="text-sm font-semibold text-stone-900">You&apos;ll be matched with your buddy right after this.</p>
           <p className="text-xs text-stone-600 leading-relaxed">
             An IIM senior who scored in the top percentiles on CAT — reviews your progress every week, decodes your mocks,
-            and gives you guidance built around your actual Blueprint. Not a generic batch coach.
+            and gives you guidance built around your actual CAT Plan. Not a generic batch coach.
           </p>
         </div>
       )}

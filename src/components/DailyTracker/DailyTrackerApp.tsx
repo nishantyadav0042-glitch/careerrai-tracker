@@ -4,66 +4,17 @@ import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
-import { HeroCard } from './HeroCard';
+import { Flame, Video } from 'lucide-react';
 import type { LoggingData } from './LoggingModal';
-const LoggingModal = dynamic(
-  () => import('./LoggingModal').then((m) => m.LoggingModal),
-  { ssr: false }
-);
-const PendingDebriefCard = dynamic(
-  () => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard),
-  { ssr: false }
-);
 import { BuddyInsightCard } from './BuddyInsightCard';
-import { BrainBreakCard } from './BrainBreakCard';
 import { SafeCard } from './SafeCard';
 import type { MockDebriefData } from './MockDebriefModal';
-import type { GameType } from './DailyPuzzleCard';
-import type { PuzzleContent } from './PuzzleSolverModal';
-import { isDetectiveCase, isEscapeRoom, isMafiaGame } from './game-types';
-
-// Heavy modals — only loaded when the user actually opens them.
-const MockDebriefModal = dynamic(
-  () => import('./MockDebriefModal').then((m) => m.MockDebriefModal),
-  { ssr: false }
-);
-const MissRecoveryModal = dynamic(
-  () => import('./MissRecoveryModal').then((m) => m.MissRecoveryModal),
-  { ssr: false }
-);
-const FeedbackAnimation = dynamic(
-  () => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation),
-  { ssr: false }
-);
-const DailyPuzzleCard = dynamic(
-  () => import('./DailyPuzzleCard').then((m) => m.DailyPuzzleCard),
-  { ssr: false }
-);
-const PuzzleSolverModal = dynamic(
-  () => import('./PuzzleSolverModal').then((m) => m.PuzzleSolverModal),
-  { ssr: false }
-);
-const DetectiveCaseModal = dynamic(
-  () => import('./DetectiveCaseModal').then((m) => m.DetectiveCaseModal),
-  { ssr: false }
-);
-const EscapeRoomModal = dynamic(
-  () => import('./EscapeRoomModal').then((m) => m.EscapeRoomModal),
-  { ssr: false }
-);
-const MafiaLogicModal = dynamic(
-  () => import('./MafiaLogicModal').then((m) => m.MafiaLogicModal),
-  { ssr: false }
-);
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
-import { useDailyPuzzle } from '@/hooks/useDailyPuzzle';
-import { Loader2, Video } from 'lucide-react';
 
-// ── Feature flags — disable without deleting (re-enable by changing to true) ──
-// Brain break: unvalidated break-containment hypothesis; hidden for 60-day cohort.
-const BRAIN_BREAK_ENABLED = true;
-// Daily puzzle: content pipeline not ready; hidden until populated.
-const DAILY_PUZZLE_ENABLED = false;
+const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
+const PendingDebriefCard = dynamic(() => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard), { ssr: false });
+const MockDebriefModal = dynamic(() => import('./MockDebriefModal').then((m) => m.MockDebriefModal), { ssr: false });
+const FeedbackAnimation = dynamic(() => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation), { ssr: false });
 
 function SessionStrip({ session }: { session: TodaySession }) {
   const startsAt = new Date(session.scheduled_at);
@@ -76,27 +27,14 @@ function SessionStrip({ session }: { session: TodaySession }) {
       <div className="flex items-center gap-2.5 min-w-0">
         <Video className="w-4 h-4 text-indigo-600 shrink-0" />
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-indigo-900 truncate">
-            {session.title || 'Buddy session'}
-          </p>
+          <p className="text-xs font-semibold text-indigo-900 truncate">{session.title || 'Buddy session'}</p>
           <p className="text-[11px] text-indigo-600">
-            {startsAt.toLocaleString('en-IN', {
-              timeZone: 'Asia/Kolkata',
-              hour: '2-digit',
-              minute: '2-digit',
-              day: 'numeric',
-              month: 'short',
-            })}
+            {startsAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
           </p>
         </div>
       </div>
       {joinable ? (
-        <a
-          href={session.google_meet_link!}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors"
-        >
+        <a href={session.google_meet_link!} target="_blank" rel="noopener noreferrer" className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors">
           Join →
         </a>
       ) : (
@@ -123,17 +61,17 @@ interface DailyTrackerAppProps {
   buddyName?: string | null;
   initialPendingDebrief?: { report_date: string; updated_at: string } | null;
   initialFeedback?: { feedback_text: string; feedback_date: string; feedback_type: string } | null;
-  recovery?: { missedDays: number; previousStreak: number } | null;
   initialLogging?: InitialLogging | null;
-  themeName?: string;
-  themeFocus?: string;
-  daysInTheme?: number;
-  themeTarget?: number;
   hasLoggedYesterday?: boolean;
   yesterdayStr?: string;   // ISO date for the API
   yesterdayLabel?: string; // "Jun 16" for the UI
 }
 
+// Minimal by design: the mock-debrief loop (the paid product's core data),
+// one buddy line, today's session, and a small log strip with a tiny
+// streak. The old hero streak card, puzzles, brain-break games, and
+// recovery modal are gone — the homepage earns trust with today's study,
+// not widgets.
 export function DailyTrackerApp({
   studentId = '',
   todaySession = null,
@@ -142,28 +80,20 @@ export function DailyTrackerApp({
   buddyName = null,
   initialPendingDebrief = null,
   initialFeedback = null,
-  recovery = null,
   initialLogging = null,
-  themeName = '',
-  themeFocus = '',
-  daysInTheme = 0,
-  themeTarget = 30,
   hasLoggedYesterday = true,
   yesterdayStr = '',
   yesterdayLabel = '',
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
-  const [isPuzzleOpen, setIsPuzzleOpen] = useState(false);
   const [currentLogDate, setCurrentLogDate] = useState('');
   const [logDateOverride, setLogDateOverride] = useState<string | null>(null);
   const [lastNudge, setLastNudge] = useState<string | null>(null);
-  const [showRecovery, setShowRecovery] = useState(!!recovery);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // A mock logged in the last 48h with no debrief = the loud #1 card.
-  // initialPendingDebrief comes from the server component (zero client waterfall on load).
   const { data: pendingDebrief } = useQuery({
     queryKey: ['pending-debrief', studentId],
     enabled: !!studentId,
@@ -192,10 +122,7 @@ export function DailyTrackerApp({
     },
   });
 
-  // Force the mock debrief: if a mock was logged but isn't debriefed yet, open
-  // the debrief automatically — on first load and on every later visit — until
-  // the student fills it. It stays closeable (so nobody is bricked); closing it
-  // just brings back the loud pending-debrief card, and it reopens next visit.
+  // Force the mock debrief until it's filled — closeable, reopens next visit.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (pendingDebrief && !isDebriefOpen) {
@@ -208,7 +135,6 @@ export function DailyTrackerApp({
 
   const {
     currentStreak,
-    maxStreak,
     hasLoggedToday,
     isSubmitting,
     showFeedback,
@@ -217,8 +143,6 @@ export function DailyTrackerApp({
     submitLog,
   } = useLogging(studentId, initialLogging);
 
-  const { puzzle, attempt, isLoading: puzzleLoading, submitAttempt } = useDailyPuzzle(studentId, DAILY_PUZZLE_ENABLED);
-
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
     const result = await submitLog({ ...data, ...(logDateOverride ? { log_date: logDateOverride } : {}) });
     setLogDateOverride(null);
@@ -226,7 +150,6 @@ export function DailyTrackerApp({
     else if (result?.daily_nudge) setLastNudge(result.daily_nudge);
     const mockSelected = data.sections.includes('Mock');
     if (mockSelected) {
-      // Compute today's log date (same 3 AM boundary logic)
       const now = new Date();
       const today3am = new Date();
       today3am.setHours(3, 0, 0, 0);
@@ -234,7 +157,6 @@ export function DailyTrackerApp({
       setCurrentLogDate(logDate.toISOString().split('T')[0]);
       setIsLogOpen(false);
       setIsDebriefOpen(true);
-      // If they skip the debrief, the pending card takes over on home
       queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
     }
     return { mockSelected };
@@ -252,41 +174,9 @@ export function DailyTrackerApp({
     queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
   };
 
-  const rawContent = puzzle?.puzzle_content;
-  const puzzleContent = rawContent as PuzzleContent | undefined;
-  const isEscape = isEscapeRoom(rawContent);
-  const isMafia = isMafiaGame(rawContent);
-  const isCasePuzzle = !isEscape && !isMafia && isDetectiveCase(rawContent);
-  const isPlayablePuzzle =
-    isCasePuzzle || isEscape || isMafia || (!!puzzleContent?.question && Array.isArray(puzzleContent?.options));
-
-  const gameType: GameType = isEscape
-    ? 'escape_room'
-    : isMafia
-    ? 'mafia'
-    : isCasePuzzle && (rawContent as { game_type?: string }).game_type === 'airport'
-    ? 'airport'
-    : 'detective';
-
-  const handlePuzzleComplete = async (result: { solved: boolean; timeSeconds: number; accuracy: number }) => {
-    await submitAttempt({ solved: result.solved, timeSeconds: result.timeSeconds, accuracy: result.accuracy });
-  };
-
-  void maxStreak; // available for future use in HeroCard
-
   return (
-    <div className="space-y-5">
-      {/* Miss-recovery — the compassionate restart for a returning student. */}
-      {recovery && showRecovery && !hasLoggedToday && (
-        <MissRecoveryModal
-          missedDays={recovery.missedDays}
-          previousStreak={recovery.previousStreak}
-          onRestart={() => { setShowRecovery(false); setIsLogOpen(true); }}
-          onDismiss={() => setShowRecovery(false)}
-        />
-      )}
-
-      {/* 0. Pending mock debrief — the loud #1 card until it's done */}
+    <div className="space-y-4">
+      {/* Pending mock debrief — the loud #1 card until it's done */}
       {pendingDebrief && !isDebriefOpen && (
         <PendingDebriefCard
           loggedAt={pendingDebrief.updated_at}
@@ -298,148 +188,55 @@ export function DailyTrackerApp({
         />
       )}
 
-      {/* Post-debrief insight — one factual sentence, manually dismissible */}
       {debriefInsight && (
         <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3">
           <span className="text-xs font-bold text-teal-700 shrink-0 mt-0.5">📊</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-teal-900">{debriefInsight}</p>
-          </div>
-          <button
-            onClick={() => setDebriefInsight(null)}
-            className="text-teal-500 hover:text-teal-700 text-xs shrink-0"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
+          <p className="flex-1 min-w-0 text-sm text-teal-900">{debriefInsight}</p>
+          <button onClick={() => setDebriefInsight(null)} className="text-teal-500 hover:text-teal-700 text-xs shrink-0" aria-label="Dismiss">✕</button>
         </div>
       )}
 
-      {/* 1. Hero — Monthly theme ring + streak + log */}
-      <HeroCard
-        themeName={themeName}
-        themeFocus={themeFocus}
-        daysInTheme={daysInTheme}
-        themeTarget={themeTarget}
-        currentStreak={currentStreak}
-        onLogClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
-        isLoading={isSubmitting}
-        hasLoggedToday={hasLoggedToday}
-        showLogYesterday={!hasLoggedYesterday}
-        onLogYesterdayClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-        yesterdayLabel={yesterdayLabel}
-      />
-
-      {/* 2. Daily Puzzle — hidden until content pipeline is ready */}
-      {DAILY_PUZZLE_ENABLED && (puzzleLoading ? (
-        <div className="flex items-center justify-center py-6 text-stone-500">
-          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-          <span className="text-sm">Loading today&apos;s puzzle...</span>
-        </div>
-      ) : puzzle ? (
-        <DailyPuzzleCard
-          puzzleDate={puzzle.puzzle_date}
-          puzzleType={puzzle.puzzle_type}
-          gameType={gameType}
-          difficulty={puzzle.difficulty}
-          title={(rawContent as { title?: string } | undefined)?.title}
-          estimatedTime={puzzle.estimated_time_minutes || 15}
-          isSolved={!!attempt}
-          timeTaken={attempt?.time_taken_seconds ? Math.max(1, Math.round(attempt.time_taken_seconds / 60)) : undefined}
-          accuracy={attempt?.accuracy}
-          solution={puzzle.solution}
-          explanation={puzzle.explanation}
-          onSolve={() => isPlayablePuzzle && setIsPuzzleOpen(true)}
-        />
-      ) : null)}
-
-      {/* 3. Buddy insight — 1 line */}
+      {/* Buddy insight — 1 line */}
       {studentId && (
         <SafeCard>
           <BuddyInsightCard studentId={studentId} buddyId={buddyId} buddyName={buddyName} dailyNudge={lastNudge} initialFeedback={initialFeedback} />
         </SafeCard>
       )}
 
-      {/* 4. Today's session strip */}
       {todaySession && <SessionStrip session={todaySession} />}
 
-      {/* 5. Brain Break — 90-sec sprint games */}
-      {BRAIN_BREAK_ENABLED && studentId && (
-        <SafeCard>
-          <BrainBreakCard studentId={studentId} />
-        </SafeCard>
-      )}
+      {/* Log strip — small, bottom. The streak lives here, tiny. */}
+      <div className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-stone-500">
+          <Flame className={currentStreak > 0 ? 'w-3.5 h-3.5 text-orange-500' : 'w-3.5 h-3.5 text-stone-300'} />
+          {currentStreak > 0 ? `${currentStreak}-day streak` : 'No streak yet'}
+        </span>
+        {hasLoggedToday ? (
+          <span className="text-xs font-semibold text-teal-700">Logged ✓</span>
+        ) : (
+          <div className="flex items-center gap-3">
+            {!hasLoggedYesterday && yesterdayStr && (
+              <button
+                onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
+                className="text-[11px] text-stone-400 hover:text-stone-600"
+              >
+                {yesterdayLabel}?
+              </button>
+            )}
+            <button
+              onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
+              disabled={isSubmitting}
+              className="rounded-lg bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white active:scale-95 transition-all disabled:opacity-50"
+            >
+              Log today
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Puzzle modals — only rendered when DAILY_PUZZLE_ENABLED */}
-      {DAILY_PUZZLE_ENABLED && isCasePuzzle && puzzle && (
-        <DetectiveCaseModal
-          isOpen={isPuzzleOpen}
-          onClose={() => setIsPuzzleOpen(false)}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content={puzzle.puzzle_content as any}
-          explanation={puzzle.explanation}
-          caseDate={puzzle.puzzle_date}
-          onComplete={handlePuzzleComplete}
-        />
-      )}
-
-      {DAILY_PUZZLE_ENABLED && isEscape && puzzle && (
-        <EscapeRoomModal
-          isOpen={isPuzzleOpen}
-          onClose={() => setIsPuzzleOpen(false)}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content={puzzle.puzzle_content as any}
-          caseDate={puzzle.puzzle_date}
-          onComplete={handlePuzzleComplete}
-        />
-      )}
-
-      {DAILY_PUZZLE_ENABLED && isMafia && puzzle && (
-        <MafiaLogicModal
-          isOpen={isPuzzleOpen}
-          onClose={() => setIsPuzzleOpen(false)}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content={puzzle.puzzle_content as any}
-          caseDate={puzzle.puzzle_date}
-          onComplete={handlePuzzleComplete}
-        />
-      )}
-
-      {DAILY_PUZZLE_ENABLED && !isCasePuzzle && !isEscape && !isMafia && isPlayablePuzzle && puzzle && (
-        <PuzzleSolverModal
-          isOpen={isPuzzleOpen}
-          onClose={() => setIsPuzzleOpen(false)}
-          puzzleType={puzzle.puzzle_type}
-          content={puzzleContent!}
-          explanation={puzzle.explanation}
-          onComplete={handlePuzzleComplete}
-        />
-      )}
-
-      {/* Layer 1 Log */}
-      <LoggingModal
-        isOpen={isLogOpen}
-        onClose={() => setIsLogOpen(false)}
-        onSubmit={handleLogSubmit}
-        isSubmitting={isSubmitting}
-      />
-
-      {/* Layer 2 Debrief */}
-      <MockDebriefModal
-        isOpen={isDebriefOpen}
-        onClose={() => setIsDebriefOpen(false)}
-        onSubmit={handleDebriefSubmit}
-        logDate={currentLogDate}
-      />
-
-      {/* Feedback Animation */}
-      <FeedbackAnimation
-        isVisible={showFeedback}
-        onComplete={() => setShowFeedback(false)}
-        streakIncrement={currentStreak}
-        bonus={feedbackData?.bonus}
-        noticed={lastNudge}
-      />
+      <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />
+      <MockDebriefModal isOpen={isDebriefOpen} onClose={() => setIsDebriefOpen(false)} onSubmit={handleDebriefSubmit} logDate={currentLogDate} />
+      <FeedbackAnimation isVisible={showFeedback} onComplete={() => setShowFeedback(false)} streakIncrement={currentStreak} bonus={feedbackData?.bonus} noticed={lastNudge} />
     </div>
   );
 }

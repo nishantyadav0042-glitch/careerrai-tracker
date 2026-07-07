@@ -85,7 +85,7 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
   return (
     <div className="space-y-5">
       <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">🎉 Your CAT Blueprint is ready</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">🎉 Your CAT Plan is ready</p>
         <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           This is yours now.
         </h1>

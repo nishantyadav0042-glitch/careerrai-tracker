@@ -36,7 +36,7 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
   return (
     <div className="bg-stone-900 rounded-2xl px-4 py-3.5 mb-4">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">CareerRai Blueprint</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">My CAT Plan</p>
         <p className="text-[10px] text-stone-500 italic">{stillBuilding ? 'Building…' : 'Built'}</p>
       </div>
       <div className="flex gap-0.5 mb-2.5">

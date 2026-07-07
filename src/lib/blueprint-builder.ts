@@ -27,11 +27,11 @@ export interface BlueprintSection {
 export const BLUEPRINT_SECTIONS: BlueprintSection[] = [
   {
     id: 'position', order: 0, eyebrow: "Let's understand where you are",
-    purpose: 'Your Blueprint is built around your exam, your attempt, and your life — not a template. This is what makes it yours.',
+    purpose: 'Your CAT Plan starts with your exam, your attempt, your life. Not a template.',
   },
   {
     id: 'time', order: 1, eyebrow: "Let's understand your available time",
-    purpose: 'A plan that ignores your real hours fails in week one. Your Blueprint will only ever ask for time you actually have.',
+    purpose: 'Plans that ignore real hours fail in week one. Yours never will.',
   },
   {
     id: 'coverage', order: 2, eyebrow: "Let's understand what you've already covered",

@@ -82,7 +82,7 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
       <div className="flex flex-col items-center gap-2">
         <CheckCircle2 className="w-10 h-10 text-teal-600" />
         <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {studentName ? `${studentName}, this Blueprint` : 'This Blueprint'} was built only for you
+          {studentName ? `${studentName}, this CAT Plan` : 'This CAT Plan'} was built only for you
         </h1>
       </div>
 
@@ -138,7 +138,7 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         disabled={isLoading || windows.length === 0}
         className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
       >
-        {isLoading ? 'Finishing up…' : windows.length === 0 ? 'Pick at least one study window' : '🤝 I commit to following this Blueprint'}
+        {isLoading ? 'Finishing up…' : windows.length === 0 ? 'Pick at least one study window' : '🤝 I commit to my CAT Plan'}
       </button>
     </div>
   );

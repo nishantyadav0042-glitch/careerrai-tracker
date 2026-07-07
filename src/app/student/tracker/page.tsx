@@ -4,18 +4,13 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
-import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
-import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
 import { getLogDateString } from '@/lib/streak-utils';
-import { getCurrentMonthlyTheme, MONTHLY_THEME_TARGET } from '@/lib/monthly-theme';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
-import { resolveCatExamDate } from '@/lib/routine-engine';
 import { computePrepMemory } from '@/lib/prep-memory-data';
-import { StudyPlanSnapshot } from '@/components/DailyTracker/StudyPlanSnapshot';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -23,6 +18,10 @@ export const metadata = {
   description: 'Your CAT prep command centre',
 };
 
+// The homepage answers three questions, nothing else:
+// What should I study? (Today's Study) · Am I okay? (Health) · Is this
+// working? (one proof line). One buddy profile below — trust first,
+// revenue second. Every removed widget lives on its own page or is gone.
 export default async function DailyTrackerPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
@@ -30,24 +29,18 @@ export default async function DailyTrackerPage() {
   const admin = createAdminClient();
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
 
-  // Profile fetched first (not folded into the batch below) — computePrepMemory
-  // needs its archetype fields (is_repeater/is_working_professional/created_at)
-  // as INPUT, so it can't run in the same parallel batch that fetches them.
+  // Profile fetched first — computePrepMemory needs its archetype fields as input.
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, cat_percentile, buddy_id, dream_colleges, target_percentile, is_premium, is_demo, attempt_year, is_repeater, is_working_professional, created_at')
+    .select('full_name, buddy_id, is_premium, is_demo, is_repeater, is_working_professional, created_at')
     .eq('id', user.id).single();
 
-  // Everything else: one parallel round-trip.
   const [
     { data: sessions },
     { data: pendingReqs },
-    { data: anyDebrief },
     { data: logs },
-    { count: mockCount },
     { data: recentMock },
     { data: streakRow },
-    { data: coverage },
     { prepMemory, weeklyEvolution, healthScore },
   ] = await Promise.all([
     admin
@@ -65,20 +58,11 @@ export default async function DailyTrackerPage() {
       .eq('status', 'pending')
       .limit(1),
     admin
-      .from('mock_debriefs')
-      .select('id')
-      .eq('student_id', user.id)
-      .limit(1),
-    admin
       .from('daily_reports')
       .select('report_date, study_duration')
       .eq('student_id', user.id)
       .order('report_date', { ascending: false })
-      .limit(90),
-    admin
-      .from('mock_debriefs')
-      .select('id', { count: 'exact', head: true })
-      .eq('student_id', user.id),
+      .limit(2),
     admin
       .from('daily_reports')
       .select('report_date, updated_at')
@@ -89,28 +73,19 @@ export default async function DailyTrackerPage() {
       .limit(1)
       .maybeSingle(),
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
-    admin.from('topic_coverage').select('status').eq('student_id', user.id),
     computePrepMemory(
       admin, user.id,
       { isRepeater: !!profile?.is_repeater, isWorkingProfessional: !!profile?.is_working_professional },
       (profile?.created_at as string | null)?.split('T')[0] ?? null
     ),
   ]);
+  void prepMemory;
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
   const isPremiumUser = isPremium(profile);
-  const dreamColleges = (profile?.dream_colleges as string[] | null) ?? [];
-  const dreamCollege = dreamColleges[0] ?? null;
-  const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
-  const attemptYear = (profile?.attempt_year as number | null) ?? null;
-  const coverageTally = { not_started: 0, learning: 0, practicing: 0, revising: 0, exam_ready: 0 };
-  for (const row of coverage ?? []) {
-    const status = row.status as keyof typeof coverageTally;
-    coverageTally[status] = (coverageTally[status] ?? 0) + 1;
-  }
 
-  // Second batch — only runs when there IS a buddy or a recent mock.
+  // Second batch — buddy identity + existing debrief, only when relevant.
   let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
   let existingDebrief: { id: string } | null = null;
   let initialFeedback: { feedback_text: string; feedback_date: string; feedback_type: string } | null = null;
@@ -132,11 +107,9 @@ export default async function DailyTrackerPage() {
     initialFeedback = results[2];
   }
 
-  // Free, buddyless students see REAL matched mentors on the very first
-  // screen they open — most never reach the Buddy tab, so this can't be a
-  // teaser-with-a-link, it has to be the actual showcase, right here.
+  // One recommended mentor — trust first, then the offer.
   const recommendedBuddies = (!buddyId && !isPremiumUser)
-    ? await getRecommendedBuddiesForStudent(admin, user.id)
+    ? (await getRecommendedBuddiesForStudent(admin, user.id)).slice(0, 1)
     : [];
 
   let buddyName: string | null = null;
@@ -148,28 +121,12 @@ export default async function DailyTrackerPage() {
   const serverPendingDebrief: { report_date: string; updated_at: string } | null =
     recentMock && !existingDebrief ? recentMock : null;
 
-  // Miss-recovery detection.
-  let recovery: { missedDays: number; previousStreak: number } | null = null;
-  if (streakRow?.last_log_date && (streakRow.current_streak ?? 0) > 0) {
-    const todayStr = getLogDateString();
-    const gap = Math.round((Date.parse(todayStr) - Date.parse(streakRow.last_log_date)) / 86_400_000);
-    if (gap >= 2) recovery = { missedDays: gap - 1, previousStreak: streakRow.current_streak as number };
-  }
-
   const initialLogging = {
     streak: (streakRow as StreakData | null) ?? null,
     hasLoggedToday: (logs?.[0]?.report_date ?? null) === getLogDateString(),
   };
 
-  // Monthly theme — computed from already-fetched logs (no extra query).
-  const now = new Date();
-  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const daysInTheme = logs?.filter(
-    (l) => (l.report_date as string).startsWith(currentMonthStr) && (l.study_duration as number) > 0
-  ).length ?? 0;
-  const currentTheme = getCurrentMonthlyTheme(now.getMonth());
-
-  // Yesterday backlog — computed from already-fetched logs.
+  // Yesterday backlog — from already-fetched logs.
   const todayStr = getLogDateString();
   const todayDate = new Date(todayStr + 'T00:00:00.000Z');
   const yesterdayDate = new Date(todayDate.getTime() - 86_400_000);
@@ -177,17 +134,9 @@ export default async function DailyTrackerPage() {
   const hasLoggedYesterday = logs?.some((l) => l.report_date === yesterdayStr) ?? false;
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
-  const examDate = resolveCatExamDate(now, attemptYear);
-  const daysToCat = Math.max(0, Math.ceil((examDate.getTime() - now.getTime()) / 86_400_000));
-  // Count remaining Sundays (mock-test days) to CAT
-  let weekendsToCat = 0;
-  const d = new Date(now);
-  d.setDate(d.getDate() + (7 - d.getDay()) % 7 || 7); // next Sunday
-  while (d <= examDate) { weekendsToCat++; d.setDate(d.getDate() + 7); }
-
-  const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
+  const hour = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   const h = parseInt(hour);
-  const greeting = h < 4 ? 'Late night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
+  const greeting = h < 4 ? 'Late night' : h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : 'Good Evening';
 
   const nextSession = sessions?.[0] ?? null;
   const todaySession =
@@ -196,49 +145,24 @@ export default async function DailyTrackerPage() {
       : null;
 
   const hasPendingRequest = (pendingReqs?.length ?? 0) > 0;
-  const hasDebriefedBefore = (anyDebrief?.length ?? 0) > 0;
-
-  const logCount = logs?.length ?? 0;
-  const daysStudied = logs?.filter((l) => (l.study_duration as number) > 0).length ?? 0;
-  const totalMocks = mockCount ?? 0;
-
-  void daysToCat; // computed but only used as a stepping stone for weekendsToCat
+  // One proof line: the tasks-completed week diff, already computed.
+  const proofLine = weeklyEvolution.find((l) => l.startsWith('Tasks completed')) ?? null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
-      <div className="max-w-md mx-auto space-y-5">
-        {/* Header: greeting + CRS pill + weekends-to-CAT chip */}
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-xl font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
-            {greeting} {firstName} 👋
-          </h1>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* CRS pill only when TrajectoryWall is absent — it already shows current%ile */}
-            {profile?.cat_percentile != null && !dreamCollege && (
-              <span className="text-[11px] font-bold bg-stone-900 text-white rounded-full px-2.5 py-1">
-                CRS {profile.cat_percentile}
-              </span>
-            )}
-            <span className="text-[11px] font-semibold bg-stone-900 text-white rounded-full px-2.5 py-1 text-center leading-tight">
-              {weekendsToCat} weekends{dreamCollege ? ` · ${dreamCollege.replace(/IIM /,'IIM-').split(' ')[0]}` : ' to CAT'}
-            </span>
-          </div>
-        </div>
+      <div className="max-w-md mx-auto space-y-4">
+        <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+          {greeting} {firstName} 👋
+        </h1>
 
-        {/* Today's Mission IS the homepage's first answer — "what do I study
-            right now," zero scrolling, no warm-up paragraph above it. */}
-        <TodaysRoutineCard />
-
-        {/* Preparation Health — diagnoses, never decorates: one number, one
-            label, one sentence naming the weakest component. Hidden while
-            provisional (under a week of history) — no fabricated score. */}
+        {/* Am I okay? — one number, one label, one fix. */}
         {healthScore.status === 'ready' && healthScore.score != null && healthScore.components && (() => {
           const c = healthScore.components;
           const ratios = [
-            { key: 'consistency', ratio: c.consistency / 35, label: 'Consistency slipping', line: 'Show up today — the streak is the fix.' },
-            { key: 'confidence', ratio: c.confidenceQuality / 25, label: 'Too many shaky topics', line: 'Slow down and relearn before speeding up.' },
-            { key: 'balance', ratio: c.balance / 25, label: 'A section is going untouched', line: "Today's mix brings it back." },
-            { key: 'revision', ratio: c.revisionDiscipline / 15, label: 'Revision falling behind', line: 'One revision block today stops the fade.' },
+            { ratio: c.consistency / 35, label: 'Consistency slipping', line: 'Show up today' },
+            { ratio: c.confidenceQuality / 25, label: 'Shaky topics', line: 'Relearn before speeding up' },
+            { ratio: c.balance / 25, label: 'Section untouched', line: "Today's mix fixes it" },
+            { ratio: c.revisionDiscipline / 15, label: 'Revision behind', line: 'One block today' },
           ].sort((a, b) => a.ratio - b.ratio);
           const weakest = ratios[0];
           const healthy = healthScore.score >= 75;
@@ -247,65 +171,38 @@ export default async function DailyTrackerPage() {
             <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
               <p className="text-xl font-bold text-stone-900 shrink-0">{emoji} {healthScore.score}%</p>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-stone-800">{healthy ? 'Preparation healthy' : weakest.label}</p>
-                <p className="text-xs text-stone-500">{healthy ? "You're still on track." : weakest.line}</p>
+                <p className="text-sm font-semibold text-stone-800">{healthy ? 'Healthy' : weakest.label}</p>
+                <p className="text-xs text-stone-500">{healthy ? 'On track' : weakest.line}</p>
               </div>
             </div>
           );
         })()}
 
-        {/* Study Plan Dashboard, condensed — Coverage snapshot, Preparation
-            Memory, and Weekly Evolution right on the homepage instead of only
-            on the separate Blueprint page one tap away. */}
-        <StudyPlanSnapshot coverageTally={coverageTally} last30={prepMemory.last30} weeklyEvolution={weeklyEvolution} />
+        {/* What should I study? */}
+        <TodaysRoutineCard />
 
-        {/* Trajectory Wall — dream-anchored, present once college set */}
-        <TrajectoryWall
-          dreamCollege={dreamCollege}
-          currentPercentile={profile?.cat_percentile as number | null}
-          targetPercentile={targetPercentile}
-          logCount={logCount}
-          mockCount={totalMocks}
-          daysStudied={daysStudied}
-          attemptYear={attemptYear}
-        />
-
-        {buddyId && (
-          <UrgentHelpBanner
-            buddyId={buddyId}
-            hasPendingRequest={hasPendingRequest}
-          />
+        {/* Is this working? — one sentence, only when real. */}
+        {proofLine && (
+          <p className="text-xs text-stone-500 px-1">📈 {proofLine}</p>
         )}
 
-        {/* Free user → real matched mentors, right here on the first screen —
-            most students never reach the Buddy tab, so this can't wait for a
-            click. Falls back to the generic locked pitch only when there are
-            zero showcase-eligible buddies yet. Paid-but-unassigned → "being
-            matched" below. Premium-with-buddy → neither. */}
+        {buddyId && (
+          <UrgentHelpBanner buddyId={buddyId} hasPendingRequest={hasPendingRequest} />
+        )}
+
+        {/* One mentor. Trust first, offer second. */}
         {!buddyId && !isPremiumUser && (
           recommendedBuddies.length > 0
             ? <RecommendedBuddies buddies={recommendedBuddies} studentName={profile?.full_name ?? undefined} />
-            : (
-              <LockedBuddyCard
-                streak={(streakRow?.current_streak as number | null) ?? 0}
-                fullName={profile?.full_name ?? undefined}
-              />
-            )
+            : <LockedBuddyCard streak={(streakRow?.current_streak as number | null) ?? 0} fullName={profile?.full_name ?? undefined} />
         )}
 
         {!buddyId && isPremiumUser && (
           <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
             <div className="flex items-center gap-3">
-              <Image
-                src="/buddy-logo.jpg"
-                alt="CareerRai Buddy"
-                width={48}
-                height={48}
-                className="rounded-full shrink-0 object-cover"
-              />
-              <p className="text-sm text-teal-900 leading-relaxed">
-                <strong>Your buddy is being matched</strong> — someone who&apos;s walked your exact
-                journey. Meanwhile, log today: your first week of data is what makes their guidance sharp.
+              <Image src="/buddy-logo.jpg" alt="CareerRai Buddy" width={40} height={40} className="rounded-full shrink-0 object-cover" />
+              <p className="text-sm text-teal-900">
+                <strong>Your buddy is being matched.</strong> Log today — data makes their guidance sharp.
               </p>
             </div>
           </div>
@@ -319,35 +216,12 @@ export default async function DailyTrackerPage() {
           buddyName={buddyName}
           initialPendingDebrief={serverPendingDebrief}
           initialFeedback={initialFeedback}
-          recovery={recovery}
           initialLogging={initialLogging}
-          themeName={currentTheme.name}
-          themeFocus={currentTheme.focus}
-          daysInTheme={daysInTheme}
-          themeTarget={MONTHLY_THEME_TARGET}
           hasLoggedYesterday={hasLoggedYesterday}
           yesterdayStr={yesterdayStr}
           yesterdayLabel={yesterdayLabel}
         />
-
-        {!hasDebriefedBefore && (
-          <div className="rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50 px-4 py-4 flex items-start gap-3">
-            <span className="text-xl leading-none">📋</span>
-            <p className="text-xs text-stone-500 leading-relaxed">
-              <strong className="text-stone-700">Your first mock debrief unlocks here.</strong>
-              <br />
-              This is where the real work happens — log a mock and walk every error with your buddy.
-            </p>
-          </div>
-        )}
-
-        <AddToHomeScreenBanner />
-
-        <p className="text-center text-[11px] text-stone-400 pb-20">
-          <a href="mailto:hello@careerrai.com" className="hover:text-stone-600 transition-colors">
-            Help us improve · Give feedback
-          </a>
-        </p>
+        <div className="pb-16" />
       </div>
     </div>
   );
