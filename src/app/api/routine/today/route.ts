@@ -34,10 +34,21 @@ export async function GET() {
     .single();
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-  // Explicit self-report wins (fast onboarding tap); baseline scores are the
-  // fallback for students who filled the diagnostic but skipped the tap.
+  // Coverage grid fetched up front — it's both the modern source of the
+  // weakest-section signal AND what buildTopicChoices scores topics with
+  // (passed down so it isn't queried twice).
+  const { data: coverageRows } = await admin
+    .from('topic_coverage')
+    .select('section, topic, status')
+    .eq('student_id', user.id);
+
+  // Weakest-section chain: explicit self-report (legacy accounts that
+  // answered the old tap) → baseline mock scores → derived from the
+  // student's own declared Coverage grid (the Blueprint Builder no longer
+  // asks the single-section question — the full grid answers it better).
   const weakest = (profile.self_reported_weakest_section as Section | null)
-    ?? computeWeakestFromBaseline(profile);
+    ?? computeWeakestFromBaseline(profile)
+    ?? computeWeakestFromCoverage(coverageRows ?? []);
   const strongest = (profile.self_reported_strongest_section as Section | null)
     ?? computeStrongestFromBaseline(profile);
 
@@ -82,21 +93,16 @@ export async function GET() {
     .eq('routine_date', today)
     .maybeSingle();
 
-  // Minimum-friction onboarding: weakest section drives ~40% of the day's time
-  // budget, the topic within it is what makes the routine feel precise rather
-  // than "everyone already knows to study VARC/DILR/QA" generic, and current
-  // stage is what stops phase from being calendar-only — each is worth one
-  // explicit tap, rather than a guessed default. Only re-offer while
-  // genuinely unanswered (null) — once answered (even via a skip-to-default
-  // path), don't nag on future visits.
-  if (!existing && (weakest == null || weakTopicRaw == null || currentStage == null || biggestBlocker == null)) {
+  // Legacy safety net only: the Blueprint Builder now collects everything
+  // through the Coverage grid, so any account WITH coverage rows is fully
+  // set up — weakest derives from the grid, stage/blocker are optional
+  // engine biases that default safely to null. The old homepage quick-setup
+  // gate fires only for pre-Builder accounts that have neither coverage nor
+  // any self-report to derive a weakest section from.
+  if (!existing && (coverageRows ?? []).length === 0 && weakest == null) {
     return NextResponse.json({
       needsSetup: true,
       weakestSection: weakest,
-      // Fixes a real bug: without this, the setup component had no way to
-      // know a topic was already saved, so it re-asked the topic question
-      // every time setup re-triggered for an unrelated missing field (e.g.
-      // biggest_blocker) — even for a student who'd already answered it.
       weakTopic,
       currentStage,
       biggestBlocker,
@@ -109,7 +115,7 @@ export async function GET() {
   // request, the same reasoning as whySummary already being recomputed
   // fresh rather than frozen at generation time.
   const history = await buildHistory(admin, user.id);
-  const topicChoices = await buildTopicChoices(admin, user.id, routineProfile, history);
+  const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history);
 
   let routine = existing;
   if (!routine) {
@@ -213,6 +219,26 @@ export async function GET() {
   });
 }
 
+// Weakest section from the student's own declared Coverage grid: the
+// section with the most ground left to cover, weighting untouched topics
+// double vs in-progress ones. Ratio-based (not raw count) so VARC's 5
+// topics and DILR's 4 compare fairly. Ties break DILR → QA → VARC (DILR is
+// the most commonly feared CAT section — a deterministic, stated default,
+// not a guess about this student). Null when nothing is declared at all.
+function computeWeakestFromCoverage(rows: { section: string; status: string }[]): Section | null {
+  if (rows.length === 0) return null;
+  const tieOrder: Section[] = ['DILR', 'QA', 'VARC'];
+  let best: { s: Section; score: number } | null = null;
+  for (const s of tieOrder) {
+    const sectionRows = rows.filter((r) => r.section === s);
+    if (sectionRows.length === 0) continue;
+    const gap = sectionRows.reduce((sum, r) => sum + (r.status === 'not_started' ? 2 : r.status === 'started' ? 1 : 0), 0);
+    const score = gap / sectionRows.length;
+    if (best == null || score > best.score) best = { s, score };
+  }
+  return best?.s ?? null;
+}
+
 function computeWeakestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
   const scores = [
     { s: 'VARC' as const, v: p.baseline_varc as number | null },
@@ -287,15 +313,9 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 // revision-due + (weak section only) the self-reported bonus. This is what
 // replaced the old behavior where the two non-weakest sections used the
 // exact same static topic for every student in the product.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildTopicChoices(admin: any, studentId: string, profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }): Promise<Record<Section, TopicChoice>> {
-  const { data: coverageRows } = await admin
-    .from('topic_coverage')
-    .select('topic, status')
-    .eq('student_id', studentId);
-
+function buildTopicChoices(coverageRows: { topic: string; status: string }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }): Record<Section, TopicChoice> {
   const coverageByTopic = new Map<string, CoverageStatus>();
-  for (const row of coverageRows ?? []) coverageByTopic.set(row.topic, row.status as CoverageStatus);
+  for (const row of coverageRows) coverageByTopic.set(row.topic, row.status as CoverageStatus);
 
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];

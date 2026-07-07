@@ -8,7 +8,7 @@
 // Pure and parse-free like every other engine in this codebase — the caller
 // passes in whatever's been answered so far, this derives what's now knowable.
 
-export type SectionId = 'position' | 'preparation' | 'time' | 'coverage';
+export type SectionId = 'position' | 'time' | 'coverage';
 
 export interface BlueprintSection {
   id: SectionId;
@@ -16,11 +16,14 @@ export interface BlueprintSection {
   eyebrow: string; // the transition line shown once entering the section
 }
 
+// No 'preparation' section — the single-topic self-report taps (weakest
+// section/topic, stage, blocker, baseline) were superseded by the explicit
+// per-topic Coverage declaration, and the engines derive those signals from
+// it (see /api/routine/today's coverage-derived weakest section).
 export const BLUEPRINT_SECTIONS: BlueprintSection[] = [
-  { id: 'position',    order: 0, eyebrow: "Let's understand where you are" },
-  { id: 'preparation', order: 1, eyebrow: "Let's understand your preparation" },
-  { id: 'time',        order: 2, eyebrow: "Let's understand your available time" },
-  { id: 'coverage',    order: 3, eyebrow: "Let's understand what you've already covered" },
+  { id: 'position', order: 0, eyebrow: "Let's understand where you are" },
+  { id: 'time',     order: 1, eyebrow: "Let's understand your available time" },
+  { id: 'coverage', order: 2, eyebrow: "Let's understand what you've already covered" },
 ];
 
 export interface BlueprintPreviewInput {

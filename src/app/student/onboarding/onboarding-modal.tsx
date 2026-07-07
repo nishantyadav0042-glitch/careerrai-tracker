@@ -7,11 +7,7 @@ import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenAboutYou from './screens/screen-about-you';
 import ScreenDailyCommitment from './screens/screen-daily-commitment';
-import ScreenWeakFocus from './screens/screen-weak-focus';
-import ScreenCurrentStage from './screens/screen-current-stage';
-import ScreenBiggestBlocker from './screens/screen-biggest-blocker';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
-import ScreenBaselineTest from './screens/screen-baseline-test';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
@@ -70,25 +66,26 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     coverage_total: onboardingData.coverage_total as number | undefined,
   });
 
+  // No single-topic self-report screens (weakest section/topic, stage,
+  // blocker, baseline percentiles) — the explicit per-topic Coverage grid
+  // supersedes all of them, and the engines now derive those signals from
+  // it (see /api/routine/today). One question never asks what a better
+  // question already answered.
   const screens: Screen[] = [
     { component: ScreenBlueprintIntro, sectionId: null },        // 0
     { component: ScreenDreamColleges, sectionId: 'position' },   // 1
     { component: ScreenExamContext, sectionId: 'position' },     // 2
     { component: ScreenAboutYou, sectionId: 'position' },        // 3
-    { component: ScreenWeakFocus, sectionId: 'preparation' },    // 4
-    { component: ScreenCurrentStage, sectionId: 'preparation' }, // 5
-    { component: ScreenBiggestBlocker, sectionId: 'preparation' }, // 6
-    { component: ScreenBaselineTest, sectionId: 'preparation' }, // 7
-    { component: ScreenDailyCommitment, sectionId: 'time' },     // 8
-    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 9
-    { component: ScreenMeetBuddy, sectionId: null },             // 10
-    { component: ScreenBuildAnimation, sectionId: null },        // 11
-    { component: ScreenBlueprintReveal, sectionId: null },       // 12
+    { component: ScreenDailyCommitment, sectionId: 'time' },     // 4
+    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 5
+    { component: ScreenMeetBuddy, sectionId: null },             // 6
+    { component: ScreenBuildAnimation, sectionId: null },        // 7
+    { component: ScreenBlueprintReveal, sectionId: null },       // 8
     {
       component: ScreenBlueprintContract,
       sectionId: null,
       extraProps: { archetypeLabel: preview.archetypeBadge, weeklyLoadHours: preview.weeklyLoadHours },
-    }, // 13
+    }, // 9
   ];
 
   const currentScreenMeta = screens[currentScreen];
@@ -142,31 +139,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         }).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 6 = Biggest Blocker — the last of the 3 taps (weak focus, stage,
-      // blocker); all 4 fields are now known, so persist them in ONE call
-      // through the same tested endpoint the old post-onboarding "quick
-      // setup" gate used. Awaited (not fire-and-forget) because Topic
-      // Coverage (screen 9) seeds itself from current_stage.
-      if (currentScreen === 6 && data?.biggest_blocker) {
-        const merged = { ...onboardingData, ...data };
-        setIsLoading(true);
-        const res = await fetch('/api/routine/quick-setup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            weakest_section: merged.weakest_section,
-            weak_topic: merged.weak_topic ?? '',
-            current_stage: merged.current_stage,
-            biggest_blocker: merged.biggest_blocker,
-          }),
-        });
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}));
-          throw new Error(json?.error ?? 'Could not save your focus and blocker.');
-        }
-      }
-      // Screen 8 = Daily Commitment (weekday + weekend hours)
-      if (currentScreen === 8 && data?.studyTargetHours) {
+      // Screen 4 = Daily Commitment (weekday + weekend hours)
+      if (currentScreen === 4 && data?.studyTargetHours) {
         const hours = data.studyTargetHours as number;
         const weekend = (data.weekendHours as number | undefined) ?? weekendHours;
         setStudyTargetHours(hours);
