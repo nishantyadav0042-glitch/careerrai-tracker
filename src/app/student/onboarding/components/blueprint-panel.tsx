@@ -13,6 +13,9 @@ interface Props {
 // The "wow" mechanism: a persistent strip that fills in as the student
 // answers, so building the Blueprint is watched, not submitted. Every fact
 // shown here is real output of computeBlueprintPreview — nothing is staged.
+// The progress bar shows totalSections + 1 segments with the first one
+// already lit: the account itself is genuinely completed work (endowed
+// progress — a truthful head start measurably lifts completion).
 export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, totalSections }: Props) {
   const facts: { key: string; label: string }[] = [];
   if (preview.examBadge) facts.push({ key: 'exam', label: preview.examBadge });
@@ -27,16 +30,16 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
       <div className="flex items-center justify-between mb-2.5">
         <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">Your Blueprint</p>
         <div className="flex gap-1">
-          {Array.from({ length: totalSections }).map((_, i) => (
+          {Array.from({ length: totalSections + 1 }).map((_, i) => (
             <div
               key={i}
-              className={cn('w-4 h-1 rounded-full transition-colors', i <= sectionIndex ? 'bg-orange-500' : 'bg-stone-700')}
+              className={cn('w-4 h-1 rounded-full transition-colors', i <= sectionIndex + 1 ? 'bg-orange-500' : 'bg-stone-700')}
             />
           ))}
         </div>
       </div>
       {facts.length === 0 ? (
-        <p className="text-xs text-stone-500 italic">Building as you go…</p>
+        <p className="text-xs text-stone-500 italic">Account in — building the rest as you go…</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {facts.map((f) => (
@@ -48,6 +51,11 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
             </span>
           ))}
         </div>
+      )}
+      {preview.projectionBadge && (
+        <p className="mt-2 text-xs font-semibold text-teal-300">
+          {preview.projectionBadge}
+        </p>
       )}
     </div>
   );

@@ -47,6 +47,9 @@ export default function ScreenBlueprintIntro({ onNext, isLoading }: Props) {
       >
         Start Building →
       </button>
+
+      {/* Endowed progress, truthfully: the account IS section one. */}
+      <p className="text-xs text-stone-400">Your account is in — 1 of 5 sections already done.</p>
     </div>
   );
 }

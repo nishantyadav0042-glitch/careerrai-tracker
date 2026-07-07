@@ -43,6 +43,7 @@ export interface BlueprintPreview {
   focusBadge: string | null;
   weeklyLoadHours: number | null;
   coverageBadge: string | null;
+  projectionBadge: string | null;
   filledFacts: number; // how many of the data-derived fact slots are lit
 }
 
@@ -80,6 +81,47 @@ function weeklyLoadHours(input: BlueprintPreviewInput): number | null {
   return Math.round((input.studyTargetHours * 5 + input.weekendHours * 2) * 10) / 10;
 }
 
+// ─── Live projection (the Noom pattern, deterministic) ─────────────────────
+// A rough completion forecast that visibly updates as answers land — first
+// when weekly hours are known (assumes nothing covered yet), again after
+// coverage is declared (recomputed from what's actually left). The constants
+// are deliberately coarse and the copy says "≈": this is a pace estimate,
+// not a promise. ~12 focused hours to take an untouched CAT topic to "done
+// once," half that to finish a started one — spread across the ~14-topic
+// taxonomy this lands in the 150-180h total prep range commonly cited for
+// CAT, and it's stated here once so there's a single place to tune it.
+const HOURS_PER_UNTOUCHED_TOPIC = 12;
+const HOURS_PER_STARTED_TOPIC = 6;
+const TOTAL_TOPICS = 14;
+
+export interface CoverageProjection {
+  weeks: number;           // ≈ weeks to finish remaining coverage at this load
+  basedOnDeclared: boolean; // false = pre-coverage assumption (nothing done yet)
+}
+
+export function projectCoverageWeeks(input: BlueprintPreviewInput): CoverageProjection | null {
+  const load = weeklyLoadHours(input);
+  if (load == null || load <= 0) return null;
+  const total = input.coverage_total ?? TOTAL_TOPICS;
+  const declared = input.coverage_total != null;
+  const done = declared ? (input.coverage_done ?? 0) : 0;
+  const started = declared ? (input.coverage_started ?? 0) : 0;
+  const untouched = Math.max(0, total - done - started);
+  const hoursLeft = untouched * HOURS_PER_UNTOUCHED_TOPIC + started * HOURS_PER_STARTED_TOPIC;
+  return { weeks: Math.max(1, Math.ceil(hoursLeft / load)), basedOnDeclared: declared };
+}
+
+function projectionBadge(input: BlueprintPreviewInput): string | null {
+  const p = projectCoverageWeeks(input);
+  if (p == null) return null;
+  if (p.basedOnDeclared) {
+    const done = input.coverage_done ?? 0;
+    if (done >= (input.coverage_total ?? TOTAL_TOPICS)) return 'Coverage complete — revision mode';
+    return `Remaining topics ≈ ${p.weeks} week${p.weeks === 1 ? '' : 's'} at your pace`;
+  }
+  return `Full syllabus ≈ ${p.weeks} weeks at this pace`;
+}
+
 // coverageBadge unlocks once the student has explicitly declared the whole
 // grid (Section 4) — the exact per-topic statuses they tapped, never an
 // inferred count. Feeds topic-selector.ts's coverage-status scoring.
@@ -99,6 +141,7 @@ export function computeBlueprintPreview(input: BlueprintPreviewInput): Blueprint
   const focus = focusBadge(input);
   const load = weeklyLoadHours(input);
   const coverage = coverageBadge(input);
+  const projection = projectionBadge(input);
 
   return {
     examBadge: exam,
@@ -106,6 +149,7 @@ export function computeBlueprintPreview(input: BlueprintPreviewInput): Blueprint
     focusBadge: focus,
     weeklyLoadHours: load,
     coverageBadge: coverage,
+    projectionBadge: projection,
     filledFacts: [exam, archetype, focus, load, coverage].filter((v) => v != null).length,
   };
 }
