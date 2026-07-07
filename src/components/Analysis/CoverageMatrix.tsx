@@ -98,7 +98,16 @@ export function CoverageMatrix() {
       </div>
     );
   }
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-stone-200 p-5 text-center space-y-1.5">
+        <p className="text-sm font-semibold text-stone-800">Your preparation map isn&apos;t built yet</p>
+        <p className="text-xs text-stone-500">
+          Mark what you&apos;ve covered on the Home tab and it&apos;ll show up here — section by section.
+        </p>
+      </div>
+    );
+  }
 
   const rowsByTopic = new Map(rows.map((r) => [r.topic, r]));
 
@@ -123,7 +132,7 @@ export function CoverageMatrix() {
             disabled={busy === key}
             title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
             className={cn(
-              'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-95',
+              'min-h-[32px] rounded-full border px-3 py-1.5 text-[11px] font-medium transition-all active:scale-95',
               revDue ? REVISION_DUE_STYLE : STATUS_STYLE[row.status],
               busy === key && 'opacity-50',
               row.status === 'exam_ready' && 'cursor-default'
@@ -140,7 +149,20 @@ export function CoverageMatrix() {
   return (
     <div className="bg-white rounded-2xl border border-stone-200 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">Preparation Map</h2>
-      <p className="text-xs text-stone-400 mb-3">Tap a section, then tap a topic to update it. ⬤ is earned, red means revision due.</p>
+      <p className="text-xs text-stone-400 mb-2">Tap a section, then tap a topic to cycle its status.</p>
+      {/* The `title` tooltip on each chip never fires on a mobile tap, so
+          every status needs to be explained here in text, not just on hover. */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[10px] text-stone-500">
+        {STUDENT_CYCLE.map((s) => (
+          <span key={s} className="inline-flex items-center gap-1">
+            <span>{STATUS_GLYPH[s]}</span>{STATUS_LABEL[s]}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1">
+          <span>{STATUS_GLYPH.exam_ready}</span>Exam ready (earned, not tappable)
+        </span>
+        <span className="inline-flex items-center gap-1 text-red-600 font-medium">Red = revision due</span>
+      </div>
       <div className="space-y-2">
         {KNOWLEDGE_GRAPH.map((section) => {
           const allUnits = section.groups.flatMap((g) => g.units);

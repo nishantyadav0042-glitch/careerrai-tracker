@@ -25,6 +25,21 @@ export async function POST(request: NextRequest) {
 
   let notified = 0;
   for (const session of sessions) {
+    // Both Vercel's cron and the GitHub Actions fallback are live and could
+    // both fire this route on the same day — dedup per session_id so a
+    // student never gets two "session tomorrow" pushes for the one session.
+    if (session.student_id) {
+      const { data: existing } = await admin
+        .from('notifications')
+        .select('id')
+        .eq('user_id', session.student_id)
+        .eq('type', 'session_reminder')
+        .eq('data->>session_id', session.id)
+        .limit(1)
+        .maybeSingle();
+      if (existing) continue;
+    }
+
     const time = new Date(session.scheduled_at).toLocaleTimeString('en-IN', {
       timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true,
     });

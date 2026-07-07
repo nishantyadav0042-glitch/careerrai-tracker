@@ -160,6 +160,7 @@ export function ChatThread({
       seenIds.current.delete(tempId);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setDraft(body);
+      setSendError("Couldn't send — check your connection and try again.");
     } finally {
       setSending(false);
     }

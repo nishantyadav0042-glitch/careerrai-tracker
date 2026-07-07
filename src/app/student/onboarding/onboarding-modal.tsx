@@ -20,6 +20,36 @@ interface OnboardingModalProps {
   onComplete: () => void;
 }
 
+// Every screen from 1-4 already persists straight to `profiles` as it's
+// answered, but the step position itself and the later screens' answers
+// (success_goal, study_windows — only written to DB on the very last screen)
+// lived in plain useState. Closing the tab or losing connection mid-flow
+// reset to screen 0 with nothing prefilled, forcing a full re-answer. Keyed
+// by userId (not a fixed key) so a shared device can't leak one student's
+// in-progress answers into a different account's onboarding.
+interface OnboardingDraft {
+  currentScreen: number;
+  onboardingData: Record<string, unknown>;
+  studyTargetHours: number;
+  weekendHours: number;
+}
+
+function draftKey(userId: string): string {
+  return `cr_onboarding_draft_${userId}`;
+}
+
+function loadOnboardingDraft(userId: string): OnboardingDraft | null {
+  try {
+    const raw = window.localStorage.getItem(draftKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.currentScreen !== 'number' || typeof parsed?.onboardingData !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 // This is the Blueprint Builder, not "onboarding" — the distinction isn't
 // cosmetic. Every screen either feeds the planning engine directly or shows
 // a real signal it's about to use; the 4 labeled sections below map 1:1 to
@@ -48,10 +78,34 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   useEffect(() => {
     async function getUser() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
+      if (!user) return;
+      setUserId(user.id);
+      const draft = loadOnboardingDraft(user.id);
+      if (draft) {
+        setCurrentScreen(draft.currentScreen);
+        setOnboardingData(draft.onboardingData);
+        setStudyTargetHours(draft.studyTargetHours);
+        setWeekendHours(draft.weekendHours);
+      }
     }
     getUser();
   }, [supabase]);
+
+  // Mirror progress to localStorage on every change so a reload resumes
+  // instead of restarting. Skipped until userId is known so a draft is
+  // never written under the wrong key, and skipped on screen 0 (nothing to
+  // resume yet, and avoids overwriting a real draft while it's still loading).
+  useEffect(() => {
+    if (!userId || currentScreen === 0) return;
+    try {
+      window.localStorage.setItem(
+        draftKey(userId),
+        JSON.stringify({ currentScreen, onboardingData, studyTargetHours, weekendHours })
+      );
+    } catch {
+      // Private browsing / storage full — best-effort only, not launch-critical.
+    }
+  }, [userId, currentScreen, onboardingData, studyTargetHours, weekendHours]);
 
   const preview = computeBlueprintPreview({
     attempt_year: onboardingData.attempt_year as number | undefined,
@@ -199,6 +253,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         const { error: finalError } = await supabase.from('profiles').update(update).eq('id', userId).select();
         if (finalError) throw finalError;
 
+        try { window.localStorage.removeItem(draftKey(userId)); } catch { /* best-effort */ }
         onComplete();
       }
     } catch (err) {

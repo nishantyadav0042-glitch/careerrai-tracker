@@ -1,6 +1,6 @@
 'use client';
-
-import { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { KNOWLEDGE_GRAPH, QA_GROUPS } from '@/lib/topics-constants';
@@ -56,22 +56,43 @@ function phaseWord(label: string): string {
 export default function MyCatPlanPage() {
   const [data, setData] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchFailed, setFetchFailed] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/blueprint');
-        if (res.ok) setData(await res.json());
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setFetchFailed(false);
+    try {
+      const res = await fetch('/api/blueprint');
+      if (res.ok) setData(await res.json());
+    } catch {
+      setFetchFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-sm text-stone-500">Loading your plan…</div>
+      </div>
+    );
+  }
+  if (fetchFailed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        <div className="space-y-3">
+          <p className="text-sm text-stone-500">Couldn&apos;t load your plan — check your connection.</p>
+          <button
+            type="button"
+            onClick={load}
+            className="text-sm font-semibold text-teal-700 hover:text-teal-800 underline underline-offset-2"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

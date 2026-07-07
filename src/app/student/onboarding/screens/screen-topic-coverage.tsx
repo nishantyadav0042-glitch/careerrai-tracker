@@ -73,9 +73,30 @@ const STEPS: MapStep[] = KNOWLEDGE_GRAPH.flatMap((section) =>
 // Every unit REQUIRES an explicit tap — nothing is pre-filled, so nothing
 // can be skimmed past. People abandon uncertainty, not effort: each step is
 // small, priced, and finishes itself.
+// This is the longest, most-tapped step in onboarding (~53 taps across 9
+// sub-steps) and previously saved nothing until the very last tap — closing
+// the tab, losing connection, or the app backgrounding mid-flow silently
+// discarded the entire map. Mirrored to localStorage on every tap so a
+// reload resumes instead of restarting; cleared once the real save succeeds.
+const DRAFT_KEY = 'cr_onboarding_topic_coverage_draft';
+
+function loadDraft(): { stepIdx: number; statuses: Record<string, DeclaredStatus> } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.stepIdx !== 'number' || typeof parsed?.statuses !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoading }: Props) {
-  const [stepIdx, setStepIdx] = useState(0);
-  const [statuses, setStatuses] = useState<Record<string, DeclaredStatus>>({});
+  const draft = loadDraft();
+  const [stepIdx, setStepIdx] = useState(() => Math.min(draft?.stepIdx ?? 0, STEPS.length - 1));
+  const [statuses, setStatuses] = useState<Record<string, DeclaredStatus>>(() => draft?.statuses ?? {});
   const [celebration, setCelebration] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +106,14 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   useEffect(() => () => { if (celebrationTimer.current) clearTimeout(celebrationTimer.current); }, []);
   // New step — jump back to the top so it reads like a fresh screen.
   useEffect(() => { scrollRef.current?.scrollIntoView({ block: 'start' }); }, [stepIdx]);
+  // Mirror every tap and every step change to the draft so a reload resumes.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ stepIdx, statuses }));
+    } catch {
+      // Private browsing / storage full — best-effort only, not launch-critical.
+    }
+  }, [stepIdx, statuses]);
 
   const step = STEPS[stepIdx];
   const isHabit = step.sectionId === 'MOCKS' || step.sectionId === 'READING';
@@ -126,6 +155,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         const json = await res.json().catch(() => ({}));
         throw new Error((json as { error?: string })?.error ?? 'Could not save your preparation map.');
       }
+      try { window.localStorage.removeItem(DRAFT_KEY); } catch { /* best-effort */ }
       onNext({
         coverage_practicing: matrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
         coverage_learning: matrix.filter((m) => m.status === 'learning').length,

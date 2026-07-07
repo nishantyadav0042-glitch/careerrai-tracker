@@ -18,7 +18,9 @@ interface Props {
 
 const CATEGORY_OPTIONS = ['General', 'OBC', 'SC', 'ST', 'EWS'];
 const EXAM_OPTIONS = ['CAT', 'XAT', 'NMAT', 'Other'];
-const YEAR_OPTIONS = [2025, 2026, 2027];
+// Never offer a year that's already passed — a hardcoded list drifts stale.
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR + 1, CURRENT_YEAR + 2];
 
 export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading }: Props) {
   const [isRepeater, setIsRepeater] = useState<boolean | null>(null);

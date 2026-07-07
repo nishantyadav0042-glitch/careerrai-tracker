@@ -146,6 +146,17 @@ function LoginForm() {
 
           <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
 
+            {/* Password-login failures redirect here as a full page load
+                (/login?error=1 from api/auth/login), which resets all local
+                state including userType back to the step-1 role picker —
+                so this banner is driven purely by the URL param and shown
+                regardless of step, or the error silently vanishes. */}
+            {hasError && (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700">
+                That didn&apos;t work — check your password (or number) and try again.
+              </div>
+            )}
+
             {/* ── STEP 1: Role picker ── */}
             {userType === null && (
               <div className="space-y-3">
@@ -375,10 +386,6 @@ function LoginForm() {
                           </button>
                         </div>
                       </div>
-
-                      {hasError && (
-                        <p className="text-xs text-rose-600">Incorrect password. Try again.</p>
-                      )}
 
                       <button
                         type="submit"

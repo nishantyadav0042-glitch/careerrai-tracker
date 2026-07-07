@@ -171,12 +171,18 @@ export default async function DailyTrackerPage() {
           const healthy = healthScore.score >= 75;
           const emoji = healthy ? '🟢' : healthScore.score >= 50 ? '🟡' : '🔴';
           return (
-            <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
-              <p className="text-xl font-bold text-stone-900 shrink-0">{emoji} {healthScore.score}%</p>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-stone-800">{healthy ? 'Healthy' : weakest.label}</p>
-                <p className="text-xs text-stone-500">{healthy ? 'On track' : weakest.line}</p>
+            // Labeled explicitly as a status readout, not an instruction —
+            // otherwise it and TodaysRoutineCard right below both read as
+            // "do something now" with no signal which one to act on first.
+            <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-4 py-2.5 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-0.5">Preparation health</p>
+                <p className="text-xs text-stone-600">
+                  <span className="font-semibold text-stone-800">{healthy ? 'Healthy' : weakest.label}</span>
+                  {' — '}{healthy ? 'on track' : weakest.line}
+                </p>
               </div>
+              <p className="text-base font-bold text-stone-700 shrink-0">{emoji} {healthScore.score}%</p>
             </div>
           );
         })()}
