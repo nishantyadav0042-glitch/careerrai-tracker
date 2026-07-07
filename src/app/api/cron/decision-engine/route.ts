@@ -6,19 +6,28 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { computePrepMemory } from '@/lib/prep-memory-data';
 import {
   detectRevisionDue, detectTopicEarned, detectMissionChanged, detectWeeklyEvolved, detectInactive,
-  pickTopEvent, templateFor, type CoverageSignalRow,
+  selectEvents, templateFor, type CoverageSignalRow,
 } from '@/lib/decision-engine';
 
-// 14:30 UTC = 20:00 IST — the one slot the retired daily-reminder used to
-// own. This cron replaces daily-reminder, streak-risk, and growth-nudges:
-// per the founder's own rule, "one notification, maximum, per day," a
-// nightly diff engine and three separate reminder crons cannot coexist —
-// running all four would just stack a fifth push on top of the old four.
+// 14:30 UTC = 20:00 IST — the slot the retired daily-reminder used to own.
+// This cron replaces daily-reminder's guilt rotation, streak-risk, and
+// growth-nudges entirely.
+//
+// Cap is 2/day ("Personal Study: maximum 2/day"), never manufactured — a
+// day with one real event sends one, a day with none sends none. Raising
+// the cap from 1 wasn't "send more," it was fixing a real bug: a genuinely
+// independent second event used to be silently discarded just for losing
+// the priority contest to a first. Sundays additionally guarantee
+// weekly_evolved a slot when it fires ("Sunday evolution, always") instead
+// of letting it compete on priority and possibly lose. Critical channels
+// (buddy replies, session reminders, payments) are separate infra and
+// were never part of this cap to begin with — nothing to change there.
 //
 // No AI anywhere in this file. No event bus, no snapshot table — every
 // signal below reads tables that already exist (topic_coverage,
 // daily_routines, streak_data). The founder's four boxes, in order:
 // diff existing data -> detect events -> rank by priority -> template copy.
+const DAILY_CAP = 2;
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -55,7 +64,11 @@ export async function POST(request: NextRequest) {
     admin.from('streak_data').select('student_id, last_log_date').in('student_id', studentIds),
   ]);
 
-  const sentToday = new Set((alreadySentToday ?? []).map((n) => n.user_id));
+  // Idempotency guard: how many decision-engine notifications this student
+  // already has today (only relevant if the cron were ever re-triggered) —
+  // caps the remaining budget rather than blocking outright at 1.
+  const sentCountToday = new Map<string, number>();
+  for (const n of alreadySentToday ?? []) sentCountToday.set(n.user_id, (sentCountToday.get(n.user_id) ?? 0) + 1);
   const coverageByStudent = new Map<string, CoverageSignalRow[]>();
   for (const r of coverageRows ?? []) {
     if (!coverageByStudent.has(r.student_id)) coverageByStudent.set(r.student_id, []);
@@ -73,7 +86,8 @@ export async function POST(request: NextRequest) {
   let silent = 0;
 
   for (const s of students) {
-    if (sentToday.has(s.id)) continue;
+    const remaining = DAILY_CAP - (sentCountToday.get(s.id) ?? 0);
+    if (remaining <= 0) continue;
     const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
     if (prefs.daily_reminder === false) continue;
 
@@ -95,23 +109,25 @@ export async function POST(request: NextRequest) {
       weeklyLines = weeklyEvolution;
     }
 
-    const event = pickTopEvent([
+    const events = selectEvents([
       detectRevisionDue(coverage, today, revisionFrequencyDays),
       detectTopicEarned(coverage, today),
       detectMissionChanged(yesterdayFirstSection, todayFirst?.section ?? null, todayFirst?.topic ?? null),
       detectWeeklyEvolved(isSunday, weeklyLines),
       detectInactive(daysSinceLastLog),
-    ]);
+    ], remaining);
 
-    if (!event) { silent++; continue; }
+    if (events.length === 0) { silent++; continue; }
 
-    const { title, body, url } = templateFor(event);
-    await admin.from('notifications').insert({
-      user_id: s.id, type: event.type, title, body,
-      data: { url }, read: false, channel: 'in_app',
-    });
-    if (prefs.push === true) await sendPushToUser(s.id, { title, body, url });
-    notified++;
+    for (const event of events) {
+      const { title, body, url } = templateFor(event);
+      await admin.from('notifications').insert({
+        user_id: s.id, type: event.type, title, body,
+        data: { url }, read: false, channel: 'in_app',
+      });
+      if (prefs.push === true) await sendPushToUser(s.id, { title, body, url });
+      notified++;
+    }
   }
 
   return NextResponse.json({ notified, silent, total: students.length });

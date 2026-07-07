@@ -20,10 +20,9 @@ export interface DecisionEvent {
   extra?: string | null;
 }
 
-// Fixed priority ladder — the founder's "one notification, highest wins"
-// rule. Revision slipping outranks a routine plan reshuffle; a plan
-// reshuffle outranks a weekly summary; nothing outranks silence when
-// nothing fired at all.
+// Fixed priority ladder. Revision slipping outranks a routine plan
+// reshuffle; a plan reshuffle outranks a weekly summary; nothing outranks
+// silence when nothing fired at all.
 const PRIORITY: Record<DecisionEventType, number> = {
   revision_due: 90,
   topic_earned: 85,
@@ -38,15 +37,17 @@ export interface CoverageSignalRow {
   updatedAt: string; // ISO
 }
 
-// Fires exactly once — the day a topic CROSSES its own revision cadence,
-// not every day it stays overdue (that would repeat the same fact forever,
-// which is a reminder, not an event). Uses the same raw
-// TOPIC_METADATA.revisionFrequencyDays comparison the Preparation Map
-// itself displays (CoverageMatrix.isRevisionDue) — not the archetype-
-// adjusted version topic-selector uses internally. A notification that
-// disagrees with what the student sees on screen is the "I revised it
-// yesterday" trust failure; matching the visible source of truth is not
-// optional here.
+// Fires every day a topic is overdue, not just the day it crosses —
+// "overdue events should persist until resolved, not disappear forever."
+// This is self-limiting without a separate cooldown table: the moment the
+// student actually revises the topic, updatedAt resets, daysSince drops to
+// 0, and the event stops qualifying — resolution silences it, nothing
+// else needs to. Uses the same raw TOPIC_METADATA.revisionFrequencyDays
+// comparison the Preparation Map itself displays (CoverageMatrix.
+// isRevisionDue) — not the archetype-adjusted version topic-selector uses
+// internally. A notification that disagrees with what the student sees on
+// screen is the "I revised it yesterday" trust failure; matching the
+// visible source of truth is not optional here.
 export function detectRevisionDue(
   rows: CoverageSignalRow[],
   today: string,
@@ -57,7 +58,7 @@ export function detectRevisionDue(
     const freq = revisionFrequencyDays[row.topic];
     if (freq == null) continue;
     const daysSince = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
-    if (daysSince === Math.round(freq) + 1) {
+    if (daysSince >= Math.round(freq) + 1) {
       return { type: 'revision_due', priority: PRIORITY.revision_due, topic: row.topic };
     }
   }
@@ -103,12 +104,29 @@ export function detectInactive(daysSinceLastLog: number | null): DecisionEvent |
   return { type: 'inactive_recovery', priority: PRIORITY.inactive_recovery };
 }
 
-// One notification. Maximum. The founder's own words. Ties broken by
-// declaration order (stable) since priorities are all distinct anyway.
+// Single highest-priority event — still the right primitive when only one
+// slot exists (e.g. testing a single detector in isolation).
 export function pickTopEvent(events: (DecisionEvent | null)[]): DecisionEvent | null {
   const real = events.filter((e): e is DecisionEvent => e != null);
   if (real.length === 0) return null;
   return real.reduce((best, e) => (e.priority > best.priority ? e : best));
+}
+
+// The cron's actual selector: up to `cap` events, never manufactured — a
+// day with one real thing sends one, a day with none sends none. Raising
+// the cap from 1 to 2 isn't "send more"; it's "stop discarding the second
+// genuinely independent thing that happened" (the losing-event bug this
+// function replaces pickTopEvent-in-the-cron to fix). The one guarantee:
+// on a Sunday where weekly_evolved fired, it always claims a slot — "Sunday
+// evolution, always" — rather than competing on priority against whatever
+// else happened that day and possibly losing.
+export function selectEvents(events: (DecisionEvent | null)[], cap: number): DecisionEvent[] {
+  const real = events.filter((e): e is DecisionEvent => e != null);
+  if (real.length === 0) return [];
+  const weekly = real.find((e) => e.type === 'weekly_evolved');
+  const rest = real.filter((e) => e.type !== 'weekly_evolved').sort((a, b) => b.priority - a.priority);
+  if (weekly) return [weekly, ...rest.slice(0, Math.max(0, cap - 1))];
+  return rest.slice(0, cap);
 }
 
 export interface DecisionEventTemplate { title: string; body: string; url: string }
