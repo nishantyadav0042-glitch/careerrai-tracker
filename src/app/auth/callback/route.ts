@@ -79,9 +79,12 @@ export async function GET(request: NextRequest) {
 
   const role = (entry?.person_type === 'buddy' ? 'buddy' : 'student') as 'student' | 'buddy';
   const isNewUser = !existing;
-  // New students go to /student/home where the onboarding modal auto-launches.
-  // Returning students skip straight to the tracker.
-  const normalDest = role === 'buddy' ? '/buddy/students' : (isNewUser ? '/student/home' : '/student/tracker');
+  // Both new and returning students land on /student/tracker directly — the
+  // Blueprint Builder gate lives in the student layout (fires for ANY page
+  // under /student/* while onboarding_completed is false), not on a
+  // specific landing page, so there's no reason to route new signups
+  // through an extra redirect hop first.
+  const normalDest = role === 'buddy' ? '/buddy/students' : '/student/tracker';
 
   if (isNewUser) {
     await admin.from('profiles').insert({
