@@ -85,12 +85,18 @@ function taskTitle(task: RoutineTask): string {
 // re-seeing "Solve RC questions" with no acknowledgment reads it as the app
 // not noticing their own progress, even when the underlying pick was
 // correct. This badge says the quiet part out loud.
+// Wording in the student's own head, not the engine's internal vocabulary —
+// "EXAM READY" is how the Coverage Matrix labels it internally, but no
+// CAT aspirant thinks "this topic is exam ready"; they think "I'm
+// comfortable with this." NEW deliberately isn't "Start Here" — that phrase
+// is already the position-in-list tag on the first task below and would
+// collide with a second, different meaning right next to it.
 const CONTINUITY_BADGE: Record<CoverageStatus, { label: string; style: string }> = {
   not_started: { label: 'NEW', style: 'bg-teal-50 text-teal-700 border-teal-200' },
   learning: { label: 'CONTINUE', style: 'bg-blue-50 text-blue-700 border-blue-200' },
   practicing: { label: 'CONTINUE', style: 'bg-blue-50 text-blue-700 border-blue-200' },
-  revising: { label: 'REVISION', style: 'bg-orange-50 text-orange-700 border-orange-200' },
-  exam_ready: { label: 'EXAM READY', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  revising: { label: 'BACK FOR REVISION', style: 'bg-orange-50 text-orange-700 border-orange-200' },
+  exam_ready: { label: 'COMFORTABLE', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
 export function TodaysRoutineCard() {
@@ -240,7 +246,11 @@ export function TodaysRoutineCard() {
 
       {fullyDone ? (
         <div className="py-3">
-          <p className="text-lg font-bold text-stone-900 text-center mb-3">Today&apos;s Study Done ✅</p>
+          {/* Forward-pull, not a finish line — the app's job is to make
+              tomorrow morning feel easier than today did, not to mark today
+              closed. "Done" reads as an ending; "Ready for tomorrow" reads
+              as momentum. */}
+          <p className="text-lg font-bold text-stone-900 text-center mb-3">Ready for tomorrow ✅</p>
           <div className="space-y-1 text-center">
             {completedWithTopic.length > 0 && (
               <p className="text-sm text-stone-600">Plan updated · {completedWithTopic.length} topic{completedWithTopic.length === 1 ? '' : 's'}</p>
@@ -248,7 +258,7 @@ export function TodaysRoutineCard() {
             {confidenceTaps.filter((t) => t.confidence === 'green').length > 0 && (
               <p className="text-sm text-stone-600">{confidenceTaps.filter((t) => t.confidence === 'green').map((t) => t.topic).join(', ')} ↑</p>
             )}
-            <p className="text-sm text-stone-600">Tomorrow adapts overnight</p>
+            <p className="text-sm text-stone-600">Your next step is already being built — open tomorrow and go</p>
           </div>
         </div>
       ) : (
