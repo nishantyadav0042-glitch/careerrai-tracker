@@ -54,10 +54,13 @@ const COVERAGE_POINTS: Record<CoverageStatus | 'unknown', number> = {
   exam_ready: 2,
 };
 
+// Elder-sibling language, not analytics: the reason should read like
+// someone protecting your preparation, not a database annotation. Every
+// number in these strings is still real.
 function coverageReason(topic: string, status: CoverageStatus | null): string | null {
-  if (status == null) return `${topic} hasn't been mapped in your Blueprint yet`;
-  if (status === 'not_started') return `${topic} — never started`;
-  if (status === 'learning') return `${topic} — you're still learning the concepts`;
+  if (status == null) return `${topic} isn't on your map yet — today puts it there`;
+  if (status === 'not_started') return `you haven't started ${topic} — today is the cheapest it will ever be`;
+  if (status === 'learning') return `you're mid-way through ${topic} — finish the idea while it's warm`;
   return null; // practicing/revising/exam_ready only explained via revision-due below, not coverage alone
 }
 
@@ -82,7 +85,7 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
       const adjustedFrequency = meta.revisionFrequencyDays * revisionMultiplier;
       const overdue = Math.min(Math.max(c.daysSinceLastPracticed - adjustedFrequency, 0), 10);
       revisionPoints = overdue * 3;
-      if (overdue > 0) reasons.push(`${c.topic} last practiced ${c.daysSinceLastPracticed} day${c.daysSinceLastPracticed === 1 ? '' : 's'} ago — due for revision`);
+      if (overdue > 0) reasons.push(`you've ignored ${c.topic} for ${c.daysSinceLastPracticed} day${c.daysSinceLastPracticed === 1 ? '' : 's'} — skip today and it starts fading`);
     }
 
     // Prerequisite gate: a real edge, not a rank-order guess. A topic whose
@@ -100,7 +103,7 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     }
 
     const selfReportPoints = c.selfReportedBonus ? 12 : 0;
-    if (c.selfReportedBonus) reasons.push(`${c.topic} is what you told us was toughest`);
+    if (c.selfReportedBonus) reasons.push(`${c.topic} is what you told us was toughest — we didn't forget`);
 
     const score = coveragePoints + weightagePoints + revisionPoints + prereqPenalty + selfReportPoints;
     return { topic: c.topic, score, reasons };

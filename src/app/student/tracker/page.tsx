@@ -48,7 +48,7 @@ export default async function DailyTrackerPage() {
     { data: recentMock },
     { data: streakRow },
     { data: coverage },
-    { prepMemory, weeklyEvolution },
+    { prepMemory, weeklyEvolution, healthScore },
   ] = await Promise.all([
     admin
       .from('video_sessions')
@@ -187,7 +187,7 @@ export default async function DailyTrackerPage() {
 
   const hour = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   const h = parseInt(hour);
-  const greeting = h < 4 ? 'Burning the midnight oil' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = h < 4 ? 'Late night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
 
   const nextSession = sessions?.[0] ?? null;
   const todaySession =
@@ -210,7 +210,7 @@ export default async function DailyTrackerPage() {
         {/* Header: greeting + CRS pill + weekends-to-CAT chip */}
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
-            {greeting}, {firstName}
+            {greeting} {firstName} 👋
           </h1>
           <div className="flex items-center gap-1.5 shrink-0">
             {/* CRS pill only when TrajectoryWall is absent — it already shows current%ile */}
@@ -225,9 +225,34 @@ export default async function DailyTrackerPage() {
           </div>
         </div>
 
-        {/* Today's Routine IS the homepage's first answer — "what do I study
+        {/* Today's Mission IS the homepage's first answer — "what do I study
             right now," zero scrolling, no warm-up paragraph above it. */}
         <TodaysRoutineCard />
+
+        {/* Preparation Health — diagnoses, never decorates: one number, one
+            label, one sentence naming the weakest component. Hidden while
+            provisional (under a week of history) — no fabricated score. */}
+        {healthScore.status === 'ready' && healthScore.score != null && healthScore.components && (() => {
+          const c = healthScore.components;
+          const ratios = [
+            { key: 'consistency', ratio: c.consistency / 35, label: 'Consistency slipping', line: 'Show up today — the streak is the fix.' },
+            { key: 'confidence', ratio: c.confidenceQuality / 25, label: 'Too many shaky topics', line: 'Slow down and relearn before speeding up.' },
+            { key: 'balance', ratio: c.balance / 25, label: 'A section is going untouched', line: "Today's mix brings it back." },
+            { key: 'revision', ratio: c.revisionDiscipline / 15, label: 'Revision falling behind', line: 'One revision block today stops the fade.' },
+          ].sort((a, b) => a.ratio - b.ratio);
+          const weakest = ratios[0];
+          const healthy = healthScore.score >= 75;
+          const emoji = healthy ? '🟢' : healthScore.score >= 50 ? '🟡' : '🔴';
+          return (
+            <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
+              <p className="text-xl font-bold text-stone-900 shrink-0">{emoji} {healthScore.score}%</p>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-stone-800">{healthy ? 'Preparation healthy' : weakest.label}</p>
+                <p className="text-xs text-stone-500">{healthy ? "You're still on track." : weakest.line}</p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Study Plan Dashboard, condensed — Coverage snapshot, Preparation
             Memory, and Weekly Evolution right on the homepage instead of only

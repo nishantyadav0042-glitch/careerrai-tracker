@@ -11,6 +11,7 @@ interface Props {
   isLoading: boolean;
   archetypeLabel: string | null;
   weeklyLoadHours: number | null;
+  studentName: string | null;
 }
 
 interface ContractSnapshot {
@@ -46,7 +47,7 @@ function joinPhrases(phrases: string[]): string {
 // onComplete() actually fires. Coverage/phase come from the same
 // /api/blueprint read the Reveal screen just used; archetype and weekly
 // load come straight from the wizard's own state.
-export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLabel, weeklyLoadHours }: Props) {
+export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLabel, weeklyLoadHours, studentName }: Props) {
   const [data, setData] = useState<ContractSnapshot | null>(null);
   const [windows, setWindows] = useState<StudyWindow[]>([]);
 
@@ -81,7 +82,7 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
       <div className="flex flex-col items-center gap-2">
         <CheckCircle2 className="w-10 h-10 text-teal-600" />
         <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          This is your CAT Blueprint
+          {studentName ? `${studentName}, this Blueprint` : 'This Blueprint'} was built only for you
         </h1>
       </div>
 
@@ -92,10 +93,11 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         )}
         {archetypeLabel && <p className="text-sm text-stone-800">• {archetypeLabel}</p>}
         {weeklyLoadHours != null && <p className="text-sm text-stone-800">• {weeklyLoadHours}h / week planned</p>}
-        <p className="text-sm text-stone-800">• {data?.phaseLabel ?? 'Your current phase'} · {data?.weeksRemaining ?? '—'} weeks to go</p>
+        <p className="text-sm text-stone-800">• {data?.phaseLabel ?? 'Your current phase'} · {data != null ? `${data.weeksRemaining * 7} study days to CAT` : '—'}</p>
         {data && data.coverageTotal > 0 && (
-          <p className="text-sm text-stone-800">• Coverage so far: {data.coverageDone}/{data.coverageTotal} topics</p>
+          <p className="text-sm text-stone-800">• {data.coverageTotal} learning units mapped · {data.coverageDone} already in motion</p>
         )}
+        <p className="text-sm text-stone-800">• Generated today</p>
       </div>
 
       <div className="text-left">
@@ -136,7 +138,7 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         disabled={isLoading || windows.length === 0}
         className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
       >
-        {isLoading ? 'Finishing up…' : windows.length === 0 ? 'Pick at least one study window' : "Let's begin →"}
+        {isLoading ? 'Finishing up…' : windows.length === 0 ? 'Pick at least one study window' : '🤝 I commit to following this Blueprint'}
       </button>
     </div>
   );

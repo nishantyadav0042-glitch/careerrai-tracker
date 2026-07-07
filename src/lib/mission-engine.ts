@@ -52,8 +52,8 @@ export function pickMission(candidates: MissionCandidate[]): ScoredMission {
 export function mockPendingAnalysisSignal(daysSincePendingMock: number | null): MissionSignal {
   if (daysSincePendingMock == null) return { active: false, points: 0, reason: null };
   const points = 40 + Math.min(Math.max(daysSincePendingMock - 1, 0), 3) * 10;
-  const dayLabel = daysSincePendingMock === 0 ? 'today' : daysSincePendingMock === 1 ? '1 day ago' : `${daysSincePendingMock} days ago`;
-  return { active: true, points, reason: `Mock logged ${dayLabel}, not yet analyzed` };
+  const dayLabel = daysSincePendingMock === 0 ? 'today' : daysSincePendingMock === 1 ? 'yesterday' : `${daysSincePendingMock} days ago`;
+  return { active: true, points, reason: `Your mock from ${dayLabel} is still unanalyzed — the mistakes are worth more than the score` };
 }
 
 // The weakest section's revision — this is the existing default the routine
@@ -67,7 +67,7 @@ export function mockPendingAnalysisSignal(daysSincePendingMock: number | null): 
 export function revisionOverdueSignal(section: string, daysSinceLastPracticed: number | null, revisionFrequencyDays = 3): MissionSignal {
   const base = 25;
   if (daysSinceLastPracticed == null) {
-    return { active: true, points: base, reason: `${section} hasn't been practiced yet` };
+    return { active: true, points: base, reason: `${section} hasn't been touched yet — start the record today` };
   }
   if (daysSinceLastPracticed === 0) {
     return { active: true, points: base, reason: `${section} — keep today's momentum going` };
@@ -76,7 +76,7 @@ export function revisionOverdueSignal(section: string, daysSinceLastPracticed: n
   return {
     active: true,
     points: base + overdueBonus,
-    reason: `${section} last practiced ${daysSinceLastPracticed} day${daysSinceLastPracticed === 1 ? '' : 's'} ago`,
+    reason: `you've ignored ${section} for ${daysSinceLastPracticed} day${daysSinceLastPracticed === 1 ? '' : 's'} — it fades fast`,
   };
 }
 

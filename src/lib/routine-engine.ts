@@ -42,6 +42,11 @@ export interface RoutineTask {
   // (a full mock, a general revision block).
   topic: string | null;
   label: string;
+  // The executable target — "Solve 15 questions", "Log 3 mistakes" — never
+  // just "study X". A goal the student can finish and tick, not a subject
+  // to stare at. Derived from the time budget (~3 min/question), stated as
+  // an instruction, never as a claim about anything.
+  target: string | null;
   estMinutes: number;
   reason: string | null;
   // True only for the single priority task. Backed by a real meta-analysis
@@ -160,22 +165,25 @@ export function archetypeRevisionMultiplier(profile: { isRepeater: boolean; isWo
 // revision-due, prerequisites) instead of a flat per-section day-count, so
 // the cue is topic-specific, not just section-specific.
 export function implementationIntention(section: Section, topic: string, topicReasons: string[], phase: Phase): string {
-  const target = `${section} — ${topic}`;
+  // The card already shows "SECTION — TOPIC" as the task title, so the
+  // reason never repeats it — it's pure coaching.
   if (topicReasons.length > 0) {
-    return `If you study today, start with ${target} — ${topicReasons[0]}`;
+    return `Start here — ${topicReasons[0]}`;
   }
   return phase === 'foundation'
-    ? `If you study today, start with ${target} — first pass, before anything else`
-    : `If you study today, start with ${target} — day one counts`;
+    ? 'Start here — first pass, before anything else'
+    : 'Start here — day one counts';
 }
 
 // Plain, non-conditional reason for the secondary tasks — deliberately NOT
 // if-then framed. The evidence supports one vivid, personal trigger, not
 // diluting the pattern across a whole checklist.
 export function sectionReason(section: Section, topic: string, topicReasons: string[], ordinal: 'second' | 'third'): string {
-  const target = `${section} — ${topic}`;
-  if (topicReasons.length > 0) return `${target} — ${topicReasons[0]}`;
-  return ordinal === 'second' ? `${target} — rounding out today's set` : `${target} — closes today's session`;
+  if (topicReasons.length > 0) {
+    const r = topicReasons[0];
+    return r.charAt(0).toUpperCase() + r.slice(1);
+  }
+  return ordinal === 'second' ? "Rounds out today's set" : "Closes today's session";
 }
 
 // The "how did you plan this" answer, made visible instead of implicit. A
@@ -192,6 +200,14 @@ export function personalizationSummary(profile: RoutineProfile, isWeekendToday: 
       : `${profile.weakestSection} is your focus`
     : 'balanced across sections';
   return `Built from your setup: ${weakLabel} · ${hoursLabel}`;
+}
+
+// ~3 focused minutes per question is the pacing instruction the target is
+// built from (concept-first tasks reserve a third of the slot for the
+// concept). A goal to aim at, stated once here.
+function questionTarget(minutes: number, conceptFirst: boolean): number {
+  const practiceMinutes = conceptFirst ? Math.round(minutes * 0.67) : minutes;
+  return Math.max(5, Math.round(practiceMinutes / 3));
 }
 
 export interface HistoryInput {
@@ -238,28 +254,32 @@ export function generateRoutine(
   const otherShare = (1 - weakShare) / nonWeak.length;
 
   const weakChoice = topicChoices[weak];
-  const priorityLabel = phase === 'foundation'
-    ? `${weak} — ${weakChoice.topic}: concept + practice`
-    : `${weak} — ${weakChoice.topic}: targeted practice`;
+  const priorityMinutes = Math.round(totalMinutes * weakShare);
+  const priorityQuestions = questionTarget(priorityMinutes, phase === 'foundation');
 
   tasks.push({
     id: `${weak.toLowerCase()}-priority`,
     section: weak,
     topic: weakChoice.topic,
-    label: priorityLabel,
-    estMinutes: Math.round(totalMinutes * weakShare),
+    label: `${weak} — ${weakChoice.topic}`,
+    target: phase === 'foundation'
+      ? `Learn the concept, then solve ${priorityQuestions} questions`
+      : `Solve ${priorityQuestions} questions, timed`,
+    estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
   });
 
   nonWeak.forEach((section, i) => {
     const choice = topicChoices[section];
+    const minutes = Math.round(totalMinutes * otherShare);
     tasks.push({
       id: `${section.toLowerCase()}-set`,
       section,
       topic: choice.topic,
-      label: `${section} — ${choice.topic}: practice set`,
-      estMinutes: Math.round(totalMinutes * otherShare),
+      label: `${section} — ${choice.topic}`,
+      target: `Solve ${questionTarget(minutes, false)} questions`,
+      estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });
   });
@@ -278,18 +298,20 @@ export function generateRoutine(
         id: 'mock-or-review',
         section: 'General',
         topic: null,
-        label: 'Mock analysis — review your last attempt',
+        label: 'Mock analysis',
+        target: 'Re-open your last mock, log 3 mistakes',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-        reason: 'Intensive phase — mocks are the #1 signal now',
+        reason: 'Your mistakes are worth more marks than new topics right now',
       });
     } else if (profile.isWorkingProfessional && !weekend) {
       tasks.push({
         id: 'weekday-sectional',
         section: weak,
         topic: null,
-        label: `${weak} — timed sectional practice`,
+        label: `${weak} — timed sectional`,
+        target: 'One timed set — accuracy over volume',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-        reason: 'Weekday capacity is tight — full mocks wait for the weekend',
+        reason: 'Weekday capacity is tight — the full mock waits for your weekend',
       });
     } else {
       tasks.push({
@@ -297,8 +319,9 @@ export function generateRoutine(
         section: 'General',
         topic: null,
         label: 'Sectional mock',
+        target: 'One timed sectional, exam conditions',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
-        reason: 'Intensive phase — mocks are the #1 signal now',
+        reason: 'Mocks are the #1 signal in this phase — skip one and you fly blind',
       });
     }
   } else if (phase === 'revision') {
@@ -306,18 +329,20 @@ export function generateRoutine(
       id: 'revision-block',
       section: strong ?? weak,
       topic: null,
-      label: `Revise ${strong ?? weak} — keep it sharp, don't drift`,
+      label: `${strong ?? weak} rapid recall`,
+      target: '15-minute recall — formulas and set-ups from memory',
       estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
-      reason: 'Revision phase — protect your strengths, don\'t just chase weaknesses',
+      reason: 'Protect your strengths — losing marks you own hurts double',
     });
   } else if (profile.isRepeater) {
     tasks.push({
       id: 'repeater-review',
       section: weak,
       topic: null,
-      label: `Review yesterday's ${weak} mistakes`,
+      label: `Yesterday's ${weak} mistakes`,
+      target: 'Rework each one until it cracks',
       estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
-      reason: 'Repeaters improve fastest by closing yesterday\'s gaps, not opening new ground',
+      reason: "Closing yesterday's gaps beats opening new ground — you know this",
     });
   }
 

@@ -90,7 +90,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     {
       component: ScreenBlueprintContract,
       sectionId: null,
-      extraProps: { archetypeLabel: preview.archetypeBadge, weeklyLoadHours: preview.weeklyLoadHours },
+      extraProps: {
+        archetypeLabel: preview.archetypeBadge,
+        weeklyLoadHours: preview.weeklyLoadHours,
+        studentName: ((onboardingData.full_name as string | undefined) ?? '').split(' ')[0] || null,
+      },
     }, // 10
   ];
 
