@@ -65,6 +65,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     weak_topic: onboardingData.weak_topic as string | undefined,
     studyTargetHours: onboardingData.studyTargetHours as number | undefined,
     weekendHours: onboardingData.weekendHours as number | undefined,
+    coverage_done: onboardingData.coverage_done as number | undefined,
+    coverage_started: onboardingData.coverage_started as number | undefined,
+    coverage_total: onboardingData.coverage_total as number | undefined,
   });
 
   const screens: Screen[] = [

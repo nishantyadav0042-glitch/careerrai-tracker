@@ -19,7 +19,8 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
   if (preview.archetypeBadge) facts.push({ key: 'archetype', label: preview.archetypeBadge });
   if (preview.focusBadge) facts.push({ key: 'focus', label: `Focus: ${preview.focusBadge}` });
   if (preview.weeklyLoadHours != null) facts.push({ key: 'load', label: `${preview.weeklyLoadHours}h / week` });
-  if (sectionIndex >= coverageSectionIndex) facts.push({ key: 'coverage', label: 'Mapping your coverage…' });
+  if (preview.coverageBadge) facts.push({ key: 'coverage', label: preview.coverageBadge });
+  else if (sectionIndex >= coverageSectionIndex) facts.push({ key: 'coverage', label: 'Mapping your coverage…' });
 
   return (
     <div className="bg-stone-900 rounded-2xl px-4 py-3.5 mb-4">

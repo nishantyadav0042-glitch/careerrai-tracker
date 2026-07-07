@@ -32,6 +32,9 @@ export interface BlueprintPreviewInput {
   weak_topic?: string | null;
   studyTargetHours?: number | null;
   weekendHours?: number | null;
+  coverage_done?: number | null;
+  coverage_started?: number | null;
+  coverage_total?: number | null;
 }
 
 export interface BlueprintPreview {
@@ -39,7 +42,8 @@ export interface BlueprintPreview {
   archetypeBadge: string | null;
   focusBadge: string | null;
   weeklyLoadHours: number | null;
-  filledFacts: number; // how many of the 3 data-derived fact slots are lit
+  coverageBadge: string | null;
+  filledFacts: number; // how many of the data-derived fact slots are lit
 }
 
 // examBadge unlocks right after Exam Context (attempt_year + is_repeater
@@ -76,17 +80,32 @@ function weeklyLoadHours(input: BlueprintPreviewInput): number | null {
   return Math.round((input.studyTargetHours * 5 + input.weekendHours * 2) * 10) / 10;
 }
 
+// coverageBadge unlocks once the student has explicitly declared the whole
+// grid (Section 4) — the exact per-topic statuses they tapped, never an
+// inferred count. Feeds topic-selector.ts's coverage-status scoring.
+function coverageBadge(input: BlueprintPreviewInput): string | null {
+  if (input.coverage_total == null) return null;
+  const done = input.coverage_done ?? 0;
+  const started = input.coverage_started ?? 0;
+  if (done === 0 && started === 0) return `Coverage: starting fresh (0/${input.coverage_total})`;
+  const parts = [`${done} done`];
+  if (started > 0) parts.push(`${started} in progress`);
+  return `Coverage: ${parts.join(' · ')} of ${input.coverage_total}`;
+}
+
 export function computeBlueprintPreview(input: BlueprintPreviewInput): BlueprintPreview {
   const exam = examBadge(input);
   const archetype = archetypeBadge(input);
   const focus = focusBadge(input);
   const load = weeklyLoadHours(input);
+  const coverage = coverageBadge(input);
 
   return {
     examBadge: exam,
     archetypeBadge: archetype,
     focusBadge: focus,
     weeklyLoadHours: load,
-    filledFacts: [exam, archetype, focus, load].filter((v) => v != null).length,
+    coverageBadge: coverage,
+    filledFacts: [exam, archetype, focus, load, coverage].filter((v) => v != null).length,
   };
 }

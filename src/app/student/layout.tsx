@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
-import { FirstLoginTour } from '@/components/first-login-tour';
 import { PushGate } from '@/components/push-gate';
 
 function DemoBanner() {
@@ -25,11 +24,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [chatUnread, notifUnread, { data: profile }, { data: engagement }] = await Promise.all([
+  const [chatUnread, notifUnread, { data: profile }] = await Promise.all([
     getChatUnreadCount(user.id, 'student'),
     getNotifUnreadCount(user.id),
     admin.from('profiles').select('role, is_demo, is_premium, onboarding_completed, notif_prefs').eq('id', user.id).single(),
-    admin.from('student_engagement').select('tour_completed').eq('student_id', user.id).maybeSingle(),
   ]);
 
   // Route non-students to their own home (handles stale role cookies too).
@@ -41,20 +39,17 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (profile && profile.role !== 'student') redirect('/login');
 
   const isDemo = !!profile?.is_demo;
-  // The Blueprint Builder is the FIRST thing after login — before the tour,
-  // before anything else. The first 120 seconds are the product: a student
-  // who logs in and sees a generic homepage instead of their Blueprint being
-  // built never comes back. It stays until completed — no skip, no dismiss.
+  // Login → Blueprint Builder, nothing in between. Its own intro screen is
+  // the one hero the founder wants; the old FirstLoginTour was a second,
+  // redundant hero in front of it and is gone. The Builder stays until
+  // completed — no skip, no dismiss.
   const showOnboarding = !isDemo && profile?.onboarding_completed !== true;
-  // First-login tour: one-time, for free non-demo students, AFTER the
-  // Blueprint exists — a tour of an app whose core object hasn't been built
-  // yet is a tour of nothing.
-  const showTour = !isDemo && !showOnboarding && !profile?.is_premium && engagement?.tour_completed !== true;
-  // Mandatory push step — AFTER Blueprint + tour. Shown to every non-demo student
-  // who hasn't turned push on yet (notif_prefs.push !== true). Enabling sets that
-  // flag, so the gate appears at most once per student and then never again.
+  // Mandatory push step — only AFTER the Blueprint exists. Shown to every
+  // non-demo student who hasn't turned push on yet (notif_prefs.push !==
+  // true). Enabling sets that flag, so the gate appears at most once per
+  // student and then never again.
   const pushEnabled = (profile?.notif_prefs as { push?: boolean } | null)?.push === true;
-  const showPushGate = !isDemo && !showTour && !showOnboarding && !pushEnabled;
+  const showPushGate = !isDemo && !showOnboarding && !pushEnabled;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -72,7 +67,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {showOnboarding ? <OnboardingGate /> : showTour ? <FirstLoginTour /> : showPushGate && <PushGate />}
+      {showOnboarding ? <OnboardingGate /> : showPushGate && <PushGate />}
     </div>
   );
 }

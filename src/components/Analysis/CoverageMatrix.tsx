@@ -32,9 +32,9 @@ const STATUS_STYLE: Record<Status, string> = {
 
 // The Coverage Matrix (Study Plan Generator Bible Part 4) — reuses the same
 // 14-topic taxonomy already shown in daily logging, no second one invented.
-// First view is pre-filled server-side from current_stage (see
-// /api/coverage), so this is a review-and-correct step for most students,
-// not a 14-question survey.
+// Shows exactly what the student declared in the Blueprint Builder (or
+// not_started if they haven't) — never a stage-inferred guess. Each chip
+// shows its status label, so the state is readable, not a color code.
 export function CoverageMatrix() {
   const [rows, setRows] = useState<CoverageRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,6 +106,7 @@ export function CoverageMatrix() {
                     )}
                   >
                     {row.topic}
+                    <span className="ml-1 opacity-70 font-normal">· {STATUS_LABEL[row.status]}</span>
                   </button>
                 );
               })}

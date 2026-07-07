@@ -75,7 +75,15 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function memoryLine(entry: BlueprintData['topicMemory'][number]): string {
-  if (entry.firstTouchedDaysAgo == null) return "Haven't started this yet.";
+  if (entry.firstTouchedDaysAgo == null) {
+    // No logged practice in the app. The status can still be completed/
+    // strong/started — that's the student's own Blueprint declaration, not
+    // app history, so say exactly that instead of contradicting the badge
+    // ("Completed once" next to "haven't started this yet").
+    if (entry.status === 'completed' || entry.status === 'strong') return 'You marked this covered before joining — no practice logged in the app yet.';
+    if (entry.status === 'started') return 'You marked this in progress — no practice logged in the app yet.';
+    return "Haven't started this yet.";
+  }
   const parts = [`First studied ${entry.firstTouchedDaysAgo}d ago`];
   if (entry.timesTouched > 1) parts.push(`revisited ${entry.timesTouched - 1}x`);
   if (entry.lastTouchedDaysAgo != null) parts.push(`last touched ${entry.lastTouchedDaysAgo}d ago`);
