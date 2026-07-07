@@ -1,6 +1,8 @@
 'use client';
-
-import { useState, useEffect, useCallback } from 'react';
+/* eslint-disable react-hooks/purity -- Date.now() below only ever runs
+   inside a click handler (reportStart, called from handleTaskTap), never
+   during render; the linter can't see that from the call site. */
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Check } from 'lucide-react';
@@ -81,6 +83,12 @@ export function TodaysRoutineCard() {
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [confidenceTaps, setConfidenceTaps] = useState<{ topic: string; confidence: ConfidenceSignal }[]>([]);
+  // Reading the routine isn't the same as committing to it — viewedAt marks
+  // when a real (non-empty, non-setup) routine first appeared on screen,
+  // and the first task tap reports elapsed time against it. hasReportedStart
+  // guards against double-firing if the student taps more than one task.
+  const viewedAt = useRef<number | null>(null);
+  const hasReportedStart = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -95,10 +103,29 @@ export function TodaysRoutineCard() {
       setNeedsSetup(null);
       setData(json);
       setCompletedIds(new Set(json.completions.map((c) => c.task_id)));
+      if (viewedAt.current == null) {
+        viewedAt.current = Date.now();
+        fetch('/api/routine/engagement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'viewed' }),
+        }).catch(() => {});
+      }
     } finally {
       setLoading(false);
     }
   }, []);
+
+  function reportStart() {
+    if (hasReportedStart.current || viewedAt.current == null) return;
+    hasReportedStart.current = true;
+    const seconds = Math.round((Date.now() - viewedAt.current) / 1000);
+    fetch('/api/routine/engagement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'started', seconds_to_start: seconds }),
+    }).catch(() => {});
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -123,6 +150,7 @@ export function TodaysRoutineCard() {
   }
 
   function handleTaskTap(task: RoutineTask, done: boolean) {
+    if (!done) reportStart();
     if (done) { toggleTask(task); return; }
     if (task.topic) { setExpandedTaskId((cur) => (cur === task.id ? null : task.id)); return; }
     toggleTask(task);
