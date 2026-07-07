@@ -1,7 +1,7 @@
 'use client';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Eye, EyeOff, Smartphone, Sparkles, PlayCircle, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft } from 'lucide-react';
 import Image from 'next/image';
 import { InstallAppButton } from '@/components/install-app-button';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,6 @@ function LoginForm() {
   const [showPass, setShowPass] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgIsError, setMsgIsError] = useState(false);
 
@@ -49,24 +48,6 @@ function LoginForm() {
   }
 
   const activePhone = phone;
-
-  async function startDemo() {
-    setDemoLoading(true);
-    clearMsg();
-    try {
-      const res = await fetch('/api/auth/demo-login', { method: 'POST' });
-      const data = await res.json();
-      if (data.ok && data.dest) {
-        window.location.href = data.dest;
-      } else {
-        setError(data.error ?? 'Demo is temporarily unavailable.');
-        setDemoLoading(false);
-      }
-    } catch {
-      setError('No connection. Try again.');
-      setDemoLoading(false);
-    }
-  }
 
   async function requestPhoneOtp(e?: React.FormEvent) {
     e?.preventDefault();
@@ -136,20 +117,25 @@ function LoginForm() {
                 priority
               />
             </div>
-            <h1 className="text-3xl font-bold text-stone-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-              Who&apos;s checking your<br />
-              <span className="italic text-orange-600">CAT prep?</span>
+            <h1 className="text-3xl font-bold text-stone-900 tracking-tight leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
+              Build Your <span className="italic text-orange-600">FREE</span><br />
+              Personal CAT Study Plan
             </h1>
-            <p className="mt-3 text-sm text-stone-600">Nobody? That&apos;s the problem. Get an IIM senior who does.</p>
-            <p className="mt-2 text-base font-bold text-stone-800" style={{ fontFamily: 'Georgia, serif' }}>
-              Your exam. Our IIM buddy. One honest plan to your dream.
+            <p className="mt-3 text-sm text-stone-600 leading-relaxed">
+              Built around your preparation, your strengths and your available time.
+              No more wondering what to study today, what to revise, or if you&apos;re
+              on track — CareerRai plans it for you.
             </p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-3 py-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-500 inline-block shrink-0" />
-                200+ IIM mentors ready
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs font-medium text-stone-600">
+              <span className="inline-flex items-center gap-1">
+                <span className="text-teal-600">✓</span> Personalized for every student
               </span>
-              <span className="text-xs text-stone-500 italic">Founding cohort — be among the first</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="text-teal-600">✓</span> Updates till CAT day
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="text-teal-600">✓</span> Built by CAT mentors
+              </span>
             </div>
           </div>
 
@@ -163,40 +149,30 @@ function LoginForm() {
             {/* ── STEP 1: Role picker ── */}
             {userType === null && (
               <div className="space-y-3">
-                <div className="text-center mb-4">
-                  <p className="text-base font-bold text-stone-900">Who are you?</p>
-                  <p className="text-xs text-stone-500 mt-1">Pick your role to continue</p>
-                </div>
-
                 <button
                   type="button"
                   onClick={() => selectRole('student')}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-stone-200 hover:border-stone-900 hover:bg-stone-50 transition-all group"
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-stone-900 bg-stone-900 hover:bg-stone-800 transition-all group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-stone-100 group-hover:bg-stone-900 flex items-center justify-center text-2xl transition-colors shrink-0">
+                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-2xl shrink-0">
                     🎓
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-bold text-stone-900">Student</p>
-                    <p className="text-xs text-stone-500">I&apos;m preparing for CAT</p>
+                    <p className="text-sm font-bold text-white">Build my free study plan</p>
+                    <p className="text-xs text-stone-300">I&apos;m preparing for CAT</p>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-stone-900 ml-auto transition-colors" />
+                  <ArrowRight className="w-4 h-4 text-white ml-auto transition-transform group-hover:translate-x-0.5" />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => selectRole('buddy')}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-teal-100 hover:border-teal-600 hover:bg-teal-50 transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-teal-50 group-hover:bg-teal-600 flex items-center justify-center text-2xl transition-colors shrink-0">
-                    👤
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-stone-900">Buddy</p>
-                    <p className="text-xs text-stone-500">I&apos;m an IIM mentor</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-teal-600 ml-auto transition-colors" />
-                </button>
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => selectRole('buddy')}
+                    className="text-xs font-medium text-stone-400 hover:text-teal-700 transition-colors"
+                  >
+                    I&apos;m an IIM Buddy →
+                  </button>
+                </div>
               </div>
             )}
 
@@ -430,32 +406,6 @@ function LoginForm() {
             )}
 
           </div>
-
-          {/* Live demo */}
-          <button
-            type="button"
-            onClick={startDemo}
-            disabled={demoLoading}
-            className="group mt-4 w-full overflow-hidden rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-4 text-left shadow-sm transition-all hover:shadow-md hover:border-teal-300 active:scale-[0.99] disabled:opacity-60"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow">
-                {demoLoading ? <Sparkles className="w-5 h-5 animate-pulse" /> : <PlayCircle className="w-6 h-6" />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-stone-900">
-                    {demoLoading ? 'Opening demo…' : 'See a live student demo'}
-                  </p>
-                  <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700">View only</span>
-                </div>
-                <p className="mt-0.5 text-xs text-stone-500">
-                  Step inside a real student&apos;s 30-day journey — no signup, nothing to break.
-                </p>
-              </div>
-              <ArrowRight className="w-4 h-4 shrink-0 text-teal-600 transition-transform group-hover:translate-x-1" />
-            </div>
-          </button>
 
           <p className="mt-6 text-center text-xs text-stone-500">
             Bharat-first peer mentorship · 0% commission

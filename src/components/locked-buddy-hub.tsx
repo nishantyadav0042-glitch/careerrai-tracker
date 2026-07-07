@@ -1,8 +1,9 @@
+import Link from 'next/link';
 import { SampleDebrief } from '@/components/sample-debrief';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
-import { Users, Target, LineChart, MessageCircle, ShieldCheck, Check } from 'lucide-react';
+import { Users, Target, LineChart, MessageCircle, ShieldCheck, Check, PlayCircle, ArrowRight } from 'lucide-react';
 
 // The buddy upsell — a full-page SALES ASSET shown on /student/buddy and
 // /student/chat for free users instead of the real hub. Sells the one thing
@@ -67,6 +68,25 @@ export function LockedBuddyHub({
       {recommendedBuddies.length > 0 && (
         <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
       )}
+
+      {/* See it before you buy it — the demo student, surfaced here (not on
+          login) because this is the moment someone's actually curious what
+          a buddy does, not just deciding whether to install the app. */}
+      <Link
+        href="/demo"
+        className="group flex items-center gap-3 rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-4 transition-all hover:shadow-md hover:border-teal-300"
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow">
+          <PlayCircle className="h-6 w-6" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-stone-900">See how an IIM Buddy helped a real student</p>
+          <p className="mt-0.5 text-xs text-stone-500">
+            Step inside a real 30-day journey — no signup, nothing to break.
+          </p>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0 text-teal-600 transition-transform group-hover:translate-x-1" />
+      </Link>
 
       {/* Why a buddy — value props */}
       <div className="space-y-2.5">
