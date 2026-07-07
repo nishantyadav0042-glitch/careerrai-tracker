@@ -38,7 +38,7 @@ export default async function BuddyCommunicationPage() {
 
   const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: feedbackRows }] = await Promise.all([
     buddyId
-      ? admin.from('profiles').select('full_name, college, cat_percentile').eq('id', buddyId).single()
+      ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio, avatar_url').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
     // Upcoming: scheduled sessions + 1h grace window
     admin
@@ -94,6 +94,9 @@ export default async function BuddyCommunicationPage() {
   ]);
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
+  const buddyInitials = buddy
+    ? (buddy.full_name ?? '').split(' ').map((n: string) => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?'
+    : '';
   const hasPendingRequest = (pendingRequests?.length ?? 0) > 0;
   const sessions = [...(upcoming ?? []), ...(recentCompleted ?? [])];
 
@@ -121,14 +124,41 @@ export default async function BuddyCommunicationPage() {
         {/* Header */}
         <div>
           <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your buddy</p>
-          <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>
-            {buddy ? buddy.full_name : 'Buddy'}
-          </h1>
-          {buddy && (
-            <p className="text-sm text-stone-500 mt-0.5">
-              {buddy.college ? `IIM ${buddy.college}` : 'IIM Alumni'}
-              {buddy.cat_percentile ? ` · ${buddy.cat_percentile}%ile` : ''}
-            </p>
+          {buddy ? (
+            <div className="mt-2 space-y-3">
+              <div className="flex items-center gap-3">
+                {buddy.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={buddy.avatar_url}
+                    alt={buddy.full_name}
+                    className="w-14 h-14 rounded-full object-cover flex-shrink-0 border border-stone-200"
+                  />
+                ) : (
+                  <div className="w-14 h-14 bg-gradient-to-br from-teal-600 to-teal-800 rounded-full flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
+                    {buddyInitials}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h1 className="text-xl font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
+                    {buddy.full_name}
+                  </h1>
+                  <p className="text-sm text-stone-500 mt-0.5">
+                    {buddy.college ?? 'IIM Alumni'}
+                    {buddy.cat_percentile ? ` · ${Number(buddy.cat_percentile).toFixed(1)}%ile CAT` : ''}
+                  </p>
+                </div>
+              </div>
+              {buddy.buddy_bio && (
+                <p className="text-sm text-stone-700 italic leading-relaxed border-l-2 border-teal-300 pl-3">
+                  &quot;{buddy.buddy_bio}&quot;
+                </p>
+              )}
+            </div>
+          ) : (
+            <h1 className="text-2xl font-bold text-stone-900 mt-1" style={{ fontFamily: 'Georgia, serif' }}>
+              Buddy
+            </h1>
           )}
         </div>
 
