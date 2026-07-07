@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Flame } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { KNOWLEDGE_GRAPH, QA_GROUPS } from '@/lib/topics-constants';
 
 interface WindowStats {
   daysStudied: number;
@@ -14,87 +15,47 @@ interface WindowStats {
   mocksLogged: number;
 }
 
-interface BlueprintData {
-  narrative: string;
-  source: 'ai' | 'fallback';
-  phase: { label: string; weekRange: string; objective: string; dailyFocus: string; weeklyFocus: string };
+interface PlanData {
+  phase: { label: string; weekRange: string; objective: string };
   weeksRemaining: number;
   weakestSection: string | null;
   weakTopic: string | null;
-  currentStage: string | null;
-  biggestBlocker: string | null;
   coverageTally: { not_started: number; learning: number; practicing: number; revising: number; exam_ready: number };
-  currentStreak: number;
-  targetPercentile: number | null;
   prepMemory: {
     last30: WindowStats;
-    last7: WindowStats;
     mockTrend: { count: number; latestPercentile: number | null; previousPercentile: number | null };
   };
-  weeklyEvolution: string[];
   healthScore: {
     status: 'provisional' | 'ready';
     score: number | null;
     components: { consistency: number; confidenceQuality: number; balance: number; revisionDiscipline: number } | null;
   };
-  blueprintConfidence: { score: number; reasons: string[] };
-  topicMemory: {
-    topic: string;
-    status: string;
-    firstTouchedDaysAgo: number | null;
-    timesTouched: number;
-    lastTouchedDaysAgo: number | null;
-    revisionOverdue: boolean;
-  }[];
+  topicMemory: { topic: string; status: string; revisionOverdue: boolean; lastTouchedDaysAgo: number | null }[];
 }
 
-const STAGE_LABEL: Record<string, string> = {
-  not_started: "Haven't started",
-  concepts: 'Learning concepts',
-  questions: 'Solving questions',
-  sectionals: 'Taking sectionals',
-  mocks: 'Taking full mocks',
-};
-const BLOCKER_LABEL: Record<string, string> = {
-  inconsistency: "Staying consistent",
-  dont_know_what: 'Knowing what to study',
-  mock_anxiety: 'Mock anxiety',
-  time_wasting: 'Time management',
-};
+// Milestone groups: VARC, DILR, and the five QA clusters — real Knowledge
+// Graph groupings, nothing invented.
+const MILESTONE_GROUPS: { label: string; units: string[] }[] = [
+  { label: 'VARC', units: KNOWLEDGE_GRAPH.find((s) => s.id === 'VARC')!.groups.flatMap((g) => g.units) },
+  { label: 'DILR', units: KNOWLEDGE_GRAPH.find((s) => s.id === 'DILR')!.groups.flatMap((g) => g.units) },
+  ...QA_GROUPS.map((g) => ({ label: g.label, units: g.units })),
+];
 
-// The Study Blueprint — deliberately a different screen from Today's
-// Routine, not a rename of it. Every fact here is already decided by the
-// deterministic engines (routine-engine, mission-engine, study-plan); the
-// narrative line only organizes and phrases them (same "explain, never
-// decide" boundary as the buddy briefing) — it never proposes its own plan.
-const STATUS_LABEL: Record<string, string> = {
-  not_started: '○ Not started',
-  learning: '◔ Learning',
-  practicing: '◑ Practicing',
-  revising: '◕ Revising',
-  exam_ready: '⬤ Exam ready',
-};
-
-function memoryLine(entry: BlueprintData['topicMemory'][number]): string {
-  if (entry.firstTouchedDaysAgo == null) {
-    // No logged practice in the app. The status can still be practicing/
-    // learning — that's the student's own Blueprint declaration, not app
-    // history, so say exactly that instead of contradicting the badge.
-    if (entry.status === 'practicing' || entry.status === 'revising' || entry.status === 'exam_ready') return 'You marked this as practice-level before joining — no practice logged in the app yet.';
-    if (entry.status === 'learning') return 'You marked this as learning — no practice logged in the app yet.';
-    return "Haven't started this yet.";
-  }
-  const parts = [`First studied ${entry.firstTouchedDaysAgo}d ago`];
-  if (entry.timesTouched > 1) parts.push(`revisited ${entry.timesTouched - 1}x`);
-  if (entry.lastTouchedDaysAgo != null) parts.push(`last touched ${entry.lastTouchedDaysAgo}d ago`);
-  if (entry.revisionOverdue) parts.push('revision overdue');
-  return parts.join(' · ');
+// Founder words ("Strengthening phase") mean nothing to students — map the
+// phase to what they actually DO in it.
+function phaseWord(label: string): string {
+  if (/foundation|concept|build/i.test(label)) return 'Learn + practice basics';
+  if (/strength|practice|question/i.test(label)) return 'Practice questions';
+  if (/sectional|intensive|mock/i.test(label)) return 'Sectionals + mocks';
+  if (/revision|final|peak/i.test(label)) return 'Revise + mocks';
+  return label;
 }
 
-export default function BlueprintPage() {
-  const [data, setData] = useState<BlueprintData | null>(null);
+// My CAT Plan — the owned asset. Home is today; this page is the journey.
+// Every number is computed from the student's own declared + logged data.
+export default function MyCatPlanPage() {
+  const [data, setData] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [memorySearch, setMemorySearch] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -110,57 +71,113 @@ export default function BlueprintPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-sm text-stone-500">Loading your blueprint…</div>
+        <div className="text-sm text-stone-500">Loading your plan…</div>
       </div>
     );
   }
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        <p className="text-sm text-stone-500">Complete today&apos;s setup on the Home tab first — your blueprint builds from that.</p>
+        <p className="text-sm text-stone-500">Build your CAT Plan first — it starts on the Home tab.</p>
       </div>
     );
   }
 
-  const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution, healthScore, blueprintConfidence, topicMemory } = data;
-  const filteredMemory = topicMemory.filter((m) => m.topic.toLowerCase().includes(memorySearch.toLowerCase()));
-  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
+  const { phase, weeksRemaining, weakestSection, weakTopic, coverageTally, prepMemory, healthScore, topicMemory } = data;
   const { last30, mockTrend } = prepMemory;
+
+  // Progress = exam units past "not started", out of the 46 exam units.
+  const statusByTopic = new Map(topicMemory.map((t) => [t.topic, t.status]));
+  const examUnits = MILESTONE_GROUPS.flatMap((g) => g.units);
+  const inMotion = examUnits.filter((u) => (statusByTopic.get(u) ?? 'not_started') !== 'not_started').length;
+  const progressPct = Math.round((inMotion / examUnits.length) * 100);
+
+  // Next milestone: the group closest to done but not finished; if nothing
+  // has started, start with Arithmetic (highest-weightage cluster).
+  const groupStats = MILESTONE_GROUPS.map((g) => {
+    const done = g.units.filter((u) => (statusByTopic.get(u) ?? 'not_started') !== 'not_started').length;
+    return { label: g.label, done, total: g.units.length, ratio: done / g.units.length };
+  });
+  const unfinished = groupStats.filter((g) => g.ratio < 1).sort((a, b) => b.ratio - a.ratio);
+  const milestone = unfinished.length === 0
+    ? 'All topics in motion — revision mode'
+    : unfinished[0].done === 0
+    ? `Start ${groupStats.every((g) => g.done === 0) ? 'Arithmetic' : unfinished[0].label}`
+    : `Finish ${unfinished[0].label} · ${unfinished[0].done}/${unfinished[0].total}`;
+
+  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
   const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
+
+  // ONE observation per page — a decision, not data. Priority-ordered rules
+  // over real signals; the first that fires wins.
+  const overdue = topicMemory.filter((t) => t.revisionOverdue);
+  const stalest = [...overdue].sort((a, b) => (b.lastTouchedDaysAgo ?? 0) - (a.lastTouchedDaysAgo ?? 0))[0];
+  const observation =
+    mockTrend.count === 0 && weeksRemaining < 20
+      ? 'Your plan sharpens a lot after your first mock. Take one this Sunday.'
+      : stalest && stalest.lastTouchedDaysAgo != null
+      ? `${stalest.topic} untouched for ${stalest.lastTouchedDaysAgo} days. Revise it this week.`
+      : coverageTally.learning > coverageTally.practicing + coverageTally.revising && coverageTally.learning >= 5
+      ? 'Enough basics in progress. Time to solve questions.'
+      : inMotion > 0
+      ? `${inMotion} topics in motion. Keep the pace.`
+      : 'Start with Arithmetic. Highest weightage.';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
-      <div className="max-w-md mx-auto space-y-6">
+      <div className="max-w-md mx-auto space-y-4">
         <div className="flex items-center gap-3">
           <Link href="/student/tracker" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-stone-600" />
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My CAT Plan</h1>
-            <p className="text-sm text-stone-500">Your journey to CAT day</p>
+          <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My CAT Plan</h1>
+        </div>
+
+        {/* The journey, one glance */}
+        <div className="bg-stone-900 rounded-2xl p-5">
+          <div className="flex items-baseline justify-between mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">Plan progress</p>
+            <p className="text-sm font-bold text-white">{inMotion}/{examUnits.length} topics</p>
+          </div>
+          <div className="flex gap-0.5 mb-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className={`flex-1 h-2 first:rounded-l-sm last:rounded-r-sm ${i < Math.round((progressPct / 100) * 12) ? 'bg-orange-500' : 'bg-stone-700'}`} />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-stone-500">Current focus</p>
+              <p className="font-semibold text-white">{weakestSection ? `${weakestSection}${weakTopic ? ` · ${weakTopic}` : ''}` : '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-stone-500">Now</p>
+              <p className="font-semibold text-white">{phaseWord(phase.label)} · {weeksRemaining}w to CAT</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-stone-500">Next milestone</p>
+              <p className="font-semibold text-white">{milestone}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-stone-500">Mocks</p>
+              <p className="font-semibold text-white">{mockTrend.count > 0 ? `${mockTrend.count} logged · Sundays` : 'Sundays'}</p>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-stone-200 p-5">
-          <p className="text-sm text-stone-800 leading-relaxed">{narrative}</p>
-          {currentStreak > 0 && (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500">
-              <Flame className="w-3.5 h-3.5 text-orange-500" />{currentStreak}-day streak
-            </p>
-          )}
+        <Link href="/student/tracker" className="block rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
+          Today&apos;s Study →
+        </Link>
+
+        <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Today&apos;s observation</p>
+          <p className="text-sm font-semibold text-stone-800">{observation}</p>
         </div>
 
-        {/* Preparation Health — ONE composite number, not a multi-metric
-            dashboard: Consistency + Confidence quality + Balance + Revision
-            discipline, rolling 30 days. Confidence quality is what keeps this
-            from measuring pure activity — showing up every day tapping "lost"
-            on everything scores lower than showing up less but improving.
-            Provisional (no number) under a week of history — a score from 2
-            days of data would be worse than no score. */}
+        {/* One Health score */}
         <div className="bg-white rounded-2xl border border-stone-200 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Preparation health</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">On track?</h2>
           {healthScore.status === 'provisional' ? (
-            <p className="text-sm text-stone-500">Calculating — complete your first week to unlock this.</p>
+            <p className="text-sm text-stone-500">Unlocks after your first week.</p>
           ) : (
             <>
               <div className="flex items-baseline gap-2 mb-3">
@@ -168,173 +185,71 @@ export default function BlueprintPage() {
                 <span className="text-sm text-stone-400">/ 100</span>
               </div>
               <div className="grid grid-cols-4 gap-2 text-center border-t border-stone-100 pt-3">
-                <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.consistency}<span className="text-stone-400 font-normal">/35</span></p>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Consistency</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.confidenceQuality}<span className="text-stone-400 font-normal">/25</span></p>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Confidence</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.balance}<span className="text-stone-400 font-normal">/25</span></p>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Balance</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-stone-800">{healthScore.components!.revisionDiscipline}<span className="text-stone-400 font-normal">/15</span></p>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Revision</p>
-                </div>
+                {([
+                  [healthScore.components!.consistency, 35, 'Consistency'],
+                  [healthScore.components!.confidenceQuality, 25, 'Confidence'],
+                  [healthScore.components!.balance, 25, 'Balance'],
+                  [healthScore.components!.revisionDiscipline, 15, 'Revision'],
+                ] as const).map(([v, max, label]) => (
+                  <div key={label}>
+                    <p className="text-sm font-bold text-stone-800">{v}<span className="text-stone-400 font-normal">/{max}</span></p>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">{label}</p>
+                  </div>
+                ))}
               </div>
             </>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-stone-200 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Where you are</h2>
-          <p className="text-sm font-bold text-stone-900">{phase.label} <span className="font-normal text-stone-400">· {phase.weekRange} · {weeksRemaining}w to CAT</span></p>
-          <p className="text-xs text-stone-500 mt-1">{phase.objective}</p>
-          <div className="mt-3 space-y-1 border-t border-stone-100 pt-3">
-            <p className="text-xs text-stone-600"><span className="font-semibold text-stone-500">Daily:</span> {phase.dailyFocus}</p>
-            <p className="text-xs text-stone-600"><span className="font-semibold text-stone-500">Weekly:</span> {phase.weeklyFocus}</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-stone-200 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Built from your setup</h2>
-          <dl className="space-y-2 text-sm">
-            {weakestSection && (
-              <div className="flex justify-between"><dt className="text-stone-500">Focus</dt><dd className="font-semibold text-stone-800">{weakestSection}{weakTopic ? ` — ${weakTopic}` : ''}</dd></div>
-            )}
-            {currentStage && (
-              <div className="flex justify-between"><dt className="text-stone-500">Stage</dt><dd className="font-semibold text-stone-800">{STAGE_LABEL[currentStage] ?? currentStage}</dd></div>
-            )}
-            {biggestBlocker && (
-              <div className="flex justify-between"><dt className="text-stone-500">Biggest blocker</dt><dd className="font-semibold text-stone-800">{BLOCKER_LABEL[biggestBlocker] ?? biggestBlocker}</dd></div>
-            )}
-            {targetPercentile && (
-              <div className="flex justify-between"><dt className="text-stone-500">Target</dt><dd className="font-semibold text-stone-800">{targetPercentile}%ile</dd></div>
-            )}
-          </dl>
-          <div className="mt-3 border-t border-stone-100 pt-3 flex items-center justify-between">
-            <span className="text-xs text-stone-500">Blueprint confidence</span>
-            <span className="text-sm font-bold text-stone-800">{blueprintConfidence.score}%</span>
-          </div>
-          {blueprintConfidence.reasons.length > 0 && (
-            <ul className="mt-1.5 space-y-1">
-              {blueprintConfidence.reasons.map((r) => (
-                <li key={r} className="text-[11px] text-stone-400 leading-snug">{r}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
+        {/* Topics — rows a student reads in five seconds */}
         {coverageTotal > 0 && (
           <div className="bg-white rounded-2xl border border-stone-200 p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">Coverage snapshot</h2>
-              <Link href="/student/analysis" className="text-xs font-semibold text-orange-600 hover:text-orange-700">Edit →</Link>
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">Topics</h2>
+              <Link href="/student/analysis" className="text-xs font-semibold text-orange-600">Edit →</Link>
             </div>
-            <div className="grid grid-cols-5 gap-1 text-center">
-              {([
-                ['⚪ New', coverageTally.not_started, 'text-stone-400'],
-                ['🟡 Learning', coverageTally.learning, 'text-amber-600'],
-                ['🔵 Practicing', coverageTally.practicing, 'text-blue-600'],
-                ['🟠 Revising', coverageTally.revising, 'text-orange-600'],
-                ['🟢 Ready', coverageTally.exam_ready, 'text-teal-600'],
-              ] as const).map(([label, count, color]) => (
-                <div key={label}>
-                  <p className={`text-lg font-bold ${color}`}>{count}</p>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">{label}</p>
-                </div>
-              ))}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-stone-500">In motion</span><span className="font-bold text-stone-900">{inMotion}/{examUnits.length}</span></div>
+              {coverageTally.revising + coverageTally.exam_ready > 0 && (
+                <div className="flex justify-between"><span className="text-stone-500">Revision stage</span><span className="font-bold text-orange-600">{coverageTally.revising}</span></div>
+              )}
+              {overdue.length > 0 && (
+                <div className="flex justify-between"><span className="text-stone-500">Revision pending</span><span className="font-bold text-red-600">{overdue.length}</span></div>
+              )}
+              {coverageTally.exam_ready > 0 && (
+                <div className="flex justify-between"><span className="text-stone-500">Exam ready</span><span className="font-bold text-teal-600">{coverageTally.exam_ready}</span></div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Preparation Memory (Engine v2, Part 5) — what's actually happened,
-            not just what's planned. Only renders once there's real history;
-            a brand-new student sees no card rather than a padded-out zero
-            state, matching the "never fabricate a fact" rule everywhere else
-            on this page. */}
+        {/* Last 30 days — facts only, hidden until real */}
         {hasMemory && (
           <div className="bg-white rounded-2xl border border-stone-200 p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Preparation memory · last 30 days</h2>
-            <div className="grid grid-cols-3 gap-2 text-center mb-4">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Last 30 days</h2>
+            <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-lg font-bold text-stone-900">{last30.daysStudied}</p>
-                <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Days studied</p>
+                <p className="text-[10px] text-stone-400">Days</p>
               </div>
               <div>
                 <p className="text-lg font-bold text-stone-900">{Math.round(last30.minutesStudied / 6) / 10}h</p>
-                <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Time studied</p>
+                <p className="text-[10px] text-stone-400">Studied</p>
               </div>
               <div>
                 <p className="text-lg font-bold text-stone-900">{last30.topicsTouched}</p>
-                <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Topics touched</p>
+                <p className="text-[10px] text-stone-400">Topics</p>
               </div>
             </div>
-            {(last30.confidenceCounts.green + last30.confidenceCounts.yellow + last30.confidenceCounts.red) > 0 && (
-              <div className="flex items-center justify-center gap-4 text-sm border-t border-stone-100 pt-3 mb-3">
-                <span>🟢 {last30.confidenceCounts.green}</span>
-                <span>🟡 {last30.confidenceCounts.yellow}</span>
-                <span>🔴 {last30.confidenceCounts.red}</span>
-              </div>
-            )}
             {mockTrend.latestPercentile != null && (
-              <p className="text-xs text-stone-600 border-t border-stone-100 pt-3">
-                Last mock: <span className="font-semibold text-stone-800">{mockTrend.latestPercentile}%ile</span>
-                {mockTrend.previousPercentile != null && (
-                  <> (was {mockTrend.previousPercentile}%ile — {mockTrend.latestPercentile > mockTrend.previousPercentile ? 'up' : mockTrend.latestPercentile < mockTrend.previousPercentile ? 'down' : 'unchanged'})</>
-                )}
-                {' · '}{mockTrend.count} logged this month
+              <p className="text-xs text-stone-600 border-t border-stone-100 pt-3 mt-3">
+                Last mock: <span className="font-semibold">{mockTrend.latestPercentile}%ile</span>
+                {mockTrend.previousPercentile != null && <> · was {mockTrend.previousPercentile}%ile</>}
               </p>
             )}
           </div>
         )}
-
-        {/* Weekly evolution (Engine v2, Part 6) — a plain-arithmetic diff
-            against last week, not AI narration. Omitted entirely once there
-            are fewer than two weeks of history to compare. */}
-        {weeklyEvolution.length > 0 && (
-          <div className="bg-white rounded-2xl border border-stone-200 p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">This week vs last week</h2>
-            <ul className="space-y-1.5">
-              {weeklyEvolution.map((line) => (
-                <li key={line} className="text-sm text-stone-700 flex gap-1.5">
-                  <span aria-hidden className="text-orange-500">•</span><span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Blueprint Memory — "did I / when did I," over the student's full
-            history (not just the last 30 days like the cards above). Pure
-            read over Coverage Matrix + completions, no accuracy claims. */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Study memory</h2>
-          <input
-            type="text"
-            value={memorySearch}
-            onChange={(e) => setMemorySearch(e.target.value)}
-            placeholder="Search a topic — e.g. Geometry"
-            className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-orange-200"
-          />
-          <ul className="space-y-2 max-h-72 overflow-y-auto">
-            {filteredMemory.map((entry) => (
-              <li key={entry.topic} className="flex items-start justify-between gap-3 text-sm">
-                <div>
-                  <p className="font-semibold text-stone-800">{entry.topic}</p>
-                  <p className="text-xs text-stone-500">{memoryLine(entry)}</p>
-                </div>
-                <span className="shrink-0 text-[10px] font-semibold text-stone-400 uppercase tracking-wide mt-0.5">{STATUS_LABEL[entry.status] ?? entry.status}</span>
-              </li>
-            ))}
-            {filteredMemory.length === 0 && (
-              <li className="text-xs text-stone-400">No topic matches &quot;{memorySearch}&quot;.</li>
-            )}
-          </ul>
-        </div>
+        <div className="pb-16" />
       </div>
     </div>
   );

@@ -147,6 +147,9 @@ export default async function DailyTrackerPage() {
   const hasPendingRequest = (pendingReqs?.length ?? 0) > 0;
   // One proof line: the tasks-completed week diff, already computed.
   const proofLine = weeklyEvolution.find((l) => l.startsWith('Tasks completed')) ?? null;
+  // Sunday Review — the weekly heartbeat. IST Sunday only, real diffs only.
+  const isSundayIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short' }) === 'Sun';
+  const sundayLines = isSundayIST ? weeklyEvolution.slice(0, 3) : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -177,6 +180,24 @@ export default async function DailyTrackerPage() {
             </div>
           );
         })()}
+
+        {/* Sunday Review — what changed this week. Buddy offer comes AFTER
+            the review: earned, not advertised. */}
+        {sundayLines.length > 0 && (
+          <div className="rounded-2xl bg-stone-900 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400 mb-2">Sunday Review</p>
+            <ul className="space-y-1.5">
+              {sundayLines.map((line) => (
+                <li key={line} className="text-sm text-white flex gap-2"><span className="text-teal-400">✓</span>{line}</li>
+              ))}
+            </ul>
+            {!buddyId && !isPremiumUser && (
+              <a href="/student/buddy" className="mt-3 block text-xs font-semibold text-orange-400">
+                Want an IIM mentor to review this week? →
+              </a>
+            )}
+          </div>
+        )}
 
         {/* What should I study? */}
         <TodaysRoutineCard />

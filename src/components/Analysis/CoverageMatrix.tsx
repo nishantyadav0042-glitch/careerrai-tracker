@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, TOPIC_METADATA } from '@/lib/topics-constants';
 
@@ -14,13 +15,9 @@ interface CoverageRow {
 }
 
 // Student-controlled cycle only — exam_ready (🟢) is earned through
-// confidence signals on completed tasks, never set by a tap here, and
-// tapping an exam_ready topic deliberately does nothing (the system gave
-// that status; the system takes it away via a red confidence signal).
+// confidence signals, never set by a tap here.
 const STUDENT_CYCLE: Status[] = ['not_started', 'learning', 'practicing', 'revising'];
 
-// The mastery ring: one glyph per state, growth you can see — more
-// motivating than a percentage and honest about who set it.
 const STATUS_GLYPH: Record<Status, string> = {
   not_started: '○',
   learning: '◔',
@@ -42,9 +39,7 @@ const STATUS_STYLE: Record<Status, string> = {
   revising: 'bg-orange-50 text-orange-700 border-orange-200',
   exam_ready: 'bg-teal-50 text-teal-700 border-teal-300',
 };
-// Derived, never stored: a practicing/exam_ready topic past its revision
-// cadence shows ◕ Revision due in place of its normal state.
-const REVISION_DUE_STYLE = 'bg-orange-50 text-orange-700 border-orange-300';
+const REVISION_DUE_STYLE = 'bg-red-50 text-red-700 border-red-300';
 
 function isRevisionDue(row: CoverageRow): boolean {
   if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') return false;
@@ -54,13 +49,15 @@ function isRevisionDue(row: CoverageRow): boolean {
   return daysSince > meta.revisionFrequencyDays;
 }
 
-// The preparation map (Knowledge Graph coverage) — shows exactly what the
-// student declared in the Blueprint Builder plus what the system has since
-// upgraded, grouped the way the graph defines it.
+// Progressive disclosure — sections collapsed with a % headline, depth only
+// on tap. Never all 53 units at once (the Google-Maps-zoomed-to-Earth
+// problem). Section header = a conclusion; chips = the detail.
 export function CoverageMatrix() {
   const [rows, setRows] = useState<CoverageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try {
@@ -81,7 +78,6 @@ export function CoverageMatrix() {
     if (busy) return;
     setBusy(key);
     const nextStatus = STUDENT_CYCLE[(STUDENT_CYCLE.indexOf(row.status) + 1) % STUDENT_CYCLE.length];
-    // Optimistic — a low-stakes single-tap toggle, not worth a round-trip delay.
     setRows((prev) => prev.map((r) => (r.section === row.section && r.topic === row.topic ? { ...r, status: nextStatus } : r)));
     try {
       await fetch('/api/coverage', {
@@ -106,42 +102,92 @@ export function CoverageMatrix() {
 
   const rowsByTopic = new Map(rows.map((r) => [r.topic, r]));
 
+  // Section headline: one conclusion — % in motion, or "revision due".
+  const summarize = (units: string[]) => {
+    const unitRows = units.map((u) => rowsByTopic.get(u)).filter((r): r is CoverageRow => r != null);
+    const inMotion = unitRows.filter((r) => r.status !== 'not_started').length;
+    const due = unitRows.filter(isRevisionDue).length;
+    const pct = unitRows.length > 0 ? Math.round((inMotion / unitRows.length) * 100) : 0;
+    return { pct, due, count: unitRows.length };
+  };
+
+  const renderChips = (units: string[]) => (
+    <div className="flex flex-wrap gap-1.5 p-2.5">
+      {units.map((u) => rowsByTopic.get(u)).filter((r): r is CoverageRow => r != null).map((row) => {
+        const key = `${row.section}:${row.topic}`;
+        const revDue = isRevisionDue(row);
+        return (
+          <button
+            key={key}
+            onClick={() => cycleTopic(row)}
+            disabled={busy === key}
+            title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-95',
+              revDue ? REVISION_DUE_STYLE : STATUS_STYLE[row.status],
+              busy === key && 'opacity-50',
+              row.status === 'exam_ready' && 'cursor-default'
+            )}
+          >
+            <span className="mr-1">{STATUS_GLYPH[row.status]}</span>
+            {row.topic}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-2xl border border-stone-200 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">Preparation Map</h2>
-      <p className="text-xs text-stone-400 mb-4">
-        Tap to update: ○ Not started → ◔ Learning → ◑ Practicing → ◕ Revising. ⬤ Exam ready is earned, not tapped; an orange chip means revision is due.
-      </p>
-      <div className="space-y-4">
+      <p className="text-xs text-stone-400 mb-3">Tap a section, then tap a topic to update it. ⬤ is earned, red means revision due.</p>
+      <div className="space-y-2">
         {KNOWLEDGE_GRAPH.map((section) => {
-          const sectionRows = section.groups.flatMap((g) => g.units).map((u) => rowsByTopic.get(u)).filter((r): r is CoverageRow => r != null);
-          if (sectionRows.length === 0) return null;
+          const allUnits = section.groups.flatMap((g) => g.units);
+          const stat = summarize(allUnits);
+          if (stat.count === 0) return null;
+          const isOpen = openSection === section.id;
           return (
-            <div key={section.id}>
-              <p className="text-xs font-bold text-stone-700 mb-1.5">{section.label}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {sectionRows.map((row) => {
-                  const key = `${row.section}:${row.topic}`;
-                  const revDue = isRevisionDue(row);
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => cycleTopic(row)}
-                      disabled={busy === key}
-                      title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
-                      className={cn(
-                        'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-95',
-                        revDue ? REVISION_DUE_STYLE : STATUS_STYLE[row.status],
-                        busy === key && 'opacity-50',
-                        row.status === 'exam_ready' && 'cursor-default'
-                      )}
-                    >
-                      <span className="mr-1">{revDue ? '◕' : STATUS_GLYPH[row.status]}</span>
-                      {row.topic}
-                    </button>
-                  );
-                })}
-              </div>
+            <div key={section.id} className="rounded-xl border border-stone-200 overflow-hidden">
+              <button
+                onClick={() => setOpenSection(isOpen ? null : section.id)}
+                className="w-full flex items-center justify-between px-3.5 py-3 bg-stone-50 hover:bg-stone-100 transition-colors"
+              >
+                <span className="text-sm font-bold text-stone-800">{section.label}</span>
+                <span className="flex items-center gap-2 text-[11px]">
+                  <span className="font-bold text-stone-700">{stat.pct}%</span>
+                  {stat.due > 0 && <span className="font-semibold text-red-600">{stat.due} due</span>}
+                  <ChevronDown className={cn('w-4 h-4 text-stone-400 transition-transform', isOpen && 'rotate-180')} />
+                </span>
+              </button>
+              {isOpen && (
+                section.groups.length === 1 && section.groups[0].label == null ? (
+                  renderChips(section.groups[0].units)
+                ) : (
+                  <div className="p-2 space-y-1.5">
+                    {section.groups.map((group) => {
+                      const gStat = summarize(group.units);
+                      const gOpen = !!openGroups[group.label!];
+                      return (
+                        <div key={group.label} className="rounded-lg border border-stone-100 overflow-hidden">
+                          <button
+                            onClick={() => setOpenGroups((prev) => ({ ...prev, [group.label!]: !gOpen }))}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-stone-50"
+                          >
+                            <span className="text-xs font-bold text-stone-600">{group.label}</span>
+                            <span className="flex items-center gap-2 text-[10px]">
+                              <span className="font-bold text-stone-600">{gStat.pct}%</span>
+                              {gStat.due > 0 && <span className="font-semibold text-red-600">{gStat.due} due</span>}
+                              <ChevronDown className={cn('w-3.5 h-3.5 text-stone-400 transition-transform', gOpen && 'rotate-180')} />
+                            </span>
+                          </button>
+                          {gOpen && renderChips(group.units)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
             </div>
           );
         })}

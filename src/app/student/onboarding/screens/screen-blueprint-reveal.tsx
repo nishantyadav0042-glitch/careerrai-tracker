@@ -127,15 +127,6 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
           </div>
         )}
 
-        <div className="border-t border-stone-100 pt-3 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold">Blueprint confidence</p>
-            {data.blueprintConfidence.reasons[0] && (
-              <p className="text-[11px] text-stone-500 mt-0.5 max-w-[220px]">{data.blueprintConfidence.reasons[0]}</p>
-            )}
-          </div>
-          <p className="text-2xl font-bold text-stone-900 shrink-0">{data.blueprintConfidence.score}%</p>
-        </div>
       </div>
 
       {/* Not an ending — a journey that has already started. Every line is
