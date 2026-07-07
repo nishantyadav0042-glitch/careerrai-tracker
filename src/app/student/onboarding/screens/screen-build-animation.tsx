@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => Promise<void>;
@@ -10,43 +10,60 @@ interface Props {
   isLoading: boolean;
 }
 
-// Each line names a real step the engines below actually perform — Topic
-// Selector's weakest-section weighting, routine-engine's revision cadence,
-// mission-engine's priority pick — not decorative copy. Auto-advances once
-// the sequence finishes; nothing here blocks on a network call, since the
-// Blueprint itself was already being written to the DB screen-by-screen.
+// Suspense, not a spinner: each line names a real step the engines below
+// actually perform (weakest-section derivation from the declared map,
+// topic-selector's opportunity scoring, routine-engine's weekday/weekend
+// split, revision cadences, roadmap milestones, tomorrow's mission) — and
+// completed lines STACK with checks instead of vanishing, so the student
+// watches meaningful work accumulate. Nothing here blocks on a network
+// call; the Blueprint was already written to the DB screen-by-screen.
 const STEPS = [
-  '✓ Mapping your preparation…',
-  '✓ Calculating your study capacity…',
-  '✓ Building your personalized Blueprint…',
-  '✓ Planning your revision strategy…',
-  '✓ Optimizing your path till CAT…',
+  'Finding your strongest section…',
+  'Finding your biggest opportunity…',
+  'Balancing your weekly workload…',
+  'Planning your revision cycles…',
+  'Building your milestones…',
+  'Preparing your first week…',
 ];
 
-// ~5-7 seconds total — long enough to feel like real work, short enough
-// to never feel like a fake loading screen.
-const STEP_MS = 1150;
+const STEP_MS = 950;
+const FINAL_PAUSE_MS = 900;
 
 export default function ScreenBuildAnimation({ onNext }: Props) {
-  const [stepIndex, setStepIndex] = useState(0);
+  const [doneCount, setDoneCount] = useState(0);
 
   useEffect(() => {
-    if (stepIndex >= STEPS.length) {
+    if (doneCount > STEPS.length) {
       onNext();
       return;
     }
-    const id = setTimeout(() => setStepIndex((i) => i + 1), STEP_MS);
+    const id = setTimeout(
+      () => setDoneCount((i) => i + 1),
+      doneCount === STEPS.length ? FINAL_PAUSE_MS : STEP_MS
+    );
     return () => clearTimeout(id);
-  }, [stepIndex, onNext]);
+  }, [doneCount, onNext]);
 
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-16">
-      <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
-      <div className="space-y-2 text-center min-h-[4.5rem]">
-        {STEPS.slice(0, stepIndex + 1).slice(-1).map((line) => (
-          <p key={line} className="text-base font-semibold text-stone-800">{line}</p>
-        ))}
+    <div className="flex flex-col justify-center gap-5 py-10 px-2">
+      <div className="space-y-2.5">
+        {STEPS.slice(0, Math.min(doneCount + 1, STEPS.length)).map((line, i) => {
+          const isDone = i < doneCount;
+          return (
+            <div key={line} className="flex items-center gap-2.5">
+              {isDone ? (
+                <Check className="w-4 h-4 text-teal-600 shrink-0" />
+              ) : (
+                <Loader2 className="w-4 h-4 text-orange-600 animate-spin shrink-0" />
+              )}
+              <p className={isDone ? 'text-sm text-stone-500' : 'text-sm font-semibold text-stone-800'}>{line}</p>
+            </div>
+          );
+        })}
       </div>
+      {doneCount >= STEPS.length && (
+        <p className="text-center text-sm font-bold text-stone-900 pt-2">Almost there…</p>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, type CoverageSectionId } from '@/lib/topics-constants';
@@ -25,16 +25,57 @@ const STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; activ
   { value: 'practicing',  dot: '🔵', label: 'Practicing questions', active: 'bg-blue-600 border-blue-600 text-white' },
 ];
 
-// Everything starts collapsed — never all ~56 units at once. A section
-// header shows its declared tally; expanding reveals its units (QA expands
-// once more into its five clusters). Untouched units stay ⚪ by default, so
-// "expand nothing, continue" is itself an honest, valid answer.
+// Honesty is what gets celebrated — never knowledge. A student who marks
+// "Haven't started" did the Blueprint a bigger favor than one who
+// flattered themselves; the copy says so, instantly, on every tap.
+const HONESTY_LINES: Record<DeclaredStatus, (unit: string) => string> = {
+  not_started: (u) => `Excellent — now the plan won't waste your time assuming you know ${u}. That one tap probably saved you weeks.`,
+  learning: (u) => `Noted — ${u} stays in concept mode. Questions come after concepts, and your plan will respect that order.`,
+  practicing: (u) => `Perfect — that's exactly why we asked. ${u} goes into your revision cycle, and revision is where percentiles are won.`,
+};
+
+// Section-completion rewards — a short win at the end of every block of
+// work, phrased as what the Blueprint now KNOWS, not "section completed."
+const SECTION_REWARD: Record<CoverageSectionId, string> = {
+  VARC: 'VARC mapped — the plan now knows where to start you and what to skip.',
+  DILR: 'DILR mapped — set selection just got personal.',
+  QA: 'Quant mapped — where to start, what to skip, where revision matters. Your Blueprint just became much smarter.',
+  MOCKS: 'Mock prep mapped — your test-readiness now has a baseline.',
+  REVISION: 'Revision habits mapped — decay is now part of your plan.',
+  READING: 'Reading habits mapped — the highest-leverage VARC input is on record.',
+};
+
+// Micro-lessons — onboarding that already teaches. Each is a widely-known
+// CAT-prep convention consistent with this codebase's own topic weightages,
+// never an invented statistic.
+const SECTION_LESSON: Partial<Record<CoverageSectionId, string>> = {
+  VARC: '💡 Reading Comprehension carries most VARC marks — a daily reading habit moves this section more than any drill.',
+  DILR: '💡 DILR is a set-selection game: choosing the right 2 sets to attempt matters more than raw speed.',
+  QA: '💡 Arithmetic + Algebra contribute the majority of CAT Quant questions. Good thing we mapped these carefully.',
+};
+
+// Effort preview per section — people abandon uncertainty, not effort.
+// ~4 seconds per one-tap unit, said out loud so the brain can price it.
+function effortLabel(unitCount: number): string {
+  const seconds = unitCount * 4;
+  return seconds < 60 ? `≈${Math.round(seconds / 5) * 5}s` : `≈${Math.round(seconds / 60)} min`;
+}
+
+// Everything starts collapsed — never all ~57 units at once. A section
+// header shows its declared tally and time price; expanding reveals its
+// units (QA expands once more into its five clusters). Untouched units stay
+// ⚪ by default, so "expand nothing, continue" is itself an honest answer.
 export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoading }: Props) {
   const [statuses, setStatuses] = useState<Record<string, DeclaredStatus>>({});
   const [openSection, setOpenSection] = useState<CoverageSectionId | null>('VARC');
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [celebration, setCelebration] = useState<string | null>(null);
+  const [touchedSections, setTouchedSections] = useState<Set<CoverageSectionId>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (celebrationTimer.current) clearTimeout(celebrationTimer.current); }, []);
 
   const statusOf = (unit: string): DeclaredStatus => statuses[unit] ?? 'not_started';
   const allUnits = KNOWLEDGE_GRAPH.flatMap((s) => s.groups.flatMap((g) => g.units));
@@ -45,6 +86,14 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     const learning = units.filter((u) => statusOf(u) === 'learning').length;
     const practicing = units.filter((u) => statusOf(u) === 'practicing').length;
     return { total: units.length, learning, practicing };
+  };
+
+  const declareStatus = (sectionId: CoverageSectionId, unit: string, value: DeclaredStatus) => {
+    setStatuses((prev) => ({ ...prev, [unit]: value }));
+    setTouchedSections((prev) => new Set(prev).add(sectionId));
+    setCelebration(HONESTY_LINES[value](unit));
+    if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+    celebrationTimer.current = setTimeout(() => setCelebration(null), 3000);
   };
 
   const handleSave = async () => {
@@ -75,7 +124,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     }
   };
 
-  const renderUnit = (unit: string) => {
+  const renderUnit = (sectionId: CoverageSectionId, unit: string) => {
     const current = statusOf(unit);
     return (
       <div key={unit} className="rounded-xl border border-stone-200 p-2.5">
@@ -85,7 +134,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
             <button
               key={value}
               disabled={saving || isLoading}
-              onClick={() => setStatuses((prev) => ({ ...prev, [unit]: value }))}
+              onClick={() => declareStatus(sectionId, unit, value)}
               className={cn(
                 'rounded-lg border py-1.5 px-1 text-[10px] font-semibold leading-tight transition-all active:scale-95',
                 current === value ? active : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'
@@ -106,11 +155,20 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         <span className="font-semibold text-stone-800">leaving everything &ldquo;Haven&apos;t started&rdquo; is a perfectly honest answer.</span>
       </p>
 
+      {/* Honesty celebration — one live slot, decisions get celebrated the
+          moment they're made, not at the end. */}
+      <div aria-live="polite" className={cn('transition-opacity duration-300', celebration ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden')}>
+        {celebration && (
+          <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 leading-relaxed">{celebration}</p>
+        )}
+      </div>
+
       <div className="space-y-2">
         {KNOWLEDGE_GRAPH.map((section) => {
           const isOpen = openSection === section.id;
           const tally = sectionTally(section.id);
           const declared = tally.learning + tally.practicing;
+          const rewardEarned = !isOpen && touchedSections.has(section.id);
           return (
             <div key={section.id} className="rounded-xl border border-stone-200 overflow-hidden">
               <button
@@ -122,16 +180,21 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
                   <span className="text-[11px] text-stone-500">
                     {declared > 0
                       ? `${tally.practicing > 0 ? `🔵 ${tally.practicing}  ` : ''}${tally.learning > 0 ? `🟡 ${tally.learning}  ` : ''}of ${tally.total}`
-                      : `${tally.total} units`}
+                      : `${tally.total} units · ${effortLabel(tally.total)}`}
                   </span>
                   <ChevronDown className={cn('w-4 h-4 text-stone-400 transition-transform', isOpen && 'rotate-180')} />
                 </span>
               </button>
+              {rewardEarned && (
+                <p className="px-3.5 py-2 text-[11px] text-teal-700 bg-teal-50/60 border-t border-teal-100 leading-relaxed">
+                  ✓ {SECTION_REWARD[section.id]}
+                </p>
+              )}
               {isOpen && (
                 <div className="p-2.5 space-y-2">
                   {section.groups.map((group) =>
                     group.label == null ? (
-                      group.units.map(renderUnit)
+                      group.units.map((u) => renderUnit(section.id, u))
                     ) : (
                       <div key={group.label} className="rounded-xl border border-stone-100 overflow-hidden">
                         <button
@@ -140,13 +203,18 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
                         >
                           <span className="text-xs font-bold text-stone-600">{group.label}</span>
                           <span className="flex items-center gap-2">
-                            <span className="text-[10px] text-stone-400">{group.units.length} units</span>
+                            <span className="text-[10px] text-stone-400">{group.units.length} units · {effortLabel(group.units.length)}</span>
                             <ChevronDown className={cn('w-3.5 h-3.5 text-stone-400 transition-transform', openGroups[group.label] && 'rotate-180')} />
                           </span>
                         </button>
-                        {openGroups[group.label] && <div className="p-2 space-y-2">{group.units.map(renderUnit)}</div>}
+                        {openGroups[group.label] && <div className="p-2 space-y-2">{group.units.map((u) => renderUnit(section.id, u))}</div>}
                       </div>
                     )
+                  )}
+                  {SECTION_LESSON[section.id] && (
+                    <p className="text-[11px] text-stone-600 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 leading-relaxed">
+                      {SECTION_LESSON[section.id]}
+                    </p>
                   )}
                 </div>
               )}

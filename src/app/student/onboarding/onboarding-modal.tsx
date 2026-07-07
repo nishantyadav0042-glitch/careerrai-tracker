@@ -9,6 +9,7 @@ import ScreenAboutYou from './screens/screen-about-you';
 import ScreenDailyCommitment from './screens/screen-daily-commitment';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
+import ScreenSuccessGoal from './screens/screen-success-goal';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
 import ScreenBlueprintContract from './screens/screen-blueprint-contract';
@@ -79,13 +80,18 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     { component: ScreenDailyCommitment, sectionId: 'time' },     // 4
     { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 5
     { component: ScreenMeetBuddy, sectionId: null },             // 6
-    { component: ScreenBuildAnimation, sectionId: null },        // 7
-    { component: ScreenBlueprintReveal, sectionId: null },       // 8
+    { component: ScreenSuccessGoal, sectionId: null },           // 7 — identity tap, right before the build
+    { component: ScreenBuildAnimation, sectionId: null },        // 8
+    {
+      component: ScreenBlueprintReveal,
+      sectionId: null,
+      extraProps: { successGoal: (onboardingData.success_goal as string | undefined) ?? null },
+    }, // 9
     {
       component: ScreenBlueprintContract,
       sectionId: null,
       extraProps: { archetypeLabel: preview.archetypeBadge, weeklyLoadHours: preview.weeklyLoadHours },
-    }, // 9
+    }, // 10
   ];
 
   const currentScreenMeta = screens[currentScreen];
@@ -183,6 +189,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (typeof merged.coaching_enrolled === 'boolean') update.coaching_enrolled = merged.coaching_enrolled;
         if (merged.course_year != null) update.course_year = merged.course_year;
         if (typeof merged.study_window === 'string') update.study_window = merged.study_window;
+        if (typeof merged.success_goal === 'string') update.success_goal = merged.success_goal;
 
         const { error: finalError } = await supabase.from('profiles').update(update).eq('id', userId).select();
         if (finalError) throw finalError;
@@ -210,7 +217,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             Build Your CAT Blueprint
           </h2>
           {activeSection && isFirstOfSection && (
-            <p className="text-sm text-orange-600 font-semibold">{activeSection.eyebrow}</p>
+            <>
+              <p className="text-sm text-orange-600 font-semibold">{activeSection.eyebrow}</p>
+              <p className="text-xs text-stone-500 mt-1 leading-relaxed">{activeSection.purpose}</p>
+            </>
           )}
         </div>
 

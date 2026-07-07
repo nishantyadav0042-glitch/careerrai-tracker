@@ -9,10 +9,19 @@ interface ScreenBlueprintRevealProps {
   onBack: () => void;
   canGoBack: boolean;
   isLoading: boolean;
+  successGoal?: string | null;
 }
+
+const SUCCESS_GOAL_LABEL: Record<string, string> = {
+  any_iim: 'Get into an IIM',
+  p95: '95+ percentile',
+  p99: '99+ percentile',
+  figuring_out: 'Finding your target',
+};
 
 interface BlueprintSnapshot {
   phase: { label: string; weekRange: string; objective: string };
+  attemptYear: number | null;
   weeksRemaining: number;
   weakestSection: string | null;
   weakTopic: string | null;
@@ -28,7 +37,7 @@ interface BlueprintSnapshot {
 // nothing on this screen is staged or fabricated for effect. A first-day
 // confidence score in the 60s-70s is the honest number, not a bug — it
 // climbs as real history accumulates (see blueprintConfidence.reasons).
-export default function ScreenBlueprintReveal({ onNext, isLoading }: ScreenBlueprintRevealProps) {
+export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal = null }: ScreenBlueprintRevealProps) {
   const [data, setData] = useState<BlueprintSnapshot | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -76,10 +85,15 @@ export default function ScreenBlueprintReveal({ onNext, isLoading }: ScreenBluep
   return (
     <div className="space-y-5">
       <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">Your CAT Blueprint is ready</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">🎉 Your CAT Blueprint is ready</p>
         <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           This is yours now.
         </h1>
+        {successGoal && SUCCESS_GOAL_LABEL[successGoal] && (
+          <p className="mt-1.5 inline-block text-[11px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
+            Built for your goal: {SUCCESS_GOAL_LABEL[successGoal]}
+          </p>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border-2 border-orange-100 p-5 space-y-4">
@@ -123,8 +137,27 @@ export default function ScreenBlueprintReveal({ onNext, isLoading }: ScreenBluep
         </div>
       </div>
 
+      {/* Not an ending — a journey that has already started. Every line is
+          real: today's mission exists (routine generates on first homepage
+          load), tomorrow regenerates from tonight's state, the weekly
+          evolution runs every week, and the finish line is their own CAT. */}
+      <div className="bg-stone-900 rounded-2xl p-4 space-y-2">
+        {([
+          ['Today', 'Mission 1 ready', '✓'],
+          ['Tomorrow', 'Already planned', '✓'],
+          ['Every Sunday', 'Weekly review', '✓'],
+          [data.attemptYear ? `November ${data.attemptYear}` : 'CAT day', 'CAT ready', '🏁'],
+        ] as const).map(([when, what, mark]) => (
+          <div key={when} className="flex items-center justify-between">
+            <span className="text-xs text-stone-400 w-24 shrink-0">{when}</span>
+            <span className="text-xs font-semibold text-white flex-1">{what}</span>
+            <span className="text-xs">{mark}</span>
+          </div>
+        ))}
+      </div>
+
       <p className="text-xs text-stone-500 text-center leading-relaxed">
-        This isn&apos;t a template — it&apos;s built from what you just told us, and it changes every day as you study.
+        Every decision about your CAT preparation now has a home. This isn&apos;t a template — it changes every day as you study.
       </p>
 
       <button

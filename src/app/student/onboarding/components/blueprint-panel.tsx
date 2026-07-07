@@ -25,18 +25,31 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
   if (preview.coverageBadge) facts.push({ key: 'coverage', label: preview.coverageBadge });
   else if (sectionIndex >= coverageSectionIndex) facts.push({ key: 'coverage', label: 'Mapping your coverage…' });
 
+  // Construction, not percentage — 12 build cells filling as sections land
+  // (first chunk pre-lit: the account is real completed work). The active
+  // cell pulses: the student is watching something being built, not
+  // watching a survey progress bar.
+  const TOTAL_CELLS = 12;
+  const filledCells = Math.min(TOTAL_CELLS, Math.round(((sectionIndex + 2) / (totalSections + 2)) * TOTAL_CELLS));
+  const stillBuilding = filledCells < TOTAL_CELLS;
+
   return (
     <div className="bg-stone-900 rounded-2xl px-4 py-3.5 mb-4">
-      <div className="flex items-center justify-between mb-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">Your Blueprint</p>
-        <div className="flex gap-1">
-          {Array.from({ length: totalSections + 1 }).map((_, i) => (
-            <div
-              key={i}
-              className={cn('w-4 h-1 rounded-full transition-colors', i <= sectionIndex + 1 ? 'bg-orange-500' : 'bg-stone-700')}
-            />
-          ))}
-        </div>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">CareerRai Blueprint</p>
+        <p className="text-[10px] text-stone-500 italic">{stillBuilding ? 'Building…' : 'Built'}</p>
+      </div>
+      <div className="flex gap-0.5 mb-2.5">
+        {Array.from({ length: TOTAL_CELLS }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              'flex-1 h-2 first:rounded-l-sm last:rounded-r-sm transition-colors duration-500',
+              i < filledCells ? 'bg-orange-500' : 'bg-stone-700',
+              stillBuilding && i === filledCells - 1 && 'animate-pulse'
+            )}
+          />
+        ))}
       </div>
       {facts.length === 0 ? (
         <p className="text-xs text-stone-500 italic">Account in — building the rest as you go…</p>

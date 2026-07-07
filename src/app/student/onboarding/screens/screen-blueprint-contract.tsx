@@ -116,10 +116,10 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         {chosen ? (
           <>
             <span className="font-semibold text-stone-800">If {chosen.ifThen}, I open today&apos;s mission.</span>{' '}
-            That&apos;s the whole deal — CareerRai plans, adapts, and tracks everything else, every single day.
+            That&apos;s the whole deal — every decision about your CAT preparation now has a home.
           </>
         ) : (
-          <>From here, you never have to decide &quot;what should I study today.&quot; CareerRai will plan, adapt, track, and improve your preparation every single day.</>
+          <>Every decision about your CAT preparation now has a home — what to study, when to revise, when to mock. CareerRai plans, adapts, and tracks it every single day.</>
         )}
       </p>
 

@@ -14,6 +14,10 @@ export interface BlueprintSection {
   id: SectionId;
   order: number;
   eyebrow: string; // the transition line shown once entering the section
+  // WHY this section exists, shown before it asks anything — every screen
+  // answers "why am I doing this" before it asks the student to do it.
+  // Purpose, not progress, not motivation.
+  purpose: string;
 }
 
 // No 'preparation' section — the single-topic self-report taps (weakest
@@ -21,9 +25,18 @@ export interface BlueprintSection {
 // per-topic Coverage declaration, and the engines derive those signals from
 // it (see /api/routine/today's coverage-derived weakest section).
 export const BLUEPRINT_SECTIONS: BlueprintSection[] = [
-  { id: 'position', order: 0, eyebrow: "Let's understand where you are" },
-  { id: 'time',     order: 1, eyebrow: "Let's understand your available time" },
-  { id: 'coverage', order: 2, eyebrow: "Let's understand what you've already covered" },
+  {
+    id: 'position', order: 0, eyebrow: "Let's understand where you are",
+    purpose: 'Your Blueprint is built around your exam, your attempt, and your life — not a template. This is what makes it yours.',
+  },
+  {
+    id: 'time', order: 1, eyebrow: "Let's understand your available time",
+    purpose: 'A plan that ignores your real hours fails in week one. Your Blueprint will only ever ask for time you actually have.',
+  },
+  {
+    id: 'coverage', order: 2, eyebrow: "Let's understand what you've already covered",
+    purpose: "This is the most important part. Thousands of CAT students study every day — very few know what they should study NEXT. These 90 seconds solve that.",
+  },
 ];
 
 export interface BlueprintPreviewInput {
