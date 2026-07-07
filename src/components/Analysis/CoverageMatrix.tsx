@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, TOPIC_METADATA } from '@/lib/topics-constants';
 
-type Status = 'not_started' | 'learning' | 'practicing' | 'exam_ready';
+type Status = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
 interface CoverageRow {
   section: string;
@@ -17,7 +17,7 @@ interface CoverageRow {
 // confidence signals on completed tasks, never set by a tap here, and
 // tapping an exam_ready topic deliberately does nothing (the system gave
 // that status; the system takes it away via a red confidence signal).
-const STUDENT_CYCLE: Status[] = ['not_started', 'learning', 'practicing'];
+const STUDENT_CYCLE: Status[] = ['not_started', 'learning', 'practicing', 'revising'];
 
 // The mastery ring: one glyph per state, growth you can see — more
 // motivating than a percentage and honest about who set it.
@@ -25,18 +25,21 @@ const STATUS_GLYPH: Record<Status, string> = {
   not_started: '○',
   learning: '◔',
   practicing: '◑',
+  revising: '◕',
   exam_ready: '⬤',
 };
 const STATUS_LABEL: Record<Status, string> = {
   not_started: 'Not started',
   learning: 'Learning',
   practicing: 'Practicing',
+  revising: 'Revision started',
   exam_ready: 'Exam ready',
 };
 const STATUS_STYLE: Record<Status, string> = {
   not_started: 'bg-stone-100 text-stone-500 border-stone-200',
   learning: 'bg-amber-50 text-amber-700 border-amber-200',
   practicing: 'bg-blue-50 text-blue-700 border-blue-200',
+  revising: 'bg-orange-50 text-orange-700 border-orange-200',
   exam_ready: 'bg-teal-50 text-teal-700 border-teal-300',
 };
 // Derived, never stored: a practicing/exam_ready topic past its revision
@@ -44,7 +47,7 @@ const STATUS_STYLE: Record<Status, string> = {
 const REVISION_DUE_STYLE = 'bg-orange-50 text-orange-700 border-orange-300';
 
 function isRevisionDue(row: CoverageRow): boolean {
-  if (row.status !== 'practicing' && row.status !== 'exam_ready') return false;
+  if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') return false;
   const meta = TOPIC_METADATA[row.topic];
   if (!meta) return false;
   const daysSince = Math.round((Date.now() - Date.parse(row.updated_at)) / 86_400_000);
@@ -107,7 +110,7 @@ export function CoverageMatrix() {
     <div className="bg-white rounded-2xl border border-stone-200 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">Preparation Map</h2>
       <p className="text-xs text-stone-400 mb-4">
-        Tap to update: ○ Not started → ◔ Learning → ◑ Practicing. ◕ Revision due and ⬤ Exam ready are set by CareerRai, not by tapping.
+        Tap to update: ○ Not started → ◔ Learning → ◑ Practicing → ◕ Revising. ⬤ Exam ready is earned, not tapped; an orange chip means revision is due.
       </p>
       <div className="space-y-4">
         {KNOWLEDGE_GRAPH.map((section) => {

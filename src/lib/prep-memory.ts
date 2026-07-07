@@ -195,7 +195,7 @@ export function revisionDueStats(
   let due = 0;
   let completed = 0;
   for (const row of coverageRows) {
-    if (row.status !== 'practicing' && row.status !== 'exam_ready') continue;
+    if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') continue;
     const meta = TOPIC_METADATA[row.topic];
     if (!meta) continue;
     const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
@@ -340,7 +340,7 @@ export function buildTopicMemory(
     }
 
     let revisionOverdue = false;
-    if ((status === 'practicing' || status === 'exam_ready') && coverageRow?.updatedAt) {
+    if ((status === 'practicing' || status === 'revising' || status === 'exam_ready') && coverageRow?.updatedAt) {
       const meta = TOPIC_METADATA[topic];
       if (meta) {
         const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(coverageRow.updatedAt)) / 86_400_000);

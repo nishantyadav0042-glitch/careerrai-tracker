@@ -23,7 +23,7 @@ interface BlueprintData {
   weakTopic: string | null;
   currentStage: string | null;
   biggestBlocker: string | null;
-  coverageTally: { not_started: number; learning: number; practicing: number; exam_ready: number };
+  coverageTally: { not_started: number; learning: number; practicing: number; revising: number; exam_ready: number };
   currentStreak: number;
   targetPercentile: number | null;
   prepMemory: {
@@ -71,6 +71,7 @@ const STATUS_LABEL: Record<string, string> = {
   not_started: '○ Not started',
   learning: '◔ Learning',
   practicing: '◑ Practicing',
+  revising: '◕ Revising',
   exam_ready: '⬤ Exam ready',
 };
 
@@ -79,7 +80,7 @@ function memoryLine(entry: BlueprintData['topicMemory'][number]): string {
     // No logged practice in the app. The status can still be practicing/
     // learning — that's the student's own Blueprint declaration, not app
     // history, so say exactly that instead of contradicting the badge.
-    if (entry.status === 'practicing' || entry.status === 'exam_ready') return 'You marked this as practice-level before joining — no practice logged in the app yet.';
+    if (entry.status === 'practicing' || entry.status === 'revising' || entry.status === 'exam_ready') return 'You marked this as practice-level before joining — no practice logged in the app yet.';
     if (entry.status === 'learning') return 'You marked this as learning — no practice logged in the app yet.';
     return "Haven't started this yet.";
   }
@@ -123,7 +124,7 @@ export default function BlueprintPage() {
 
   const { narrative, phase, weeksRemaining, weakestSection, weakTopic, currentStage, biggestBlocker, coverageTally, currentStreak, targetPercentile, prepMemory, weeklyEvolution, healthScore, blueprintConfidence, topicMemory } = data;
   const filteredMemory = topicMemory.filter((m) => m.topic.toLowerCase().includes(memorySearch.toLowerCase()));
-  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.exam_ready;
+  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
   const { last30, mockTrend } = prepMemory;
   const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
 
@@ -233,12 +234,13 @@ export default function BlueprintPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">Coverage snapshot</h2>
               <Link href="/student/analysis" className="text-xs font-semibold text-orange-600 hover:text-orange-700">Edit →</Link>
             </div>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-5 gap-1 text-center">
               {([
-                ['⚪ Not started', coverageTally.not_started, 'text-stone-400'],
+                ['⚪ New', coverageTally.not_started, 'text-stone-400'],
                 ['🟡 Learning', coverageTally.learning, 'text-amber-600'],
                 ['🔵 Practicing', coverageTally.practicing, 'text-blue-600'],
-                ['🟢 Exam ready', coverageTally.exam_ready, 'text-teal-600'],
+                ['🟠 Revising', coverageTally.revising, 'text-orange-600'],
+                ['🟢 Ready', coverageTally.exam_ready, 'text-teal-600'],
               ] as const).map(([label, count, color]) => (
                 <div key={label}>
                   <p className={`text-lg font-bold ${color}`}>{count}</p>

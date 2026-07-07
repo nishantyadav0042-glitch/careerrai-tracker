@@ -3,13 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { KNOWLEDGE_GRAPH, UNIT_ORDER } from '@/lib/topics-constants';
 
-// All six Knowledge Graph sections — three exam sections plus the three
-// habit tracks (Mock Preparation / Revision / Reading Habit).
+// All five Knowledge Graph sections — three exam sections plus the two
+// habit tracks (Mock Preparation / Reading Habit).
 const VALID_SECTIONS = KNOWLEDGE_GRAPH.map((s) => s.id);
-// Student-declared states + the system-earned exam_ready (writable here
-// only via the single-topic path used by confidence upgrades; the Builder's
-// bulk path never sends it — see the matrix validation below).
-const VALID_STATUSES = ['not_started', 'learning', 'practicing', 'exam_ready'] as const;
+// Student-declared states (incl. 'revising' — "Revision started") + the
+// system-earned exam_ready, which no self-declared path may write — see
+// the matrix validation below.
+const VALID_STATUSES = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'] as const;
 
 const TOPICS_BY_SECTION: Record<string, string[]> = Object.fromEntries(
   KNOWLEDGE_GRAPH.map((s) => [s.id, s.groups.flatMap((g) => g.units)])

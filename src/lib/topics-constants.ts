@@ -51,13 +51,15 @@ export const QUANT_TOPICS = QA_GROUPS.flatMap((g) => g.units);
 // 'Daily Editorials' (habit) is deliberately named differently from VARC's
 // 'Editorial Reading' (skill unit) — unit names are globally unique because
 // several maps key on the unit string alone.
+// There is deliberately NO "Revision" section: revision isn't a topic, it's
+// a per-topic STATE — the 'revising' status on any unit ("Revision
+// started") replaced the old QA/VARC/DILR/Formula-Revision pseudo-units.
 export const MOCK_PREP_UNITS = ['Sectional Tests', 'Full Length Mocks', 'Mock Analysis', 'Error Log'];
-export const REVISION_UNITS = ['QA Revision', 'VARC Revision', 'DILR Revision', 'Formula Revision'];
 export const READING_HABIT_UNITS = ['Daily Editorials', 'Business & Economy Reading', 'Long-form Reading'];
 
 // The complete graph, in canonical display order — what the Blueprint
-// Builder's preparation-mapping screen and the Analysis matrix render.
-export type CoverageSectionId = 'VARC' | 'DILR' | 'QA' | 'MOCKS' | 'REVISION' | 'READING';
+// Builder's preparation-mapping screens and the Analysis matrix render.
+export type CoverageSectionId = 'VARC' | 'DILR' | 'QA' | 'MOCKS' | 'READING';
 export interface KnowledgeSection {
   id: CoverageSectionId;
   label: string;
@@ -68,7 +70,6 @@ export const KNOWLEDGE_GRAPH: KnowledgeSection[] = [
   { id: 'DILR', label: 'DILR', groups: [{ label: null, units: LRDI_TOPICS }] },
   { id: 'QA', label: 'QA', groups: QA_GROUPS },
   { id: 'MOCKS', label: 'Mock Preparation', groups: [{ label: null, units: MOCK_PREP_UNITS }] },
-  { id: 'REVISION', label: 'Revision', groups: [{ label: null, units: REVISION_UNITS }] },
   { id: 'READING', label: 'Reading Habit', groups: [{ label: null, units: READING_HABIT_UNITS }] },
 ];
 

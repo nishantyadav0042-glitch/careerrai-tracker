@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, type CoverageSectionId } from '@/lib/topics-constants';
 
-// Student-declared states only — exam_ready (🟢) is earned through
-// confidence signals and mock evidence, never self-assigned, and
-// revision-due (🟠) is derived. This screen is "where are you in your
-// preparation journey," not "how good are you" — journey positions are
-// easier to answer honestly than ability ratings.
-type DeclaredStatus = 'not_started' | 'learning' | 'practicing';
+// Student-declared states — including 'revising' ("Revision started"), the
+// per-topic state that replaced the old Revision pseudo-section. exam_ready
+// (🟢) is earned through confidence signals, never self-assigned; revision
+// DUE is derived.
+type DeclaredStatus = 'not_started' | 'learning' | 'practicing' | 'revising';
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => void;
@@ -19,89 +17,105 @@ interface Props {
   isLoading: boolean;
 }
 
-const STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; active: string }[] = [
+const EXAM_STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; active: string }[] = [
   { value: 'not_started', dot: '⚪', label: "Haven't started", active: 'bg-stone-600 border-stone-600 text-white' },
   { value: 'learning',    dot: '🟡', label: 'Learning concepts', active: 'bg-amber-500 border-amber-500 text-white' },
   { value: 'practicing',  dot: '🔵', label: 'Practicing questions', active: 'bg-blue-600 border-blue-600 text-white' },
+  { value: 'revising',    dot: '🟠', label: 'Revision started', active: 'bg-orange-600 border-orange-600 text-white' },
 ];
+// Habit tracks (mocks, reading) don't have a revision stage — three states.
+const HABIT_STATUS_OPTIONS = EXAM_STATUS_OPTIONS.slice(0, 3);
 
-// Honesty is what gets celebrated — never knowledge. A student who marks
-// "Haven't started" did the Blueprint a bigger favor than one who
-// flattered themselves; the copy says so, instantly, on every tap.
+// Honesty is what gets celebrated — never knowledge.
 const HONESTY_LINES: Record<DeclaredStatus, (unit: string) => string> = {
   not_started: (u) => `Excellent — now the plan won't waste your time assuming you know ${u}. That one tap probably saved you weeks.`,
   learning: (u) => `Noted — ${u} stays in concept mode. Questions come after concepts, and your plan will respect that order.`,
-  practicing: (u) => `Perfect — that's exactly why we asked. ${u} goes into your revision cycle, and revision is where percentiles are won.`,
+  practicing: (u) => `Perfect — that's exactly why we asked. ${u} goes into your practice rotation.`,
+  revising: (u) => `Strong — ${u} enters your revision cycle, and revision is where percentiles are won.`,
 };
 
-// Section-completion rewards — a short win at the end of every block of
-// work, phrased as what the Blueprint now KNOWS, not "section completed."
-const SECTION_REWARD: Record<CoverageSectionId, string> = {
-  VARC: 'VARC mapped — the plan now knows where to start you and what to skip.',
-  DILR: 'DILR mapped — set selection just got personal.',
-  QA: 'Quant mapped — where to start, what to skip, where revision matters. Your Blueprint just became much smarter.',
-  MOCKS: 'Mock prep mapped — your test-readiness now has a baseline.',
-  REVISION: 'Revision habits mapped — decay is now part of your plan.',
-  READING: 'Reading habits mapped — the highest-leverage VARC input is on record.',
-};
-
-// Micro-lessons — onboarding that already teaches. Each is a widely-known
-// CAT-prep convention consistent with this codebase's own topic weightages,
-// never an invented statistic.
-const SECTION_LESSON: Partial<Record<CoverageSectionId, string>> = {
-  VARC: '💡 Reading Comprehension carries most VARC marks — a daily reading habit moves this section more than any drill.',
-  DILR: '💡 DILR is a set-selection game: choosing the right 2 sets to attempt matters more than raw speed.',
-  QA: '💡 Arithmetic + Algebra contribute the majority of CAT Quant questions. Good thing we mapped these carefully.',
-};
-
-// Effort preview per section — people abandon uncertainty, not effort.
-// ~4 seconds per one-tap unit, said out loud so the brain can price it.
-function effortLabel(unitCount: number): string {
-  const seconds = unitCount * 4;
-  return seconds < 60 ? `≈${Math.round(seconds / 5) * 5}s` : `≈${Math.round(seconds / 60)} min`;
+// One step per group — the student never sees the whole graph at once and
+// never has to open anything manually; finishing a step advances to the
+// next automatically. QA's five clusters are five separate, short steps.
+interface MapStep {
+  sectionId: CoverageSectionId;
+  title: string;
+  subtitle: string | null;
+  units: string[];
+  reward: string;
+  lesson: string | null;
 }
 
-// Everything starts collapsed — never all ~57 units at once. A section
-// header shows its declared tally and time price; expanding reveals its
-// units (QA expands once more into its five clusters). Untouched units stay
-// ⚪ by default, so "expand nothing, continue" is itself an honest answer.
+const STEPS: MapStep[] = KNOWLEDGE_GRAPH.flatMap((section) =>
+  section.groups.map((group) => ({
+    sectionId: section.id,
+    title: group.label ? `${section.label} · ${group.label}` : section.label,
+    subtitle: group.label,
+    units: group.units,
+    reward: '',
+    lesson: null,
+  }))
+).map((step) => ({
+  ...step,
+  reward:
+    step.sectionId === 'VARC' ? 'VARC mapped — the plan now knows where to start you and what to skip.'
+    : step.sectionId === 'DILR' ? 'DILR mapped — set selection just got personal.'
+    : step.sectionId === 'MOCKS' ? 'Mock prep mapped — your test-readiness now has a baseline.'
+    : step.sectionId === 'READING' ? 'Reading habits mapped — the highest-leverage VARC input is on record.'
+    : `${step.title.replace('QA · ', '')} mapped — your Quant plan just got sharper.`,
+  lesson:
+    step.title === 'VARC' ? '💡 Reading Comprehension carries most VARC marks — a daily reading habit moves this section more than any drill.'
+    : step.title === 'DILR' ? '💡 DILR is a set-selection game: choosing the right 2 sets to attempt matters more than raw speed.'
+    : step.title === 'QA · Algebra' ? '💡 Arithmetic + Algebra contribute the majority of CAT Quant questions. Good thing we mapped these carefully.'
+    : null,
+}));
+
+// Every unit REQUIRES an explicit tap — nothing is pre-filled, so nothing
+// can be skimmed past. People abandon uncertainty, not effort: each step is
+// small, priced, and finishes itself.
 export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoading }: Props) {
+  const [stepIdx, setStepIdx] = useState(0);
   const [statuses, setStatuses] = useState<Record<string, DeclaredStatus>>({});
-  const [openSection, setOpenSection] = useState<CoverageSectionId | null>('VARC');
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [celebration, setCelebration] = useState<string | null>(null);
-  const [touchedSections, setTouchedSections] = useState<Set<CoverageSectionId>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => () => { if (celebrationTimer.current) clearTimeout(celebrationTimer.current); }, []);
+  // New step — jump back to the top so it reads like a fresh screen.
+  useEffect(() => { scrollRef.current?.scrollIntoView({ block: 'start' }); }, [stepIdx]);
 
-  const statusOf = (unit: string): DeclaredStatus => statuses[unit] ?? 'not_started';
-  const allUnits = KNOWLEDGE_GRAPH.flatMap((s) => s.groups.flatMap((g) => g.units));
-  const touched = allUnits.filter((u) => statusOf(u) !== 'not_started');
+  const step = STEPS[stepIdx];
+  const isHabit = step.sectionId === 'MOCKS' || step.sectionId === 'READING';
+  const options = isHabit ? HABIT_STATUS_OPTIONS : EXAM_STATUS_OPTIONS;
+  const answeredOnStep = step.units.filter((u) => statuses[u] != null).length;
+  const stepComplete = answeredOnStep === step.units.length;
+  const remaining = step.units.length - answeredOnStep;
 
-  const sectionTally = (sectionId: CoverageSectionId) => {
-    const units = KNOWLEDGE_GRAPH.find((s) => s.id === sectionId)!.groups.flatMap((g) => g.units);
-    const learning = units.filter((u) => statusOf(u) === 'learning').length;
-    const practicing = units.filter((u) => statusOf(u) === 'practicing').length;
-    return { total: units.length, learning, practicing };
-  };
-
-  const declareStatus = (sectionId: CoverageSectionId, unit: string, value: DeclaredStatus) => {
+  const declare = (unit: string, value: DeclaredStatus) => {
     setStatuses((prev) => ({ ...prev, [unit]: value }));
-    setTouchedSections((prev) => new Set(prev).add(sectionId));
     setCelebration(HONESTY_LINES[value](unit));
     if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
-    celebrationTimer.current = setTimeout(() => setCelebration(null), 3000);
+    celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
   };
 
-  const handleSave = async () => {
+  const handleNext = async () => {
+    if (!stepComplete) return;
+    if (stepIdx < STEPS.length - 1) {
+      setCelebration(`✓ ${step.reward}`);
+      if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+      celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
+      setStepIdx(stepIdx + 1);
+      return;
+    }
+    // Last step — persist the whole declared grid in one call. Every unit
+    // was explicitly tapped; there are no defaulted rows.
     setSaving(true);
     setError(null);
     try {
       const matrix = KNOWLEDGE_GRAPH.flatMap((s) =>
-        s.groups.flatMap((g) => g.units.map((unit) => ({ section: s.id, topic: unit, status: statusOf(unit) })))
+        s.groups.flatMap((g) => g.units.map((unit) => ({ section: s.id, topic: unit, status: statuses[unit] ?? 'not_started' })))
       );
       const res = await fetch('/api/coverage', {
         method: 'POST',
@@ -113,7 +127,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         throw new Error((json as { error?: string })?.error ?? 'Could not save your preparation map.');
       }
       onNext({
-        coverage_practicing: matrix.filter((m) => m.status === 'practicing').length,
+        coverage_practicing: matrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
         coverage_learning: matrix.filter((m) => m.status === 'learning').length,
         coverage_total: matrix.length,
       });
@@ -124,123 +138,89 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     }
   };
 
-  const renderUnit = (sectionId: CoverageSectionId, unit: string) => {
-    const current = statusOf(unit);
-    return (
-      <div key={unit} className="rounded-xl border border-stone-200 p-2.5">
-        <p className="text-[13px] font-semibold text-stone-800 mb-1.5">{unit}</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {STATUS_OPTIONS.map(({ value, dot, label, active }) => (
-            <button
-              key={value}
-              disabled={saving || isLoading}
-              onClick={() => declareStatus(sectionId, unit, value)}
-              className={cn(
-                'rounded-lg border py-1.5 px-1 text-[10px] font-semibold leading-tight transition-all active:scale-95',
-                current === value ? active : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'
-              )}
-            >
-              {dot} {label}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+  const handleBack = () => {
+    if (stepIdx > 0) setStepIdx(stepIdx - 1);
+    else onBack();
   };
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-stone-600 leading-relaxed">
-        Where are you currently with these topics? Open only what you&apos;ve touched —{' '}
-        <span className="font-semibold text-stone-800">leaving everything &ldquo;Haven&apos;t started&rdquo; is a perfectly honest answer.</span>
-      </p>
+    <div ref={scrollRef} className="space-y-4">
+      {/* Step header: where you are + how small this step is */}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step {stepIdx + 1} of {STEPS.length}</p>
+        <p className="text-[11px] text-stone-400">{step.units.length} topics · one tap each</p>
+      </div>
+      <div className="flex gap-0.5">
+        {STEPS.map((_, i) => (
+          <div key={i} className={cn('flex-1 h-1 rounded-full', i < stepIdx ? 'bg-teal-500' : i === stepIdx ? 'bg-orange-500' : 'bg-stone-200')} />
+        ))}
+      </div>
 
-      {/* Honesty celebration — one live slot, decisions get celebrated the
-          moment they're made, not at the end. */}
+      <div>
+        <p className="text-base font-bold text-stone-900">{step.title}</p>
+        <p className="text-xs text-stone-500">Tap where you currently are on each — every topic needs an answer.</p>
+      </div>
+
+      {/* Honesty celebration — one live slot */}
       <div aria-live="polite" className={cn('transition-opacity duration-300', celebration ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden')}>
         {celebration && (
           <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 leading-relaxed">{celebration}</p>
         )}
       </div>
 
-      <div className="space-y-2">
-        {KNOWLEDGE_GRAPH.map((section) => {
-          const isOpen = openSection === section.id;
-          const tally = sectionTally(section.id);
-          const declared = tally.learning + tally.practicing;
-          const rewardEarned = !isOpen && touchedSections.has(section.id);
+      <div className="space-y-2.5">
+        {step.units.map((unit) => {
+          const current = statuses[unit] ?? null;
           return (
-            <div key={section.id} className="rounded-xl border border-stone-200 overflow-hidden">
-              <button
-                onClick={() => setOpenSection(isOpen ? null : section.id)}
-                className="w-full flex items-center justify-between px-3.5 py-3 bg-stone-50 hover:bg-stone-100 transition-colors"
-              >
-                <span className="text-sm font-bold text-stone-800">{section.label}</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-[11px] text-stone-500">
-                    {declared > 0
-                      ? `${tally.practicing > 0 ? `🔵 ${tally.practicing}  ` : ''}${tally.learning > 0 ? `🟡 ${tally.learning}  ` : ''}of ${tally.total}`
-                      : `${tally.total} units · ${effortLabel(tally.total)}`}
-                  </span>
-                  <ChevronDown className={cn('w-4 h-4 text-stone-400 transition-transform', isOpen && 'rotate-180')} />
-                </span>
-              </button>
-              {rewardEarned && (
-                <p className="px-3.5 py-2 text-[11px] text-teal-700 bg-teal-50/60 border-t border-teal-100 leading-relaxed">
-                  ✓ {SECTION_REWARD[section.id]}
-                </p>
-              )}
-              {isOpen && (
-                <div className="p-2.5 space-y-2">
-                  {section.groups.map((group) =>
-                    group.label == null ? (
-                      group.units.map((u) => renderUnit(section.id, u))
-                    ) : (
-                      <div key={group.label} className="rounded-xl border border-stone-100 overflow-hidden">
-                        <button
-                          onClick={() => setOpenGroups((prev) => ({ ...prev, [group.label!]: !prev[group.label!] }))}
-                          className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-stone-50 transition-colors"
-                        >
-                          <span className="text-xs font-bold text-stone-600">{group.label}</span>
-                          <span className="flex items-center gap-2">
-                            <span className="text-[10px] text-stone-400">{group.units.length} units · {effortLabel(group.units.length)}</span>
-                            <ChevronDown className={cn('w-3.5 h-3.5 text-stone-400 transition-transform', openGroups[group.label] && 'rotate-180')} />
-                          </span>
-                        </button>
-                        {openGroups[group.label] && <div className="p-2 space-y-2">{group.units.map((u) => renderUnit(section.id, u))}</div>}
-                      </div>
-                    )
-                  )}
-                  {SECTION_LESSON[section.id] && (
-                    <p className="text-[11px] text-stone-600 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 leading-relaxed">
-                      {SECTION_LESSON[section.id]}
-                    </p>
-                  )}
-                </div>
-              )}
+            <div key={unit} className={cn('rounded-xl border p-2.5', current == null ? 'border-orange-200 bg-orange-50/40' : 'border-stone-200')}>
+              <p className="text-[13px] font-semibold text-stone-800 mb-1.5">{unit}</p>
+              <div className={cn('grid gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-2')}>
+                {options.map(({ value, dot, label, active }) => (
+                  <button
+                    key={value}
+                    disabled={saving || isLoading}
+                    onClick={() => declare(unit, value)}
+                    className={cn(
+                      'rounded-lg border py-1.5 px-1 text-[10px] font-semibold leading-tight transition-all active:scale-95',
+                      current === value ? active : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'
+                    )}
+                  >
+                    {dot} {label}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         })}
       </div>
 
-      {touched.length > 0 && (
-        <p className="text-xs text-stone-500 text-center">{touched.length} of {allUnits.length} units marked</p>
+      {step.lesson && (
+        <p className="text-[11px] text-stone-600 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 leading-relaxed">{step.lesson}</p>
       )}
 
       {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-3 pt-1">
-        {canGoBack && (
-          <button onClick={onBack} disabled={saving} className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">
+        {(canGoBack || stepIdx > 0) && (
+          <button onClick={handleBack} disabled={saving} className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">
             Back
           </button>
         )}
         <button
-          onClick={handleSave}
-          disabled={saving || isLoading}
-          className="flex-1 py-3 rounded-xl font-semibold text-sm bg-orange-600 text-white hover:bg-orange-700 transition-all active:scale-[0.98] disabled:opacity-50"
+          onClick={handleNext}
+          disabled={!stepComplete || saving || isLoading}
+          className={cn(
+            'flex-1 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]',
+            stepComplete ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+          )}
         >
-          {saving ? 'Saving…' : 'Lock my preparation map →'}
+          {saving
+            ? 'Saving…'
+            : !stepComplete
+            ? `${remaining} topic${remaining === 1 ? '' : 's'} left on this step`
+            : stepIdx < STEPS.length - 1
+            ? `Next: ${STEPS[stepIdx + 1].title} →`
+            : 'Lock my preparation map →'}
         </button>
       </div>
     </div>

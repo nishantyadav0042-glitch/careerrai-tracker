@@ -189,6 +189,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         if (typeof merged.coaching_enrolled === 'boolean') update.coaching_enrolled = merged.coaching_enrolled;
         if (merged.course_year != null) update.course_year = merged.course_year;
         if (typeof merged.study_window === 'string') update.study_window = merged.study_window;
+        if (Array.isArray(merged.study_windows) && merged.study_windows.length > 0) update.study_windows = merged.study_windows;
         if (typeof merged.success_goal === 'string') update.success_goal = merged.success_goal;
 
         const { error: finalError } = await supabase.from('profiles').update(update).eq('id', userId).select();

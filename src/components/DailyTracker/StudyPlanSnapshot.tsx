@@ -11,7 +11,7 @@ interface WindowStats {
 }
 
 interface StudyPlanSnapshotProps {
-  coverageTally: { not_started: number; learning: number; practicing: number; exam_ready: number };
+  coverageTally: { not_started: number; learning: number; practicing: number; revising: number; exam_ready: number };
   last30: WindowStats;
   weeklyEvolution: string[];
 }
@@ -31,7 +31,7 @@ interface StudyPlanSnapshotProps {
 // feature isn't there" instead of "no history yet." Never hide proof of a
 // shipped feature behind a data precondition a brand-new account can't meet.
 export function StudyPlanSnapshot({ coverageTally, last30, weeklyEvolution }: StudyPlanSnapshotProps) {
-  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.exam_ready;
+  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
   const hasMemory = last30.tasksCompleted > 0;
   const topEvolutionLine = weeklyEvolution[0] ?? null;
 
@@ -43,12 +43,13 @@ export function StudyPlanSnapshot({ coverageTally, last30, weeklyEvolution }: St
       </div>
 
       {coverageTotal > 0 ? (
-        <div className="grid grid-cols-4 gap-2 text-center mb-3">
+        <div className="grid grid-cols-5 gap-1 text-center mb-3">
           {([
-            ['⚪ Not started', coverageTally.not_started, 'text-stone-400'],
+            ['⚪ New', coverageTally.not_started, 'text-stone-400'],
             ['🟡 Learning', coverageTally.learning, 'text-amber-600'],
             ['🔵 Practicing', coverageTally.practicing, 'text-blue-600'],
-            ['🟢 Exam ready', coverageTally.exam_ready, 'text-teal-600'],
+            ['🟠 Revising', coverageTally.revising, 'text-orange-600'],
+            ['🟢 Ready', coverageTally.exam_ready, 'text-teal-600'],
           ] as const).map(([label, count, color]) => (
             <div key={label}>
               <p className={`text-lg font-bold ${color}`}>{count}</p>

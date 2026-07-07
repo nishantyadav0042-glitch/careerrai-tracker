@@ -6,7 +6,6 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { UrgentHelpBanner } from './urgent-help-banner';
 import { TrajectoryWall } from '@/components/DailyTracker/TrajectoryWall';
 import { AddToHomeScreenBanner } from '@/components/add-to-home-screen';
-import { AnchorLine } from '@/components/DailyTracker/AnchorLine';
 import { getLogDateString } from '@/lib/streak-utils';
 import { getCurrentMonthlyTheme, MONTHLY_THEME_TARGET } from '@/lib/monthly-theme';
 import { isPremium } from '@/lib/access';
@@ -105,7 +104,7 @@ export default async function DailyTrackerPage() {
   const dreamCollege = dreamColleges[0] ?? null;
   const targetPercentile = (profile?.target_percentile as number | null) ?? 90;
   const attemptYear = (profile?.attempt_year as number | null) ?? null;
-  const coverageTally = { not_started: 0, learning: 0, practicing: 0, exam_ready: 0 };
+  const coverageTally = { not_started: 0, learning: 0, practicing: 0, revising: 0, exam_ready: 0 };
   for (const row of coverage ?? []) {
     const status = row.status as keyof typeof coverageTally;
     coverageTally[status] = (coverageTally[status] ?? 0) + 1;
@@ -226,11 +225,8 @@ export default async function DailyTrackerPage() {
           </div>
         </div>
 
-        {/* Emotional anchor line — dost-wala Hinglish, rotates slowly */}
-        <AnchorLine />
-
-        {/* Today's Routine — the hero: removes the "what should I study today"
-            decision entirely. Deterministic, no LLM call. */}
+        {/* Today's Routine IS the homepage's first answer — "what do I study
+            right now," zero scrolling, no warm-up paragraph above it. */}
         <TodaysRoutineCard />
 
         {/* Study Plan Dashboard, condensed — Coverage snapshot, Preparation

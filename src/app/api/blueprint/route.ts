@@ -65,9 +65,9 @@ export async function GET() {
   const roadmapIndex = currentRoadmapIndex(weeksRemaining, stage);
   const phase = ROADMAP_PHASES[roadmapIndex];
 
-  const coverageTally = { not_started: 0, learning: 0, practicing: 0, exam_ready: 0 } as Record<string, number>;
+  const coverageTally = { not_started: 0, learning: 0, practicing: 0, revising: 0, exam_ready: 0 } as Record<string, number>;
   for (const row of coverage ?? []) coverageTally[row.status as string] = (coverageTally[row.status as string] ?? 0) + 1;
-  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.exam_ready;
+  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
 
   const blueprintConfidence = computeBlueprintConfidence({
     mockCount: prepMemory.mockTrend.count,
@@ -82,7 +82,7 @@ export async function GET() {
     `Weeks remaining to exam: ${weeksRemaining}`,
     `Current phase: ${phase.label} (${phase.weekRange}) — ${phase.objective}`,
     weak ? `Weakest section: ${weak}${weakTopic ? ` (toughest topic: ${weakTopic})` : ''}` : null,
-    `Preparation map: ${coverageTally.not_started} not started, ${coverageTally.learning} learning concepts, ${coverageTally.practicing} practicing questions, ${coverageTally.exam_ready} exam ready`,
+    `Preparation map: ${coverageTally.not_started} not started, ${coverageTally.learning} learning concepts, ${coverageTally.practicing} practicing questions, ${coverageTally.revising} in revision, ${coverageTally.exam_ready} exam ready`,
     blocker ? `Self-reported biggest blocker: ${BLOCKER_LABEL[blocker]}` : null,
     streak?.current_streak ? `Current daily streak: ${streak.current_streak} days` : null,
     profile.target_percentile ? `Target percentile: ${profile.target_percentile}` : null,

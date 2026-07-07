@@ -35,12 +35,12 @@ export async function StudyPlanFeed({ studentId }: { studentId: string }) {
   const weeksRemaining = weeksToExam(new Date(), profile.attempt_year as number | null);
   const phase = ROADMAP_PHASES[currentRoadmapIndex(weeksRemaining, stage)];
 
-  const coverageTally = { not_started: 0, learning: 0, practicing: 0, exam_ready: 0 };
+  const coverageTally = { not_started: 0, learning: 0, practicing: 0, revising: 0, exam_ready: 0 };
   for (const row of coverage ?? []) {
     const status = row.status as keyof typeof coverageTally;
     coverageTally[status] = (coverageTally[status] ?? 0) + 1;
   }
-  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.exam_ready;
+  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
 
   const blueprintConfidence = computeBlueprintConfidence({
     mockCount: prepMemory.mockTrend.count,
@@ -82,12 +82,13 @@ export async function StudyPlanFeed({ studentId }: { studentId: string }) {
       </div>
 
       {coverageTotal > 0 && (
-        <div className="grid grid-cols-4 gap-2 text-center border-t border-stone-100 mt-3 pt-3">
+        <div className="grid grid-cols-5 gap-1 text-center border-t border-stone-100 mt-3 pt-3">
           {([
-            ['⚪ Not started', coverageTally.not_started, 'text-stone-400'],
+            ['⚪ New', coverageTally.not_started, 'text-stone-400'],
             ['🟡 Learning', coverageTally.learning, 'text-amber-600'],
             ['🔵 Practicing', coverageTally.practicing, 'text-blue-600'],
-            ['🟢 Exam ready', coverageTally.exam_ready, 'text-teal-600'],
+            ['🟠 Revising', coverageTally.revising, 'text-orange-600'],
+            ['🟢 Ready', coverageTally.exam_ready, 'text-teal-600'],
           ] as const).map(([label, count, color]) => (
             <div key={label}>
               <p className={`text-sm font-bold ${color}`}>{count}</p>

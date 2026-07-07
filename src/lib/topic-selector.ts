@@ -15,13 +15,13 @@ import { TOPIC_METADATA } from './topics-constants';
 
 // Student-controlled states (declared in the Blueprint Builder):
 //   not_started (⚪ Haven't Started) · learning (🟡 Learning Concepts) ·
-//   practicing (🔵 Practicing Questions)
+//   practicing (🔵 Practicing Questions) · revising (🟠 Revision Started)
 // System-controlled state (never a self-report option):
 //   exam_ready (🟢) — earned through confidence signals (applyConfidenceSignal
 //   below), mock evidence, and revision discipline.
-// 🟠 Revision Due is DERIVED (practicing/exam_ready + past the topic's
-// revision cadence), never stored — see prep-memory's revisionOverdue.
-export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'exam_ready';
+// "Revision DUE" is DERIVED (practicing/revising/exam_ready + past the
+// topic's revision cadence), never stored — see prep-memory's revisionOverdue.
+export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
 export interface TopicCandidateInput {
   topic: string;
@@ -50,6 +50,7 @@ const COVERAGE_POINTS: Record<CoverageStatus | 'unknown', number> = {
   not_started: 30,
   learning: 20,
   practicing: 10,
+  revising: 6,
   exam_ready: 2,
 };
 
@@ -57,7 +58,7 @@ function coverageReason(topic: string, status: CoverageStatus | null): string | 
   if (status == null) return `${topic} hasn't been mapped in your Blueprint yet`;
   if (status === 'not_started') return `${topic} — never started`;
   if (status === 'learning') return `${topic} — you're still learning the concepts`;
-  return null; // "practicing"/"exam_ready" only explained via revision-due below, not coverage alone
+  return null; // practicing/revising/exam_ready only explained via revision-due below, not coverage alone
 }
 
 // revisionMultiplier: the archetype coefficient from
@@ -112,20 +113,20 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
 
 export type ConfidenceSignal = 'green' | 'yellow' | 'red';
 
-const STATUS_ORDER: CoverageStatus[] = ['not_started', 'learning', 'practicing', 'exam_ready'];
+const STATUS_ORDER: CoverageStatus[] = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'];
 
 // Confidence-aware planning — this is where "CareerRai upgrades topics
-// automatically" lives: the student only ever declares up to 'practicing'
-// in the Blueprint; 'exam_ready' is EARNED here, from a green tap on a
-// topic already at 'practicing'. Signals feed the same Coverage grid the
-// Topic Selector reads for tomorrow's plan.
+// automatically" lives: the student declares up to 'revising' in the
+// Blueprint; 'exam_ready' is EARNED here, from a green tap on a topic
+// already at 'revising'. Signals feed the same Coverage grid the Topic
+// Selector reads for tomorrow's plan.
 //   green  — advance one level, up to and including 'exam_ready'
 //   yellow — acknowledges the attempt; only moves an untouched topic to
 //            'learning', never advances or regresses one already in progress
-//   red    — a real regression signal: struggling on a topic marked
-//            'practicing'/'exam_ready' means it isn't holding, so it drops
-//            back to 'learning' — never all the way to 'not_started', since
-//            the attempt itself is still real signal
+//   red    — a real regression signal: struggling on a topic at
+//            'practicing'/'revising'/'exam_ready' means it isn't holding, so
+//            it drops back to 'learning' — never all the way to
+//            'not_started', since the attempt itself is still real signal
 export function applyConfidenceSignal(current: CoverageStatus | null, confidence: ConfidenceSignal): CoverageStatus {
   const rank = STATUS_ORDER.indexOf(current ?? 'not_started');
   if (confidence === 'green') return STATUS_ORDER[Math.min(rank + 1, STATUS_ORDER.length - 1)];
