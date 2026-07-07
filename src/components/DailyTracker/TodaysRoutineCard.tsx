@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { QuickRoutineSetup } from './QuickRoutineSetup';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 
+type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+
 interface RoutineTask {
   id: string;
   section: string;
@@ -19,6 +21,9 @@ interface RoutineTask {
   estMinutes: number;
   reason: string | null;
   isImplementationIntention?: boolean;
+  // Looked up fresh per request, not stored on the frozen routine row — see
+  // /api/routine/today. Absent entirely on routines generated before this shipped.
+  coverageStatus?: CoverageStatus | null;
 }
 
 type ConfidenceSignal = 'green' | 'yellow' | 'red';
@@ -73,6 +78,21 @@ function taskTitle(task: RoutineTask): string {
   return task.label;
 }
 
+// The engine already knows whether this topic is fresh or a continuation —
+// chooseTopicForSection advances/holds coverage status per confidence tap
+// (see topic-selector.ts). That used to be invisible: the task copy read
+// identically whether it was day 1 or day 4 on the same topic. A student
+// re-seeing "Solve RC questions" with no acknowledgment reads it as the app
+// not noticing their own progress, even when the underlying pick was
+// correct. This badge says the quiet part out loud.
+const CONTINUITY_BADGE: Record<CoverageStatus, { label: string; style: string }> = {
+  not_started: { label: 'NEW', style: 'bg-teal-50 text-teal-700 border-teal-200' },
+  learning: { label: 'CONTINUE', style: 'bg-blue-50 text-blue-700 border-blue-200' },
+  practicing: { label: 'CONTINUE', style: 'bg-blue-50 text-blue-700 border-blue-200' },
+  revising: { label: 'REVISION', style: 'bg-orange-50 text-orange-700 border-orange-200' },
+  exam_ready: { label: 'EXAM READY', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+};
+
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [needsSetup, setNeedsSetup] = useState<NeedsSetupResponse | null>(null);
@@ -88,7 +108,9 @@ export function TodaysRoutineCard() {
   // and the first task tap reports elapsed time against it. hasReportedStart
   // guards against double-firing if the student taps more than one task.
   const viewedAt = useRef<number | null>(null);
+  const startedAt = useRef<number | null>(null);
   const hasReportedStart = useRef(false);
+  const hasReportedComplete = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -119,11 +141,23 @@ export function TodaysRoutineCard() {
   function reportStart() {
     if (hasReportedStart.current || viewedAt.current == null) return;
     hasReportedStart.current = true;
-    const seconds = Math.round((Date.now() - viewedAt.current) / 1000);
+    startedAt.current = Date.now();
+    const seconds = Math.round((startedAt.current - viewedAt.current) / 1000);
     fetch('/api/routine/engagement', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event: 'started', seconds_to_start: seconds }),
+    }).catch(() => {});
+  }
+
+  function reportComplete() {
+    if (hasReportedComplete.current) return;
+    hasReportedComplete.current = true;
+    const seconds = startedAt.current != null ? Math.round((Date.now() - startedAt.current) / 1000) : null;
+    fetch('/api/routine/engagement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'completed', seconds_since_started: seconds }),
     }).catch(() => {});
   }
 
@@ -143,7 +177,7 @@ export function TodaysRoutineCard() {
       setCompletedIds(new Set(json.completedTaskIds));
       setExpandedTaskId(null);
       if (confidence && task.topic) setConfidenceTaps((prev) => [...prev, { topic: task.topic!, confidence }]);
-      if (json.fullyDone) setFullyDone(true);
+      if (json.fullyDone) { setFullyDone(true); reportComplete(); }
     } finally {
       setBusyTaskId(null);
     }
@@ -259,20 +293,28 @@ export function TodaysRoutineCard() {
                       {done && <Check className="w-3 h-3 text-white" />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className={cn(
                           'text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5',
                           isStart ? 'bg-orange-600 text-white' : 'bg-stone-100 text-stone-400'
                         )}>
                           {isStart ? 'Start Here' : done ? 'Done' : 'Next'}
                         </span>
+                        {task.coverageStatus != null && (
+                          <span className={cn(
+                            'text-[9px] font-bold uppercase tracking-wider rounded border px-1.5 py-0.5',
+                            CONTINUITY_BADGE[task.coverageStatus].style
+                          )}>
+                            {CONTINUITY_BADGE[task.coverageStatus].label}
+                          </span>
+                        )}
                         <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
                       </div>
                       <p className={cn('text-sm font-bold mt-1', done ? 'text-teal-800 line-through' : 'text-stone-900')}>
                         {taskTitle(task)}
                       </p>
                       {!done && task.reason && (
-                        <p className="text-xs text-stone-500 mt-0.5"><span className="text-stone-400">Why?</span> {task.reason}</p>
+                        <p className="text-xs text-stone-500 mt-0.5"><span className="text-stone-400">Why today?</span> {task.reason}</p>
                       )}
                     </div>
                   </button>

@@ -208,8 +208,22 @@ export async function GET() {
     phases: ROADMAP_PHASES,
   };
 
+  // Task copy ("Solve 5 RC questions") barely changes day to day even
+  // though the topic's coverage status genuinely advances underneath it —
+  // the engine adapts, but that's invisible unless it's said out loud. Coverage
+  // status is looked up fresh here (never baked into the stored routine,
+  // which is frozen once per day) so a status tap made after the routine
+  // generated still shows up immediately, same as whySummary above.
+  const coverageByTopic = new Map<string, CoverageStatus>();
+  for (const row of (coverageRows ?? [])) coverageByTopic.set(row.topic, row.status as CoverageStatus);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tasksWithStatus = (routine.tasks as any[]).map((t) => ({
+    ...t,
+    coverageStatus: t.topic ? coverageByTopic.get(t.topic) ?? null : null,
+  }));
+
   return NextResponse.json({
-    routine,
+    routine: { ...routine, tasks: tasksWithStatus },
     whySummary,
     mission,
     roadmap,
