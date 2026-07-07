@@ -1,0 +1,122 @@
+name: Cron fallback
+
+# Independent trigger path for the app's scheduled jobs, parallel to
+# vercel.json's `crons` array. Vercel's own time-based scheduler has been
+# registering all 14 jobs correctly (confirmed in the dashboard) and every
+# job runs correctly when triggered manually, but the automatic firing
+# stopped happening. GitHub's scheduler is a separate system from Vercel's,
+# so this keeps notifications going regardless of what's wrong on the
+# Vercel side. Schedules below are a 1:1 copy of vercel.json's cron times
+# (all UTC) — keep the two files in sync if either changes.
+#
+# GitHub Actions schedules are best-effort and can slip by several minutes
+# under platform load; that's an acceptable tradeoff for a fallback path.
+
+on:
+  schedule:
+    - cron: '30 4 * * *'   # onboarding-morning
+    - cron: '30 14 * * *'  # daily-reminder + decision-engine
+    - cron: '30 3 * * *'   # buddy-brief
+    - cron: '0 6 * * *'    # session-tomorrow
+    - cron: '30 15 * * *'  # buddy-escalation
+    - cron: '0 8 * * 0'    # nishant-weekly
+    - cron: '0 4 * * 1'    # weekly-digest
+    - cron: '0 15 * * *'   # check-red-flags
+    - cron: '0 2 1,11,21 * *' # cleanup-voice-notes
+    - cron: '0 3 * * *'    # expire-subscriptions
+    - cron: '0 4 * * *'    # renewal-reminders
+    - cron: '0 1 * * *'    # refresh-demo
+    - cron: '30 9 * * *'   # sales-ready
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: 'Specific cron path to call, e.g. /api/cron/decision-engine. Leave blank to call every job — useful for an immediate manual test.'
+        required: false
+        type: string
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call matching cron endpoint(s)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BASE_URL: https://careerrai-daily.vercel.app
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL_ENDPOINT: ${{ github.event.inputs.endpoint }}
+        run: |
+          set +e
+          FAILED=0
+
+          call() {
+            echo "-> POST $1"
+            code=$(curl -s -o /tmp/resp.txt -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "$BASE_URL$1")
+            echo "   status: $code"
+            cat /tmp/resp.txt
+            echo
+            if [ "$code" -ge 400 ]; then
+              echo "::error::$1 returned $code"
+              FAILED=1
+            fi
+          }
+
+          if [ -n "$MANUAL_ENDPOINT" ]; then
+            call "$MANUAL_ENDPOINT"
+          elif [ -n "$SCHEDULE" ]; then
+            case "$SCHEDULE" in
+              "30 4 * * *")
+                call "/api/cron/onboarding-morning" ;;
+              "30 14 * * *")
+                call "/api/cron/daily-reminder"
+                call "/api/cron/decision-engine" ;;
+              "30 3 * * *")
+                call "/api/cron/buddy-brief" ;;
+              "0 6 * * *")
+                call "/api/cron/session-tomorrow" ;;
+              "30 15 * * *")
+                call "/api/cron/buddy-escalation" ;;
+              "0 8 * * 0")
+                call "/api/cron/nishant-weekly" ;;
+              "0 4 * * 1")
+                call "/api/cron/weekly-digest" ;;
+              "0 15 * * *")
+                call "/api/cron/check-red-flags" ;;
+              "0 2 1,11,21 * *")
+                call "/api/admin/cleanup-voice-notes" ;;
+              "0 3 * * *")
+                call "/api/cron/expire-subscriptions" ;;
+              "0 4 * * *")
+                call "/api/cron/renewal-reminders" ;;
+              "0 1 * * *")
+                call "/api/cron/refresh-demo" ;;
+              "30 9 * * *")
+                call "/api/cron/sales-ready" ;;
+              *)
+                echo "::error::Unrecognized schedule string: $SCHEDULE"
+                FAILED=1 ;;
+            esac
+          else
+            echo "Manual run with no endpoint specified — calling every job"
+            for p in \
+              /api/cron/onboarding-morning \
+              /api/cron/daily-reminder \
+              /api/cron/decision-engine \
+              /api/cron/buddy-brief \
+              /api/cron/session-tomorrow \
+              /api/cron/buddy-escalation \
+              /api/cron/nishant-weekly \
+              /api/cron/weekly-digest \
+              /api/cron/check-red-flags \
+              /api/admin/cleanup-voice-notes \
+              /api/cron/expire-subscriptions \
+              /api/cron/renewal-reminders \
+              /api/cron/refresh-demo \
+              /api/cron/sales-ready
+            do
+              call "$p"
+            done
+          fi
+
+          exit $FAILED
