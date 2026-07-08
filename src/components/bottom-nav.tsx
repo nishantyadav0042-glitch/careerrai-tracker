@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, Target, User, Settings, Users, IndianRupee, X } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, Target, User, Settings, Users, IndianRupee, X, Compass } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -20,6 +20,10 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
   const [moreOpen, setMoreOpen] = useState(false);
 
   const isMoreActive = moreItems?.some((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
+  // Chat's unread badge moved inside "More" along with it — surface it on
+  // the More button itself so an unread buddy reply is never silently
+  // invisible just because Chat isn't a primary tab anymore.
+  const moreBadgeTotal = moreItems?.reduce((sum, item) => sum + (item.badge ?? 0), 0) ?? 0;
 
   return (
     <>
@@ -109,7 +113,14 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                 (moreOpen || isMoreActive) ? 'text-stone-900' : 'text-stone-400'
               )}
             >
-              <MoreHorizontal className={cn('w-5 h-5 transition-all', (moreOpen || isMoreActive) && 'scale-110')} />
+              <div className="relative">
+                <MoreHorizontal className={cn('w-5 h-5 transition-all', (moreOpen || isMoreActive) && 'scale-110')} />
+                {moreBadgeTotal > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {moreBadgeTotal > 9 ? '9+' : moreBadgeTotal}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider">More</span>
             </button>
           )}
@@ -119,17 +130,20 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
   );
 }
 
+// Today's Study and My CAT Plan are the two things a student actually
+// needs every day — what to do now, and where they stand. Everything else
+// (mocks, analysis, buddy, chat) is real but secondary, so it moved to
+// More rather than competing for the same visual weight in the primary bar.
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
-  // Mocks are the #1 signal — promoted to a primary, always-visible tab (was
-  // buried under "More" as "Exams", which is why students couldn't find it).
+  { href: '/student/blueprint', icon: Compass, label: 'My CAT Plan' },
+];
+
+const STUDENT_MORE: NavItem[] = [
   { href: '/student/exams', icon: Target, label: 'Mocks' },
   { href: '/student/analysis', icon: TrendingUp, label: 'Analysis' },
   { href: '/student/buddy', imgSrc: '/buddy-nav-icon.jpg', label: 'Buddy' },
   { href: '/student/chat', icon: MessageCircle, label: 'Chat' },
-];
-
-const STUDENT_MORE: NavItem[] = [
   { href: '/student/reports', icon: FileText, label: 'History' },
   { href: '/student/profile', icon: User, label: 'Profile' },
   { href: '/student/settings', icon: Settings, label: 'Settings' },
@@ -154,7 +168,7 @@ function withChatBadge(items: NavItem[], unread: number): NavItem[] {
 }
 
 export function StudentBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
-  return <NavBar items={withChatBadge(STUDENT_MAIN, chatUnread)} moreItems={STUDENT_MORE} />;
+  return <NavBar items={STUDENT_MAIN} moreItems={withChatBadge(STUDENT_MORE, chatUnread)} />;
 }
 
 export function BuddyBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
