@@ -9,6 +9,7 @@ import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
+import { RotatingBuddyBanner } from '@/components/rotating-buddy-banner';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { computePrepMemory } from '@/lib/prep-memory-data';
 import type { StreakData } from '@/types';
@@ -207,6 +208,11 @@ export default async function DailyTrackerPage() {
 
         {/* What should I study? */}
         <TodaysRoutineCard />
+
+        {/* Revenue driver — the one recurring conversion nudge on Home.
+            Rotating, not static, so it doesn't fade into wallpaper the way a
+            fixed line would after the 5th visit. */}
+        {!buddyId && !isPremiumUser && <RotatingBuddyBanner />}
 
         {/* Is this working? — one sentence, only when real. */}
         {proofLine && (

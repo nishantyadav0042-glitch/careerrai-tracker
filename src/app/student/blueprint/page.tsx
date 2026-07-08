@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { KNOWLEDGE_GRAPH, QA_GROUPS } from '@/lib/topics-constants';
+import { RotatingBuddyBanner } from '@/components/rotating-buddy-banner';
 
 interface WindowStats {
   daysStudied: number;
@@ -31,6 +32,8 @@ interface PlanData {
     components: { consistency: number; confidenceQuality: number; balance: number; revisionDiscipline: number } | null;
   };
   topicMemory: { topic: string; status: string; revisionOverdue: boolean; lastTouchedDaysAgo: number | null }[];
+  hasBuddy: boolean;
+  isPremium: boolean;
 }
 
 // Milestone groups: VARC, DILR, and the five QA clusters — real Knowledge
@@ -104,7 +107,7 @@ export default function MyCatPlanPage() {
     );
   }
 
-  const { phase, weeksRemaining, weakestSection, weakTopic, coverageTally, prepMemory, healthScore, topicMemory } = data;
+  const { phase, weeksRemaining, weakestSection, weakTopic, coverageTally, prepMemory, healthScore, topicMemory, hasBuddy, isPremium } = data;
   const { last30, mockTrend } = prepMemory;
 
   // Progress = exam units past "not started", out of the 46 exam units.
@@ -193,6 +196,10 @@ export default function MyCatPlanPage() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Today&apos;s observation</p>
           <p className="text-sm font-semibold text-stone-800">{observation}</p>
         </div>
+
+        {/* Right after the student sees their own gap is the moment to show
+            the fastest way to close it — not the first thing on the page. */}
+        {!hasBuddy && !isPremium && <RotatingBuddyBanner />}
 
         {/* One Health score */}
         <div className="bg-white rounded-2xl border border-stone-200 p-5">

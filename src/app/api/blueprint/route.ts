@@ -7,6 +7,7 @@ import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-pl
 import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
+import { isPremium } from '@/lib/access';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -42,7 +43,7 @@ export async function GET() {
       .select(`
         full_name, target_percentile, attempt_year, exam_target, is_working_professional, is_repeater,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        current_stage, biggest_blocker, created_at
+        current_stage, biggest_blocker, created_at, buddy_id, is_premium
       `)
       .eq('id', user.id).single(),
   ]);
@@ -127,6 +128,8 @@ export async function GET() {
     healthScore,
     blueprintConfidence,
     topicMemory,
+    hasBuddy: !!profile.buddy_id,
+    isPremium: isPremium(profile),
   });
 }
 
