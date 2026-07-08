@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { RotatingBuddyBanner } from '@/components/rotating-buddy-banner';
+import { BuddyBanner } from '@/components/buddy-banner';
+import type { BuddyBanner as BuddyBannerData } from '@/lib/buddy-banner';
 
 interface ThisWeekItem { label: string; href: string }
 interface FinishProjection {
@@ -22,6 +23,7 @@ interface PlanData {
   biggestPriority: string | null;
   hasBuddy: boolean;
   isPremium: boolean;
+  buddyBanner: BuddyBannerData;
 }
 
 function PlanRow({ href, icon, label, cta }: { href: string; icon: string; label: string; cta: string }) {
@@ -92,7 +94,7 @@ export default function MyCatPlanPage() {
 
   const {
     totalTopics, studiedOnceCount, notStartedCount, dueForRevisionCount, mocksCompleted,
-    finishProjection, thisWeek, biggestPriority, hasBuddy, isPremium,
+    finishProjection, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner,
   } = data;
 
   return (
@@ -161,7 +163,7 @@ export default function MyCatPlanPage() {
           </div>
         )}
 
-        {!hasBuddy && !isPremium && <RotatingBuddyBanner />}
+        {!hasBuddy && !isPremium && <BuddyBanner banner={buddyBanner} />}
 
         <div className="pb-16" />
       </div>

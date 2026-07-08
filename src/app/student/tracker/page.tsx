@@ -9,9 +9,10 @@ import { isPremium } from '@/lib/access';
 import { LockedBuddyCard } from '@/components/locked-buddy-card';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
-import { RotatingBuddyBanner } from '@/components/rotating-buddy-banner';
+import { BuddyBanner } from '@/components/buddy-banner';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { computePrepMemory } from '@/lib/prep-memory-data';
+import { selectBuddyBanner } from '@/lib/buddy-banner';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -80,11 +81,18 @@ export default async function DailyTrackerPage() {
       (profile?.created_at as string | null)?.split('T')[0] ?? null
     ),
   ]);
-  void prepMemory;
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
   const isPremiumUser = isPremium(profile);
+  const buddyBanner = selectBuddyBanner({
+    mocksCount: prepMemory.mockTrend.count,
+    latestPercentile: prepMemory.mockTrend.latestPercentile,
+    previousPercentile: prepMemory.mockTrend.previousPercentile,
+    daysStudiedLast30: prepMemory.last30.daysStudied,
+    isRepeater: !!profile?.is_repeater,
+    isWorkingProfessional: !!profile?.is_working_professional,
+  });
 
   // Second batch — buddy identity + existing debrief, only when relevant.
   let buddyProfile: { full_name: string | null; cat_percentile: number | null } | null = null;
@@ -209,10 +217,12 @@ export default async function DailyTrackerPage() {
         {/* What should I study? */}
         <TodaysRoutineCard />
 
-        {/* Revenue driver — the one recurring conversion nudge on Home.
-            Rotating, not static, so it doesn't fade into wallpaper the way a
-            fixed line would after the 5th visit. */}
-        {!buddyId && !isPremiumUser && <RotatingBuddyBanner />}
+        {/* Revenue driver — the one recurring conversion nudge on Home. Which
+            banner shows is picked from the student's own behavior (a dropped
+            mock, revision piling up, sustained consistency) rather than a
+            timer — it changes because the student changed, not because a
+            few seconds passed. */}
+        {!buddyId && !isPremiumUser && <BuddyBanner banner={buddyBanner} />}
 
         {/* Is this working? — one sentence, only when real. */}
         {proofLine && (

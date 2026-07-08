@@ -10,6 +10,7 @@ import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { selectBuddyBanner } from '@/lib/buddy-banner';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -144,6 +145,16 @@ export async function GET() {
     biggestPriority = "You're covering new topics well. Focus on revision next.";
   }
 
+  const buddyBanner = selectBuddyBanner({
+    mocksCount: prepMemory.mockTrend.count,
+    latestPercentile: prepMemory.mockTrend.latestPercentile,
+    previousPercentile: prepMemory.mockTrend.previousPercentile,
+    dueForRevisionCount: dueForRevision.length,
+    daysStudiedLast30: prepMemory.last30.daysStudied,
+    isRepeater: archetype.isRepeater,
+    isWorkingProfessional: archetype.isWorkingProfessional,
+  });
+
   const facts = [
     `Target CAT year: ${profile.attempt_year ?? 'not set'}`,
     `Weeks remaining to exam: ${weeksRemaining}`,
@@ -204,6 +215,7 @@ export async function GET() {
     finishProjection,
     thisWeek,
     biggestPriority,
+    buddyBanner,
   });
 }
 
