@@ -3,59 +3,41 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { KNOWLEDGE_GRAPH, QA_GROUPS } from '@/lib/topics-constants';
 import { RotatingBuddyBanner } from '@/components/rotating-buddy-banner';
 
-interface WindowStats {
-  daysStudied: number;
-  tasksCompleted: number;
-  minutesStudied: number;
-  topicsTouched: number;
-  sectionCounts: { VARC: number; DILR: number; QA: number; General: number };
-  confidenceCounts: { green: number; yellow: number; red: number };
-  mocksLogged: number;
+interface ThisWeekItem { label: string; href: string }
+interface FinishProjection {
+  status: 'done' | 'stalled' | 'ahead' | 'tight' | 'critical';
+  windowLabel: string | null;
+  sub: string;
 }
-
 interface PlanData {
-  phase: { label: string; weekRange: string; objective: string };
-  weeksRemaining: number;
-  weakestSection: string | null;
-  weakTopic: string | null;
-  coverageTally: { not_started: number; learning: number; practicing: number; revising: number; exam_ready: number };
-  prepMemory: {
-    last30: WindowStats;
-    mockTrend: { count: number; latestPercentile: number | null; previousPercentile: number | null };
-  };
-  healthScore: {
-    status: 'provisional' | 'ready';
-    score: number | null;
-    components: { consistency: number; confidenceQuality: number; balance: number; revisionDiscipline: number } | null;
-  };
-  topicMemory: { topic: string; status: string; revisionOverdue: boolean; lastTouchedDaysAgo: number | null }[];
+  totalTopics: number;
+  studiedOnceCount: number;
+  notStartedCount: number;
+  dueForRevisionCount: number;
+  mocksCompleted: number;
+  finishProjection: FinishProjection;
+  thisWeek: ThisWeekItem[];
+  biggestPriority: string | null;
   hasBuddy: boolean;
   isPremium: boolean;
 }
 
-// Milestone groups: VARC, DILR, and the five QA clusters — real Knowledge
-// Graph groupings, nothing invented.
-const MILESTONE_GROUPS: { label: string; units: string[] }[] = [
-  { label: 'VARC', units: KNOWLEDGE_GRAPH.find((s) => s.id === 'VARC')!.groups.flatMap((g) => g.units) },
-  { label: 'DILR', units: KNOWLEDGE_GRAPH.find((s) => s.id === 'DILR')!.groups.flatMap((g) => g.units) },
-  ...QA_GROUPS.map((g) => ({ label: g.label, units: g.units })),
-];
-
-// Founder words ("Strengthening phase") mean nothing to students — map the
-// phase to what they actually DO in it.
-function phaseWord(label: string): string {
-  if (/foundation|concept|build/i.test(label)) return 'Learn + practice basics';
-  if (/strength|practice|question/i.test(label)) return 'Practice questions';
-  if (/sectional|intensive|mock/i.test(label)) return 'Sectionals + mocks';
-  if (/revision|final|peak/i.test(label)) return 'Revise + mocks';
-  return label;
+function PlanRow({ href, icon, label, cta }: { href: string; icon: string; label: string; cta: string }) {
+  return (
+    <Link href={href} className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors">
+      <span className="text-lg w-6 text-center shrink-0">{icon}</span>
+      <span className="flex-1 text-sm font-semibold text-stone-800">{label}</span>
+      <span className="text-xs font-bold text-orange-600 whitespace-nowrap">{cta} →</span>
+    </Link>
+  );
 }
 
-// My CAT Plan — the owned asset. Home is today; this page is the journey.
-// Every number is computed from the student's own declared + logged data.
+// My CAT Plan — four questions, ten seconds: what have I studied, what's due,
+// what's left, and when does the syllabus finish. Every number reads off the
+// same engines the rest of the app already trusts (topic memory, mock trend,
+// roadmap phase) — nothing on this page is computed just for this page.
 export default function MyCatPlanPage() {
   const [data, setData] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +49,7 @@ export default function MyCatPlanPage() {
     try {
       const res = await fetch('/api/blueprint');
       if (res.ok) setData(await res.json());
+      else setFetchFailed(true);
     } catch {
       setFetchFailed(true);
     } finally {
@@ -107,45 +90,10 @@ export default function MyCatPlanPage() {
     );
   }
 
-  const { phase, weeksRemaining, weakestSection, weakTopic, coverageTally, prepMemory, healthScore, topicMemory, hasBuddy, isPremium } = data;
-  const { last30, mockTrend } = prepMemory;
-
-  // Progress = exam units past "not started", out of the 46 exam units.
-  const statusByTopic = new Map(topicMemory.map((t) => [t.topic, t.status]));
-  const examUnits = MILESTONE_GROUPS.flatMap((g) => g.units);
-  const inMotion = examUnits.filter((u) => (statusByTopic.get(u) ?? 'not_started') !== 'not_started').length;
-  const progressPct = Math.round((inMotion / examUnits.length) * 100);
-
-  // Next milestone: the group closest to done but not finished; if nothing
-  // has started, start with Arithmetic (highest-weightage cluster).
-  const groupStats = MILESTONE_GROUPS.map((g) => {
-    const done = g.units.filter((u) => (statusByTopic.get(u) ?? 'not_started') !== 'not_started').length;
-    return { label: g.label, done, total: g.units.length, ratio: done / g.units.length };
-  });
-  const unfinished = groupStats.filter((g) => g.ratio < 1).sort((a, b) => b.ratio - a.ratio);
-  const milestone = unfinished.length === 0
-    ? 'All topics in motion — revision mode'
-    : unfinished[0].done === 0
-    ? `Start ${groupStats.every((g) => g.done === 0) ? 'Arithmetic' : unfinished[0].label}`
-    : `Finish ${unfinished[0].label} · ${unfinished[0].done}/${unfinished[0].total}`;
-
-  const coverageTotal = coverageTally.not_started + coverageTally.learning + coverageTally.practicing + coverageTally.revising + coverageTally.exam_ready;
-  const hasMemory = last30.tasksCompleted > 0 || mockTrend.count > 0;
-
-  // ONE observation per page — a decision, not data. Priority-ordered rules
-  // over real signals; the first that fires wins.
-  const overdue = topicMemory.filter((t) => t.revisionOverdue);
-  const stalest = [...overdue].sort((a, b) => (b.lastTouchedDaysAgo ?? 0) - (a.lastTouchedDaysAgo ?? 0))[0];
-  const observation =
-    mockTrend.count === 0 && weeksRemaining < 20
-      ? 'Your plan sharpens a lot after your first mock. Take one this Sunday.'
-      : stalest && stalest.lastTouchedDaysAgo != null
-      ? `${stalest.topic} untouched for ${stalest.lastTouchedDaysAgo} days. Revise it this week.`
-      : coverageTally.learning > coverageTally.practicing + coverageTally.revising && coverageTally.learning >= 5
-      ? 'Enough basics in progress. Time to solve questions.'
-      : inMotion > 0
-      ? `${inMotion} topics in motion. Keep the pace.`
-      : 'Start with Arithmetic. Highest weightage.';
+  const {
+    totalTopics, studiedOnceCount, notStartedCount, dueForRevisionCount, mocksCompleted,
+    finishProjection, thisWeek, biggestPriority, hasBuddy, isPremium,
+  } = data;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -154,129 +102,67 @@ export default function MyCatPlanPage() {
           <Link href="/student/tracker" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-stone-600" />
           </Link>
-          <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My CAT Plan</h1>
-        </div>
-
-        {/* The journey, one glance */}
-        <div className="bg-stone-900 rounded-2xl p-5">
-          <div className="flex items-baseline justify-between mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">Plan progress</p>
-            <p className="text-sm font-bold text-white">{inMotion}/{examUnits.length} topics</p>
-          </div>
-          <div className="flex gap-0.5 mb-4">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className={`flex-1 h-2 first:rounded-l-sm last:rounded-r-sm ${i < Math.round((progressPct / 100) * 12) ? 'bg-orange-500' : 'bg-stone-700'}`} />
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-stone-500">Current focus</p>
-              <p className="font-semibold text-white">{weakestSection ? `${weakestSection}${weakTopic ? ` · ${weakTopic}` : ''}` : '—'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-stone-500">Now</p>
-              <p className="font-semibold text-white">{phaseWord(phase.label)} · {weeksRemaining}w to CAT</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-stone-500">Next milestone</p>
-              <p className="font-semibold text-white">{milestone}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-stone-500">Mocks</p>
-              <p className="font-semibold text-white">{mockTrend.count > 0 ? `${mockTrend.count} logged · Sundays` : 'Sundays'}</p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My CAT Plan</h1>
+            <p className="text-sm text-stone-500">Your preparation today</p>
           </div>
         </div>
 
-        <Link href="/student/tracker" className="block rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
-          Today&apos;s Study Plan →
-        </Link>
-
-        <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Today&apos;s observation</p>
-          <p className="text-sm font-semibold text-stone-800">{observation}</p>
+        {/* Studied / revision / not started / mocks — four rows, four taps */}
+        <div className="bg-white rounded-2xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
+          <PlanRow href="/student/analysis" icon="✅" label={`${studiedOnceCount}/${totalTopics} studied once`} cta="View" />
+          <PlanRow href="/student/analysis" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
+          <PlanRow href="/student/analysis" icon="⚪" label={`${notStartedCount} not started`} cta="Start" />
+          <PlanRow
+            href="/student/analysis?tab=mocks"
+            icon="📝"
+            label={`${mocksCompleted} mock${mocksCompleted === 1 ? '' : 's'} completed`}
+            cta="View"
+          />
         </div>
 
-        {/* Right after the student sees their own gap is the moment to show
-            the fastest way to close it — not the first thing on the page. */}
-        {!hasBuddy && !isPremium && <RotatingBuddyBanner />}
-
-        {/* One Health score */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">On track?</h2>
-          {healthScore.status === 'provisional' ? (
-            <p className="text-sm text-stone-500">Unlocks after your first week.</p>
-          ) : (
+        {/* Finish syllabus — a real date window from trailing pace, or the
+            honest reason there isn't one yet. Never "estimated," never a
+            verdict — the sub-line is always a lever, not a scolding. */}
+        <div className="bg-white rounded-2xl border border-stone-200 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Finish syllabus</p>
+          {finishProjection.windowLabel ? (
             <>
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold text-stone-900">{healthScore.score}</span>
-                <span className="text-sm text-stone-400">/ 100</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2 text-center border-t border-stone-100 pt-3">
-                {([
-                  [healthScore.components!.consistency, 35, 'Consistency'],
-                  [healthScore.components!.confidenceQuality, 25, 'Confidence'],
-                  [healthScore.components!.balance, 25, 'Balance'],
-                  [healthScore.components!.revisionDiscipline, 15, 'Revision'],
-                ] as const).map(([v, max, label]) => (
-                  <div key={label}>
-                    <p className="text-sm font-bold text-stone-800">{v}<span className="text-stone-400 font-normal">/{max}</span></p>
-                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">{label}</p>
-                  </div>
-                ))}
-              </div>
+              <p className="text-lg font-bold text-stone-900">{finishProjection.windowLabel}</p>
+              <p className="text-xs text-stone-500 mt-0.5">{finishProjection.sub}</p>
             </>
+          ) : (
+            <p className="text-sm font-semibold text-stone-800">{finishProjection.sub}</p>
           )}
         </div>
 
-        {/* Topics — rows a student reads in five seconds */}
-        {coverageTotal > 0 && (
-          <div className="bg-white rounded-2xl border border-stone-200 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">Topics</h2>
-              <Link href="/student/analysis" className="text-xs font-semibold text-orange-600">Edit →</Link>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-stone-500">In motion</span><span className="font-bold text-stone-900">{inMotion}/{examUnits.length}</span></div>
-              {coverageTally.revising + coverageTally.exam_ready > 0 && (
-                <div className="flex justify-between"><span className="text-stone-500">Revision stage</span><span className="font-bold text-orange-600">{coverageTally.revising}</span></div>
-              )}
-              {overdue.length > 0 && (
-                <div className="flex justify-between"><span className="text-stone-500">Revision pending</span><span className="font-bold text-red-600">{overdue.length}</span></div>
-              )}
-              {coverageTally.exam_ready > 0 && (
-                <div className="flex justify-between"><span className="text-stone-500">Exam ready</span><span className="font-bold text-teal-600">{coverageTally.exam_ready}</span></div>
-              )}
+        {thisWeek.length > 0 && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-4">
+            <h2 className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2.5">This week</h2>
+            <div className="space-y-2">
+              {thisWeek.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="flex items-center gap-2.5 text-sm font-semibold text-stone-800 hover:text-orange-700"
+                >
+                  <span className="text-teal-600">✓</span>{item.label}
+                </Link>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Last 30 days — facts only, hidden until real */}
-        {hasMemory && (
-          <div className="bg-white rounded-2xl border border-stone-200 p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-3">Last 30 days</h2>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-lg font-bold text-stone-900">{last30.daysStudied}</p>
-                <p className="text-[10px] text-stone-400">Days</p>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-stone-900">{Math.round(last30.minutesStudied / 6) / 10}h</p>
-                <p className="text-[10px] text-stone-400">Studied</p>
-              </div>
-              <div>
-                <p className="text-lg font-bold text-stone-900">{last30.topicsTouched}</p>
-                <p className="text-[10px] text-stone-400">Topics</p>
-              </div>
-            </div>
-            {mockTrend.latestPercentile != null && (
-              <p className="text-xs text-stone-600 border-t border-stone-100 pt-3 mt-3">
-                Last mock: <span className="font-semibold">{mockTrend.latestPercentile}%ile</span>
-                {mockTrend.previousPercentile != null && <> · was {mockTrend.previousPercentile}%ile</>}
-              </p>
-            )}
+        {/* One diagnosis, or none — never a generic filler line. */}
+        {biggestPriority && (
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-700 mb-1">Biggest priority</p>
+            <p className="text-sm font-semibold text-orange-900">{biggestPriority}</p>
           </div>
         )}
+
+        {!hasBuddy && !isPremium && <RotatingBuddyBanner />}
+
         <div className="pb-16" />
       </div>
     </div>

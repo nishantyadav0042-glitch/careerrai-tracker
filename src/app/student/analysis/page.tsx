@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { MocksSection } from './mocks-section';
 import { TrendsSection } from './trends-section';
@@ -13,11 +14,21 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'mocks', label: 'Mocks' },
 ];
 
+export default function AnalysisPage() {
+  return (
+    <Suspense fallback={null}>
+      <AnalysisPageInner />
+    </Suspense>
+  );
+}
+
 // Mocks and Analysis used to be two separate bottom-nav destinations. Merged
 // into one panel — same student question ("how am I actually doing?"),
 // answered from two angles instead of two screens competing for a nav slot.
-export default function AnalysisPage() {
-  const [tab, setTab] = useState<Tab>('trends');
+function AnalysisPageInner() {
+  const searchParams = useSearchParams();
+  const initialTab: Tab = searchParams.get('tab') === 'mocks' ? 'mocks' : 'trends';
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">

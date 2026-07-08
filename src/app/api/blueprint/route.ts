@@ -3,11 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
-import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
+import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish } from '@/lib/study-plan';
+import { catExamDate } from '@/lib/routine-engine';
 import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -78,6 +80,70 @@ export async function GET() {
     daysStudiedLast30: prepMemory.last30.daysStudied,
   });
 
+  // ── My CAT Plan: studied/revision/not-started, finish date, this week ──
+  // All of it reads off topicMemory (all 46 exam topics, defaulted to
+  // not_started when a topic has no coverage row at all) rather than the raw
+  // coverageTally above, which only counts topics that already have a row.
+  const totalTopics = Object.keys(TOPIC_METADATA).length;
+  const notStartedTopics = topicMemory.filter((t) => t.status === 'not_started');
+  const notStartedCount = notStartedTopics.length;
+  const studiedOnceCount = totalTopics - notStartedCount;
+  const dueForRevision = topicMemory
+    .filter((t) => t.revisionOverdue)
+    .sort((a, b) => (b.lastTouchedDaysAgo ?? 0) - (a.lastTouchedDaysAgo ?? 0));
+
+  const today = new Date();
+  let examYear = (profile.attempt_year as number | null) ?? today.getFullYear();
+  if (today > catExamDate(examYear)) examYear += 1;
+  const topicsStartedLast21Days = topicMemory.filter(
+    (t) => t.status !== 'not_started' && t.firstTouchedDaysAgo != null && t.firstTouchedDaysAgo <= 21
+  ).length;
+  const finishProjection = projectSyllabusFinish({
+    today,
+    examDate: catExamDate(examYear),
+    topicsRemaining: notStartedCount,
+    topicsStartedLast21Days,
+  });
+
+  const notStartedBySection: Partial<Record<Section, number>> = {};
+  for (const t of notStartedTopics) {
+    const section = TOPIC_METADATA[t.topic]?.section;
+    if (section) notStartedBySection[section] = (notStartedBySection[section] ?? 0) + 1;
+  }
+  const sectionToFinish = (Object.entries(notStartedBySection) as [Section, number][])
+    .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  const thisWeek: { label: string; href: string }[] = [];
+  for (const t of dueForRevision) {
+    if (thisWeek.length >= 1) break; // first slot: most-overdue revision, if any
+    thisWeek.push({ label: `Revise ${t.topic}`, href: '/student/analysis' });
+  }
+  thisWeek.push({ label: 'Take your next mock', href: '/student/tracker' });
+  if (sectionToFinish) thisWeek.push({ label: `Finish ${sectionToFinish}`, href: '/student/analysis' });
+  let extraRevisionIdx = 1;
+  while (thisWeek.length < 3 && dueForRevision[extraRevisionIdx]) {
+    thisWeek.push({ label: `Revise ${dueForRevision[extraRevisionIdx].topic}`, href: '/student/analysis' });
+    extraRevisionIdx++;
+  }
+
+  // One rules-generated diagnosis, priority order, or nothing — never a
+  // generic line. "Mocks need attention" only fires once mock cadence
+  // actually matters (Mock Intensive / Revision Sprint) and none landed
+  // this week — there's no invented "planned mocks" target to compare to.
+  const revRatio = studiedOnceCount > 0 ? dueForRevision.length / studiedOnceCount : 0;
+  const notStartedRatio = notStartedCount / totalTopics;
+  const inMockCadencePhase = phase.id === 'mock_intensive' || phase.id === 'revision_sprint';
+  let biggestPriority: string | null = null;
+  if (inMockCadencePhase && prepMemory.last7.mocksLogged === 0) {
+    biggestPriority = 'Mocks need more attention this week.';
+  } else if (revRatio > 0.45) {
+    biggestPriority = 'Revision needs more attention than new topics right now.';
+  } else if (notStartedRatio > 0.3) {
+    biggestPriority = `Finish the remaining ${notStartedCount} topics before increasing mock frequency.`;
+  } else if (dueForRevision.length > 0) {
+    biggestPriority = "You're covering new topics well. Focus on revision next.";
+  }
+
   const facts = [
     `Target CAT year: ${profile.attempt_year ?? 'not set'}`,
     `Weeks remaining to exam: ${weeksRemaining}`,
@@ -130,6 +196,14 @@ export async function GET() {
     topicMemory,
     hasBuddy: !!profile.buddy_id,
     isPremium: isPremium(profile),
+    totalTopics,
+    studiedOnceCount,
+    notStartedCount,
+    dueForRevisionCount: dueForRevision.length,
+    mocksCompleted: prepMemory.mockTrend.count,
+    finishProjection,
+    thisWeek,
+    biggestPriority,
   });
 }
 

@@ -98,3 +98,57 @@ export function currentRoadmapIndex(weeksRemaining: number, stage: Stage | null)
   }
   return calendarIndex;
 }
+
+// ─── Syllabus finish projection ────────────────────────────────────────────
+// "Finish syllabus — 12–17 September." One honest date window, built from a
+// trailing 3-week pace (topics actually started via a logged study session,
+// not a manual status flip) — never a lifetime average, never a guess. If
+// pace is 0 or the projection lands after the exam, that's what gets shown —
+// this never hides a bad number, it only ever pairs it with a lever instead
+// of a verdict ("two extra sessions a week" instead of "you're behind").
+// A fixed 6-day window (not a shrinking-with-distance one) — simpler to
+// read and just as honest, since the trailing-pace input already re-derives
+// fresh every time this is called.
+export interface FinishProjection {
+  status: 'done' | 'stalled' | 'ahead' | 'tight' | 'critical';
+  windowLabel: string | null;
+  sub: string;
+}
+
+const BUFFER_WEEKS_BEFORE_EXAM = 3.5;
+
+export function projectSyllabusFinish(input: {
+  today: Date;
+  examDate: Date;
+  topicsRemaining: number;
+  topicsStartedLast21Days: number;
+}): FinishProjection {
+  const { today, examDate, topicsRemaining, topicsStartedLast21Days } = input;
+
+  if (topicsRemaining === 0) {
+    return { status: 'done', windowLabel: null, sub: "You're in revision and mocks now." };
+  }
+
+  const weeklyPace = topicsStartedLast21Days / 3;
+  if (weeklyPace <= 0) {
+    return { status: 'stalled', windowLabel: null, sub: 'Finish one topic to see your date.' };
+  }
+
+  const weeksNeeded = topicsRemaining / weeklyPace;
+  const rawDate = new Date(today.getTime() + weeksNeeded * 7 * 24 * 60 * 60 * 1000);
+  const start = new Date(rawDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 5 * 24 * 60 * 60 * 1000);
+  const sameMonth = start.getMonth() === end.getMonth();
+  const windowLabel = sameMonth
+    ? `${start.getDate()}–${end.getDate()} ${end.toLocaleDateString('en-GB', { month: 'long' })}`
+    : `${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+
+  const bufferDate = new Date(examDate.getTime() - BUFFER_WEEKS_BEFORE_EXAM * 7 * 24 * 60 * 60 * 1000);
+  if (rawDate > examDate) {
+    return { status: 'critical', windowLabel, sub: 'Two extra sessions a week brings this before CAT.' };
+  }
+  if (rawDate > bufferDate) {
+    return { status: 'tight', windowLabel, sub: 'One extra study session this week keeps you on track.' };
+  }
+  return { status: 'ahead', windowLabel, sub: 'Based on your current pace.' };
+}
