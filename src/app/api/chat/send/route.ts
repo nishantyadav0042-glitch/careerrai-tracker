@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         body: preview,
         channels: ['in_app', 'push'],
         data: {
-          url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy',
+          url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy?tab=chat',
           student_id: pair.studentId, buddy_id: pair.buddyId,
         },
       });

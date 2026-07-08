@@ -39,6 +39,14 @@ interface ChatThreadProps {
    * Omitted/undefined when the viewer is the student.
    */
   sendStudentId?: string;
+  /**
+   * True when rendered as a tab inside another page (the student's merged
+   * Buddy panel) rather than as a standalone route. Standalone uses a fixed
+   * panel sized off the app chrome; embedded fills whatever height its
+   * parent gives it instead, since a page header + tab switcher now sits
+   * above it that the fixed offset doesn't know about.
+   */
+  embedded?: boolean;
 }
 
 export function ChatThread({
@@ -49,6 +57,7 @@ export function ChatThread({
   subtitle,
   initialMessages,
   sendStudentId,
+  embedded = false,
 }: ChatThreadProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [draft, setDraft] = useState('');
@@ -196,8 +205,10 @@ export function ChatThread({
      * the bottom nav (~4.5rem from bottom, accounting for nav content + padding).
      * Using fixed + inline top/bottom avoids layout-shift issues on mobile.
      */
-    <div className="fixed left-0 right-0 flex flex-col max-w-2xl mx-auto px-4"
-         style={{ top: '6rem', bottom: '4.5rem' }}>
+    <div
+      className={embedded ? 'h-full flex flex-col' : 'fixed left-0 right-0 flex flex-col max-w-2xl mx-auto px-4'}
+      style={embedded ? undefined : { top: '6rem', bottom: '4.5rem' }}
+    >
       {/* Header */}
       <div className="shrink-0 pb-3 mb-1 border-b border-stone-200">
         <h1 className="text-lg font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>

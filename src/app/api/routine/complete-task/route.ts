@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 
-const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'yellow', 'red'];
+const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
 interface RoutineTaskShape { id: string; section: string; topic: string | null; label: string; estMinutes: number }
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const { task_id: taskId, is_emergency: isEmergency, confidence } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string };
   if (!taskId || typeof taskId !== 'string') return NextResponse.json({ error: 'task_id required' }, { status: 400 });
   if (confidence !== undefined && !VALID_CONFIDENCE.includes(confidence as ConfidenceSignal)) {
-    return NextResponse.json({ error: 'confidence must be green, yellow, or red' }, { status: 400 });
+    return NextResponse.json({ error: 'confidence must be green, blue, yellow, or red' }, { status: 400 });
   }
 
   const admin = createAdminClient();

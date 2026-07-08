@@ -26,14 +26,15 @@ interface RoutineTask {
   coverageStatus?: CoverageStatus | null;
 }
 
-// Plain self-assessment words, not slang ("nailed it" reads casual/American,
-// "Okay" is falsely upbeat for what's actually an ambivalent middle state).
-// These three map directly to applyConfidenceSignal (topic-selector.ts):
-// green advances the topic's status, yellow acknowledges the attempt without
-// moving anything already in progress, red is a real regression signal.
-type ConfidenceSignal = 'green' | 'yellow' | 'red';
+// Plain self-assessment words, not slang. Four points, not three, so
+// "real progress but not solid yet" has its own answer instead of getting
+// forced into either "Confident" or "Not sure." Maps directly to
+// applyConfidenceSignal (topic-selector.ts): green advances fully, blue
+// advances but caps below revision-ready, yellow holds steady, red regresses.
+type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
 const CONFIDENCE_OPTIONS: { value: ConfidenceSignal; emoji: string; label: string }[] = [
   { value: 'green', emoji: '🟢', label: 'Confident' },
+  { value: 'blue', emoji: '🔵', label: 'Getting there' },
   { value: 'yellow', emoji: '🟡', label: 'Not sure' },
   { value: 'red', emoji: '🔴', label: 'Struggling' },
 ];
@@ -339,13 +340,16 @@ export function TodaysRoutineCard() {
                   </button>
                   {expanded && (
                     <div className="rounded-b-xl border border-t-0 border-orange-300 bg-orange-50/60 px-3 pb-3 pt-1">
-                      <div className="flex gap-2">
+                      {/* 2x2, not a single row of 4 — "Getting there" and
+                          "Struggling" don't fit four-across on a phone
+                          without wrapping mid-word. */}
+                      <div className="grid grid-cols-2 gap-2">
                         {CONFIDENCE_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
                             onClick={() => toggleTask(task, opt.value)}
                             disabled={busyTaskId === task.id}
-                            className="flex-1 flex flex-col items-center gap-0.5 rounded-lg border border-orange-200 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
+                            className="flex flex-col items-center gap-0.5 rounded-lg border border-orange-200 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
                           >
                             <span className="text-lg leading-none">{opt.emoji}</span>
                             {opt.label}

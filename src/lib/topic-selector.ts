@@ -113,25 +113,30 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
   return { topic: winner.topic, score: winner.score, reasons: winner.reasons.slice(0, 2) };
 }
 
-export type ConfidenceSignal = 'green' | 'yellow' | 'red';
+export type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
 
 const STATUS_ORDER: CoverageStatus[] = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'];
+const PRACTICING_RANK = STATUS_ORDER.indexOf('practicing');
 
 // Confidence-aware planning — this is where "CareerRai upgrades topics
 // automatically" lives: the student declares up to 'revising' in the
 // Blueprint; 'exam_ready' is EARNED here, from a green tap on a topic
 // already at 'revising'. Signals feed the same Coverage grid the Topic
 // Selector reads for tomorrow's plan.
-//   green  — advance one level, up to and including 'exam_ready'
-//   yellow — acknowledges the attempt; only moves an untouched topic to
-//            'learning', never advances or regresses one already in progress
-//   red    — a real regression signal: struggling on a topic at
-//            'practicing'/'revising'/'exam_ready' means it isn't holding, so
-//            it drops back to 'learning' — never all the way to
-//            'not_started', since the attempt itself is still real signal
+//   green   — advance one level, up to and including 'exam_ready'
+//   blue    — real progress, not full confidence yet: advance one level but
+//             capped at 'practicing' — never pushes a topic into 'revising'
+//             or 'exam_ready' off a "getting there" tap, only green does that
+//   yellow  — acknowledges the attempt; only moves an untouched topic to
+//             'learning', never advances or regresses one already in progress
+//   red     — a real regression signal: struggling on a topic at
+//             'practicing'/'revising'/'exam_ready' means it isn't holding, so
+//             it drops back to 'learning' — never all the way to
+//             'not_started', since the attempt itself is still real signal
 export function applyConfidenceSignal(current: CoverageStatus | null, confidence: ConfidenceSignal): CoverageStatus {
   const rank = STATUS_ORDER.indexOf(current ?? 'not_started');
   if (confidence === 'green') return STATUS_ORDER[Math.min(rank + 1, STATUS_ORDER.length - 1)];
+  if (confidence === 'blue') return STATUS_ORDER[rank >= PRACTICING_RANK ? rank : rank + 1];
   if (confidence === 'red') return 'learning';
   return rank === 0 ? 'learning' : STATUS_ORDER[rank];
 }

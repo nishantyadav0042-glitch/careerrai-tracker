@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, MoreHorizontal, FileText, Target, User, Settings, Users, IndianRupee, X, Compass } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, MoreHorizontal, User, Settings, Users, IndianRupee, X, Compass } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -139,14 +139,14 @@ const STUDENT_MAIN: NavItem[] = [
   { href: '/student/blueprint', icon: Compass, label: 'My CAT Plan' },
 ];
 
+// Mocks folded into Analysis (one "how am I doing" panel with two tabs),
+// Chat folded into Buddy (one "everything with my mentor" panel), History
+// and Settings folded into Profile (sub-sections there, not their own
+// top-level destinations). Three real screens instead of seven.
 const STUDENT_MORE: NavItem[] = [
-  { href: '/student/exams', icon: Target, label: 'Mocks' },
   { href: '/student/analysis', icon: TrendingUp, label: 'Analysis' },
   { href: '/student/buddy', imgSrc: '/buddy-nav-icon.jpg', label: 'Buddy' },
-  { href: '/student/chat', icon: MessageCircle, label: 'Chat' },
-  { href: '/student/reports', icon: FileText, label: 'History' },
   { href: '/student/profile', icon: User, label: 'Profile' },
-  { href: '/student/settings', icon: Settings, label: 'Settings' },
 ];
 
 const BUDDY_MAIN: NavItem[] = [
@@ -162,15 +162,16 @@ const BUDDY_MORE: NavItem[] = [
   { href: '/buddy/settings', icon: Settings, label: 'Settings' },
 ];
 
-function withChatBadge(items: NavItem[], unread: number): NavItem[] {
+function withBadge(items: NavItem[], label: string, unread: number): NavItem[] {
   if (!unread) return items;
-  return items.map((it) => (it.label === 'Chat' ? { ...it, badge: unread } : it));
+  return items.map((it) => (it.label === label ? { ...it, badge: unread } : it));
 }
 
 export function StudentBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
-  return <NavBar items={STUDENT_MAIN} moreItems={withChatBadge(STUDENT_MORE, chatUnread)} />;
+  // Chat lives inside the Buddy panel now — badge Buddy, not a separate Chat item.
+  return <NavBar items={STUDENT_MAIN} moreItems={withBadge(STUDENT_MORE, 'Buddy', chatUnread)} />;
 }
 
 export function BuddyBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
-  return <NavBar items={withChatBadge(BUDDY_MAIN, chatUnread)} moreItems={BUDDY_MORE} />;
+  return <NavBar items={withBadge(BUDDY_MAIN, 'Chat', chatUnread)} moreItems={BUDDY_MORE} />;
 }
