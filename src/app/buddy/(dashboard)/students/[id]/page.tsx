@@ -12,6 +12,7 @@ import { OrientationCompleteButton } from './orientation-complete-button';
 import { BriefingPanel } from './briefing-panel';
 import { StudentDossier } from '@/components/student-dossier';
 import { StudyPlanFeed } from './study-plan-feed';
+import { PreparationDNA } from './preparation-dna';
 import type { DailyReport, BuddyFeedback } from '@/types';
 import { ArrowLeft, AlertCircle, TrendingDown, TrendingUp, UserCircle, ChevronDown } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -280,6 +281,9 @@ export default async function BuddyStudentDetailPage({
           confidence, Coverage Matrix, weekly evolution. A standalone
           component with its own queries — nothing above this line changed. */}
       <StudyPlanFeed studentId={id} />
+
+      {/* Preparation DNA — features, not raw logs. Student State V1: */}
+      <PreparationDNA studentId={id} />
 
       {/* Period selector */}
       <div className="flex bg-stone-100 rounded-xl p-1 gap-1">

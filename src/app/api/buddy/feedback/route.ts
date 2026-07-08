@@ -14,7 +14,20 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { student_id, feedback_text, rating, next_steps, period_covered, ai_draft } = body;
+  const { student_id, feedback_text, rating, next_steps, period_covered, ai_draft, diagnosis_issue, diagnosis_section, diagnosis_confidence } = body;
+
+  const ISSUES = ['knowledge', 'consistency', 'strategy'];
+  const SECTIONS = ['VARC', 'DILR', 'QA'];
+  const CONFIDENCE = ['improved', 'same', 'worse'];
+  if (diagnosis_issue != null && !ISSUES.includes(diagnosis_issue)) {
+    return NextResponse.json({ error: 'Invalid diagnosis_issue' }, { status: 400 });
+  }
+  if (diagnosis_section != null && !SECTIONS.includes(diagnosis_section)) {
+    return NextResponse.json({ error: 'Invalid diagnosis_section' }, { status: 400 });
+  }
+  if (diagnosis_confidence != null && !CONFIDENCE.includes(diagnosis_confidence)) {
+    return NextResponse.json({ error: 'Invalid diagnosis_confidence' }, { status: 400 });
+  }
 
   if (!student_id || !feedback_text?.trim()) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -67,6 +80,9 @@ export async function POST(request: NextRequest) {
     rating: rating ?? 3,
     next_steps: next_steps ?? [],
     period_covered: period_covered ?? 'adhoc',
+    diagnosis_issue: diagnosis_issue ?? null,
+    diagnosis_section: diagnosis_section ?? null,
+    diagnosis_confidence: diagnosis_confidence ?? null,
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

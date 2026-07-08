@@ -275,11 +275,18 @@ function checkAuthorship(aiBulletText: string, submitted: string): string | null
   return null;
 }
 
+type DiagnosisIssue = 'knowledge' | 'consistency' | 'strategy';
+type DiagnosisSection = 'VARC' | 'DILR' | 'QA';
+type DiagnosisConfidence = 'improved' | 'same' | 'worse';
+
 function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; onSuccess: (fb: BuddyFeedback) => void }) {
   const [open, setOpen] = useState(false);
   const [fbText, setFbText] = useState('');
   const [rating, setRating] = useState(4);
   const [nextSteps, setNextSteps] = useState<string[]>([]);
+  const [diagnosisIssue, setDiagnosisIssue] = useState<DiagnosisIssue | null>(null);
+  const [diagnosisSection, setDiagnosisSection] = useState<DiagnosisSection | null>(null);
+  const [diagnosisConfidence, setDiagnosisConfidence] = useState<DiagnosisConfidence | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [bulletLoading, setBulletLoading] = useState(false);
   const [aiBullets, setAiBullets] = useState<string | null>(null);
@@ -334,12 +341,16 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
           next_steps: nextSteps,
           period_covered: 'adhoc',
           ...(aiBullets ? { ai_draft: aiBullets } : {}),
+          diagnosis_issue: diagnosisIssue,
+          diagnosis_section: diagnosisSection,
+          diagnosis_confidence: diagnosisConfidence,
         }),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? 'Failed to submit. Try again.'); return; }
       onSuccess(json.feedback as BuddyFeedback);
       setFbText(''); setRating(4); setNextSteps([]); setOpen(false); setAiBullets(null);
+      setDiagnosisIssue(null); setDiagnosisSection(null); setDiagnosisConfidence(null);
     } finally {
       setSubmitting(false);
     }
@@ -412,6 +423,62 @@ function FeedbackFormConnected({ studentId, onSuccess }: { studentId: string; on
             </button>
           ))}
         </div>
+
+        {/* Three optional taps — this is how the engine learns from you.
+            Every buddy who fills this in teaches CareerRai's student-state
+            model a real, outcome-labeled data point instead of a guess. */}
+        <div className="rounded-xl bg-stone-50 p-3 space-y-3">
+          <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Quick diagnosis (optional)</p>
+          <div>
+            <p className="text-xs text-stone-600 mb-1.5">Primary issue</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['knowledge', 'consistency', 'strategy'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setDiagnosisIssue((cur) => (cur === v ? null : v))}
+                  className={cn('py-1.5 rounded-lg text-xs font-medium capitalize transition-colors',
+                    diagnosisIssue === v ? 'bg-teal-700 text-white' : 'bg-white text-stone-600 border border-stone-200')}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-stone-600 mb-1.5">Section</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['VARC', 'DILR', 'QA'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setDiagnosisSection((cur) => (cur === v ? null : v))}
+                  className={cn('py-1.5 rounded-lg text-xs font-medium transition-colors',
+                    diagnosisSection === v ? 'bg-teal-700 text-white' : 'bg-white text-stone-600 border border-stone-200')}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-stone-600 mb-1.5">Confidence vs last check-in</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['improved', 'same', 'worse'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setDiagnosisConfidence((cur) => (cur === v ? null : v))}
+                  className={cn('py-1.5 rounded-lg text-xs font-medium capitalize transition-colors',
+                    diagnosisConfidence === v ? 'bg-teal-700 text-white' : 'bg-white text-stone-600 border border-stone-200')}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-2">
           {NEXT_STEP_OPTIONS.map((s) => (
             <label key={s} className="flex items-center gap-2 cursor-pointer">

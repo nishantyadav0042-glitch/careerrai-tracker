@@ -11,6 +11,7 @@ import {
   buildTopicMemory,
   type CompletionRecord, type WindowStats, type MockTrend, type HealthScore, type TopicMemoryEntry,
 } from './prep-memory';
+import { computeMomentum, computeRisk, detectSignals, type StudentState, type Signal } from './signal-engine';
 
 function addDays(dateStr: string, delta: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
@@ -54,6 +55,8 @@ export interface PrepMemoryResult {
   prepMemory: { last30: WindowStats; last7: WindowStats; mockTrend: MockTrend };
   weeklyEvolution: string[];
   healthScore: HealthScore;
+  studentState: StudentState;
+  signals: Signal[];
 }
 
 // Single entry point for both /api/blueprint and the tracker homepage —
@@ -72,6 +75,8 @@ export async function computePrepMemory(
   const last7Start = addDays(today, -6);
   const priorWeekStart = addDays(today, -13);
   const priorWeekEnd = addDays(today, -7);
+  const week1Start = addDays(today, -20);
+  const week1End = addDays(today, -14);
 
   const [completionRecords, { data: debriefs }, { data: coverageRows }] = await Promise.all([
     buildCompletionRecords(admin, studentId, last30Start),
@@ -83,6 +88,7 @@ export async function computePrepMemory(
   const last30 = windowStats(completionRecords, mockDates, last30Start, today);
   const last7 = windowStats(completionRecords, mockDates, last7Start, today);
   const priorWeek = windowStats(completionRecords, mockDates, priorWeekStart, priorWeekEnd);
+  const week1 = windowStats(completionRecords, mockDates, week1Start, week1End);
 
   const daysSinceSignup = signupDate ? Math.round((Date.parse(today) - Date.parse(signupDate)) / 86_400_000) : 30;
   const windowDaysElapsed = Math.max(1, Math.min(30, daysSinceSignup));
@@ -99,12 +105,47 @@ export async function computePrepMemory(
     windowStart
   );
 
+  const trend = mockTrend((debriefs ?? []).map((d: { overall_percentile: number | null }) => ({ overallPercentile: d.overall_percentile })));
+
+  // Student State V1 — see signal-engine.ts for why only these four fields.
+  const inMotionTopics = new Set(
+    (coverageRows ?? []).filter((r: { status: string }) => r.status !== 'not_started').map((r: { topic: string }) => r.topic)
+  ).size;
+  const totalTopics = Object.keys(TOPIC_METADATA).length;
+  const lastActivityDate = completionRecords.length
+    ? [...completionRecords].map((c) => c.routineDate).sort().at(-1)!
+    : null;
+  const daysSinceLastActivity = lastActivityDate
+    ? Math.round((Date.parse(today) - Date.parse(lastActivityDate)) / 86_400_000)
+    : null;
+  const emergencyRatio = last30.daysStudied > 0 ? last30.emergencyDays / last30.daysStudied : 0;
+
+  const studentState: StudentState = {
+    knowledge: Math.round((inMotionTopics / totalTopics) * 100),
+    consistency: Math.round((last30.daysStudied / 30) * 100),
+    momentum: computeMomentum([week1.minutesStudied, priorWeek.minutesStudied, last7.minutesStudied]),
+    risk: computeRisk({
+      daysSinceLastActivity,
+      priorConsistencyDays: last30.daysStudied,
+      mockLatestPercentile: trend.latestPercentile,
+      mockPreviousPercentile: trend.previousPercentile,
+      emergencyRatio,
+    }),
+  };
+
+  const qaVarcDilrTasks = last30.sectionCounts.VARC + last30.sectionCounts.DILR + last30.sectionCounts.QA;
+  const signals = detectSignals({
+    sectionGapDays: gaps,
+    sectionShare: qaVarcDilrTasks > 0
+      ? { VARC: last30.sectionCounts.VARC / qaVarcDilrTasks, DILR: last30.sectionCounts.DILR / qaVarcDilrTasks, QA: last30.sectionCounts.QA / qaVarcDilrTasks }
+      : {},
+    emergencyRatio,
+    revisionDue: due,
+    revisionCompletedThisWeek: completed,
+  });
+
   return {
-    prepMemory: {
-      last30,
-      last7,
-      mockTrend: mockTrend((debriefs ?? []).map((d: { overall_percentile: number | null }) => ({ overallPercentile: d.overall_percentile }))),
-    },
+    prepMemory: { last30, last7, mockTrend: trend },
     weeklyEvolution: weeklyEvolutionLines(last7, priorWeek),
     healthScore: computeHealthScore({
       windowDaysElapsed,
@@ -115,6 +156,8 @@ export async function computePrepMemory(
       revisionDue: due,
       revisionCompleted: completed,
     }),
+    studentState,
+    signals,
   };
 }
 

@@ -28,6 +28,7 @@ export interface WindowStats {
   sectionCounts: Record<Section | 'General', number>;
   confidenceCounts: { green: number; yellow: number; red: number };
   mocksLogged: number;
+  emergencyDays: number;
 }
 
 const emptySectionCounts = (): Record<Section | 'General', number> => ({ VARC: 0, DILR: 0, QA: 0, General: 0 });
@@ -47,11 +48,13 @@ export function windowStats(
   const topics = new Set(rows.map((r) => r.topic).filter((t): t is string => t != null));
   const sectionCounts = emptySectionCounts();
   const confidenceCounts = { green: 0, yellow: 0, red: 0 };
+  const emergencyDaySet = new Set<string>();
   let minutes = 0;
   for (const r of rows) {
     sectionCounts[r.section] += 1;
     minutes += r.estMinutes;
     if (r.confidence) confidenceCounts[r.confidence] += 1;
+    if (r.isEmergency) emergencyDaySet.add(r.routineDate);
   }
 
   return {
@@ -62,6 +65,7 @@ export function windowStats(
     sectionCounts,
     confidenceCounts,
     mocksLogged: mockDates.filter(inWindow).length,
+    emergencyDays: emergencyDaySet.size,
   };
 }
 
