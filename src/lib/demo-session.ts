@@ -73,6 +73,20 @@ export async function applyDemoSession(
     }
   );
 
+  // Clear any existing real session first. Now that the demo link is also
+  // reachable from inside the app (the paywalled Buddy tab), this runs for
+  // already-logged-in students, not just anonymous visitors — without an
+  // explicit sign-out, verifyOtp below only ever ADDS the demo session's
+  // cookies via setAll, it never clears the visitor's real session cookies.
+  // If the real session's auth-token cookie was chunked into more pieces
+  // than the demo session needs, the leftover chunk stays in the browser
+  // and corrupts the concatenated JWT on the very next request — auth then
+  // fails a request or two later, bouncing back to /login with a stuck
+  // cr_demo cookie still blocking writes. signOut() here uses the same
+  // getAll/setAll pair, so it correctly clears however many chunks the
+  // real session actually has before the new ones are written.
+  await supabase.auth.signOut();
+
   const { error: verifyError } = await supabase.auth.verifyOtp({
     email: demoEmail,
     token: linkData.properties.email_otp,
