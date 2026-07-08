@@ -50,13 +50,17 @@ interface NeedsSetupResponse {
 }
 
 // Time budget filters today's list — same tasks, never invented ones.
-// 'planned' = the full plan (default; most days nobody changes it).
-type TimeBudget = 30 | 60 | 120 | 'planned';
+// 'planned' = the full plan (default; most days nobody changes it). 30 is
+// not just "a shorter list" — completing just the top task under this
+// budget is tagged is_emergency server-side (complete-task/route.ts) and
+// counts as a full streak-preserving day. Only two options because that's
+// the only real fork: a normal day, or a crisis day. 1h/2h were arbitrary
+// in-between trims with no distinct meaning and no visible effect most
+// days, just four buttons competing with the actual task below them.
+type TimeBudget = 30 | 'planned';
 const TIME_OPTIONS: { value: TimeBudget; label: string }[] = [
-  { value: 30, label: '30m' },
-  { value: 60, label: '1h' },
-  { value: 120, label: '2h' },
   { value: 'planned', label: '🟢 Planned' },
+  { value: 30, label: '⚡ Emergency (30m)' },
 ];
 
 // Today's Win — a real prerequisite edge from the Knowledge Graph.
@@ -263,7 +267,7 @@ export function TodaysRoutineCard() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-1.5 mb-4">
+          <div className="grid grid-cols-2 gap-1.5 mb-4">
             {TIME_OPTIONS.map(({ value, label }) => (
               <button
                 key={String(value)}
