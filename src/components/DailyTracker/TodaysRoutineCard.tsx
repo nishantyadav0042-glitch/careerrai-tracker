@@ -26,11 +26,16 @@ interface RoutineTask {
   coverageStatus?: CoverageStatus | null;
 }
 
+// Plain self-assessment words, not slang ("nailed it" reads casual/American,
+// "Okay" is falsely upbeat for what's actually an ambivalent middle state).
+// These three map directly to applyConfidenceSignal (topic-selector.ts):
+// green advances the topic's status, yellow acknowledges the attempt without
+// moving anything already in progress, red is a real regression signal.
 type ConfidenceSignal = 'green' | 'yellow' | 'red';
 const CONFIDENCE_OPTIONS: { value: ConfidenceSignal; emoji: string; label: string }[] = [
-  { value: 'green', emoji: '🟢', label: 'Nailed it' },
-  { value: 'yellow', emoji: '🟡', label: 'Okay' },
-  { value: 'red', emoji: '🔴', label: 'Shaky' },
+  { value: 'green', emoji: '🟢', label: 'Confident' },
+  { value: 'yellow', emoji: '🟡', label: 'Not sure' },
+  { value: 'red', emoji: '🔴', label: 'Struggling' },
 ];
 
 interface RoutineResponse {
