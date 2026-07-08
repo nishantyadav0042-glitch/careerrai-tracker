@@ -220,6 +220,12 @@ export async function GET() {
   const tasksWithStatus = (routine.tasks as any[]).map((t) => ({
     ...t,
     coverageStatus: t.topic ? coverageByTopic.get(t.topic) ?? null : null,
+    // Memory tag — "Last done Nd ago" / "First time" / "Nth revision".
+    // Reads the same 14-routine lookback whySummary/mission already use, so
+    // "first time" means first time within that window, not literally ever —
+    // same honest scoping as the rest of this file's recency signals.
+    lastTouchedDaysAgo: t.topic ? history.daysSinceLastPracticedByTopic[t.topic] ?? null : null,
+    timesPracticed: t.topic ? history.timesPracticedByTopic[t.topic] ?? 0 : 0,
   }));
 
   return NextResponse.json({
@@ -274,7 +280,7 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }> {
+async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number> }> {
   const { data: pastRoutines } = await admin
     .from('daily_routines')
     .select('routine_date, tasks')
@@ -301,6 +307,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   // simply won't match here, which is the correct honest behavior for data
   // that didn't exist yet).
   const daysSinceByTopic: Record<string, number | null> = {};
+  const timesPracticedByTopic: Record<string, number> = {};
   const today = getLogDateString();
   for (const r of (pastRoutines ?? [])) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
@@ -313,12 +320,13 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
         daysSince[section] = daysAgo;
       }
       const topic = t.topic as string | null | undefined;
-      if (topic && daysSinceByTopic[topic] == null) {
-        daysSinceByTopic[topic] = daysAgo;
+      if (topic) {
+        if (daysSinceByTopic[topic] == null) daysSinceByTopic[topic] = daysAgo;
+        timesPracticedByTopic[topic] = (timesPracticedByTopic[topic] ?? 0) + 1;
       }
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic };
+  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic };
 }
 
 // The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
-import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish } from '@/lib/study-plan';
+import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish, phaseBoundaryDates } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
@@ -105,6 +105,12 @@ export async function GET() {
     topicsRemaining: notStartedCount,
     topicsStartedLast21Days,
   });
+  const { mockIntensiveStart, revisionSprintStart } = phaseBoundaryDates(catExamDate(examYear));
+  const dateLabel = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+  const roadmapDates = {
+    mockIntensiveStart: dateLabel(mockIntensiveStart),
+    revisionSprintStart: dateLabel(revisionSprintStart),
+  };
 
   const notStartedBySection: Partial<Record<Section, number>> = {};
   for (const t of notStartedTopics) {
@@ -213,6 +219,7 @@ export async function GET() {
     dueForRevisionCount: dueForRevision.length,
     mocksCompleted: prepMemory.mockTrend.count,
     finishProjection,
+    roadmapDates,
     thisWeek,
     biggestPriority,
     buddyBanner,

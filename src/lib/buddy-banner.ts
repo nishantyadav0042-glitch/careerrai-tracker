@@ -102,8 +102,8 @@ export function selectBuddyBanner(signals: BuddyBannerSignals): BuddyBanner {
 
   return {
     key: 'default',
-    headline: 'Feeling stuck?',
-    sub: 'A Buddy tells you what to change, not just what to study.',
+    headline: 'Stop repeating the same mistakes.',
+    sub: 'A Buddy catches what you can’t see in your own mocks.',
     cta: 'See how it works →',
   };
 }

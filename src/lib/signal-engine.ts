@@ -102,3 +102,37 @@ export interface StudentState {
   momentum: Momentum;
   risk: Risk;
 }
+
+export interface TodaysFocus {
+  headline: string;
+  sub: string;
+}
+
+// "Today's Focus" — the one thing Home says before anything else. Same
+// priority-rules discipline as every other engine here: the first rule
+// with real evidence behind it wins, and the fallback never invents
+// enthusiasm ("you're on a good run") unless the number backing it is
+// actually large enough to say out loud.
+export function computeTodaysFocus(input: {
+  revisionDueCount: number;
+  avoidedSection: 'VARC' | 'DILR' | 'QA' | null;
+  hasStartedMocks: boolean;
+  mocksThisWeek: number;
+  daysStudiedLast30: number;
+}): TodaysFocus {
+  const { revisionDueCount, avoidedSection, hasStartedMocks, mocksThisWeek, daysStudiedLast30 } = input;
+
+  if (revisionDueCount > 15) {
+    return { headline: 'Revision', sub: `${revisionDueCount} topics are waiting. Ignore new topics today.` };
+  }
+  if (hasStartedMocks && mocksThisWeek === 0 && daysStudiedLast30 >= 14) {
+    return { headline: 'Mock test', sub: "You haven't tested yourself this week. Take one before Sunday." };
+  }
+  if (avoidedSection) {
+    return { headline: avoidedSection, sub: `You're avoiding it. Do ${avoidedSection} first today.` };
+  }
+  if (daysStudiedLast30 >= 14) {
+    return { headline: 'Keep the pace', sub: `You've studied ${daysStudiedLast30} of the last 30 days — don't break it now.` };
+  }
+  return { headline: "Today's plan", sub: 'Ready below.' };
+}

@@ -14,6 +14,7 @@ import { BuddyBanner } from '@/components/buddy-banner';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { computePrepMemory } from '@/lib/prep-memory-data';
 import { selectBuddyBanner } from '@/lib/buddy-banner';
+import { computeTodaysFocus } from '@/lib/signal-engine';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -46,7 +47,7 @@ export default async function DailyTrackerPage() {
     { data: logs },
     { data: recentMock },
     { data: streakRow },
-    { prepMemory, weeklyEvolution, healthScore },
+    { prepMemory, weeklyEvolution, healthScore, signals, revisionDueCount },
   ] = await Promise.all([
     admin
       .from('video_sessions')
@@ -176,6 +177,22 @@ export default async function DailyTrackerPage() {
     };
   }
 
+  // Today's Focus — the one sentence that comes before anything else. Not a
+  // dashboard fact; a decision. Reuses the same signals computed for the
+  // Buddy's Preparation DNA (avoid_<section>, revision backlog, mock
+  // cadence) rather than inventing a second definition of "behind."
+  const avoidedSectionSignal = signals.find((s) => s.key.startsWith('avoid_'));
+  const avoidedSection = avoidedSectionSignal
+    ? (avoidedSectionSignal.key.replace('avoid_', '') as 'VARC' | 'DILR' | 'QA')
+    : null;
+  const todaysFocus = computeTodaysFocus({
+    revisionDueCount,
+    avoidedSection,
+    hasStartedMocks: prepMemory.mockTrend.count > 0,
+    mocksThisWeek: prepMemory.last7.mocksLogged,
+    daysStudiedLast30: prepMemory.last30.daysStudied,
+  });
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto space-y-5">
@@ -188,6 +205,14 @@ export default async function DailyTrackerPage() {
               {healthChip.emoji} {healthChip.score}%
             </Link>
           )}
+        </div>
+
+        {/* Today's Focus — one sentence, one decision, before anything else.
+            Everything below this line is detail; this line is the verdict. */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-1">Today&apos;s Focus</p>
+          <p className="text-lg font-bold text-stone-900">{todaysFocus.headline}</p>
+          <p className="text-sm text-stone-600 mt-0.5">{todaysFocus.sub}</p>
         </div>
 
         {/* What should I study? — the reason the student opened the app,

@@ -12,6 +12,10 @@ interface FinishProjection {
   windowLabel: string | null;
   sub: string;
 }
+interface RoadmapDates {
+  mockIntensiveStart: string;
+  revisionSprintStart: string;
+}
 interface PlanData {
   totalTopics: number;
   studiedOnceCount: number;
@@ -19,12 +23,21 @@ interface PlanData {
   dueForRevisionCount: number;
   mocksCompleted: number;
   finishProjection: FinishProjection;
+  roadmapDates: RoadmapDates;
   thisWeek: ThisWeekItem[];
   biggestPriority: string | null;
   hasBuddy: boolean;
   isPremium: boolean;
   buddyBanner: BuddyBannerData;
 }
+
+const VERDICT: Record<FinishProjection['status'], { label: string; color: string } | null> = {
+  done: { label: '✓ Syllabus done', color: 'text-teal-700' },
+  ahead: { label: '✓ On track', color: 'text-teal-700' },
+  tight: { label: '⚠ Tight', color: 'text-orange-700' },
+  critical: { label: '⚠ Behind', color: 'text-rose-700' },
+  stalled: null,
+};
 
 function PlanRow({ href, icon, label, cta }: { href: string; icon: string; label: string; cta: string }) {
   return (
@@ -94,8 +107,9 @@ export default function MyCatPlanPage() {
 
   const {
     totalTopics, studiedOnceCount, notStartedCount, dueForRevisionCount, mocksCompleted,
-    finishProjection, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner,
+    finishProjection, roadmapDates, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner,
   } = data;
+  const verdict = VERDICT[finishProjection.status];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
@@ -123,11 +137,17 @@ export default function MyCatPlanPage() {
           />
         </div>
 
-        {/* Finish syllabus — a real date window from trailing pace, or the
-            honest reason there isn't one yet. Never "estimated," never a
-            verdict — the sub-line is always a lever, not a scolding. */}
+        {/* "Can I still finish?" — a real date window from trailing pace,
+            paired with two fixed calendar facts (Mock Intensive / Revision
+            Sprint start dates come straight from the roadmap's own
+            thresholds, not from pace — nothing here is projected twice).
+            The verdict badge is the same status the sub-line already
+            implies; it's a lever, never a scolding. */}
         <div className="bg-white rounded-2xl border border-stone-200 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">Finish syllabus</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Finish syllabus</p>
+            {verdict && <span className={`text-xs font-bold ${verdict.color}`}>{verdict.label}</span>}
+          </div>
           {finishProjection.windowLabel ? (
             <>
               <p className="text-lg font-bold text-stone-900">{finishProjection.windowLabel}</p>
@@ -136,6 +156,16 @@ export default function MyCatPlanPage() {
           ) : (
             <p className="text-sm font-semibold text-stone-800">{finishProjection.sub}</p>
           )}
+          <div className="grid grid-cols-2 gap-3 border-t border-stone-100 mt-3 pt-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-0.5">Mock Intensive begins</p>
+              <p className="text-sm font-semibold text-stone-800">{roadmapDates.mockIntensiveStart}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-0.5">Revision Sprint begins</p>
+              <p className="text-sm font-semibold text-stone-800">{roadmapDates.revisionSprintStart}</p>
+            </div>
+          </div>
         </div>
 
         {thisWeek.length > 0 && (

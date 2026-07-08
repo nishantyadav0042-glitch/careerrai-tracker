@@ -23,6 +23,19 @@ interface RoutineTask {
   // Looked up fresh per request, not stored on the frozen routine row — see
   // /api/routine/today. Absent entirely on routines generated before this shipped.
   coverageStatus?: CoverageStatus | null;
+  lastTouchedDaysAgo?: number | null;
+  timesPracticed?: number;
+}
+
+// "Last done 6 days ago" / "First time" / "3rd revision" — three words, not
+// a sentence. Memory made visible without making it emotional.
+function memoryTag(task: RoutineTask): string | null {
+  if (!task.topic) return null;
+  if (task.lastTouchedDaysAgo == null) return 'First time';
+  if (task.lastTouchedDaysAgo === 0) return 'Practiced today';
+  const times = task.timesPracticed ?? 0;
+  const ordinal = times === 1 ? '1st' : times === 2 ? '2nd' : times === 3 ? '3rd' : `${times}th`;
+  return times > 1 ? `${ordinal} revision · ${task.lastTouchedDaysAgo}d ago` : `Last done ${task.lastTouchedDaysAgo}d ago`;
 }
 
 // Plain self-assessment words, not slang. Four points, not three, so
@@ -271,6 +284,20 @@ export function TodaysRoutineCard() {
         <p className="mb-3 text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Welcome back 👋 Today&apos;s priority is ready.</p>
       )}
 
+      {/* The engine, made visible. Every one of these bullets already exists
+          as a per-task "why today" reason — this just says them together,
+          once, before the student has to read three separate cards to piece
+          it together themselves. */}
+      {!fullyDone && routine.tasks.some((t) => t.reason) && (
+        <ul className="mb-3 space-y-1">
+          {routine.tasks.filter((t) => t.reason).slice(0, 3).map((t) => (
+            <li key={t.id} className="text-xs text-stone-500 flex gap-1.5">
+              <span className="text-stone-300">•</span>{t.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {fullyDone ? (
         <div className="py-3">
           {/* Forward-pull, not a finish line — the app's job is to make
@@ -329,6 +356,9 @@ export function TodaysRoutineCard() {
                           <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
                         </div>
                         <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
+                        {memoryTag(task) && (
+                          <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
+                        )}
                         {task.reason && (
                           <p className="text-xs text-stone-500 mt-1"><span className="text-stone-400">Why today?</span> {task.reason}</p>
                         )}

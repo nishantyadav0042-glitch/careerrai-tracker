@@ -57,6 +57,7 @@ export interface PrepMemoryResult {
   healthScore: HealthScore;
   studentState: StudentState;
   signals: Signal[];
+  revisionDueCount: number;
 }
 
 // Single entry point for both /api/blueprint and the tracker homepage —
@@ -158,6 +159,7 @@ export async function computePrepMemory(
     }),
     studentState,
     signals,
+    revisionDueCount: due,
   };
 }
 

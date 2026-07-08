@@ -152,3 +152,21 @@ export function projectSyllabusFinish(input: {
   }
   return { status: 'ahead', windowLabel, sub: 'Based on your current pace.' };
 }
+
+// ─── Phase boundary dates ───────────────────────────────────────────────────
+// The roadmap's own thresholds (currentRoadmapIndex above), turned into real
+// calendar dates instead of a "weeks remaining" number nobody converts in
+// their head. These are fixed offsets from the exam date — not projected
+// from pace, so there's nothing to invent: Mock Intensive starts 11 weeks
+// out and Revision Sprint starts 3 weeks out, on the calendar, for everyone.
+export interface PhaseBoundaries {
+  mockIntensiveStart: Date;
+  revisionSprintStart: Date;
+}
+
+export function phaseBoundaryDates(examDate: Date): PhaseBoundaries {
+  return {
+    mockIntensiveStart: new Date(examDate.getTime() - 11 * 7 * 24 * 60 * 60 * 1000),
+    revisionSprintStart: new Date(examDate.getTime() - 3 * 7 * 24 * 60 * 60 * 1000),
+  };
+}
