@@ -189,7 +189,7 @@ export default function MyCatPlanPage() {
         </div>
 
         <Link href="/student/tracker" className="block rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
-          Today&apos;s Study →
+          Today&apos;s Study Plan →
         </Link>
 
         <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3">

@@ -4,20 +4,20 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Sparkles, ArrowRight } from 'lucide-react';
 
-// Every line here is either a fact this product can already back up
-// (verified IIM alumni, 95%ile+, 1-on-1 not a batch) or a description of
-// what a buddy actually does (mock breakdowns, daily log nudges) — never a
-// fabricated efficacy number. "Increases your chances by 40%" would be a
-// made-up statistic with no study behind it; this app's own brand rule,
-// set earlier in this build, is no invented numbers, no unverified
-// superlatives. Real claims convert better long-term anyway — a student
-// who catches one fake stat stops trusting all the honest ones too.
+// Sharper pass: specific and a little confrontational, not just feature
+// descriptions — "you" language, a challenge the reader has to answer
+// honestly, contrast that stings a little. Still zero fabricated stats
+// ("increases your chances by X%" is a made-up number with no study behind
+// it and breaks this app's own no-invented-numbers rule) — every claim
+// below is either a real fact (verified 95%ile+, IIM) or a description of
+// what actually happens in a session. Specificity is what's supposed to do
+// the convincing here, not adjectives.
 const LINES = [
-  'Most aspirants take 30+ mocks and never learn to analyse one. Your buddy breaks down every mock with you — where you lost marks, why, what to fix next.',
-  '1-on-1, never a group. A senior who knows your name, your weak section, and your last mock — not one of 200 in a batch.',
-  'Every CareerRai buddy cleared CAT at 95%ile+, verified. No exceptions.',
-  'Your buddy sees your daily logs and nudges you the moment you go quiet — accountability that doesn’t wait for you to ask.',
-  'A personalised strategy, re-tuned every week from your own data — not the same plan handed to every student.',
+  'You’ve given 30 mocks. Can you name the ONE mistake repeating in all of them? Your buddy can.',
+  'Self-study means nobody checks your work. A buddy does — every week, before a wrong strategy costs you a percentile.',
+  '90%ile and 99%ile don’t study different hours. One of them has someone catching what they can’t see in their own mistakes.',
+  'Every CareerRai buddy cleared CAT at 95%ile+ — they’ve stood exactly where you’re standing now.',
+  'Most aspirants find out their strategy was wrong after the result. A weekly buddy session catches it months before results day, not after.',
 ];
 
 const ROTATE_MS = 4500;

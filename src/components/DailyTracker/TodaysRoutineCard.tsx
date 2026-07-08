@@ -217,7 +217,7 @@ export function TodaysRoutineCard() {
   if (needsSetup) {
     return (
       <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Study</p>
+        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Study Plan</p>
         <QuickRoutineSetup
           initialWeakest={needsSetup.weakestSection}
           initialWeakTopic={needsSetup.weakTopic}
@@ -248,7 +248,7 @@ export function TodaysRoutineCard() {
 
   return (
     <Card className="p-5">
-      <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Study</p>
+      <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Study Plan</p>
 
       {isCatchUp && !fullyDone && (
         <p className="mb-3 text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Welcome back 👋 Today&apos;s priority is ready.</p>
