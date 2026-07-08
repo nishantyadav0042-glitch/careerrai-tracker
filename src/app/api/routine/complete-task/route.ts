@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     const mergedHours = Math.max(1, Math.round(routineMinutes / 60), existingLog?.study_duration ?? 0);
     const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...routineSections])];
     const mergedMockTaken = routineMockTaken || !!existingLog?.mock_taken;
-    const mergedNotes = existingLog?.notes ?? (emergencyMinimumDone && !fullyDone ? 'Emergency-mode minimum day' : null);
+    const mergedNotes = existingLog?.notes ?? (emergencyMinimumDone && !fullyDone ? 'Less time today — did the essentials.' : null);
 
     const { error: rpcError } = await admin.rpc('upsert_log_and_streak', {
       p_student_id: user.id,

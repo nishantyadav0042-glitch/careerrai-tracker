@@ -60,7 +60,7 @@ interface NeedsSetupResponse {
 type TimeBudget = 30 | 'planned';
 const TIME_OPTIONS: { value: TimeBudget; label: string }[] = [
   { value: 'planned', label: '🟢 Planned' },
-  { value: 30, label: '⚡ Emergency (30m)' },
+  { value: 30, label: '⏱️ Less time today (30m)' },
 ];
 
 // Today's Win — a real prerequisite edge from the Knowledge Graph.
