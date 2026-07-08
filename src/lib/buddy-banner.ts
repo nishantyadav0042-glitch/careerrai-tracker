@@ -28,6 +28,7 @@ export interface BuddyBannerSignals {
 
 export interface BuddyBanner {
   key: string;
+  eyebrow?: string;
   headline: string;
   sub: string;
   cta: string;
@@ -36,9 +37,15 @@ export interface BuddyBanner {
 export function selectBuddyBanner(signals: BuddyBannerSignals): BuddyBanner {
   const { mocksCount, latestPercentile, previousPercentile, dueForRevisionCount, daysStudiedLast30, isRepeater, isWorkingProfessional } = signals;
 
+  // The four behavior-tier banners get a "Based on your progress" eyebrow —
+  // it's true for these because a real signal fired. Profile-tier and the
+  // generic fallback don't get it: claiming "based on your progress" for a
+  // static fact (repeater) or a no-signal default would be the same kind of
+  // dishonesty this file exists to avoid.
   if (latestPercentile != null && previousPercentile != null && latestPercentile < previousPercentile) {
     return {
       key: 'mocks_dropping',
+      eyebrow: 'Based on your progress',
       headline: 'Your last mock dropped.',
       sub: "More hours won't fix this. Better feedback might.",
       cta: 'See how →',
@@ -48,6 +55,7 @@ export function selectBuddyBanner(signals: BuddyBannerSignals): BuddyBanner {
   if (mocksCount === 0 && (daysStudiedLast30 ?? 0) >= 5) {
     return {
       key: 'no_mocks_yet',
+      eyebrow: 'Based on your progress',
       headline: "You haven't taken a mock yet.",
       sub: 'A Buddy would start there.',
       cta: 'Meet a Buddy →',
@@ -57,15 +65,17 @@ export function selectBuddyBanner(signals: BuddyBannerSignals): BuddyBanner {
   if ((dueForRevisionCount ?? 0) > 20) {
     return {
       key: 'revision_piling',
-      headline: "New topics aren't the problem now.",
-      sub: 'Revision is. A Buddy keeps you accountable for it.',
-      cta: 'See how →',
+      eyebrow: 'Based on your progress',
+      headline: `${dueForRevisionCount} topics need revision.`,
+      sub: 'A Buddy keeps you accountable for it.',
+      cta: 'See why →',
     };
   }
 
   if ((daysStudiedLast30 ?? 0) >= 14) {
     return {
       key: 'sustained_consistency',
+      eyebrow: 'Based on your progress',
       headline: "You've built discipline.",
       sub: 'Now build strategy with someone who has done this before.',
       cta: 'Meet a Buddy →',

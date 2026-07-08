@@ -1,5 +1,4 @@
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { type MatchBuddy } from '@/lib/buddy-match';
 import { Briefcase, ExternalLink, Sparkles, Lock } from 'lucide-react';
@@ -26,7 +25,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
   if (buddies.length === 0) return null;
 
   return (
-    <Card className="p-5">
+    <div>
       <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Recommended buddies for you</div>
       <p className="text-xs text-stone-400 mt-1 mb-4">
         Real IIM seniors, matched to your profile. Browse free — subscribe to connect with one.
@@ -48,7 +47,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
             : 'Handpicked IIM alumni mentor');
 
           return (
-            <div key={b.id} className="rounded-2xl border border-stone-200 p-4">
+            <div key={b.id} className="rounded-2xl bg-stone-50 p-4">
               <div className="flex items-start gap-3">
                 {b.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -114,6 +113,6 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
       <p className="mt-3 text-center text-[11px] text-stone-400">
         Your buddy tracks you daily, decodes every mock, and meets you weekly — 21-day full refund.
       </p>
-    </Card>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
@@ -20,10 +21,12 @@ export const metadata = {
   description: 'Your CAT prep command centre',
 };
 
-// The homepage answers three questions, nothing else:
-// What should I study? (Today's Study) · Am I okay? (Health) · Is this
-// working? (one proof line). One buddy profile below — trust first,
-// revenue second. Every removed widget lives on its own page or is gone.
+// One dominant answer, not a dashboard of equal-weight cards: what should I
+// study, given almost the whole first screen. Am I okay (Health) shrinks to
+// a header chip, is this working (proof line) shrinks to one sentence, and
+// the buddy nudge only ever shows one line at a time — nothing on this page
+// is allowed to compete with Today's Study Plan for attention.
+
 export default async function DailyTrackerPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
@@ -160,45 +163,51 @@ export default async function DailyTrackerPage() {
   const isSundayIST = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short' }) === 'Sun';
   const sundayLines = isSundayIST ? weeklyEvolution.slice(0, 3) : [];
 
+  // Am I okay? — folded into the header as a small chip instead of its own
+  // card. It's real, and worth one glance, but it was competing for the same
+  // "do something now" attention as the routine right below it — a
+  // dashboard reflex, not a companion one. Full breakdown still lives on
+  // My CAT Plan for anyone who wants it.
+  let healthChip: { emoji: string; score: number } | null = null;
+  if (healthScore.status === 'ready' && healthScore.score != null) {
+    healthChip = {
+      score: healthScore.score,
+      emoji: healthScore.score >= 75 ? '🟢' : healthScore.score >= 50 ? '🟡' : '🔴',
+    };
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
-      <div className="max-w-md mx-auto space-y-4">
-        <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {greeting} {firstName} 👋
-        </h1>
+      <div className="max-w-md mx-auto space-y-5">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+            {greeting} {firstName} 👋
+          </h1>
+          {healthChip && (
+            <Link href="/student/blueprint" className="shrink-0 text-sm font-semibold text-stone-500">
+              {healthChip.emoji} {healthChip.score}%
+            </Link>
+          )}
+        </div>
 
-        {/* Am I okay? — one number, one label, one fix. */}
-        {healthScore.status === 'ready' && healthScore.score != null && healthScore.components && (() => {
-          const c = healthScore.components;
-          const ratios = [
-            { ratio: c.consistency / 35, label: 'Consistency slipping', line: 'Show up today' },
-            { ratio: c.confidenceQuality / 25, label: 'Shaky topics', line: 'Relearn before speeding up' },
-            { ratio: c.balance / 25, label: 'Section untouched', line: "Today's mix fixes it" },
-            { ratio: c.revisionDiscipline / 15, label: 'Revision behind', line: 'One block today' },
-          ].sort((a, b) => a.ratio - b.ratio);
-          const weakest = ratios[0];
-          const healthy = healthScore.score >= 75;
-          const emoji = healthy ? '🟢' : healthScore.score >= 50 ? '🟡' : '🔴';
-          return (
-            // Labeled explicitly as a status readout, not an instruction —
-            // otherwise it and TodaysRoutineCard right below both read as
-            // "do something now" with no signal which one to act on first.
-            <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-4 py-2.5 flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-0.5">Preparation health</p>
-                <p className="text-xs text-stone-600">
-                  <span className="font-semibold text-stone-800">{healthy ? 'Healthy' : weakest.label}</span>
-                  {' — '}{healthy ? 'on track' : weakest.line}
-                </p>
-              </div>
-              <p className="text-base font-bold text-stone-700 shrink-0">{emoji} {healthScore.score}%</p>
-            </div>
-          );
-        })()}
+        {/* What should I study? — the reason the student opened the app,
+            given the most room on the first screen. */}
+        <TodaysRoutineCard />
 
-        {/* Sunday Review — what changed this week. Buddy offer comes AFTER
-            the review: earned, not advertised. */}
-        {sundayLines.length > 0 && (
+        {/* Revenue driver — the one recurring conversion nudge on Home. Which
+            banner shows is picked from the student's own behavior (a dropped
+            mock, revision piling up, sustained consistency) rather than a
+            timer — it changes because the student changed, not because a
+            few seconds passed. */}
+        {!buddyId && !isPremiumUser && <BuddyBanner banner={buddyBanner} />}
+
+        {buddyId && (
+          <UrgentHelpBanner buddyId={buddyId} hasPendingRequest={hasPendingRequest} />
+        )}
+
+        {/* Weekly progress — Sunday gets the fuller review; every other day
+            gets the same fact in one quiet line. Never its own shouting card. */}
+        {sundayLines.length > 0 ? (
           <div className="rounded-2xl bg-stone-900 p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400 mb-2">Sunday Review</p>
             <ul className="space-y-1.5">
@@ -212,25 +221,8 @@ export default async function DailyTrackerPage() {
               </a>
             )}
           </div>
-        )}
-
-        {/* What should I study? */}
-        <TodaysRoutineCard />
-
-        {/* Revenue driver — the one recurring conversion nudge on Home. Which
-            banner shows is picked from the student's own behavior (a dropped
-            mock, revision piling up, sustained consistency) rather than a
-            timer — it changes because the student changed, not because a
-            few seconds passed. */}
-        {!buddyId && !isPremiumUser && <BuddyBanner banner={buddyBanner} />}
-
-        {/* Is this working? — one sentence, only when real. */}
-        {proofLine && (
+        ) : proofLine && (
           <p className="text-xs text-stone-500 px-1">📈 {proofLine}</p>
-        )}
-
-        {buddyId && (
-          <UrgentHelpBanner buddyId={buddyId} hasPendingRequest={hasPendingRequest} />
         )}
 
         {/* One mentor. Trust first, offer second. */}
@@ -241,7 +233,7 @@ export default async function DailyTrackerPage() {
         )}
 
         {!buddyId && isPremiumUser && (
-          <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
+          <div className="rounded-2xl bg-teal-50 px-4 py-3">
             <div className="flex items-center gap-3">
               <Image src="/buddy-logo.jpg" alt="CareerRai Buddy" width={40} height={40} className="rounded-full shrink-0 object-cover" />
               <p className="text-sm text-teal-900">

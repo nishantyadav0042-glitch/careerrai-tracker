@@ -8,7 +8,6 @@ import { Card } from '@/components/ui/card';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QuickRoutineSetup } from './QuickRoutineSetup';
-import { TOPIC_METADATA } from '@/lib/topics-constants';
 
 type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
@@ -68,18 +67,6 @@ const TIME_OPTIONS: { value: TimeBudget; label: string }[] = [
   { value: 'planned', label: '🟢 Planned' },
   { value: 30, label: '⏱️ Less time today (30m)' },
 ];
-
-// Today's Win — a real prerequisite edge from the Knowledge Graph.
-function todaysWin(tasks: RoutineTask[]): { finish: string; unlocks: string } | null {
-  const todayTopics = tasks.map((t) => t.topic).filter((t): t is string => t != null);
-  for (const topic of todayTopics) {
-    const unlocked = Object.entries(TOPIC_METADATA).find(
-      ([candidate, meta]) => !todayTopics.includes(candidate) && meta.prerequisites.includes(topic)
-    );
-    if (unlocked) return { finish: topic, unlocks: unlocked[0] };
-  }
-  return null;
-}
 
 // Fallback for routines generated before targets existed.
 function taskTitle(task: RoutineTask): string {
@@ -242,13 +229,43 @@ export function TodaysRoutineCard() {
         }
         return acc;
       }, { list: [], used: 0 }).list;
-  const win = todaysWin(routine.tasks);
   const doneCount = routine.tasks.filter((t) => completedIds.has(t.id)).length;
   const completedWithTopic = routine.tasks.filter((t) => completedIds.has(t.id) && t.topic);
 
   return (
     <Card className="p-5">
-      <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Study Plan</p>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold">Today&apos;s Study Plan</p>
+        {!fullyDone && (
+          <div className="flex gap-1 text-[11px] font-semibold">
+            {TIME_OPTIONS.map(({ value, label }) => (
+              <button
+                key={String(value)}
+                onClick={() => setBudget(value)}
+                className={cn(
+                  'rounded-full px-2 py-0.5 transition-colors',
+                  budget === value ? 'bg-orange-100 text-orange-700' : 'text-stone-400'
+                )}
+              >
+                {value === 30 ? 'Less time' : label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Today's Goal — the one number that matters, read at a glance. */}
+      {!fullyDone && (
+        <div className="flex items-center gap-1.5 mb-3">
+          {routine.tasks.map((t) => (
+            <span
+              key={t.id}
+              className={cn('h-2 w-2 rounded-full', completedIds.has(t.id) ? 'bg-teal-500' : 'bg-stone-200')}
+            />
+          ))}
+          <span className="text-xs text-stone-400 ml-1">{doneCount} of {routine.tasks.length} done</span>
+        </div>
+      )}
 
       {isCatchUp && !fullyDone && (
         <p className="mb-3 text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Welcome back 👋 Today&apos;s priority is ready.</p>
@@ -273,106 +290,99 @@ export function TodaysRoutineCard() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-1.5 mb-4">
-            {TIME_OPTIONS.map(({ value, label }) => (
-              <button
-                key={String(value)}
-                onClick={() => setBudget(value)}
-                className={cn(
-                  'rounded-lg border py-1.5 text-xs font-semibold transition-all active:scale-95',
-                  budget === value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-stone-200 bg-white text-stone-500'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {tasks.map((task, idx) => {
               const done = completedIds.has(task.id);
               const isStart = idx === 0 && !done;
               const expanded = expandedTaskId === task.id && !done;
-              return (
-                <div key={task.id}>
-                  <button
-                    onClick={() => handleTaskTap(task, done)}
-                    disabled={busyTaskId === task.id}
-                    className={cn(
-                      'w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-all active:scale-[0.99]',
-                      done ? 'border-teal-200 bg-teal-50'
-                        : expanded || isStart ? 'border-orange-300 bg-orange-50/60'
-                        : 'border-stone-200 bg-white',
-                      expanded && 'rounded-b-none border-b-0'
-                    )}
-                  >
-                    <span className={cn(
-                      'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
-                      done ? 'border-teal-600 bg-teal-600' : isStart || expanded ? 'border-orange-500' : 'border-stone-300'
-                    )}>
-                      {done && <Check className="w-3 h-3 text-white" />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn(
-                          'text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5',
-                          isStart ? 'bg-orange-600 text-white' : 'bg-stone-100 text-stone-400'
-                        )}>
-                          {isStart ? 'Start Here' : done ? 'Done' : 'Next'}
-                        </span>
-                        {task.coverageStatus != null && (
-                          <span className={cn(
-                            'text-[9px] font-bold uppercase tracking-wider rounded border px-1.5 py-0.5',
-                            CONTINUITY_BADGE[task.coverageStatus].style
-                          )}>
-                            {CONTINUITY_BADGE[task.coverageStatus].label}
-                          </span>
-                        )}
-                        <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
-                      </div>
-                      <p className={cn('text-sm font-bold mt-1', done ? 'text-teal-800 line-through' : 'text-stone-900')}>
-                        {taskTitle(task)}
-                      </p>
-                      {!done && task.reason && (
-                        <p className="text-xs text-stone-500 mt-0.5"><span className="text-stone-400">Why today?</span> {task.reason}</p>
+
+              // Task 1 gets the hero treatment — full detail, big and hard to
+              // miss. Everything after it is a compact single line: still
+              // real, still tappable (never gated — a student choosing to
+              // skip ahead is making a real choice, not cheating), just not
+              // shouting for the same attention as the one thing to do now.
+              if (isStart || expanded) {
+                return (
+                  <div key={task.id}>
+                    <button
+                      onClick={() => handleTaskTap(task, done)}
+                      disabled={busyTaskId === task.id}
+                      className={cn(
+                        'w-full flex items-start gap-3 rounded-2xl bg-orange-50/70 p-4 text-left transition-all active:scale-[0.99]',
+                        expanded && 'rounded-b-none'
                       )}
-                    </div>
-                  </button>
-                  {expanded && (
-                    <div className="rounded-b-xl border border-t-0 border-orange-300 bg-orange-50/60 px-3 pb-3 pt-1">
-                      {/* 2x2, not a single row of 4 — "Getting there" and
-                          "Struggling" don't fit four-across on a phone
-                          without wrapping mid-word. */}
-                      <div className="grid grid-cols-2 gap-2">
-                        {CONFIDENCE_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => toggleTask(task, opt.value)}
-                            disabled={busyTaskId === task.id}
-                            className="flex flex-col items-center gap-0.5 rounded-lg border border-orange-200 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
-                          >
-                            <span className="text-lg leading-none">{opt.emoji}</span>
-                            {opt.label}
-                          </button>
-                        ))}
+                    >
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-orange-500" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-orange-600 text-white">
+                            {isStart ? 'Start Here' : 'Next'}
+                          </span>
+                          {task.coverageStatus != null && (
+                            <span className={cn(
+                              'text-[9px] font-bold uppercase tracking-wider rounded border px-1.5 py-0.5',
+                              CONTINUITY_BADGE[task.coverageStatus].style
+                            )}>
+                              {CONTINUITY_BADGE[task.coverageStatus].label}
+                            </span>
+                          )}
+                          <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
+                        </div>
+                        <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
+                        {task.reason && (
+                          <p className="text-xs text-stone-500 mt-1"><span className="text-stone-400">Why today?</span> {task.reason}</p>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    </button>
+                    {expanded && (
+                      <div className="rounded-b-2xl bg-orange-50/70 px-4 pb-4 pt-1">
+                        {/* 2x2, not a single row of 4 — "Getting there" and
+                            "Struggling" don't fit four-across on a phone
+                            without wrapping mid-word. */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {CONFIDENCE_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => toggleTask(task, opt.value)}
+                              disabled={busyTaskId === task.id}
+                              className="flex flex-col items-center gap-0.5 rounded-lg border border-orange-200 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
+                            >
+                              <span className="text-lg leading-none">{opt.emoji}</span>
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={task.id}
+                  onClick={() => handleTaskTap(task, done)}
+                  disabled={busyTaskId === task.id}
+                  className="w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-stone-50 active:scale-[0.99]"
+                >
+                  <span className={cn(
+                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                    done ? 'border-teal-600 bg-teal-600' : 'border-stone-300'
+                  )}>
+                    {done && <Check className="w-2.5 h-2.5 text-white" />}
+                  </span>
+                  <span className={cn('text-sm flex-1 min-w-0 truncate', done ? 'text-stone-400 line-through' : 'text-stone-600')}>
+                    {taskTitle(task)}
+                  </span>
+                  <span className="text-xs text-stone-400 shrink-0">{task.estMinutes}m</span>
+                </button>
               );
             })}
           </div>
 
-          <div className="mt-3 flex items-center justify-between">
-            <p className="text-xs text-stone-500">{doneCount}/{routine.tasks.length} done</p>
+          <div className="mt-3">
             <Link href="/student/blueprint" className="text-xs font-semibold text-orange-600">My CAT Plan →</Link>
           </div>
-
-          {win && (
-            <p className="mt-2.5 rounded-xl bg-stone-900 px-3.5 py-2 text-xs text-white">
-              🏁 Finish {win.finish} → unlocks {win.unlocks}
-            </p>
-          )}
         </>
       )}
     </Card>
