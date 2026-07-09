@@ -62,7 +62,7 @@ function isStandalone(): boolean {
  * Android/Chrome → fires the native install prompt. iOS / browsers without a
  * native prompt → opens step-by-step Add-to-Home-Screen instructions.
  */
-export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'banner' }) {
+export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'banner' | 'text' }) {
   // Start hidden to avoid showing to users who already installed; reveal after
   // the client check. (Most login-page visitors aren't installed, so it shows.)
   const [hidden, setHidden] = useState(true);
@@ -104,8 +104,20 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
 
   if (hidden) return null;
 
-  // Prominent orange banner (top of login) vs. subtle card (anywhere else).
-  const trigger = variant === 'banner' ? (
+  // Prominent orange banner (top of login) vs. subtle card (anywhere else)
+  // vs. a single bracketed line for a low-commitment escape hatch right
+  // under a primary CTA — for someone who just wants to try the app
+  // without filling in a phone number first.
+  const trigger = variant === 'text' ? (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={working}
+      className="mx-auto block text-xs font-medium text-stone-400 hover:text-orange-600 transition-colors disabled:opacity-60"
+    >
+      {working ? '…' : '(Just want to try it? Install the app — no signup, ~3 MB →)'}
+    </button>
+  ) : variant === 'banner' ? (
     <button
       type="button"
       onClick={handleClick}

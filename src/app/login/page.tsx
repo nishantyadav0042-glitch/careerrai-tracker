@@ -176,6 +176,10 @@ function LoginForm() {
                 </button>
 
                 <div className="pt-1 text-center">
+                  <InstallAppButton variant="text" />
+                </div>
+
+                <div className="pt-1 text-center">
                   <button
                     type="button"
                     onClick={() => selectRole('buddy')}
