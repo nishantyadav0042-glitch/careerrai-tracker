@@ -88,7 +88,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname === '/login' && user) {
+  // A demo session doesn't count as "logged in" for /login: the root page
+  // sends demo-cookie holders here so the bare domain never silently resumes
+  // the demo — bouncing them back to the tracker would loop. Logging in for
+  // real from here clears cr_demo (handled inside /api/auth/*).
+  if (pathname === '/login' && user && request.cookies.get('cr_demo')?.value !== '1') {
     const homeUrl = request.nextUrl.clone();
     // Route to the right home based on role cookie; layout will correct if stale.
     const roleCookie = request.cookies.get('user_role')?.value;
