@@ -88,27 +88,6 @@ function taskTitle(task: RoutineTask): string {
   return task.label;
 }
 
-// The engine already knows whether this topic is fresh or a continuation —
-// chooseTopicForSection advances/holds coverage status per confidence tap
-// (see topic-selector.ts). That used to be invisible: the task copy read
-// identically whether it was day 1 or day 4 on the same topic. A student
-// re-seeing "Solve RC questions" with no acknowledgment reads it as the app
-// not noticing their own progress, even when the underlying pick was
-// correct. This badge says the quiet part out loud.
-// Wording in the student's own head, not the engine's internal vocabulary —
-// "EXAM READY" is how the Coverage Matrix labels it internally, but no
-// CAT aspirant thinks "this topic is exam ready"; they think "I'm
-// comfortable with this." NEW deliberately isn't "Start Here" — that phrase
-// is already the position-in-list tag on the first task below and would
-// collide with a second, different meaning right next to it.
-const CONTINUITY_BADGE: Record<CoverageStatus, { label: string; style: string }> = {
-  not_started: { label: 'NEW', style: 'bg-teal-50 text-teal-700 border-teal-200' },
-  learning: { label: 'CONTINUE', style: 'bg-blue-50 text-blue-700 border-blue-200' },
-  practicing: { label: 'CONTINUE', style: 'bg-blue-50 text-blue-700 border-blue-200' },
-  revising: { label: 'BACK FOR REVISION', style: 'bg-orange-50 text-orange-700 border-orange-200' },
-  exam_ready: { label: 'COMFORTABLE', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-};
-
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [needsSetup, setNeedsSetup] = useState<NeedsSetupResponse | null>(null);
@@ -231,7 +210,7 @@ export function TodaysRoutineCard() {
   }
   if (!data) return null;
 
-  const { routine, isCatchUp } = data;
+  const { routine } = data;
   // Budget filter: keep tasks (in priority order) while they fit; always ≥1.
   const tasks = budget === 'planned'
     ? routine.tasks
@@ -278,24 +257,6 @@ export function TodaysRoutineCard() {
           ))}
           <span className="text-xs text-stone-400 ml-1">{doneCount} of {routine.tasks.length} done</span>
         </div>
-      )}
-
-      {isCatchUp && !fullyDone && (
-        <p className="mb-3 text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Welcome back 👋 Today&apos;s priority is ready.</p>
-      )}
-
-      {/* The engine, made visible. Every one of these bullets already exists
-          as a per-task "why today" reason — this just says them together,
-          once, before the student has to read three separate cards to piece
-          it together themselves. */}
-      {!fullyDone && routine.tasks.some((t) => t.reason) && (
-        <ul className="mb-3 space-y-1">
-          {routine.tasks.filter((t) => t.reason).slice(0, 3).map((t) => (
-            <li key={t.id} className="text-xs text-stone-500 flex gap-1.5">
-              <span className="text-stone-300">•</span>{t.reason}
-            </li>
-          ))}
-        </ul>
       )}
 
       {fullyDone ? (
@@ -345,22 +306,11 @@ export function TodaysRoutineCard() {
                           <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-orange-600 text-white">
                             {isStart ? 'Start Here' : 'Next'}
                           </span>
-                          {task.coverageStatus != null && (
-                            <span className={cn(
-                              'text-[9px] font-bold uppercase tracking-wider rounded border px-1.5 py-0.5',
-                              CONTINUITY_BADGE[task.coverageStatus].style
-                            )}>
-                              {CONTINUITY_BADGE[task.coverageStatus].label}
-                            </span>
-                          )}
                           <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
                         </div>
                         <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
                         {memoryTag(task) && (
                           <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
-                        )}
-                        {task.reason && (
-                          <p className="text-xs text-stone-500 mt-1"><span className="text-stone-400">Why today?</span> {task.reason}</p>
                         )}
                       </div>
                     </button>
