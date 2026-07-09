@@ -59,7 +59,10 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
     })();
   }, []);
 
-  const isValid = fullName.trim() !== '' && college.trim() !== '';
+  // Coaching is mandatory, not defaulted: an untapped answer silently saved
+  // as "no coaching" would poison the lead data this screen exists to
+  // collect — the sales team can't tell a real "no" from a skipped question.
+  const isValid = fullName.trim() !== '' && college.trim() !== '' && coachingEnrolled !== null;
 
   const handleNext = () => {
     if (!isValid) return;

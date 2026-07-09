@@ -434,10 +434,10 @@ export default async function AdminPage() {
             <ClipboardList className="w-3.5 h-3.5" /> CAT Leads
           </Link>
           <Link
-            href="/admin/sales-queue"
+            href="/admin/leads"
             className="flex items-center justify-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg px-3 py-2.5 transition-colors"
           >
-            <PhoneCall className="w-3.5 h-3.5" /> Sales Queue
+            <PhoneCall className="w-3.5 h-3.5" /> Leads
           </Link>
         </div>
 

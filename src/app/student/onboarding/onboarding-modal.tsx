@@ -170,6 +170,19 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     if (data) setOnboardingData((prev) => ({ ...prev, ...data }));
     setError(null);
 
+    // Drop marker for the leads system — records how far every student got,
+    // so the admin can see "dropped at Exam Context" for anyone who never
+    // finishes. Fire-and-forget: lead telemetry must never slow down or
+    // block the student's own flow.
+    if (userId) {
+      const reached = currentScreen + 1;
+      void supabase.from('profiles')
+        .update({ onboarding_step_reached: reached })
+        .eq('id', userId)
+        .lt('onboarding_step_reached', reached)
+        .then(({ error: e }) => { if (e) console.error('step marker failed:', e.message); });
+    }
+
     try {
       // Screen 1 = Dream Colleges
       if (currentScreen === 1 && data?.dream_colleges) {
