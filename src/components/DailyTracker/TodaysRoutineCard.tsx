@@ -343,15 +343,15 @@ export function TodaysRoutineCard() {
                   key={task.id}
                   onClick={() => handleTaskTap(task, done)}
                   disabled={busyTaskId === task.id}
-                  className="w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-stone-50 active:scale-[0.99]"
+                  className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3 text-left transition-colors hover:bg-stone-100 active:scale-[0.99]"
                 >
                   <span className={cn(
-                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                    'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
                     done ? 'border-teal-600 bg-teal-600' : 'border-stone-300'
                   )}>
-                    {done && <Check className="w-2.5 h-2.5 text-white" />}
+                    {done && <Check className="w-3 h-3 text-white" />}
                   </span>
-                  <span className={cn('text-sm flex-1 min-w-0 truncate', done ? 'text-stone-400 line-through' : 'text-stone-600')}>
+                  <span className={cn('text-sm font-semibold flex-1 min-w-0', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
                     {taskTitle(task)}
                   </span>
                   <span className="text-xs text-stone-400 shrink-0">{task.estMinutes}m</span>
