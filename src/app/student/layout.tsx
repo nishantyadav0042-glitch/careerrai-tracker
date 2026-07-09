@@ -44,12 +44,23 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // redundant hero in front of it and is gone. The Builder stays until
   // completed — no skip, no dismiss.
   const showOnboarding = !isDemo && profile?.onboarding_completed !== true;
-  // Mandatory push step — only AFTER the Blueprint exists. Shown to every
-  // non-demo student who hasn't turned push on yet (notif_prefs.push !==
-  // true). Enabling sets that flag, so the gate appears at most once per
-  // student and then never again.
-  const pushEnabled = (profile?.notif_prefs as { push?: boolean } | null)?.push === true;
-  const showPushGate = !isDemo && !showOnboarding && !pushEnabled;
+
+  // Push, reordered: the FIRST ask now fires as early as possible — right
+  // after login, before onboarding — because reach beats conversion rate
+  // here (far more students reach this screen than ever finish the
+  // Builder, so even a lower accept rate nets more push-enabled students
+  // overall). Optional, never blocking: declining lets them straight into
+  // onboarding, because the highest-value student is the one who finishes
+  // it, not the one who granted push. A SECOND, gentler ask fires once,
+  // only if they declined the first time and have since finished
+  // onboarding — backed by something real they now have ("your plan is
+  // ready") instead of a cold request. Decline that one too and it's over.
+  const notifPrefs = (profile?.notif_prefs as Record<string, unknown> | null) ?? {};
+  const pushEnabled = notifPrefs.push === true;
+  const pushPrompted = notifPrefs.push_prompted === true;
+  const pushReprompted = notifPrefs.push_reprompted === true;
+  const showFirstPushAsk = !isDemo && !pushEnabled && !pushPrompted;
+  const showSecondPushAsk = !isDemo && !showOnboarding && !pushEnabled && pushPrompted && !pushReprompted;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -67,7 +78,13 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {showOnboarding ? <OnboardingGate /> : showPushGate && <PushGate />}
+      {showFirstPushAsk ? (
+        <PushGate mode="first" notifPrefs={notifPrefs} />
+      ) : showOnboarding ? (
+        <OnboardingGate />
+      ) : (
+        showSecondPushAsk && <PushGate mode="second" notifPrefs={notifPrefs} />
+      )}
     </div>
   );
 }

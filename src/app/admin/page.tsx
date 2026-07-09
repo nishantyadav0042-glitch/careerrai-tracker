@@ -443,7 +443,7 @@ export default async function AdminPage() {
 
         <AdminTabs tabs={adminTabs} />
       </div>
-      {!adminPushEnabled && <PushGate variant="staff" />}
+      {!adminPushEnabled && <PushGate mode="staff" />}
     </div>
   );
 }

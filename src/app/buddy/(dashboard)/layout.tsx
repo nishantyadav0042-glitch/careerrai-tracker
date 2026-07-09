@@ -59,7 +59,7 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
         {children}
       </div>
       <BuddyBottomNav chatUnread={chatUnread} />
-      {showBuddyGuide ? <BuddyFirstLoginGuide /> : showBuddyPushGate && <PushGate variant="staff" />}
+      {showBuddyGuide ? <BuddyFirstLoginGuide /> : showBuddyPushGate && <PushGate mode="staff" />}
     </div>
   );
 }
