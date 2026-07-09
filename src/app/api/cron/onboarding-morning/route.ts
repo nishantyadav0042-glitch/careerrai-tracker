@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
+import { dispatch } from '@/lib/notification-os';
 
-// 04:30 UTC = 10:00 IST. First touch of the day for students still inside their
-// first 7 days of logging — the hardest window to survive. Paired with the
-// evening reminder (which auto-switches to onboarding copy for these same
-// students), this gives onboarding exactly two touches/day; the normal system
-// takes over the moment a student reaches 7 logged days.
+// 04:30 UTC = 10:00 IST. Morning touch of the Day 1-7 habit arc — but ONLY
+// for students who are actually inside it (state = onboarding_arc):
+//   - Builder incomplete → skipped. They can't log (the mandatory Builder
+//     gate blocks the tracker), so "log karo" here was an impossible ask;
+//     /api/cron/builder-recovery owns them with honest copy.
+//   - Plan built but never logged → skipped. The evening activation ladder
+//     (daily-reminder) owns them on days 0/1/3/7 — not two nags a day.
+// Sends go through dispatch(): global 2/day budget + measurement columns.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -19,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   const { data: candidates } = await admin
     .from('profiles')
-    .select('id, full_name, notif_prefs, created_at')
+    .select('id, full_name, notif_prefs, created_at, onboarding_completed')
     .eq('role', 'student')
     .eq('is_demo', false)
     .gte('created_at', fourteenDaysAgo);
@@ -41,9 +44,11 @@ export async function POST(request: NextRequest) {
   let sent = 0;
   for (const c of candidates) {
     if (already.has(c.id)) continue;
+    if (c.onboarding_completed !== true) continue;     // builder-recovery owns them
     const loggedDays = loggedDaysByStudent.get(c.id) ?? new Set();
-    if (loggedDays.size >= 7) continue;              // graduated — normal system owns them now
-    if (loggedDays.has(today)) continue;              // already logged today
+    if (loggedDays.size === 0) continue;               // activation ladder owns them
+    if (loggedDays.size >= 7) continue;                // graduated — decision-engine owns them
+    if (loggedDays.has(today)) continue;               // already logged today
     const prefs = (c.notif_prefs ?? {}) as Record<string, unknown>;
     if (prefs.daily_reminder === false) continue;
 
@@ -51,12 +56,17 @@ export async function POST(request: NextRequest) {
     const copy = onboardingCopy(dayNumber, 'pending', c.full_name.split(' ')[0]);
     if (!copy) continue;
 
-    await admin.from('notifications').insert({
-      user_id: c.id, type: 'onboarding_morning', title: copy.title, body: copy.body,
-      data: { url: '/student/tracker' }, read: false, channel: 'in_app',
+    const outcome = await dispatch({
+      userId: c.id,
+      type: 'onboarding_morning',
+      title: copy.title,
+      body: copy.body,
+      url: '/student/tracker',
+      reason: `Day ${dayNumber} of the 7-day habit arc, no log yet today — morning touch`,
+      expectedAction: 'log_today',
+      prefs,
     });
-    if (prefs.push === true) await sendPushToUser(c.id, { ...copy, url: '/student/tracker' });
-    sent++;
+    if (outcome === 'sent') sent++;
   }
 
   return NextResponse.json({ sent, candidates: candidates.length });

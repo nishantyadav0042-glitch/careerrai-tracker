@@ -16,6 +16,7 @@ export interface LeadRow {
   targetPercentile: number | null;
   tier: LeadTier;
   reasons: string[];
+  needsHuman: string | null; // intervention-queue line, null = automation still working
   lastLogDaysAgo: number | null;
   outreachStatus: string;
   outreachOwner: string | null;
@@ -41,9 +42,10 @@ const STATUS_LABEL: Record<string, string> = {
   not_interested: 'Not interested',
 };
 
-type AttributeFilter = 'repeater' | 'working' | 'coaching' | 'target99' | 'not_contacted';
+type AttributeFilter = 'needs_human' | 'repeater' | 'working' | 'coaching' | 'target99' | 'not_contacted';
 
 const ATTRIBUTE_FILTERS: { key: AttributeFilter; label: string }[] = [
+  { key: 'needs_human', label: 'Needs human' },
   { key: 'repeater', label: 'Repeater' },
   { key: 'working', label: 'Working pro' },
   { key: 'coaching', label: 'In coaching' },
@@ -69,6 +71,7 @@ export function LeadsList({ rows }: { rows: LeadRow[] }) {
     return rows
       .filter((r) => activeTier === 'all' || r.tier === activeTier)
       .filter((r) => {
+        if (attrs.has('needs_human') && !r.needsHuman) return false;
         if (attrs.has('repeater') && !r.isRepeater) return false;
         if (attrs.has('working') && !r.isWorkingProfessional) return false;
         if (attrs.has('coaching') && !r.coachingEnrolled) return false;
@@ -76,7 +79,12 @@ export function LeadsList({ rows }: { rows: LeadRow[] }) {
         if (attrs.has('not_contacted') && r.outreachStatus !== 'not_contacted') return false;
         return true;
       })
-      .sort((a, b) => TIER_META[a.tier].order - TIER_META[b.tier].order);
+      // Within a tier, intervention-queue leads float to the top — automation
+      // has formally given up on them, so they're the most call-urgent rows.
+      .sort((a, b) =>
+        (TIER_META[a.tier].order - TIER_META[b.tier].order) ||
+        ((b.needsHuman ? 1 : 0) - (a.needsHuman ? 1 : 0))
+      );
   }, [rows, activeTier, attrs]);
 
   function toggleAttr(key: AttributeFilter) {
@@ -155,11 +163,12 @@ export function LeadsList({ rows }: { rows: LeadRow[] }) {
                     <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', TIER_STYLE[r.tier])}>
                       {TIER_META[r.tier].label}
                     </span>
+                    {r.needsHuman && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">Needs human</span>}
                     {r.isRepeater && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">Repeater</span>}
                     {r.isWorkingProfessional && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">Working</span>}
                     {r.targetPercentile != null && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">Target {r.targetPercentile}</span>}
                   </div>
-                  <p className="mt-1 text-xs text-stone-500">{r.reasons[0]}</p>
+                  <p className="mt-1 text-xs text-stone-500">{r.needsHuman ?? r.reasons[0]}</p>
                   <p className="mt-1 text-[11px] text-stone-400">
                     {r.outreachOwner ? `${r.outreachOwner} · ` : ''}{STATUS_LABEL[r.outreachStatus] ?? r.outreachStatus}
                     {r.nextFollowUp ? ` · follow-up ${r.nextFollowUp}` : ''}

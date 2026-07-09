@@ -40,7 +40,10 @@ export async function POST(request: NextRequest) {
   // Merge push:true into existing prefs — never clobber daily_reminder/email/time.
   const { data: profile } = await admin.from('profiles').select('notif_prefs').eq('id', user.id).single();
   const notif_prefs = { ...(profile?.notif_prefs as Record<string, unknown> ?? {}), push: true };
-  await admin.from('profiles').update({ push_subscription: subscription, notif_prefs }).eq('id', user.id);
+  // A fresh subscription resurrects the channel — clear the death stamp.
+  await admin.from('profiles')
+    .update({ push_subscription: subscription, notif_prefs, push_died_at: null })
+    .eq('id', user.id);
 
   return NextResponse.json({ ok: true });
 }

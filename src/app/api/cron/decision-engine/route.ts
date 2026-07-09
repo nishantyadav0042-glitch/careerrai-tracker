@@ -1,33 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
 import { authorizedCron } from '@/lib/cron-auth';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { computePrepMemory } from '@/lib/prep-memory-data';
 import {
-  detectRevisionDue, detectTopicEarned, detectMissionChanged, detectWeeklyEvolved, detectInactive,
-  selectEvents, templateFor, type CoverageSignalRow,
+  detectRevisionDue, detectTopicEarned, detectMissionChanged, detectWeeklyEvolved, detectRecovery,
+  selectEvents, templateFor, reasonFor, type CoverageSignalRow, type DecisionEventType,
 } from '@/lib/decision-engine';
+import { computeStudentState, dispatch, type ExpectedAction } from '@/lib/notification-os';
 
-// 14:30 UTC = 20:00 IST — the slot the retired daily-reminder used to own.
-// This cron replaces daily-reminder's guilt rotation, streak-risk, and
-// growth-nudges entirely.
+// 14:30 UTC = 20:00 IST — the evening slot.
 //
-// Cap is 2/day ("Personal Study: maximum 2/day"), never manufactured — a
-// day with one real event sends one, a day with none sends none. Raising
-// the cap from 1 wasn't "send more," it was fixing a real bug: a genuinely
-// independent second event used to be silently discarded just for losing
-// the priority contest to a first. Sundays additionally guarantee
-// weekly_evolved a slot when it fires ("Sunday evolution, always") instead
-// of letting it compete on priority and possibly lose. Critical channels
-// (buddy replies, session reminders, payments) are separate infra and
-// were never part of this cap to begin with — nothing to change there.
+// Notification-OS rules (see lib/notification-os.ts): every student is in
+// exactly ONE state, and the state decides which event families are even
+// eligible here:
+//   building_plan  → owned by /api/cron/builder-recovery, skipped entirely
+//   plan_ready     → owned by daily-reminder's activation ladder, skipped
+//   onboarding_arc → owned by the Day 1-7 arc crons, skipped (this is the
+//                    structural fix for the old 14:30 double-fire — the two
+//                    crons at this slot now target disjoint students)
+//   slipping/inactive/dark → recovery ladder ONLY (exact days 2/4/7/14; a
+//                    "Geometry revision due" push to a 5-day-quiet student
+//                    ignores reality, so product events are suppressed)
+//   active         → product events, cap 2/day, silence when nothing fired
 //
-// No AI anywhere in this file. No event bus, no snapshot table — every
-// signal below reads tables that already exist (topic_coverage,
-// daily_routines, streak_data). The founder's four boxes, in order:
-// diff existing data -> detect events -> rank by priority -> template copy.
+// Budget (2/day across ALL student-facing types) and push-cooldown are
+// enforced inside dispatch(), not per-cron. No AI anywhere in this file.
 const DAILY_CAP = 2;
+
+const EXPECTED: Record<DecisionEventType, ExpectedAction> = {
+  revision_due: 'log_today',
+  topic_earned: 'open_plan',
+  mission_changed: 'log_today',
+  weekly_evolved: 'open_plan',
+  inactive_recovery: 'log_today',
+};
+
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -42,33 +50,30 @@ export async function POST(request: NextRequest) {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id, notif_prefs, is_demo, is_repeater, is_working_professional, created_at')
+    .select('id, notif_prefs, is_demo, is_repeater, is_working_professional, created_at, onboarding_completed')
     .eq('role', 'student').eq('is_demo', false);
   if (!students?.length) return NextResponse.json({ notified: 0, total: 0 });
 
   const studentIds = students.map((s) => s.id);
+  // Arc detection needs logged-day counts, but only to distinguish <7 from
+  // >=7 for students who joined within 14 days — a 21-day report window is
+  // strictly wider than any window that matters, and stays bounded forever.
+  const reportsWindowStart = new Date(Date.now() - 21 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   const [
-    { data: alreadySentToday },
     { data: coverageRows },
     { data: todayRoutines },
     { data: yesterdayRoutines },
     { data: streakRows },
+    { data: recentReports },
   ] = await Promise.all([
-    admin.from('notifications').select('user_id').in('user_id', studentIds)
-      .in('type', ['revision_due', 'topic_earned', 'mission_changed', 'weekly_evolved', 'inactive_recovery'])
-      .gte('created_at', `${today}T00:00:00+05:30`),
     admin.from('topic_coverage').select('student_id, topic, status, updated_at').in('student_id', studentIds),
     admin.from('daily_routines').select('student_id, tasks').in('student_id', studentIds).eq('routine_date', today),
     admin.from('daily_routines').select('student_id, tasks').in('student_id', studentIds).eq('routine_date', yesterday),
     admin.from('streak_data').select('student_id, last_log_date').in('student_id', studentIds),
+    admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds).gte('report_date', reportsWindowStart),
   ]);
 
-  // Idempotency guard: how many decision-engine notifications this student
-  // already has today (only relevant if the cron were ever re-triggered) —
-  // caps the remaining budget rather than blocking outright at 1.
-  const sentCountToday = new Map<string, number>();
-  for (const n of alreadySentToday ?? []) sentCountToday.set(n.user_id, (sentCountToday.get(n.user_id) ?? 0) + 1);
   const coverageByStudent = new Map<string, CoverageSignalRow[]>();
   for (const r of coverageRows ?? []) {
     if (!coverageByStudent.has(r.student_id)) coverageByStudent.set(r.student_id, []);
@@ -81,56 +86,80 @@ export async function POST(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of yesterdayRoutines ?? []) yesterdayFirstBySection.set(r.student_id, (r.tasks as any[])[0]?.section ?? null);
   const lastLogByStudent = new Map((streakRows ?? []).map((r) => [r.student_id, r.last_log_date as string | null]));
+  const loggedDaysByStudent = new Map<string, Set<string>>();
+  for (const r of recentReports ?? []) {
+    if (!loggedDaysByStudent.has(r.student_id)) loggedDaysByStudent.set(r.student_id, new Set());
+    loggedDaysByStudent.get(r.student_id)!.add(r.report_date);
+  }
 
   let notified = 0;
   let silent = 0;
+  let ownedElsewhere = 0;
 
   for (const s of students) {
-    const remaining = DAILY_CAP - (sentCountToday.get(s.id) ?? 0);
-    if (remaining <= 0) continue;
     const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
     if (prefs.daily_reminder === false) continue;
 
-    const coverage = coverageByStudent.get(s.id) ?? [];
-    const todayFirst = todayFirstBySection.get(s.id) ?? null;
-    const yesterdayFirstSection = yesterdayFirstBySection.get(s.id) ?? null;
     const lastLogDate = lastLogByStudent.get(s.id) ?? null;
     const daysSinceLastLog = lastLogDate
       ? Math.round((Date.parse(today) - Date.parse(lastLogDate)) / 86_400_000)
       : null;
+    const daysSinceJoin = Math.floor((Date.now() - new Date(s.created_at as string).getTime()) / 86_400_000);
 
-    let weeklyLines: string[] = [];
-    if (isSunday) {
-      const { weeklyEvolution } = await computePrepMemory(
-        admin, s.id,
-        { isRepeater: !!s.is_repeater, isWorkingProfessional: !!s.is_working_professional },
-        (s.created_at as string | null)?.split('T')[0] ?? null
-      );
-      weeklyLines = weeklyEvolution;
+    const state = computeStudentState({
+      onboardingCompleted: s.onboarding_completed === true,
+      daysSinceLastLog,
+      loggedDaysTotal: loggedDaysByStudent.get(s.id)?.size ?? 0,
+      daysSinceJoin,
+    });
+
+    if (state === 'building_plan' || state === 'plan_ready' || state === 'onboarding_arc') {
+      ownedElsewhere++;
+      continue;
     }
 
-    const events = selectEvents([
-      detectRevisionDue(coverage, today, revisionFrequencyDays),
-      detectTopicEarned(coverage, today),
-      detectMissionChanged(yesterdayFirstSection, todayFirst?.section ?? null, todayFirst?.topic ?? null),
-      detectWeeklyEvolved(isSunday, weeklyLines),
-      detectInactive(daysSinceLastLog),
-    ], remaining);
+    let events;
+    if (state === 'slipping' || state === 'inactive' || state === 'dark') {
+      const recovery = detectRecovery(daysSinceLastLog);
+      events = recovery ? [recovery] : []; // non-ladder days are silent, on purpose
+    } else {
+      const coverage = coverageByStudent.get(s.id) ?? [];
+      const todayFirst = todayFirstBySection.get(s.id) ?? null;
+      const yesterdayFirstSection = yesterdayFirstBySection.get(s.id) ?? null;
+
+      let weeklyLines: string[] = [];
+      if (isSunday) {
+        const { weeklyEvolution } = await computePrepMemory(
+          admin, s.id,
+          { isRepeater: !!s.is_repeater, isWorkingProfessional: !!s.is_working_professional },
+          (s.created_at as string | null)?.split('T')[0] ?? null
+        );
+        weeklyLines = weeklyEvolution;
+      }
+
+      events = selectEvents([
+        detectRevisionDue(coverage, today, revisionFrequencyDays),
+        detectTopicEarned(coverage, today),
+        detectMissionChanged(yesterdayFirstSection, todayFirst?.section ?? null, todayFirst?.topic ?? null),
+        detectWeeklyEvolved(isSunday, weeklyLines),
+      ], DAILY_CAP);
+    }
 
     if (events.length === 0) { silent++; continue; }
 
     for (const event of events) {
       const { title, body, url } = templateFor(event);
-      await admin.from('notifications').insert({
-        user_id: s.id, type: event.type, title, body,
-        data: { url }, read: false, channel: 'in_app',
+      const outcome = await dispatch({
+        userId: s.id, type: event.type, title, body, url,
+        reason: reasonFor(event),
+        expectedAction: EXPECTED[event.type],
+        prefs,
       });
-      if (prefs.push === true) await sendPushToUser(s.id, { title, body, url });
-      notified++;
+      if (outcome === 'sent') notified++;
     }
   }
 
-  return NextResponse.json({ notified, silent, total: students.length });
+  return NextResponse.json({ notified, silent, ownedElsewhere, total: students.length });
 }
 
 export { POST as GET };

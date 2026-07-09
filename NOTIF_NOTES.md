@@ -29,28 +29,38 @@ Example: *"Oye {name}, aaj ka log nahi aaya — sab theek? Buddy baat karna chah
 
 ---
 
-## Current Notification Architecture
+## Current Notification Architecture — the Notification OS (July 2026)
 
-### Channels
-- **In-app bell**: Always fires. Reads from `notifications` table.
-- **Push (web-push/VAPID)**: Fires when `notif_prefs.push = true` and `push_subscription` set.
-- **Email (Resend)**: Fires when `notif_prefs.email !== false`.
+Core: `src/lib/notification-os.ts`. Signals → Decision → Action → Measurement.
 
-### Cron Schedule (all UTC)
-| Cron | UTC | IST | Purpose |
-|------|-----|-----|---------|
-| daily-reminder | 14:30 | 20:00 | 6-bucket emotional engine for students who haven't logged |
-| buddy-ping | 11:30 | 17:00 | Random elder-sibling ping (7–10 day gap, 30% of eligible) |
-| weekly-digest | Mon 04:00 | Mon 09:30 | Buddy performance summary |
-| check-red-flags | 15:00 | 20:30 | Alert buddy when student has red flags |
-| expire-subscriptions | 03:00 | 08:30 | Flip paused memberships |
-| renewal-reminders | 04:00 | 09:30 | Nudge 7/3/1 days before expiry |
+### One student state, never two (`computeStudentState`)
+`building_plan → plan_ready → onboarding_arc → active | slipping | inactive | dark`.
+The state decides which cron may speak — crons target disjoint states, so
+nothing double-fires. Conversion (premium/buddy) is an attribute, not a state.
 
-### Daily Cap
-Hard cap: 2 notifications/day per student (enforced in `pickNotification()` via DB query).  
-Achievement bucket fires only on real data wins — not in the daily reminder flow.
+### One send gate (`dispatch`)
+Every student-facing nudge goes through it: global budget of **2/day across
+ALL types**, push cooldown (last 3 pushes unclicked + no log since → in-app
+only), and every row persists `reason` + `expected_action`.
 
-### Message Bank
-See `src/lib/notification-engine.ts` — 6 buckets × 8+ messages each.  
-**Add your own Hinglish lines to each bucket before launch.** The message bank is a brand asset.  
-Especially the `emotional` and `buddy_ping` banks — those are the retention drivers.
+### Who owns whom
+| State | Owner | Ladder |
+|-------|-------|--------|
+| Builder incomplete | `cron/builder-recovery` (every 30min, 09:30–20:30 IST) | 30min → 24h → 72h → human queue |
+| Plan built, never logged | `cron/daily-reminder` (activation branch) | days 0/1/3/7 → human queue |
+| Day 1-7 arc (logged ≥1) | `cron/onboarding-morning` + `cron/daily-reminder` | 2 touches/day until 7 logged days |
+| Active, graduated | `cron/decision-engine` | revision_due / topic_earned / mission_changed / weekly_evolved, cap 2, silence-capable |
+| Quiet (2/4/7/14 days) | `cron/decision-engine` recovery ladder | exact days only, tier 4 (day 14) is terminal |
+| Dark 14+ days | humans only — `interventionNeeded()` in lead-intel surfaces them on /admin/leads | — |
+
+### Measurement
+- `notifications.pushed_at / clicked_at / emailed_at` + SW click beacon (`/api/push/click`).
+- `profiles.push_died_at` — endpoint 410 = likely uninstall (CRM signal).
+- Admin dashboard: `/admin/notification-health` — Sent → Pushed → Clicked → **Acted**
+  (the only KPI: did the expected action happen). No "delivered/opened" — web
+  push has no delivery receipt, and we don't fabricate funnel stages.
+
+### Rules that survived every iteration
+- The notification never sells. Buddy = evidence → diagnosis → human call.
+- Silence is a valid output; every ladder has a terminal state.
+- Copy describes the outcome, is true on tap, and never guilts.

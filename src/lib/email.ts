@@ -24,6 +24,37 @@ export async function sendDailyReminder(to: string, name: string) {
   await resend.emails.send({ from: FROM, to, subject, html });
 }
 
+// Builder-recovery ladder email (touch 1: 30min, touch 2: 24h, touch 3: 72h).
+// Mid-Builder students usually haven't granted push yet, so email is the
+// primary channel for this segment. Copy rule: proof of saved progress +
+// the short remaining path — never "come back".
+export async function sendBuilderRecovery(
+  to: string,
+  name: string,
+  stepLabelText: string,
+  screensLeft: number,
+  touch: number
+) {
+  const hasName = name && name !== 'there';
+  const subject =
+    touch === 1 ? `${hasName ? `${name}, your` : 'Your'} CAT plan is ${screensLeft} screen${screensLeft === 1 ? '' : 's'} from done`
+    : touch === 2 ? `Your CAT plan is still saved at "${stepLabelText}"`
+    : 'Two minutes finishes your CAT plan';
+  const html = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <h2 style="font-size:20px;color:#1c1917">Your plan is saved — not lost</h2>
+      <p style="color:#57534e">${hasName ? `Hey ${name}, e` : 'E'}verything you entered is safe. You stopped at <strong>${stepLabelText}</strong> — ${screensLeft} screen${screensLeft === 1 ? '' : 's'} left, about 2 minutes.</p>
+      <p style="color:#57534e">The moment it's done, CareerRai builds today's routine around the time you actually have.</p>
+      <a href="https://careerrai-daily.vercel.app/student/tracker" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
+        Finish my plan →
+      </a>
+      <p style="margin-top:24px;font-size:12px;color:#a8a29e">CareerRai · Bharat-first peer mentorship · 0% commission</p>
+    </div>
+  `;
+  if (!resend) { log(subject, to); return; }
+  await resend.emails.send({ from: FROM, to, subject, html });
+}
+
 export async function sendBuddyWeeklyDigest(
   to: string,
   buddyName: string,

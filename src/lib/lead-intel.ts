@@ -36,6 +36,10 @@ export interface LeadSignals {
   mocksLogged: number;
   isPremium: boolean;
   hasBuddy: boolean;
+  // Notification-OS feedback (last 14 days) — optional so callers without
+  // the notifications join keep working.
+  nudgesSent14d?: number;
+  nudgesClicked14d?: number;
 }
 
 export interface LeadAssessment {
@@ -97,6 +101,29 @@ export function assessLead(s: LeadSignals): LeadAssessment {
   }
 
   return { tier: 'warming', reasons: [`Active ${s.loggedDaysLast7}/7 days this week — not hot yet`] };
+}
+
+// ─── Human Intervention Queue ────────────────────────────────────────────────
+// The bridge from the notification OS into the CRM: automation tried (3+
+// nudges in 14 days), the student didn't move (zero clicks AND the behaviour
+// the nudges were asking for never happened) — that COMBINATION is the
+// "assign a human" signal, not any single number. Returns null while
+// automation hasn't genuinely failed yet, so a quiet day never manufactures
+// queue entries.
+export function interventionNeeded(s: LeadSignals): string | null {
+  if (s.isPremium || s.hasBuddy) return null;
+  const sent = s.nudgesSent14d ?? 0;
+  if (sent < 3 || (s.nudgesClicked14d ?? 0) > 0) return null;
+  if (!s.onboardingCompleted) {
+    return `${sent} nudges since the Builder drop, none clicked — only a human reaches them now`;
+  }
+  if (s.daysSinceLastLog == null) {
+    return `${sent} nudges ignored and never logged a day — needs a call, not another push`;
+  }
+  if (s.daysSinceLastLog >= 7) {
+    return `${sent} nudges ignored across ${s.daysSinceLastLog} quiet days — automation is done here`;
+  }
+  return null;
 }
 
 // ─── "Why contact TODAY" — the one sentence at the top of a lead profile ────

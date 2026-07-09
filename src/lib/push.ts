@@ -20,7 +20,7 @@ export interface PushResult { ok: boolean; reason?: string }
 
 export async function sendPushToUser(
   userId: string,
-  payload: { title: string; body: string; url?: string }
+  payload: { title: string; body: string; url?: string; notifId?: string }
 ): Promise<PushResult> {
   if (!(await getVapidConfigured())) {
     console.warn(`[push] VAPID not configured — skipped push to ${userId}: ${payload.title}`);
@@ -37,7 +37,15 @@ export async function sendPushToUser(
     // silently collapse into one with no sound/vibration on the second, so a
     // chat-message push followed by a streak-risk push would erase the chat one
     // unheard. A per-send tag guarantees every push actually alerts the device.
-    const tagged = { ...payload, tag: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` };
+    // data.{url,notifId} is what the SW actually reads: url for the click
+    // target (the old top-level url was silently ignored by showNotification,
+    // so every push click opened "/" instead of its deep link), notifId for
+    // the click beacon that stamps clicked_at (see /api/push/click).
+    const tagged = {
+      ...payload,
+      tag: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      data: { url: payload.url ?? '/', notifId: payload.notifId ?? null },
+    };
     await webpush.sendNotification(
       profile.push_subscription as webpush.PushSubscription,
       JSON.stringify(tagged)
@@ -46,9 +54,14 @@ export async function sendPushToUser(
   } catch (err: unknown) {
     const statusCode = typeof err === 'object' && err !== null && 'statusCode' in err
       ? (err as { statusCode: number }).statusCode : undefined;
-    // Subscription expired/invalid — clean it up so we stop trying.
+    // Subscription expired/invalid — clean it up so we stop trying, and
+    // stamp push_died_at: a dead endpoint usually means the PWA was
+    // uninstalled, which is a CRM signal ("push can't reach them — email or
+    // a call are the only doors left"), not just an error to swallow.
     if (statusCode === 410 || statusCode === 404) {
-      await admin.from('profiles').update({ push_subscription: null }).eq('id', userId);
+      await admin.from('profiles')
+        .update({ push_subscription: null, push_died_at: new Date().toISOString() })
+        .eq('id', userId);
     }
     console.error(`[push] send failed (status ${statusCode}) for ${userId}`);
     return { ok: false, reason: `send_failed_${statusCode ?? 'unknown'}` };

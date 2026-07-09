@@ -176,8 +176,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     // block the student's own flow.
     if (userId) {
       const reached = currentScreen + 1;
+      // onboarding_last_activity_at anchors the builder-recovery ladder
+      // (30min/24h/72h touches are timed from the last screen advance).
       void supabase.from('profiles')
-        .update({ onboarding_step_reached: reached })
+        .update({ onboarding_step_reached: reached, onboarding_last_activity_at: new Date().toISOString() })
         .eq('id', userId)
         .lt('onboarding_step_reached', reached)
         .then(({ error: e }) => { if (e) console.error('step marker failed:', e.message); });
@@ -245,6 +247,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         const merged: Record<string, unknown> = { ...onboardingData, ...(data ?? {}) };
         const update: Record<string, unknown> = {
           onboarding_completed: true,
+          // Completion re-anchors: from here this timestamp drives the
+          // activation ladder (days 0/1/3/7 of "your routine is waiting").
+          onboarding_last_activity_at: new Date().toISOString(),
           study_target_hours: studyTargetHours,
           weekend_hours_available: weekendHours,
         };

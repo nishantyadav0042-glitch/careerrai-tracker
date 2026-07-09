@@ -1,31 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendDailyReminder } from '@/lib/email';
-import { sendPushToUser } from '@/lib/push';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
+import { ACTIVATION_DAYS, activationCopy, dispatch } from '@/lib/notification-os';
 
-// PARTIALLY RETIRED. The two-regime split from the founder's notification
-// philosophy: Day 0-7 keeps its scheduled, light evening touch (real habit-
-// formation research, not a nag — see onboardingCopy); the generic
-// post-day-7 guilt rotation (pickNoLogVariant — "Streak TOOT jayegi" and
-// its siblings) is retired in favor of /api/cron/decision-engine's
-// silence-capable model. This cron now only ever sends the onboarding arc.
+// 14:30 UTC = 20:00 IST. The evening touch for students in their first two
+// weeks — two distinct populations, one send each, both through dispatch()
+// (global 2/day budget + measurement):
+//
+//   1. Day 1-7 habit arc (logged at least once, <7 logged days): the
+//      original onboarding evening copy.
+//   2. Activation ladder (Builder done, NEVER logged): "your routine is
+//      waiting" on days 0/1/3/7 after the build, then silence + the human
+//      queue. This replaces the old behaviour of sending them the same
+//      "Day 1" copy twice a day for 14 days — repetition without
+//      escalation or an end is a nag, not a system.
+//
+// Builder-incomplete students are skipped entirely — they can't log (the
+// mandatory Builder gate blocks the tracker), so any "log today" ask here
+// was impossible on tap; /api/cron/builder-recovery owns them.
+// Students past the arc are owned by /api/cron/decision-engine at this same
+// slot — the state split is what makes the two crons collision-free.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const todayStart = new Date(today + 'T00:00:00+05:30').toISOString();
-
-  // Only students still inside the first-7-days arc are candidates now —
-  // the generic post-day-7 rotation is retired, so there's no reason to
-  // fetch the full student roster or streak/title-recency data anymore.
   const fourteenDaysAgoIso = new Date(Date.now() - 14 * 86_400_000).toISOString();
+
   const { data: students } = await admin
     .from('profiles')
-    .select('id, full_name, email, notif_prefs, created_at')
+    .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_last_activity_at')
     .eq('role', 'student')
+    .eq('is_demo', false)
     .gte('created_at', fourteenDaysAgoIso);
   if (!students?.length) return NextResponse.json({ reminded: 0 });
 
@@ -38,7 +47,8 @@ export async function POST(request: NextRequest) {
   ] = await Promise.all([
     admin.from('daily_reports').select('student_id').in('student_id', studentIds).eq('report_date', today),
     admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds),
-    admin.from('notifications').select('user_id').in('user_id', studentIds).in('type', ['daily_reminder', 'onboarding_evening']).gte('created_at', todayStart),
+    admin.from('notifications').select('user_id').in('user_id', studentIds)
+      .in('type', ['onboarding_evening', 'activation']).gte('created_at', todayStart),
   ]);
 
   const submittedIds = new Set((todayReports ?? []).map((r) => r.student_id));
@@ -49,35 +59,56 @@ export async function POST(request: NextRequest) {
     if (!loggedDaysByStudent.has(r.student_id)) loggedDaysByStudent.set(r.student_id, new Set());
     loggedDaysByStudent.get(r.student_id)!.add(r.report_date);
   }
-  const fourteenDaysAgoMs = Date.now() - 14 * 86_400_000;
-
-  const pending = students.filter((s) => !submittedIds.has(s.id) && !reminderSentToday.has(s.id));
 
   let reminded = 0;
-  for (const s of pending) {
+  for (const s of students) {
+    if (submittedIds.has(s.id) || reminderSentToday.has(s.id)) continue;
+    if (s.onboarding_completed !== true) continue; // builder-recovery owns them
     const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
     if (prefs.daily_reminder === false) continue;
 
     const firstName = s.full_name.split(' ')[0];
     const loggedDays = loggedDaysByStudent.get(s.id) ?? new Set();
-    const isOnboarding = loggedDays.size < 7 && new Date(s.created_at).getTime() >= fourteenDaysAgoMs;
-    if (!isOnboarding) continue; // generic guilt rotation retired — decision-engine owns day 8+
+
+    if (loggedDays.size === 0) {
+      // Activation ladder: plan built, never logged.
+      const anchorIso = (s.onboarding_last_activity_at as string | null) ?? (s.created_at as string);
+      const daysSinceBuilt = Math.floor((Date.now() - new Date(anchorIso).getTime()) / 86_400_000);
+      if (!ACTIVATION_DAYS.includes(daysSinceBuilt)) continue; // off-ladder days are silent
+      const copy = activationCopy(daysSinceBuilt, firstName);
+      const outcome = await dispatch({
+        userId: s.id,
+        type: 'activation',
+        title: copy.title,
+        body: copy.body,
+        url: '/student/tracker',
+        reason: `Plan built ${daysSinceBuilt === 0 ? 'today' : `${daysSinceBuilt}d ago`}, never logged — activation day ${daysSinceBuilt}`,
+        expectedAction: 'log_today',
+        prefs,
+        email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
+      });
+      if (outcome === 'sent') reminded++;
+      continue;
+    }
+
+    if (loggedDays.size >= 7) continue; // graduated — decision-engine owns them
 
     const onboarding = onboardingCopy(loggedDays.size + 1, 'pending', firstName)!;
-    const { title, body } = onboarding;
-
-    await admin.from('notifications').insert({
-      user_id: s.id, type: 'onboarding_evening', title, body,
-      data: { url: '/student/tracker' }, read: false, channel: 'in_app',
+    const outcome = await dispatch({
+      userId: s.id,
+      type: 'onboarding_evening',
+      title: onboarding.title,
+      body: onboarding.body,
+      url: '/student/tracker',
+      reason: `Day ${loggedDays.size + 1} of the 7-day habit arc, no log today — evening touch`,
+      expectedAction: 'log_today',
+      prefs,
+      email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
     });
-
-    if (prefs.email !== false && s.email) await sendDailyReminder(s.email, firstName);
-    if (prefs.push === true) await sendPushToUser(s.id, { title, body, url: '/student/tracker' });
-
-    reminded++;
+    if (outcome === 'sent') reminded++;
   }
 
-  return NextResponse.json({ reminded, total: students.length, pendingCount: pending.length });
+  return NextResponse.json({ reminded, total: students.length });
 }
 
 export { POST as GET };

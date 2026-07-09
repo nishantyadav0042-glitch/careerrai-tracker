@@ -18,6 +18,7 @@ export interface DecisionEvent {
   priority: number;
   topic?: string | null;
   extra?: string | null;
+  tier?: number; // inactive_recovery only: 1..4, indexed into RECOVERY_LADDER_DAYS
 }
 
 // Fixed priority ladder. Revision slipping outranks a routine plan
@@ -95,13 +96,22 @@ export function detectWeeklyEvolved(isSunday: boolean, weeklyEvolutionLines: str
   return { type: 'weekly_evolved', priority: PRIORITY.weekly_evolved, extra: weeklyEvolutionLines[0] };
 }
 
-// The one deliberate exception to "only notify on positive change": going
-// quiet for 3+ days is itself the most valuable signal in the whole
-// system, and a silence-only engine would never recover a lapsed student.
-// No guilt in the copy layer — see templateFor — this only decides WHETHER.
-export function detectInactive(daysSinceLastLog: number | null): DecisionEvent | null {
-  if (daysSinceLastLog == null || daysSinceLastLog < 3) return null;
-  return { type: 'inactive_recovery', priority: PRIORITY.inactive_recovery };
+// The recovery LADDER — the one deliberate exception to "only notify on
+// positive change". The old detectInactive fired at >=3 days and then again
+// every single day after, forever: a nag loop wearing an event's clothes.
+// This fires on EXACT days since the last log (2, 4, 7, 14), each tier with
+// different psychology in the copy layer, and day 14 is terminal — after
+// that, automation is silent and the student belongs to the human
+// intervention queue on /admin/leads. The clock resets itself: any log
+// moves last_log_date and the ladder restarts from zero. No guilt in any
+// tier — see templateFor — this only decides WHETHER and WHICH.
+export const RECOVERY_LADDER_DAYS: readonly number[] = [2, 4, 7, 14];
+
+export function detectRecovery(daysSinceLastLog: number | null): DecisionEvent | null {
+  if (daysSinceLastLog == null) return null;
+  const idx = RECOVERY_LADDER_DAYS.indexOf(daysSinceLastLog);
+  if (idx === -1) return null;
+  return { type: 'inactive_recovery', priority: PRIORITY.inactive_recovery, tier: idx + 1 };
 }
 
 // Single highest-priority event — still the right primitive when only one
@@ -145,6 +155,34 @@ export function templateFor(event: DecisionEvent): DecisionEventTemplate {
     case 'weekly_evolved':
       return { title: 'Your CAT Plan evolved', body: event.extra ?? 'See what changed this week.', url: '/student/tracker' };
     case 'inactive_recovery':
-      return { title: 'Picked up where you left off', body: "Today's first task is ready.", url: '/student/tracker' };
+      // Tiered psychology, never guilt: protect (2d) → restart (4d) →
+      // rebuilt (7d) → win-back (14d, final). Every claim is true on tap:
+      // the routine engine genuinely recomputes today's plan from the time
+      // left, so "rebuilt" is a fact, not a metaphor.
+      switch (event.tier) {
+        case 1:
+          return { title: 'Your routine is still waiting', body: "The gap doesn't matter — today's first task is ready.", url: '/student/tracker' };
+        case 2:
+          return { title: 'Start again from today', body: 'The missed days are ignored. The plan picks up from where you are.', url: '/student/tracker' };
+        case 3:
+          return { title: "Today's routine is rebuilt", body: 'A week away changes the plan, so it adapted. Ready when you open it.', url: '/student/tracker' };
+        default:
+          return { title: 'Your CAT routine has been rebuilt', body: "Rebuilt around the time you have left. It's waiting when you are.", url: '/student/tracker' };
+      }
+  }
+}
+
+// The persisted "why" on every send — the debugging answer to "why did this
+// student get this push?" without reading cron code.
+export function reasonFor(event: DecisionEvent): string {
+  switch (event.type) {
+    case 'revision_due': return `"${event.topic}" is past its revision window`;
+    case 'topic_earned': return `"${event.topic}" was earned into exam-ready today`;
+    case 'mission_changed': return "Today's plan opens with a different section than yesterday";
+    case 'weekly_evolved': return 'Sunday evolution produced a real change this week';
+    case 'inactive_recovery': {
+      const tier = event.tier ?? 4;
+      return `${RECOVERY_LADDER_DAYS[tier - 1]} days since last log — recovery tier ${tier} of 4${tier === 4 ? ' (final automated touch)' : ''}`;
+    }
   }
 }

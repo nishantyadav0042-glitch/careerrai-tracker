@@ -83,6 +83,12 @@ export interface Notification {
   read: boolean;
   channel: string;
   created_at: string;
+  // Notification-OS measurement (nullable — rows predating it stay null)
+  reason?: string | null;
+  expected_action?: string | null;
+  pushed_at?: string | null;
+  emailed_at?: string | null;
+  clicked_at?: string | null;
 }
 
 export interface AnalyticsSummary {

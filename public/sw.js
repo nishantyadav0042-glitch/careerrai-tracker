@@ -1,4 +1,4 @@
-﻿// Service Worker — push notifications + installability (v4)
+﻿// Service Worker — push notifications + installability (v5: click beacon + deep links)
 //
 // Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
 // site has a service worker with a REAL fetch handler. So we add one — but it is
@@ -55,20 +55,30 @@ self.addEventListener('push', (event) => {
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
-  console.log('[Service Worker] Notification clicked:', event.notification.tag);
-
   event.notification.close();
 
-  // Default: open home page
-  const urlToOpen = new URL('/', self.location.origin);
-  const data = event.notification.data;
+  const data = event.notification.data || {};
+  // new URL(path, origin) keeps query strings intact — the old
+  // `urlToOpen.pathname = data.url` dropped them.
+  const urlToOpen = new URL(data.url || '/', self.location.origin);
 
-  // If there's a URL in the notification data, use that
-  if (data && data.url) {
-    urlToOpen.pathname = data.url;
+  const work = [];
+
+  // Click beacon: the ONLY signal web push gives us that a notification was
+  // seen. Feeds clicked_at on the notifications row — cooldown logic and the
+  // admin health dashboard both run on it. Best-effort: a failed beacon
+  // must never block opening the app.
+  if (data.notifId) {
+    work.push(
+      fetch('/api/push/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: data.notifId }),
+      }).catch(() => {})
+    );
   }
 
-  event.waitUntil(
+  work.push(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Check if we already have a window open
       for (let i = 0; i < clientList.length; i++) {
@@ -83,6 +93,8 @@ self.addEventListener('notificationclick', (event) => {
       }
     })
   );
+
+  event.waitUntil(Promise.all(work));
 });
 
 // Handle notification dismissal
