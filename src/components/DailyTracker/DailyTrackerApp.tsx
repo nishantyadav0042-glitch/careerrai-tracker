@@ -5,9 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 import { Flame, Video } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
-import { BuddyInsightCard } from './BuddyInsightCard';
-import { SafeCard } from './SafeCard';
 import type { MockDebriefData } from './MockDebriefModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 
@@ -57,29 +56,22 @@ interface DailyTrackerAppProps {
   studentId?: string;
   todaySession?: TodaySession | null;
   hasBuddy?: boolean;
-  buddyId?: string | null;
-  buddyName?: string | null;
   initialPendingDebrief?: { report_date: string; updated_at: string } | null;
-  initialFeedback?: { feedback_text: string; feedback_date: string; feedback_type: string } | null;
   initialLogging?: InitialLogging | null;
   hasLoggedYesterday?: boolean;
   yesterdayStr?: string;   // ISO date for the API
   yesterdayLabel?: string; // "Jun 16" for the UI
 }
 
-// Minimal by design: the mock-debrief loop (the paid product's core data),
-// one buddy line, today's session, and a small log strip with a tiny
-// streak. The old hero streak card, puzzles, brain-break games, and
-// recovery modal are gone — the homepage earns trust with today's study,
-// not widgets.
+// Home's second hero, not a buried strip — Today's Log is one of the app's
+// two core loops (the other is Today's Study Plan). Tomorrow's plan, revision
+// scheduling, and Buddy feedback all read off what gets logged here, so it
+// gets the same visual weight as the routine card, not a footnote under it.
 export function DailyTrackerApp({
   studentId = '',
   todaySession = null,
   hasBuddy = false,
-  buddyId = null,
-  buddyName = null,
   initialPendingDebrief = null,
-  initialFeedback = null,
   initialLogging = null,
   hasLoggedYesterday = true,
   yesterdayStr = '',
@@ -196,43 +188,46 @@ export function DailyTrackerApp({
         </div>
       )}
 
-      {/* Buddy insight — 1 line */}
-      {studentId && (
-        <SafeCard>
-          <BuddyInsightCard studentId={studentId} buddyId={buddyId} buddyName={buddyName} dailyNudge={lastNudge} initialFeedback={initialFeedback} />
-        </SafeCard>
-      )}
+      {/* Today's Log — Home's second hero, same visual weight as Today's
+          Study Plan. A session happening today is nested inside it rather
+          than its own section, so Home still structurally has exactly two
+          things on it. */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold">Today&apos;s Log</p>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-stone-500">
+            <Flame className={currentStreak > 0 ? 'w-3.5 h-3.5 text-orange-500' : 'w-3.5 h-3.5 text-stone-300'} />
+            {currentStreak > 0 ? `${currentStreak}d streak` : 'No streak yet'}
+          </span>
+        </div>
 
-      {todaySession && <SessionStrip session={todaySession} />}
+        {todaySession && <div className="mb-3"><SessionStrip session={todaySession} /></div>}
 
-      {/* Log strip — small, bottom. The streak lives here, tiny. */}
-      <div className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-3">
-        <span className="inline-flex items-center gap-1.5 text-xs text-stone-500">
-          <Flame className={currentStreak > 0 ? 'w-3.5 h-3.5 text-orange-500' : 'w-3.5 h-3.5 text-stone-300'} />
-          {currentStreak > 0 ? `${currentStreak}-day streak` : 'No streak yet'}
-        </span>
         {hasLoggedToday ? (
-          <span className="text-xs font-semibold text-teal-700">Logged ✓</span>
+          <div className="py-2 text-center">
+            <p className="text-base font-bold text-teal-700">Logged ✓</p>
+            <p className="text-xs text-stone-500 mt-1">That&apos;s what tomorrow&apos;s plan is built from.</p>
+          </div>
         ) : (
-          <div className="flex items-center gap-3">
-            {!hasLoggedYesterday && yesterdayStr && (
-              <button
-                onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-                className="text-[11px] text-stone-400 hover:text-stone-600"
-              >
-                {yesterdayLabel}?
-              </button>
-            )}
+          <div className="space-y-2.5">
             <button
               onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
               disabled={isSubmitting}
-              className="rounded-lg bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white active:scale-95 transition-all disabled:opacity-50"
+              className="w-full rounded-xl bg-stone-900 py-3.5 text-sm font-bold text-white active:scale-[0.99] transition-all disabled:opacity-50"
             >
-              Log today
+              {isSubmitting ? 'Logging…' : "Log today's study →"}
             </button>
+            {!hasLoggedYesterday && yesterdayStr && (
+              <button
+                onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
+                className="w-full text-center text-xs text-stone-400 hover:text-stone-600"
+              >
+                Missed {yesterdayLabel}? Log it too →
+              </button>
+            )}
           </div>
         )}
-      </div>
+      </Card>
 
       <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />
       <MockDebriefModal isOpen={isDebriefOpen} onClose={() => setIsDebriefOpen(false)} onSubmit={handleDebriefSubmit} logDate={currentLogDate} />
