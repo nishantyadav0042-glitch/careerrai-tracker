@@ -292,16 +292,26 @@ export function TodaysRoutineCard() {
               if (isStart || expanded) {
                 return (
                   <div key={task.id}>
-                    <button
-                      onClick={() => handleTaskTap(task, done)}
-                      disabled={busyTaskId === task.id}
+                    <div
                       className={cn(
-                        'w-full flex items-start gap-3 rounded-2xl bg-orange-50/70 p-4 text-left transition-all active:scale-[0.99]',
+                        'w-full flex items-start gap-3 rounded-2xl bg-orange-50/70 p-4 transition-all',
                         expanded && 'rounded-b-none'
                       )}
                     >
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-orange-500" />
-                      <div className="min-w-0 flex-1">
+                      {/* Tap the circle to mark done, no confidence required —
+                          a real one-tap complete. Tap the task itself to open
+                          the confidence picker for those who want to log it. */}
+                      <button
+                        onClick={() => { if (!done) reportStart(); toggleTask(task); }}
+                        disabled={busyTaskId === task.id}
+                        aria-label="Mark complete"
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-orange-500 active:scale-90 transition-transform"
+                      />
+                      <button
+                        onClick={() => handleTaskTap(task, done)}
+                        disabled={busyTaskId === task.id}
+                        className="min-w-0 flex-1 text-left active:scale-[0.99] transition-transform"
+                      >
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-orange-600 text-white">
                             {isStart ? 'Start Here' : 'Next'}
@@ -312,8 +322,8 @@ export function TodaysRoutineCard() {
                         {memoryTag(task) && (
                           <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
                         )}
-                      </div>
-                    </button>
+                      </button>
+                    </div>
                     {expanded && (
                       <div className="rounded-b-2xl bg-orange-50/70 px-4 pb-4 pt-1">
                         {/* 2x2, not a single row of 4 — "Getting there" and
@@ -339,23 +349,30 @@ export function TodaysRoutineCard() {
               }
 
               return (
-                <button
-                  key={task.id}
-                  onClick={() => handleTaskTap(task, done)}
-                  disabled={busyTaskId === task.id}
-                  className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3 text-left transition-colors hover:bg-stone-100 active:scale-[0.99]"
-                >
-                  <span className={cn(
-                    'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
-                    done ? 'border-teal-600 bg-teal-600' : 'border-stone-300'
-                  )}>
+                <div key={task.id} className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3 transition-colors hover:bg-stone-100">
+                  {/* Circle = one-tap complete, no confidence required. */}
+                  <button
+                    onClick={() => { if (!done) reportStart(); toggleTask(task); }}
+                    disabled={busyTaskId === task.id}
+                    aria-label="Mark complete"
+                    className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 active:scale-90 transition-transform',
+                      done ? 'border-teal-600 bg-teal-600' : 'border-stone-300'
+                    )}
+                  >
                     {done && <Check className="w-3 h-3 text-white" />}
-                  </span>
-                  <span className={cn('text-sm font-semibold flex-1 min-w-0', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
-                    {taskTitle(task)}
-                  </span>
-                  <span className="text-xs text-stone-400 shrink-0">{task.estMinutes}m</span>
-                </button>
+                  </button>
+                  <button
+                    onClick={() => handleTaskTap(task, done)}
+                    disabled={busyTaskId === task.id}
+                    className="flex-1 min-w-0 flex items-center justify-between gap-3 text-left"
+                  >
+                    <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
+                      {taskTitle(task)}
+                    </span>
+                    <span className="text-xs text-stone-400 shrink-0">{task.estMinutes}m</span>
+                  </button>
+                </div>
               );
             })}
           </div>
