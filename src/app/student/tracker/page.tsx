@@ -8,6 +8,8 @@ import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
 import { CoachLine } from '@/components/coach-line';
+import { PaceRing } from '@/components/pace-ring';
+import { remainingSyllabusHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
@@ -42,7 +44,7 @@ export default async function DailyTrackerPage() {
   ] = await Promise.all([
     admin
       .from('profiles')
-      .select('full_name, buddy_id, password_set, created_at, notif_prefs, attempt_year, is_repeater, is_working_professional, syllabus_target_date')
+      .select('full_name, buddy_id, password_set, created_at, notif_prefs, attempt_year, is_repeater, is_working_professional, syllabus_target_date, study_target_hours')
       .eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -105,7 +107,19 @@ export default async function DailyTrackerPage() {
   // finish date in the Builder, the strip anchors on THEIR date and compares
   // pace against it. Pace-only mode remains the fallback for accounts that
   // predate the chooser.
+  // Precise, per-topic study pace: hours of syllabus still ahead (weighted by
+  // each topic's own estimatedHours + how far the student is on it) → the
+  // daily-hours requirement to hit their date. Auto catch-up / roll-over.
   const targetIso = (profile?.syllabus_target_date as string | null) ?? null;
+  const paceRemainingHours = remainingSyllabusHours(topicMemory);
+  const pace = targetIso
+    ? computeRequiredPace({
+        remainingHours: paceRemainingHours,
+        today: now,
+        targetDate: new Date(targetIso + 'T00:00:00'),
+        committedPerDay: (profile?.study_target_hours as number | null) ?? null,
+      })
+    : null;
   const targetLabel = targetIso
     ? new Date(targetIso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
     : null;
@@ -195,9 +209,13 @@ export default async function DailyTrackerPage() {
           </span>
         </div>
 
-        {/* The consequence number, always in sight: finish window at their
-            current pace. Tap-through to My CAT Plan for the full picture. */}
-        {finishStrip && (
+        {/* The daily-hours ring — the number that keeps them honest: how many
+            hours today to hit their own date, catch-up/roll-over baked in.
+            Shown whenever they've committed to a finish date. */}
+        {pace && targetIso && <PaceRing pace={pace} targetIso={targetIso} />}
+
+        {/* Fallback pace strip only when there's no ring (no target date yet). */}
+        {!pace && finishStrip && (
           <Link
             href="/student/blueprint"
             className={
