@@ -102,8 +102,9 @@ export default async function DailyTrackerPage() {
   // not already dismissed.
   const notifPrefs = (profile?.notif_prefs ?? {}) as Record<string, unknown>;
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+  const nowMs = Date.now();
   const daysSinceJoin = profile?.created_at
-    ? Math.floor((Date.now() - new Date(profile.created_at as string).getTime()) / 86_400_000)
+    ? Math.floor((nowMs - new Date(profile.created_at as string).getTime()) / 86_400_000)
     : 0;
   const showPasswordReminder =
     profile?.password_set !== true &&
