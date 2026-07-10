@@ -77,16 +77,23 @@ export async function GET() {
   // answered the old tap) → baseline mock scores → derived from the
   // student's own declared Coverage grid (the Blueprint Builder no longer
   // asks the single-section question — the full grid answers it better).
+  // Falls back to 'DILR' — the same deterministic, stated default the
+  // tie-break in computeWeakestFromCoverage already uses — when nothing is
+  // derivable (a true beginner: no self-report, no baselines, and an
+  // honestly-empty Coverage grid). This replaced the legacy quick-setup
+  // gate that used to re-interrogate exactly those students on the home
+  // screen ("Which section is toughest?") even though they'd just finished
+  // the mandatory Builder.
   const weakest = (profile.self_reported_weakest_section as Section | null)
     ?? computeWeakestFromBaseline(profile)
-    ?? computeWeakestFromCoverage(coverageRows ?? []);
+    ?? computeWeakestFromCoverage(coverageRows ?? [])
+    ?? 'DILR';
   const strongest = (profile.self_reported_strongest_section as Section | null)
     ?? computeStrongestFromBaseline(profile);
 
-  // null = never asked. Skipping the topic tap in quick-setup still resolves
-  // to a real default topic (see DEFAULT_TOPIC_BY_SECTION in
-  // /api/routine/quick-setup) rather than an empty string — a "not sure" tap
-  // must never mean zero topic-level personalization.
+  // null = never asked (the legacy quick-setup that used to collect this is
+  // gone; the topic selector derives per-section topics from the Coverage
+  // grid regardless, so null costs nothing).
   const weakTopicRaw = profile.self_reported_weak_topic as string | null;
   const weakTopic = weakTopicRaw ? weakTopicRaw : null;
 
@@ -115,23 +122,6 @@ export async function GET() {
     coachingEnrolled: profile.coaching_enrolled as boolean | null,
     attemptYear: profile.attempt_year as number | null,
   };
-
-  // Legacy safety net only: the Blueprint Builder now collects everything
-  // through the Coverage grid, so any account WITH coverage rows is fully
-  // set up — weakest derives from the grid, stage/blocker are optional
-  // engine biases that default safely to null. The old homepage quick-setup
-  // gate fires only for pre-Builder accounts that have neither coverage nor
-  // any self-report to derive a weakest section from.
-  if (!existing && (coverageRows ?? []).length === 0 && weakest == null) {
-    return NextResponse.json({
-      needsSetup: true,
-      weakestSection: weakest,
-      weakTopic,
-      currentStage,
-      biggestBlocker,
-      needsWeekendHours: profile.weekend_hours_available == null,
-    });
-  }
 
   // Computed unconditionally (not just on generation) — the Mission and the
   // fresh whySummary below both need current recency/coverage data every
