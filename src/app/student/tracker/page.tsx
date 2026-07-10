@@ -1,11 +1,16 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString } from '@/lib/streak-utils';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
-import { Flame } from 'lucide-react';
+import { computeTopicMemory } from '@/lib/prep-memory-data';
+import { projectSyllabusFinish } from '@/lib/study-plan';
+import { catExamDate } from '@/lib/routine-engine';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { Flame, CalendarCheck } from 'lucide-react';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -35,7 +40,7 @@ export default async function DailyTrackerPage() {
   ] = await Promise.all([
     admin
       .from('profiles')
-      .select('full_name, buddy_id, password_set, created_at, notif_prefs')
+      .select('full_name, buddy_id, password_set, created_at, notif_prefs, attempt_year, is_repeater, is_working_professional')
       .eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -65,6 +70,37 @@ export default async function DailyTrackerPage() {
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
+
+  // Syllabus finish window (founder ask: the date belongs on TOP of Home,
+  // not one tab away). Same engine as My CAT Plan — projectSyllabusFinish
+  // over topicMemory — so the two surfaces can never disagree. Silent for
+  // students with no pace yet (day-1 accounts shouldn't open to "stalled").
+  // NOTE: topicMemory scans the student's full routine history — watch this
+  // page's server time on /admin/perf as data grows.
+  const archetype = { isRepeater: !!profile?.is_repeater, isWorkingProfessional: !!profile?.is_working_professional };
+  const topicMemory = await computeTopicMemory(admin, user.id, archetype);
+  const totalTopics = Object.keys(TOPIC_METADATA).length;
+  const notStartedCount = topicMemory.filter((t) => t.status === 'not_started').length;
+  const startedLast21 = topicMemory.filter(
+    (t) => t.status !== 'not_started' && t.firstTouchedDaysAgo != null && t.firstTouchedDaysAgo <= 21
+  ).length;
+   
+  const now = new Date();
+  let examYear = (profile?.attempt_year as number | null) ?? now.getFullYear();
+  if (now > catExamDate(examYear)) examYear += 1;
+  const finish = projectSyllabusFinish({
+    today: now,
+    examDate: catExamDate(examYear),
+    topicsRemaining: notStartedCount,
+    topicsStartedLast21Days: startedLast21,
+  });
+  const finishStrip =
+    finish.status === 'done'
+      ? { label: 'Syllabus complete — revision & mocks now', tone: 'done' as const }
+      : finish.windowLabel
+        ? { label: `Syllabus done ${finish.windowLabel} at this pace`, tone: finish.status }
+        : null;
+  const startedOnceCount = totalTopics - notStartedCount;
 
   const existingDebrief = recentMock
     ? await admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
@@ -122,6 +158,26 @@ export default async function DailyTrackerPage() {
             {currentStreak}
           </span>
         </div>
+
+        {/* The consequence number, always in sight: finish window at their
+            current pace. Tap-through to My CAT Plan for the full picture. */}
+        {finishStrip && (
+          <Link
+            href="/student/blueprint"
+            className={
+              'flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors ' +
+              (finishStrip.tone === 'critical'
+                ? 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                : finishStrip.tone === 'tight'
+                  ? 'border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100'
+                  : 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100')
+            }
+          >
+            <CalendarCheck className="h-4 w-4 shrink-0" />
+            <span className="min-w-0 truncate">{finishStrip.label}</span>
+            <span className="ml-auto shrink-0 text-[10px] font-bold opacity-60">{startedOnceCount}/{totalTopics} topics →</span>
+          </Link>
+        )}
 
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
 
