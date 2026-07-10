@@ -84,9 +84,23 @@ export async function GET() {
   // not_started when a topic has no coverage row at all) rather than the raw
   // coverageTally above, which only counts topics that already have a row.
   const totalTopics = Object.keys(TOPIC_METADATA).length;
+  // 'learning' = concepts just begun, NOT a finished study pass. Counting it
+  // as "studied once" made a student who merely tapped through onboarding land
+  // on "46/46 studied · Syllabus done" with nothing left to do — a fake plan.
+  // A topic is "studied once" only once it reaches practicing/revising/exam_ready;
+  // 'learning' is surfaced as its own in-progress bucket, and BOTH not_started
+  // and learning count as still-to-finish for the syllabus projection.
   const notStartedTopics = topicMemory.filter((t) => t.status === 'not_started');
+  const learningTopics = topicMemory.filter((t) => t.status === 'learning');
   const notStartedCount = notStartedTopics.length;
-  const studiedOnceCount = totalTopics - notStartedCount;
+  const learningCount = learningTopics.length;
+  // Topics with a genuine study pass behind them.
+  const studiedOnceCount = topicMemory.filter(
+    (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
+  ).length;
+  // Everything not yet studied through — drives the finish projection and the
+  // "syllabus done" gate, so neither fires while topics are still in learning.
+  const remainingTopics = notStartedCount + learningCount;
   const dueForRevision = topicMemory
     .filter((t) => t.revisionOverdue)
     .sort((a, b) => (b.lastTouchedDaysAgo ?? 0) - (a.lastTouchedDaysAgo ?? 0));
@@ -100,7 +114,7 @@ export async function GET() {
   const finishProjection = projectSyllabusFinish({
     today,
     examDate: catExamDate(examYear),
-    topicsRemaining: notStartedCount,
+    topicsRemaining: remainingTopics,
     topicsStartedLast21Days,
   });
   const { mockIntensiveStart, revisionSprintStart } = phaseBoundaryDates(catExamDate(examYear));
@@ -110,12 +124,15 @@ export async function GET() {
     revisionSprintStart: dateLabel(revisionSprintStart),
   };
 
-  const notStartedBySection: Partial<Record<Section, number>> = {};
-  for (const t of notStartedTopics) {
+  // "Finish X" spans every not-yet-studied-through topic — not_started AND
+  // still-in-learning — so the suggestion doesn't vanish the moment a student
+  // has merely opened every topic.
+  const remainingBySection: Partial<Record<Section, number>> = {};
+  for (const t of [...notStartedTopics, ...learningTopics]) {
     const section = TOPIC_METADATA[t.topic]?.section;
-    if (section) notStartedBySection[section] = (notStartedBySection[section] ?? 0) + 1;
+    if (section) remainingBySection[section] = (remainingBySection[section] ?? 0) + 1;
   }
-  const sectionToFinish = (Object.entries(notStartedBySection) as [Section, number][])
+  const sectionToFinish = (Object.entries(remainingBySection) as [Section, number][])
     .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
   const thisWeek: { label: string; href: string }[] = [];
@@ -136,15 +153,15 @@ export async function GET() {
   // actually matters (Mock Intensive / Revision Sprint) and none landed
   // this week — there's no invented "planned mocks" target to compare to.
   const revRatio = studiedOnceCount > 0 ? dueForRevision.length / studiedOnceCount : 0;
-  const notStartedRatio = notStartedCount / totalTopics;
+  const remainingRatio = remainingTopics / totalTopics;
   const inMockCadencePhase = phase.id === 'mock_intensive' || phase.id === 'revision_sprint';
   let biggestPriority: string | null = null;
   if (inMockCadencePhase && prepMemory.last7.mocksLogged === 0) {
     biggestPriority = 'Mocks need more attention this week.';
   } else if (revRatio > 0.45) {
     biggestPriority = 'Revision needs more attention than new topics right now.';
-  } else if (notStartedRatio > 0.3) {
-    biggestPriority = `Finish the remaining ${notStartedCount} topics before increasing mock frequency.`;
+  } else if (remainingRatio > 0.3) {
+    biggestPriority = `Finish the remaining ${remainingTopics} topics before increasing mock frequency.`;
   } else if (dueForRevision.length > 0) {
     biggestPriority = "You're covering new topics well. Focus on revision next.";
   }
@@ -195,6 +212,7 @@ export async function GET() {
     isPremium: isPremium(profile),
     totalTopics,
     studiedOnceCount,
+    learningCount,
     notStartedCount,
     dueForRevisionCount: dueForRevision.length,
     mocksCompleted: prepMemory.mockTrend.count,
