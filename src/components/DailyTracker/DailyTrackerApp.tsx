@@ -22,22 +22,22 @@ function SessionStrip({ session }: { session: TodaySession }) {
   const joinable = minsAway <= 15 && !!session.google_meet_link;
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3">
+    <div className="flex items-center justify-between gap-3 bg-stone-100 border border-stone-200 rounded-2xl px-4 py-3">
       <div className="flex items-center gap-2.5 min-w-0">
-        <Video className="w-4 h-4 text-indigo-600 shrink-0" />
+        <Video className="w-4 h-4 text-stone-900 shrink-0" />
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-indigo-900 truncate">{session.title || 'Buddy session'}</p>
-          <p className="text-[11px] text-indigo-600">
+          <p className="text-xs font-semibold text-stone-900 truncate">{session.title || 'Buddy session'}</p>
+          <p className="text-[11px] text-stone-900">
             {startsAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
           </p>
         </div>
       </div>
       {joinable ? (
-        <a href={session.google_meet_link!} target="_blank" rel="noopener noreferrer" className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors">
+        <a href={session.google_meet_link!} target="_blank" rel="noopener noreferrer" className="shrink-0 px-3 py-1.5 bg-stone-900 hover:bg-stone-900 text-white text-xs font-bold rounded-lg transition-colors">
           Join →
         </a>
       ) : (
-        <span className="shrink-0 text-[11px] font-medium text-indigo-500">
+        <span className="shrink-0 text-[11px] font-medium text-stone-500">
           {minsAway > 60 ? `in ${Math.round(minsAway / 60)}h` : `in ${Math.max(0, minsAway)}m`}
         </span>
       )}
@@ -181,10 +181,10 @@ export function DailyTrackerApp({
       )}
 
       {debriefInsight && (
-        <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3">
-          <span className="text-xs font-bold text-teal-700 shrink-0 mt-0.5">📊</span>
-          <p className="flex-1 min-w-0 text-sm text-teal-900">{debriefInsight}</p>
-          <button onClick={() => setDebriefInsight(null)} className="text-teal-500 hover:text-teal-700 text-xs shrink-0" aria-label="Dismiss">✕</button>
+        <div className="flex items-start gap-2 bg-stone-100 border border-stone-300 rounded-2xl px-4 py-3">
+          <span className="text-xs font-bold text-stone-900 shrink-0 mt-0.5">📊</span>
+          <p className="flex-1 min-w-0 text-sm text-stone-900">{debriefInsight}</p>
+          <button onClick={() => setDebriefInsight(null)} className="text-stone-900 hover:text-stone-900 text-xs shrink-0" aria-label="Dismiss">✕</button>
         </div>
       )}
 
@@ -194,9 +194,9 @@ export function DailyTrackerApp({
           things on it. */}
       <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold">Today&apos;s Log</p>
+          <p className="text-xs uppercase tracking-widest text-stone-900 font-semibold">Today&apos;s Log</p>
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-stone-500">
-            <Flame className={currentStreak > 0 ? 'w-3.5 h-3.5 text-orange-500' : 'w-3.5 h-3.5 text-stone-300'} />
+            <Flame className={currentStreak > 0 ? 'w-3.5 h-3.5 text-stone-900' : 'w-3.5 h-3.5 text-stone-300'} />
             {currentStreak > 0 ? `${currentStreak}d streak` : 'No streak yet'}
           </span>
         </div>
@@ -205,7 +205,7 @@ export function DailyTrackerApp({
 
         {hasLoggedToday ? (
           <div className="py-2 text-center">
-            <p className="text-base font-bold text-teal-700">Logged ✓</p>
+            <p className="text-base font-bold text-stone-900">Logged ✓</p>
             <p className="text-xs text-stone-500 mt-1">That&apos;s what tomorrow&apos;s plan is built from.</p>
           </div>
         ) : (

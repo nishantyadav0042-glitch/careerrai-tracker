@@ -190,7 +190,7 @@ export default async function DailyTrackerPage() {
             Hello, {firstName}
           </h1>
           <span className="inline-flex items-center gap-1 text-sm font-bold text-stone-700 shrink-0">
-            <Flame className={currentStreak > 0 ? 'w-4 h-4 text-orange-500' : 'w-4 h-4 text-stone-300'} />
+            <Flame className={currentStreak > 0 ? 'w-4 h-4 text-stone-900' : 'w-4 h-4 text-stone-300'} />
             {currentStreak}
           </span>
         </div>

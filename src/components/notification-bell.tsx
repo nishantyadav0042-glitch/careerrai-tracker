@@ -52,7 +52,7 @@ export function NotificationBell({ userId, initialUnreadCount = 0 }: { userId: s
       >
         <Bell className="w-5 h-5 text-stone-700" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+          <span className="absolute top-1 right-1 w-4 h-4 bg-stone-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -88,11 +88,11 @@ export function NotificationBell({ userId, initialUnreadCount = 0 }: { userId: s
                   onClick={() => markRead(n.id)}
                   className={cn(
                     'p-4 cursor-pointer hover:bg-stone-50 transition-colors',
-                    !n.read && 'bg-orange-50/50'
+                    !n.read && 'bg-stone-100/50'
                   )}
                 >
                   <div className="flex items-start gap-2">
-                    {!n.read && <div className="w-2 h-2 rounded-full bg-orange-600 mt-1.5 flex-shrink-0" />}
+                    {!n.read && <div className="w-2 h-2 rounded-full bg-stone-900 mt-1.5 flex-shrink-0" />}
                     <div className={cn(!n.read ? 'ml-0' : 'ml-4')}>
                       <div className="text-sm font-semibold text-stone-900">{n.title}</div>
                       <div className="text-xs text-stone-600 mt-0.5">{n.body}</div>

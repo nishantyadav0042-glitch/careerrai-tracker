@@ -250,7 +250,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       </div>
       <div className="flex gap-0.5">
         {steps.map((_, i) => (
-          <div key={i} className={cn('flex-1 h-1 rounded-full', i < stepIdx ? 'bg-teal-500' : i === stepIdx ? 'bg-orange-500' : 'bg-stone-200')} />
+          <div key={i} className={cn('flex-1 h-1 rounded-full', i < stepIdx ? 'bg-stone-900' : i === stepIdx ? 'bg-stone-400' : 'bg-stone-200')} />
         ))}
       </div>
 
@@ -348,7 +348,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
           disabled={!stepComplete || saving || isLoading}
           className={cn(
             'flex-1 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]',
-            stepComplete ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+            stepComplete ? 'bg-stone-900 text-white hover:bg-stone-800' : 'bg-stone-200 text-stone-400 cursor-not-allowed'
           )}
         >
           {saving
