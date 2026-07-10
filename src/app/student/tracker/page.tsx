@@ -81,17 +81,22 @@ export default async function DailyTrackerPage() {
   const topicMemory = await computeTopicMemory(admin, user.id, archetype);
   const totalTopics = Object.keys(TOPIC_METADATA).length;
   const notStartedCount = topicMemory.filter((t) => t.status === 'not_started').length;
+  const learningCount = topicMemory.filter((t) => t.status === 'learning').length;
+  // Not yet studied through = not_started + still-in-learning. Same honesty
+  // fix as My CAT Plan: merely opening a topic ('learning') must not make the
+  // syllabus read "done", nor count as a finished topic in the Home strip.
+  const remainingTopics = notStartedCount + learningCount;
   const startedLast21 = topicMemory.filter(
     (t) => t.status !== 'not_started' && t.firstTouchedDaysAgo != null && t.firstTouchedDaysAgo <= 21
   ).length;
-   
+
   const now = new Date();
   let examYear = (profile?.attempt_year as number | null) ?? now.getFullYear();
   if (now > catExamDate(examYear)) examYear += 1;
   const finish = projectSyllabusFinish({
     today: now,
     examDate: catExamDate(examYear),
-    topicsRemaining: notStartedCount,
+    topicsRemaining: remainingTopics,
     topicsStartedLast21Days: startedLast21,
   });
   // Target mode (the commitment, not a setting): if the student chose a
@@ -126,7 +131,10 @@ export default async function DailyTrackerPage() {
           ? { label: `Syllabus done ${finish.windowLabel} at this pace`, tone: finish.status === 'ahead' ? 'done' : finish.status === 'tight' ? 'tight' : 'critical' }
           : null;
   }
-  const startedOnceCount = totalTopics - notStartedCount;
+  // Studied through (practicing+), not merely opened — matches My CAT Plan.
+  const startedOnceCount = topicMemory.filter(
+    (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
+  ).length;
 
   const existingDebrief = recentMock
     ? await admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)

@@ -18,6 +18,7 @@ interface RoadmapDates {
 interface PlanData {
   totalTopics: number;
   studiedOnceCount: number;
+  learningCount: number;
   notStartedCount: number;
   dueForRevisionCount: number;
   mocksCompleted: number;
@@ -102,7 +103,7 @@ export default function MyCatPlanPage() {
   }
 
   const {
-    totalTopics, studiedOnceCount, notStartedCount, dueForRevisionCount, mocksCompleted,
+    totalTopics, studiedOnceCount, learningCount, notStartedCount, dueForRevisionCount, mocksCompleted,
     finishProjection, roadmapDates, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner,
   } = data;
   const verdict = VERDICT[finishProjection.status];
@@ -120,9 +121,14 @@ export default function MyCatPlanPage() {
           </div>
         </div>
 
-        {/* Studied / revision / not started / mocks — four rows, four taps */}
+        {/* Studied through / in progress / due revision / not started / mocks.
+            'In progress' (learning) is its own row so a student who has merely
+            opened topics sees real next actions instead of a false "done". */}
         <div className="bg-white rounded-2xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
           <PlanRow href="/student/analysis" icon="✅" label={`${studiedOnceCount}/${totalTopics} studied once`} cta="View" />
+          {learningCount > 0 && (
+            <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} in progress`} cta="Continue" />
+          )}
           <PlanRow href="/student/analysis" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
           <PlanRow href="/student/analysis" icon="⚪" label={`${notStartedCount} not started`} cta="Start" />
           <PlanRow
