@@ -26,6 +26,7 @@ const CHECKLIST = [
 // server response confirms the plan is actually saved — never before.
 export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
   const [step, setStep] = useState<Step>('phone');
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
@@ -41,6 +42,7 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
   async function requestOtp(e?: React.FormEvent) {
     e?.preventDefault();
     setError(null);
+    if (name.trim().length < 2) { setError('Enter your name.'); return; }
     if (phone.length !== 10 || !/^[6-9]/.test(phone)) { setError('Enter a valid 10-digit mobile number.'); return; }
     setBusy(true);
     try {
@@ -82,7 +84,7 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
       const res = await fetch('/api/auth/verify-phone-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, token: otp, userType: 'student', onboarding }),
+        body: JSON.stringify({ phone, token: otp, name: name.trim(), userType: 'student', onboarding }),
       });
       const json = await res.json();
       if (json.ok && json.dest) {
@@ -141,6 +143,19 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
       {step === 'phone' ? (
         <form onSubmit={requestOtp} className="space-y-4">
           <div>
+            <label className="mb-1.5 block text-sm font-medium text-stone-800">Your name</label>
+            <input
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              required
+              autoFocus
+              className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+            />
+          </div>
+          <div>
             <label className="mb-1.5 block text-sm font-medium text-stone-800">Mobile number</label>
             <div className="relative flex items-center">
               <span className="absolute left-3 select-none text-sm font-medium text-stone-500">+91</span>
@@ -153,7 +168,6 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
                 placeholder="9876543210"
                 required
                 maxLength={10}
-                autoFocus
                 className="w-full rounded-xl border border-stone-300 py-2.5 pl-12 pr-3 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
               />
             </div>
@@ -161,7 +175,7 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
           {error && <p className="text-xs text-rose-600">{error}</p>}
           <button
             type="submit"
-            disabled={busy || isLoading || phone.length < 10}
+            disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
             className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
           >
             {busy ? 'Sending…' : 'Send code →'}
