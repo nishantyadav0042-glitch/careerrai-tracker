@@ -87,6 +87,7 @@ export default async function DailyTrackerPage() {
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
   const nextSession = sessions?.[0] ?? null;
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const todaySession =
     nextSession && new Date(nextSession.scheduled_at).getTime() - Date.now() < 24 * 3_600_000
       ? nextSession
