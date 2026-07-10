@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
@@ -29,8 +29,8 @@ const TIER_STYLE: Record<string, string> = {
 // own app shows them — the pitch and the product can never disagree.
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — middleware already paid the network auth hop.
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();

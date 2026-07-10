@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import { OnboardingModal } from '../onboarding/onboarding-modal';
 
 export function EditProfileTrigger() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -15,7 +17,9 @@ export function EditProfileTrigger() {
         <Pencil className="w-3 h-3" />
         Edit profile
       </button>
-      {open && <OnboardingModal onComplete={() => window.location.reload()} />}
+      {/* Close locally + soft-refresh: unlike the old full reload, client
+          state survives a refresh, so the modal must dismiss itself. */}
+      {open && <OnboardingModal onComplete={() => { setOpen(false); router.refresh(); }} />}
     </>
   );
 }

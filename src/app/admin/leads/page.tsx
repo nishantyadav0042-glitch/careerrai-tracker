@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
@@ -18,8 +18,8 @@ export const metadata = { title: 'Leads · CareerRai' };
 // profiles one tap away. Batch queries only (5 round trips regardless of
 // student count); the per-student heavy compute lives on the detail page.
 export default async function LeadsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — middleware already paid the network auth hop.
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();

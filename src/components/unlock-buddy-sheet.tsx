@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles } from 'lucide-react';
@@ -49,6 +50,7 @@ export function UnlockBuddyButton({
   className?: string;
   fullName?: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<PlanId | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -79,7 +81,9 @@ export function UnlockBuddyButton({
       // A scholarship/coupon already made it free → premium activated server-side.
       if (data.free) {
         setMessage('Done! Your buddy is being unlocked — refreshing…');
-        setTimeout(() => window.location.reload(), 1500);
+        // Soft refresh: re-runs server components for fresh premium state
+        // without a full app reload at the highest-value moment.
+        setTimeout(() => router.refresh(), 1500);
         return;
       }
 
@@ -98,7 +102,7 @@ export function UnlockBuddyButton({
         handler: () => {
           // Confirmation is server-side via webhook; reassure + refresh.
           setMessage('Payment received — confirming your buddy… 🎉');
-          setTimeout(() => window.location.reload(), 4000);
+          setTimeout(() => router.refresh(), 4000);
         },
       });
       rzp.open();

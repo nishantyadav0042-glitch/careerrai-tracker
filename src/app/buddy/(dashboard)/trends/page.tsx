@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/utils';
 import type { Profile, DailyReport } from '@/types';
-import BuddyTrendsCharts from './trends-charts';
+import BuddyTrendsCharts from './trends-charts-lazy';
 
 const LINE_COLORS = ['#1c1917', '#ea580c', '#0f766e', '#7c3aed', '#be123c'];
 

@@ -1,28 +1,17 @@
-import { createAdminClient } from '@/lib/supabase/admin';
-import { computePrepMemory } from '@/lib/prep-memory-data';
 import { Card } from '@/components/ui/card';
 import type { Momentum, RiskLevel } from '@/lib/signal-engine';
+import { getStudentPrepSnapshot } from './prep-snapshot';
 
 // Preparation DNA — one card, features not raw logs. Everything here reads
 // off Student State V1 (src/lib/signal-engine.ts): Knowledge, Consistency,
 // Momentum, and Risk, each traceable to real logged behavior, plus the
-// small Signal library. Standalone query, same pattern as StudyPlanFeed —
-// additive, doesn't touch the parent page's existing Promise.all.
+// small Signal library. Reads the request-scoped snapshot shared with
+// StudyPlanFeed (prep-snapshot.ts) instead of re-running the same profile
+// fetch + computePrepMemory for the same student in the same render.
 export async function PreparationDNA({ studentId }: { studentId: string }) {
-  const admin = createAdminClient();
-
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('is_repeater, is_working_professional, created_at')
-    .eq('id', studentId)
-    .single();
-  if (!profile) return null;
-
-  const { prepMemory, studentState, signals } = await computePrepMemory(
-    admin, studentId,
-    { isRepeater: !!profile.is_repeater, isWorkingProfessional: !!profile.is_working_professional },
-    (profile.created_at as string | null)?.split('T')[0] ?? null
-  );
+  const snapshot = await getStudentPrepSnapshot(studentId);
+  if (!snapshot) return null;
+  const { prepMemory, studentState, signals } = snapshot;
 
   const MOMENTUM_LABEL: Record<Momentum, { label: string; color: string }> = {
     accelerating: { label: '↑ Accelerating', color: 'text-teal-600' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PLANS, type PlanId } from '@/lib/plans';
@@ -43,6 +44,7 @@ const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' 
 };
 
 export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }: MembershipCardProps) {
+  const router = useRouter();
   const [busy, setBusy] = useState<PlanId | 'refund' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [coupon, setCoupon] = useState('');
@@ -62,7 +64,9 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       // A scholarship/coupon brought the price to zero — already activated.
       if (data.free) {
         setMessage('You’re all set — your access is active. Refreshing…');
-        setTimeout(() => window.location.reload(), 1500);
+        // router.refresh() re-runs the server components (fresh premium state)
+        // without tearing down and re-downloading the whole app.
+        setTimeout(() => router.refresh(), 1500);
         return;
       }
 
@@ -81,7 +85,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         handler: () => {
           // Confirmation is server-side via webhook; just reassure + refresh.
           setMessage('Payment received — confirming your membership…');
-          setTimeout(() => window.location.reload(), 4000);
+          setTimeout(() => router.refresh(), 4000);
         },
       });
       rzp.open();
@@ -101,7 +105,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       const data = await res.json();
       if (!res.ok) { setMessage(data.error ?? 'Could not submit request.'); return; }
       setMessage('Refund requested. Your founder will be in touch.');
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => router.refresh(), 1500);
     } catch {
       setMessage('Something went wrong. Try again.');
     } finally {

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { ArrowLeft } from 'lucide-react';
@@ -12,8 +12,8 @@ function currentPeriod() {
 }
 
 export default async function AdminPaymentsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — middleware already paid the network auth hop.
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 
@@ -198,6 +199,7 @@ const SLIDES: Slide[] = [
 ];
 
 export function BuddyFirstLoginGuide() {
+  const router = useRouter();
   const [i, setI] = useState(0);
   const [finishing, setFinishing] = useState(false);
   const slide = SLIDES[i];
@@ -216,8 +218,10 @@ export function BuddyFirstLoginGuide() {
       if (user) {
         await supabase.from('profiles').update({ buddy_tour_completed: true }).eq('id', user.id);
       }
-    } catch { /* reload re-shows the guide if the flag didn't stick */ }
-    window.location.reload();
+    } catch { /* refresh re-shows the guide if the flag didn't stick */ }
+    // Server layout re-reads buddy_tour_completed and stops rendering the
+    // guide — no full app reload needed.
+    router.refresh();
   }
 
   return (
