@@ -43,11 +43,12 @@ function ScreenTitle({ children }: { children: React.ReactNode }) {
 
 // 1 — Daily study plan ready
 function ScreenPlan() {
+  // Short labels on purpose — they must not truncate inside the 210px frame.
   const rows = [
-    { tag: 'DILR', topic: 'Seating arrangement', time: '45m', state: 'done' as const },
-    { tag: 'VARC', topic: 'RC — 2 passages', time: '40m', state: 'done' as const },
-    { tag: 'QA', topic: 'Time, Speed & Distance', time: '50m', state: 'now' as const },
-    { tag: 'QA', topic: 'Practice set · 15 Qs', time: '35m', state: 'next' as const },
+    { tag: 'DILR', topic: 'Seating sets', time: '45m', state: 'done' as const },
+    { tag: 'VARC', topic: 'RC practice', time: '40m', state: 'done' as const },
+    { tag: 'QA', topic: 'Time & Speed', time: '50m', state: 'now' as const },
+    { tag: 'QA', topic: 'Practice set', time: '35m', state: 'next' as const },
   ];
   return (
     <div className="flex h-full flex-col">
