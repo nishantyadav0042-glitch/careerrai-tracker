@@ -88,6 +88,14 @@ function taskTitle(task: RoutineTask): string {
   return task.label;
 }
 
+// 30-second module-level cache for GET /api/routine/today — the single
+// heaviest student API. A student bouncing Home → Log → Home re-renders
+// this card within seconds and used to pay the full backend round-trip
+// each time. Busted on every task completion so the card can never show
+// pre-completion state after an action; anything past 30s refetches.
+let routineTodayCache: { at: number; json: unknown } | null = null;
+const ROUTINE_CACHE_MS = 30_000;
+
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [needsSetup, setNeedsSetup] = useState<NeedsSetupResponse | null>(null);
@@ -109,9 +117,15 @@ export function TodaysRoutineCard() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/routine/today');
-      if (!res.ok) return;
-      const json = (await res.json()) as RoutineResponse | NeedsSetupResponse;
+      let json: RoutineResponse | NeedsSetupResponse;
+      if (routineTodayCache && Date.now() - routineTodayCache.at < ROUTINE_CACHE_MS) {
+        json = routineTodayCache.json as RoutineResponse | NeedsSetupResponse;
+      } else {
+        const res = await fetch('/api/routine/today');
+        if (!res.ok) return;
+        json = (await res.json()) as RoutineResponse | NeedsSetupResponse;
+        routineTodayCache = { at: Date.now(), json };
+      }
       if ('needsSetup' in json) {
         setNeedsSetup(json);
         setData(null);
@@ -168,6 +182,9 @@ export function TodaysRoutineCard() {
         body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, ...(confidence ? { confidence } : {}) }),
       });
       if (!res.ok) return;
+      // Server state changed — the 30s GET cache must never serve
+      // pre-completion data.
+      routineTodayCache = null;
       const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean };
       setCompletedIds(new Set(json.completedTaskIds));
       setExpandedTaskId(null);
