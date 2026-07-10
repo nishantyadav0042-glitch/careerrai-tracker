@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { sendBuilderRecovery } from '@/lib/email';
 import { BUILDER_STEPS, stepLabel } from '@/lib/lead-intel';
-import { builderRecoveryCopy, dispatch } from '@/lib/notification-os';
+import { builderRecoveryCopy, dispatch, BUDGET_SETUP } from '@/lib/notification-os';
 
 // Runs every 30 minutes inside the 09:30–20:30 IST window (see vercel.json —
 // the cron schedule IS the quiet-hours gate; a 2am drop gets its first touch
@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
       email: email
         ? { to: email, send: () => sendBuilderRecovery(email, firstName, label, screensLeft, dueTouch) }
         : null,
+      dailyBudget: BUDGET_SETUP,
     });
     if (outcome === 'sent') sent++;
   }

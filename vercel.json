@@ -16,6 +16,12 @@
     { "path": "/api/cron/renewal-reminders", "schedule": "0 4 * * *"     },
     { "path": "/api/cron/refresh-demo",      "schedule": "0 1 * * *"     },
     { "path": "/api/cron/sales-ready",       "schedule": "30 9 * * *"    },
-    { "path": "/api/cron/builder-recovery",  "schedule": "30 4 * * *" }
+    { "path": "/api/cron/builder-recovery",  "schedule": "*/30 4-15 * * *" },
+    { "path": "/api/cron/study-companion?slot=morning",  "schedule": "0 4 * * *"   },
+    { "path": "/api/cron/study-companion?slot=fact",     "schedule": "30 7 * * *"  },
+    { "path": "/api/cron/study-companion?slot=open",     "schedule": "30 11 * * *" },
+    { "path": "/api/cron/study-companion?slot=progress", "schedule": "0 15 * * *"  },
+    { "path": "/api/cron/study-companion?slot=log",      "schedule": "0 16 * * *"  },
+    { "path": "/api/cron/study-companion?slot=close",    "schedule": "30 16 * * *" }
   ]
 }

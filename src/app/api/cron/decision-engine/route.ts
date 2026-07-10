@@ -7,7 +7,7 @@ import {
   detectRevisionDue, detectTopicEarned, detectMissionChanged, detectWeeklyEvolved, detectRecovery,
   selectEvents, templateFor, reasonFor, type CoverageSignalRow, type DecisionEventType,
 } from '@/lib/decision-engine';
-import { computeStudentState, dispatch, type ExpectedAction } from '@/lib/notification-os';
+import { computeStudentState, dispatch, BUDGET_ACTIVE, BUDGET_RECOVERY, type ExpectedAction } from '@/lib/notification-os';
 
 // 14:30 UTC = 20:00 IST — the evening slot.
 //
@@ -154,6 +154,10 @@ export async function POST(request: NextRequest) {
         reason: reasonFor(event),
         expectedAction: EXPECTED[event.type],
         prefs,
+        // Active students share the day's budget with the Study Companion
+        // cadence; recovery states keep the tight cap — volume is help for
+        // a studying student and noise for a silent one.
+        dailyBudget: state === 'active' ? BUDGET_ACTIVE : BUDGET_RECOVERY,
       });
       if (outcome === 'sent') notified++;
     }
