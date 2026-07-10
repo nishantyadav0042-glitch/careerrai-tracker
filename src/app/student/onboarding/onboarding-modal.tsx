@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import ScreenBlueprintIntro from './screens/screen-blueprint-intro';
+import ScreenNeedCheck from './screens/screen-need-check';
+import ScreenAmbitionDate from './screens/screen-ambition-date';
+import ScreenNotifPermission from './screens/screen-notif-permission';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenAboutYou from './screens/screen-about-you';
@@ -37,7 +39,8 @@ function draftKey(userId: string): string {
   // currentScreen index would otherwise resume on the wrong screen.
   // v2: finish-date chooser replaced Daily Commitment.
   // v3: success-goal + contract screens removed.
-  return `cr_onboarding_draft_v3_${userId}`;
+  // v4: opening funnel added (need-check → ambition date → permission).
+  return `cr_onboarding_draft_v4_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
@@ -129,11 +132,24 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   // it (see /api/routine/today). One question never asks what a better
   // question already answered.
   const screens: Screen[] = [
-    { component: ScreenBlueprintIntro, sectionId: null },        // 0
-    { component: ScreenDreamColleges, sectionId: 'position' },   // 1
-    { component: ScreenExamContext, sectionId: 'position' },     // 2
-    { component: ScreenAboutYou, sectionId: 'position' },        // 3
-    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 4
+    // Opening funnel (founder design): commitment question → owned date →
+    // "you own the plan, we own the reminders" permission. The student says
+    // yes, picks a date, grants the channel — THEN we start asking.
+    { component: ScreenNeedCheck, sectionId: null },             // 0
+    { component: ScreenAmbitionDate, sectionId: null },          // 1
+    {
+      component: ScreenNotifPermission,
+      sectionId: null,
+      extraProps: {
+        ambitionDateLabel: typeof onboardingData.ambition_date === 'string'
+          ? new Date(onboardingData.ambition_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+          : null,
+      },
+    },                                                           // 2
+    { component: ScreenDreamColleges, sectionId: 'position' },   // 3
+    { component: ScreenExamContext, sectionId: 'position' },     // 4
+    { component: ScreenAboutYou, sectionId: 'position' },        // 5
+    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 6
     {
       // The finish-date chooser (replaces the old Daily Commitment screen):
       // hours + target date picked together, AFTER coverage so the date
@@ -145,10 +161,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         coverageLearning: (onboardingData.coverage_learning as number | undefined) ?? null,
         coverageTotal: (onboardingData.coverage_total as number | undefined) ?? null,
         attemptYear: (onboardingData.attempt_year as number | undefined) ?? null,
+        ambitionDate: (onboardingData.ambition_date as string | undefined) ?? null,
       },
-    },                                                           // 5
-    { component: ScreenMeetBuddy, sectionId: null },             // 6
-    { component: ScreenBuildAnimation, sectionId: null },        // 7
+    },                                                           // 7
+    { component: ScreenMeetBuddy, sectionId: null },             // 8
+    { component: ScreenBuildAnimation, sectionId: null },        // 9
     {
       // Last screen (founder cut: the success-goal question duplicated the
       // percentile ask, and the contract/oath screen was one tap too many —
@@ -157,7 +174,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       component: ScreenBlueprintReveal,
       sectionId: null,
       extraProps: { successGoal: null },
-    }, // 8
+    }, // 10
   ];
 
   const currentScreenMeta = screens[currentScreen];
@@ -173,7 +190,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   // proves the previous answer mattered. Loss-aversion, never cheerleading,
   // no invented statistics; every personalized fact is something they just
   // typed. Fallbacks cover the screens before that data exists.
-  const asksLeft = currentScreen >= 1 && currentScreen <= 6 ? 7 - currentScreen : null;
+  const asksLeft = currentScreen >= 1 && currentScreen <= 7 ? 8 - currentScreen : null;
   const leftLabel = asksLeft == null ? null : asksLeft === 1 ? 'Last section' : `${asksLeft} left`;
   const hFirstName = typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
     ? onboardingData.full_name.trim().split(' ')[0] : null;
@@ -182,13 +199,15 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const hAttemptYear = typeof onboardingData.attempt_year === 'number' ? onboardingData.attempt_year : null;
   const headerLine = (() => {
     switch (currentScreen) {
-      case 1: return 'Every answer changes what you study tomorrow.';
-      case 2: return hFirstDream ? `${hFirstDream} is the target. Set your pace.` : 'Your attempt year sets the pace of the plan.';
-      case 3: return hAttemptYear ? `CAT ${hAttemptYear}. Now make the plan yours.` : 'The more honest, the better the plan.';
-      case 4: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
-      case 5: return hFirstName ? `${hFirstName}, pick the date — the hours decide it.` : 'Pick the date — the hours decide it.';
-      case 6: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
-      case 7: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      case 1: return 'Your date. Your call.';
+      case 2: return 'One permission. That part is our job.';
+      case 3: return 'Every answer changes what you study tomorrow.';
+      case 4: return hFirstDream ? `${hFirstDream} is the target. Set your pace.` : 'Your attempt year sets the pace of the plan.';
+      case 5: return hAttemptYear ? `CAT ${hAttemptYear}. Now make the plan yours.` : 'The more honest, the better the plan.';
+      case 6: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
+      case 7: return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
+      case 8: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
+      case 9: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       default: return null;
     }
   })();

@@ -13,6 +13,9 @@ interface Props {
   coverageLearning: number | null;
   coverageTotal: number | null;
   attemptYear: number | null;
+  // The date the student picked at the very start (screen 2) — this screen
+  // now reconciles that ambition against the real per-day cost.
+  ambitionDate: string | null;
 }
 
 // The finish-date chooser — the commitment, not a setting (founder
@@ -43,7 +46,7 @@ function toIsoDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, attemptYear }: Props) {
+export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, attemptYear, ambitionDate }: Props) {
   const [selected, setSelected] = useState<number | 'custom' | null>(null);
   const [customDate, setCustomDate] = useState<string>('');
 
@@ -76,16 +79,47 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
     });
   };
 
+  // Reconciliation: the ambition date from screen 2, now priced against the
+  // topics they just declared. "You decided this date — here's what it
+  // costs. Keep it or adjust."
+  const ambition = ambitionDate ? new Date(ambitionDate + 'T00:00:00') : null;
+  const ambitionDays = ambition ? Math.max(1, Math.round((ambition.getTime() - today.getTime()) / 86_400_000)) : null;
+  const ambitionRequired = ambitionDays ? Math.ceil((hoursLeft / ambitionDays) * 2) / 2 : null;
+  const ambitionUnrealistic = ambitionRequired != null && ambitionRequired > 10;
+
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-base font-bold text-stone-900">When do you want to finish your syllabus?</p>
+        <p className="text-base font-bold text-stone-900">
+          {ambition ? `You chose ${fmt(ambition)}. Lock it with the real math.` : 'When do you want to finish your syllabus?'}
+        </p>
         <p className="text-xs text-stone-500 mt-0.5">
           Based on the {coverageTotal ?? 46} topics you just mapped — the hours decide the date. Choose what you can actually commit.
         </p>
       </div>
 
       <div className="space-y-2">
+        {ambition && ambitionRequired != null && (
+          <button
+            type="button"
+            disabled={isLoading || ambitionUnrealistic}
+            onClick={() => choose(ambitionRequired, ambition)}
+            className={cn(
+              'w-full rounded-xl border-2 p-3.5 text-left transition-all active:scale-[0.98]',
+              ambitionUnrealistic ? 'border-stone-200 opacity-60' : 'border-stone-800 bg-stone-50 hover:bg-stone-100'
+            )}
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-bold text-stone-900">Keep {fmt(ambition)}</p>
+              <p className="text-xs font-semibold text-stone-500">Your date</p>
+            </div>
+            <p className={cn('mt-0.5 text-sm font-semibold', ambitionUnrealistic ? 'text-rose-600' : 'text-stone-700')}>
+              {ambitionUnrealistic
+                ? `Needs ≈ ${ambitionRequired}h every day — not sustainable. Pick a pace below.`
+                : `Needs ≈ ${ambitionRequired}h a day, every day`}
+            </p>
+          </button>
+        )}
         {HOUR_OPTIONS.map(({ hours, label, tone, toneActive }) => {
           const finish = dateForHours(hours);
           const afterCutoff = finish > syllabusCutoff;
