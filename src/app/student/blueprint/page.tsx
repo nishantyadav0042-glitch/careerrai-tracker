@@ -31,11 +31,12 @@ interface PlanData {
   buddyBanner: BuddyBannerData;
 }
 
+// Pure B&W: the ✓ / ⚠ glyph carries the signal, not colour.
 const VERDICT: Record<FinishProjection['status'], { label: string; color: string } | null> = {
-  done: { label: '✓ Syllabus done', color: 'text-teal-700' },
-  ahead: { label: '✓ On track', color: 'text-teal-700' },
-  tight: { label: '⚠ Tight', color: 'text-orange-700' },
-  critical: { label: '⚠ Behind', color: 'text-rose-700' },
+  done: { label: '✓ Syllabus done', color: 'text-stone-900' },
+  ahead: { label: '✓ On track', color: 'text-stone-900' },
+  tight: { label: '⚠ Tight', color: 'text-stone-600' },
+  critical: { label: '⚠ Behind', color: 'text-stone-900 font-bold' },
   stalled: null,
 };
 
@@ -44,7 +45,7 @@ function PlanRow({ href, icon, label, cta }: { href: string; icon: string; label
     <Link href={href} className="flex items-center gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors">
       <span className="text-lg w-6 text-center shrink-0">{icon}</span>
       <span className="flex-1 text-sm font-semibold text-stone-800">{label}</span>
-      <span className="text-xs font-bold text-orange-600 whitespace-nowrap">{cta} →</span>
+      <span className="text-xs font-bold text-stone-900 whitespace-nowrap">{cta} →</span>
     </Link>
   );
 }
@@ -178,9 +179,9 @@ export default function MyCatPlanPage() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="flex items-center gap-2.5 text-sm font-semibold text-stone-800 hover:text-orange-700"
+                  className="flex items-center gap-2.5 text-sm font-semibold text-stone-800 hover:text-stone-950"
                 >
-                  <span className="text-teal-600">✓</span>{item.label}
+                  <span className="text-stone-900">✓</span>{item.label}
                 </Link>
               ))}
             </div>
@@ -189,9 +190,9 @@ export default function MyCatPlanPage() {
 
         {/* One diagnosis, or none — never a generic filler line. */}
         {biggestPriority && (
-          <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-700 mb-1">Biggest priority</p>
-            <p className="text-sm font-semibold text-orange-900">{biggestPriority}</p>
+          <div className="rounded-2xl border-2 border-stone-900 bg-stone-50 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">Biggest priority</p>
+            <p className="text-sm font-semibold text-stone-900">{biggestPriority}</p>
           </div>
         )}
 

@@ -7,6 +7,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
+import { CoachLine } from '@/components/coach-line';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
@@ -202,11 +203,13 @@ export default async function DailyTrackerPage() {
             href="/student/blueprint"
             className={
               'flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors ' +
+              // Pure B&W: urgency reads off weight/fill, not hue. Behind = solid
+              // black (loudest), tight = grey fill, on-track = quiet outline.
               (finishStrip.tone === 'critical'
-                ? 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                ? 'border-stone-900 bg-stone-900 text-white hover:bg-stone-800'
                 : finishStrip.tone === 'tight'
-                  ? 'border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100'
-                  : 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100')
+                  ? 'border-stone-300 bg-stone-100 text-stone-900 hover:bg-stone-200'
+                  : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50')
             }
           >
             <CalendarCheck className="h-4 w-4 shrink-0" />
@@ -216,6 +219,11 @@ export default async function DailyTrackerPage() {
         )}
 
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
+
+        {/* Daily coach line — AI rewords the deterministic status facts into one
+            warm sentence (server-cached per day). Loads after paint; silent if
+            there's nothing honest to say yet. */}
+        <CoachLine />
 
         {/* Install prompt lives HERE — after login, once the student has a real
             plan to come back to (and iOS needs Add-to-Home-Screen before push
