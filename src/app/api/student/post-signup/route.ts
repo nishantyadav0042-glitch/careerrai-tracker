@@ -1,0 +1,48 @@
+import { createServerClient } from '@supabase/ssr';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { NextRequest, NextResponse } from 'next/server';
+
+// Persists the post-login sequence: the date the student (re)confirms in the
+// reconciliation step, and the one-time "done" flag once they finish it.
+// Every field is whitelisted and validated — the client can only ever move
+// their own target date/hours and mark the ceremony seen, nothing else.
+export async function POST(request: NextRequest) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = (await request.json().catch(() => ({}))) as {
+    syllabus_target_date?: unknown;
+    study_target_hours?: unknown;
+    done?: unknown;
+  };
+
+  const update: Record<string, unknown> = {};
+
+  if (typeof body.syllabus_target_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.syllabus_target_date)) {
+    update.syllabus_target_date = body.syllabus_target_date;
+  }
+  if (typeof body.study_target_hours === 'number' && body.study_target_hours > 0 && body.study_target_hours <= 16) {
+    // Round to the nearest half-hour and mirror to both columns the routine
+    // engine reads, matching the finish-date chooser.
+    const h = Math.round(body.study_target_hours * 2) / 2;
+    update.study_target_hours = h;
+    update.hours_available = h;
+    update.weekend_hours_available = h;
+  }
+  if (body.done === true) update.post_signup_done = true;
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from('profiles').update(update).eq('id', user.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

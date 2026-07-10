@@ -9,6 +9,9 @@ import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
 import { PushGate } from '@/components/push-gate';
+import PostSignupSequence from '@/components/post-signup-sequence';
+import { computeTopicMemory } from '@/lib/prep-memory-data';
+import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
 
 function DemoBanner() {
   return (
@@ -27,7 +30,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const [chatUnread, notifUnread, { data: profile }] = await Promise.all([
     getChatUnreadCount(user.id, 'student'),
     getNotifUnreadCount(user.id),
-    admin.from('profiles').select('role, is_demo, is_premium, onboarding_completed, notif_prefs').eq('id', user.id).single(),
+    admin.from('profiles').select('role, is_demo, is_premium, onboarding_completed, notif_prefs, post_signup_done, syllabus_target_date, study_target_hours, is_repeater, is_working_professional').eq('id', user.id).single(),
   ]);
 
   // Route non-students to their own home (handles stale role cookies too).
@@ -63,8 +66,28 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // "you own the plan, we own the reminders" — asked right after they pick
   // their date, so it has a reason attached). This pre-Builder gate only
   // remains for already-onboarded accounts that were never prompted.
-  const showFirstPushAsk = !isDemo && !showOnboarding && !pushEnabled && !pushPrompted;
-  const showSecondPushAsk = !isDemo && !showOnboarding && !pushEnabled && pushPrompted && !pushReprompted;
+  // Post-login sequence (once, right after onboarding completes): install →
+  // reconcile the date → commit → thank you → the two-way deal. Supersedes the
+  // pre-Builder push gates for new students (they already met the permission
+  // inside the funnel). Only the hoursLeft compute below runs, and only when
+  // the sequence is actually about to render.
+  const showPostSignup = !isDemo && !showOnboarding && profile?.post_signup_done !== true;
+
+  let postSignupProps: { targetIso: string | null; hoursLeft: number } | null = null;
+  if (showPostSignup) {
+    const archetype = { isRepeater: !!profile?.is_repeater, isWorkingProfessional: !!profile?.is_working_professional };
+    const topicMemory = await computeTopicMemory(admin, user.id, archetype);
+    const practicing = topicMemory.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
+    const learning = topicMemory.filter((t) => t.status === 'learning').length;
+    const hoursLeft = remainingPrepHours({ coverage_total: topicMemory.length || EXAM_UNIT_COUNT, coverage_practicing: practicing, coverage_learning: learning });
+    postSignupProps = {
+      targetIso: (profile?.syllabus_target_date as string | null) ?? null,
+      hoursLeft,
+    };
+  }
+
+  const showFirstPushAsk = !isDemo && !showOnboarding && !showPostSignup && !pushEnabled && !pushPrompted;
+  const showSecondPushAsk = !isDemo && !showOnboarding && !showPostSignup && !pushEnabled && pushPrompted && !pushReprompted;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -84,6 +107,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
       <StudentBottomNav chatUnread={chatUnread} />
       {showOnboarding ? (
         <OnboardingGate />
+      ) : showPostSignup && postSignupProps ? (
+        <PostSignupSequence {...postSignupProps} />
       ) : showFirstPushAsk ? (
         <PushGate mode="first" notifPrefs={notifPrefs} />
       ) : (
