@@ -33,9 +33,11 @@ interface OnboardingDraft {
 }
 
 function draftKey(userId: string): string {
-  // v2: screen order changed when the finish-date chooser replaced the
-  // Daily Commitment screen — old drafts would resume at the wrong index.
-  return `cr_onboarding_draft_v2_${userId}`;
+  // Version-bumped whenever the screen ORDER changes — an old draft's
+  // currentScreen index would otherwise resume on the wrong screen.
+  // v2: finish-date chooser replaced Daily Commitment.
+  // v3: success-goal + contract screens removed.
+  return `cr_onboarding_draft_v3_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
