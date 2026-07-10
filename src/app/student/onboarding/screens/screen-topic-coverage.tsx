@@ -252,42 +252,45 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
           own explicit tap — the no-prefill doctrine survives. */}
       <div>
         <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1 backdrop-blur-sm">
-          <div className={cn('grid items-end gap-1', isHabit ? 'grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))]')}>
-            <span />
+          <div className={cn('grid items-end gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-4')}>
             {options.map(({ value, dot }) => (
-              <span key={value} className="text-center text-[9px] font-bold leading-tight text-stone-500">
-                {dot}<br />{SHORT_LABEL[value]}
+              <span key={value} className="text-center text-[10px] font-bold leading-tight text-stone-500">
+                {dot} {SHORT_LABEL[value]}
               </span>
             ))}
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {step.units.map((unit) => {
             const current = statuses[unit] ?? null;
             return (
               <div
                 key={unit}
                 className={cn(
-                  'grid items-center gap-1 rounded-lg border px-1 py-1',
-                  isHabit ? 'grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))]',
+                  'rounded-lg border px-2 py-1.5',
                   current == null ? 'border-orange-200 bg-orange-50/40' : 'border-stone-100'
                 )}
               >
-                <p className="truncate pl-1 text-[12px] font-semibold text-stone-800">{unit}</p>
-                {options.map(({ value, dot, active }) => (
-                  <button
-                    key={value}
-                    disabled={saving || isLoading}
-                    onClick={() => declare(unit, value)}
-                    aria-label={`${unit}: ${value}`}
-                    className={cn(
-                      'mx-auto flex h-9 w-full max-w-[3.25rem] items-center justify-center rounded-lg border text-sm transition-all active:scale-90',
-                      current === value ? active : 'border-stone-200 bg-white hover:border-stone-300'
-                    )}
-                  >
-                    {current === value ? dot : <span className="h-2 w-2 rounded-full bg-stone-200" />}
-                  </button>
-                ))}
+                {/* Full-width name line — never truncated (a topic you can't
+                    read is a topic you can't honestly rate). Cells align with
+                    the sticky legend above. */}
+                <p className="mb-1 text-[12px] font-semibold leading-snug text-stone-800">{unit}</p>
+                <div className={cn('grid gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-4')}>
+                  {options.map(({ value, dot, active }) => (
+                    <button
+                      key={value}
+                      disabled={saving || isLoading}
+                      onClick={() => declare(unit, value)}
+                      aria-label={`${unit}: ${value}`}
+                      className={cn(
+                        'flex h-9 w-full items-center justify-center rounded-lg border text-sm transition-all active:scale-90',
+                        current === value ? active : 'border-stone-200 bg-white hover:border-stone-300'
+                      )}
+                    >
+                      {current === value ? dot : <span className="h-2 w-2 rounded-full bg-stone-200" />}
+                    </button>
+                  ))}
+                </div>
               </div>
             );
           })}
