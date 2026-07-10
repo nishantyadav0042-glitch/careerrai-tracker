@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { QuickRoutineSetup } from './QuickRoutineSetup';
 
 type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
@@ -58,15 +57,6 @@ interface RoutineResponse {
   isCatchUp: boolean;
 }
 
-interface NeedsSetupResponse {
-  needsSetup: true;
-  weakestSection: 'VARC' | 'DILR' | 'QA' | null;
-  weakTopic: string | null;
-  currentStage: 'not_started' | 'concepts' | 'questions' | 'sectionals' | 'mocks' | null;
-  biggestBlocker: 'inconsistency' | 'dont_know_what' | 'mock_anxiety' | 'time_wasting' | null;
-  needsWeekendHours: boolean;
-}
-
 // Time budget filters today's list — same tasks, never invented ones.
 // 'planned' = the full plan (default; most days nobody changes it). 30 is
 // not just "a shorter list" — completing just the top task under this
@@ -98,7 +88,6 @@ const ROUTINE_CACHE_MS = 30_000;
 
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
-  const [needsSetup, setNeedsSetup] = useState<NeedsSetupResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [budget, setBudget] = useState<TimeBudget>('planned');
   const [fullyDone, setFullyDone] = useState(false);
@@ -117,21 +106,15 @@ export function TodaysRoutineCard() {
 
   const load = useCallback(async () => {
     try {
-      let json: RoutineResponse | NeedsSetupResponse;
+      let json: RoutineResponse;
       if (routineTodayCache && Date.now() - routineTodayCache.at < ROUTINE_CACHE_MS) {
-        json = routineTodayCache.json as RoutineResponse | NeedsSetupResponse;
+        json = routineTodayCache.json as RoutineResponse;
       } else {
         const res = await fetch('/api/routine/today');
         if (!res.ok) return;
-        json = (await res.json()) as RoutineResponse | NeedsSetupResponse;
+        json = (await res.json()) as RoutineResponse;
         routineTodayCache = { at: Date.now(), json };
       }
-      if ('needsSetup' in json) {
-        setNeedsSetup(json);
-        setData(null);
-        return;
-      }
-      setNeedsSetup(null);
       setData(json);
       setCompletedIds(new Set(json.completions.map((c) => c.task_id)));
       if (viewedAt.current == null) {
@@ -207,21 +190,6 @@ export function TodaysRoutineCard() {
       <Card className="p-5 animate-pulse">
         <div className="h-4 w-32 bg-stone-200 rounded mb-3" />
         <div className="h-16 bg-stone-100 rounded" />
-      </Card>
-    );
-  }
-  if (needsSetup) {
-    return (
-      <Card className="p-5">
-        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold mb-3">Today&apos;s Study Plan</p>
-        <QuickRoutineSetup
-          initialWeakest={needsSetup.weakestSection}
-          initialWeakTopic={needsSetup.weakTopic}
-          initialStage={needsSetup.currentStage}
-          initialBlocker={needsSetup.biggestBlocker}
-          needsWeekendHours={needsSetup.needsWeekendHours}
-          onDone={load}
-        />
       </Card>
     );
   }
