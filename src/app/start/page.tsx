@@ -58,6 +58,17 @@ export default function StartPage() {
     setStepIdx((i) => Math.min(i + 1, TOTAL_SCREENS));
   };
   const back = () => setStepIdx((i) => Math.max(i - 1, 0));
+  // Wipe the saved draft and restart at screen 1. Prevents a device that
+  // already ran the funnel (an abandoned lead, a finished signup, a shared
+  // phone) from silently resuming someone else's half-finished journey.
+  const startOver = () => {
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+      window.localStorage.removeItem('cr_onboarding_topic_coverage_draft');
+    } catch { /* best-effort */ }
+    setData({});
+    setStepIdx(0);
+  };
 
   const ambitionDateLabel = typeof data.ambition_date === 'string'
     ? new Date(data.ambition_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
@@ -115,7 +126,18 @@ export default function StartPage() {
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-5 flex items-center justify-between">
           <Logo size="sm" />
-          {showProgress && <p className="text-[11px] font-medium text-stone-400">{stepIdx + 1} / {TOTAL_SCREENS}</p>}
+          <div className="flex items-center gap-3">
+            {stepIdx > 0 && (
+              <button
+                type="button"
+                onClick={startOver}
+                className="text-[11px] font-medium text-stone-400 underline underline-offset-2 hover:text-stone-600"
+              >
+                Start over
+              </button>
+            )}
+            {showProgress && <p className="text-[11px] font-medium text-stone-400">{stepIdx + 1} / {TOTAL_SCREENS}</p>}
+          </div>
         </div>
         {showProgress && (
           <div className="mb-6 h-1 w-full overflow-hidden rounded-full bg-stone-100">
