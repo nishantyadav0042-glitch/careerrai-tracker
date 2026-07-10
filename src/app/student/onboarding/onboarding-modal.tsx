@@ -159,27 +159,32 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     : null;
   const coverageSectionOrder = BLUEPRINT_SECTIONS.find((s) => s.id === 'coverage')!.order;
 
-  // Header = two lines, always (founder decision: a mid-flow student is only
-  // asking "how many left / is it worth it / does my answer matter" — answer
-  // those, never a paragraph, never a pep talk). Screens 1-7 are the asks;
-  // the count is real, and each line states a consequence of the answer or
-  // of leaving. Loss-aversion, not motivation. No invented statistics.
+  // Header = ONE targeted line + the count (founder decision, v2: shorter
+  // and personal). It speaks with the student's own accumulating answers —
+  // their dream college, their name, their real hours — so every screen
+  // proves the previous answer mattered. Loss-aversion, never cheerleading,
+  // no invented statistics; every personalized fact is something they just
+  // typed. Fallbacks cover the screens before that data exists.
   const asksLeft = currentScreen >= 1 && currentScreen <= 7 ? 8 - currentScreen : null;
-  const leftLabel = asksLeft == null ? null : asksLeft === 1 ? 'Last section' : `${asksLeft} sections left`;
-  const CONSEQUENCE_LINES: (string | null)[] = [
-    'This takes about 4 minutes.',                               // 0 intro
-    'Every answer changes what you study tomorrow.',             // 1 dream colleges
-    'Your attempt year sets the pace of the entire plan.',       // 2 exam context
-    'The more honest you are, the better your plan gets.',       // 3 about you
-    "We plan around your real hours — not an ideal student's.",  // 4 commitment
-    "We'll skip everything you've already finished.",            // 5 coverage
-    'Almost ready.',                                             // 6 buddy
-    'Last question. Your plan builds next.',                     // 7 goal
-    'Building your personal CAT plan…',                          // 8 build
-    null,                                                        // 9 reveal — the payoff speaks
-    null,                                                        // 10 contract
-  ];
-  const consequenceLine = CONSEQUENCE_LINES[currentScreen] ?? null;
+  const leftLabel = asksLeft == null ? null : asksLeft === 1 ? 'Last section' : `${asksLeft} left`;
+  const hFirstName = typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
+    ? onboardingData.full_name.trim().split(' ')[0] : null;
+  const hFirstDream = Array.isArray(onboardingData.dream_colleges)
+    ? ((onboardingData.dream_colleges as string[])[0] ?? null) : null;
+  const hAttemptYear = typeof onboardingData.attempt_year === 'number' ? onboardingData.attempt_year : null;
+  const headerLine = (() => {
+    switch (currentScreen) {
+      case 1: return 'Every answer changes what you study tomorrow.';
+      case 2: return hFirstDream ? `${hFirstDream} is the target. Set your pace.` : 'Your attempt year sets the pace of the plan.';
+      case 3: return hAttemptYear ? `CAT ${hAttemptYear}. Now make the plan yours.` : 'The more honest, the better the plan.';
+      case 4: return hFirstName ? `${hFirstName}, real hours only — the plan lives on them.` : 'Real hours only — the plan lives on them.';
+      case 5: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
+      case 6: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
+      case 7: return hFirstName ? `Last question, ${hFirstName}. Then we build.` : 'Last question. Then we build.';
+      case 8: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      default: return null;
+    }
+  })();
   // Section index for the panel's progress dots: while in a labeled section,
   // its own order; once past Coverage (buddy/build/reveal/contract), show
   // all sections as complete — there's nothing left for the panel to track.
@@ -308,15 +313,24 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        {/* Header — two lines, nothing else. */}
-        <div className="bg-white border-b border-stone-200 p-6 pb-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-lg font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-              Build My CAT Plan
-            </h2>
-            {leftLabel && <p className="shrink-0 text-xs font-bold text-orange-600">{leftLabel}</p>}
-          </div>
-          {consequenceLine && <p className="text-xs text-stone-500 mt-1">{consequenceLine}</p>}
+        {/* Header — one personalized line + the count. Title only on intro;
+            the dark panel below already carries the "My CAT Plan" identity. */}
+        <div className="bg-white border-b border-stone-200 px-6 py-4">
+          {currentScreen === 0 ? (
+            <>
+              <h2 className="text-lg font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+                Build My CAT Plan
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">This takes about 4 minutes.</p>
+            </>
+          ) : (
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="min-w-0 truncate text-sm font-semibold text-stone-900">
+                {headerLine ?? 'Build My CAT Plan'}
+              </p>
+              {leftLabel && <p className="shrink-0 text-xs font-bold text-orange-600">{leftLabel}</p>}
+            </div>
+          )}
         </div>
 
         {/* Content */}
