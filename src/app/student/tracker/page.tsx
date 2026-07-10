@@ -40,7 +40,7 @@ export default async function DailyTrackerPage() {
   ] = await Promise.all([
     admin
       .from('profiles')
-      .select('full_name, buddy_id, password_set, created_at, notif_prefs, attempt_year, is_repeater, is_working_professional')
+      .select('full_name, buddy_id, password_set, created_at, notif_prefs, attempt_year, is_repeater, is_working_professional, syllabus_target_date')
       .eq('id', user.id).single(),
     admin
       .from('video_sessions')
@@ -94,12 +94,38 @@ export default async function DailyTrackerPage() {
     topicsRemaining: notStartedCount,
     topicsStartedLast21Days: startedLast21,
   });
-  const finishStrip =
-    finish.status === 'done'
-      ? { label: 'Syllabus complete — revision & mocks now', tone: 'done' as const }
-      : finish.windowLabel
-        ? { label: `Syllabus done ${finish.windowLabel} at this pace`, tone: finish.status }
-        : null;
+  // Target mode (the commitment, not a setting): if the student chose a
+  // finish date in the Builder, the strip anchors on THEIR date and compares
+  // pace against it. Pace-only mode remains the fallback for accounts that
+  // predate the chooser.
+  const targetIso = (profile?.syllabus_target_date as string | null) ?? null;
+  const targetLabel = targetIso
+    ? new Date(targetIso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+    : null;
+  let finishStrip: { label: string; tone: 'done' | 'ahead' | 'tight' | 'critical' } | null;
+  if (targetIso && targetLabel) {
+    if (finish.status === 'done') {
+      finishStrip = { label: `Target ${targetLabel} — syllabus complete`, tone: 'done' };
+    } else if (!finish.rawFinishIso) {
+      // No pace yet — show the owned commitment neutrally, never "stalled".
+      finishStrip = { label: `Your target: ${targetLabel}`, tone: 'tight' };
+    } else {
+      const driftDays = Math.round((Date.parse(finish.rawFinishIso) - Date.parse(targetIso)) / 86_400_000);
+      finishStrip =
+        driftDays <= 2
+          ? { label: `Your target: ${targetLabel} · on track`, tone: 'done' }
+          : driftDays <= 9
+            ? { label: `Your target: ${targetLabel} · pace says ${finish.windowLabel}`, tone: 'tight' }
+            : { label: `Your target: ${targetLabel} · pace says ${finish.windowLabel}`, tone: 'critical' };
+    }
+  } else {
+    finishStrip =
+      finish.status === 'done'
+        ? { label: 'Syllabus complete — revision & mocks now', tone: 'done' }
+        : finish.windowLabel
+          ? { label: `Syllabus done ${finish.windowLabel} at this pace`, tone: finish.status === 'ahead' ? 'done' : finish.status === 'tight' ? 'tight' : 'critical' }
+          : null;
+  }
   const startedOnceCount = totalTopics - notStartedCount;
 
   const existingDebrief = recentMock

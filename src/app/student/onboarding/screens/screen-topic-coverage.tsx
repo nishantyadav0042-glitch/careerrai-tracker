@@ -26,6 +26,14 @@ const EXAM_STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; 
 // Habit tracks (mocks, reading) don't have a revision stage — three states.
 const HABIT_STATUS_OPTIONS = EXAM_STATUS_OPTIONS.slice(0, 3);
 
+// Compact column-legend labels for the matrix header.
+const SHORT_LABEL: Record<DeclaredStatus, string> = {
+  not_started: 'Not started',
+  learning: 'Learning',
+  practicing: 'Practicing',
+  revising: 'Revising',
+};
+
 // Honesty is what gets celebrated — never knowledge. One short line each
 // (founder rule: nobody reads paragraphs mid-flow).
 const HONESTY_LINES: Record<DeclaredStatus, (unit: string) => string> = {
@@ -101,6 +109,10 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   const [celebration, setCelebration] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Momentum chip: after 3 identical taps in a row within a step, offer a
+  // one-tap "mark the rest as X" — explicit honest bulk-fill (the student
+  // says it; we never assume it). Resets on step change or a different tap.
+  const [tapStreak, setTapStreak] = useState<{ status: DeclaredStatus; count: number } | null>(null);
   const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,13 +137,34 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
 
   const declare = (unit: string, value: DeclaredStatus) => {
     setStatuses((prev) => ({ ...prev, [unit]: value }));
+    setTapStreak((prev) => (prev?.status === value ? { status: value, count: prev.count + 1 } : { status: value, count: 1 }));
     setCelebration(HONESTY_LINES[value](unit));
     if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
     celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
   };
 
+  const unansweredUnits = step.units.filter((u) => statuses[u] == null);
+  const showMomentumChip = tapStreak != null && tapStreak.count >= 3 && unansweredUnits.length > 0;
+
+  const bulkFill = () => {
+    if (!tapStreak) return;
+    const value = tapStreak.status;
+    const filling = [...unansweredUnits];
+    setStatuses((prev) => {
+      const next = { ...prev };
+      for (const u of filling) next[u] = value;
+      return next;
+    });
+    const label = (isHabit ? HABIT_STATUS_OPTIONS : EXAM_STATUS_OPTIONS).find((o) => o.value === value)?.label ?? value;
+    setCelebration(`✓ ${filling.length} topic${filling.length === 1 ? '' : 's'} marked "${label}". Tap any cell to correct one.`);
+    if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+    celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
+    setTapStreak(null);
+  };
+
   const handleNext = async () => {
     if (!stepComplete) return;
+    setTapStreak(null);
     if (stepIdx < STEPS.length - 1) {
       setCelebration(`✓ ${step.reward}`);
       if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
@@ -170,6 +203,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   };
 
   const handleBack = () => {
+    setTapStreak(null);
     if (stepIdx > 0) setStepIdx(stepIdx - 1);
     else onBack();
   };
@@ -189,7 +223,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
 
       <div>
         <p className="text-base font-bold text-stone-900">{step.title}</p>
-        <p className="text-xs text-stone-500">One tap each — honest answers cut wasted weeks.</p>
+        <p className="text-xs text-stone-500">Overclaiming wastes revision. Underclaiming wastes weeks.</p>
       </div>
 
       {/* Honesty celebration — one live slot */}
@@ -199,30 +233,65 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         )}
       </div>
 
-      <div className="space-y-2.5">
-        {step.units.map((unit) => {
-          const current = statuses[unit] ?? null;
-          return (
-            <div key={unit} className={cn('rounded-xl border p-2.5', current == null ? 'border-orange-200 bg-orange-50/40' : 'border-stone-200')}>
-              <p className="text-[13px] font-semibold text-stone-800 mb-1.5">{unit}</p>
-              <div className={cn('grid gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-2')}>
-                {options.map(({ value, dot, label, active }) => (
+      {/* Momentum chip — honest bulk-fill after 3 identical taps. */}
+      {showMomentumChip && tapStreak && (
+        <button
+          type="button"
+          onClick={bulkFill}
+          disabled={saving || isLoading}
+          className="w-full rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800 transition-all hover:bg-teal-100 active:scale-[0.98]"
+        >
+          Mark the remaining {unansweredUnits.length} as {options.find((o) => o.value === tapStreak.status)?.dot}{' '}
+          {options.find((o) => o.value === tapStreak.status)?.label}?
+        </button>
+      )}
+
+      {/* Matrix: rows = topics, columns = statuses. Same answer always lives
+          in the same column (muscle memory = speed), the legend is sticky so
+          labels never scroll away (accuracy), and every row still needs its
+          own explicit tap — the no-prefill doctrine survives. */}
+      <div>
+        <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1 backdrop-blur-sm">
+          <div className={cn('grid items-end gap-1', isHabit ? 'grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))]')}>
+            <span />
+            {options.map(({ value, dot }) => (
+              <span key={value} className="text-center text-[9px] font-bold leading-tight text-stone-500">
+                {dot}<br />{SHORT_LABEL[value]}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1">
+          {step.units.map((unit) => {
+            const current = statuses[unit] ?? null;
+            return (
+              <div
+                key={unit}
+                className={cn(
+                  'grid items-center gap-1 rounded-lg border px-1 py-1',
+                  isHabit ? 'grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))]',
+                  current == null ? 'border-orange-200 bg-orange-50/40' : 'border-stone-100'
+                )}
+              >
+                <p className="truncate pl-1 text-[12px] font-semibold text-stone-800">{unit}</p>
+                {options.map(({ value, dot, active }) => (
                   <button
                     key={value}
                     disabled={saving || isLoading}
                     onClick={() => declare(unit, value)}
+                    aria-label={`${unit}: ${value}`}
                     className={cn(
-                      'rounded-lg border py-1.5 px-1 text-[10px] font-semibold leading-tight transition-all active:scale-95',
-                      current === value ? active : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'
+                      'mx-auto flex h-9 w-full max-w-[3.25rem] items-center justify-center rounded-lg border text-sm transition-all active:scale-90',
+                      current === value ? active : 'border-stone-200 bg-white hover:border-stone-300'
                     )}
                   >
-                    {dot} {label}
+                    {current === value ? dot : <span className="h-2 w-2 rounded-full bg-stone-200" />}
                   </button>
                 ))}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {step.lesson && (

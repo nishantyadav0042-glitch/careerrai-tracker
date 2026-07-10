@@ -18,6 +18,8 @@ interface Props {
 // checked because the account genuinely is completed work (a truthful
 // endowed head start measurably lifts completion).
 export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, totalSections }: Props) {
+  // Order mirrors the (reordered) flow: coverage is declared first, then
+  // the finish-date chooser prices the hours+target from it.
   const pastCoverage = sectionIndex > coverageSectionIndex
     || (sectionIndex === coverageSectionIndex && !!preview.coverageBadge);
 
@@ -31,13 +33,6 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
         : 'Exam context',
     },
     {
-      key: 'time',
-      state: sectionIndex > 1 ? 'done' : sectionIndex === 1 ? 'active' : 'pending',
-      label: sectionIndex > 1
-        ? `Real hours mapped${preview.weeklyLoadHours != null ? ` · ${preview.weeklyLoadHours}h/week` : ''}`
-        : 'Your real hours',
-    },
-    {
       key: 'coverage',
       state: pastCoverage ? 'done' : sectionIndex === coverageSectionIndex ? 'active' : 'pending',
       label: pastCoverage
@@ -45,6 +40,17 @@ export function BlueprintPanel({ preview, sectionIndex, coverageSectionIndex, to
         : sectionIndex === coverageSectionIndex
           ? 'Mapping your preparation…'
           : 'Preparation map',
+    },
+    {
+      key: 'time',
+      state: sectionIndex > coverageSectionIndex + 1
+        ? 'done'
+        : sectionIndex === coverageSectionIndex + 1 ? 'active' : 'pending',
+      label: sectionIndex === coverageSectionIndex + 1
+        ? 'Choosing your finish date…'
+        : sectionIndex > coverageSectionIndex + 1
+          ? `Target locked${preview.weeklyLoadHours != null ? ` · ${preview.weeklyLoadHours}h/week` : ''}`
+          : 'Hours + finish date',
     },
     {
       key: 'routine',

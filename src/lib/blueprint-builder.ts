@@ -24,18 +24,21 @@ export interface BlueprintSection {
 // section/topic, stage, blocker, baseline) were superseded by the explicit
 // per-topic Coverage declaration, and the engines derive those signals from
 // it (see /api/routine/today's coverage-derived weakest section).
+// Order matters: coverage now comes BEFORE time — the finish-date chooser
+// (the 'time' section, hours + target picked together) needs the declared
+// coverage to compute honest "4h/day → 12 Sept" options.
 export const BLUEPRINT_SECTIONS: BlueprintSection[] = [
   {
     id: 'position', order: 0, eyebrow: "Let's understand where you are",
     purpose: 'Your CAT Plan starts with your exam, your attempt, your life. Not a template.',
   },
   {
-    id: 'time', order: 1, eyebrow: "Let's understand your available time",
-    purpose: 'Plans that ignore real hours fail in week one. Yours never will.',
+    id: 'coverage', order: 1, eyebrow: "Let's understand what you've already covered",
+    purpose: 'Very few students know what to study NEXT. These 90 seconds solve that.',
   },
   {
-    id: 'coverage', order: 2, eyebrow: "Let's understand what you've already covered",
-    purpose: "This is the most important part. Thousands of CAT students study every day — very few know what they should study NEXT. These 90 seconds solve that.",
+    id: 'time', order: 2, eyebrow: 'Choose your syllabus finish date',
+    purpose: 'The hours you commit decide the date. Pick what you can actually sustain.',
   },
 ];
 
@@ -117,15 +120,24 @@ export interface CoverageProjection {
   basedOnDeclared: boolean; // false = pre-coverage assumption (nothing done yet)
 }
 
-export function projectCoverageWeeks(input: BlueprintPreviewInput): CoverageProjection | null {
-  const load = weeklyLoadHours(input);
-  if (load == null || load <= 0) return null;
+// Total remaining prep hours from the declared coverage — THE shared unit
+// behind every hours↔date conversion (the live projection badge AND the
+// finish-date chooser's "4h/day → 12 Sept" options both call this, so the
+// two can never disagree).
+export function remainingPrepHours(input: BlueprintPreviewInput): number {
   const total = input.coverage_total ?? EXAM_UNIT_COUNT;
   const declared = input.coverage_total != null;
   const practicing = declared ? (input.coverage_practicing ?? 0) : 0;
   const learning = declared ? (input.coverage_learning ?? 0) : 0;
   const untouched = Math.max(0, total - practicing - learning);
-  const hoursLeft = untouched * HOURS_PER_UNTOUCHED_UNIT + learning * HOURS_PER_LEARNING_UNIT + practicing * HOURS_PER_PRACTICING_UNIT;
+  return untouched * HOURS_PER_UNTOUCHED_UNIT + learning * HOURS_PER_LEARNING_UNIT + practicing * HOURS_PER_PRACTICING_UNIT;
+}
+
+export function projectCoverageWeeks(input: BlueprintPreviewInput): CoverageProjection | null {
+  const load = weeklyLoadHours(input);
+  if (load == null || load <= 0) return null;
+  const declared = input.coverage_total != null;
+  const hoursLeft = remainingPrepHours(input);
   return { weeks: Math.max(1, Math.ceil(hoursLeft / load)), basedOnDeclared: declared };
 }
 

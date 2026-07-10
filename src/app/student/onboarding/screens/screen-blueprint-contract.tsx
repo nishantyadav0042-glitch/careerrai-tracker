@@ -12,6 +12,7 @@ interface Props {
   archetypeLabel: string | null;
   weeklyLoadHours: number | null;
   studentName: string | null;
+  targetDateLabel: string | null; // the student's OWN chosen syllabus finish date
 }
 
 interface ContractSnapshot {
@@ -47,7 +48,7 @@ function joinPhrases(phrases: string[]): string {
 // onComplete() actually fires. Coverage/phase come from the same
 // /api/blueprint read the Reveal screen just used; archetype and weekly
 // load come straight from the wizard's own state.
-export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLabel, weeklyLoadHours, studentName }: Props) {
+export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLabel, weeklyLoadHours, studentName, targetDateLabel }: Props) {
   const [data, setData] = useState<ContractSnapshot | null>(null);
   const [windows, setWindows] = useState<StudyWindow[]>([]);
 
@@ -93,6 +94,9 @@ export default function ScreenBlueprintContract({ onNext, isLoading, archetypeLa
         )}
         {archetypeLabel && <p className="text-sm text-stone-800">• {archetypeLabel}</p>}
         {weeklyLoadHours != null && <p className="text-sm text-stone-800">• {weeklyLoadHours}h / week planned</p>}
+        {targetDateLabel && (
+          <p className="text-sm font-semibold text-stone-900">• Syllabus finish target: {targetDateLabel} — your date, your call</p>
+        )}
         <p className="text-sm text-stone-800">• {data?.phaseLabel ?? 'Your current phase'} · {data != null ? `${data.weeksRemaining * 7} study days to CAT` : '—'}</p>
         {data && data.coverageTotal > 0 && (
           <p className="text-sm text-stone-800">• {data.coverageTotal} learning units mapped · {data.coverageDone} already in motion</p>
