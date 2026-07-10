@@ -1,0 +1,172 @@
+'use client';
+
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { remainingPrepHours, type BlueprintPreviewInput } from '@/lib/blueprint-builder';
+
+interface Props {
+  onNext: (data?: Record<string, unknown>) => void;
+  onBack: () => void;
+  canGoBack: boolean;
+  isLoading: boolean;
+  coveragePracticing: number | null;
+  coverageLearning: number | null;
+  coverageTotal: number | null;
+  attemptYear: number | null;
+}
+
+// The finish-date chooser — the commitment, not a setting (founder
+// decision). Replaces the old abstract "how many hours do you have?"
+// screen: hours are chosen HERE, with the date consequence of each option
+// visible, computed from the coverage the student just declared. Same
+// remainingPrepHours model as the live projection badge — one source of
+// truth. Choosing an option sets BOTH the daily hours (feeds the routine
+// engine) and the target date (owned deadline, shown on Home).
+//
+// CAT falls in late November; anything that lands after ~mid-November
+// leaves no revision/mock buffer and is flagged, not offered.
+const HOUR_OPTIONS: { hours: number; label: string; tone: string; toneActive: string }[] = [
+  { hours: 4, label: 'Steady',     tone: 'border-teal-200 hover:border-teal-400',     toneActive: 'border-teal-500 bg-teal-50' },
+  { hours: 6, label: 'Committed',  tone: 'border-orange-200 hover:border-orange-400', toneActive: 'border-orange-500 bg-orange-50' },
+  { hours: 8, label: 'Aggressive', tone: 'border-rose-200 hover:border-rose-400',     toneActive: 'border-rose-500 bg-rose-50' },
+];
+
+function addDays(base: Date, days: number): Date {
+  return new Date(base.getTime() + days * 86_400_000);
+}
+
+function fmt(d: Date): string {
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+}
+
+function toIsoDate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, attemptYear }: Props) {
+  const [selected, setSelected] = useState<number | 'custom' | null>(null);
+  const [customDate, setCustomDate] = useState<string>('');
+
+  const input: BlueprintPreviewInput = {
+    coverage_practicing: coveragePracticing,
+    coverage_learning: coverageLearning,
+    coverage_total: coverageTotal,
+  };
+  const hoursLeft = remainingPrepHours(input);
+  const today = new Date();
+
+  // CAT is late November of the attempt year; the syllabus must land well
+  // before it. Options finishing after this cutoff aren't real plans.
+  const examYear = attemptYear ?? today.getFullYear();
+  const syllabusCutoff = new Date(examYear, 10, 10); // 10 November
+
+  const dateForHours = (hoursPerDay: number): Date => addDays(today, Math.max(7, Math.ceil(hoursLeft / hoursPerDay)));
+
+  // Custom date → required daily hours (the inverse), rounded UP to the
+  // half hour so the plan never quietly under-provisions.
+  const customDays = customDate ? Math.max(1, Math.round((Date.parse(customDate) - today.getTime()) / 86_400_000)) : null;
+  const customRequired = customDays ? Math.ceil((hoursLeft / customDays) * 2) / 2 : null;
+  const customUnrealistic = customRequired != null && customRequired > 10;
+
+  const choose = (hours: number, finishDate: Date) => {
+    onNext({
+      studyTargetHours: hours,
+      weekendHours: hours,
+      syllabus_target_date: toIsoDate(finishDate),
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-base font-bold text-stone-900">When do you want to finish your syllabus?</p>
+        <p className="text-xs text-stone-500 mt-0.5">
+          Based on the {coverageTotal ?? 46} topics you just mapped — the hours decide the date. Choose what you can actually commit.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {HOUR_OPTIONS.map(({ hours, label, tone, toneActive }) => {
+          const finish = dateForHours(hours);
+          const afterCutoff = finish > syllabusCutoff;
+          return (
+            <button
+              key={hours}
+              type="button"
+              disabled={isLoading || afterCutoff}
+              onClick={() => { setSelected(hours); choose(hours, finish); }}
+              className={cn(
+                'w-full rounded-xl border-2 p-3.5 text-left transition-all active:scale-[0.98]',
+                afterCutoff ? 'border-stone-200 opacity-50' : selected === hours ? toneActive : `bg-white ${tone}`
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-sm font-bold text-stone-900">{hours} hours / day</p>
+                <p className="text-xs font-semibold text-stone-500">{label}</p>
+              </div>
+              <p className={cn('mt-0.5 text-sm font-semibold', afterCutoff ? 'text-rose-600' : 'text-stone-700')}>
+                {afterCutoff
+                  ? `Finishes past ${fmt(syllabusCutoff)} — too late before CAT ${examYear}`
+                  : `Syllabus done by ${fmt(finish)}`}
+              </p>
+            </button>
+          );
+        })}
+
+        {/* My own date → shows the required daily hours before committing. */}
+        <div
+          className={cn(
+            'rounded-xl border-2 p-3.5 transition-all',
+            selected === 'custom' ? 'border-stone-800 bg-stone-50' : 'border-stone-200 bg-white'
+          )}
+        >
+          <button type="button" className="w-full text-left" onClick={() => setSelected('custom')}>
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-bold text-stone-900">📅 My own date</p>
+              <p className="text-xs font-semibold text-stone-500">You set it, we price it</p>
+            </div>
+          </button>
+          {selected === 'custom' && (
+            <div className="mt-3 space-y-2">
+              <input
+                type="date"
+                value={customDate}
+                min={toIsoDate(addDays(today, 7))}
+                max={toIsoDate(syllabusCutoff)}
+                onChange={(e) => setCustomDate(e.target.value)}
+                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900"
+              />
+              {customRequired != null && (
+                <p className={cn('text-xs font-semibold', customUnrealistic ? 'text-rose-600' : 'text-stone-700')}>
+                  {customUnrealistic
+                    ? `That date needs ≈ ${customRequired}h every day — not a sustainable plan. Pick a later date.`
+                    : `This date needs ≈ ${customRequired}h a day, every day. Still choose it?`}
+                </p>
+              )}
+              {customRequired != null && !customUnrealistic && (
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => choose(customRequired, new Date(customDate + 'T00:00:00'))}
+                  className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+                >
+                  Yes — {customRequired}h/day until {fmt(new Date(customDate + 'T00:00:00'))} →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p className="text-[11px] text-stone-400 leading-relaxed">
+        ≈ estimates from your own coverage map. Your daily routine is sized to this commitment, and you can renegotiate the date later — the plan never lies to you about it.
+      </p>
+
+      {canGoBack && (
+        <button onClick={onBack} disabled={isLoading} className="w-full py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">
+          Back
+        </button>
+      )}
+    </div>
+  );
+}

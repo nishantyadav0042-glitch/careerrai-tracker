@@ -112,6 +112,7 @@ export function currentRoadmapIndex(weeksRemaining: number, stage: Stage | null)
 export interface FinishProjection {
   status: 'done' | 'stalled' | 'ahead' | 'tight' | 'critical';
   windowLabel: string | null;
+  rawFinishIso: string | null; // the projected finish as an ISO date — lets Home compare pace vs the student's chosen target
   sub: string;
 }
 
@@ -126,12 +127,12 @@ export function projectSyllabusFinish(input: {
   const { today, examDate, topicsRemaining, topicsStartedLast21Days } = input;
 
   if (topicsRemaining === 0) {
-    return { status: 'done', windowLabel: null, sub: "You're in revision and mocks now." };
+    return { status: 'done', windowLabel: null, rawFinishIso: null, sub: "You're in revision and mocks now." };
   }
 
   const weeklyPace = topicsStartedLast21Days / 3;
   if (weeklyPace <= 0) {
-    return { status: 'stalled', windowLabel: null, sub: 'Finish one topic to see your date.' };
+    return { status: 'stalled', windowLabel: null, rawFinishIso: null, sub: 'Finish one topic to see your date.' };
   }
 
   const weeksNeeded = topicsRemaining / weeklyPace;
@@ -143,14 +144,15 @@ export function projectSyllabusFinish(input: {
     ? `${start.getDate()}–${end.getDate()} ${end.toLocaleDateString('en-GB', { month: 'long' })}`
     : `${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
 
+  const rawFinishIso = rawDate.toISOString().split('T')[0];
   const bufferDate = new Date(examDate.getTime() - BUFFER_WEEKS_BEFORE_EXAM * 7 * 24 * 60 * 60 * 1000);
   if (rawDate > examDate) {
-    return { status: 'critical', windowLabel, sub: 'Two extra sessions a week brings this before CAT.' };
+    return { status: 'critical', windowLabel, rawFinishIso, sub: 'Two extra sessions a week brings this before CAT.' };
   }
   if (rawDate > bufferDate) {
-    return { status: 'tight', windowLabel, sub: 'One extra study session this week keeps you on track.' };
+    return { status: 'tight', windowLabel, rawFinishIso, sub: 'One extra study session this week keeps you on track.' };
   }
-  return { status: 'ahead', windowLabel, sub: 'Based on your current pace.' };
+  return { status: 'ahead', windowLabel, rawFinishIso, sub: 'Based on your current pace.' };
 }
 
 // ─── Phase boundary dates ───────────────────────────────────────────────────

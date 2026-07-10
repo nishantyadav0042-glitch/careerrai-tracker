@@ -6,7 +6,7 @@ import ScreenBlueprintIntro from './screens/screen-blueprint-intro';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenAboutYou from './screens/screen-about-you';
-import ScreenDailyCommitment from './screens/screen-daily-commitment';
+import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenSuccessGoal from './screens/screen-success-goal';
@@ -35,7 +35,9 @@ interface OnboardingDraft {
 }
 
 function draftKey(userId: string): string {
-  return `cr_onboarding_draft_${userId}`;
+  // v2: screen order changed when the finish-date chooser replaced the
+  // Daily Commitment screen — old drafts would resume at the wrong index.
+  return `cr_onboarding_draft_v2_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
@@ -131,8 +133,20 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     { component: ScreenDreamColleges, sectionId: 'position' },   // 1
     { component: ScreenExamContext, sectionId: 'position' },     // 2
     { component: ScreenAboutYou, sectionId: 'position' },        // 3
-    { component: ScreenDailyCommitment, sectionId: 'time' },     // 4
-    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 5
+    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 4
+    {
+      // The finish-date chooser (replaces the old Daily Commitment screen):
+      // hours + target date picked together, AFTER coverage so the date
+      // options are priced from the topics the student just declared.
+      component: ScreenFinishDate,
+      sectionId: 'time',
+      extraProps: {
+        coveragePracticing: (onboardingData.coverage_practicing as number | undefined) ?? null,
+        coverageLearning: (onboardingData.coverage_learning as number | undefined) ?? null,
+        coverageTotal: (onboardingData.coverage_total as number | undefined) ?? null,
+        attemptYear: (onboardingData.attempt_year as number | undefined) ?? null,
+      },
+    },                                                           // 5
     { component: ScreenMeetBuddy, sectionId: null },             // 6
     { component: ScreenSuccessGoal, sectionId: null },           // 7 — identity tap, right before the build
     { component: ScreenBuildAnimation, sectionId: null },        // 8
@@ -148,6 +162,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         archetypeLabel: preview.archetypeBadge,
         weeklyLoadHours: preview.weeklyLoadHours,
         studentName: ((onboardingData.full_name as string | undefined) ?? '').split(' ')[0] || null,
+        targetDateLabel: typeof onboardingData.syllabus_target_date === 'string'
+          ? new Date(onboardingData.syllabus_target_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+          : null,
       },
     }, // 10
   ];
@@ -177,8 +194,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 1: return 'Every answer changes what you study tomorrow.';
       case 2: return hFirstDream ? `${hFirstDream} is the target. Set your pace.` : 'Your attempt year sets the pace of the plan.';
       case 3: return hAttemptYear ? `CAT ${hAttemptYear}. Now make the plan yours.` : 'The more honest, the better the plan.';
-      case 4: return hFirstName ? `${hFirstName}, real hours only — the plan lives on them.` : 'Real hours only — the plan lives on them.';
-      case 5: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
+      case 4: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
+      case 5: return hFirstName ? `${hFirstName}, pick the date — the hours decide it.` : 'Pick the date — the hours decide it.';
       case 6: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
       case 7: return hFirstName ? `Last question, ${hFirstName}. Then we build.` : 'Last question. Then we build.';
       case 8: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
@@ -242,10 +259,12 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         }).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 4 = Daily Commitment (weekday + weekend hours)
-      if (currentScreen === 4 && data?.studyTargetHours) {
+      // Finish-date chooser — hours + owned target date land together
+      // (keyed by the data shape, not the screen index, so a reorder can't
+      // silently break the save).
+      if (data?.syllabus_target_date && data?.studyTargetHours) {
         const hours = data.studyTargetHours as number;
-        const weekend = (data.weekendHours as number | undefined) ?? weekendHours;
+        const weekend = (data.weekendHours as number | undefined) ?? hours;
         setStudyTargetHours(hours);
         setWeekendHours(weekend);
         setIsLoading(true);
@@ -253,6 +272,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           study_target_hours: hours,
           hours_available: hours,
           weekend_hours_available: weekend,
+          syllabus_target_date: data.syllabus_target_date,
         }).eq('id', userId ?? '');
         if (e) throw e;
       }
@@ -277,6 +297,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           study_target_hours: studyTargetHours,
           weekend_hours_available: weekendHours,
         };
+        if (merged.syllabus_target_date) update.syllabus_target_date = merged.syllabus_target_date;
         if (typeof merged.full_name === 'string' && merged.full_name.trim()) update.full_name = merged.full_name.trim();
         if (merged.college) update.college = merged.college;
         if (merged.dream_colleges) update.dream_colleges = merged.dream_colleges;
