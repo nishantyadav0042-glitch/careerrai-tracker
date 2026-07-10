@@ -59,7 +59,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const pushEnabled = notifPrefs.push === true;
   const pushPrompted = notifPrefs.push_prompted === true;
   const pushReprompted = notifPrefs.push_reprompted === true;
-  const showFirstPushAsk = !isDemo && !pushEnabled && !pushPrompted;
+  // New students meet the permission INSIDE the Builder now (screen 3,
+  // "you own the plan, we own the reminders" — asked right after they pick
+  // their date, so it has a reason attached). This pre-Builder gate only
+  // remains for already-onboarded accounts that were never prompted.
+  const showFirstPushAsk = !isDemo && !showOnboarding && !pushEnabled && !pushPrompted;
   const showSecondPushAsk = !isDemo && !showOnboarding && !pushEnabled && pushPrompted && !pushReprompted;
 
   return (
@@ -78,10 +82,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {showFirstPushAsk ? (
-        <PushGate mode="first" notifPrefs={notifPrefs} />
-      ) : showOnboarding ? (
+      {showOnboarding ? (
         <OnboardingGate />
+      ) : showFirstPushAsk ? (
+        <PushGate mode="first" notifPrefs={notifPrefs} />
       ) : (
         showSecondPushAsk && <PushGate mode="second" notifPrefs={notifPrefs} />
       )}
