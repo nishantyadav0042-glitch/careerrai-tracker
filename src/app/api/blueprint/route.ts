@@ -5,7 +5,6 @@ import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish, phaseBoundaryDates } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
-import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
 import { computePrepMemory, computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
@@ -15,18 +14,8 @@ import { selectBuddyBanner } from '@/lib/buddy-banner';
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
 // by the deterministic engines (routine-engine, mission-engine, study-plan) —
-// this endpoint only gathers and (optionally) narrates them. AI is used the
-// same way it already is for buddy briefings: it may summarize and phrase,
-// it may NEVER invent a plan, task, or fact that isn't in the data below.
-const BLUEPRINT_NARRATION_RULE = `You are writing a short "Study Blueprint" summary directly for a CAT exam aspirant inside CareerRai, a CAT-prep app.
-
-ABSOLUTE RULES — these define the product and may never be broken:
-1. You may ONLY summarize, organize, and present the facts you are given below. Never invent a fact, statistic, study technique, or plan detail that isn't explicitly provided.
-2. The study plan itself is already decided by the app's own planning logic — your only job is to narrate it clearly and warmly, never to propose a different plan, task, or sequence.
-3. Never diagnose a psychological or emotional state beyond what's explicitly given.
-4. Second person ("you"), plain language, no jargon, no bullet points, no headers. 3-4 short sentences.
-5. If a fact is missing below, omit it — never guess or fabricate to fill a gap.`;
-
+// this endpoint only gathers them. The Gemini narration that used to run
+// here was removed from the critical path (see the narrative comment below).
 const BLOCKER_LABEL: Record<Blocker, string> = {
   inconsistency: "staying consistent",
   dont_know_what: 'knowing what to study',
@@ -170,36 +159,18 @@ export async function GET() {
     isWorkingProfessional: archetype.isWorkingProfessional,
   });
 
-  const facts = [
-    `Target CAT year: ${profile.attempt_year ?? 'not set'}`,
-    `Weeks remaining to exam: ${weeksRemaining}`,
-    `Current phase: ${phase.label} (${phase.weekRange}) — ${phase.objective}`,
-    weak ? `Weakest section: ${weak}${weakTopic ? ` (toughest topic: ${weakTopic})` : ''}` : null,
-    `Preparation map: ${coverageTally.not_started} not started, ${coverageTally.learning} learning concepts, ${coverageTally.practicing} practicing questions, ${coverageTally.revising} in revision, ${coverageTally.exam_ready} exam ready`,
-    blocker ? `Self-reported biggest blocker: ${BLOCKER_LABEL[blocker]}` : null,
-    streak?.current_streak ? `Current daily streak: ${streak.current_streak} days` : null,
-    profile.target_percentile ? `Target percentile: ${profile.target_percentile}` : null,
-  ].filter((f): f is string => f != null).join('\n');
-
-  let narrative: string;
-  let source: 'ai' | 'fallback' = 'fallback';
-  if (await geminiEnabled()) {
-    const safeFacts = stripNames(facts, [profile.full_name as string | null]);
-    const ai = await callGemini({
-      parts: [{ text: `Here are the facts:\n${safeFacts}\n\nWrite the Study Blueprint summary.` }],
-      system: BLUEPRINT_NARRATION_RULE,
-      maxTokens: 220,
-      temperature: 0.4,
-    });
-    if (ai) {
-      narrative = stripNames(ai, [profile.full_name as string | null]);
-      source = 'ai';
-    } else {
-      narrative = fallbackNarrative(phase.label, weeksRemaining, weak, weakTopic, blocker);
-    }
-  } else {
-    narrative = fallbackNarrative(phase.label, weeksRemaining, weak, weakTopic, blocker);
-  }
+  // The AI narration is gone from the blocking path — nothing in the app
+  // renders `narrative` anymore (the narrative UI was removed in the
+  // Conclusions-layer iteration; the generation outlived it), yet every
+  // caller — My CAT Plan AND the onboarding Reveal, the most emotionally
+  // loaded screen in the product — was waiting 1-3s for Gemini to write a
+  // sentence nobody displays, and paying the API cost per view. The
+  // deterministic fallback line (microseconds, pure template) stays in the
+  // payload so any stale client bundle that still reads the field keeps
+  // working. If a narrated summary ever returns to the UI, fetch it from a
+  // separate non-blocking endpoint — never on this page's critical path.
+  const narrative = fallbackNarrative(phase.label, weeksRemaining, weak, weakTopic, blocker);
+  const source: 'ai' | 'fallback' = 'fallback';
 
   return NextResponse.json({
     narrative,
