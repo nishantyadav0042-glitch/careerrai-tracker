@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, Check, Loader2 } from 'lucide-react';
 
 // Web Push requires the applicationServerKey as a Uint8Array.
@@ -69,13 +70,10 @@ interface PushGateProps {
   notifPrefs?: Record<string, unknown>;
 }
 
-// Same reload-on-dismiss convention OnboardingModal already uses — the
-// layout is a server component, so the simplest correct way to make it
-// re-read the freshly-persisted notif_prefs flag is a reload, not a second
-// client-side state model layered on top of server-computed gating.
-function dismiss() {
-  window.location.reload();
-}
+// Refresh-on-dismiss: the layout is a server component, so making it re-read
+// the freshly-persisted notif_prefs flag means re-running server components —
+// router.refresh() does exactly that without tearing down and re-downloading
+// the whole app the way the old window.location.reload() did.
 
 /**
  * Optional, never blocking. Declining either ask lets the student straight
@@ -84,10 +82,15 @@ function dismiss() {
  * customers for a permission.
  */
 export function PushGate({ mode, notifPrefs }: PushGateProps) {
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>('intro');
   const [error, setError] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState(false);
   const copy = COPY[mode];
+
+  function dismiss() {
+    router.refresh();
+  }
 
   async function persistDismissal(flag: 'push_prompted' | 'push_reprompted') {
     try {

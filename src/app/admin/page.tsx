@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeSummary } from '@/lib/analytics';
 import { Logo } from '@/components/logo';
@@ -25,8 +25,8 @@ function getTodayIST() {
 }
 
 export default async function AdminPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — middleware already paid the network auth hop.
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
@@ -68,11 +68,36 @@ export default async function AdminPage() {
   const weekAgoStr = weekAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   const studentIds = students.map(s => s.id);
-  let reports: DailyReport[] = [];
-  if (studentIds.length > 0) {
-    const { data } = await admin.from('daily_reports').select('student_id, report_date, study_duration, confidence, stress, sleep_quality, overall_energy, mock_taken, total_accuracy').in('student_id', studentIds).gte('report_date', weekAgoStr);
-    reports = (data ?? []) as DailyReport[];
-  }
+  const buddyIds = buddies.map(b => b.id);
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+  // These four reads depend only on the id-arrays above — one concurrent
+  // wave instead of four serial round-trips.
+  const [
+    { data: reportsData },
+    { data: recentFeedback },
+    { data: videoSessions },
+    { data: lastLogs },
+  ] = await Promise.all([
+    studentIds.length > 0
+      ? admin.from('daily_reports').select('student_id, report_date, study_duration, confidence, stress, sleep_quality, overall_energy, mock_taken, total_accuracy').in('student_id', studentIds).gte('report_date', weekAgoStr)
+      : Promise.resolve({ data: [] as DailyReport[] }),
+    admin
+      .from('buddy_feedback')
+      .select('buddy_id, created_at, feedback_date')
+      .gte('created_at', twoWeeksAgo),
+    buddyIds.length > 0
+      ? admin.from('video_sessions').select('buddy_id, session_status').in('buddy_id', buddyIds)
+      : Promise.resolve({ data: [] }),
+    // Churn risk reads streak_data.last_log_date — one indexed row per
+    // student, the same source of truth /admin/leads uses — instead of the
+    // old approach of scanning every daily_report ever written just to find
+    // each student's latest date.
+    studentIds.length > 0
+      ? admin.from('streak_data').select('student_id, last_log_date').in('student_id', studentIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const reports: DailyReport[] = (reportsData ?? []) as DailyReport[];
 
   // Pre-build Maps — eliminates O(n²) array scans inside the stats loops below
   const buddyById = new Map(buddies.map(b => [b.id, b]));
@@ -125,27 +150,12 @@ export default async function AdminPage() {
   const redFlagCount = studentStats.filter(s => s.hasRedFlags).length;
   const onTrack = studentStats.filter(s => s.summary.band === 'On track').length;
 
-  // Buddy performance: feedback volume + response speed over last 14 days
-  // eslint-disable-next-line react-hooks/purity
-  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
-  const { data: recentFeedback } = await admin
-    .from('buddy_feedback')
-    .select('buddy_id, created_at, feedback_date')
-    .gte('created_at', twoWeeksAgo);
-
-  // Video sessions for buddy show-up rate
-  const buddyIds = buddies.map(b => b.id);
-  const { data: videoSessions } = buddyIds.length > 0
-    ? await admin.from('video_sessions').select('buddy_id, session_status').in('buddy_id', buddyIds)
-    : { data: [] };
-
-  // Churn risk: days since last log per student (beyond the 7-day window = high risk)
-  const { data: lastLogs } = studentIds.length > 0
-    ? await admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds).order('report_date', { ascending: false })
-    : { data: [] };
+  // Churn risk: days since last log per student (beyond the 7-day window = high risk).
+  // recentFeedback / videoSessions / lastLogs were all fetched in the
+  // parallel wave above.
   const lastLogByStudent = new Map<string, string>();
   for (const r of lastLogs ?? []) {
-    if (!lastLogByStudent.has(r.student_id)) lastLogByStudent.set(r.student_id, r.report_date);
+    if (r.last_log_date) lastLogByStudent.set(r.student_id, r.last_log_date as string);
   }
   const todayMs = new Date(today + 'T00:00:00').getTime();
   const churnRisk = students

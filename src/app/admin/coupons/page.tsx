@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ArrowLeft } from 'lucide-react';
 import { AdminCouponsClient, type CouponRow } from './admin-coupons-client';
@@ -23,8 +23,8 @@ function discountLabel(type: 'percent' | 'flat', value: number): string {
 }
 
 export default async function AdminCouponsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — middleware already paid the network auth hop.
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();

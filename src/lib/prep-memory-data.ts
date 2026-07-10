@@ -21,12 +21,24 @@ function addDays(dateStr: string, delta: number): string {
 
 interface RoutineTaskShape { id: string; section: Section | 'General'; topic: string | null; estMinutes: number }
 
+export interface CoverageRowInput { topic: string; status: string; updated_at: string }
+
+// Optional prefetched inputs so a caller that needs BOTH computePrepMemory
+// and computeTopicMemory (i.e. /api/blueprint) can fetch topic_coverage and
+// the completion history ONCE and share them — those two used to be fetched
+// 3× and 2× respectively in a single blueprint request. Callers that pass
+// nothing get the exact same internal queries as before.
+export interface PrefetchedPrepInputs {
+  coverageRows?: CoverageRowInput[];
+  completionRecords?: CompletionRecord[]; // full-history records; windows filter down internally
+}
+
 // Cross-references routine_task_completions (which only stores task_id +
 // routine_date) back to the section/topic/estMinutes each task actually
 // was, by matching against the daily_routines row for that same date — the
 // same join pattern buildHistory() in /api/routine/today already uses.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildCompletionRecords(admin: any, studentId: string, sinceDate: string): Promise<CompletionRecord[]> {
+export async function buildCompletionRecords(admin: any, studentId: string, sinceDate: string): Promise<CompletionRecord[]> {
   const [{ data: routines }, { data: completions }] = await Promise.all([
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', studentId).gte('routine_date', sinceDate),
     admin.from('routine_task_completions').select('routine_date, task_id, confidence, is_emergency').eq('student_id', studentId).gte('routine_date', sinceDate),
@@ -69,7 +81,8 @@ export async function computePrepMemory(
   admin: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   studentId: string,
   archetype: { isRepeater: boolean; isWorkingProfessional: boolean },
-  signupDate: string | null
+  signupDate: string | null,
+  prefetched?: PrefetchedPrepInputs
 ): Promise<PrepMemoryResult> {
   const today = getLogDateString();
   const last30Start = addDays(today, -29);
@@ -79,11 +92,21 @@ export async function computePrepMemory(
   const week1Start = addDays(today, -20);
   const week1End = addDays(today, -14);
 
-  const [completionRecords, { data: debriefs }, { data: coverageRows }] = await Promise.all([
-    buildCompletionRecords(admin, studentId, last30Start),
+  const [completionRecordsRaw, { data: debriefs }, { data: coverageRows }] = await Promise.all([
+    prefetched?.completionRecords != null
+      ? Promise.resolve(prefetched.completionRecords)
+      : buildCompletionRecords(admin, studentId, last30Start),
     admin.from('mock_debriefs').select('taken_on, overall_percentile').eq('student_id', studentId).gte('taken_on', last30Start).order('taken_on', { ascending: false }),
-    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
+    prefetched?.coverageRows != null
+      ? Promise.resolve({ data: prefetched.coverageRows })
+      : admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
   ]);
+  // Prefetched records may span full history — filter down to the same
+  // 30-day window the internal query would have applied. Identical rows in
+  // either path.
+  const completionRecords = prefetched?.completionRecords != null
+    ? completionRecordsRaw.filter((r) => r.routineDate >= last30Start)
+    : completionRecordsRaw;
 
   const mockDates = (debriefs ?? []).map((d: { taken_on: string }) => d.taken_on);
   const last30 = windowStats(completionRecords, mockDates, last30Start, today);
@@ -168,11 +191,15 @@ export async function computePrepMemory(
 // separate query on purpose: "first studied 54 days ago" needs to look
 // further back than Preparation Health ever does.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function computeTopicMemory(admin: any, studentId: string, archetype: { isRepeater: boolean; isWorkingProfessional: boolean }): Promise<TopicMemoryEntry[]> {
+export async function computeTopicMemory(admin: any, studentId: string, archetype: { isRepeater: boolean; isWorkingProfessional: boolean }, prefetched?: PrefetchedPrepInputs): Promise<TopicMemoryEntry[]> {
   const today = getLogDateString();
   const [allCompletions, { data: coverageRows }] = await Promise.all([
-    buildCompletionRecords(admin, studentId, '2000-01-01'),
-    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
+    prefetched?.completionRecords != null
+      ? Promise.resolve(prefetched.completionRecords)
+      : buildCompletionRecords(admin, studentId, '2000-01-01'),
+    prefetched?.coverageRows != null
+      ? Promise.resolve({ data: prefetched.coverageRows })
+      : admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
   ]);
 
   return buildTopicMemory(

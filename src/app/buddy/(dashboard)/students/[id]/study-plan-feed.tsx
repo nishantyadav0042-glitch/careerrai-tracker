@@ -1,34 +1,26 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
-import { computePrepMemory } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { Card } from '@/components/ui/card';
 import type { Stage } from '@/lib/routine-engine';
+import { getStudentPrepSnapshot } from './prep-snapshot';
 
-// Buddy read-only Study Plan feed (spec Phase 4) — mounted as a standalone,
-// additive component: it runs its own queries rather than touching the
-// parent page's existing Promise.all, so nothing about the buddy panel's
-// current logic changes by adding this. Read-only by construction — no
-// mutation, no edit links; this shows the same facts the student's own
-// Blueprint page shows, just from the buddy's side.
+// Buddy read-only Study Plan feed (spec Phase 4). Profile + prep-memory come
+// from the request-scoped snapshot shared with PreparationDNA (see
+// prep-snapshot.ts) — this card used to re-run both for the same student in
+// the same render. Read-only by construction — no mutation, no edit links;
+// this shows the same facts the student's own Blueprint page shows, just
+// from the buddy's side.
 export async function StudyPlanFeed({ studentId }: { studentId: string }) {
   const admin = createAdminClient();
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('attempt_year, is_repeater, is_working_professional, current_stage, self_reported_weakest_section, self_reported_weak_topic, created_at')
-    .eq('id', studentId)
-    .single();
-  if (!profile) return null;
+  const snapshot = await getStudentPrepSnapshot(studentId);
+  if (!snapshot) return null;
+  const { profile, prepMemory, weeklyEvolution, healthScore } = snapshot;
 
-  const [{ data: coverage }, { data: streak }, { prepMemory, weeklyEvolution, healthScore }] = await Promise.all([
+  const [{ data: coverage }, { data: streak }] = await Promise.all([
     admin.from('topic_coverage').select('status').eq('student_id', studentId),
     admin.from('streak_data').select('current_streak').eq('student_id', studentId).maybeSingle(),
-    computePrepMemory(
-      admin, studentId,
-      { isRepeater: !!profile.is_repeater, isWorkingProfessional: !!profile.is_working_professional },
-      (profile.created_at as string | null)?.split('T')[0] ?? null
-    ),
   ]);
 
   const stage = profile.current_stage as Stage | null;

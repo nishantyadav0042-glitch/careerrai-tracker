@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
@@ -77,8 +77,8 @@ const ANXIETY_LABELS = ['Calm', 'A little nervous', 'Moderate', 'High anxiety', 
 const BELIEF_LABELS  = ['Fully confident', 'Mostly yes', 'Not sure', 'Honestly no'];
 
 export default async function CatLeadsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — middleware already paid the network auth hop.
+  const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();

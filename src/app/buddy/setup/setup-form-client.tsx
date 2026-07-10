@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 
@@ -60,6 +61,7 @@ const STEP_TITLES = [
 ];
 
 export function SetupFormClient({ buddyId, initialProfile }: Props) {
+  const router = useRouter();
   const supabase = createClient();
 
   const [step, setStep] = useState(0);
@@ -188,7 +190,10 @@ export function SetupFormClient({ buddyId, initialProfile }: Props) {
         setSaving(false);
         return;
       }
-      window.location.href = '/buddy/home';
+      // Client transition + refresh instead of a full document load — the
+      // refresh makes the layout re-read buddy_onboarding_completed.
+      router.push('/buddy/home');
+      router.refresh();
     } catch {
       setSaveError('Network error. Please try again.');
       setSaving(false);

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish, phaseBoundaryDates } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { callGemini, geminiEnabled, stripNames } from '@/lib/gemini';
-import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
+import { computePrepMemory, computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -35,13 +35,19 @@ const BLOCKER_LABEL: Record<Blocker, string> = {
 };
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification — the middleware already paid the network auth
+  // round-trip for this request.
+  const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
 
-  const [{ data: profile }] = await Promise.all([
+  // One wave: this route used to fetch topic_coverage 3× (its own tally +
+  // once inside each memory engine) and build completion records twice
+  // (30-day + full-history). Coverage and the full-history records are now
+  // fetched ONCE here and passed into both engines — same rows, same
+  // arithmetic, ~5 fewer round-trips.
+  const [{ data: profile }, { data: coverageRows }, { data: streak }, allCompletions] = await Promise.all([
     admin.from('profiles')
       .select(`
         full_name, target_percentile, attempt_year, exam_target, is_working_professional, is_repeater,
@@ -49,15 +55,18 @@ export async function GET() {
         current_stage, biggest_blocker, created_at, buddy_id, is_premium
       `)
       .eq('id', user.id).single(),
+    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
+    admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
+    buildCompletionRecords(admin, user.id, '2000-01-01'),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
   const archetype = { isRepeater: !!profile.is_repeater, isWorkingProfessional: !!profile.is_working_professional };
-  const [{ data: coverage }, { data: streak }, { prepMemory, weeklyEvolution, healthScore }, topicMemory] = await Promise.all([
-    admin.from('topic_coverage').select('status').eq('student_id', user.id),
-    admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
-    computePrepMemory(admin, user.id, archetype, (profile.created_at as string | null)?.split('T')[0] ?? null),
-    computeTopicMemory(admin, user.id, archetype),
+  const prefetched = { coverageRows: coverageRows ?? [], completionRecords: allCompletions };
+  const coverage = coverageRows;
+  const [{ prepMemory, weeklyEvolution, healthScore }, topicMemory] = await Promise.all([
+    computePrepMemory(admin, user.id, archetype, (profile.created_at as string | null)?.split('T')[0] ?? null, prefetched),
+    computeTopicMemory(admin, user.id, archetype, prefetched),
   ]);
 
   const weak = profile.self_reported_weakest_section as Section | null;

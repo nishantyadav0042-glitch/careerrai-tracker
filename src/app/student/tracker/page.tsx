@@ -24,17 +24,17 @@ export default async function DailyTrackerPage() {
   const admin = createAdminClient();
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('full_name, buddy_id')
-    .eq('id', user.id).single();
-
   const [
+    { data: profile },
     { data: sessions },
     { data: logs },
     { data: recentMock },
     { data: streakRow },
   ] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('full_name, buddy_id')
+      .eq('id', user.id).single(),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
@@ -15,32 +15,63 @@ const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR
 // catch-up context (days since last full completion) so the client can show
 // "welcome back" instead of a guilt-trip after a gap.
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // getAuthUser verifies the JWT locally (cached JWKS) — the middleware
+  // already paid the network auth round-trip for this request.
+  const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
   const today = getLogDateString();
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select(`
-      is_working_professional, is_repeater, target_percentile,
-      hours_available, study_target_hours, weekend_hours_available,
-      self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-      baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker
-    `)
-    .eq('id', user.id)
-    .single();
+  // Every read below depends only on user.id, so this is ONE concurrent
+  // wave instead of the ~9 serial round-trips this route used to make —
+  // the single biggest latency cut on the home screen's study card.
+  const [
+    { data: profile },
+    { data: coverageRows },
+    { data: existing },
+    { data: completions },
+    { data: streak },
+    history,
+    { daysSincePendingMock, pendingMockName },
+  ] = await Promise.all([
+    admin
+      .from('profiles')
+      .select(`
+        is_working_professional, is_repeater, target_percentile,
+        hours_available, study_target_hours, weekend_hours_available,
+        self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
+        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker
+      `)
+      .eq('id', user.id)
+      .single(),
+    // Coverage grid — both the modern source of the weakest-section signal
+    // AND what buildTopicChoices scores topics with (passed down so it
+    // isn't queried twice).
+    admin
+      .from('topic_coverage')
+      .select('section, topic, status')
+      .eq('student_id', user.id),
+    admin
+      .from('daily_routines')
+      .select('phase, tasks, est_minutes')
+      .eq('student_id', user.id)
+      .eq('routine_date', today)
+      .maybeSingle(),
+    admin
+      .from('routine_task_completions')
+      .select('task_id, completed_at, is_emergency')
+      .eq('student_id', user.id)
+      .eq('routine_date', today),
+    admin
+      .from('streak_data')
+      .select('current_streak, last_log_date')
+      .eq('student_id', user.id)
+      .maybeSingle(),
+    buildHistory(admin, user.id),
+    buildMissionInputs(admin, user.id, today),
+  ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-
-  // Coverage grid fetched up front — it's both the modern source of the
-  // weakest-section signal AND what buildTopicChoices scores topics with
-  // (passed down so it isn't queried twice).
-  const { data: coverageRows } = await admin
-    .from('topic_coverage')
-    .select('section, topic, status')
-    .eq('student_id', user.id);
 
   // Weakest-section chain: explicit self-report (legacy accounts that
   // answered the old tap) → baseline mock scores → derived from the
@@ -85,14 +116,6 @@ export async function GET() {
     attemptYear: profile.attempt_year as number | null,
   };
 
-  // Existing routine for today?
-  const { data: existing } = await admin
-    .from('daily_routines')
-    .select('phase, tasks, est_minutes')
-    .eq('student_id', user.id)
-    .eq('routine_date', today)
-    .maybeSingle();
-
   // Legacy safety net only: the Blueprint Builder now collects everything
   // through the Coverage grid, so any account WITH coverage rows is fully
   // set up — weakest derives from the grid, stage/blocker are optional
@@ -113,8 +136,8 @@ export async function GET() {
   // Computed unconditionally (not just on generation) — the Mission and the
   // fresh whySummary below both need current recency/coverage data every
   // request, the same reasoning as whySummary already being recomputed
-  // fresh rather than frozen at generation time.
-  const history = await buildHistory(admin, user.id);
+  // fresh rather than frozen at generation time. (history itself is fetched
+  // in the parallel wave above.)
   const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history);
 
   let routine = existing;
@@ -132,18 +155,7 @@ export async function GET() {
     routine = inserted;
   }
 
-  const { data: completions } = await admin
-    .from('routine_task_completions')
-    .select('task_id, completed_at, is_emergency')
-    .eq('student_id', user.id)
-    .eq('routine_date', today);
-
   // Catch-up context: days since the student last fully completed a routine day.
-  const { data: streak } = await admin
-    .from('streak_data')
-    .select('current_streak, last_log_date')
-    .eq('student_id', user.id)
-    .maybeSingle();
   const gapDays = streak?.last_log_date
     ? Math.round((Date.parse(today) - Date.parse(streak.last_log_date as string)) / 86_400_000)
     : null;
@@ -175,7 +187,6 @@ export async function GET() {
   const weakRevisionFrequency = TOPIC_METADATA[weakTopicChosen]
     ? TOPIC_METADATA[weakTopicChosen].revisionFrequencyDays * revisionMultiplier
     : undefined;
-  const { daysSincePendingMock, pendingMockName } = await buildMissionInputs(admin, user.id, today);
   const mission = pickMission([
     {
       id: 'mock-analysis',
@@ -281,18 +292,20 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number> }> {
-  const { data: pastRoutines } = await admin
-    .from('daily_routines')
-    .select('routine_date, tasks')
-    .eq('student_id', studentId)
-    .order('routine_date', { ascending: false })
-    .limit(14);
-  const { data: pastCompletions } = await admin
-    .from('routine_task_completions')
-    .select('routine_date, task_id')
-    .eq('student_id', studentId)
-    .order('routine_date', { ascending: false })
-    .limit(200);
+  const [{ data: pastRoutines }, { data: pastCompletions }] = await Promise.all([
+    admin
+      .from('daily_routines')
+      .select('routine_date, tasks')
+      .eq('student_id', studentId)
+      .order('routine_date', { ascending: false })
+      .limit(14),
+    admin
+      .from('routine_task_completions')
+      .select('routine_date, task_id')
+      .eq('student_id', studentId)
+      .order('routine_date', { ascending: false })
+      .limit(200),
+  ]);
 
   const completedByDate = new Map<string, Set<string>>();
   for (const c of pastCompletions ?? []) {

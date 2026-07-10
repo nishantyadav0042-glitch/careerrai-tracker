@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Clock, Phone, ChevronDown, ChevronUp, UserX, AlertCircle, Sparkles, MessageCircle } from 'lucide-react';
@@ -93,6 +94,7 @@ export function AdminStudentsList({
   buddies: BuddyInfo[];
   pendingStudents?: PendingStudent[];
 }) {
+  const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -104,7 +106,7 @@ export function AdminStudentsList({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: studentId, buddy_id: buddyId }),
       });
-      if (response.ok) window.location.reload();
+      if (response.ok) router.refresh(); // re-runs the server page for fresh assignment state
     } finally {
       setLoadingId(null);
     }

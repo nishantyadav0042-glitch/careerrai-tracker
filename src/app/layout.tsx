@@ -10,7 +10,9 @@ export const metadata: Metadata = {
   title: 'CareerRai',
   description: 'Daily prep tracking with your IIM buddy.',
   icons: {
-    icon: '/careerrai-monogram.png',
+    // Favicons bypass next/image optimization entirely — this used to point at
+    // the 223KB monogram, shipping it raw on every page's first paint. 5KB now.
+    icon: '/favicon-96.png',
     // Square, opaque 180×180 — used as the iOS Home-Screen icon when a student
     // adds the app via Share → Add to Home Screen (iOS ignores the manifest icons).
     apple: '/apple-touch-icon.png',
