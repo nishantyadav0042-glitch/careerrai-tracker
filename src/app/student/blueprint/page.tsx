@@ -130,14 +130,22 @@ export default function MyCatPlanPage() {
           {learningCount > 0 && (
             <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} in progress`} cta="Continue" />
           )}
-          <PlanRow href="/student/analysis" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
+          {/* Revision only appears once something is ACTUALLY due — a brand-new
+              student who hasn't studied anything should never see a "0 due for
+              revision" line implying they're behind on revision they never started. */}
+          {dueForRevisionCount > 0 && (
+            <PlanRow href="/student/analysis" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
+          )}
           <PlanRow href="/student/analysis" icon="⚪" label={`${notStartedCount} not started`} cta="Start" />
-          <PlanRow
-            href="/student/analysis?tab=mocks"
-            icon="📝"
-            label={`${mocksCompleted} mock${mocksCompleted === 1 ? '' : 's'} completed`}
-            cta="View"
-          />
+          {/* Same logic for mocks — no "0 mocks completed" noise before the first one. */}
+          {mocksCompleted > 0 && (
+            <PlanRow
+              href="/student/analysis?tab=mocks"
+              icon="📝"
+              label={`${mocksCompleted} mock${mocksCompleted === 1 ? '' : 's'} completed`}
+              cta="View"
+            />
+          )}
         </div>
 
         {/* "Can I still finish?" — a real date window from trailing pace,
