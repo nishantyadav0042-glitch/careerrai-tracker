@@ -10,11 +10,18 @@ interface Props {
   isLoading: boolean;
 }
 
+// The real, felt pains of a CAT aspirant — written so a student reads one and
+// thinks "that's literally me," not a polite survey option. Each still maps to
+// something CareerRai actually does (results→buddy mock analysis,
+// consistency→routine+reminders, tracking→coverage map, finish→owned date,
+// revision→revision cycle, mentor→1:1 IIM buddy) so the reassurance is honest.
 export const PAINS: { id: string; label: string }[] = [
-  { id: 'consistency', label: "I start strong and lose consistency within days" },
-  { id: 'no_tracking', label: "I don't actually know what I've covered and what I haven't" },
-  { id: 'no_plan', label: "I don't have a real day-by-day study plan" },
-  { id: 'no_mentor', label: "I have no one senior checking in on me" },
+  { id: 'results', label: "I put in the hours but my mocks just won't improve" },
+  { id: 'consistency', label: "I plan big on Sunday — by Wednesday it's dead" },
+  { id: 'no_tracking', label: "I've lost track of what's done and what's left" },
+  { id: 'finish', label: "I'm scared I won't finish the syllabus before CAT" },
+  { id: 'revision', label: "I forget topics I studied just a month ago" },
+  { id: 'no_mentor', label: "No one who's actually cracked CAT is guiding me" },
 ];
 
 // Choose exactly 2 — forces the honest top pain instead of a wishlist.
