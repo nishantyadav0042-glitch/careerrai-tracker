@@ -91,6 +91,12 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
         setProgress(100);
         setCheckedCount(CHECKLIST.length);
         setDone(true);
+        // Account created — the pre-auth draft is now stale. Clear it so this
+        // device never resumes a finished journey on a later visit.
+        try {
+          window.localStorage.removeItem('cr_preauth_draft_v1');
+          window.localStorage.removeItem('cr_onboarding_topic_coverage_draft');
+        } catch { /* best-effort */ }
         setTimeout(() => { window.location.href = json.dest; }, 900);
       } else {
         setBuilding(false);
