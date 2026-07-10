@@ -15,9 +15,9 @@ export default function ScreenMentor({ onNext, onBack, canGoBack, isLoading }: P
     <div className="space-y-6 pt-2">
       <div>
         <h1 className="text-2xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
-          Do you have someone senior — an IIM alum, a mentor — guiding you right now?
+          Would you like someone to guide you like an elder sibling — and plan with you, 1:1?
         </h1>
-        <p className="mt-2 text-sm text-stone-500">Last question. Then we build your plan.</p>
+        <p className="mt-2 text-sm text-stone-500">Last question — then we build your plan.</p>
       </div>
 
       <div className="space-y-2.5">
@@ -27,7 +27,7 @@ export default function ScreenMentor({ onNext, onBack, canGoBack, isLoading }: P
           onClick={() => onNext({ wants_mentor: true })}
           className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
         >
-          No — I could use one
+          Yes, I&apos;d like that
         </button>
         <button
           type="button"
@@ -35,7 +35,7 @@ export default function ScreenMentor({ onNext, onBack, canGoBack, isLoading }: P
           onClick={() => onNext({ wants_mentor: false })}
           className="w-full rounded-2xl border-2 border-stone-200 bg-white py-4 text-sm font-semibold text-stone-700 transition-all hover:border-stone-300 active:scale-[0.98]"
         >
-          Yes — I&apos;m covered
+          No, I&apos;m good for now
         </button>
       </div>
 
