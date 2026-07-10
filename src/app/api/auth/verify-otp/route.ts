@@ -77,9 +77,14 @@ export async function POST(request: NextRequest) {
         .eq('id', data.user.id);
     }
 
-    // Redirect to set-password if they haven't set one yet (first login or recovery)
+    // Students are never walled behind set-password at login — OTP login
+    // works without one, and a password wall right after signup is pure
+    // friction on day one. They get a dismissible "set a password for
+    // faster login" card in the app from day 2 instead (SetPasswordReminder
+    // on the tracker). Buddies still set one immediately — staff access
+    // can't depend on OTP delivery.
     const hasPassword = existing?.password_set === true;
-    const dest = hasPassword ? normalDest : `/set-password?dest=${encodeURIComponent(normalDest)}`;
+    const dest = (role === 'student' || hasPassword) ? normalDest : `/set-password?dest=${encodeURIComponent(normalDest)}`;
 
     const res = NextResponse.json({ ok: true, dest });
     pending.forEach(({ name, value, options }) =>
