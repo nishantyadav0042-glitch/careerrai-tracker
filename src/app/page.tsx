@@ -15,7 +15,7 @@ export default async function Home() {
   if (cookieStore.get('cr_demo')?.value === '1') redirect('/login');
 
   const user = await getAuthUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/welcome');
 
   // Fast path: role cookie set at login — no DB round-trip needed.
   const role = cookieStore.get('user_role')?.value;
