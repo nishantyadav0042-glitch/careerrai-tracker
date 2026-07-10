@@ -26,12 +26,13 @@ const EXAM_STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; 
 // Habit tracks (mocks, reading) don't have a revision stage — three states.
 const HABIT_STATUS_OPTIONS = EXAM_STATUS_OPTIONS.slice(0, 3);
 
-// Honesty is what gets celebrated — never knowledge.
+// Honesty is what gets celebrated — never knowledge. One short line each
+// (founder rule: nobody reads paragraphs mid-flow).
 const HONESTY_LINES: Record<DeclaredStatus, (unit: string) => string> = {
-  not_started: (u) => `Excellent — now the plan won't waste your time assuming you know ${u}. That one tap probably saved you weeks.`,
-  learning: (u) => `Noted — ${u} stays in concept mode. Questions come after concepts, and your plan will respect that order.`,
-  practicing: (u) => `Perfect — that's exactly why we asked. ${u} goes into your practice rotation.`,
-  revising: (u) => `Strong — ${u} enters your revision cycle, and revision is where percentiles are won.`,
+  not_started: (u) => `Good. The plan won't waste time assuming you know ${u}.`,
+  learning: (u) => `${u} stays in concept mode — questions come after.`,
+  practicing: (u) => `${u} goes into your practice rotation.`,
+  revising: (u) => `${u} enters your revision cycle.`,
 };
 
 // One step per group — the student never sees the whole graph at once and
@@ -188,7 +189,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
 
       <div>
         <p className="text-base font-bold text-stone-900">{step.title}</p>
-        <p className="text-xs text-stone-500">Tap where you currently are on each — every topic needs an answer.</p>
+        <p className="text-xs text-stone-500">One tap each — honest answers cut wasted weeks.</p>
       </div>
 
       {/* Honesty celebration — one live slot */}
@@ -250,7 +251,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
             ? `${remaining} topic${remaining === 1 ? '' : 's'} left on this step`
             : stepIdx < STEPS.length - 1
             ? `Next: ${STEPS[stepIdx + 1].title} →`
-            : 'Lock my preparation map →'}
+            : 'Continue →'}
         </button>
       </div>
     </div>

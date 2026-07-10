@@ -90,7 +90,7 @@ export default function ScreenDreamColleges({ onNext, onBack, canGoBack, isLoadi
               : 'bg-stone-200 text-stone-400 cursor-not-allowed'
           )}
         >
-          {selected.length === 0 ? 'Pick at least one' : `Lock in my dream${selected.length > 1 ? 's' : ''} →`}
+          {selected.length === 0 ? 'Pick at least one' : 'Continue →'}
         </button>
       </div>
     </div>
