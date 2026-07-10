@@ -225,7 +225,7 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
             isValid ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-stone-200 text-stone-400 cursor-not-allowed'
           )}
         >
-          {isLoading ? 'Saving…' : 'Almost there →'}
+          {isLoading ? 'Saving…' : 'Continue →'}
         </button>
       </div>
     </div>
