@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import { PerfBeacon } from '@/components/perf-beacon';
 
 // Supabase is in ap-southeast-1 (Singapore). Running server functions in the
 // same region eliminates ~250ms round-trip latency per DB query.
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-stone-50 antialiased min-h-screen">
         <Providers>
           {children}
+          <PerfBeacon />
         </Providers>
       </body>
     </html>
