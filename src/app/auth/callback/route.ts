@@ -106,8 +106,10 @@ export async function GET(request: NextRequest) {
       .eq('id', userId);
   }
 
+  // Students skip the set-password wall (day-2 in-app reminder instead —
+  // see SetPasswordReminder); buddies/admins still set one immediately.
   const hasPassword = existing?.password_set === true;
-  const dest = hasPassword ? normalDest : `/set-password?dest=${encodeURIComponent(normalDest)}`;
+  const dest = (role === 'student' || hasPassword) ? normalDest : `/set-password?dest=${encodeURIComponent(normalDest)}`;
 
   const res = NextResponse.redirect(`${origin}${dest}`);
   pending.forEach(({ name, value, options }) =>
