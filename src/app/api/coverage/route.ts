@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { KNOWLEDGE_GRAPH, UNIT_ORDER } from '@/lib/topics-constants';
-
-// All five Knowledge Graph sections — three exam sections plus the two
-// habit tracks (Mock Preparation / Reading Habit).
-const VALID_SECTIONS = KNOWLEDGE_GRAPH.map((s) => s.id);
-// Student-declared states (incl. 'revising' — "Revision started") + the
-// system-earned exam_ready, which no self-declared path may write — see
-// the matrix validation below.
-const VALID_STATUSES = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'] as const;
-
-const TOPICS_BY_SECTION: Record<string, string[]> = Object.fromEntries(
-  KNOWLEDGE_GRAPH.map((s) => [s.id, s.groups.flatMap((g) => g.units)])
-);
+import { UNIT_ORDER } from '@/lib/topics-constants';
+import { VALID_SECTIONS, TOPICS_BY_SECTION, validateCoverageEntry, type MatrixEntry } from '@/lib/coverage-validate';
 
 // Canonical Knowledge Graph order, not raw DB order — the grid always
 // renders sections and units the way the graph defines them.
@@ -62,18 +51,6 @@ export async function GET() {
   return NextResponse.json({ matrix: byGraphOrder(inserted) });
 }
 
-interface MatrixEntry { section?: string; topic?: string; status?: string }
-
-function validateEntry({ section, topic, status }: MatrixEntry, allowExamReady: boolean): string | null {
-  if (!section || !(VALID_SECTIONS as string[]).includes(section)) return 'section is not a Knowledge Graph section';
-  if (!topic || !TOPICS_BY_SECTION[section].includes(topic)) return 'topic is not valid for section';
-  if (!status || !(VALID_STATUSES as readonly string[]).includes(status)) return 'status is not a recognised value';
-  // exam_ready is system-earned (confidence signals), never self-declared —
-  // the Builder's bulk write may only carry the three student states.
-  if (!allowExamReady && status === 'exam_ready') return 'exam_ready cannot be self-declared';
-  return null;
-}
-
 // POST /api/coverage — persist coverage. Two shapes:
 //  { section, topic, status }  — one topic (the Analysis page's tap-to-update)
 //  { matrix: [...] }           — the whole grid in one call (the Blueprint
@@ -90,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'matrix must have 1-80 entries' }, { status: 400 });
     }
     for (const entry of body.matrix) {
-      const problem = validateEntry(entry, false);
+      const problem = validateCoverageEntry(entry, false);
       if (problem) return NextResponse.json({ error: `${entry.section ?? '?'}/${entry.topic ?? '?'}: ${problem}` }, { status: 400 });
     }
     const now = new Date().toISOString();
@@ -108,7 +85,7 @@ export async function POST(request: NextRequest) {
   const { section, topic, status } = body;
   // Single-topic path: the Analysis page tap cycles student states only —
   // exam_ready still cannot be self-assigned from any UI.
-  const problem = validateEntry(body, false);
+  const problem = validateCoverageEntry(body, false);
   if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
   const admin = createAdminClient();

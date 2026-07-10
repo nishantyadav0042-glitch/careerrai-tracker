@@ -4,10 +4,30 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
 import { sendNotification } from '@/lib/notifications';
+import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validate';
+import { isValidPushEndpoint } from '@/lib/push-validate';
+
+// Whitelisted answers from the pre-auth /start funnel — collected before
+// an account existed, handed over here in one shot on first signup only.
+interface OnboardingPayload {
+  ambition_date?: unknown;
+  dream_colleges?: unknown;
+  target_percentile?: unknown;
+  hours_available?: unknown;
+  coaching_enrolled?: unknown;
+  is_repeater?: unknown;
+  pain_points?: unknown;
+  wants_mentor?: unknown;
+  push_subscription?: unknown;
+  push_prompted?: unknown;
+  topic_matrix?: unknown;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone: rawPhone, token, name: rawName, userType } = (await request.json()) as { phone?: string; token?: string; name?: string; userType?: string };
+    const { phone: rawPhone, token, name: rawName, userType, onboarding } = (await request.json()) as {
+      phone?: string; token?: string; name?: string; userType?: string; onboarding?: OnboardingPayload;
+    };
     // Which role the person chose on the login screen ('student' | 'buddy').
     // Honored ONLY for brand-new signups (below) — it must never downgrade an
     // existing buddy/admin or silently convert an existing real student.
@@ -139,6 +159,70 @@ export async function POST(request: NextRequest) {
           ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
         })
         .eq('id', data.user.id);
+    }
+
+    // Pre-auth funnel (/start): a brand-new student answered a full set of
+    // questions before any account existed — this is the one place those
+    // answers get persisted, whitelisted field-by-field. Never applied to a
+    // returning user's real profile (isStub/!existing only, same guard the
+    // registration branches above use).
+    if ((isStub || !existing) && role === 'student' && onboarding) {
+      const profileUpdate: Record<string, unknown> = {};
+      if (typeof onboarding.ambition_date === 'string') profileUpdate.syllabus_target_date = onboarding.ambition_date;
+      if (Array.isArray(onboarding.dream_colleges)) {
+        profileUpdate.dream_colleges = onboarding.dream_colleges.filter((c): c is string => typeof c === 'string').slice(0, 3);
+      }
+      if (typeof onboarding.target_percentile === 'number' && onboarding.target_percentile >= 50 && onboarding.target_percentile <= 99) {
+        profileUpdate.target_percentile = onboarding.target_percentile;
+      }
+      if (typeof onboarding.hours_available === 'number' && onboarding.hours_available > 0 && onboarding.hours_available <= 16) {
+        profileUpdate.hours_available = onboarding.hours_available;
+        profileUpdate.study_target_hours = onboarding.hours_available;
+      }
+      if (typeof onboarding.coaching_enrolled === 'boolean') profileUpdate.coaching_enrolled = onboarding.coaching_enrolled;
+      if (typeof onboarding.is_repeater === 'boolean') profileUpdate.is_repeater = onboarding.is_repeater;
+      if (Array.isArray(onboarding.pain_points)) {
+        profileUpdate.pain_points = onboarding.pain_points.filter((p): p is string => typeof p === 'string').slice(0, 2);
+      }
+      if (typeof onboarding.wants_mentor === 'boolean') profileUpdate.wants_mentor = onboarding.wants_mentor;
+
+      const subscription = onboarding.push_subscription as { endpoint?: unknown } | null | undefined;
+      if (subscription?.endpoint && isValidPushEndpoint(subscription.endpoint)) {
+        profileUpdate.push_subscription = subscription;
+        profileUpdate.notif_prefs = { push: true };
+      } else if (onboarding.push_prompted === true) {
+        profileUpdate.notif_prefs = { push_prompted: true };
+      }
+
+      // A non-empty topic matrix is only ever sent once the /start wizard's
+      // final mandatory step completed — the same signal the old post-login
+      // Builder used to mark itself done. Set it BEFORE the write below so
+      // this student never lands back in the old post-login onboarding gate
+      // and gets asked the same questions twice.
+      const matrixOk = Array.isArray(onboarding.topic_matrix) && onboarding.topic_matrix.length > 0;
+      if (matrixOk) {
+        profileUpdate.onboarding_completed = true;
+        profileUpdate.onboarding_last_activity_at = new Date().toISOString();
+      }
+
+      const userId = data.user.id;
+      if (Object.keys(profileUpdate).length > 0) {
+        await admin.from('profiles').update(profileUpdate).eq('id', userId);
+      }
+
+      if (matrixOk) {
+        const matrix = onboarding.topic_matrix as MatrixEntry[];
+        const problem = validateCoverageMatrix(matrix);
+        if (!problem) {
+          const now = new Date().toISOString();
+          await admin.from('topic_coverage').upsert(
+            matrix.map((e) => ({ student_id: userId, section: e.section!, topic: e.topic!, status: e.status!, updated_at: now })),
+            { onConflict: 'student_id,section,topic' }
+          );
+        } else {
+          console.error('[verify-phone-otp] rejected pre-auth coverage matrix:', problem);
+        }
+      }
     }
 
     // Admin phone: guarantee the DB role is 'admin' so /admin (which re-checks
