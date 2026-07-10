@@ -1,6 +1,5 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { BuddyBanner } from '@/components/buddy-banner';
@@ -54,25 +53,22 @@ function PlanRow({ href, icon, label, cta }: { href: string; icon: string; label
 // same engines the rest of the app already trusts (topic memory, mock trend,
 // roadmap phase) — nothing on this page is computed just for this page.
 export default function MyCatPlanPage() {
-  const [data, setData] = useState<PlanData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchFailed, setFetchFailed] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setFetchFailed(false);
-    try {
+  // React Query with a 30s staleTime — a student bouncing tracker ↔ plan
+  // used to pay the full /api/blueprint round-trip (the heaviest student
+  // API) on every visit; within 30s it now renders instantly from memory.
+  // Same freshness rule as the streak/log queries in useLogging.ts.
+  const { data, isLoading, isError, refetch } = useQuery<PlanData>({
+    queryKey: ['blueprint'],
+    queryFn: async () => {
       const res = await fetch('/api/blueprint');
-      if (res.ok) setData(await res.json());
-      else setFetchFailed(true);
-    } catch {
-      setFetchFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+      if (!res.ok) throw new Error(`blueprint fetch failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const loading = isLoading;
+  const fetchFailed = isError;
+  const load = refetch;
 
   if (loading) {
     return (
@@ -88,7 +84,7 @@ export default function MyCatPlanPage() {
           <p className="text-sm text-stone-500">Couldn&apos;t load your plan — check your connection.</p>
           <button
             type="button"
-            onClick={load}
+            onClick={() => load()}
             className="text-sm font-semibold text-teal-700 hover:text-teal-800 underline underline-offset-2"
           >
             Try again
