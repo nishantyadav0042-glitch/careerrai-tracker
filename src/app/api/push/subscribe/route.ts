@@ -1,23 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-
-// A real Web Push endpoint is always an https URL on a public hostname (FCM,
-// Mozilla autopush, Apple, WNS). Reject anything else so a stored subscription
-// can't later point the server's push POST at an internal/loopback host.
-// Legit push services never use IP literals or internal hostnames, so this
-// never rejects a genuine subscription.
-function isValidPushEndpoint(endpoint: unknown): boolean {
-  if (typeof endpoint !== 'string') return false;
-  let url: URL;
-  try { url = new URL(endpoint); } catch { return false; }
-  if (url.protocol !== 'https:') return false;
-  const host = url.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false;
-  if (host.includes(':')) return false;                         // IPv6 literal
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;       // IPv4 literal
-  return true;
-}
+import { isValidPushEndpoint } from '@/lib/push-validate';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(

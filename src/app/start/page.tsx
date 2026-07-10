@@ -1,169 +1,128 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
 import { Logo } from '@/components/logo';
-import { InstallAppButton } from '@/components/install-app-button';
 import { OpenInBrowser } from '@/components/open-in-browser';
+import ScreenNeedCheck from './screens/screen-need-check';
+import ScreenTargetDate from './screens/screen-target-date';
+import ScreenDreamPercentile from './screens/screen-dream-percentile';
+import ScreenPermission from './screens/screen-permission';
+import ScreenQuickFacts from './screens/screen-quick-facts';
+import ScreenPainPoints from './screens/screen-pain-points';
+import ScreenReassurance from './screens/screen-reassurance';
+import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
+import ScreenMentor from './screens/screen-mentor';
+import ScreenLoginBuild from './screens/screen-login-build';
+import type { CoverageSectionId } from '@/lib/topics-constants';
 
-// Freemium self-signup. Two fields (Name + Phone), phone-OTP, no password,
-// no allowlist. On success the visitor lands straight in the free app.
-// Meta ad CTA points here (optionally after previewing the public /demo).
-type Step = 'form' | 'otp';
+// Founder-directed rebuild: every onboarding question now happens BEFORE
+// the account exists — "you decide the date, you own the plan" comes first,
+// signup comes last as "log in while we build." Nothing here writes to
+// Supabase until ScreenLoginBuild's verify call, which hands the whole
+// accumulated payload over in one request.
+const TOTAL_SCREENS = 9; // excludes the final login/build screen from the progress bar
+const DRAFT_KEY = 'cr_preauth_draft_v1';
+
+const TOPIC_SECTION_ORDER: CoverageSectionId[] = ['DILR', 'VARC', 'QA', 'MOCKS', 'READING'];
+const TOPIC_SECTION_INTRO: Partial<Record<CoverageSectionId, string>> = {
+  DILR: 'Set selection wins DILR — let\'s see where you stand.',
+  VARC: 'Reading habits move VARC more than any drill.',
+  QA: 'The last core section — then it\'s just revision and mocks.',
+  MOCKS: 'Almost done — revision and mock readiness, one honest tap each.',
+};
+
+function loadDraft(): { stepIdx: number; data: Record<string, unknown> } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.stepIdx !== 'number' || typeof parsed?.data !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export default function StartPage() {
-  const [step, setStep] = useState<Step>('form');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const draft = loadDraft();
+  const [stepIdx, setStepIdx] = useState(() => Math.min(draft?.stepIdx ?? 0, TOTAL_SCREENS - 1));
+  const [data, setData] = useState<Record<string, unknown>>(() => draft?.data ?? {});
 
-  // Keep only digits, cap at 10 (Indian mobile).
-  function onPhoneChange(v: string) {
-    setPhone(v.replace(/\D/g, '').slice(0, 10));
+  useEffect(() => {
+    try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ stepIdx, data })); } catch { /* best-effort */ }
+  }, [stepIdx, data]);
+
+  const advance = (patch?: Record<string, unknown>) => {
+    if (patch) setData((prev) => ({ ...prev, ...patch }));
+    setStepIdx((i) => Math.min(i + 1, TOTAL_SCREENS));
+  };
+  const back = () => setStepIdx((i) => Math.max(i - 1, 0));
+
+  const ambitionDateLabel = typeof data.ambition_date === 'string'
+    ? new Date(data.ambition_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+    : null;
+
+  const shared = { onBack: back, canGoBack: stepIdx > 0, isLoading: false };
+
+  let content: React.ReactNode;
+  switch (stepIdx) {
+    case 0:
+      content = <ScreenNeedCheck onNext={advance} isLoading={false} />;
+      break;
+    case 1:
+      content = <ScreenTargetDate onNext={advance} {...shared} />;
+      break;
+    case 2:
+      content = <ScreenDreamPercentile onNext={advance} {...shared} />;
+      break;
+    case 3:
+      content = <ScreenPermission onNext={advance} isLoading={false} ambitionDateLabel={ambitionDateLabel} />;
+      break;
+    case 4:
+      content = <ScreenQuickFacts onNext={advance} {...shared} />;
+      break;
+    case 5:
+      content = <ScreenPainPoints onNext={advance} {...shared} />;
+      break;
+    case 6:
+      content = <ScreenReassurance onNext={advance} isLoading={false} painPoints={(data.pain_points as string[]) ?? []} />;
+      break;
+    case 7:
+      content = (
+        <ScreenTopicCoverage
+          onNext={advance}
+          {...shared}
+          deferSave
+          sectionOrder={TOPIC_SECTION_ORDER}
+          sectionIntro={TOPIC_SECTION_INTRO}
+          onMatrixReady={(matrix) => setData((prev) => ({ ...prev, topic_matrix: matrix }))}
+        />
+      );
+      break;
+    case 8:
+      content = <ScreenMentor onNext={advance} {...shared} />;
+      break;
+    default:
+      content = <ScreenLoginBuild isLoading={false} onboarding={data} />;
   }
 
-  async function requestOtp(e?: React.FormEvent) {
-    e?.preventDefault();
-    setError(null);
-    if (name.trim().length < 2) { setError('Please enter your name.'); return; }
-    if (phone.length !== 10 || !/^[6-9]/.test(phone)) { setError('Please enter a valid 10-digit mobile number.'); return; }
-    setLoading(true);
-    try {
-      const res = await fetch('/api/auth/request-phone-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (data.sent) {
-        setStep('otp');
-      } else {
-        setError(data.message ?? "We couldn't send the OTP. Please try again.");
-      }
-    } catch {
-      setError('Connection issue. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function verifyOtp(e?: React.FormEvent) {
-    e?.preventDefault();
-    setError(null);
-    if (!/^\d{6}$/.test(otp)) { setError('Please enter the 6-digit code.'); return; }
-    setLoading(true);
-    try {
-      const res = await fetch('/api/auth/verify-phone-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, token: otp, name: name.trim() }),
-      });
-      const data = await res.json();
-      if (data.ok && data.dest) {
-        window.location.href = data.dest;
-      } else {
-        setError(data.error ?? 'That code is incorrect or has expired.');
-      }
-    } catch {
-      setError('Connection issue. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const showProgress = stepIdx < TOTAL_SCREENS;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white flex flex-col items-center px-4 py-10">
-      {/* Instagram/Facebook in-app browser can't install PWAs — prompt the user to
-          open in real Safari/Chrome first. Renders only inside an in-app browser. */}
+    <div className="min-h-screen bg-white px-4 py-8">
       <OpenInBrowser />
-      <div className="w-full max-w-sm">
-        <div className="flex justify-center mb-6"><Logo /></div>
-
-        {step === 'form' ? (
-          <form onSubmit={requestOtp} className="space-y-5">
-            <div className="text-center space-y-1.5">
-              <h1 className="text-xl font-bold text-stone-900">Start tracking your CAT prep — the app is completely free 🎯</h1>
-              <p className="text-sm text-stone-600">An IIM senior comes later; first, try the app for yourself.</p>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full rounded-xl border border-stone-300 px-4 py-3 text-sm focus:border-stone-900 focus:outline-none"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-stone-500 mb-1">Mobile number</label>
-                <div className="flex items-center rounded-xl border border-stone-300 focus-within:border-stone-900">
-                  <span className="pl-4 pr-2 text-sm text-stone-500">+91</span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    value={phone}
-                    onChange={(e) => onPhoneChange(e.target.value)}
-                    placeholder="10-digit number"
-                    className="w-full rounded-xl py-3 pr-4 text-sm focus:outline-none"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-stone-400">Verify by OTP, takes 10 seconds.</p>
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={loading}>
-              {loading ? 'Sending…' : 'Get free access →'}
-            </Button>
-            <p className="text-center text-[11px] text-stone-400">
-              We&apos;re not a coaching institute. Your data is used only for your prep.
-            </p>
-          </form>
-        ) : (
-          <form onSubmit={verifyOtp} className="space-y-5">
-            <div className="text-center space-y-1.5">
-              <h1 className="text-xl font-bold text-stone-900">Enter the code 📲</h1>
-              <p className="text-sm text-stone-600">
-                We&apos;ve sent a 6-digit code to +91 {phone} — enter it to head straight in.
-              </p>
-            </div>
-
-            <input
-              type="text"
-              inputMode="numeric"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="••••••"
-              className="w-full rounded-xl border border-stone-300 px-4 py-3 text-center text-lg tracking-[0.4em] focus:border-stone-900 focus:outline-none"
-              autoFocus
-            />
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={loading}>
-              {loading ? 'Verifying…' : 'Continue →'}
-            </Button>
-            <button
-              type="button"
-              onClick={() => { setStep('form'); setOtp(''); setError(null); }}
-              className="w-full text-center text-xs text-stone-500 hover:text-stone-700"
-            >
-              ← Change number
-            </button>
-          </form>
-        )}
-
-        {/* Prominent install push — below the signup form so lead capture stays primary. */}
-        <div className="mt-6">
-          <InstallAppButton variant="banner" />
+      <div className="mx-auto w-full max-w-sm">
+        <div className="mb-5 flex items-center justify-between">
+          <Logo size="sm" />
+          {showProgress && <p className="text-[11px] font-medium text-stone-400">{stepIdx + 1} / {TOTAL_SCREENS}</p>}
         </div>
+        {showProgress && (
+          <div className="mb-6 h-1 w-full overflow-hidden rounded-full bg-stone-100">
+            <div className="h-full rounded-full bg-stone-900 transition-all duration-300" style={{ width: `${((stepIdx + 1) / TOTAL_SCREENS) * 100}%` }} />
+          </div>
+        )}
+        {content}
       </div>
     </div>
   );
