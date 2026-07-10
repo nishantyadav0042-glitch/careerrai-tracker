@@ -6,6 +6,7 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString } from '@/lib/streak-utils';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
+import { InstallAppButton } from '@/components/install-app-button';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
@@ -215,6 +216,11 @@ export default async function DailyTrackerPage() {
         )}
 
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
+
+        {/* Install prompt lives HERE — after login, once the student has a real
+            plan to come back to (and iOS needs Add-to-Home-Screen before push
+            can ever fire). Self-hides the moment the app is installed/standalone. */}
+        <InstallAppButton variant="card" />
 
         {/* Question 1: what should I study? */}
         <TodaysRoutineCard />
