@@ -9,10 +9,8 @@ import ScreenAboutYou from './screens/screen-about-you';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
-import ScreenSuccessGoal from './screens/screen-success-goal';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
-import ScreenBlueprintContract from './screens/screen-blueprint-contract';
 import { BlueprintPanel } from './components/blueprint-panel';
 import { BLUEPRINT_SECTIONS, computeBlueprintPreview, type SectionId } from '@/lib/blueprint-builder';
 
@@ -148,25 +146,16 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       },
     },                                                           // 5
     { component: ScreenMeetBuddy, sectionId: null },             // 6
-    { component: ScreenSuccessGoal, sectionId: null },           // 7 — identity tap, right before the build
-    { component: ScreenBuildAnimation, sectionId: null },        // 8
+    { component: ScreenBuildAnimation, sectionId: null },        // 7
     {
+      // Last screen (founder cut: the success-goal question duplicated the
+      // percentile ask, and the contract/oath screen was one tap too many —
+      // super quick beats ceremonial). The Reveal's "Start my prep →"
+      // already sends onboardingCompleted and fires the final save.
       component: ScreenBlueprintReveal,
       sectionId: null,
-      extraProps: { successGoal: (onboardingData.success_goal as string | undefined) ?? null },
-    }, // 9
-    {
-      component: ScreenBlueprintContract,
-      sectionId: null,
-      extraProps: {
-        archetypeLabel: preview.archetypeBadge,
-        weeklyLoadHours: preview.weeklyLoadHours,
-        studentName: ((onboardingData.full_name as string | undefined) ?? '').split(' ')[0] || null,
-        targetDateLabel: typeof onboardingData.syllabus_target_date === 'string'
-          ? new Date(onboardingData.syllabus_target_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
-          : null,
-      },
-    }, // 10
+      extraProps: { successGoal: null },
+    }, // 8
   ];
 
   const currentScreenMeta = screens[currentScreen];
@@ -182,7 +171,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   // proves the previous answer mattered. Loss-aversion, never cheerleading,
   // no invented statistics; every personalized fact is something they just
   // typed. Fallbacks cover the screens before that data exists.
-  const asksLeft = currentScreen >= 1 && currentScreen <= 7 ? 8 - currentScreen : null;
+  const asksLeft = currentScreen >= 1 && currentScreen <= 6 ? 7 - currentScreen : null;
   const leftLabel = asksLeft == null ? null : asksLeft === 1 ? 'Last section' : `${asksLeft} left`;
   const hFirstName = typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
     ? onboardingData.full_name.trim().split(' ')[0] : null;
@@ -197,8 +186,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 4: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
       case 5: return hFirstName ? `${hFirstName}, pick the date — the hours decide it.` : 'Pick the date — the hours decide it.';
       case 6: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
-      case 7: return hFirstName ? `Last question, ${hFirstName}. Then we build.` : 'Last question. Then we build.';
-      case 8: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      case 7: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       default: return null;
     }
   })();
