@@ -236,37 +236,46 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     }
 
     try {
-      // Screen 1 = Dream Colleges
-      if (currentScreen === 1 && data?.dream_colleges) {
+      // Per-screen saves are keyed by DATA SHAPE, not screen index. A screen
+      // reorder once left these on stale indices, so advancing from Dreams
+      // fired the About-You write and set full_name = null → a not-null
+      // constraint crash. Shape-keying makes that impossible: each save runs
+      // only when its own distinctive fields are present.
+
+      // Dream Colleges
+      if (data?.dream_colleges) {
         setIsLoading(true);
         const { error: e } = await supabase.from('profiles').update({ dream_colleges: data.dream_colleges }).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 2 = Exam Context
-      if (currentScreen === 2 && data) {
+      // Exam Context
+      if (data && (data.exam_target !== undefined || data.attempt_year !== undefined || data.target_percentile !== undefined || data.category !== undefined || data.is_repeater !== undefined)) {
         setIsLoading(true);
-        const { error: e } = await supabase.from('profiles').update({
-          is_repeater: data.is_repeater,
-          category: data.category ?? null,
-          exam_target: data.exam_target ?? null,
-          attempt_year: data.attempt_year ?? null,
-          target_percentile: data.target_percentile ?? null,
-        }).eq('id', userId ?? '');
+        const ec: Record<string, unknown> = {};
+        if (data.is_repeater !== undefined) ec.is_repeater = data.is_repeater;
+        if (data.category !== undefined) ec.category = data.category ?? null;
+        if (data.exam_target !== undefined) ec.exam_target = data.exam_target ?? null;
+        if (data.attempt_year !== undefined) ec.attempt_year = data.attempt_year ?? null;
+        if (data.target_percentile !== undefined) ec.target_percentile = data.target_percentile ?? null;
+        const { error: e } = await supabase.from('profiles').update(ec).eq('id', userId ?? '');
         if (e) throw e;
       }
-      // Screen 3 = About You
-      if (currentScreen === 3 && data) {
+      // About You — full_name and phone are NEVER nulled (required / identity
+      // fields already set at signup); they update only when a real value is typed.
+      if (data && (data.full_name !== undefined || data.phone !== undefined || data.college !== undefined || data.course_year !== undefined || data.is_working_professional !== undefined || data.work_ex_months !== undefined || data.coaching_enrolled !== undefined)) {
         setIsLoading(true);
-        const { error: e } = await supabase.from('profiles').update({
-          full_name: data.full_name || null,
-          phone: data.phone || null,
-          college: data.college || null,
-          course_year: data.course_year ?? null,
-          is_working_professional: data.is_working_professional ?? false,
-          work_ex_months: data.work_ex_months ?? null,
-          coaching_enrolled: data.coaching_enrolled ?? false,
-        }).eq('id', userId ?? '');
-        if (e) throw e;
+        const ay: Record<string, unknown> = {};
+        if (typeof data.full_name === 'string' && data.full_name.trim()) ay.full_name = data.full_name.trim();
+        if (typeof data.phone === 'string' && data.phone.trim()) ay.phone = data.phone.trim();
+        if (data.college !== undefined) ay.college = data.college || null;
+        if (data.course_year !== undefined) ay.course_year = data.course_year ?? null;
+        if (data.is_working_professional !== undefined) ay.is_working_professional = data.is_working_professional ?? false;
+        if (data.work_ex_months !== undefined) ay.work_ex_months = data.work_ex_months ?? null;
+        if (data.coaching_enrolled !== undefined) ay.coaching_enrolled = data.coaching_enrolled ?? false;
+        if (Object.keys(ay).length > 0) {
+          const { error: e } = await supabase.from('profiles').update(ay).eq('id', userId ?? '');
+          if (e) throw e;
+        }
       }
       // Finish-date chooser — hours + owned target date land together
       // (keyed by the data shape, not the screen index, so a reorder can't
