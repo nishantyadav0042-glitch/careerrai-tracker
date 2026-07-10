@@ -1,8 +1,92 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { InstallAppButton } from '@/components/install-app-button';
 import { cn } from '@/lib/utils';
+
+// Press-and-hold-to-commit (Cal-AI style): the ring fills over ~2.5s while
+// held; release early and it resets with a nudge to hold again; complete it
+// and the commitment "lands" with a haptic tick. Deliberate friction — the
+// student earns the moment instead of tapping past it.
+function HoldToCommit({ onComplete }: { onComplete: () => void }) {
+  const HOLD_MS = 2500;
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<'idle' | 'holding' | 'early' | 'done'>('idle');
+  const rafRef = useRef<number | null>(null);
+  const startRef = useRef(0);
+  const doneRef = useRef(false);
+
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+
+  const tick = () => {
+    // eslint-disable-next-line react-hooks/purity -- rAF callback; real elapsed wall-clock time is the whole point of a hold gesture
+    const p = Math.min(100, ((performance.now() - startRef.current) / HOLD_MS) * 100);
+    setProgress(p);
+    if (p >= 100) {
+      doneRef.current = true;
+      setStatus('done');
+      try { navigator.vibrate?.(40); } catch { /* not supported — fine */ }
+      setTimeout(onComplete, 650);
+      return;
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  };
+  const start = () => {
+    if (doneRef.current) return;
+    setStatus('holding');
+    startRef.current = performance.now();
+    rafRef.current = requestAnimationFrame(tick);
+  };
+  const stop = () => {
+    if (doneRef.current) return;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    setStatus((prev) => (progress > 4 && prev === 'holding' ? 'early' : 'idle'));
+    setProgress(0);
+  };
+
+  const R = 66;
+  const C = 2 * Math.PI * R;
+  const holding = status === 'holding';
+  const done = status === 'done';
+
+  return (
+    <div className="flex select-none flex-col items-center gap-3">
+      <button
+        type="button"
+        aria-label="Press and hold to make your commitment"
+        onPointerDown={start}
+        onPointerUp={stop}
+        onPointerLeave={stop}
+        onPointerCancel={stop}
+        onContextMenu={(e) => e.preventDefault()}
+        className="relative touch-none active:outline-none"
+      >
+        <svg width="168" height="168" viewBox="0 0 168 168" className={cn('transition-transform duration-200', holding && 'scale-105')}>
+          <defs>
+            <linearGradient id="commitgrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#8b5cf6" />
+              <stop offset="100%" stopColor="#4f46e5" />
+            </linearGradient>
+          </defs>
+          <circle cx="84" cy="84" r={R} fill="none" stroke="#e7e5e4" strokeWidth="6" />
+          <circle
+            cx="84" cy="84" r={R} fill="none" stroke="url(#commitgrad)" strokeWidth="6" strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={C * (1 - progress / 100)}
+            transform="rotate(-90 84 84)"
+            style={{ transition: holding ? 'none' : 'stroke-dashoffset 0.3s ease' }}
+          />
+          <circle cx="84" cy="84" r="52" fill="url(#commitgrad)" opacity={done ? 1 : 0.12} style={{ transition: 'opacity 0.3s ease' }} />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-4xl">
+          {done ? <span className="text-white">✓</span> : '🎯'}
+        </span>
+      </button>
+      <p className={cn('text-sm font-semibold', done ? 'text-indigo-600' : status === 'early' ? 'text-rose-500' : 'text-stone-500')}>
+        {done ? 'Committed 💪' : holding ? 'Keep holding…' : status === 'early' ? 'Hold a little longer — try again' : 'Press & hold to commit'}
+      </p>
+    </div>
+  );
+}
 
 interface Props {
   // The date the student picked in the pre-auth funnel, and the hours of prep
@@ -33,9 +117,10 @@ function addDays(base: Date, days: number): Date {
 interface DateOption { hours: number; date: Date; label: string; note: string }
 
 // The whole post-login ceremony, once per student: install → reconcile the
-// date against the real per-day cost → commit → thank you → the two-way deal.
-// Pure black & white (founder direction). Every number is deterministic — the
-// same remainingPrepHours model as the Builder, never invented.
+// date against the real per-day cost → hold-to-commit → thank you → the
+// two-way deal. Gentle violet accents (founder: colourful but not loud) on an
+// otherwise clean canvas. Every number is deterministic — the same
+// remainingPrepHours model as the Builder, never invented.
 export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const [today] = useState(() => new Date());
   const [visible, setVisible] = useState(true);
@@ -156,30 +241,22 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
         )}
 
         {step === 'commit' && (
-          <div className="space-y-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-stone-900 text-3xl">🤝</div>
+          <div className="space-y-5 text-center">
             <div>
               <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Commit to your goal</h1>
-              <div className="mx-auto mt-4 max-w-xs rounded-2xl border border-stone-200 bg-stone-50 p-4 text-left">
+              <div className="mx-auto mt-4 max-w-xs rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-left">
                 <p className="text-[15px] leading-relaxed text-stone-700">
-                  I&apos;m committing to finish my syllabus{chosenLabel ? <> by <span className="font-bold text-stone-900">{chosenLabel}</span></> : null}. I&apos;ll show up daily, log my prep honestly, and trust the plan.
+                  I&apos;m committing to finish my syllabus{chosenLabel ? <> by <span className="font-bold text-violet-700">{chosenLabel}</span></> : null}. I&apos;ll show up daily, log my prep honestly, and trust the plan.
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setStep('thanks')}
-              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
-            >
-              I commit →
-            </button>
+            <HoldToCommit onComplete={() => setStep('thanks')} />
           </div>
         )}
 
         {step === 'thanks' && (
           <div className="space-y-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-stone-900 text-3xl">🙏</div>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-3xl shadow-lg shadow-violet-200">🙏</div>
             <div>
               <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Thank you for trusting us.</h1>
               <p className="mt-2 text-sm text-stone-500">We don&apos;t take it lightly. From here on, we work for your date.</p>
