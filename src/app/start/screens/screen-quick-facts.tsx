@@ -10,7 +10,9 @@ interface Props {
   isLoading: boolean;
 }
 
-const HOURS = [1, 2, 3, 4, 6];
+// CAT aspirants range from working pros squeezing in an hour to full-time
+// droppers doing 10-12h — the options must cover both ends honestly.
+const HOURS = [1, 2, 3, 4, 6, 8, 10, 12];
 
 function Chip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (

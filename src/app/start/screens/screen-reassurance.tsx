@@ -23,7 +23,7 @@ export default function ScreenReassurance({ onNext, isLoading, painPoints }: Pro
         {labels.length > 0 && (
           <p className="mt-3 text-sm leading-relaxed text-stone-500">
             {labels.join(' and ')}
-            {' '}— that&apos;s exactly what a daily plan and a reminder system are built for.
+            {' '}— that&apos;s exactly what a daily plan, honest tracking, and a real IIM buddy are built to fix.
           </p>
         )}
       </div>

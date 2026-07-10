@@ -5,217 +5,277 @@ import Link from 'next/link';
 import { OpenInBrowser } from '@/components/open-in-browser';
 import { InstallAppButton } from '@/components/install-app-button';
 
-// Public landing — the first thing a logged-out visitor (organic or ad
-// traffic) sees at "/". Founder direction: classic black & white like Cal AI,
-// BUT the phone previews must be real, dense sales assets — each one shows a
-// single concrete thing the app does, not an empty wireframe. One tasteful
-// signal accent (emerald = done / climbing, amber = still to do) keeps it
-// alive without going rainbow. Primary CTA is pinned to the bottom so it is
-// NEVER below the fold. Every preview maps to one of the four sales specs:
-//   plan     → daily study plan ready, zero confusion what to study
-//   topics   → every topic tracked: covered vs pending
-//   buddy    → a real IIM buddy, 1:1 — no batches, no coaching
-//   progress → climb like a topper, percentile mock over mock
-const SCREENS = ['plan', 'topics', 'buddy', 'progress'] as const;
+// Public landing at "/". Founder direction: the phone previews are SALES
+// ASSETS — colourful, dense, and convincing like Cal AI's, not flat
+// wireframes (the in-app product stays black & white; the landing is the one
+// place colour sells). Six rotating screens, one per concrete promise:
+//   syllabus → set your own finish date
+//   ontrack  → finish your syllabus on time
+//   plan     → daily plan ready + real reminders
+//   coverage → what's covered / left / revised
+//   mock     → analyse every mock with an IIM buddy
+//   chat     → chat 1:1 with your IIM buddy
+const SCREENS = ['syllabus', 'ontrack', 'plan', 'coverage', 'mock', 'chat'] as const;
 type ScreenId = (typeof SCREENS)[number];
 
 const ROTATE_MS = 3200;
 
 const CAPTIONS: Record<ScreenId, { title: string; sub: string }> = {
-  plan: { title: 'Wake up to today’s plan.', sub: 'No more guessing what to study — it’s decided for you.' },
-  topics: { title: 'Every topic, tracked.', sub: 'See exactly what’s revised and what’s still pending.' },
-  buddy: { title: 'Your own IIM mentor.', sub: '1:1 guidance — no batches, no coaching classes.' },
-  progress: { title: 'Climb like a topper.', sub: 'Watch your percentile move, mock over mock.' },
+  syllabus: { title: 'Set your own finish date.', sub: 'You own the deadline — we build the plan around it.' },
+  ontrack: { title: 'Finish your syllabus on time.', sub: 'Always know if today’s pace lands your date.' },
+  plan: { title: 'Your day, planned. With reminders.', sub: 'Wake up knowing exactly what to study — and get nudged.' },
+  coverage: { title: 'Covered, left, revised — live.', sub: 'Never lose track of your syllabus again.' },
+  mock: { title: 'Analyse every mock with your buddy.', sub: 'A real IIM topper reads your score — not a bot.' },
+  chat: { title: 'Chat 1:1 with your IIM buddy.', sub: 'Real guidance the moment you’re stuck.' },
 };
 
 function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative mx-auto h-[380px] w-[210px] rounded-[2.1rem] border-[6px] border-stone-900 bg-white shadow-2xl shadow-stone-900/15">
+    <div className="relative mx-auto h-[404px] w-[224px] rounded-[2.2rem] border-[6px] border-stone-900 bg-white shadow-2xl shadow-stone-900/20">
       <div className="absolute left-1/2 top-0 z-10 h-3.5 w-16 -translate-x-1/2 rounded-b-xl bg-stone-900" />
-      <div className="h-full w-full overflow-hidden rounded-[1.6rem] bg-stone-50 p-3 pt-5">{children}</div>
+      <div className="h-full w-full overflow-hidden rounded-[1.7rem] bg-stone-50 p-3 pt-5">{children}</div>
     </div>
   );
 }
 
-function ScreenTitle({ children }: { children: React.ReactNode }) {
-  return <p className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400">{children}</p>;
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <p className="mb-2 text-[9.5px] font-bold uppercase tracking-[0.14em] text-stone-400">{children}</p>;
 }
 
-// 1 — Daily study plan ready
-function ScreenPlan() {
-  // Short labels on purpose — they must not truncate inside the 210px frame.
-  const rows = [
-    { tag: 'DILR', topic: 'Seating sets', time: '45m', state: 'done' as const },
-    { tag: 'VARC', topic: 'RC practice', time: '40m', state: 'done' as const },
-    { tag: 'QA', topic: 'Time & Speed', time: '50m', state: 'now' as const },
-    { tag: 'QA', topic: 'Practice set', time: '35m', state: 'next' as const },
-  ];
+// Coloured rounded icon chip — the Cal-AI move that makes a card feel alive.
+function Chip({ bg, children }: { bg: string; children: React.ReactNode }) {
+  return <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] ${bg}`}>{children}</span>;
+}
+
+// 1 — Set your own finish date
+function ScreenSyllabus() {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between">
-        <ScreenTitle>Today</ScreenTitle>
-        <span className="text-[9.5px] font-semibold text-stone-500">Mon · 2h 50m</span>
+      <Eyebrow>Your CAT deadline</Eyebrow>
+      <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-3 text-center">
+        <div className="mx-auto mb-1.5 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm shadow-violet-200">🎯</div>
+        <p className="text-[10px] font-semibold text-violet-500">Finish my syllabus by</p>
+        <p className="text-2xl font-extrabold leading-tight text-stone-900">17 Sept</p>
+        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[9.5px] font-bold text-violet-700">✓ You set this</span>
       </div>
-      <div className="flex flex-col gap-1.5">
-        {rows.map((r) => (
-          <div
-            key={r.topic}
-            className={`flex items-center gap-2 rounded-lg border bg-white px-2 py-1.5 ${
-              r.state === 'now' ? 'border-stone-900 shadow-sm' : 'border-stone-200'
-            }`}
-          >
-            <div
-              className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
-                r.state === 'done' ? 'border-emerald-600 bg-emerald-600' : r.state === 'now' ? 'border-stone-900' : 'border-stone-300'
-              }`}
-            >
-              {r.state === 'done' && <span className="text-[8px] leading-none text-white">✓</span>}
+      <div className="mt-2 space-y-1.5">
+        {[
+          { d: '17 Sept', tag: 'Your pick', h: '5h/day', on: true },
+          { d: '2 Oct', tag: 'Balanced', h: '4h/day', on: false },
+          { d: '28 Oct', tag: 'Steady', h: '3h/day', on: false },
+        ].map((o) => (
+          <div key={o.d} className={`flex items-center justify-between rounded-lg border px-2.5 py-1.5 ${o.on ? 'border-violet-500 bg-violet-50' : 'border-stone-200 bg-white'}`}>
+            <div>
+              <p className="text-[11px] font-bold text-stone-900">{o.d}</p>
+              <p className="text-[8.5px] text-stone-400">{o.tag}</p>
             </div>
-            <span className="w-9 shrink-0 rounded bg-stone-100 py-0.5 text-center text-[8px] font-bold text-stone-600">{r.tag}</span>
-            <p className={`flex-1 truncate text-[10px] font-medium ${r.state === 'done' ? 'text-stone-400 line-through' : 'text-stone-800'}`}>{r.topic}</p>
-            <span className="shrink-0 text-[8.5px] font-semibold text-stone-400">{r.time}</span>
+            <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${o.on ? 'bg-violet-600 text-white' : 'bg-stone-100 text-stone-500'}`}>{o.h}</span>
           </div>
         ))}
-      </div>
-      <div className="mt-auto pt-2">
-        <div className="flex items-center justify-between text-[9px] font-semibold text-stone-500">
-          <span>2 of 4 done</span>
-          <span className="text-emerald-600">on track</span>
-        </div>
-        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
-          <div className="h-full w-1/2 rounded-full bg-emerald-500" />
-        </div>
       </div>
     </div>
   );
 }
 
-// 2 — Every topic tracked: covered vs pending
-function ScreenTopics() {
-  const topics = [
-    { name: 'Geometry', state: 'done' as const },
-    { name: 'Reading Comprehension', state: 'done' as const },
-    { name: 'Time & Work', state: 'learning' as const },
-    { name: 'Probability', state: 'pending' as const },
-  ];
+// 2 — Finish on time (pace vs deadline)
+function ScreenOnTrack() {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between">
-        <ScreenTitle>Syllabus map</ScreenTitle>
-        <span className="text-[9.5px] font-semibold text-stone-500">28 topics</span>
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        <div className="rounded-lg border border-stone-200 bg-white py-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-emerald-600">18</p>
-          <p className="mt-0.5 text-[8.5px] text-stone-500">revised</p>
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-white py-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-amber-500">5</p>
-          <p className="mt-0.5 text-[8.5px] text-stone-500">pending</p>
-        </div>
-      </div>
-      <div className="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
-        <div className="h-full bg-emerald-500" style={{ width: '64%' }} />
-        <div className="h-full bg-stone-400" style={{ width: '18%' }} />
-        <div className="h-full bg-amber-400" style={{ width: '18%' }} />
-      </div>
-      <div className="mt-2 flex flex-col gap-1">
-        {topics.map((t) => (
-          <div key={t.name} className="flex items-center gap-1.5 rounded-md bg-white px-2 py-1">
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${
-                t.state === 'done' ? 'bg-emerald-500' : t.state === 'learning' ? 'bg-stone-400' : 'bg-amber-400'
-              }`}
-            />
-            <p className="flex-1 truncate text-[9.5px] font-medium text-stone-700">{t.name}</p>
-            <span className="text-[8px] font-semibold uppercase tracking-wide text-stone-400">
-              {t.state === 'done' ? 'revised' : t.state === 'learning' ? 'learning' : 'to do'}
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-auto pt-1.5 text-center text-[9px] text-stone-400">Never a guess — always the real map</p>
-    </div>
-  );
-}
-
-// 3 — A real IIM buddy, 1:1
-function ScreenBuddy() {
-  return (
-    <div className="flex h-full flex-col">
-      <ScreenTitle>Your buddy</ScreenTitle>
-      <div className="rounded-xl border border-stone-200 bg-white p-2.5">
+      <Eyebrow>Syllabus finish</Eyebrow>
+      <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[11px] font-bold text-white">A</div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <p className="truncate text-[10.5px] font-bold text-stone-900">Ananya</p>
-              <span className="shrink-0 rounded bg-emerald-50 px-1 py-0.5 text-[7.5px] font-bold text-emerald-700">✓ IIM</span>
-            </div>
-            <p className="text-[8.5px] text-stone-500">IIM Lucknow · 99.4 %ile</p>
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm shadow-emerald-200">✓</div>
+          <div>
+            <p className="text-[13px] font-extrabold leading-tight text-emerald-700">On track</p>
+            <p className="text-[9.5px] text-stone-500">Finishing <span className="font-bold text-stone-800">12 Sept</span></p>
           </div>
-        </div>
-        <div className="mt-2 rounded-lg bg-stone-50 p-2">
-          <p className="text-[9.5px] leading-snug text-stone-700">“Saw you finished DILR today — keep that pace into the mocks. Ping me if RC feels slow.”</p>
+          <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">5 days early</span>
         </div>
       </div>
-      <div className="mt-2 flex flex-col gap-1">
-        {['1:1 — just you and your mentor', 'No batches of 200', 'No coaching classes'].map((line) => (
-          <div key={line} className="flex items-center gap-1.5">
-            <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[7px] text-white">✓</span>
-            <p className="text-[9.5px] font-medium text-stone-700">{line}</p>
+      {/* timeline: today → finish → deadline */}
+      <div className="mt-3 px-1">
+        <div className="relative h-1.5 w-full rounded-full bg-stone-200">
+          <div className="absolute left-0 top-0 h-full w-[70%] rounded-full bg-emerald-500" />
+          <div className="absolute left-[70%] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-500 bg-white" />
+        </div>
+        <div className="mt-1.5 flex justify-between text-[8.5px] font-semibold text-stone-400">
+          <span>Today</span><span className="text-emerald-600">12 Sep ✓</span><span>17 Sep</span>
+        </div>
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {[
+          { l: 'This week’s pace', v: '19h', c: 'text-emerald-600' },
+          { l: 'Topics/week needed', v: '4.5', c: 'text-stone-800' },
+          { l: 'Buffer before CAT', v: '10 wks', c: 'text-stone-800' },
+        ].map((r) => (
+          <div key={r.l} className="flex items-center justify-between rounded-lg bg-white px-2.5 py-1.5 border border-stone-100">
+            <p className="text-[10px] text-stone-600">{r.l}</p>
+            <p className={`text-[11px] font-bold ${r.c}`}>{r.v}</p>
           </div>
         ))}
       </div>
-      <p className="mt-auto pt-1.5 text-center text-[9px] text-stone-400">They check in on you — not the other way around</p>
     </div>
   );
 }
 
-// 4 — Climb like a topper
-function ScreenProgress() {
-  const points = [72, 74, 79, 78, 83, 87, 90, 94];
-  const w = 172, h = 76;
-  const max = 100, min = 68;
-  const coords = points.map((v, i) => ({
-    x: (i / (points.length - 1)) * w,
-    y: h - ((v - min) / (max - min)) * h,
-  }));
-  const path = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
-  const area = `${path} L${w},${h} L0,${h} Z`;
-  const first = coords[0];
-  const last = coords[coords.length - 1];
-  const targetY = h - ((99 - min) / (max - min)) * h;
+// 3 — Daily plan + reminders
+function ScreenPlan() {
+  const rows = [
+    { tag: 'DILR', chip: 'bg-blue-100 text-blue-700', topic: 'Seating sets', time: '45m', done: true },
+    { tag: 'VARC', chip: 'bg-violet-100 text-violet-700', topic: 'RC practice', time: '40m', done: true },
+    { tag: 'QA', chip: 'bg-amber-100 text-amber-700', topic: 'Time & Speed', time: '50m', done: false },
+  ];
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
-        <ScreenTitle>Mock percentile</ScreenTitle>
-        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">+22</span>
+        <Eyebrow>Today’s plan</Eyebrow>
+        <span className="text-[9px] font-bold text-stone-400">Mon · 2h 15m</span>
       </div>
-      <div className="rounded-xl border border-stone-200 bg-white p-2.5">
-        <svg viewBox={`0 0 ${w} ${h + 8}`} width="100%" height={h + 8} className="overflow-visible">
-          <line x1={0} y1={targetY} x2={w} y2={targetY} stroke="#d6d3d1" strokeWidth={1} strokeDasharray="3 3" />
-          <text x={w} y={targetY - 3} textAnchor="end" className="fill-stone-400" style={{ fontSize: 8, fontWeight: 700 }}>99 · topper</text>
-          <path d={area} fill="#10b981" fillOpacity={0.08} />
-          <path d={path} fill="none" stroke="#059669" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx={first.x} cy={first.y} r={3} fill="#a8a29e" />
-          <circle cx={last.x} cy={last.y} r={4} fill="#059669" />
-        </svg>
-        <div className="mt-1.5 flex items-center justify-between text-[9px] font-semibold">
-          <span className="text-stone-400">72 %ile · start</span>
-          <span className="text-emerald-600">94 %ile · now</span>
+      <div className="space-y-1.5">
+        {rows.map((r) => (
+          <div key={r.topic} className={`flex items-center gap-2 rounded-xl border bg-white px-2 py-1.5 ${r.done ? 'border-stone-100' : 'border-stone-300 shadow-sm'}`}>
+            <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] ${r.done ? 'bg-emerald-500 text-white' : 'border-2 border-stone-300'}`}>{r.done ? '✓' : ''}</span>
+            <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${r.chip}`}>{r.tag}</span>
+            <p className={`flex-1 truncate text-[10px] font-semibold ${r.done ? 'text-stone-400 line-through' : 'text-stone-800'}`}>{r.topic}</p>
+            <span className="text-[8.5px] font-bold text-stone-400">{r.time}</span>
+          </div>
+        ))}
+      </div>
+      {/* reminder toast */}
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-white px-2.5 py-2">
+        <Chip bg="bg-orange-500 text-white">🔔</Chip>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-stone-800">9:00 PM reminder</p>
+          <p className="text-[9px] text-stone-500 truncate">Revise Geometry before bed</p>
         </div>
       </div>
-      <p className="mt-auto pt-2 text-center text-[9px] text-stone-400">Tracked mock over mock — your climb to 99</p>
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-stone-900 px-3 py-2">
+        <p className="text-[10px] font-semibold text-white">2 of 3 done</p>
+        <span className="text-[9px] font-bold text-emerald-300">🔥 12-day streak</span>
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
+        <div className="h-full w-2/3 rounded-full bg-emerald-500" />
+      </div>
+    </div>
+  );
+}
+
+// 4 — Coverage: covered / left / revised
+function ScreenCoverage() {
+  const topics = [
+    { n: 'Geometry', s: 'revised', c: 'bg-blue-500' },
+    { n: 'Reading Comp', s: 'covered', c: 'bg-emerald-500' },
+    { n: 'Probability', s: 'left', c: 'bg-amber-400' },
+  ];
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between">
+        <Eyebrow>Syllabus map</Eyebrow>
+        <span className="text-[9px] font-bold text-stone-400">46 topics</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {[
+          { v: 28, l: 'covered', bg: 'from-emerald-50', t: 'text-emerald-600' },
+          { v: 13, l: 'left', bg: 'from-amber-50', t: 'text-amber-500' },
+          { v: 18, l: 'revised', bg: 'from-blue-50', t: 'text-blue-600' },
+        ].map((s) => (
+          <div key={s.l} className={`rounded-xl border border-stone-100 bg-gradient-to-b ${s.bg} to-white py-1.5 text-center`}>
+            <p className={`text-lg font-extrabold leading-none ${s.t}`}>{s.v}</p>
+            <p className="mt-0.5 text-[8px] font-semibold text-stone-500">{s.l}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-stone-200">
+        <div className="h-full bg-emerald-500" style={{ width: '61%' }} />
+        <div className="h-full bg-blue-500" style={{ width: '14%' }} />
+        <div className="h-full bg-amber-400" style={{ width: '25%' }} />
+      </div>
+      <div className="mt-2 space-y-1">
+        {topics.map((t) => (
+          <div key={t.n} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 border border-stone-100">
+            <span className={`h-2 w-2 rounded-full ${t.c}`} />
+            <p className="flex-1 truncate text-[10px] font-semibold text-stone-700">{t.n}</p>
+            <span className="text-[8px] font-bold uppercase tracking-wide text-stone-400">{t.s}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-auto pt-1.5 text-center text-[8.5px] text-stone-400">Always the real map — never a guess</p>
+    </div>
+  );
+}
+
+// 5 — Mock analysis with buddy
+function ScreenMock() {
+  const secs = [
+    { n: 'VARC', v: 88, w: '88%', c: 'bg-violet-500' },
+    { n: 'DILR', v: 79, w: '79%', c: 'bg-blue-500' },
+    { n: 'QA', v: 95, w: '95%', c: 'bg-emerald-500' },
+  ];
+  return (
+    <div className="flex h-full flex-col">
+      <Eyebrow>Mock #6 · analysed</Eyebrow>
+      <div className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-gradient-to-br from-emerald-50 to-white p-3">
+        <div>
+          <p className="text-2xl font-extrabold leading-none text-stone-900">92.4</p>
+          <p className="text-[8.5px] font-semibold text-stone-500">percentile</p>
+        </div>
+        <span className="ml-auto rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">▲ +6.1</span>
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {secs.map((s) => (
+          <div key={s.n}>
+            <div className="flex justify-between text-[9px] font-bold text-stone-600">
+              <span>{s.n}</span><span>{s.v}</span>
+            </div>
+            <div className="mt-0.5 h-1.5 w-full rounded-full bg-stone-200">
+              <div className={`h-full rounded-full ${s.c}`} style={{ width: s.w }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* buddy annotation */}
+      <div className="mt-2 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">A</span>
+        <p className="text-[9.5px] leading-snug text-stone-700"><span className="font-bold">Ananya:</span> DILR set-selection cost you 4 marks — let’s fix that pattern.</p>
+      </div>
+    </div>
+  );
+}
+
+// 6 — Chat with buddy
+function ScreenChat() {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-2 border-b border-stone-100 pb-2">
+        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-[12px] font-bold text-white">
+          A<span className="absolute -bottom-0 -right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+        </span>
+        <div>
+          <p className="text-[11px] font-bold text-stone-900">Ananya</p>
+          <p className="text-[8.5px] text-emerald-600">IIM Lucknow · online</p>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-1 flex-col gap-1.5">
+        <div className="max-w-[80%] self-start rounded-2xl rounded-tl-sm bg-stone-100 px-2.5 py-1.5 text-[9.5px] text-stone-700">How did today’s RC go?</div>
+        <div className="max-w-[80%] self-end rounded-2xl rounded-tr-sm bg-stone-900 px-2.5 py-1.5 text-[9.5px] text-white">Better! 4 of 5 correct 🎉</div>
+        <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-stone-100 px-2.5 py-1.5 text-[9.5px] text-stone-700">That’s the jump we wanted. Keep the daily habit 🙌</div>
+        <div className="max-w-[70%] self-end rounded-2xl rounded-tr-sm bg-stone-900 px-2.5 py-1.5 text-[9.5px] text-white">On it 💪</div>
+      </div>
+      <div className="mt-2 flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5">
+        <p className="flex-1 text-[9.5px] text-stone-400">Message Ananya…</p>
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">↑</span>
+      </div>
     </div>
   );
 }
 
 const RENDER: Record<ScreenId, () => React.ReactElement> = {
+  syllabus: ScreenSyllabus,
+  ontrack: ScreenOnTrack,
   plan: ScreenPlan,
-  topics: ScreenTopics,
-  buddy: ScreenBuddy,
-  progress: ScreenProgress,
+  coverage: ScreenCoverage,
+  mock: ScreenMock,
+  chat: ScreenChat,
 };
 
 export default function WelcomePage() {
@@ -237,24 +297,17 @@ export default function WelcomePage() {
     <div className="flex min-h-[100dvh] flex-col bg-white text-stone-900">
       <OpenInBrowser />
 
-      {/* Brand */}
       <div className="shrink-0 px-6 pt-5 text-center">
         <p className="text-sm font-bold tracking-tight">CareerRai</p>
       </div>
 
-      {/* Hero — phone + synced caption, vertically centred in the free space */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 py-4">
-        <div
-          onPointerDown={() => setPaused(true)}
-          key={id}
-          className="animate-[fadeIn_0.45s_ease]"
-        >
+        <div onPointerDown={() => setPaused(true)} key={id} className="animate-[fadeIn_0.45s_ease]">
           <PhoneFrame>
             <Screen />
           </PhoneFrame>
         </div>
 
-        {/* Tappable dots — let a visitor drive the story */}
         <div className="flex items-center gap-1.5">
           {SCREENS.map((s, i) => (
             <button
@@ -267,15 +320,12 @@ export default function WelcomePage() {
           ))}
         </div>
 
-        <div key={`cap-${id}`} className="min-h-[52px] max-w-xs animate-[fadeIn_0.45s_ease] text-center">
-          <h1 className="text-xl font-bold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
-            {caption.title}
-          </h1>
+        <div key={`cap-${id}`} className="min-h-[54px] max-w-xs animate-[fadeIn_0.45s_ease] text-center">
+          <h1 className="text-xl font-bold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>{caption.title}</h1>
           <p className="mt-1 text-[13px] leading-snug text-stone-500">{caption.sub}</p>
         </div>
       </div>
 
-      {/* CTA — pinned to the bottom, always in view, never below the fold */}
       <div className="sticky bottom-0 shrink-0 border-t border-stone-100 bg-white/95 px-6 pb-6 pt-4 backdrop-blur">
         <div className="mx-auto w-full max-w-xs space-y-2.5">
           <Link
@@ -287,13 +337,9 @@ export default function WelcomePage() {
           <InstallAppButton variant="text" />
           <div className="flex items-center justify-center gap-1.5 pt-0.5 text-[11px] text-stone-400">
             <span>Already have a plan?</span>
-            <Link href="/login" className="font-semibold text-stone-600 underline-offset-2 hover:underline">
-              Log in
-            </Link>
+            <Link href="/login" className="font-semibold text-stone-600 underline-offset-2 hover:underline">Log in</Link>
             <span className="text-stone-300">·</span>
-            <Link href="/login" className="font-medium text-stone-500 hover:text-stone-700">
-              I’m an IIM Buddy
-            </Link>
+            <Link href="/login" className="font-medium text-stone-500 hover:text-stone-700">I’m an IIM Buddy</Link>
           </div>
           <p className="text-center text-[11px] text-stone-400">Free to start · no credit card</p>
         </div>
