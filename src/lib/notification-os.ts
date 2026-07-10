@@ -24,7 +24,18 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
 
-export const DAILY_BUDGET = 2;
+// State-based daily budgets (founder decision, post-Inshorts discussion):
+// students who are ACTIVELY STUDYING get the full Study Companion cadence —
+// the tray becomes a study surface, ~7-9 value-carrying touches/day. The
+// old flat 2/day survives exactly where it was right all along: recovery
+// states, where volume reads as nagging, not help. Setup states sit in
+// between. The per-student cooldown below is the counterweight — a student
+// who stops logging AND stops tapping gets automatically quieter, no
+// human decision needed.
+export const BUDGET_ACTIVE = 9;    // active / arc students: full cadence + decision events
+export const BUDGET_SETUP = 3;     // building_plan / plan_ready: ladder touches only
+export const BUDGET_RECOVERY = 2;  // slipping / inactive / dark: recovery ladder only
+export const DAILY_BUDGET = 2;     // conservative default for any caller that doesn't say
 
 // Every student-facing nudge type, counted against ONE shared daily budget.
 // Transactional rows (session reminders, buddy replies, payment notices)
@@ -33,6 +44,7 @@ export const DAILY_BUDGET = 2;
 export const STUDENT_BUDGET_TYPES = [
   'onboarding_morning', 'onboarding_evening', 'activation', 'builder_recovery',
   'revision_due', 'topic_earned', 'mission_changed', 'weekly_evolved', 'inactive_recovery',
+  'companion_morning', 'companion_fact', 'companion_open', 'companion_progress', 'companion_log', 'companion_close',
 ];
 
 export type ExpectedAction = 'log_today' | 'finish_builder' | 'open_plan';
@@ -73,6 +85,7 @@ export interface DispatchOptions {
   expectedAction: ExpectedAction;
   prefs: Record<string, unknown>; // the caller already holds notif_prefs
   email?: { to: string; send: () => Promise<void> } | null;
+  dailyBudget?: number;     // state-based cap; callers pass BUDGET_ACTIVE/SETUP/RECOVERY
 }
 
 export type DispatchOutcome = 'sent' | 'budget_exhausted';
@@ -91,7 +104,7 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
     .eq('user_id', opts.userId)
     .in('type', STUDENT_BUDGET_TYPES)
     .gte('created_at', todayStart);
-  if ((count ?? 0) >= DAILY_BUDGET) return 'budget_exhausted';
+  if ((count ?? 0) >= (opts.dailyBudget ?? DAILY_BUDGET)) return 'budget_exhausted';
 
   const { data: row } = await admin
     .from('notifications')

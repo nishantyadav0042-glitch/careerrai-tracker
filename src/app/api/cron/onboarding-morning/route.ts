@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
-import { dispatch } from '@/lib/notification-os';
+import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 
 // 04:30 UTC = 10:00 IST. Morning touch of the Day 1-7 habit arc — but ONLY
 // for students who are actually inside it (state = onboarding_arc):
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       reason: `Day ${dayNumber} of the 7-day habit arc, no log yet today — morning touch`,
       expectedAction: 'log_today',
       prefs,
+      dailyBudget: BUDGET_ACTIVE, // arc students get the full companion cadence too
     });
     if (outcome === 'sent') sent++;
   }

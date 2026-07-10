@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendDailyReminder } from '@/lib/email';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
-import { ACTIVATION_DAYS, activationCopy, dispatch } from '@/lib/notification-os';
+import { ACTIVATION_DAYS, activationCopy, dispatch, BUDGET_ACTIVE, BUDGET_SETUP } from '@/lib/notification-os';
 
 // 14:30 UTC = 20:00 IST. The evening touch for students in their first two
 // weeks — two distinct populations, one send each, both through dispatch()
@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
         expectedAction: 'log_today',
         prefs,
         email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
+        dailyBudget: BUDGET_SETUP,
       });
       if (outcome === 'sent') reminded++;
       continue;
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
       expectedAction: 'log_today',
       prefs,
       email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
+      dailyBudget: BUDGET_ACTIVE, // arc students get the full companion cadence too
     });
     if (outcome === 'sent') reminded++;
   }
