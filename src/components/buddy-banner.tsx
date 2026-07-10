@@ -14,7 +14,7 @@ export function BuddyBanner({ banner, className = '' }: { banner: BuddyBannerDat
   return (
     <Link
       href="/student/buddy"
-      className={`group flex items-start gap-3 rounded-2xl bg-teal-50/70 p-4 transition-colors hover:bg-teal-50 ${className}`}
+      className={`group flex items-start gap-3 rounded-2xl bg-stone-100/70 p-4 transition-colors hover:bg-stone-100 ${className}`}
     >
       <Image
         src="/buddy-logo.jpg"
@@ -25,11 +25,11 @@ export function BuddyBanner({ banner, className = '' }: { banner: BuddyBannerDat
       />
       <div className="min-w-0 flex-1">
         {banner.eyebrow && (
-          <p className="text-[10px] font-bold uppercase tracking-widest text-teal-700 mb-0.5">{banner.eyebrow}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-900 mb-0.5">{banner.eyebrow}</p>
         )}
         <p className="text-sm font-bold text-stone-900">{banner.headline}</p>
         <p className="text-sm text-stone-600 mt-0.5">{banner.sub}</p>
-        <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-teal-700">
+        <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-stone-900">
           {banner.cta.replace(/\s*→$/, '')}
           <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </p>

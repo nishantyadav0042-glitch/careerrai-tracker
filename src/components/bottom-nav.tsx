@@ -95,7 +95,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
                     <Icon className={cn('w-5 h-5 transition-all', isActive && 'scale-110')} />
                   ) : null}
                   {item.badge !== undefined && item.badge > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-stone-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                       {item.badge > 9 ? '9+' : item.badge}
                     </span>
                   )}
@@ -116,7 +116,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
               <div className="relative">
                 <MoreHorizontal className={cn('w-5 h-5 transition-all', (moreOpen || isMoreActive) && 'scale-110')} />
                 {moreBadgeTotal > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-stone-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                     {moreBadgeTotal > 9 ? '9+' : moreBadgeTotal}
                   </span>
                 )}

@@ -212,7 +212,7 @@ export function TodaysRoutineCard() {
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs uppercase tracking-widest text-orange-600 font-semibold">Today&apos;s Study Plan</p>
+        <p className="text-xs uppercase tracking-widest text-stone-900 font-semibold">Today&apos;s Study Plan</p>
         {!fullyDone && (
           <div className="flex gap-1 text-[11px] font-semibold">
             {TIME_OPTIONS.map(({ value, label }) => (
@@ -221,7 +221,7 @@ export function TodaysRoutineCard() {
                 onClick={() => setBudget(value)}
                 className={cn(
                   'rounded-full px-2 py-0.5 transition-colors',
-                  budget === value ? 'bg-orange-100 text-orange-700' : 'text-stone-400'
+                  budget === value ? 'bg-stone-200 text-stone-900' : 'text-stone-400'
                 )}
               >
                 {value === 30 ? 'Less time' : label}
@@ -237,7 +237,7 @@ export function TodaysRoutineCard() {
           {routine.tasks.map((t) => (
             <span
               key={t.id}
-              className={cn('h-2 w-2 rounded-full', completedIds.has(t.id) ? 'bg-teal-500' : 'bg-stone-200')}
+              className={cn('h-2 w-2 rounded-full', completedIds.has(t.id) ? 'bg-stone-900' : 'bg-stone-200')}
             />
           ))}
           <span className="text-xs text-stone-400 ml-1">{doneCount} of {routine.tasks.length} done</span>
@@ -279,7 +279,7 @@ export function TodaysRoutineCard() {
                   <div key={task.id}>
                     <div
                       className={cn(
-                        'w-full flex items-start gap-3 rounded-2xl bg-orange-50/70 p-4 transition-all',
+                        'w-full flex items-start gap-3 rounded-2xl bg-stone-100/70 p-4 transition-all',
                         expanded && 'rounded-b-none'
                       )}
                     >
@@ -290,7 +290,7 @@ export function TodaysRoutineCard() {
                         onClick={() => { if (!done) reportStart(); toggleTask(task); }}
                         disabled={busyTaskId === task.id}
                         aria-label="Mark complete"
-                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-orange-500 active:scale-90 transition-transform"
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-900 active:scale-90 transition-transform"
                       />
                       <button
                         onClick={() => handleTaskTap(task, done)}
@@ -298,7 +298,7 @@ export function TodaysRoutineCard() {
                         className="min-w-0 flex-1 text-left active:scale-[0.99] transition-transform"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-orange-600 text-white">
+                          <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-stone-900 text-white">
                             {isStart ? 'Start Here' : 'Next'}
                           </span>
                           <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
@@ -310,7 +310,7 @@ export function TodaysRoutineCard() {
                       </button>
                     </div>
                     {expanded && (
-                      <div className="rounded-b-2xl bg-orange-50/70 px-4 pb-4 pt-1">
+                      <div className="rounded-b-2xl bg-stone-100/70 px-4 pb-4 pt-1">
                         {/* 2x2, not a single row of 4 — "Getting there" and
                             "Struggling" don't fit four-across on a phone
                             without wrapping mid-word. */}
@@ -320,7 +320,7 @@ export function TodaysRoutineCard() {
                               key={opt.value}
                               onClick={() => toggleTask(task, opt.value)}
                               disabled={busyTaskId === task.id}
-                              className="flex flex-col items-center gap-0.5 rounded-lg border border-orange-200 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
+                              className="flex flex-col items-center gap-0.5 rounded-lg border border-stone-300 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
                             >
                               <span className="text-lg leading-none">{opt.emoji}</span>
                               {opt.label}
@@ -342,7 +342,7 @@ export function TodaysRoutineCard() {
                     aria-label="Mark complete"
                     className={cn(
                       'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 active:scale-90 transition-transform',
-                      done ? 'border-teal-600 bg-teal-600' : 'border-stone-300'
+                      done ? 'border-stone-900 bg-stone-900' : 'border-stone-300'
                     )}
                   >
                     {done && <Check className="w-3 h-3 text-white" />}
@@ -363,7 +363,7 @@ export function TodaysRoutineCard() {
           </div>
 
           <div className="mt-3">
-            <Link href="/student/blueprint" className="text-xs font-semibold text-orange-600">My CAT Plan →</Link>
+            <Link href="/student/blueprint" className="text-xs font-semibold text-stone-900">My CAT Plan →</Link>
           </div>
         </>
       )}
