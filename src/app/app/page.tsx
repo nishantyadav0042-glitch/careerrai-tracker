@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Share, SquarePlus, Copy, Bookmark, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Share, SquarePlus, Copy, Bookmark, Plus } from 'lucide-react';
 
 // The installed-PWA entry point. Two jobs, decided by display mode:
 //  • Standalone (opened from the Home Screen): a one-time hand-off token in
@@ -79,8 +79,11 @@ export default function AppEntry() {
             {gstep === 0 ? (
               <div className="animate-[fadeIn_0.35s_ease]">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step 1 of 2</p>
-                <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap the Share button</p>
+                <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap the Share icon</p>
                 <SafariBarMock />
+                <p className="mt-2 text-[12px] leading-snug text-stone-500">
+                  It sits next to the web address — <b>top-right</b> on most iPhones, or in the <b>bottom bar</b> on some. Look for this icon: <Share className="inline h-3.5 w-3.5 align-text-bottom text-blue-600" />
+                </p>
                 <button
                   type="button"
                   onClick={() => setGstep(1)}
@@ -117,36 +120,26 @@ export default function AppEntry() {
         )}
       </div>
 
-      {/* On step 1, a live cue pointing at the real Safari Share button below. */}
-      {ios && gstep === 0 && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-3 z-10 flex flex-col items-center gap-1">
-          <div className="flex items-center gap-1.5 rounded-full bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg shadow-stone-900/25">
-            Your real Share button is down here
-          </div>
-          <span className="text-2xl text-stone-900 animate-bounce">↓</span>
-        </div>
-      )}
-
       <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
 }
 
-// A faithful mock of Safari's bottom toolbar with the Share button highlighted.
+// A faithful mock of Safari's ADDRESS BAR with the Share icon highlighted on
+// the right — Share lives next to the web address whether Safari's bar is at
+// the top or the bottom, so this reads correctly for every layout.
 function SafariBarMock() {
   return (
     <div className="rounded-2xl border border-stone-200 bg-stone-100 p-3">
-      <div className="flex items-center justify-around rounded-xl bg-white px-3 py-3 shadow-sm">
-        <ChevronLeft className="h-5 w-5 text-stone-300" />
-        <ChevronRight className="h-5 w-5 text-stone-200" />
+      <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2.5 shadow-sm">
+        <span className="text-[13px] font-semibold text-stone-400">aA</span>
+        <span className="min-w-0 flex-1 truncate text-center text-[13px] text-stone-500">careerrai-daily.vercel.app</span>
         <span className="relative flex items-center justify-center">
-          <span className="absolute inline-flex h-9 w-9 animate-ping rounded-full bg-blue-400/30" />
-          <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 ring-2 ring-blue-500">
-            <Share className="h-5 w-5 text-blue-600" />
+          <span className="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-blue-400/30" />
+          <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 ring-2 ring-blue-500">
+            <Share className="h-4 w-4 text-blue-600" />
           </span>
         </span>
-        <Bookmark className="h-5 w-5 text-stone-300" />
-        <Copy className="h-5 w-5 text-stone-300" />
       </div>
       <p className="mt-2 text-center text-[12px] font-bold text-blue-600">☝ Tap the highlighted Share icon</p>
     </div>
