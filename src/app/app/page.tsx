@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Share, Plus } from 'lucide-react';
+import { Share, Plus, ChevronDown } from 'lucide-react';
 
 // The installed-PWA entry point. Two jobs, decided by display mode:
 //  • Standalone (opened from the Home Screen): a one-time hand-off token in
@@ -61,29 +61,47 @@ export default function AppEntry() {
 
   const ios = isIOS();
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-white px-6 py-10 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
-      <div>
-        <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your Home Screen</h1>
-        <p className="mt-2 text-sm text-stone-500">~3&nbsp;MB · opens like a real app · it&apos;s how your daily reminders reach you{ios ? ' on iPhone' : ''}. You&apos;ll be signed in automatically.</p>
-      </div>
+    <div className="relative flex min-h-[100dvh] flex-col items-center bg-white px-6 pb-28 pt-10 text-center">
+      <div className="mx-auto flex w-full max-w-xs flex-1 flex-col items-center justify-center gap-5">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl shadow-lg shadow-stone-900/15">📲</div>
+        <div>
+          <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your Home&nbsp;Screen</h1>
+          <p className="mt-2 text-sm leading-relaxed text-stone-500">
+            <span className="font-semibold text-stone-700">Just 3&nbsp;MB.</span> Opens like a real app, and it&apos;s the only way your daily reminders reach you{ios ? ' on iPhone' : ''}. You&apos;ll be <span className="font-semibold text-stone-700">signed in automatically.</span>
+          </p>
+        </div>
 
-      <div className="w-full max-w-xs space-y-2.5 text-left">
         {ios ? (
-          <>
-            <Step n={1}><>Tap the <Share className="mx-0.5 inline h-4 w-4 align-text-bottom text-blue-600" /> <b>Share</b> button in Safari&apos;s bottom bar.</></Step>
-            <Step n={2}><>Scroll and tap <b>Add to Home Screen</b> <Plus className="mx-0.5 inline h-4 w-4 align-text-bottom" />.</></Step>
-            <Step n={3}><>Tap <b>Add</b>, then open CareerRai from your Home Screen — you&apos;ll be logged in.</></Step>
-            <p className="pl-9 text-[11px] text-stone-400">Only works in <b>Safari</b>. In Chrome? Open this page in Safari first.</p>
-          </>
+          <div className="w-full space-y-2.5 text-left">
+            <Step n={1}>
+              <>Tap the <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 align-middle font-semibold text-blue-700"><Share className="h-3.5 w-3.5" />Share</span> button in Safari&apos;s bar.</>
+            </Step>
+            <Step n={2}>
+              <>Scroll down, tap <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 align-middle font-semibold text-stone-800"><Plus className="h-3.5 w-3.5" />Add to Home Screen</span>.</>
+            </Step>
+            <Step n={3}><>Tap <b>Add</b> — then open CareerRai from your Home Screen. Done.</></Step>
+            <p className="pl-9 pt-0.5 text-[11px] text-stone-400">Works in <b>Safari</b> only. In Chrome? Open this page in Safari first.</p>
+          </div>
         ) : (
-          <>
+          <div className="w-full space-y-2.5 text-left">
             <Step n={1}><>Open your browser menu (<b>⋮</b>, top-right).</></Step>
             <Step n={2}><>Tap <b>Install app</b> or <b>Add to Home screen</b>.</></Step>
             <Step n={3}><>Confirm — CareerRai installs like a normal app.</></Step>
-          </>
+          </div>
         )}
       </div>
+
+      {/* The "do it now" cue: a pulsing arrow pointing at Safari's Share button
+          (bottom toolbar on iPhone). This is what makes it feel guided rather
+          than a wall of text. */}
+      {ios && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-3 z-10 flex flex-col items-center gap-1">
+          <div className="flex items-center gap-1.5 rounded-full bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg shadow-stone-900/25">
+            Tap <Share className="h-3.5 w-3.5" /> Share down here
+          </div>
+          <ChevronDown className="h-7 w-7 animate-bounce text-stone-900" strokeWidth={2.5} />
+        </div>
+      )}
     </div>
   );
 }
