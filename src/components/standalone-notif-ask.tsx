@@ -5,10 +5,13 @@ import { BellRing } from 'lucide-react';
 
 // Founder flow: notification permission is asked INSIDE the installed app —
 // before install (especially on iPhone) the permission is a dead ask, since
-// iOS only delivers web push to an installed PWA. This overlay fires on an
-// app-open in standalone mode when push isn't enabled yet: "you did your
-// first job, now let us do ours." Once per app session if declined; gone
-// forever once granted.
+// iOS only delivers web push to an installed PWA. This overlay fires in
+// standalone mode when push isn't enabled yet: "you did your first job, now
+// let us do ours." Founder decision: it must return on EVERY app open until
+// notifications are actually on — no once-and-gone skip. So we re-evaluate on
+// every foreground (visibilitychange), not just on mount: an iOS PWA that's
+// still resident is only foregrounded when reopened, never remounted, so a
+// mount-only check would silently never fire again. Gone only once granted.
 function isStandalone(): boolean {
   return window.matchMedia?.('(display-mode: standalone)').matches
     || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
@@ -23,8 +26,6 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
-const SKIP_KEY = 'cr_standalone_notif_later';
-
 export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,12 +33,23 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
-    if (pushEnabled) return;
-    if (!isStandalone()) return;
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    if (Notification.permission === 'granted') return; // subscribed elsewhere; server flag will catch up
-    if (sessionStorage.getItem(SKIP_KEY) === '1') return;
-    setShow(true);
+    if (pushEnabled) { setShow(false); return; }
+
+    // Show whenever notifications aren't on yet. Deliberately NO "skip"
+    // memory — the founder wants this on every open until it's done.
+    const evaluate = () => {
+      if (!isStandalone()) return;
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (Notification.permission === 'granted') return; // subscribed; server flag will catch up
+      setShow(true);
+    };
+    evaluate();
+
+    // Reopening a resident iOS PWA fires visibilitychange, not a remount —
+    // re-ask there so "Later" only hides it until the next time they open the app.
+    const onVisible = () => { if (document.visibilityState === 'visible') evaluate(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [pushEnabled]);
 
@@ -49,9 +61,14 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
     try {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        setErr(permission === 'denied' ? 'Blocked by the phone — enable notifications for CareerRai in Settings.' : null);
-        if (permission !== 'denied') sessionStorage.setItem(SKIP_KEY, '1');
-        if (permission !== 'denied') setShow(false);
+        // 'denied' = blocked at OS level (tell them to fix it in Settings, keep
+        // the overlay up). 'default' = they dismissed the prompt — hide for now;
+        // it comes back on the next app open. Neither is persisted.
+        if (permission === 'denied') {
+          setErr('Blocked by the phone — enable notifications for CareerRai in Settings.');
+        } else {
+          setShow(false);
+        }
         setBusy(false);
         return;
       }
@@ -82,7 +99,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
   }
 
   function later() {
-    sessionStorage.setItem(SKIP_KEY, '1');
+    // Hide for now only — no persistence, so it returns on the next app open.
     setShow(false);
   }
 
