@@ -116,11 +116,15 @@ function addDays(base: Date, days: number): Date {
 
 interface DateOption { hours: number; date: Date; label: string; note: string }
 
-// The whole post-login ceremony, once per student: install → reconcile the
-// date against the real per-day cost → hold-to-commit → thank you → the
-// two-way deal. Gentle violet accents (founder: colourful but not loud) on an
-// otherwise clean canvas. Every number is deterministic — the same
-// remainingPrepHours model as the Builder, never invented.
+// The whole post-login ceremony, once per student: reconcile the date against
+// the real per-day cost → hold-to-commit → thank you → the two-way deal →
+// and ONLY THEN the install ask, as the finale (founder: install comes after
+// the plan is complete — an install detour mid-ceremony reads as a random
+// third screen and breaks the flow, especially on iPhone where it navigates
+// to the /app guide). done is persisted BEFORE the install step so the iOS
+// navigation away can never re-trigger the ceremony. Gentle violet accents;
+// every number is deterministic — the same remainingPrepHours model as the
+// Builder, never invented.
 export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const [today] = useState(() => new Date());
   const [visible, setVisible] = useState(true);
@@ -128,7 +132,9 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
   const hasDateStep = !!targetIso && hoursLeft > 0;
 
-  const [step, setStep] = useState<Step>(() => (isStandalone() ? (hasDateStep ? 'date' : 'commit') : 'install'));
+  // The ceremony opens with the PLAN (date → commit → thanks → deal); the
+  // install ask is the finale, never the opener.
+  const [step, setStep] = useState<Step>(() => (hasDateStep ? 'date' : 'commit'));
 
   // Chosen finish date carried into the commitment copy.
   const [chosenLabel, setChosenLabel] = useState<string>(() =>
@@ -168,8 +174,6 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
     } catch { /* best-effort — the flag/date write is not worth blocking the UI on */ }
   }
 
-  const afterInstall = () => setStep(hasDateStep ? 'date' : 'commit');
-
   const chooseDate = async (opt: DateOption) => {
     setBusy(true);
     setChosenLabel(fmt(opt.date));
@@ -178,10 +182,15 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
     setStep('commit');
   };
 
+  // "Let's start" on the deal screen. The ceremony is complete — mark it done
+  // FIRST (so the iOS install navigation to /app can never re-trigger it),
+  // then show the install finale unless they're already running the app.
   const finish = async () => {
     setBusy(true);
     await persist({ done: true });
-    setVisible(false);
+    setBusy(false);
+    if (isStandalone()) { setVisible(false); return; }
+    setStep('install');
   };
 
   if (!visible) return null;
@@ -194,13 +203,13 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
           <div className="space-y-6 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
-              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your phone</h1>
-              <p className="mt-2 text-sm text-stone-500">Just ~3 MB · works best as an app · one tap to your plan, and it&apos;s how daily reminders reach you.</p>
+              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your plan is set. Get the app.</h1>
+              <p className="mt-2 text-sm text-stone-500">Just ~3 MB · one tap to your plan every day · it&apos;s how your reminders reach you.</p>
             </div>
             <div className="space-y-2 pt-2">
               <InstallAppButton variant="banner" />
-              <button type="button" onClick={afterInstall} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
-                Maybe later
+              <button type="button" onClick={() => setVisible(false)} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
+                Maybe later — take me to my plan
               </button>
             </div>
           </div>
