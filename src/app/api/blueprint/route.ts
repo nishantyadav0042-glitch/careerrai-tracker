@@ -42,7 +42,7 @@ export async function GET() {
       .select(`
         full_name, target_percentile, attempt_year, exam_target, is_working_professional, is_repeater,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        current_stage, biggest_blocker, created_at, buddy_id, is_premium, study_target_hours
+        current_stage, biggest_blocker, created_at, buddy_id, is_premium, study_target_hours, syllabus_target_date
       `)
       .eq('id', user.id).single(),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
@@ -118,7 +118,21 @@ export async function GET() {
     topicsRemaining: remainingTopics,
     topicsStartedLast21Days,
   });
-  const { mockIntensiveStart, revisionSprintStart } = phaseBoundaryDates(catExamDate(examYear));
+  // Phase dates INTEGRATE with the student's own target (founder: standalone
+  // calendar dates next to a personal target read as a bogus plan). Mock
+  // Intensive begins the day after THEIR syllabus finish date — mocks start
+  // when your syllabus ends, that's the whole point of the date. Revision
+  // Sprint stays anchored to the exam (the final consolidation weeks), but
+  // never collapses to less than two weeks of mocks if the target runs late.
+  const exam = catExamDate(examYear);
+  const defaults = phaseBoundaryDates(exam);
+  const targetDateIso = profile.syllabus_target_date as string | null;
+  const mockIntensiveStart = targetDateIso
+    ? new Date(new Date(targetDateIso + 'T00:00:00').getTime() + 86_400_000)
+    : defaults.mockIntensiveStart;
+  const minRevision = new Date(mockIntensiveStart.getTime() + 14 * 86_400_000);
+  const maxRevision = new Date(exam.getTime() - 7 * 86_400_000);
+  const revisionSprintStart = new Date(Math.min(Math.max(defaults.revisionSprintStart.getTime(), minRevision.getTime()), maxRevision.getTime()));
   const dateLabel = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
   const roadmapDates = {
     mockIntensiveStart: dateLabel(mockIntensiveStart),
