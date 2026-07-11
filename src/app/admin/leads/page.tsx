@@ -32,10 +32,14 @@ export default async function LeadsPage() {
   const twoWeeksAgoIso = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-  const [{ data: students }, { data: streaks }, { data: recentReports }, { data: engagement }, { data: mockRows }, { data: outreachRows }, { data: nudgeRows }] = await Promise.all([
+  const [{ data: students }, { data: buddies }, { data: streaks }, { data: recentReports }, { data: engagement }, { data: mockRows }, { data: outreachRows }, { data: nudgeRows }] = await Promise.all([
     admin.from('profiles')
       .select('id, full_name, phone, college, is_repeater, is_working_professional, coaching_enrolled, target_percentile, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id')
       .eq('role', 'student').eq('is_demo', false)
+      .order('created_at', { ascending: false }),
+    admin.from('profiles')
+      .select('id, full_name, phone, created_at, college, cat_percentile, app_installed, notif_prefs')
+      .eq('role', 'buddy').eq('is_demo', false)
       .order('created_at', { ascending: false }),
     admin.from('streak_data').select('student_id, current_streak, last_log_date'),
     admin.from('daily_reports').select('student_id, report_date').gte('report_date', weekAgo),
@@ -119,14 +123,59 @@ export default async function LeadsPage() {
           <ArrowLeft className="w-4 h-4" /> Admin
         </Link>
 
-        <div className="mb-5">
-          <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Leads</h1>
-          <p className="text-sm text-stone-500 mt-0.5">
-            Every student who ever logged in, tiered by what their own preparation says.
-          </p>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>New Leads</h1>
+            <p className="text-sm text-stone-500 mt-0.5">
+              Everyone who logged in — students and buddies. Tap any lead for the full profile.
+            </p>
+          </div>
+          <a
+            href="/api/admin/leads-export"
+            className="shrink-0 rounded-xl bg-stone-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-stone-800"
+          >
+            ⬇ Excel
+          </a>
         </div>
 
+        {/* ── Students ── */}
+        <h2 className="mb-2 px-1 text-sm font-bold text-stone-900">Students <span className="font-semibold text-stone-400">({rows.length})</span></h2>
         <LeadsList rows={rows} />
+
+        {/* ── Buddies ── */}
+        <h2 className="mb-2 mt-8 px-1 text-sm font-bold text-stone-900">Buddies <span className="font-semibold text-stone-400">({(buddies ?? []).length})</span></h2>
+        {(buddies ?? []).length === 0 ? (
+          <p className="px-1 text-sm text-stone-500">No buddy signups yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {(buddies ?? []).map((b) => {
+              const push = (b.notif_prefs as { push?: boolean } | null)?.push === true;
+              return (
+                <Link
+                  key={b.id}
+                  href={`/admin/leads/${b.id}`}
+                  className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-300"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-stone-900">{(b.full_name as string | null) ?? 'Buddy'}</p>
+                    <p className="text-xs text-stone-500">
+                      {(b.phone as string | null) ?? 'no phone'} · joined {new Date(b.created_at as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {b.cat_percentile != null && <> · {b.cat_percentile as number} %ile</>}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold">
+                    <span className={b.app_installed ? 'rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700' : 'rounded bg-stone-100 px-1.5 py-0.5 text-stone-500'}>
+                      {b.app_installed ? 'App ✓' : 'No app'}
+                    </span>
+                    <span className={push ? 'rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700' : 'rounded bg-stone-100 px-1.5 py-0.5 text-stone-500'}>
+                      {push ? 'Notif ✓' : 'Notif ✗'}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
