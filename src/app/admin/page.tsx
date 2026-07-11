@@ -16,7 +16,7 @@ import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import { AdminTabs, type AdminTab } from './admin-tabs';
 import { PushGate } from '@/components/push-gate';
 import type { Profile, DailyReport } from '@/types';
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, ClipboardList, PhoneCall, BellRing } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, PhoneCall, BellRing } from 'lucide-react';
 import { computeBuddySLA } from '@/lib/buddy-sla';
 import { cn } from '@/lib/utils';
 
@@ -437,17 +437,13 @@ export default async function AdminPage() {
           >
             <Ticket className="w-3.5 h-3.5" /> Coupons
           </Link>
-          <Link
-            href="/admin/cat-leads"
-            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
-          >
-            <ClipboardList className="w-3.5 h-3.5" /> CAT Leads
-          </Link>
+          {/* ONE leads entry point (founder): the old CAT-quiz leads button is
+              gone — /admin/leads is the single New Leads system. */}
           <Link
             href="/admin/leads"
             className="flex items-center justify-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg px-3 py-2.5 transition-colors"
           >
-            <PhoneCall className="w-3.5 h-3.5" /> Leads
+            <PhoneCall className="w-3.5 h-3.5" /> New Leads
           </Link>
           <Link
             href="/admin/notification-health"
