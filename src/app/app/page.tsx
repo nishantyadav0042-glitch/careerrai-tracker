@@ -97,6 +97,7 @@ export default function AppEntry() {
                 <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step 2 of 2</p>
                 <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap &ldquo;Add to Home Screen&rdquo;</p>
                 <ShareSheetMock />
+                <p className="mt-2 text-center text-[12px] font-bold text-rose-600">👆 Tap the circled row</p>
                 <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-left text-[12px] leading-snug text-emerald-800">
                   <b>Then:</b> tap <b>Add</b>, open <b>CareerRai</b>{' '}from your Home Screen — you&apos;ll be signed in and land straight on your plan.
                 </div>
@@ -134,14 +135,14 @@ function SafariBarMock() {
       <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2.5 shadow-sm">
         <span className="text-[13px] font-semibold text-stone-400">aA</span>
         <span className="min-w-0 flex-1 truncate text-center text-[13px] text-stone-500">careerrai-daily.vercel.app</span>
-        <span className="relative flex items-center justify-center">
-          <span className="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-blue-400/30" />
-          <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 ring-2 ring-blue-500">
-            <Share className="h-4 w-4 text-blue-600" />
-          </span>
+        <span className="relative flex h-6 w-6 items-center justify-center">
+          {/* hand-circled annotation on the exact tap target */}
+          <span className="absolute -inset-2 animate-ping rounded-full bg-rose-400/25" />
+          <span className="absolute -inset-2 rounded-full border-[2.5px] border-rose-500" />
+          <Share className="relative h-5 w-5 text-blue-600" />
         </span>
       </div>
-      <p className="mt-2 text-center text-[12px] font-bold text-blue-600">☝ Tap the highlighted Share icon</p>
+      <p className="mt-2 text-center text-[12px] font-bold text-rose-600">👆 Tap the circled Share icon</p>
     </div>
   );
 }
@@ -160,9 +161,13 @@ function ShareSheetMock() {
       <div className="bg-white">
         <ActionRow icon={<Copy className="h-4 w-4 text-stone-400" />} label="Copy" muted />
         <ActionRow icon={<Bookmark className="h-4 w-4 text-stone-400" />} label="Add Bookmark" muted />
-        <div className="flex items-center justify-between bg-blue-50 px-3 py-2.5 ring-2 ring-inset ring-blue-400">
+        <div className="relative flex items-center justify-between bg-rose-50/70 px-3 py-2.5 ring-2 ring-inset ring-rose-400">
           <span className="text-[13px] font-bold text-stone-900">Add to Home Screen</span>
-          <SquarePlus className="h-5 w-5 text-stone-900" />
+          <span className="relative flex h-6 w-6 items-center justify-center">
+            <span className="absolute -inset-1.5 animate-ping rounded-full bg-rose-400/25" />
+            <span className="absolute -inset-1.5 rounded-full border-[2.5px] border-rose-500" />
+            <SquarePlus className="relative h-5 w-5 text-stone-900" />
+          </span>
         </div>
         <ActionRow icon={<Share className="h-4 w-4 text-stone-400" />} label="Markup" muted />
       </div>
