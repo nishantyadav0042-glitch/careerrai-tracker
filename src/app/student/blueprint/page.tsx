@@ -4,6 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { BuddyBanner } from '@/components/buddy-banner';
 import type { BuddyBanner as BuddyBannerData } from '@/lib/buddy-banner';
+import { WeekPlan } from '@/components/week-plan';
+import type { DayPlan } from '@/lib/study-forecast';
 
 interface ThisWeekItem { label: string; href: string }
 interface FinishProjection {
@@ -20,6 +22,7 @@ interface PlanData {
   studiedOnceCount: number;
   learningCount: number;
   notStartedCount: number;
+  weekPlan: DayPlan[];
   dueForRevisionCount: number;
   mocksCompleted: number;
   finishProjection: FinishProjection;
@@ -105,7 +108,7 @@ export default function MyCatPlanPage() {
 
   const {
     totalTopics, studiedOnceCount, learningCount, notStartedCount, dueForRevisionCount, mocksCompleted,
-    finishProjection, roadmapDates, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner,
+    finishProjection, roadmapDates, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner, weekPlan,
   } = data;
   const verdict = VERDICT[finishProjection.status];
 
@@ -147,6 +150,9 @@ export default function MyCatPlanPage() {
             />
           )}
         </div>
+
+        {/* The road ahead — next several days, topic by topic, at their pace. */}
+        <WeekPlan plan={weekPlan} />
 
         {/* "Can I still finish?" — a real date window from trailing pace,
             paired with two fixed calendar facts (Mock Intensive / Revision
