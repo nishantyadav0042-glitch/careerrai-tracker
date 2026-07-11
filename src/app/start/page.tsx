@@ -6,7 +6,6 @@ import { OpenInBrowser } from '@/components/open-in-browser';
 import ScreenNeedCheck from './screens/screen-need-check';
 import ScreenTargetDate from './screens/screen-target-date';
 import ScreenDreamPercentile from './screens/screen-dream-percentile';
-import ScreenPermission from './screens/screen-permission';
 import ScreenQuickFacts from './screens/screen-quick-facts';
 import ScreenPainPoints from './screens/screen-pain-points';
 import ScreenReassurance from './screens/screen-reassurance';
@@ -20,7 +19,7 @@ import type { CoverageSectionId } from '@/lib/topics-constants';
 // signup comes last as "log in while we build." Nothing here writes to
 // Supabase until ScreenLoginBuild's verify call, which hands the whole
 // accumulated payload over in one request.
-const TOTAL_SCREENS = 9; // excludes the final login/build screen from the progress bar
+const TOTAL_SCREENS = 8; // excludes the final login/build screen from the progress bar
 // v2: bumping the key invalidates every draft saved before clear-on-signup
 // existed — old devices were resuming a finished/stale journey forever.
 const DRAFT_KEY = 'cr_preauth_draft_v2';
@@ -82,10 +81,6 @@ export default function StartPage() {
     setStepIdx(0);
   };
 
-  const ambitionDateLabel = typeof data.ambition_date === 'string'
-    ? new Date(data.ambition_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
-    : null;
-
   const shared = { onBack: back, canGoBack: stepIdx > 0, isLoading: false };
 
   let content: React.ReactNode;
@@ -100,18 +95,15 @@ export default function StartPage() {
       content = <ScreenDreamPercentile onNext={advance} {...shared} />;
       break;
     case 3:
-      content = <ScreenPermission onNext={advance} isLoading={false} ambitionDateLabel={ambitionDateLabel} />;
-      break;
-    case 4:
       content = <ScreenQuickFacts onNext={advance} {...shared} />;
       break;
-    case 5:
+    case 4:
       content = <ScreenPainPoints onNext={advance} {...shared} />;
       break;
-    case 6:
+    case 5:
       content = <ScreenReassurance onNext={advance} isLoading={false} painPoints={(data.pain_points as string[]) ?? []} />;
       break;
-    case 7:
+    case 6:
       content = (
         <ScreenTopicCoverage
           onNext={advance}
@@ -123,7 +115,7 @@ export default function StartPage() {
         />
       );
       break;
-    case 8:
+    case 7:
       content = <ScreenMentor onNext={advance} {...shared} />;
       break;
     default:
