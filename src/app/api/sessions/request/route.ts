@@ -19,9 +19,18 @@ export async function POST(request: NextRequest) {
 
     const { data: studentProfile } = await admin
       .from('profiles')
-      .select('full_name')
+      .select('full_name, buddy_id')
       .eq('id', user.id)
       .single();
+
+    // Authorization: a student may only ping THEIR OWN assigned buddy. Without
+    // this a student could POST any user id as buddyId and inject an
+    // "🚨 Urgent help needed" notification (with free-text) to an arbitrary
+    // account, and bind a session_request to a buddy they were never matched
+    // with. buddy_id is the single source of truth for the pairing.
+    if (!studentProfile?.buddy_id || studentProfile.buddy_id !== buddyId) {
+      return NextResponse.json({ error: 'Not your buddy' }, { status: 403 });
+    }
 
     const firstName = studentProfile?.full_name?.split(' ')[0] ?? 'A student';
 
