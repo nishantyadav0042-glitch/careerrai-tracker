@@ -38,9 +38,67 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (me?.role !== 'admin') redirect('/login');
 
   const { data: profile } = await admin.from('profiles')
-    .select('id, full_name, phone, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id')
-    .eq('id', id).eq('role', 'student').single();
+    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed')
+    .eq('id', id).in('role', ['student', 'buddy']).single();
   if (!profile) notFound();
+
+  // ── Status strip (founder spec): the FIRST thing on any lead's profile —
+  // how far they got in the journey, did they install the app, are
+  // notifications on. Same three facts for students and buddies.
+  const pushOn = (profile.notif_prefs as { push?: boolean } | null)?.push === true;
+  const journeyLabel = profile.role === 'buddy'
+    ? (profile.buddy_onboarding_completed === true ? 'Profile complete' : 'Profile incomplete')
+    : profile.onboarding_completed === true
+      ? (profile.post_signup_done === true ? 'Full journey done' : 'Plan built · ceremony pending')
+      : `Dropped at: ${stepLabel((profile.onboarding_step_reached as number | null) ?? 0)}`;
+  const journeyDone = profile.role === 'buddy' ? profile.buddy_onboarding_completed === true : profile.onboarding_completed === true;
+  const statusStrip = (
+    <div className="flex flex-wrap gap-2">
+      <span className={cn('rounded-lg px-2.5 py-1.5 text-xs font-bold', journeyDone ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
+        🧭 {journeyLabel}
+      </span>
+      <span className={cn('rounded-lg px-2.5 py-1.5 text-xs font-bold', profile.app_installed ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-500')}>
+        📲 {profile.app_installed ? 'App installed' : 'App not installed'}
+      </span>
+      <span className={cn('rounded-lg px-2.5 py-1.5 text-xs font-bold', pushOn ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-500')}>
+        🔔 {pushOn ? 'Notifications on' : 'Notifications off'}
+      </span>
+    </div>
+  );
+
+  // Buddy leads get a compact profile — identity, status strip, credentials —
+  // instead of the student prep intel (which doesn't exist for them).
+  if (profile.role === 'buddy') {
+    const waB = profile.phone ? `https://wa.me/${(profile.phone as string).replace(/\D/g, '')}` : null;
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <div className="max-w-2xl mx-auto px-4 py-6 pb-20 space-y-4">
+          <div className="flex items-center justify-between"><Logo /><LogoutButton /></div>
+          <Link href="/admin/leads" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700">
+            <ArrowLeft className="w-4 h-4" /> All leads
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>{profile.full_name ?? 'Buddy'}</h1>
+            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">Buddy</span>
+          </div>
+          {statusStrip}
+          <Card className="p-4 space-y-2 text-sm text-stone-700">
+            <p><span className="font-semibold text-stone-500">Phone:</span> {profile.phone ?? '—'} {waB && <a href={waB} target="_blank" rel="noopener noreferrer" className="ml-2 rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white">WhatsApp</a>}</p>
+            <p><span className="font-semibold text-stone-500">Email:</span> {profile.email ?? '—'}</p>
+            <p><span className="font-semibold text-stone-500">Joined:</span> {new Date(profile.created_at as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p><span className="font-semibold text-stone-500">College:</span> {profile.college ?? '—'}{profile.iim_converted ? ` · ${profile.iim_converted}` : ''}</p>
+            <p><span className="font-semibold text-stone-500">CAT:</span> {profile.cat_percentile != null ? `${profile.cat_percentile} %ile` : '—'}{profile.cat_year ? ` (${profile.cat_year})` : ''}{profile.first_attempt_percentile != null ? ` · first attempt ${profile.first_attempt_percentile} %ile` : ''}</p>
+            <p><span className="font-semibold text-stone-500">Company:</span> {profile.current_company ?? '—'}</p>
+            <p><span className="font-semibold text-stone-500">Strong section:</span> {profile.strongest_section ?? '—'}</p>
+            {Array.isArray(profile.student_types_helped) && (profile.student_types_helped as string[]).length > 0 && (
+              <p><span className="font-semibold text-stone-500">Helps with:</span> {(profile.student_types_helped as string[]).join(', ')}</p>
+            )}
+            {profile.linkedin_url != null && <p><a href={profile.linkedin_url as string} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline underline-offset-2">LinkedIn →</a></p>}
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const archetype = { isRepeater: !!profile.is_repeater, isWorkingProfessional: !!profile.is_working_professional };
   const signupDate = (profile.created_at as string).split('T')[0];
@@ -129,6 +187,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <Link href="/admin/leads" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700">
           <ArrowLeft className="w-4 h-4" /> All leads
         </Link>
+
+        {/* Founder spec: journey / installed / notifications — first thing on the profile */}
+        {statusStrip}
 
         {/* Identity strip */}
         <div>

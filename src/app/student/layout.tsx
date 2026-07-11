@@ -10,6 +10,7 @@ import { OnboardingGate } from './onboarding/onboarding-gate';
 import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
 import { PushGate } from '@/components/push-gate';
 import PostSignupSequence from '@/components/post-signup-sequence';
+import { InstallPing } from '@/components/install-ping';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
 
@@ -91,6 +92,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen bg-stone-50">
+      <InstallPing />
       <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
         <div className="flex items-center justify-between mb-6">
           <Logo />

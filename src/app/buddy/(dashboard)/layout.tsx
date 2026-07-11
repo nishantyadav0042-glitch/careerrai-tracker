@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { PushGate } from '@/components/push-gate';
 import { BuddyFirstLoginGuide } from '@/components/buddy-first-login-guide';
+import { InstallPing } from '@/components/install-ping';
 
 export default async function BuddyDashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -47,6 +48,7 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
 
   return (
     <div className="min-h-screen bg-stone-50">
+      <InstallPing />
       <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
         <div className="flex items-center justify-between mb-6">
           <Logo />
