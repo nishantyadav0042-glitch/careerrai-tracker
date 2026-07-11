@@ -96,7 +96,7 @@ interface Props {
   hoursLeft: number;
 }
 
-type Step = 'install' | 'date' | 'commit' | 'thanks' | 'responsibilities';
+type Step = 'install' | 'date' | 'commit' | 'thanks' | 'responsibilities' | 'share';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -184,13 +184,38 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
   // "Let's start" on the deal screen. The ceremony is complete — mark it done
   // FIRST (so the iOS install navigation to /app can never re-trigger it),
-  // then show the install finale unless they're already running the app.
+  // then the share ask, then the install finale. Share comes BEFORE install
+  // on purpose: iOS install navigates away to /app, and anything after it
+  // would never be seen.
   const finish = async () => {
     setBusy(true);
     await persist({ done: true });
     setBusy(false);
+    setStep('share');
+  };
+
+  const afterShare = () => {
     if (isStandalone()) { setVisible(false); return; }
     setStep('install');
+  };
+
+  // Native share sheet (lands straight in WhatsApp on a phone); wa.me
+  // fallback for browsers without navigator.share. Copy a CAT aspirant would
+  // actually forward — their own milestone, not an ad.
+  const shareText = `I just locked my CAT syllabus date and got a day-by-day study plan 🎯 Daily plan + honest tracking + a real IIM buddy. It's free — build yours: ${typeof window !== 'undefined' ? window.location.origin : 'https://careerrai-daily.vercel.app'}`;
+  const doShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: shareText });
+        afterShare();
+        return;
+      }
+    } catch {
+      // Sheet dismissed — stay on the step so they can retry or skip.
+      return;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener');
+    afterShare();
   };
 
   if (!visible) return null;
@@ -198,6 +223,33 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-white">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-10">
+
+        {step === 'share' && (
+          <div className="space-y-6 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-3xl shadow-lg shadow-emerald-200">🤝</div>
+            <div>
+              <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your friends are still guessing what to study.</h1>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">
+                You have a plan now. Someone in your CAT group is still lost in random YouTube playlists — send them this.
+              </p>
+            </div>
+            <div className="mx-auto max-w-xs rounded-2xl border border-stone-200 bg-stone-50 p-3 text-left">
+              <p className="text-xs leading-relaxed text-stone-600">&ldquo;{shareText}&rdquo;</p>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={doShare}
+                className="w-full rounded-2xl bg-emerald-600 py-4 text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-[0.98]"
+              >
+                Share with your CAT friends →
+              </button>
+              <button type="button" onClick={afterShare} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
+                Skip
+              </button>
+            </div>
+          </div>
+        )}
 
         {step === 'install' && (
           <div className="space-y-6 text-center">
