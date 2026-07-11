@@ -242,25 +242,35 @@ export default async function DailyTrackerPage() {
             there's nothing honest to say yet. */}
         <CoachLine />
 
-        {/* Install prompt lives HERE — after login, once the student has a real
-            plan to come back to (and iOS needs Add-to-Home-Screen before push
-            can ever fire). Self-hides the moment the app is installed/standalone. */}
-        <InstallAppButton variant="card" />
+        {/* Browser: Install card on top, plan, then the log. INSTALLED app:
+            the install card hides itself and Today's Log takes its slot at
+            the top (founder: logging is the daily action — once the app is
+            in, it leads). Pure CSS via the standalone media query — no
+            flicker, no client JS. */}
+        <div className="flex flex-col gap-6">
+          <div className="order-1 empty:hidden">
+            <InstallAppButton variant="card" />
+          </div>
 
-        {/* Question 1: what should I study? */}
-        <TodaysRoutineCard />
+          {/* Question 1: what should I study? */}
+          <div className="order-2 [@media(display-mode:standalone)]:order-3">
+            <TodaysRoutineCard />
+          </div>
 
-        {/* Question 2: have I logged today's study? */}
-        <DailyTrackerApp
-          studentId={user.id}
-          todaySession={todaySession}
-          hasBuddy={!!buddyId}
-          initialPendingDebrief={serverPendingDebrief}
-          initialLogging={initialLogging}
-          hasLoggedYesterday={hasLoggedYesterday}
-          yesterdayStr={yesterdayStr}
-          yesterdayLabel={yesterdayLabel}
-        />
+          {/* Question 2: have I logged today's study? */}
+          <div className="order-3 [@media(display-mode:standalone)]:order-1">
+            <DailyTrackerApp
+              studentId={user.id}
+              todaySession={todaySession}
+              hasBuddy={!!buddyId}
+              initialPendingDebrief={serverPendingDebrief}
+              initialLogging={initialLogging}
+              hasLoggedYesterday={hasLoggedYesterday}
+              yesterdayStr={yesterdayStr}
+              yesterdayLabel={yesterdayLabel}
+            />
+          </div>
+        </div>
 
         <div className="pb-16" />
       </div>
