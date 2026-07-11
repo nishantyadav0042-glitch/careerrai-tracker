@@ -11,6 +11,7 @@ import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
 import { PushGate } from '@/components/push-gate';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
+import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
 
@@ -111,11 +112,19 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <OnboardingGate />
       ) : showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
-      ) : showFirstPushAsk ? (
-        <PushGate mode="first" notifPrefs={notifPrefs} />
-      ) : (
-        showSecondPushAsk && <PushGate mode="second" notifPrefs={notifPrefs} />
-      )}
+      ) : !isDemo && !pushEnabled ? (
+        // Founder flow: in the INSTALLED app, the notification ask is "our
+        // job #1 — switch on notifications" (renders only in standalone mode;
+        // returns null in a browser tab, where the PushGates below apply).
+        <>
+          <StandaloneNotifAsk pushEnabled={pushEnabled} />
+          {showFirstPushAsk ? (
+            <PushGate mode="first" notifPrefs={notifPrefs} />
+          ) : (
+            showSecondPushAsk && <PushGate mode="second" notifPrefs={notifPrefs} />
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
