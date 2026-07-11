@@ -271,10 +271,10 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
           <div className="space-y-5">
             <div>
               <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
-                You chose {chosenLabel}.
+                You chose {chosenLabel} to finish your CAT syllabus.
               </h1>
               <p className="mt-1.5 text-sm text-stone-500">
-                Here&apos;s what it costs per day, now that your topics are mapped. Keep it — or pick a calmer date. You own this.
+                Here&apos;s what that costs per day, now that your topics are mapped. Keep it — or pick a calmer finish date. You own this.
               </p>
             </div>
             <div className="space-y-2">
