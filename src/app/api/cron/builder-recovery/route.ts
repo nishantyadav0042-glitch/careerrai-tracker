@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
     .from('profiles')
     .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_step_reached, onboarding_last_activity_at')
     .eq('role', 'student')
-    .eq('is_demo', false)
     .gte('created_at', sevenDaysAgo);
 
   const open = (candidates ?? []).filter((c) => c.onboarding_completed !== true);

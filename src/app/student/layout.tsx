@@ -7,22 +7,12 @@ import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import { OnboardingGate } from './onboarding/onboarding-gate';
-import { DemoWelcomeModal } from '@/components/demo-welcome-modal';
 import { PushGate } from '@/components/push-gate';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
-
-function DemoBanner() {
-  return (
-    <div className="mb-4 flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800">
-      <span className="text-sm leading-none">👀</span>
-      <span><span className="font-semibold">Demo — view only.</span> This is a real student&apos;s data; changes aren&apos;t saved.</span>
-    </div>
-  );
-}
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -32,7 +22,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const [chatUnread, notifUnread, { data: profile }] = await Promise.all([
     getChatUnreadCount(user.id, 'student'),
     getNotifUnreadCount(user.id),
-    admin.from('profiles').select('role, is_demo, is_premium, onboarding_completed, notif_prefs, post_signup_done, syllabus_target_date, study_target_hours, is_repeater, is_working_professional').eq('id', user.id).single(),
+    admin.from('profiles').select('role, is_premium, onboarding_completed, notif_prefs, post_signup_done, syllabus_target_date, study_target_hours, is_repeater, is_working_professional').eq('id', user.id).single(),
   ]);
 
   // Route non-students to their own home (handles stale role cookies too).
@@ -43,12 +33,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (profile?.role === 'buddy') redirect('/buddy/home');
   if (profile && profile.role !== 'student') redirect('/login');
 
-  const isDemo = !!profile?.is_demo;
   // Login → Blueprint Builder, nothing in between. Its own intro screen is
   // the one hero the founder wants; the old FirstLoginTour was a second,
   // redundant hero in front of it and is gone. The Builder stays until
   // completed — no skip, no dismiss.
-  const showOnboarding = !isDemo && profile?.onboarding_completed !== true;
+  const showOnboarding = profile?.onboarding_completed !== true;
 
   // Push, reordered: the FIRST ask now fires as early as possible — right
   // after login, before onboarding — because reach beats conversion rate
@@ -73,7 +62,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // pre-Builder push gates for new students (they already met the permission
   // inside the funnel). Only the hoursLeft compute below runs, and only when
   // the sequence is actually about to render.
-  const showPostSignup = !isDemo && !showOnboarding && profile?.post_signup_done !== true;
+  const showPostSignup = !showOnboarding && profile?.post_signup_done !== true;
 
   let postSignupProps: { targetIso: string | null; hoursLeft: number } | null = null;
   if (showPostSignup) {
@@ -88,8 +77,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
     };
   }
 
-  const showFirstPushAsk = !isDemo && !showOnboarding && !showPostSignup && !pushEnabled && !pushPrompted;
-  const showSecondPushAsk = !isDemo && !showOnboarding && !showPostSignup && !pushEnabled && pushPrompted && !pushReprompted;
+  const showFirstPushAsk = !showOnboarding && !showPostSignup && !pushEnabled && !pushPrompted;
+  const showSecondPushAsk = !showOnboarding && !showPostSignup && !pushEnabled && pushPrompted && !pushReprompted;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -98,13 +87,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-2">
-            {isDemo && <Badge color="purple">Demo</Badge>}
             <Badge color="stone">Student</Badge>
             <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
           </div>
         </div>
-        {isDemo && <DemoBanner />}
-        {isDemo && <DemoWelcomeModal />}
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
@@ -112,7 +98,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <OnboardingGate />
       ) : showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
-      ) : !isDemo && !pushEnabled ? (
+      ) : !pushEnabled ? (
         // Founder flow: in the INSTALLED app, the notification ask is "our
         // job #1 — switch on notifications" (renders only in standalone mode;
         // returns null in a browser tab, where the PushGates below apply).

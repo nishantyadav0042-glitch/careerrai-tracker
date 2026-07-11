@@ -21,9 +21,9 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
   const admin = createAdminClient();
 
   // Outer buddy/layout.tsx already verified role === 'buddy' (or cookie did).
-  // Here we only need is_demo + onboarding_completed — no need to re-check role.
+  // Here we only need onboarding_completed — no need to re-check role.
   const [{ data: profile }, chatUnread, notifUnread] = await Promise.all([
-    admin.from('profiles').select('role, is_demo, buddy_onboarding_completed, buddy_tour_completed, notif_prefs').eq('id', user.id).single(),
+    admin.from('profiles').select('role, buddy_onboarding_completed, buddy_tour_completed, notif_prefs').eq('id', user.id).single(),
     getChatUnreadCount(user.id, 'buddy'),
     getNotifUnreadCount(user.id),
   ]);
@@ -42,9 +42,9 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
   // One-time "what a buddy does" playbook right after setup, then the
   // mandatory push step (so they're alerted to student messages and risk
   // flags in real time). Same precedence as the student layout: guide first.
-  const showBuddyGuide = !profile?.is_demo && profile?.buddy_tour_completed !== true;
+  const showBuddyGuide = profile?.buddy_tour_completed !== true;
   const buddyPushEnabled = (profile?.notif_prefs as { push?: boolean } | null)?.push === true;
-  const showBuddyPushGate = !profile?.is_demo && !buddyPushEnabled;
+  const showBuddyPushGate = !buddyPushEnabled;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -53,7 +53,6 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
         <div className="flex items-center justify-between mb-6">
           <Logo />
           <div className="flex items-center gap-2">
-            {profile?.is_demo && <Badge color="purple">Demo</Badge>}
             <Badge color="orange">Buddy</Badge>
             <NotificationBell userId={user.id} initialUnreadCount={notifUnread} />
           </div>

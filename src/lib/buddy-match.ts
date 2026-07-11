@@ -120,7 +120,7 @@ export async function getRecommendedBuddiesForStudent(
       .eq('id', studentId).single(),
     admin.from('profiles')
       .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
-      .eq('role', 'buddy').eq('is_demo', false).eq('buddy_onboarding_completed', true)
+      .eq('role', 'buddy').eq('buddy_onboarding_completed', true)
       .not('cat_percentile', 'is', null),
   ]);
   if (!student || !buddies?.length) return [];

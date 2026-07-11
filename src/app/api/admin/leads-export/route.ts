@@ -21,7 +21,6 @@ export async function GET() {
     .from('profiles')
     .select('full_name, phone, email, role, created_at, onboarding_completed, onboarding_step_reached, app_installed, notif_prefs, signup_source, syllabus_target_date, study_target_hours, pain_points, wants_mentor, buddy_id, college, target_percentile, attempt_year')
     .in('role', ['student', 'buddy'])
-    .eq('is_demo', false)
     .order('created_at', { ascending: false });
 
   const header = [

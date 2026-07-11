@@ -23,7 +23,6 @@ interface StudentStat {
   buddy?: Profile;
   submittedToday: boolean;
   hasRedFlags: boolean;
-  isDemo?: boolean;
   joinedLabel?: string | null;
   daysSinceJoin?: number | null;
   isNew?: boolean;
@@ -39,8 +38,7 @@ interface PendingStudent {
 }
 
 // Build a WhatsApp click-to-chat link from a real (+country code) phone number.
-// Demo accounts carry placeholder numbers (e.g. "-9876543119"), so we only link
-// when the number is a genuine international one starting with "+".
+// We only link when the number is a genuine international one starting with "+".
 function whatsappLink(phone: string | null | undefined, name: string): string | null {
   if (!phone || !phone.trim().startsWith('+')) return null;
   const digits = phone.replace(/[^0-9]/g, '');
@@ -112,12 +110,8 @@ export function AdminStudentsList({
     }
   }
 
-  // Real signups (leads) first, demo/seed accounts second. The parent already
-  // sorts by created_at DESC, so within each group the newest joiner is on top.
-  const realStudents = students.filter((s) => !s.isDemo);
-  const demoStudents = students.filter((s) => s.isDemo);
-
-  function renderStudentCard({ student, summary, buddy, submittedToday, isDemo, joinedLabel, daysSinceJoin, isNew }: StudentStat) {
+  // Parent already sorts by created_at DESC, so the newest joiner is on top.
+  function renderStudentCard({ student, summary, buddy, submittedToday, joinedLabel, daysSinceJoin, isNew }: StudentStat) {
     const bandColor = summary.band === 'On track' ? 'green' : summary.band === 'Needs nudging' ? 'amber' : 'red';
     const nameParts = (student.full_name || 'S').split(' ').filter(Boolean);
     const initials = nameParts.map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'S';
@@ -133,12 +127,12 @@ export function AdminStudentsList({
       : daysSinceJoin === 0 ? 'today' : daysSinceJoin === 1 ? 'yesterday' : `${daysSinceJoin}d ago`;
 
     return (
-      <Card key={student.id} className={cn('p-4', isNew && !isDemo && 'ring-1 ring-orange-200 bg-orange-50/40')}>
+      <Card key={student.id} className={cn('p-4', isNew && 'ring-1 ring-orange-200 bg-orange-50/40')}>
         {/* Header: avatar + name + expand toggle */}
         <div className="flex items-start gap-3">
           <div className={cn(
             'w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
-            isDemo ? 'bg-gradient-to-br from-stone-400 to-stone-500' : 'bg-gradient-to-br from-stone-900 to-stone-700'
+            'bg-gradient-to-br from-stone-900 to-stone-700'
           )}>
             {initials}
           </div>
@@ -162,7 +156,7 @@ export function AdminStudentsList({
 
             {/* Status badges — wrap cleanly on their own line */}
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              {isNew && !isDemo && <Badge color="orange"><Sparkles className="w-3 h-3" />New</Badge>}
+              {isNew && <Badge color="orange"><Sparkles className="w-3 h-3" />New</Badge>}
               <Badge color={bandColor}>{summary.overallScore}/100</Badge>
               {submittedToday ? (
                 <Badge color="green"><CheckCircle2 className="w-3 h-3" />Today</Badge>
@@ -261,12 +255,12 @@ export function AdminStudentsList({
       <div className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600">
-            New signups <span className="text-stone-400">({realStudents.length})</span>
+            New signups <span className="text-stone-400">({students.length})</span>
           </h3>
           <span className="text-[11px] text-stone-400">newest first</span>
         </div>
-        {realStudents.length > 0 ? (
-          realStudents.map(renderStudentCard)
+        {students.length > 0 ? (
+          students.map(renderStudentCard)
         ) : (
           <Card className="p-4 border-dashed border-stone-300 bg-stone-50/60 text-center text-xs text-stone-400">
             No real signups yet — they’ll appear here the moment someone joins.
@@ -319,16 +313,6 @@ export function AdminStudentsList({
               </Card>
             );
           })}
-        </div>
-      )}
-
-      {/* Demo accounts — seed profiles used for sales demos, kept visually distinct */}
-      {demoStudents.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 px-1">
-            Demo accounts <span className="text-stone-400">({demoStudents.length})</span>
-          </h3>
-          {demoStudents.map(renderStudentCard)}
         </div>
       )}
 

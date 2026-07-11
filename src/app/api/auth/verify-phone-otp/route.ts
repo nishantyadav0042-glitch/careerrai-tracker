@@ -284,8 +284,6 @@ export async function POST(request: NextRequest) {
         maxAge: 60 * 60 * 24 * 30, // 30 days — matches password login in auth/login/route.ts
       });
     }
-    // Real login — ensure no stale read-only demo flag remains.
-    res.cookies.set('cr_demo', '', { path: '/', maxAge: 0 });
     return res;
   } catch (e) {
     console.error('[verify-phone-otp] error', e);

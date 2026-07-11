@@ -45,11 +45,11 @@ export default async function LeadsPage() {
   const [{ data: students }, { data: buddies }] = await Promise.all([
     admin.from('profiles')
       .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date')
-      .eq('role', 'student').eq('is_demo', false)
+      .eq('role', 'student')
       .order('created_at', { ascending: false }),
     admin.from('profiles')
       .select('id, full_name, phone, created_at, college, cat_percentile, app_installed, notif_prefs')
-      .eq('role', 'buddy').eq('is_demo', false)
+      .eq('role', 'buddy')
       .order('created_at', { ascending: false }),
   ]);
 

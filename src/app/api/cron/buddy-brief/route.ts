@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const [{ data: recentReports }, { data: sentToday }, { data: buddyProfiles }] = await Promise.all([
     admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds).gte('report_date', new Date(Date.now() - 4 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })),
     admin.from('notifications').select('user_id').in('user_id', buddyIds).eq('type', 'buddy_brief').gte('created_at', todayStart),
-    admin.from('profiles').select('id, notif_prefs, is_demo').in('id', buddyIds),
+    admin.from('profiles').select('id, notif_prefs').in('id', buddyIds),
   ]);
 
   const reportDates = new Map<string, string[]>();
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   let briefingsRefreshed = 0;
   for (const [buddyId, roster] of byBuddy) {
     const buddy = buddyById.get(buddyId);
-    if (!buddy || buddy.is_demo) continue;
+    if (!buddy) continue;
 
     // AI copilot freshness pass: any student who logged yesterday gets their
     // facts-briefing refreshed BEFORE the buddy opens the app, not after —

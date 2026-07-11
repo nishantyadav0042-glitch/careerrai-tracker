@@ -4,30 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Read-only demo: block every mutating *app data* API call for a demo session
-  // in one place, so we don't have to guard each route individually. The cr_demo
-  // cookie is set at demo-login. All of /api/auth/* is exempt — auth is how a
-  // visitor leaves the demo and logs in for real (and those routes clear the
-  // cr_demo cookie themselves), so blocking them would lock people out of login.
-  // /api/cat-leads is also exempt — the CAT readiness check is a public
-  // lead-capture funnel, not app data; submissions must always save even if the
-  // visitor still carries a demo cookie from a previous session.
-  if (
-    pathname.startsWith('/api/') &&
-    !pathname.startsWith('/api/auth/') &&
-    !pathname.startsWith('/api/cat-leads') &&
-    !pathname.startsWith('/api/install') &&
-    request.cookies.get('cr_demo')?.value === '1'
-  ) {
-    const method = request.method.toUpperCase();
-    if (method !== 'GET') {
-      return NextResponse.json(
-        { error: "This is a view-only demo — changes aren't saved. Sign up to track for real." },
-        { status: 403 }
-      );
-    }
-  }
-
   // Supabase sends magic-link emails to its configured Site URL, which may be
   // the domain root rather than /auth/callback. Intercept the auth params here
   // and forward them so the callback route can complete the session exchange.
@@ -89,11 +65,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // A demo session doesn't count as "logged in" for /login: the root page
-  // sends demo-cookie holders here so the bare domain never silently resumes
-  // the demo — bouncing them back to the tracker would loop. Logging in for
-  // real from here clears cr_demo (handled inside /api/auth/*).
-  if (pathname === '/login' && user && request.cookies.get('cr_demo')?.value !== '1') {
+  // Already logged in? Skip the login page and route to the right home.
+  if (pathname === '/login' && user) {
     const homeUrl = request.nextUrl.clone();
     // Route to the right home based on role cookie; layout will correct if stale.
     const roleCookie = request.cookies.get('user_role')?.value;

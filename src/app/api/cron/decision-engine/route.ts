@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id, notif_prefs, is_demo, is_repeater, is_working_professional, created_at, onboarding_completed')
-    .eq('role', 'student').eq('is_demo', false);
+    .select('id, notif_prefs, is_repeater, is_working_professional, created_at, onboarding_completed')
+    .eq('role', 'student');
   if (!students?.length) return NextResponse.json({ notified: 0, total: 0 });
 
   const studentIds = students.map((s) => s.id);

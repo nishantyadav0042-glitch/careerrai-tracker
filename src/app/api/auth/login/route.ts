@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  function buildResponse(dest: string, role: string, isDemo: boolean) {
+  function buildResponse(dest: string, role: string) {
     const response = NextResponse.redirect(`${origin}${dest}`, { status: 302 });
     pending.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
@@ -50,11 +50,6 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       maxAge: 60 * 60 * 24 * 30,
     });
-    if (isDemo) {
-      response.cookies.set('cr_demo', '1', { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 60 * 60 * 24 });
-    } else {
-      response.cookies.set('cr_demo', '', { path: '/', maxAge: 0 });
-    }
     return response;
   }
 
@@ -66,7 +61,7 @@ export async function POST(request: NextRequest) {
   if (e164) {
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, email, role, is_demo')
+      .select('id, email, role')
       .eq('phone', e164)
       .maybeSingle();
 
@@ -75,7 +70,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
     }
 
-    // Prefer email auth (works for email-identity users like demo buddies).
+    // Prefer email auth (works for email-identity users).
     // Fall back to phone auth for phone-identity-only accounts (no email stored).
     const authResult = profile.email
       ? await supabase.auth.signInWithPassword({ email: profile.email, password })
@@ -88,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     const role = profile.role ?? 'student';
     const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : '/student/tracker';
-    return buildResponse(dest, role, !!profile.is_demo);
+    return buildResponse(dest, role);
   }
 
   // Email + password (admin fallback or non-phone users)
@@ -96,7 +91,7 @@ export async function POST(request: NextRequest) {
   const isEmail = credLower.includes('@');
   const { data: profile, error: profileError } = await admin
     .from('profiles')
-    .select('id, email, role, is_demo')
+    .select('id, email, role')
     .ilike(isEmail ? 'email' : 'username', credLower)
     .maybeSingle();
 
@@ -113,5 +108,5 @@ export async function POST(request: NextRequest) {
 
   const role = profile.role ?? 'student';
   const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : '/student/tracker';
-  return buildResponse(dest, role, !!profile.is_demo);
+  return buildResponse(dest, role);
 }
