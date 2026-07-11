@@ -10,6 +10,7 @@ import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { selectBuddyBanner } from '@/lib/buddy-banner';
+import { buildWeekPlan } from '@/lib/study-forecast';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -41,7 +42,7 @@ export async function GET() {
       .select(`
         full_name, target_percentile, attempt_year, exam_target, is_working_professional, is_repeater,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        current_stage, biggest_blocker, created_at, buddy_id, is_premium
+        current_stage, biggest_blocker, created_at, buddy_id, is_premium, study_target_hours
       `)
       .eq('id', user.id).single(),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
@@ -214,6 +215,7 @@ export async function GET() {
     studiedOnceCount,
     learningCount,
     notStartedCount,
+    weekPlan: buildWeekPlan(coverage ?? [], (profile.study_target_hours as number | null) ?? null, today),
     dueForRevisionCount: dueForRevision.length,
     mocksCompleted: prepMemory.mockTrend.count,
     finishProjection,
