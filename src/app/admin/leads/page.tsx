@@ -5,18 +5,34 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
 import { ArrowLeft } from 'lucide-react';
-import { assessLead, interventionNeeded, type LeadTier } from '@/lib/lead-intel';
-import { STUDENT_BUDGET_TYPES } from '@/lib/notification-os';
-import { LeadsList, type LeadRow } from './leads-list';
+import { stepLabel } from '@/lib/lead-intel';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Leads · CareerRai' };
+export const metadata = { title: 'New Leads · CareerRai' };
 
-// The Preparation CRM list: every student who ever logged in — finished or
-// dropped — tiered by what their own usage says, buckets first, 20-second
-// profiles one tap away. Batch queries only (5 round trips regardless of
-// student count); the per-student heavy compute lives on the detail page.
+// New Leads — THE single leads platform (founder spec, deliberately simple):
+// every login is a lead. Two sections (Students / Buddies), newest first,
+// tap any card for the complete profile, one-tap WhatsApp, Excel export.
+// No tiers, no scoring on this page — the depth lives on the detail page.
+function waLink(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return `https://wa.me/${digits.startsWith('91') ? digits : `91${digits}`}`;
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function StatusChip({ on, yes, no }: { on: boolean; yes: string; no: string }) {
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${on ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
+      {on ? yes : no}
+    </span>
+  );
+}
+
 export default async function LeadsPage() {
   // Local JWT verification — middleware already paid the network auth hop.
   const user = await getAuthUser();
@@ -26,90 +42,16 @@ export default async function LeadsPage() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
-  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().split('T')[0];
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
-  const twoWeeksAgoIso = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-
-  const [{ data: students }, { data: buddies }, { data: streaks }, { data: recentReports }, { data: engagement }, { data: mockRows }, { data: outreachRows }, { data: nudgeRows }] = await Promise.all([
+  const [{ data: students }, { data: buddies }] = await Promise.all([
     admin.from('profiles')
-      .select('id, full_name, phone, college, is_repeater, is_working_professional, coaching_enrolled, target_percentile, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id')
+      .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date')
       .eq('role', 'student').eq('is_demo', false)
       .order('created_at', { ascending: false }),
     admin.from('profiles')
       .select('id, full_name, phone, created_at, college, cat_percentile, app_installed, notif_prefs')
       .eq('role', 'buddy').eq('is_demo', false)
       .order('created_at', { ascending: false }),
-    admin.from('streak_data').select('student_id, current_streak, last_log_date'),
-    admin.from('daily_reports').select('student_id, report_date').gte('report_date', weekAgo),
-    admin.from('student_engagement').select('student_id, buddy_cta_clicks'),
-    admin.from('mock_debriefs').select('student_id'),
-    admin.from('lead_outreach').select('student_id, owner, status, next_follow_up'),
-    admin.from('notifications').select('user_id, clicked_at').in('type', STUDENT_BUDGET_TYPES).gte('created_at', twoWeeksAgoIso),
   ]);
-
-  const streakById = new Map((streaks ?? []).map((s) => [s.student_id, s]));
-  const ctaById = new Map((engagement ?? []).map((e) => [e.student_id, e.buddy_cta_clicks as number]));
-  const outreachById = new Map((outreachRows ?? []).map((o) => [o.student_id, o]));
-  const mocksById = new Map<string, number>();
-  for (const m of mockRows ?? []) mocksById.set(m.student_id, (mocksById.get(m.student_id) ?? 0) + 1);
-  const loggedLast7ById = new Map<string, Set<string>>();
-  for (const r of recentReports ?? []) {
-    if (!loggedLast7ById.has(r.student_id)) loggedLast7ById.set(r.student_id, new Set());
-    loggedLast7ById.get(r.student_id)!.add(r.report_date);
-  }
-  const nudgesById = new Map<string, { sent: number; clicked: number }>();
-  for (const n of nudgeRows ?? []) {
-    const cur = nudgesById.get(n.user_id) ?? { sent: 0, clicked: 0 };
-    cur.sent++;
-    if (n.clicked_at != null) cur.clicked++;
-    nudgesById.set(n.user_id, cur);
-  }
-
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
-  const nowMs = Date.now();
-  const rows: LeadRow[] = (students ?? []).map((s) => {
-    const streak = streakById.get(s.id);
-    const lastLog = (streak?.last_log_date as string | null) ?? null;
-    const daysSinceLastLog = lastLog
-      ? Math.max(0, Math.round((Date.parse(todayStr) - Date.parse(lastLog)) / 86_400_000))
-      : null;
-    const nudges = nudgesById.get(s.id);
-    const signals = {
-      onboardingCompleted: s.onboarding_completed === true,
-      onboardingStepReached: (s.onboarding_step_reached as number | null) ?? 0,
-      daysSinceJoin: Math.floor((nowMs - new Date(s.created_at as string).getTime()) / 86_400_000),
-      daysSinceLastLog,
-      loggedDaysLast7: loggedLast7ById.get(s.id)?.size ?? 0,
-      currentStreak: (streak?.current_streak as number | null) ?? 0,
-      buddyCtaClicks: ctaById.get(s.id) ?? 0,
-      mocksLogged: mocksById.get(s.id) ?? 0,
-      isPremium: s.is_premium === true,
-      hasBuddy: s.buddy_id != null,
-      nudgesSent14d: nudges?.sent ?? 0,
-      nudgesClicked14d: nudges?.clicked ?? 0,
-    };
-    const assessment = assessLead(signals);
-    const outreach = outreachById.get(s.id);
-    return {
-      id: s.id,
-      name: (s.full_name as string | null) ?? 'Student',
-      phone: (s.phone as string | null) ?? null,
-      college: (s.college as string | null) ?? null,
-      isRepeater: s.is_repeater === true,
-      isWorkingProfessional: s.is_working_professional === true,
-      coachingEnrolled: s.coaching_enrolled === true,
-      targetPercentile: (s.target_percentile as number | null) ?? null,
-      tier: assessment.tier as LeadTier,
-      reasons: assessment.reasons,
-      needsHuman: interventionNeeded(signals),
-      lastLogDaysAgo: daysSinceLastLog,
-      outreachStatus: (outreach?.status as string | null) ?? 'not_contacted',
-      outreachOwner: (outreach?.owner as string | null) ?? null,
-      nextFollowUp: (outreach?.next_follow_up as string | null) ?? null,
-    };
-  });
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -126,9 +68,7 @@ export default async function LeadsPage() {
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>New Leads</h1>
-            <p className="text-sm text-stone-500 mt-0.5">
-              Everyone who logged in — students and buddies. Tap any lead for the full profile.
-            </p>
+            <p className="text-sm text-stone-500 mt-0.5">Everyone who logged in, newest first. Tap a lead for the full profile.</p>
           </div>
           <a
             href="/api/admin/leads-export"
@@ -139,39 +79,83 @@ export default async function LeadsPage() {
         </div>
 
         {/* ── Students ── */}
-        <h2 className="mb-2 px-1 text-sm font-bold text-stone-900">Students <span className="font-semibold text-stone-400">({rows.length})</span></h2>
-        <LeadsList rows={rows} />
+        <h2 className="mb-2 px-1 text-sm font-bold text-stone-900">
+          Students <span className="font-semibold text-stone-400">({(students ?? []).length})</span>
+        </h2>
+        {(students ?? []).length === 0 ? (
+          <p className="px-1 text-sm text-stone-500 mb-8">No student signups yet.</p>
+        ) : (
+          <div className="space-y-2 mb-8">
+            {(students ?? []).map((s) => {
+              const push = (s.notif_prefs as { push?: boolean } | null)?.push === true;
+              const wa = waLink(s.phone as string | null);
+              return (
+                <div key={s.id} className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3.5">
+                  <Link href={`/admin/leads/${s.id}`} className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-bold text-stone-900">{(s.full_name as string | null) ?? 'Student'}</p>
+                      {s.onboarding_completed
+                        ? <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">Plan built</span>
+                        : <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Dropped: {stepLabel((s.onboarding_step_reached as number | null) ?? 0)}</span>}
+                    </div>
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      {(s.phone as string | null) ?? 'no phone'} · {fmtDate(s.created_at as string)}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      <StatusChip on={s.app_installed === true} yes="App ✓" no="No app" />
+                      <StatusChip on={push} yes="Notif ✓" no="Notif ✗" />
+                      {s.wants_mentor === true && !s.buddy_id && (
+                        <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">wants buddy · unassigned</span>
+                      )}
+                      {(Array.isArray(s.pain_points) ? (s.pain_points as string[]) : []).map((p) => (
+                        <span key={p} className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">{p.replace(/_/g, ' ')}</span>
+                      ))}
+                    </div>
+                  </Link>
+                  {wa && (
+                    <a href={wa} target="_blank" rel="noopener noreferrer"
+                      className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white">
+                      WhatsApp
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Buddies ── */}
-        <h2 className="mb-2 mt-8 px-1 text-sm font-bold text-stone-900">Buddies <span className="font-semibold text-stone-400">({(buddies ?? []).length})</span></h2>
+        <h2 className="mb-2 px-1 text-sm font-bold text-stone-900">
+          Buddies <span className="font-semibold text-stone-400">({(buddies ?? []).length})</span>
+        </h2>
         {(buddies ?? []).length === 0 ? (
           <p className="px-1 text-sm text-stone-500">No buddy signups yet.</p>
         ) : (
           <div className="space-y-2">
             {(buddies ?? []).map((b) => {
               const push = (b.notif_prefs as { push?: boolean } | null)?.push === true;
+              const wa = waLink(b.phone as string | null);
               return (
-                <Link
-                  key={b.id}
-                  href={`/admin/leads/${b.id}`}
-                  className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-300"
-                >
-                  <div className="min-w-0 flex-1">
+                <div key={b.id} className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3.5">
+                  <Link href={`/admin/leads/${b.id}`} className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-stone-900">{(b.full_name as string | null) ?? 'Buddy'}</p>
-                    <p className="text-xs text-stone-500">
-                      {(b.phone as string | null) ?? 'no phone'} · joined {new Date(b.created_at as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      {(b.phone as string | null) ?? 'no phone'} · {fmtDate(b.created_at as string)}
                       {b.cat_percentile != null && <> · {b.cat_percentile as number} %ile</>}
+                      {b.college != null && <> · {b.college as string}</>}
                     </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold">
-                    <span className={b.app_installed ? 'rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700' : 'rounded bg-stone-100 px-1.5 py-0.5 text-stone-500'}>
-                      {b.app_installed ? 'App ✓' : 'No app'}
-                    </span>
-                    <span className={push ? 'rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700' : 'rounded bg-stone-100 px-1.5 py-0.5 text-stone-500'}>
-                      {push ? 'Notif ✓' : 'Notif ✗'}
-                    </span>
-                  </div>
-                </Link>
+                    <div className="mt-1.5 flex gap-1.5">
+                      <StatusChip on={b.app_installed === true} yes="App ✓" no="No app" />
+                      <StatusChip on={push} yes="Notif ✓" no="Notif ✗" />
+                    </div>
+                  </Link>
+                  {wa && (
+                    <a href={wa} target="_blank" rel="noopener noreferrer"
+                      className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white">
+                      WhatsApp
+                    </a>
+                  )}
+                </div>
               );
             })}
           </div>
