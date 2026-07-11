@@ -32,14 +32,27 @@ const STATUS_LABEL: Record<Status, string> = {
   revising: 'Revision started',
   exam_ready: 'Exam ready',
 };
+// Colour is a simple traffic light, not a per-status rainbow: grey = not
+// begun, amber = in progress (the pie glyph ○◔◑◕ still shows how far along),
+// green = exam-ready, red = revision due. One colour = one meaning, so the
+// map reads at a glance instead of asking "what does blue mean again?".
 const STATUS_STYLE: Record<Status, string> = {
   not_started: 'bg-stone-100 text-stone-500 border-stone-200',
-  learning: 'bg-amber-50 text-amber-700 border-amber-200',
-  practicing: 'bg-blue-50 text-blue-700 border-blue-200',
-  revising: 'bg-orange-50 text-orange-700 border-orange-200',
-  exam_ready: 'bg-teal-50 text-teal-700 border-teal-300',
+  learning: 'bg-amber-50 text-amber-700 border-amber-300',
+  practicing: 'bg-amber-50 text-amber-700 border-amber-300',
+  revising: 'bg-amber-50 text-amber-700 border-amber-300',
+  exam_ready: 'bg-emerald-50 text-emerald-700 border-emerald-300',
 };
 const REVISION_DUE_STYLE = 'bg-red-50 text-red-700 border-red-300';
+
+// The legend: four colours, one line each. Filled dots (not the pie glyphs)
+// so the colour itself is what's being taught here.
+const LEGEND: { dot: string; label: string }[] = [
+  { dot: 'bg-stone-300', label: 'Not started' },
+  { dot: 'bg-amber-400', label: 'In progress' },
+  { dot: 'bg-emerald-500', label: 'Exam ready' },
+  { dot: 'bg-red-500', label: 'Revision due' },
+];
 
 function isRevisionDue(row: CoverageRow): boolean {
   if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') return false;
@@ -149,20 +162,21 @@ export function CoverageMatrix() {
   return (
     <div className="bg-white rounded-2xl border border-stone-200 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500 mb-1">Preparation Map</h2>
-      <p className="text-xs text-stone-400 mb-2">Tap a section, then tap a topic to cycle its status.</p>
-      {/* The `title` tooltip on each chip never fires on a mobile tap, so
-          every status needs to be explained here in text, not just on hover. */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[10px] text-stone-500">
-        {STUDENT_CYCLE.map((s) => (
-          <span key={s} className="inline-flex items-center gap-1">
-            <span>{STATUS_GLYPH[s]}</span>{STATUS_LABEL[s]}
+      <p className="text-xs text-stone-400 mb-2.5">Tap a section, then tap a topic to move it forward.</p>
+      {/* Colour legend — the `title` tooltip on each chip never fires on a
+          mobile tap, so the colour meaning has to live here as text. One
+          colour, one meaning: grey → amber → green, red when revision is due. */}
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 mb-1.5">
+        {LEGEND.map((it) => (
+          <span key={it.label} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-stone-600">
+            <span className={cn('h-2.5 w-2.5 rounded-full', it.dot)} />
+            {it.label}
           </span>
         ))}
-        <span className="inline-flex items-center gap-1">
-          <span>{STATUS_GLYPH.exam_ready}</span>Exam ready (earned, not tappable)
-        </span>
-        <span className="inline-flex items-center gap-1 text-red-600 font-medium">Red = revision due</span>
       </div>
+      <p className="mb-3 text-[10px] leading-relaxed text-stone-400">
+        The dot fills — ○ ◔ ◑ ◕ — as a topic moves from just started to revision. Green is earned from your results, not a tap.
+      </p>
       <div className="space-y-2">
         {KNOWLEDGE_GRAPH.map((section) => {
           const allUnits = section.groups.flatMap((g) => g.units);
