@@ -85,13 +85,32 @@ export default async function CatLeadsPage() {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'admin') redirect('/login');
 
-  const { data: leads, count } = await admin
-    .from('cat_test_leads')
-    .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .limit(200);
+  const [{ data: leads, count }, { data: signups }] = await Promise.all([
+    admin
+      .from('cat_test_leads')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .limit(200),
+    // Every real student account IS a lead — founder: students who logged in
+    // (Brijesh, Dinesh, …) were invisible here because they signed up through
+    // /start and never took the readiness quiz. Newest first, demo excluded.
+    admin
+      .from('profiles')
+      .select('id, full_name, phone, created_at, onboarding_completed, signup_source, syllabus_target_date, pain_points, wants_mentor, buddy_id')
+      .eq('role', 'student')
+      .neq('is_demo', true)
+      .order('created_at', { ascending: false })
+      .limit(200),
+  ]);
 
   const rows = (leads ?? []) as Lead[];
+  const signupRows = (signups ?? []) as {
+    id: string; full_name: string | null; phone: string | null; created_at: string;
+    onboarding_completed: boolean | null; signup_source: string | null;
+    syllabus_target_date: string | null; pain_points: string[] | null;
+    wants_mentor: boolean | null; buddy_id: string | null;
+  }[];
+  const waLink = (phone: string | null) => phone ? `https://wa.me/${phone.replace(/\D/g, '').replace(/^(?!91)/, '91')}` : null;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -117,11 +136,57 @@ export default async function CatLeadsPage() {
         <div className="px-1 mb-6">
           <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Lead capture</p>
           <h1 className="text-2xl font-bold text-stone-900 mt-1 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-            CAT Test Leads
+            Leads
           </h1>
           <p className="text-sm text-stone-500 mt-1">
-            From <code className="text-xs bg-stone-100 px-1 rounded">/cat-readiness</code> page
+            App signups + quiz leads from <code className="text-xs bg-stone-100 px-1 rounded">/cat-readiness</code>
           </p>
+        </div>
+
+        {/* ── App signups — every student who created an account ── */}
+        <div className="px-1 mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-bold text-stone-900">App signups</h2>
+          <span className="text-xs font-semibold text-stone-500">{signupRows.length} student{signupRows.length === 1 ? '' : 's'}</span>
+        </div>
+        {signupRows.length === 0 ? (
+          <Card className="p-6 text-center text-stone-500 text-sm mb-8">No student signups yet.</Card>
+        ) : (
+          <div className="space-y-2.5 mb-8">
+            {signupRows.map((s) => (
+              <Card key={s.id} className="p-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-stone-900 truncate">{s.full_name ?? 'Student'}</p>
+                    <p className="text-xs text-stone-500">{s.phone ?? 'no phone'} · {new Date(s.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {s.onboarding_completed
+                      ? <Badge color="green">Plan built</Badge>
+                      : <Badge color="amber">Mid-funnel</Badge>}
+                    {waLink(s.phone) && (
+                      <a href={waLink(s.phone)!} target="_blank" rel="noopener noreferrer"
+                        className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                        WhatsApp
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+                  {s.wants_mentor === true && <span className="rounded bg-violet-50 px-1.5 py-0.5 font-semibold text-violet-700">wants buddy</span>}
+                  {!s.buddy_id && s.wants_mentor === true && <span className="rounded bg-rose-50 px-1.5 py-0.5 font-semibold text-rose-700">unassigned</span>}
+                  {s.syllabus_target_date && <span className="rounded bg-stone-100 px-1.5 py-0.5 font-semibold text-stone-600">target {new Date(s.syllabus_target_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}
+                  {(s.pain_points ?? []).map((p) => (
+                    <span key={p} className="rounded bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">{p.replace(/_/g, ' ')}</span>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* ── Quiz leads (/cat-readiness) ── */}
+        <div className="px-1 mb-3">
+          <h2 className="text-sm font-bold text-stone-900">Readiness-quiz leads</h2>
         </div>
 
         {/* Summary */}
