@@ -21,7 +21,12 @@ import type { CoverageSectionId } from '@/lib/topics-constants';
 // Supabase until ScreenLoginBuild's verify call, which hands the whole
 // accumulated payload over in one request.
 const TOTAL_SCREENS = 9; // excludes the final login/build screen from the progress bar
-const DRAFT_KEY = 'cr_preauth_draft_v1';
+// v2: bumping the key invalidates every draft saved before clear-on-signup
+// existed — old devices were resuming a finished/stale journey forever.
+const DRAFT_KEY = 'cr_preauth_draft_v2';
+// A draft older than this is an abandoned lead, not a session to resume —
+// dropping them prevents a week-old half-journey from resurrecting.
+const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
 
 const TOPIC_SECTION_ORDER: CoverageSectionId[] = ['DILR', 'VARC', 'QA', 'MOCKS', 'READING'];
 const TOPIC_SECTION_INTRO: Partial<Record<CoverageSectionId, string>> = {
@@ -34,10 +39,17 @@ const TOPIC_SECTION_INTRO: Partial<Record<CoverageSectionId, string>> = {
 function loadDraft(): { stepIdx: number; data: Record<string, unknown> } | null {
   if (typeof window === 'undefined') return null;
   try {
+    // Old-version drafts are dead weight — clear them so they can never
+    // resume a journey again on this device.
+    window.localStorage.removeItem('cr_preauth_draft_v1');
     const raw = window.localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed?.stepIdx !== 'number' || typeof parsed?.data !== 'object') return null;
+    if (typeof parsed?.savedAt !== 'number' || Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
+      window.localStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -50,7 +62,7 @@ export default function StartPage() {
   const [data, setData] = useState<Record<string, unknown>>(() => draft?.data ?? {});
 
   useEffect(() => {
-    try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ stepIdx, data })); } catch { /* best-effort */ }
+    try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ stepIdx, data, savedAt: Date.now() })); } catch { /* best-effort */ }
   }, [stepIdx, data]);
 
   const advance = (patch?: Record<string, unknown>) => {
