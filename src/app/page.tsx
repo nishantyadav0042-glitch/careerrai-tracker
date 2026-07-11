@@ -6,13 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  // A demo session must never claim the bare domain. The /demo share link
-  // signs the browser into the demo account with a real session, and that
-  // session persists — so a visitor who once clicked the demo would forever
-  // land inside it when they type the domain, instead of on login/signup.
-  // The demo is only ever entered through its explicit /demo link.
   const cookieStore = await cookies();
-  if (cookieStore.get('cr_demo')?.value === '1') redirect('/login');
 
   const user = await getAuthUser();
   if (!user) redirect('/welcome');

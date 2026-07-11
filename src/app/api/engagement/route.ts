@@ -4,8 +4,6 @@ import { getAuthUser } from '@/lib/auth';
 
 // Records free-user engagement signals (§D) that drive the sales-ready trigger.
 // The hottest signal is buddy_cta_clicks — every reach for the locked buddy.
-// Demo sessions are blocked from mutating by the proxy, so this only ever runs
-// for real users.
 const EVENTS = ['buddy_cta_click', 'tour_completed', 'mock_opened', 'sample_debrief_viewed'] as const;
 type EngagementEvent = (typeof EVENTS)[number];
 

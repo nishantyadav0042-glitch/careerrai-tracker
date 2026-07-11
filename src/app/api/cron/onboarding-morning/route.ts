@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
     .from('profiles')
     .select('id, full_name, notif_prefs, created_at, onboarding_completed')
     .eq('role', 'student')
-    .eq('is_demo', false)
     .gte('created_at', fourteenDaysAgo);
   if (!candidates?.length) return NextResponse.json({ sent: 0, reason: 'no_recent_signups' });
 

@@ -25,7 +25,6 @@ on:
     - cron: '0 2 1,11,21 * *' # cleanup-voice-notes
     - cron: '0 3 * * *'    # expire-subscriptions
     - cron: '0 4 * * *'    # renewal-reminders
-    - cron: '0 1 * * *'    # refresh-demo
     - cron: '30 9 * * *'   # sales-ready
   workflow_dispatch:
     inputs:
@@ -89,8 +88,6 @@ jobs:
                 call "/api/cron/expire-subscriptions" ;;
               "0 4 * * *")
                 call "/api/cron/renewal-reminders" ;;
-              "0 1 * * *")
-                call "/api/cron/refresh-demo" ;;
               "30 9 * * *")
                 call "/api/cron/sales-ready" ;;
               *)
@@ -112,7 +109,6 @@ jobs:
               /api/admin/cleanup-voice-notes \
               /api/cron/expire-subscriptions \
               /api/cron/renewal-reminders \
-              /api/cron/refresh-demo \
               /api/cron/sales-ready
             do
               call "$p"

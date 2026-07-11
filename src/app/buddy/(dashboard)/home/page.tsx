@@ -16,7 +16,7 @@ export default async function BuddyHomePage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, full_name, is_demo, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
+    .select('role, full_name, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
     .eq('id', user.id)
     .single();
 
@@ -34,7 +34,7 @@ export default async function BuddyHomePage() {
     !profile.current_company && 'company',
   ].filter(Boolean) as string[];
   const completenessPct = Math.round(((7 - missingItems.length) / 7) * 100);
-  const showProfileNudge = !profile.is_demo && missingItems.length > 0;
+  const showProfileNudge = missingItems.length > 0;
 
   const [{ data: students }, { data: pendingRequests }] = await Promise.all([
     admin

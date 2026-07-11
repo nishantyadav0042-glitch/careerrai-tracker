@@ -81,7 +81,7 @@ export default async function NotificationHealthPage() {
     admin.from('daily_reports').select('student_id, report_date').gte('report_date', reportsWindowStart),
     admin.from('profiles')
       .select('id, full_name, notif_prefs, push_subscription, push_died_at, onboarding_completed')
-      .eq('role', 'student').eq('is_demo', false),
+      .eq('role', 'student'),
   ]);
 
   const rows = (notifs ?? []) as NotifRow[];

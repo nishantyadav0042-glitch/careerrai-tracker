@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
     .from('profiles')
     .select('id, full_name, notif_prefs, created_at, is_working_professional, self_reported_weakest_section, self_reported_weak_topic, study_target_hours, hours_available, weekend_hours_available')
     .eq('role', 'student')
-    .eq('is_demo', false)
     .eq('onboarding_completed', true);
   if (!students?.length) return NextResponse.json({ slot, sent: 0 });
 
