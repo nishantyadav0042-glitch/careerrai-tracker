@@ -82,8 +82,26 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   }, []);
 
   async function handleClick() {
-    // iOS never exposes a prompt — go straight to the Add-to-Home-Screen steps.
-    if (ios) { setShowSteps(true); return; }
+    // iOS never exposes a native prompt. Route to /app — the guided
+    // Add-to-Home-Screen page. If the user is signed in, first mint a one-time
+    // hand-off token and bake it into the URL, so the installed app (which has
+    // its own separate storage on iOS) opens LOGGED IN instead of on a cold
+    // login screen. If minting fails (not signed in / offline), /app still
+    // shows the plain guide.
+    if (ios) {
+      setWorking(true);
+      try {
+        const res = await fetch('/api/install/handoff', { method: 'POST' });
+        if (res.ok) {
+          const { url } = await res.json();
+          window.location.href = url;
+          return;
+        }
+      } catch { /* fall through to the plain guide */ }
+      setWorking(false);
+      window.location.href = '/app';
+      return;
+    }
 
     let prompt = deferredPrompt;
     if (!prompt) {

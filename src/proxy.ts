@@ -16,6 +16,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/') &&
     !pathname.startsWith('/api/auth/') &&
     !pathname.startsWith('/api/cat-leads') &&
+    !pathname.startsWith('/api/install') &&
     request.cookies.get('cr_demo')?.value === '1'
   ) {
     const method = request.method.toUpperCase();
