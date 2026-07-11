@@ -16,7 +16,7 @@ import { AdminAllowlist, type AllowlistRow } from './admin-allowlist';
 import { AdminTabs, type AdminTab } from './admin-tabs';
 import { PushGate } from '@/components/push-gate';
 import type { Profile, DailyReport } from '@/types';
-import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Heart, Ticket, BarChart2, PhoneCall, BellRing } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Users, TrendingUp, FileText, IndianRupee, Ticket, BarChart2, PhoneCall, BellRing } from 'lucide-react';
 import { computeBuddySLA } from '@/lib/buddy-sla';
 import { cn } from '@/lib/utils';
 
@@ -424,12 +424,6 @@ export default async function AdminPage() {
             className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
           >
             <IndianRupee className="w-3.5 h-3.5" /> Payments
-          </Link>
-          <Link
-            href="/admin/scholarships"
-            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg px-3 py-2.5 transition-colors"
-          >
-            <Heart className="w-3.5 h-3.5" /> Scholarships
           </Link>
           <Link
             href="/admin/coupons"
