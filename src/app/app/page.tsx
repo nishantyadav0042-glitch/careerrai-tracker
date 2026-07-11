@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Share, Plus, ChevronDown } from 'lucide-react';
+import { Share, SquarePlus, Copy, Bookmark, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 // The installed-PWA entry point. Two jobs, decided by display mode:
 //  • Standalone (opened from the Home Screen): a one-time hand-off token in
 //    the URL is exchanged for a real session, so an iPhone user who installed
 //    the app lands logged in instead of on a cold login screen.
-//  • Browser (Safari): this IS the "Add to Home Screen" guide. We DON'T
-//    consume the token here — leaving it in the URL means A2HS saves it, so
-//    the first launch of the installed app can auto-log-in.
+//  • Browser (Safari): a VISUAL, step-by-step "Add to Home Screen" walkthrough
+//    (founder: show them where to tap, don't just list steps). We DON'T consume
+//    the token here — leaving it in the URL means A2HS saves it, so the first
+//    launch of the installed app can auto-log-in.
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return window.matchMedia?.('(display-mode: standalone)').matches
@@ -20,12 +21,13 @@ function isIOS(): boolean {
 }
 
 export default function AppEntry() {
-  const [state, setState] = useState<'checking' | 'exchanging' | 'guide' | 'error'>('checking');
+  const [state, setState] = useState<'checking' | 'exchanging' | 'guide'>('checking');
+  const [ios, setIos] = useState(false);
+  const [gstep, setGstep] = useState<0 | 1>(0); // iOS walkthrough step
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- entry routing must run client-side after mount */
     const token = new URLSearchParams(window.location.search).get('k');
-
     if (isStandalone()) {
       if (!token) { window.location.replace('/student/tracker'); return; }
       setState('exchanging');
@@ -36,16 +38,12 @@ export default function AppEntry() {
       })
         .then(async (res) => {
           const json = await res.json().catch(() => ({}));
-          // On success go to the destination. On failure (e.g. a REPEAT launch
-          // where the one-time token is already spent) fall to /student/tracker
-          // and let the proxy decide: if the PWA already has a session from the
-          // first launch it loads straight in; if not, the proxy sends /login.
           window.location.replace(res.ok && json.dest ? json.dest : '/student/tracker');
         })
         .catch(() => window.location.replace('/student/tracker'));
       return;
     }
-    // In a normal browser tab → show the install guide.
+    setIos(isIOS());
     setState('guide');
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
@@ -59,54 +57,136 @@ export default function AppEntry() {
     );
   }
 
-  const ios = isIOS();
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center bg-white px-6 pb-28 pt-10 text-center">
+    <div className="flex min-h-[100dvh] flex-col items-center bg-white px-6 py-8 text-center">
       <div className="mx-auto flex w-full max-w-xs flex-1 flex-col items-center justify-center gap-5">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl shadow-lg shadow-stone-900/15">📲</div>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-900 text-2xl shadow-lg shadow-stone-900/15">📲</div>
         <div>
-          <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your Home&nbsp;Screen</h1>
+          <h1 className="text-xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your Home&nbsp;Screen</h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            <span className="font-semibold text-stone-700">Just 3&nbsp;MB.</span> Opens like a real app, and it&apos;s the only way your daily reminders reach you{ios ? ' on iPhone' : ''}. You&apos;ll be <span className="font-semibold text-stone-700">signed in automatically.</span>
+            <span className="font-semibold text-stone-700">Just 3&nbsp;MB.</span> It&apos;s your job #1 — and the only way reminders reach you{ios ? ' on iPhone' : ''}. You&apos;ll be <span className="font-semibold text-stone-700">signed in automatically.</span>
           </p>
         </div>
 
         {ios ? (
-          <div className="w-full space-y-2.5 text-left">
-            <Step n={1}>
-              <>Tap the <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 align-middle font-semibold text-blue-700"><Share className="h-3.5 w-3.5" />Share</span> button in Safari&apos;s bar.</>
-            </Step>
-            <Step n={2}>
-              <>Scroll down, tap <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 align-middle font-semibold text-stone-800"><Plus className="h-3.5 w-3.5" />Add to Home Screen</span>.</>
-            </Step>
-            <Step n={3}><>Tap <b>Add</b> — then open CareerRai from your Home Screen. Done.</></Step>
-            <p className="pl-9 pt-0.5 text-[11px] text-stone-400">Works in <b>Safari</b> only. In Chrome? Open this page in Safari first.</p>
+          <div className="w-full">
+            {/* step dots */}
+            <div className="mb-3 flex items-center justify-center gap-1.5">
+              <span className={`h-1.5 rounded-full transition-all ${gstep === 0 ? 'w-5 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
+              <span className={`h-1.5 rounded-full transition-all ${gstep === 1 ? 'w-5 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
+            </div>
+
+            {gstep === 0 ? (
+              <div className="animate-[fadeIn_0.35s_ease]">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step 1 of 2</p>
+                <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap the Share button</p>
+                <SafariBarMock />
+                <button
+                  type="button"
+                  onClick={() => setGstep(1)}
+                  className="mt-4 w-full rounded-2xl bg-stone-900 py-3.5 text-sm font-semibold text-white active:scale-[0.98]"
+                >
+                  I tapped Share — next →
+                </button>
+              </div>
+            ) : (
+              <div className="animate-[fadeIn_0.35s_ease]">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step 2 of 2</p>
+                <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap &ldquo;Add to Home Screen&rdquo;</p>
+                <ShareSheetMock />
+                <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-left text-[12px] leading-snug text-emerald-800">
+                  <b>Then:</b> tap <b>Add</b>, open <b>CareerRai</b>{' '}from your Home Screen — you&apos;ll be signed in and land straight on your plan.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGstep(0)}
+                  className="mt-3 w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
+                >
+                  ← Back to step 1
+                </button>
+              </div>
+            )}
+            <p className="mt-3 text-[11px] text-stone-400">Works in <b>Safari</b> only. In Chrome? Open this page in Safari first.</p>
           </div>
         ) : (
           <div className="w-full space-y-2.5 text-left">
-            <Step n={1}><>Open your browser menu (<b>⋮</b>, top-right).</></Step>
-            <Step n={2}><>Tap <b>Install app</b> or <b>Add to Home screen</b>.</></Step>
-            <Step n={3}><>Confirm — CareerRai installs like a normal app.</></Step>
+            <AndroidStep n={1}><>Open your browser menu (<b>⋮</b>, top-right).</></AndroidStep>
+            <AndroidStep n={2}><>Tap <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 align-middle font-semibold text-stone-800"><Plus className="h-3.5 w-3.5" />Install app</span> or <b>Add to Home screen</b>.</></AndroidStep>
+            <AndroidStep n={3}><>Confirm — CareerRai installs like a normal app, signed in.</></AndroidStep>
           </div>
         )}
       </div>
 
-      {/* The "do it now" cue: a pulsing arrow pointing at Safari's Share button
-          (bottom toolbar on iPhone). This is what makes it feel guided rather
-          than a wall of text. */}
-      {ios && (
+      {/* On step 1, a live cue pointing at the real Safari Share button below. */}
+      {ios && gstep === 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-3 z-10 flex flex-col items-center gap-1">
           <div className="flex items-center gap-1.5 rounded-full bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg shadow-stone-900/25">
-            Tap <Share className="h-3.5 w-3.5" /> Share down here
+            Your real Share button is down here
           </div>
-          <ChevronDown className="h-7 w-7 animate-bounce text-stone-900" strokeWidth={2.5} />
+          <span className="text-2xl text-stone-900 animate-bounce">↓</span>
         </div>
       )}
+
+      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
 }
 
-function Step({ n, children }: { n: number; children: React.ReactNode }) {
+// A faithful mock of Safari's bottom toolbar with the Share button highlighted.
+function SafariBarMock() {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-stone-100 p-3">
+      <div className="flex items-center justify-around rounded-xl bg-white px-3 py-3 shadow-sm">
+        <ChevronLeft className="h-5 w-5 text-stone-300" />
+        <ChevronRight className="h-5 w-5 text-stone-200" />
+        <span className="relative flex items-center justify-center">
+          <span className="absolute inline-flex h-9 w-9 animate-ping rounded-full bg-blue-400/30" />
+          <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 ring-2 ring-blue-500">
+            <Share className="h-5 w-5 text-blue-600" />
+          </span>
+        </span>
+        <Bookmark className="h-5 w-5 text-stone-300" />
+        <Copy className="h-5 w-5 text-stone-300" />
+      </div>
+      <p className="mt-2 text-center text-[12px] font-bold text-blue-600">☝ Tap the highlighted Share icon</p>
+    </div>
+  );
+}
+
+// A faithful mock of the iOS Share sheet with "Add to Home Screen" highlighted.
+function ShareSheetMock() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 text-left shadow-sm">
+      <div className="flex items-center gap-2.5 border-b border-stone-200 bg-white px-3 py-2.5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-900 text-sm">📲</div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-stone-900">CareerRai</p>
+          <p className="truncate text-[10px] text-stone-400">careerrai-daily.vercel.app</p>
+        </div>
+      </div>
+      <div className="bg-white">
+        <ActionRow icon={<Copy className="h-4 w-4 text-stone-400" />} label="Copy" muted />
+        <ActionRow icon={<Bookmark className="h-4 w-4 text-stone-400" />} label="Add Bookmark" muted />
+        <div className="flex items-center justify-between bg-blue-50 px-3 py-2.5 ring-2 ring-inset ring-blue-400">
+          <span className="text-[13px] font-bold text-stone-900">Add to Home Screen</span>
+          <SquarePlus className="h-5 w-5 text-stone-900" />
+        </div>
+        <ActionRow icon={<Share className="h-4 w-4 text-stone-400" />} label="Markup" muted />
+      </div>
+    </div>
+  );
+}
+
+function ActionRow({ icon, label, muted }: { icon: React.ReactNode; label: string; muted?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between border-b border-stone-100 px-3 py-2.5 ${muted ? 'opacity-55' : ''}`}>
+      <span className="text-[13px] text-stone-700">{label}</span>
+      {icon}
+    </div>
+  );
+}
+
+function AndroidStep({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2.5">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-900 text-xs font-bold text-white">{n}</span>
