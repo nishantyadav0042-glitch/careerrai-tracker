@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { remainingSyllabusHours } from '@/lib/study-pace';
 
 // Persists the post-login sequence: the date the student (re)confirms in the
 // reconciliation step, and the one-time "done" flag once they finish it.
@@ -42,6 +43,26 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  // A date change WITHOUT explicit hours (the Reschedule control) re-derives
+  // the daily commitment from the same per-topic pace model as the ring —
+  // remaining syllabus hours ÷ days to the new date — so the ring, today's
+  // plan, and the stored commitment all move together. Never left stale.
+  if (update.syllabus_target_date && update.study_target_hours == null) {
+    const { data: coverage } = await admin
+      .from('topic_coverage')
+      .select('topic, status')
+      .eq('student_id', user.id);
+    const remaining = remainingSyllabusHours(coverage ?? []);
+    const daysLeft = Math.max(1, Math.ceil((new Date((update.syllabus_target_date as string) + 'T00:00:00').getTime() - Date.now()) / 86_400_000));
+    if (remaining > 0) {
+      const h = Math.min(12, Math.max(1, Math.round((remaining / daysLeft) * 2) / 2));
+      update.study_target_hours = h;
+      update.hours_available = h;
+      update.weekend_hours_available = h;
+    }
+  }
+
   const { error } = await admin.from('profiles').update(update).eq('id', user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

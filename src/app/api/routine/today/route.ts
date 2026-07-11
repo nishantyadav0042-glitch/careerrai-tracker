@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { remainingSyllabusHours } from '@/lib/study-pace';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -39,7 +40,7 @@ export async function GET() {
       .from('profiles')
       .select(`
         is_working_professional, is_repeater, target_percentile,
-        hours_available, study_target_hours, weekend_hours_available,
+        hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
         baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker
       `)
@@ -109,12 +110,25 @@ export async function GET() {
   // blocking you," so this is asked once and answered, not defaulted.
   const biggestBlocker = profile.biggest_blocker as Blocker | null;
 
+  // ONE source of truth for "how big is today": the same pace math as the
+  // Home ring. When a target date exists, hours/day = remaining syllabus
+  // hours ÷ days left — so rescheduling the date instantly resizes today's
+  // plan too, and the ring's number and the plan below it can never disagree
+  // (founder: a 6h ring above a 3.5h plan reads as a bogus plan).
+  const targetIso = profile.syllabus_target_date as string | null;
+  let paceHours: number | null = null;
+  if (targetIso) {
+    const daysLeft = Math.max(1, Math.ceil((new Date(targetIso + 'T00:00:00').getTime() - Date.now()) / 86_400_000));
+    const remaining = remainingSyllabusHours(coverageRows ?? []);
+    if (remaining > 0) paceHours = Math.min(12, Math.max(1, Math.round((remaining / daysLeft) * 2) / 2));
+  }
+
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
     targetPercentile: profile.target_percentile as number | null,
-    weekdayHours: (profile.study_target_hours ?? profile.hours_available) as number | null,
-    weekendHours: profile.weekend_hours_available as number | null,
+    weekdayHours: paceHours ?? ((profile.study_target_hours ?? profile.hours_available) as number | null),
+    weekendHours: paceHours ?? (profile.weekend_hours_available as number | null),
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
@@ -130,7 +144,14 @@ export async function GET() {
   // in the parallel wave above.)
   const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history);
 
+  // A routine frozen earlier today at DIFFERENT hours (the student just
+  // rescheduled their target) is stale — regenerate it, but only while
+  // nothing is ticked off yet: completed work is never wiped by a resize.
   let routine = existing;
+  if (routine && (completions ?? []).length === 0 && paceHours != null) {
+    const expectedMinutes = Math.round(paceHours * 60);
+    if (Math.abs((routine.est_minutes as number) - expectedMinutes) > 45) routine = null;
+  }
   if (!routine) {
     const generated = generateRoutine(routineProfile, new Date(), history, topicChoices);
     const { data: inserted, error } = await admin

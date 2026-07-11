@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import type { PaceResult } from '@/lib/study-pace';
 
 // The daily-hours ring: the single number that keeps a student honest — "to
@@ -23,7 +22,6 @@ const TONE: Record<PaceResult['status'], { ring: string; chipBg: string; chipTex
 };
 
 export function PaceRing({ pace, targetIso }: { pace: PaceResult; targetIso: string }) {
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
@@ -47,7 +45,12 @@ export function PaceRing({ pace, targetIso }: { pace: PaceResult; targetIso: str
       });
       if (!res.ok) throw new Error();
       setEditing(false);
-      router.refresh();
+      // Full reload, not router.refresh(): the ring is server-rendered but
+      // Today's Study Plan fetches client-side on mount — only a real reload
+      // guarantees the ring, today's plan, and phase dates all re-sync to the
+      // new date together (a partial refresh is how "6h ring, 3.5h plan"
+      // mismatches happen).
+      window.location.reload();
     } catch {
       setErr('Could not update — try again.');
     } finally {
