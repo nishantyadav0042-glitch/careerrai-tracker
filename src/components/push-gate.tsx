@@ -88,6 +88,13 @@ export function PushGate({ mode, notifPrefs }: PushGateProps) {
   const [dismissing, setDismissing] = useState(false);
   const copy = COPY[mode];
 
+  // Inside the INSTALLED app the notification ask is StandaloneNotifAsk
+  // ("our job #1"), not these browser gates — never stack both.
+  if (typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches
+    || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true))) {
+    return null;
+  }
+
   function dismiss() {
     router.refresh();
   }

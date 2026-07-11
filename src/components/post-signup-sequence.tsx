@@ -255,8 +255,8 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
           <div className="space-y-6 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
-              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your plan is set. Get the app.</h1>
-              <p className="mt-2 text-sm text-stone-500">Just ~3 MB · one tap to your plan every day · it&apos;s how your reminders reach you.</p>
+              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your first job: install the app.</h1>
+              <p className="mt-2 text-sm text-stone-500">Just ~3 MB, once. One tap to your plan every day — and it&apos;s the only way our reminders reach you.</p>
             </div>
             <div className="space-y-2 pt-2">
               <InstallAppButton variant="banner" />
@@ -336,28 +336,29 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
           <div className="space-y-5">
             <div className="text-center">
               <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>The deal, plainly.</h1>
-              <p className="mt-1.5 text-sm text-stone-500">Two jobs. You do yours, we do ours.</p>
+              <p className="mt-1.5 text-sm text-stone-500">Three jobs each. We both show up daily.</p>
             </div>
             <div className="space-y-3">
               <div className="rounded-2xl border-2 border-stone-900 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Your daily job</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Your 3 jobs</p>
                 <ul className="mt-2 space-y-1.5">
-                  {['Complete your study plan', 'Log your prep — right here'].map((t) => (
+                  {['Install the app — now, just once', 'Complete your study plan', 'Log your prep daily — right here'].map((t, i) => (
                     <li key={t} className="flex items-center gap-2 text-sm font-medium text-stone-800">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[9px] text-white">✓</span>{t}
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[9px] font-bold text-white">{i + 1}</span>{t}
                     </li>
                   ))}
                 </ul>
               </div>
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Our daily job</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Our 3 jobs</p>
                 <ul className="mt-2 space-y-1.5">
-                  {['Remind you, every day', 'Track your strengths & weak spots', 'Plan tomorrow, so you never guess'].map((t) => (
+                  {['Remind you, every day', 'Track your strengths & weak spots', 'Plan tomorrow, so you never guess'].map((t, i) => (
                     <li key={t} className="flex items-center gap-2 text-sm font-medium text-stone-800">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[9px] text-stone-700">✓</span>{t}
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[9px] font-bold text-stone-700">{i + 1}</span>{t}
                     </li>
                   ))}
                 </ul>
+                <p className="mt-2 text-[11px] leading-snug text-stone-400">Our reminders reach you through the app — that&apos;s why installing is your job #1. We&apos;ll ask for notification permission there.</p>
               </div>
             </div>
             <button
