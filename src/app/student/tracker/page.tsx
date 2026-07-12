@@ -11,6 +11,7 @@ import { CoachLine } from '@/components/coach-line';
 import { PaceRing } from '@/components/pace-ring';
 import { remainingSyllabusHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
+import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -40,7 +41,7 @@ export default async function DailyTrackerPage() {
   // parallel wave and are handed to computeTopicMemory prefetched, instead of
   // running as a second serial round-trip wave after this Promise.all resolves.
   const [
-    { data: profile },
+    profile,
     { data: sessions },
     { data: logs },
     { data: recentMock },
@@ -48,10 +49,7 @@ export default async function DailyTrackerPage() {
     completionRecords,
     { data: coverageRows },
   ] = await Promise.all([
-    admin
-      .from('profiles')
-      .select('full_name, buddy_id, password_set, created_at, notif_prefs, attempt_year, is_repeater, is_working_professional, syllabus_target_date, study_target_hours')
-      .eq('id', user.id).single(),
+    getStudentProfile(user.id),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link')

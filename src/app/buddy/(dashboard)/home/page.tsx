@@ -14,11 +14,28 @@ export default async function BuddyHomePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role, full_name, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
-    .eq('id', user.id)
-    .single();
+  // The students + pending-requests reads depend only on user.id, not on the
+  // profile/role gate, so they ride in the same wave as the profile fetch rather
+  // than waiting behind it. On the rare non-buddy redirect path the two extra
+  // reads are wasted; on every real buddy load we save a serial round-trip.
+  const [{ data: profile }, { data: students }, { data: pendingRequests }] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('role, full_name, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
+      .eq('id', user.id)
+      .single(),
+    admin
+      .from('profiles')
+      .select('id, full_name')
+      .eq('buddy_id', user.id)
+      .order('full_name'),
+    admin
+      .from('session_requests')
+      .select('id, student_id, message, created_at, profiles!session_requests_student_id_fkey(full_name)')
+      .eq('buddy_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
+  ]);
 
   if (profile?.role !== 'buddy') redirect('/');
 
@@ -35,20 +52,6 @@ export default async function BuddyHomePage() {
   ].filter(Boolean) as string[];
   const completenessPct = Math.round(((7 - missingItems.length) / 7) * 100);
   const showProfileNudge = missingItems.length > 0;
-
-  const [{ data: students }, { data: pendingRequests }] = await Promise.all([
-    admin
-      .from('profiles')
-      .select('id, full_name')
-      .eq('buddy_id', user.id)
-      .order('full_name'),
-    admin
-      .from('session_requests')
-      .select('id, student_id, message, created_at, profiles!session_requests_student_id_fkey(full_name)')
-      .eq('buddy_id', user.id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false }),
-  ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Buddy';
 
