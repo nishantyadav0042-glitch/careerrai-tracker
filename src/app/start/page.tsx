@@ -13,6 +13,10 @@ import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-c
 import ScreenMentor from './screens/screen-mentor';
 import ScreenLoginBuild from './screens/screen-login-build';
 import type { CoverageSectionId } from '@/lib/topics-constants';
+import { trackFunnel } from '@/lib/funnel';
+
+// Screen names for the funnel beacon — index matches stepIdx.
+const FUNNEL_STEPS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reassurance', 'topic-coverage', 'mentor', 'login-build'];
 
 // Founder-directed rebuild: every onboarding question now happens BEFORE
 // the account exists — "you decide the date, you own the plan" comes first,
@@ -63,6 +67,11 @@ export default function StartPage() {
   useEffect(() => {
     try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ stepIdx, data, savedAt: Date.now() })); } catch { /* best-effort */ }
   }, [stepIdx, data]);
+
+  // Funnel beacon: record which onboarding screen this visitor reached.
+  useEffect(() => {
+    trackFunnel(`start:${FUNNEL_STEPS[Math.min(stepIdx, FUNNEL_STEPS.length - 1)]}`);
+  }, [stepIdx]);
 
   const advance = (patch?: Record<string, unknown>) => {
     if (patch) setData((prev) => ({ ...prev, ...patch }));

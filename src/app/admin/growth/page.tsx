@@ -21,10 +21,11 @@ export default async function AdminGrowthPage() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  const [{ data: profiles }, { data: streaks }, { data: engagement }] = await Promise.all([
+  const [{ data: profiles }, { data: streaks }, { data: engagement }, { data: funnel }] = await Promise.all([
     admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source'),
     admin.from('streak_data').select('student_id, last_log_date'),
     admin.from('student_engagement').select('student_id, buddy_cta_clicks'),
+    admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30)),
   ]);
 
   const students = (profiles ?? []).filter((p) => p.role === 'student');
@@ -80,6 +81,27 @@ export default async function AdminGrowthPage() {
 
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
   const onboardDrop = total - onboarded;
+
+  // ── Pre-signup /start funnel (anonymous visitors) ───────────────────────
+  const FUNNEL_ORDER: [string, string][] = [
+    ['start:need-check', 'Landed (need check)'],
+    ['start:target-date', 'Target date'],
+    ['start:dream-percentile', 'Dream percentile'],
+    ['start:quick-facts', 'Quick facts'],
+    ['start:pain-points', 'Pain points'],
+    ['start:reassurance', 'Reassurance'],
+    ['start:topic-coverage', 'Topic mapping (53 taps)'],
+    ['start:mentor', 'Mentor'],
+    ['start:login-build', 'Signup screen'],
+  ];
+  const anonByStep = new Map<string, Set<string>>();
+  for (const e of funnel ?? []) {
+    const set = anonByStep.get(e.step) ?? new Set<string>();
+    if (e.anon_id) set.add(e.anon_id);
+    anonByStep.set(e.step, set);
+  }
+  const funnelStages = FUNNEL_ORDER.map(([key, label]) => ({ label, count: anonByStep.get(key)?.size ?? 0 }));
+  const funnelTop = funnelStages[0]?.count ?? 0;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -139,6 +161,37 @@ export default async function AdminGrowthPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* Pre-signup /start funnel (anonymous) */}
+        <div className="rounded-2xl border border-stone-200 bg-white p-5 mb-6">
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-1">Onboarding funnel · /start visitors</p>
+          <p className="text-[11px] text-stone-400 mb-4">Distinct anonymous visitors reaching each screen (last 30 days). The big gap is where you lose them.</p>
+          {funnelTop > 0 ? (
+            <div className="space-y-3">
+              {funnelStages.map((st, i) => {
+                const ofTop = pct(st.count, funnelTop);
+                const ofPrev = i === 0 ? 100 : pct(st.count, funnelStages[i - 1].count);
+                const bigDrop = i > 0 && ofPrev < 70 && st.count > 0;
+                return (
+                  <div key={st.label}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="font-medium text-stone-800">{st.label}</span>
+                      <span className="tabular-nums text-stone-500">
+                        <b className="text-stone-900">{st.count}</b> · {ofTop}%
+                        {i > 0 && <span className={bigDrop ? 'text-rose-600 font-semibold' : 'text-stone-400'}> · {ofPrev}% kept</span>}
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-stone-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(2, ofTop)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-stone-400 py-2">No funnel data yet — it starts collecting as visitors hit /start. Give it a little traffic.</p>
+          )}
         </div>
 
         {/* Daily signups */}
