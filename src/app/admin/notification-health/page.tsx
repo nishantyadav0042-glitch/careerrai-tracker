@@ -35,6 +35,15 @@ const TYPE_LABEL: Record<string, string> = {
   mission_changed: 'Plan changed',
   weekly_evolved: 'Weekly evolution',
   inactive_recovery: 'Recovery ladder',
+  companion_kickoff: 'Companion · 08:00 kickoff',
+  companion_morning: 'Companion · 09:30 plan',
+  companion_spark: 'Companion · 11:00 strategy',
+  companion_fact: 'Companion · 13:00 tip',
+  companion_open: 'Companion · 17:00 window',
+  companion_wind: 'Companion · 18:30 evening',
+  companion_progress: 'Companion · 20:30 progress',
+  companion_log: 'Companion · 21:30 log',
+  companion_close: 'Companion · 22:00 close',
 };
 
 interface NotifRow {

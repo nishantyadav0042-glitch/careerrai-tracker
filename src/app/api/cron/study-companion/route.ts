@@ -5,6 +5,7 @@ import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 import {
   COMPANION_SLOTS, companionType, companionTip, weakestFromCoverage,
   morningCopy, factCopy, openCopy, progressCopy, logCopy, closeCopy,
+  kickoffCopy, sparkCopy, windCopy,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const ids = students.map((s) => s.id);
   const reportsWindowStart = new Date(now.getTime() - 21 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  const needsCoverage = slot === 'morning' || slot === 'open' || slot === 'fact' || slot === 'close';
+  const needsCoverage = slot === 'morning' || slot === 'open' || slot === 'fact' || slot === 'close' || slot === 'kickoff' || slot === 'wind';
 
   const [
     { data: streaks },
@@ -112,6 +113,22 @@ export async function POST(request: NextRequest) {
     let copy: SlotCopy | null = null;
     let reason = '';
     switch (slot) {
+      case 'kickoff':
+        // Morning greeting for graduated loggers — arc students get their own
+        // Day-N morning elsewhere, so don't double their morning.
+        if (isArc) break;
+        copy = kickoffCopy((streak?.current_streak as number | null) ?? 0, weakest);
+        reason = `Companion 08:00 — morning kickoff (${weakest} weakest)`;
+        break;
+      case 'spark':
+        copy = sparkCopy(dayOfYear);
+        reason = `Companion 11:00 — strategy tip, day ${dayOfYear} rotation`;
+        break;
+      case 'wind':
+        if (loggedToday) break; // already logged — no evening push
+        copy = windCopy(weakest);
+        reason = 'Companion 18:30 — evening block, not yet logged';
+        break;
       case 'morning':
         // Arc students get their own Day-N morning copy at 10:00 — no double.
         if (isArc || loggedToday) break;
