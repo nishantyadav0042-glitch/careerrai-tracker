@@ -45,7 +45,7 @@ const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' 
 
 export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }: MembershipCardProps) {
   const router = useRouter();
-  const [busy, setBusy] = useState<PlanId | 'refund' | null>(null);
+  const [busy, setBusy] = useState<PlanId | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [coupon, setCoupon] = useState('');
 
@@ -89,23 +89,6 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         },
       });
       rzp.open();
-    } catch {
-      setMessage('Something went wrong. Try again.');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function requestRefund() {
-    if (!confirm('Request a no-questions refund? Your founder will process it manually.')) return;
-    setBusy('refund');
-    setMessage(null);
-    try {
-      const res = await fetch('/api/payments/request-refund', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { setMessage(data.error ?? 'Could not submit request.'); return; }
-      setMessage('Refund requested. Your founder will be in touch.');
-      setTimeout(() => router.refresh(), 1500);
     } catch {
       setMessage('Something went wrong. Try again.');
     } finally {
@@ -225,16 +208,6 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
             One commitment for your whole prep season — no auto-debit, ever. {verb} when you&apos;re ready.
           </p>
         </>
-      )}
-
-      {status === 'active' && (
-        <button
-          onClick={requestRefund}
-          disabled={busy !== null}
-          className="text-xs text-stone-500 hover:text-stone-700 underline underline-offset-2 disabled:opacity-50"
-        >
-          {busy === 'refund' ? 'Submitting…' : 'Request refund'}
-        </button>
       )}
 
       {message && <p className="text-xs text-stone-600 mt-3">{message}</p>}
