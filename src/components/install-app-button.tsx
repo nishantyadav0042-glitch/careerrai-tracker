@@ -1,6 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Download, Share, Plus, X, Smartphone } from 'lucide-react';
+import { Download, Share, Plus, X, Smartphone, MessageCircle } from 'lucide-react';
+import { supportWhatsappUrl } from '@/lib/whatsapp';
+
+const INSTALL_HELP_MSG = "Hi, I need help installing the CareerRai app on my phone.";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -165,6 +168,21 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
 
   if (hidden) return null;
 
+  // One-tap WhatsApp escape hatch for anyone stuck on install — shown inside the
+  // help sheets (hidden if no support number is configured).
+  const waHelp = supportWhatsappUrl(INSTALL_HELP_MSG);
+  const waHelpRow = waHelp ? (
+    <a
+      href={waHelp}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+    >
+      <MessageCircle className="w-4 h-4" />
+      Facing issues? Chat with us on WhatsApp
+    </a>
+  ) : null;
+
   // Prominent orange banner (top of login) vs. subtle card (anywhere else)
   // vs. a single bracketed line for a low-commitment escape hatch right
   // under a primary CTA — for someone who just wants to try the app
@@ -250,6 +268,7 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
             >
               {copied ? 'Link copied ✓' : 'Copy link (paste in Chrome)'}
             </button>
+            {waHelpRow}
           </div>
         </div>
       )}
@@ -296,6 +315,7 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
                 </li>
               </ol>
             )}
+            {waHelpRow}
           </div>
         </div>
       )}
