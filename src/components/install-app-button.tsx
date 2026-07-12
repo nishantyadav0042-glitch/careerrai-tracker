@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Share, Plus, X, Smartphone, MessageCircle } from 'lucide-react';
 import { supportWhatsappUrl } from '@/lib/whatsapp';
+import { InstallCoach } from '@/components/install-coach';
 
 const INSTALL_HELP_MSG = "Hi, I need help installing the CareerRai app on my phone.";
 
@@ -98,6 +99,7 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   const [ios, setIos] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
   const [showChrome, setShowChrome] = useState(false);
+  const [coach, setCoach] = useState<'android-menu' | null>(null);
   const [copied, setCopied] = useState(false);
   const [working, setWorking] = useState(false);
 
@@ -147,13 +149,17 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
       deferredPrompt = null;
       return;
     }
-    // No native prompt fired. If this browser can't mint a clean WebAPK (an OEM
-    // default browser or an in-app webview), steer the user into Chrome instead
-    // of the "Add to Home screen" path that produces a package Play Protect
-    // blocks. A Chrome/Samsung/Edge user just needs the menu steps.
+    // No native prompt fired. Decide the cleanest fallback:
     if (isAndroid() && !isWebApkCapableBrowser()) {
+      // OEM default / in-app webview → its install path yields a Play-Protect-
+      // blocked package. Steer into Chrome instead.
       setShowChrome(true);
+    } else if (isAndroid()) {
+      // Chrome/Samsung/Edge but the auto-prompt didn't fire → point them at the
+      // real ⋮ menu on their live screen (menu install is clean here).
+      setCoach('android-menu');
     } else {
+      // Desktop / other → the short menu steps.
       setShowSteps(true);
     }
   }
@@ -239,6 +245,8 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   return (
     <>
       {trigger}
+
+      {coach && <InstallCoach target={coach} onClose={() => setCoach(null)} />}
 
       {showChrome && (
         <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowChrome(false)}>
