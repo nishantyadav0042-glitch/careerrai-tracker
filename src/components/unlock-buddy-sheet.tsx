@@ -102,7 +102,7 @@ export function UnlockBuddyButton({
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; reassure + refresh.
-          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} — IIM buddy` });
+          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} — IIM buddy` }, data.orderId);
           setMessage('Payment received — confirming your buddy… 🎉');
           setTimeout(() => router.refresh(), 4000);
         },
