@@ -185,7 +185,7 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
       className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
     >
       <MessageCircle className="w-4 h-4" />
-      Facing issues? Chat with us on WhatsApp
+      Facing issues? WhatsApp us
     </a>
   ) : null;
 
