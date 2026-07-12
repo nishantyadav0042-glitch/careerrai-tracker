@@ -21,6 +21,7 @@
     { "path": "/api/cron/study-companion?slot=open",     "schedule": "30 11 * * *" },
     { "path": "/api/cron/study-companion?slot=progress", "schedule": "0 15 * * *"  },
     { "path": "/api/cron/study-companion?slot=log",      "schedule": "0 16 * * *"  },
-    { "path": "/api/cron/study-companion?slot=close",    "schedule": "30 16 * * *" }
+    { "path": "/api/cron/study-companion?slot=close",    "schedule": "30 16 * * *" },
+    { "path": "/api/admin/security-monitor",             "schedule": "0 * * * *"   }
   ]
 }

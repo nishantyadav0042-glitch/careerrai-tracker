@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { grantPremiumAndQueueBuddy, revokePremium } from '@/lib/premium';
+import { logSecurityEvent } from '@/lib/security-log';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
 // Client-side "payment success" callbacks are never trusted.
@@ -67,6 +68,11 @@ export async function POST(request: NextRequest) {
           // Idempotent — safe on Razorpay retries (the status guard above stops
           // activate_payment re-running; these are no-ops the second time).
           await grantPremiumAndQueueBuddy(admin, row.student_id);
+
+          await logSecurityEvent(admin, {
+            type: 'payment_activated', severity: 'info', userId: row.student_id,
+            metadata: { plan: row.plan, orderId, paymentId, coupon: row.coupon_code ?? null },
+          });
         }
       }
     }
@@ -83,7 +89,13 @@ export async function POST(request: NextRequest) {
           .select('student_id')
           .eq('razorpay_payment_id', refundedPaymentId)
           .maybeSingle();
-        if (row?.student_id) await revokePremium(admin, row.student_id);
+        if (row?.student_id) {
+          await revokePremium(admin, row.student_id);
+          await logSecurityEvent(admin, {
+            type: 'payment_refunded', severity: 'warning', userId: row.student_id,
+            metadata: { paymentId: refundedPaymentId },
+          });
+        }
       }
     }
 
