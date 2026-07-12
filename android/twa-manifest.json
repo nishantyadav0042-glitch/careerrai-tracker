@@ -1,0 +1,31 @@
+{
+  "packageId": "com.careerrai.app",
+  "host": "careerrai-daily.vercel.app",
+  "name": "CareerRai",
+  "launcherName": "CareerRai",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#ff6b35",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#ffffff",
+  "startUrl": "/student/tracker?source=twa",
+  "iconUrl": "https://careerrai-daily.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://careerrai-daily.vercel.app/icon-maskable-512.png",
+  "monochromeIconUrl": "https://careerrai-daily.vercel.app/icon-maskable-512.png",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "webManifestUrl": "https://careerrai-daily.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "enableNotifications": true,
+  "features": {},
+  "minSdkVersion": 23,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "careerrai"
+  },
+  "_comment": "Bubblewrap sets a CURRENT compile/target SDK automatically — that is what fixes the 'built for an older version of Android' Play Protect block. enableNotifications:true delegates web-push into the TWA (this app depends on push). packageId, host, and the signing key must never change after the first Play Store upload."
+}

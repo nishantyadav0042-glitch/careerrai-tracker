@@ -49,6 +49,32 @@ function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
+function isAndroid(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/.test(navigator.userAgent);
+}
+// Only Chrome / Samsung Internet / Edge mint a proper, Play-Protect-clean WebAPK.
+// Other Android browsers (OEM defaults, Firefox, UC, Opera Mini) and in-app
+// webviews (Instagram/FB/etc.) either can't install or produce a package that
+// Google Play Protect blocks as "built for an older version of Android". For
+// those we steer the user into Chrome instead of down the broken install path.
+function isWebApkCapableBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  if (!/Android/.test(ua)) return false;
+  const inAppOrLowQuality = /(FBAN|FBAV|Instagram|Line\/|MicroMessenger|UCBrowser|OPR\/|OPX\/|OperaMini|Firefox|FxiOS|; wv\))/i;
+  if (inAppOrLowQuality.test(ua)) return false;
+  return /(Chrome|SamsungBrowser|EdgA)/.test(ua);
+}
+// Reopen the current URL in Chrome via an Android intent. If Chrome isn't
+// installed the intent falls through harmlessly (the user stays put and can use
+// the copy-link fallback).
+function openInChrome(): void {
+  if (typeof window === 'undefined') return;
+  const { host, pathname, search } = window.location;
+  const intent = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
+  window.location.href = intent;
+}
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return (
@@ -68,6 +94,8 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   const [hidden, setHidden] = useState(true);
   const [ios, setIos] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [showChrome, setShowChrome] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [working, setWorking] = useState(false);
 
   useEffect(() => {
@@ -116,8 +144,23 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
       deferredPrompt = null;
       return;
     }
-    // Genuinely no native prompt (criteria not met / older browser) → manual steps.
-    setShowSteps(true);
+    // No native prompt fired. If this browser can't mint a clean WebAPK (an OEM
+    // default browser or an in-app webview), steer the user into Chrome instead
+    // of the "Add to Home screen" path that produces a package Play Protect
+    // blocks. A Chrome/Samsung/Edge user just needs the menu steps.
+    if (isAndroid() && !isWebApkCapableBrowser()) {
+      setShowChrome(true);
+    } else {
+      setShowSteps(true);
+    }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked — user can long-press the address bar */ }
   }
 
   if (hidden) return null;
@@ -178,6 +221,38 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   return (
     <>
       {trigger}
+
+      {showChrome && (
+        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowChrome(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-stone-900">Install from Chrome</h3>
+              <button onClick={() => setShowChrome(false)} aria-label="Close" className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-stone-600 mb-4">
+              Your current browser can&apos;t install the app cleanly — some phones show a
+              &ldquo;blocked&rdquo; warning. Open this page in <strong>Chrome</strong> and the
+              app installs in one tap, no warnings.
+            </p>
+            <button
+              type="button"
+              onClick={openInChrome}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white bg-stone-900 hover:bg-stone-800 transition-all active:scale-[0.98] mb-2"
+            >
+              <Smartphone className="w-4 h-4" /> Open in Chrome
+            </button>
+            <button
+              type="button"
+              onClick={copyLink}
+              className="w-full py-2.5 rounded-xl text-sm font-medium text-stone-600 border border-stone-200 hover:bg-stone-50"
+            >
+              {copied ? 'Link copied ✓' : 'Copy link (paste in Chrome)'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showSteps && (
         <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowSteps(false)}>
