@@ -15,6 +15,7 @@ import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
+import { InstallJourney } from '@/components/install-journey';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -85,8 +86,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // Daily "try a buddy" nudge — only for students with no buddy yet and not
   // premium, and only once no higher-priority modal is up. The component itself
   // throttles to once per calendar day.
-  const showBuddyNudge = !showOnboarding && !showPostSignup && !showFirstPushAsk && !showSecondPushAsk
-    && !profile?.buddy_id && profile?.is_premium !== true;
+  const noBlockingModal = !showOnboarding && !showPostSignup && !showFirstPushAsk && !showSecondPushAsk;
+  // Install journey (browser users, not yet installed) takes the daily slot; the
+  // buddy nudge only shows for buddy-less non-premium students on other days.
+  const showInstallJourney = noBlockingModal;
+  const showBuddyNudge = noBlockingModal && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -119,6 +123,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           )}
         </>
       ) : null}
+      {showInstallJourney && <InstallJourney />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );
