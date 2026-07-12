@@ -172,7 +172,12 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   };
 
   const unansweredUnits = step.units.filter((u) => statuses[u] == null);
-  const showMomentumChip = tapStreak != null && tapStreak.count >= 3 && unansweredUnits.length > 0;
+  // Bulk-fill is only offered for POSITIVE claims (learning/practicing/revising) —
+  // a repeater who's genuinely covered ground can move fast. "Haven't started"
+  // has no one-tap shortcut on purpose: declaring a topic untouched must be a
+  // deliberate per-topic tap, so nobody can zero-out a whole section to skim
+  // past (which produced the all-"not started" lead cards the founder flagged).
+  const showMomentumChip = tapStreak != null && tapStreak.count >= 3 && tapStreak.status !== 'not_started' && unansweredUnits.length > 0;
 
   const bulkFill = () => {
     if (!tapStreak) return;
