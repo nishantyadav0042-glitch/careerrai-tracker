@@ -5,6 +5,7 @@ import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
 import { clientIp } from '@/lib/request-ip';
 import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
+import { logSecurityEvent } from '@/lib/security-log';
 import { sendNotification } from '@/lib/notifications';
 import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validate';
 import { isValidPushEndpoint } from '@/lib/push-validate';
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
     const ip = clientIp(request);
     const otpKey = `otpv:${e164}`;
     if (await registerAttemptAndCheck(admin, otpKey, ip, { maxPerKey: 5, maxPerIp: 50 })) {
+      await logSecurityEvent(admin, { type: 'otp_verify_lockout', severity: 'warning', ip });
       return NextResponse.json(
         { error: 'Too many attempts. Request a new code and wait a few minutes.' },
         { status: 429 }

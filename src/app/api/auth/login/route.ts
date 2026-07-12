@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { clientIp } from '@/lib/request-ip';
 import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
+import { logSecurityEvent } from '@/lib/security-log';
 
 // Brute-force / credential-stuffing guard. This same route authenticates
 // student, buddy AND admin accounts, so an unthrottled password endpoint is an
@@ -47,6 +48,10 @@ export async function POST(request: NextRequest) {
     maxPerKey: MAX_FAILS_PER_CREDENTIAL,
     maxPerIp: MAX_FAILS_PER_IP,
   })) {
+    await logSecurityEvent(admin, {
+      type: 'login_lockout', severity: 'warning', ip,
+      metadata: { credentialType: e164 ? 'phone' : 'email' },
+    });
     return NextResponse.redirect(`${origin}/login?error=locked`, { status: 302 });
   }
 

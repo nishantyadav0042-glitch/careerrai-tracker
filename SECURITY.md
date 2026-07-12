@@ -35,6 +35,23 @@ Run SAST locally (offline ruleset): `semgrep --config .semgrep/local-rules.yaml 
 - **Before scaling / handling more sensitive data:** commission an external
   penetration test and enable alerting on anomalous auth, payment, and AI usage.
 
+## Monitoring & alerting (in-app)
+- **Audit trail:** security-relevant events are written to `public.security_events`
+  (service-role only) via `src/lib/security-log.ts` — login lockouts, OTP-verify
+  lockouts, payment activations/refunds, and unhandled server errors (captured by
+  `src/instrumentation.ts` `onRequestError`).
+- **Hourly anomaly monitor:** `/api/admin/security-monitor` (Vercel cron,
+  `CRON_SECRET`-gated) aggregates the last hour and fires one alert if a threshold
+  is crossed (credential-stuffing, OTP brute-force, error spikes, refund spikes,
+  AI-quota abuse).
+- **Alert delivery:** set `SECURITY_ALERT_WEBHOOK_URL` to a Slack/Discord webhook.
+  Unset → alerts are logged to the server console (visible in Vercel logs).
+- **Env (all optional, sane defaults):** `SECURITY_ALERT_WEBHOOK_URL`,
+  `ALERT_LOGIN_LOCKOUTS` (10), `ALERT_OTP_LOCKOUTS` (10), `ALERT_SERVER_ERRORS`
+  (25), `ALERT_REFUND_REQUESTS` (5), `ALERT_AI_CALLS` (500) — per rolling hour.
+- **Error tracking:** `onRequestError` centralizes server errors today; to add
+  Sentry/Datadog, forward `(err, request, context)` from there (gated on a DSN).
+
 ## Operational hardening owned outside the codebase (verify in dashboards)
 - Supabase Auth → enable **leaked-password protection**; confirm OTP expiry +
   verify rate-limits.
