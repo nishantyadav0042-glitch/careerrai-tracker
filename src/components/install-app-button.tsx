@@ -1,10 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Download, Share, Plus, X, Smartphone, MessageCircle } from 'lucide-react';
-import { supportWhatsappUrl } from '@/lib/whatsapp';
-import { InstallCoach } from '@/components/install-coach';
-
-const INSTALL_HELP_MSG = "Hi, I need help installing the CareerRai app on my phone.";
+import { Download, Smartphone } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -12,9 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 // Capture beforeinstallprompt at module load — Chrome can fire it BEFORE React
-// mounts, so a listener added inside a component effect often misses it (the
-// reason an install button looks "dead" on Android). We stash it globally and
-// notify any mounted button via a custom event.
+// mounts, so a component-effect listener often misses it.
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -25,20 +19,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
     window.dispatchEvent(new Event('cr-installed'));
-    // Don't strand the student on the install screen — forward them into the app
-    // right after install. (Android can't programmatically launch the installed
-    // WebAPK, so we move the browser tab to the app home; the standalone icon on
-    // the home screen opens the real app next time.)
+    // Forward the student into the app after install instead of stranding them.
     if (!isStandalone()) {
       window.setTimeout(() => { window.location.href = '/student/tracker'; }, 700);
     }
   });
 }
 
-// Wait briefly for Chrome to fire beforeinstallprompt (it can arrive a moment
-// after the page loads). Resolves the event if it shows up within the timeout,
-// else null — so a slightly-late prompt still gives a true one-tap install
-// instead of falling back to manual steps.
 function waitForInstallPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent | null> {
   if (deferredPrompt) return Promise.resolve(deferredPrompt);
   return new Promise((resolve) => {
@@ -57,34 +44,23 @@ function waitForInstallPrompt(timeoutMs: number): Promise<BeforeInstallPromptEve
 }
 
 function isIOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
 function isAndroid(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Android/.test(navigator.userAgent);
+  return typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent);
 }
-// Only Chrome / Samsung Internet / Edge mint a proper, Play-Protect-clean WebAPK.
-// Other Android browsers (OEM defaults, Firefox, UC, Opera Mini) and in-app
-// webviews (Instagram/FB/etc.) either can't install or produce a package that
-// Google Play Protect blocks as "built for an older version of Android". For
-// those we steer the user into Chrome instead of down the broken install path.
-function isWebApkCapableBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent;
+// Chrome / Samsung / Edge produce a clean, Play-Protect-safe install; OEM/in-app
+// browsers don't.
+function androidCanInstall(): boolean {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   if (!/Android/.test(ua)) return false;
-  const inAppOrLowQuality = /(FBAN|FBAV|Instagram|Line\/|MicroMessenger|UCBrowser|OPR\/|OPX\/|OperaMini|Firefox|FxiOS|; wv\))/i;
-  if (inAppOrLowQuality.test(ua)) return false;
+  if (/(FBAN|FBAV|Instagram|Line\/|MicroMessenger|UCBrowser|OPR\/|OPX\/|OperaMini|Firefox|FxiOS|; wv\))/i.test(ua)) return false;
   return /(Chrome|SamsungBrowser|EdgA)/.test(ua);
 }
-// Reopen the current URL in Chrome via an Android intent. If Chrome isn't
-// installed the intent falls through harmlessly (the user stays put and can use
-// the copy-link fallback).
-function openInChrome(): void {
+function openInChrome() {
   if (typeof window === 'undefined') return;
   const { host, pathname, search } = window.location;
-  const intent = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
-  window.location.href = intent;
+  window.location.href = `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;end`;
 }
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -95,25 +71,18 @@ function isStandalone(): boolean {
 }
 
 /**
- * Always-visible "Install the app" button (hidden only when already installed).
- * Android/Chrome → fires the native install prompt. iOS / browsers without a
- * native prompt → opens step-by-step Add-to-Home-Screen instructions.
+ * "Install the app" trigger. One simple action, no overlays:
+ *  • Android (Chrome-like) → the native one-tap install prompt.
+ *  • Android (other browser) → reopen in Chrome.
+ *  • iOS → the /app guide (Add to Home Screen, with logged-in hand-off).
  */
 export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'banner' | 'text' }) {
-  // Start hidden to avoid showing to users who already installed; reveal after
-  // the client check. (Most login-page visitors aren't installed, so it shows.)
   const [hidden, setHidden] = useState(true);
-  const [ios, setIos] = useState(false);
-  const [showSteps, setShowSteps] = useState(false);
-  const [showChrome, setShowChrome] = useState(false);
-  const [coach, setCoach] = useState<'android-menu' | null>(null);
-  const [copied, setCopied] = useState(false);
   const [working, setWorking] = useState(false);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
+    /* eslint-disable react-hooks/set-state-in-effect -- capability detection runs client-side */
     if (isStandalone()) { setHidden(true); return; }
-    setIos(isIOS());
     setHidden(false);
     const onInstalled = () => setHidden(true);
     window.addEventListener('cr-installed', onInstalled);
@@ -122,30 +91,21 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
   }, []);
 
   async function handleClick() {
-    // iOS never exposes a native prompt. Route to /app — the guided
-    // Add-to-Home-Screen page. If the user is signed in, first mint a one-time
-    // hand-off token and bake it into the URL, so the installed app (which has
-    // its own separate storage on iOS) opens LOGGED IN instead of on a cold
-    // login screen. If minting fails (not signed in / offline), /app still
-    // shows the plain guide.
-    if (ios) {
+    // iOS has no install API → the guided Add-to-Home-Screen page (mints a
+    // one-time token so the installed app opens logged in).
+    if (isIOS()) {
       setWorking(true);
       try {
         const res = await fetch('/api/install/handoff', { method: 'POST' });
-        if (res.ok) {
-          const { url } = await res.json();
-          window.location.href = url;
-          return;
-        }
-      } catch { /* fall through to the plain guide */ }
-      setWorking(false);
+        if (res.ok) { const { url } = await res.json(); window.location.href = url; return; }
+      } catch { /* fall through */ }
       window.location.href = '/app';
       return;
     }
 
+    // Android / desktop → native one-tap prompt if available.
     let prompt = deferredPrompt;
     if (!prompt) {
-      // Give Chrome a moment to fire the install event (one-tap install).
       setWorking(true);
       prompt = await waitForInstallPrompt(3000);
       setWorking(false);
@@ -156,87 +116,59 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
       deferredPrompt = null;
       return;
     }
-    // No native prompt fired. Decide the cleanest fallback:
-    if (isAndroid() && !isWebApkCapableBrowser()) {
-      // OEM default / in-app webview → its install path yields a Play-Protect-
-      // blocked package. Steer into Chrome instead.
-      setShowChrome(true);
-    } else if (isAndroid()) {
-      // Chrome/Samsung/Edge but the auto-prompt didn't fire → point them at the
-      // real ⋮ menu on their live screen (menu install is clean here).
-      setCoach('android-menu');
-    } else {
-      // Desktop / other → the short menu steps.
-      setShowSteps(true);
-    }
-  }
-
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked — user can long-press the address bar */ }
+    // No prompt: OEM/in-app Android → Chrome; everything else → the guide page.
+    if (isAndroid() && !androidCanInstall()) openInChrome();
+    else window.location.href = '/app';
   }
 
   if (hidden) return null;
 
-  // One-tap WhatsApp escape hatch for anyone stuck on install — shown inside the
-  // help sheets (hidden if no support number is configured).
-  const waHelp = supportWhatsappUrl(INSTALL_HELP_MSG);
-  const waHelpRow = waHelp ? (
-    <a
-      href={waHelp}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
-    >
-      <MessageCircle className="w-4 h-4" />
-      Facing issues? WhatsApp us
-    </a>
-  ) : null;
+  if (variant === 'text') {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={working}
+        className="mx-auto block text-xs font-medium text-stone-400 hover:text-orange-600 transition-colors disabled:opacity-60"
+      >
+        {working ? '…' : '(Just want to try it? Install the app — no signup, ~3 MB →)'}
+      </button>
+    );
+  }
 
-  // Prominent orange banner (top of login) vs. subtle card (anywhere else)
-  // vs. a single bracketed line for a low-commitment escape hatch right
-  // under a primary CTA — for someone who just wants to try the app
-  // without filling in a phone number first.
-  const trigger = variant === 'text' ? (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={working}
-      className="mx-auto block text-xs font-medium text-stone-400 hover:text-orange-600 transition-colors disabled:opacity-60"
-    >
-      {working ? '…' : '(Just want to try it? Install the app — no signup, ~3 MB →)'}
-    </button>
-  ) : variant === 'banner' ? (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={working}
-      className="group relative block w-full overflow-hidden rounded-2xl p-[1.5px] shadow-lg shadow-orange-900/10 disabled:opacity-90"
-      style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 55%, #f59e0b 100%)' }}
-    >
-      <div className="flex items-center justify-between gap-3 rounded-[15px] bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3.5">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20 border border-white/30 text-white">
-            <Download className="w-5 h-5" />
-          </span>
-          <div className="min-w-0 text-left">
-            <p className="text-sm font-bold text-white">Install the CareerRai app</p>
-            <p className="text-xs text-orange-50 mt-0.5">Just ~3 MB · installs in seconds · one-tap access</p>
+  if (variant === 'banner') {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={working}
+        className="group relative block w-full overflow-hidden rounded-2xl p-[1.5px] shadow-lg shadow-orange-900/10 disabled:opacity-90"
+        style={{ background: 'linear-gradient(90deg, #ea580c 0%, #d97706 55%, #f59e0b 100%)' }}
+      >
+        <div className="flex items-center justify-between gap-3 rounded-[15px] bg-gradient-to-r from-orange-600 to-amber-500 px-4 py-3.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20 border border-white/30 text-white">
+              <Download className="w-5 h-5" />
+            </span>
+            <div className="min-w-0 text-left">
+              <p className="text-sm font-bold text-white">Install the CareerRai app</p>
+              <p className="text-xs text-orange-50 mt-0.5">Just ~3 MB · installs in seconds · one-tap access</p>
+            </div>
           </div>
+          <span className="text-xs font-bold text-orange-700 bg-white rounded-lg px-3 py-1.5 shrink-0 group-active:scale-95 transition-transform">
+            {working ? '…' : 'Install'}
+          </span>
         </div>
-        <span className="text-xs font-bold text-orange-700 bg-white rounded-lg px-3 py-1.5 shrink-0 group-active:scale-95 transition-transform">
-          {working ? '…' : 'Install'}
-        </span>
-      </div>
-    </button>
-  ) : (
+      </button>
+    );
+  }
+
+  return (
     <button
       type="button"
       onClick={handleClick}
-      className="group w-full flex items-center gap-3 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4 text-left shadow-sm transition-all hover:shadow-md hover:border-orange-300 active:scale-[0.99]"
+      disabled={working}
+      className="group w-full flex items-center gap-3 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4 text-left shadow-sm transition-all hover:shadow-md hover:border-orange-300 active:scale-[0.99] disabled:opacity-80"
     >
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow">
         <Download className="w-5 h-5" />
@@ -247,93 +179,5 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
       </div>
       <Smartphone className="w-4 h-4 shrink-0 text-orange-600" />
     </button>
-  );
-
-  return (
-    <>
-      {trigger}
-
-      {coach && <InstallCoach target={coach} onClose={() => setCoach(null)} />}
-
-      {showChrome && (
-        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowChrome(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold text-stone-900">Install from Chrome</h3>
-              <button onClick={() => setShowChrome(false)} aria-label="Close" className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-100">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-sm text-stone-600 mb-4">
-              Your current browser can&apos;t install the app cleanly — some phones show a
-              &ldquo;blocked&rdquo; warning. Open this page in <strong>Chrome</strong> and the
-              app installs in one tap, no warnings.
-            </p>
-            <button
-              type="button"
-              onClick={openInChrome}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white bg-stone-900 hover:bg-stone-800 transition-all active:scale-[0.98] mb-2"
-            >
-              <Smartphone className="w-4 h-4" /> Open in Chrome
-            </button>
-            <button
-              type="button"
-              onClick={copyLink}
-              className="w-full py-2.5 rounded-xl text-sm font-medium text-stone-600 border border-stone-200 hover:bg-stone-50"
-            >
-              {copied ? 'Link copied ✓' : 'Copy link (paste in Chrome)'}
-            </button>
-            {waHelpRow}
-          </div>
-        </div>
-      )}
-
-      {showSteps && (
-        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setShowSteps(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-stone-900">Install CareerRai</h3>
-              <button onClick={() => setShowSteps(false)} aria-label="Close" className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-100">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {ios ? (
-              <ol className="space-y-2.5 text-sm text-stone-700">
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">1</span>
-                  <span>Tap the <Share className="w-3.5 h-3.5 inline mx-0.5 text-blue-600" /> <strong>Share</strong> button at the bottom of Safari.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">2</span>
-                  <span>Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong> <Plus className="w-3.5 h-3.5 inline mx-0.5" /></span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">3</span>
-                  <span>Tap <strong>Add</strong> — CareerRai appears on your home screen like a real app.</span>
-                </li>
-                <li className="text-[11px] text-stone-400 pl-7">On iPhone this only works in <strong>Safari</strong>. If you&apos;re in Chrome, open this page in Safari first.</li>
-              </ol>
-            ) : (
-              <ol className="space-y-2.5 text-sm text-stone-700">
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">1</span>
-                  <span>Open your browser menu (the <strong>⋮</strong> at the top-right).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">2</span>
-                  <span>Tap <strong>&ldquo;Install app&rdquo;</strong> or <strong>&ldquo;Add to Home screen&rdquo;</strong>.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-orange-600 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-bold">3</span>
-                  <span>Confirm — CareerRai installs like a normal app.</span>
-                </li>
-              </ol>
-            )}
-            {waHelpRow}
-          </div>
-        </div>
-      )}
-    </>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
+import { claimDailyModal } from '@/lib/daily-modal';
 
 // A gentle once-a-day nudge for students who don't have an IIM buddy yet —
 // shown when they open the app, promoting what a buddy does. Throttled to one
@@ -10,19 +11,15 @@ import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 // parent (student layout) only mounts this for buddy-less, non-premium students
 // and only when no higher-priority modal (onboarding / post-signup / push ask)
 // is on screen, so it can't stack.
-const KEY = 'cr_buddy_nudge_date';
-
 export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- client-only daily gate */
-    const today = new Date().toISOString().slice(0, 10);
-    if (localStorage.getItem(KEY) !== today) {
-      localStorage.setItem(KEY, today); // once per day, regardless of what they do next
-      setShow(true);
-    }
-    /* eslint-enable react-hooks/set-state-in-effect */
+    // Shares the one-modal-per-day gate with the install journey, so a student
+    // never sees both in a day. Install journey mounts first, so it wins when
+    // both are eligible.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (claimDailyModal()) setShow(true);
   }, []);
 
   if (!show) return null;
