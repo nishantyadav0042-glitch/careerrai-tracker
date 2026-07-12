@@ -8,6 +8,7 @@ import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
 import { logSecurityEvent } from '@/lib/security-log';
 import { sendNotification } from '@/lib/notifications';
 import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validate';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isValidPushEndpoint } from '@/lib/push-validate';
 
 // Whitelisted answers from the pre-auth /start funnel — collected before
@@ -231,11 +232,31 @@ export async function POST(request: NextRequest) {
         const matrix = onboarding.topic_matrix as MatrixEntry[];
         const problem = validateCoverageMatrix(matrix);
         if (!problem) {
-          const now = new Date().toISOString();
-          await admin.from('topic_coverage').upsert(
-            matrix.map((e) => ({ student_id: userId, section: e.section!, topic: e.topic!, status: e.status!, updated_at: now })),
-            { onConflict: 'student_id,section,topic' }
-          );
+          // Topics a student says they already covered BEFORE joining must get a
+          // realistic revision schedule. Seeding them all at "now" makes the
+          // engine treat them as freshly studied, so they'd never come due for
+          // revision. Backdate the covered ones (practicing/revising/exam_ready)
+          // so revision comes due STAGGERED over the first ~2.5 weeks — timely,
+          // but no day-1 flood. not_started / learning keep "now".
+          const now = Date.now();
+          const COVERED = new Set(['practicing', 'revising', 'exam_ready']);
+          const coveredEntries = matrix.filter((e) => COVERED.has(e.status!));
+          const SPREAD_DAYS = 18;
+          const rows = matrix.map((e) => {
+            let updatedAt = new Date(now).toISOString();
+            if (COVERED.has(e.status!)) {
+              const idx = coveredEntries.indexOf(e);
+              const dueInDays = coveredEntries.length > 1
+                ? Math.round((idx / (coveredEntries.length - 1)) * SPREAD_DAYS)
+                : 0;
+              const freq = TOPIC_METADATA[e.topic!]?.revisionFrequencyDays ?? 14;
+              // updated_at = now − (freq − dueInDays) → comes revision-due ~dueInDays from now
+              const backdate = Math.max(0, freq - dueInDays);
+              updatedAt = new Date(now - backdate * 86_400_000).toISOString();
+            }
+            return { student_id: userId, section: e.section!, topic: e.topic!, status: e.status!, updated_at: updatedAt };
+          });
+          await admin.from('topic_coverage').upsert(rows, { onConflict: 'student_id,section,topic' });
         } else {
           console.error('[verify-phone-otp] rejected pre-auth coverage matrix:', problem);
         }
