@@ -254,7 +254,6 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step {stepIdx + 1} of {steps.length}</p>
         <p className="text-[11px] text-stone-400">{step.units.length} topics · one tap each</p>
       </div>
-      <SnakeProgress frac={totalUnits ? answeredTotal / totalUnits : 0} section={step.sectionId} answered={answeredTotal} total={totalUnits} />
 
       <div>
         {intro && <p className="mb-1 text-sm font-semibold text-stone-900">{intro}</p>}
@@ -287,7 +286,12 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
           labels never scroll away (accuracy), and every row still needs its
           own explicit tap — the no-prefill doctrine survives. */}
       <div>
-        <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1.5 backdrop-blur-sm">
+          {/* Snake lives in the sticky header so it stays on screen — and visibly
+              grows — as the student scrolls and taps through the topics. */}
+          <div className="mb-2">
+            <SnakeProgress frac={totalUnits ? answeredTotal / totalUnits : 0} section={step.sectionId} answered={answeredTotal} total={totalUnits} />
+          </div>
           <div className={cn('grid items-end gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-4')}>
             {options.map(({ value, dot }) => (
               <span key={value} className="text-center text-[10px] font-bold leading-tight text-stone-500">
