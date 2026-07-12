@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { serverError } from '@/lib/api-error';
 
 const BASELINE_FIELDS = [
   'starting_percentile',
@@ -58,11 +59,7 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id);
 
   if (error) {
-    console.error('[baseline] update error:', error);
-    return NextResponse.json(
-      { error: error.message ? `Failed to save baseline: ${error.message}` : 'Failed to save baseline' },
-      { status: 500 }
-    );
+    return serverError('baseline', error, { message: 'Failed to save baseline. Please try again.' });
   }
 
   return NextResponse.json({ ok: true, locked: !isAdmin });

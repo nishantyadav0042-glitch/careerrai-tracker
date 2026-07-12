@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { clientIp } from '@/lib/request-ip';
 
 export async function POST(request: NextRequest) {
   let payload: unknown;
@@ -31,9 +32,26 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const ip = clientIp(request);
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  // Per-IP flood guard. The public quiz is unauthenticated and the per-phone
+  // dedup below is defeated by rotating fake numbers, so cap distinct leads per
+  // IP per day. Silently accept over the cap (same shape as the dedup path) so a
+  // spammer gets no signal. Fail OPEN when the IP is unknown.
+  const CAT_LEADS_IP_DAILY_CAP = 10;
+  if (ip) {
+    const { count: ipCount } = await admin
+      .from('cat_test_leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('ip', ip)
+      .gte('created_at', since24h);
+    if ((ipCount ?? 0) >= CAT_LEADS_IP_DAILY_CAP) {
+      return NextResponse.json({ ok: true });
+    }
+  }
 
   // Dedup: same phone can't submit more than once per 24h — prevents spam, idempotent for legit retries
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existing } = await admin
     .from('cat_test_leads')
     .select('id')
@@ -59,6 +77,7 @@ export async function POST(request: NextRequest) {
     weak_section:      typeof weak_section      === 'string' ? weak_section.trim() : null,
     anxiety_idx:       typeof anxiety_idx       === 'number' ? anxiety_idx       : null,
     belief_idx:        typeof belief_idx        === 'number' ? belief_idx        : null,
+    ip,
   });
 
   if (error) {

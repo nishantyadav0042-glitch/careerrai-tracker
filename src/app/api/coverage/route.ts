@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { UNIT_ORDER } from '@/lib/topics-constants';
 import { VALID_SECTIONS, TOPICS_BY_SECTION, validateCoverageEntry, type MatrixEntry } from '@/lib/coverage-validate';
+import { serverError } from '@/lib/api-error';
 
 // Canonical Knowledge Graph order, not raw DB order — the grid always
 // renders sections and units the way the graph defines them.
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
         body.matrix.map((e) => ({ student_id: user.id, section: e.section!, topic: e.topic!, status: e.status!, updated_at: now })),
         { onConflict: 'student_id,section,topic' }
       );
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return serverError('coverage', error);
     return NextResponse.json({ ok: true, saved: body.matrix.length });
   }
 
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
       { student_id: user.id, section, topic, status, updated_at: new Date().toISOString() },
       { onConflict: 'student_id,section,topic' }
     );
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError('coverage', error);
 
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolvePair } from '@/lib/chat';
+import { serverError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     .neq('sender_id', user.id)
     .is('read_at', null);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError('chat-read', error);
 
   return NextResponse.json({ ok: true });
 }

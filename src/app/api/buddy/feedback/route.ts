@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendPushToUser } from '@/lib/push';
+import { serverError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     diagnosis_confidence: diagnosis_confidence ?? null,
   }).select().single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError('buddy-feedback', error);
 
   // Notify student — in-app + push
   const notifTitle = 'Tere buddy ne reply kiya 🎯';

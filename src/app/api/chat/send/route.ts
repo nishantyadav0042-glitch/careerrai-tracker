@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendNotification } from '@/lib/notifications';
 import { resolvePair } from '@/lib/chat';
+import { serverError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error || !message) {
-    return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 });
+    return serverError('chat-send', error);
   }
 
   // Best-effort notification to the recipient (the other member of the pair).

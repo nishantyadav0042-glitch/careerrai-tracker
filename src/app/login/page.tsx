@@ -24,7 +24,9 @@ function LoginForm() {
   const [msg, setMsg] = useState<string | null>(null);
   const [msgIsError, setMsgIsError] = useState(false);
 
-  const hasError = params.get('error') === '1';
+  const errorParam = params.get('error');
+  const hasError = errorParam === '1';
+  const isLocked = errorParam === 'locked';
 
   function setError(m: string) { setMsg(m); setMsgIsError(true); }
   function setInfo(m: string) { setMsg(m); setMsgIsError(false); }
@@ -154,6 +156,11 @@ function LoginForm() {
             {hasError && (
               <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700">
                 That didn&apos;t work — check your password (or number) and try again.
+              </div>
+            )}
+            {isLocked && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800">
+                Too many attempts. Please wait a few minutes and try again — or use mobile OTP to sign in.
               </div>
             )}
 
