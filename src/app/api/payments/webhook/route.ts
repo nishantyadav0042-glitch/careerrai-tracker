@@ -4,6 +4,7 @@ import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { grantPremiumAndQueueBuddy, revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
+import { sendMetaCapiEvent } from '@/lib/meta-capi';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
 // Client-side "payment success" callbacks are never trusted.
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
         const admin = createAdminClient();
         const { data: row } = await admin
           .from('student_payments')
-          .select('id, student_id, plan, status, coupon_code')
+          .select('id, student_id, plan, status, coupon_code, amount')
           .eq('razorpay_order_id', orderId)
           .maybeSingle();
 
@@ -72,6 +73,18 @@ export async function POST(request: NextRequest) {
           await logSecurityEvent(admin, {
             type: 'payment_activated', severity: 'info', userId: row.student_id,
             metadata: { plan: row.plan, orderId, paymentId, coupon: row.coupon_code ?? null },
+          });
+
+          // Server-side Purchase (Meta Conversions API), deduped with the browser
+          // Pixel via eventId = orderId. Hashed email/phone improve ad matching.
+          const { data: prof } = await admin.from('profiles').select('email, phone').eq('id', row.student_id).maybeSingle();
+          await sendMetaCapiEvent({
+            eventName: 'Purchase',
+            eventId: orderId,
+            value: (row.amount ?? 0) / 100,
+            currency: 'INR',
+            email: prof?.email,
+            phone: prof?.phone,
           });
         }
       }

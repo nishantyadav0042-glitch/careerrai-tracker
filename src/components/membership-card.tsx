@@ -85,7 +85,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; just reassure + refresh.
-          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} membership` });
+          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} membership` }, data.orderId);
           setMessage('Payment received — confirming your membership…');
           setTimeout(() => router.refresh(), 4000);
         },
