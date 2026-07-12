@@ -25,6 +25,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
     window.dispatchEvent(new Event('cr-installed'));
+    // Don't strand the student on the install screen — forward them into the app
+    // right after install. (Android can't programmatically launch the installed
+    // WebAPK, so we move the browser tab to the app home; the standalone icon on
+    // the home screen opens the real app next time.)
+    if (!isStandalone()) {
+      window.setTimeout(() => { window.location.href = '/student/tracker'; }, 700);
+    }
   });
 }
 

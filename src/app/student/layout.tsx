@@ -14,6 +14,7 @@ import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
 import { getStudentProfile } from '@/lib/student-profile';
+import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -81,6 +82,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const showFirstPushAsk = !showOnboarding && !showPostSignup && !pushEnabled && !pushPrompted;
   const showSecondPushAsk = !showOnboarding && !showPostSignup && !pushEnabled && pushPrompted && !pushReprompted;
 
+  // Daily "try a buddy" nudge — only for students with no buddy yet and not
+  // premium, and only once no higher-priority modal is up. The component itself
+  // throttles to once per calendar day.
+  const showBuddyNudge = !showOnboarding && !showPostSignup && !showFirstPushAsk && !showSecondPushAsk
+    && !profile?.buddy_id && profile?.is_premium !== true;
+
   return (
     <div className="min-h-screen bg-stone-50">
       <InstallPing />
@@ -112,6 +119,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           )}
         </>
       ) : null}
+      {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );
 }
