@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
+import { trackMeta } from '@/lib/track';
 
 type SubStatus = 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested';
 
@@ -84,6 +85,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; just reassure + refresh.
+          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} membership` });
           setMessage('Payment received — confirming your membership…');
           setTimeout(() => router.refresh(), 4000);
         },

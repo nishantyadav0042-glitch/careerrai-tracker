@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles } from 'lucide-react';
+import { trackMeta } from '@/lib/track';
 
 // The "Unlock your buddy" CTA. Opening it fires the buddy_cta_click engagement
 // event (→ sales-ready) AND offers in-app Razorpay checkout for the ₹999 buddy
@@ -101,6 +102,7 @@ export function UnlockBuddyButton({
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; reassure + refresh.
+          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} — IIM buddy` });
           setMessage('Payment received — confirming your buddy… 🎉');
           setTimeout(() => router.refresh(), 4000);
         },
