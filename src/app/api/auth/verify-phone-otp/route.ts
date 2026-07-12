@@ -3,6 +3,8 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
+import { clientIp } from '@/lib/request-ip';
+import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
 import { sendNotification } from '@/lib/notifications';
 import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validate';
 import { isValidPushEndpoint } from '@/lib/push-validate';
@@ -40,6 +42,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid phone or OTP.' }, { status: 400 });
     }
 
+    // Brute-force cap on OTP verification. A 6-digit code is a 10^6 space; the
+    // send-side limits don't stop an attacker who triggered one code to a victim
+    // from spraying guesses at this endpoint. Record up front (race-free), cap at
+    // 5/phone + 50/IP per 15 min, clear on success.
+    const admin = createAdminClient();
+    const ip = clientIp(request);
+    const otpKey = `otpv:${e164}`;
+    if (await registerAttemptAndCheck(admin, otpKey, ip, { maxPerKey: 5, maxPerIp: 50 })) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Request a new code and wait a few minutes.' },
+        { status: 429 }
+      );
+    }
+
     const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,8 +80,7 @@ export async function POST(request: NextRequest) {
     if (error || !data.user) {
       return NextResponse.json({ error: 'That code is incorrect or expired.' }, { status: 401 });
     }
-
-    const admin = createAdminClient();
+    await clearAttempts(admin, otpKey);
 
     // Look up allowlist by phone
     const { data: entry } = await admin
@@ -281,6 +296,7 @@ export async function POST(request: NextRequest) {
         path: '/',
         sameSite: 'lax',
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
         maxAge: 60 * 60 * 24 * 30, // 30 days — matches password login in auth/login/route.ts
       });
     }

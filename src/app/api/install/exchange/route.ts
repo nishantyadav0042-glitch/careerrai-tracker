@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   const res = NextResponse.json({ ok: true, dest });
   pending.forEach(({ name, value, options }) => res.cookies.set(name, value, options as Parameters<typeof res.cookies.set>[2]));
   if (role === 'student' || role === 'buddy' || role === 'admin') {
-    res.cookies.set('user_role', role, { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
+    res.cookies.set('user_role', role, { path: '/', sameSite: 'lax', httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 30 });
   }
   return res;
 }

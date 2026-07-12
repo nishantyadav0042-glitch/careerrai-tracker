@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
+import { overAiHourlyLimit, recordAiCall } from '@/lib/ai-rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,6 +25,12 @@ export async function POST(request: NextRequest) {
     if (!student || student.buddy_id !== user.id) {
       return NextResponse.json({ error: 'Not your student' }, { status: 403 });
     }
+
+    // Shared free-tier Gemini key — cap per buddy so one can't drain the quota.
+    if (await overAiHourlyLimit(admin, user.id, 'feedback_draft', 60)) {
+      return NextResponse.json({ error: 'Too many draft requests this hour — try again shortly.' }, { status: 429 });
+    }
+    await recordAiCall(admin, user.id, 'feedback_draft');
 
     // Fetch last 7 days of logs
     const sevenDaysAgo = new Date();

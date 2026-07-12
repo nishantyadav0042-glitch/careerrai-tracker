@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateBuddyBriefing } from '@/lib/buddy-briefing';
+import { overAiHourlyLimit, recordAiCall } from '@/lib/ai-rate-limit';
 
 export async function GET(
   _request: NextRequest,
@@ -54,6 +55,13 @@ export async function POST(
   if (!student || student.buddy_id !== user.id) {
     return NextResponse.json({ error: 'Not your student' }, { status: 403 });
   }
+
+  // On-demand briefing generation hits the shared free-tier Gemini key (and
+  // bypasses the 18h staleness gate the cron/log paths use), so cap per buddy.
+  if (await overAiHourlyLimit(admin, user.id, 'buddy_briefing', 20)) {
+    return NextResponse.json({ error: 'Too many briefing refreshes this hour — try again shortly.' }, { status: 429 });
+  }
+  await recordAiCall(admin, user.id, 'buddy_briefing');
 
   const briefing = await generateBuddyBriefing(studentId, user.id);
   if (!briefing) return NextResponse.json({ error: 'Could not generate briefing' }, { status: 500 });
