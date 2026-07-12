@@ -78,6 +78,7 @@ export function InstallCoach({
             <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-stone-100 px-3 py-2 text-sm font-bold text-stone-800">
               <Plus className="h-4 w-4" /> Install app
             </div>
+            <p className="mt-2 text-[11px] text-stone-400">or &ldquo;Add to Home screen&rdquo;</p>
           </>
         ) : (
           <>
