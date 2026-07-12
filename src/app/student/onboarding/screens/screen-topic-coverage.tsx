@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
+import { SnakeProgress } from '@/components/snake-progress';
 
 // Student-declared states — including 'revising' ("Revision started"), the
 // per-topic state that replaced the old Revision pseudo-section. exam_ready
@@ -157,6 +158,11 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   const stepComplete = answeredOnStep === step.units.length;
   const remaining = step.units.length - answeredOnStep;
 
+  // Whole-map progress for the snake — grows across every step, not just this one.
+  const allUnits = steps.flatMap((s) => s.units);
+  const totalUnits = allUnits.length;
+  const answeredTotal = allUnits.reduce((n, u) => n + (statuses[u] != null ? 1 : 0), 0);
+
   const declare = (unit: string, value: DeclaredStatus) => {
     setStatuses((prev) => ({ ...prev, [unit]: value }));
     setTapStreak((prev) => (prev?.status === value ? { status: value, count: prev.count + 1 } : { status: value, count: 1 }));
@@ -248,11 +254,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step {stepIdx + 1} of {steps.length}</p>
         <p className="text-[11px] text-stone-400">{step.units.length} topics · one tap each</p>
       </div>
-      <div className="flex gap-0.5">
-        {steps.map((_, i) => (
-          <div key={i} className={cn('flex-1 h-1 rounded-full', i < stepIdx ? 'bg-stone-900' : i === stepIdx ? 'bg-stone-400' : 'bg-stone-200')} />
-        ))}
-      </div>
+      <SnakeProgress frac={totalUnits ? answeredTotal / totalUnits : 0} section={step.sectionId} answered={answeredTotal} total={totalUnits} />
 
       <div>
         {intro && <p className="mb-1 text-sm font-semibold text-stone-900">{intro}</p>}
