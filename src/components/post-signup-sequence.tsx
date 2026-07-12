@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { InstallAppButton } from '@/components/install-app-button';
 import { cn } from '@/lib/utils';
 import { trackMeta } from '@/lib/track';
+import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 
 // Press-and-hold-to-commit (Cal-AI style): the ring fills over ~2.5s while
 // held; release early and it resets with a nudge to hold again; complete it
@@ -97,7 +98,7 @@ interface Props {
   hoursLeft: number;
 }
 
-type Step = 'install' | 'date' | 'commit' | 'thanks' | 'responsibilities' | 'share';
+type Step = 'install' | 'date' | 'commit' | 'thanks' | 'notifications' | 'responsibilities' | 'share';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -130,6 +131,8 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const [today] = useState(() => new Date());
   const [visible, setVisible] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushState, setPushState] = useState<EnablePushResult | null>(null);
 
   // A new student has completed onboarding — the signup conversion for ad
   // campaigns. Fires once (this sequence renders only right after onboarding).
@@ -202,6 +205,20 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const afterShare = () => {
     if (isStandalone()) { setVisible(false); return; }
     setStep('install');
+  };
+
+  // The whole point of the sequence: ask for push permission at peak intent,
+  // right after the commitment ceremony — not deferred to a later gate most
+  // students never reach. enablePush() subscribes AND flips notif_prefs.push on
+  // the server, so a granted student is immediately reachable by dispatch().
+  // A denial / iOS-needs-install / error never blocks the flow — we show the
+  // note and let them continue.
+  const turnOnReminders = async () => {
+    setPushBusy(true);
+    const result = await enablePush();
+    setPushState(result);
+    setPushBusy(false);
+    if (result === 'granted') setTimeout(() => setStep('responsibilities'), 900);
   };
 
   // Native share sheet (lands straight in WhatsApp on a phone); wa.me
@@ -329,11 +346,67 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => setStep('responsibilities')}
+              onClick={() => setStep('notifications')}
               className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
             >
               Continue →
             </button>
+          </div>
+        )}
+
+        {step === 'notifications' && (
+          <div className="space-y-6 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-3xl shadow-lg shadow-orange-200">🔔</div>
+            <div>
+              <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+                Now let us do our job.
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">
+                A plan you forget is a plan you drop. Switch on reminders and we&apos;ll nudge you at the right time every day — your daily task, your streak, your weak spots. This is how we keep you on track to your date.
+              </p>
+            </div>
+
+            {pushState === 'granted' ? (
+              <div className="mx-auto flex max-w-xs flex-col items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-lg text-white">✓</span>
+                <p className="text-sm font-semibold text-emerald-700">Reminders are on. We&apos;ve got you.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  disabled={pushBusy}
+                  onClick={turnOnReminders}
+                  className="w-full rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 py-4 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+                >
+                  {pushBusy ? 'Turning on…' : '🔔 Switch on reminders'}
+                </button>
+
+                {pushState === 'denied' && (
+                  <p className="px-2 text-[11px] leading-snug text-rose-500">
+                    Notifications are blocked in your browser. Open your browser settings for this site and allow notifications — then you&apos;re set.
+                  </p>
+                )}
+                {pushState === 'ios_needs_install' && (
+                  <p className="px-2 text-[11px] leading-snug text-stone-500">
+                    On iPhone, reminders switch on right after you install the app (next step). Keep going.
+                  </p>
+                )}
+                {(pushState === 'unsupported' || pushState === 'error') && (
+                  <p className="px-2 text-[11px] leading-snug text-stone-500">
+                    We couldn&apos;t turn them on here — installing the app in the next step fixes this. Keep going.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setStep('responsibilities')}
+                  className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
+                >
+                  {pushState ? 'Continue →' : 'Maybe later'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -363,7 +436,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-[11px] leading-snug text-stone-400">Our reminders reach you through the app — that&apos;s why installing is your job #1. We&apos;ll ask for notification permission there.</p>
+                <p className="mt-2 text-[11px] leading-snug text-stone-400">Our reminders reach you through the app — that&apos;s why installing is your job #1.</p>
               </div>
             </div>
             <button
