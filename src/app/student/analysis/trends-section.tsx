@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 import { CoverageMatrix } from '@/components/Analysis/CoverageMatrix';
@@ -39,14 +39,15 @@ const BUCKET_LABELS = [
 // the merged Analysis panel, alongside Mocks. Same component, minus its own
 // header/page-level padding, which the merged parent now owns.
 export function TrendsSection() {
-  const supabase = createClient();
-  const [debriefs, setDebriefs] = useState<MockDebrief[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
+  // Read-only view — moved off a raw useEffect+fetch onto react-query so
+  // re-opening Analysis (or toggling back from the Mocks tab) serves from the
+  // shared 5-min cache instead of re-hitting the network. Same query, same data.
+  const { data: debriefs = [], isPending: loading } = useQuery({
+    queryKey: ['analysis-trends-debriefs'],
+    queryFn: async () => {
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      if (!user) return [] as MockDebrief[];
 
       const { data: d } = await supabase
         .from('mock_debriefs')
@@ -55,12 +56,9 @@ export function TrendsSection() {
         .order('taken_on', { ascending: true })
         .limit(20);
 
-      setDebriefs((d ?? []) as MockDebrief[]);
-      setLoading(false);
-    }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      return (d ?? []) as MockDebrief[];
+    },
+  });
 
   // Percentile trend data
   const percentileData = debriefs
