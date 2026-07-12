@@ -86,7 +86,8 @@ export default async function AdminGrowthPage() {
 
   // ── Pre-signup /start funnel (anonymous visitors) ───────────────────────
   const FUNNEL_ORDER: [string, string][] = [
-    ['start:need-check', 'Landed (need check)'],
+    ['start:landed', 'Opened the page'],
+    ['start:need-check', 'Reached screen 1 (need check)'],
     ['start:target-date', 'Target date'],
     ['start:dream-percentile', 'Dream percentile'],
     ['start:quick-facts', 'Quick facts'],

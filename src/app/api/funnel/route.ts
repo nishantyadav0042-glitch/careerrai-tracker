@@ -7,6 +7,10 @@ import { clientIp } from '@/lib/request-ip';
 // IP so it can't be used to flood the table. Best-effort — always 200 so the
 // client beacon never blocks the funnel.
 const STEPS = new Set([
+  'start:landed',      // fired by an inline script the instant /start's HTML parses,
+                       // BEFORE the React bundle loads — so it counts every page-open
+                       // (matches Meta's Landing Page Views), catching visitors who
+                       // bounce before the app hydrates and 'need-check' would fire.
   'start:need-check',
   'start:target-date',
   'start:dream-percentile',
