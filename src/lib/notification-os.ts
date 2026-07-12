@@ -32,10 +32,14 @@ import { sendPushToUser } from '@/lib/push';
 // between. The per-student cooldown below is the counterweight — a student
 // who stops logging AND stops tapping gets automatically quieter, no
 // human decision needed.
-export const BUDGET_ACTIVE = 10;   // active / arc students: full cadence + decision events
-export const BUDGET_SETUP = 3;     // building_plan / plan_ready: ladder touches only
-export const BUDGET_RECOVERY = 2;  // slipping / inactive / dark: recovery ladder only
-export const DAILY_BUDGET = 2;     // conservative default for any caller that doesn't say
+// Growth-first inversion (founder decision): the students who need PUSHING are
+// the ones NOT yet using the app — signups who never logged, and dormant
+// students. They get the heavy, emotional activation cadence. Students already
+// showing up need far less — 4 gentle touches, not a stream.
+export const BUDGET_ACTIVE = 4;    // engaged loggers: light cadence
+export const BUDGET_SETUP = 8;     // building_plan / plan_ready: heavy activation
+export const BUDGET_RECOVERY = 8;  // slipping / inactive / dark: heavy reactivation
+export const DAILY_BUDGET = 4;     // default for any caller that doesn't say
 
 // Every student-facing nudge type, counted against ONE shared daily budget.
 // Transactional rows (session reminders, buddy replies, payment notices)
@@ -117,7 +121,11 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
     .select('id')
     .single();
 
-  if (opts.prefs.push === true && row?.id && !(await pushCoolingDown(opts.userId))) {
+  // Auto-silence removed (founder decision): we keep pushing up to the budget for
+  // every state — the whole growth thesis is that ignored ≠ stop-trying for the
+  // dormant/never-active students we most need to reach. The budget is the only
+  // volume control now.
+  if (opts.prefs.push === true && row?.id) {
     const res = await sendPushToUser(opts.userId, {
       title: opts.title, body: opts.body, url: opts.url, notifId: row.id as string,
     });
@@ -138,32 +146,6 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
   }
 
   return 'sent';
-}
-
-// "Ignored 3 → reduce, don't repeat": if the last 3 pushed nudges are all
-// unclicked AND the student hasn't logged since the oldest of them, the
-// push channel goes quiet. The in-app row still lands — cooldown reduces
-// interruption, not information. Any click or any log resets it, because
-// both prove the channel still works. Old rows (pre-measurement) have
-// pushed_at null and are excluded automatically.
-async function pushCoolingDown(userId: string): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data: recent } = await admin
-    .from('notifications')
-    .select('pushed_at, clicked_at')
-    .eq('user_id', userId)
-    .in('type', STUDENT_BUDGET_TYPES)
-    .not('pushed_at', 'is', null)
-    .order('pushed_at', { ascending: false })
-    .limit(3);
-  if (!recent || recent.length < 3) return false;
-  if (recent.some((r) => r.clicked_at != null)) return false;
-
-  const oldestDate = (recent[2].pushed_at as string).slice(0, 10);
-  const { data: streak } = await admin
-    .from('streak_data').select('last_log_date').eq('student_id', userId).maybeSingle();
-  if (streak?.last_log_date && (streak.last_log_date as string) >= oldestDate) return false;
-  return true;
 }
 
 // ─── Builder recovery ladder: 30min → 24h → 72h, then the human queue ───────

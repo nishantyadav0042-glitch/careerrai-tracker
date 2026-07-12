@@ -151,6 +151,63 @@ export function windCopy(weakest: string): SlotCopy {
   };
 }
 
+// ── Growth cadence: emotional activation / reactivation ─────────────────────
+// The push channel's real job is pulling in students who AREN'T using the app —
+// signups who never logged, and dormant ones. Urgency is real (their own
+// inaction + the countdown to CAT); no invented statistics, no shaming. One
+// angle per slot so up to 8/day never repeats.
+export interface ActivationCtx { firstName: string; daysToExam: number; rotate: number; weakest: string }
+
+// plan_ready — onboarded, never logged. Pull them to START.
+export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotCopy | null {
+  switch (slot) {
+    case 'kickoff':
+      return { title: `${c.daysToExam} days to CAT`, body: `${c.firstName}, your plan is built — and still unopened. Today is where it starts.`, expectedAction: 'log_today' };
+    case 'morning':
+      return { title: 'Your plan is waiting', body: `Everything's mapped. The very first task takes 90 seconds. Start now.`, expectedAction: 'log_today' };
+    case 'spark':
+      return { title: 'Every topper started at day 1', body: companionStrategy(c.rotate), expectedAction: 'open_plan' };
+    case 'fact':
+      return { title: 'One for the tray', body: `Your plan already knows exactly what to study first. Open it and go.`, expectedAction: 'open_plan' };
+    case 'open':
+      return { title: 'Prime study window', body: `${c.weakest} first — your plan lays out the exact next step. Tap in.`, expectedAction: 'log_today' };
+    case 'wind':
+      return { title: `The syllabus doesn't wait`, body: `30 focused minutes tonight beats a perfect plan you never opened.`, expectedAction: 'log_today' };
+    case 'progress':
+      return { title: `Still 0 logged · ${c.daysToExam} days left`, body: `Every day skipped is ground others are covering. Start tonight — small.`, expectedAction: 'log_today' };
+    case 'log':
+      return { title: 'Last call today', body: `One 90-second log starts your streak — and your real prep. Do it now.`, expectedAction: 'log_today' };
+    case 'close':
+      return null; // nothing to celebrate until they log
+  }
+}
+
+export interface ReactivationCtx { firstName: string; daysToExam: number; daysSinceLastLog: number; weakest: string }
+
+// slipping / inactive / dark — was logging, stopped. Pull them BACK, never shame.
+export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): SlotCopy | null {
+  switch (slot) {
+    case 'kickoff':
+      return { title: `${c.daysSinceLastLog} days since you studied`, body: `Momentum is hard to rebuild — but 10 minutes today restarts it.`, expectedAction: 'log_today' };
+    case 'morning':
+      return { title: 'Your plan reshaped for you', body: `It adjusted around the days you missed. Pick up where it now makes sense.`, expectedAction: 'open_plan' };
+    case 'spark':
+      return { title: 'Study smart', body: companionStrategy(c.daysSinceLastLog), expectedAction: 'open_plan' };
+    case 'fact':
+      return { title: 'One for the tray', body: `Your plan is still here, still yours. Open it and take one step.`, expectedAction: 'open_plan' };
+    case 'open':
+      return { title: 'Restart small', body: `${c.weakest}, 20 minutes. Small beats zero — and zero is how gaps grow.`, expectedAction: 'log_today' };
+    case 'wind':
+      return { title: `${c.daysToExam} days to CAT`, body: `The clock doesn't pause for a break. One block tonight and you're moving again.`, expectedAction: 'log_today' };
+    case 'progress':
+      return { title: 'The gap is still closeable', body: `You've done it before. Log tonight and your streak restarts from 1.`, expectedAction: 'log_today' };
+    case 'log':
+      return { title: 'Log tonight', body: `90 seconds to break the silence. Tomorrow-you will be glad you did.`, expectedAction: 'log_today' };
+    case 'close':
+      return null;
+  }
+}
+
 // Same rule the routine engine's weakest-derivation uses (see
 // /api/routine/today computeWeakestFromCoverage): most ground left to
 // cover, untouched topics weighted double, ratio-based across sections,
