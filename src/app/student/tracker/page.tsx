@@ -10,7 +10,7 @@ import { InstallAppButton } from '@/components/install-app-button';
 import { CoachLine } from '@/components/coach-line';
 import { PaceRing } from '@/components/pace-ring';
 import { remainingSyllabusHours, computeRequiredPace } from '@/lib/study-pace';
-import { computeTopicMemory } from '@/lib/prep-memory-data';
+import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -35,12 +35,18 @@ export default async function DailyTrackerPage() {
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
 
+  // Topic-memory's two source reads (full-history completions + topic_coverage)
+  // depend only on user.id — not on the profile — so they ride in this one
+  // parallel wave and are handed to computeTopicMemory prefetched, instead of
+  // running as a second serial round-trip wave after this Promise.all resolves.
   const [
     { data: profile },
     { data: sessions },
     { data: logs },
     { data: recentMock },
     { data: streakRow },
+    completionRecords,
+    { data: coverageRows },
   ] = await Promise.all([
     admin
       .from('profiles')
@@ -70,6 +76,8 @@ export default async function DailyTrackerPage() {
       .limit(1)
       .maybeSingle(),
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
+    buildCompletionRecords(admin, user.id, '2000-01-01'),
+    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -82,7 +90,10 @@ export default async function DailyTrackerPage() {
   // NOTE: topicMemory scans the student's full routine history — watch this
   // page's server time on /admin/perf as data grows.
   const archetype = { isRepeater: !!profile?.is_repeater, isWorkingProfessional: !!profile?.is_working_professional };
-  const topicMemory = await computeTopicMemory(admin, user.id, archetype);
+  const topicMemory = await computeTopicMemory(admin, user.id, archetype, {
+    completionRecords,
+    coverageRows: coverageRows ?? [],
+  });
   const totalTopics = Object.keys(TOPIC_METADATA).length;
   const notStartedCount = topicMemory.filter((t) => t.status === 'not_started').length;
   const learningCount = topicMemory.filter((t) => t.status === 'learning').length;
