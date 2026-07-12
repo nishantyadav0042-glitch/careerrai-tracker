@@ -1,0 +1,64 @@
+name: security
+
+# Continuous security scanning — runs on every PR and push to main so new CVEs,
+# leaked secrets, and risky code patterns are caught before they ship. Mirrors
+# the one-off audit tooling (Semgrep SAST, Gitleaks secrets, Trivy CVE/secret,
+# npm audit) as a standing gate. Tune the failure thresholds to taste.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # weekly, to catch newly-disclosed CVEs in unchanged deps
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: npm audit (deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Fail only on HIGH/CRITICAL production advisories so the known moderate
+      # transitive postcss/next advisory doesn't block every PR.
+      - run: npm audit --omit=dev --audit-level=high
+
+  sast:
+    name: Semgrep (SAST)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - run: semgrep ci
+        env:
+          SEMGREP_RULES: "p/security-audit p/owasp-top-ten p/javascript p/typescript p/nextjs p/secrets"
+
+  secrets:
+    name: Gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so historical leaks are caught too
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  filesystem:
+    name: Trivy (CVE + secret + misconfig)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
