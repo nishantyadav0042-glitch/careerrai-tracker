@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
-import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
+import { dispatch, BUDGET_ACTIVE, BUDGET_SETUP, BUDGET_RECOVERY } from '@/lib/notification-os';
+import { catExamDate } from '@/lib/routine-engine';
 import {
   COMPANION_SLOTS, companionType, companionTip, weakestFromCoverage,
   morningCopy, factCopy, openCopy, progressCopy, logCopy, closeCopy,
-  kickoffCopy, sparkCopy, windCopy,
+  kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 
@@ -41,6 +42,12 @@ export async function POST(request: NextRequest) {
   const dayOfYear = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 1)) / 86_400_000);
   const istDay = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).getDay();
   const isWeekend = istDay === 0 || istDay === 6;
+
+  // Real urgency for the activation/reactivation copy — the CAT countdown.
+  const examYr = now.getFullYear();
+  let examDate = catExamDate(examYr);
+  if (now > examDate) examDate = catExamDate(examYr + 1);
+  const daysToExam = Math.max(0, Math.ceil((examDate.getTime() - now.getTime()) / 86_400_000));
 
   const { data: students } = await admin
     .from('profiles')
@@ -90,16 +97,19 @@ export async function POST(request: NextRequest) {
 
     const streak = streakById.get(s.id);
     const lastLog = (streak?.last_log_date as string | null) ?? null;
-    // Never logged → activation ladder owns them; 2+ days quiet → recovery
-    // ladder owns them. The cadence is only for students in motion.
-    if (lastLog == null) { skipped++; continue; }
-    const daysSinceLastLog = Math.round((Date.parse(today) - Date.parse(lastLog)) / 86_400_000);
-    if (daysSinceLastLog >= 2) { skipped++; continue; }
+    const daysSinceLastLog = lastLog == null ? null : Math.round((Date.parse(today) - Date.parse(lastLog)) / 86_400_000);
 
     const days = reportDays.get(s.id) ?? new Set<string>();
     const loggedToday = days.has(today);
     const daysSinceJoin = Math.floor((now.getTime() - new Date(s.created_at as string).getTime()) / 86_400_000);
     const isArc = daysSinceJoin <= 14 && days.size < 7;
+    const firstName = (s.full_name as string | null)?.split(' ')[0] ?? 'there';
+
+    // Growth-first routing: students NOT using the app get the heavy emotional
+    // cadence (activation if never logged, reactivation if dormant); engaged
+    // loggers get the light one.
+    const stateKind: 'active' | 'activation' | 'reactivation' =
+      lastLog == null ? 'activation' : (daysSinceLastLog! >= 2 ? 'reactivation' : 'active');
 
     const weakest = (s.self_reported_weakest_section as 'VARC' | 'DILR' | 'QA' | null)
       ?? weakestFromCoverage(coverageById.get(s.id) ?? [])
@@ -112,7 +122,17 @@ export async function POST(request: NextRequest) {
 
     let copy: SlotCopy | null = null;
     let reason = '';
-    switch (slot) {
+    let budget: number = BUDGET_ACTIVE;
+
+    if (stateKind === 'activation') {
+      budget = BUDGET_SETUP;
+      copy = activationSlotCopy(slot, { firstName, daysToExam, rotate: daysSinceJoin, weakest });
+      reason = `Activation cadence · ${slot} · never logged · ${daysToExam}d to CAT`;
+    } else if (stateKind === 'reactivation') {
+      budget = BUDGET_RECOVERY;
+      copy = reactivationSlotCopy(slot, { firstName, daysToExam, daysSinceLastLog: daysSinceLastLog!, weakest });
+      reason = `Reactivation cadence · ${slot} · ${daysSinceLastLog}d quiet`;
+    } else switch (slot) {
       case 'kickoff':
         // Morning greeting for graduated loggers — arc students get their own
         // Day-N morning elsewhere, so don't double their morning.
@@ -176,7 +196,7 @@ export async function POST(request: NextRequest) {
       reason,
       expectedAction: copy.expectedAction,
       prefs,
-      dailyBudget: BUDGET_ACTIVE,
+      dailyBudget: budget,
     });
     if (outcome === 'sent') sent++;
   }
