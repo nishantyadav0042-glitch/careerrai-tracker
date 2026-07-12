@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { InstallAppButton } from '@/components/install-app-button';
 import { cn } from '@/lib/utils';
+import { trackMeta } from '@/lib/track';
 
 // Press-and-hold-to-commit (Cal-AI style): the ring fills over ~2.5s while
 // held; release early and it resets with a nudge to hold again; complete it
@@ -129,6 +130,10 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const [today] = useState(() => new Date());
   const [visible, setVisible] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  // A new student has completed onboarding — the signup conversion for ad
+  // campaigns. Fires once (this sequence renders only right after onboarding).
+  useEffect(() => { trackMeta('CompleteRegistration'); }, []);
 
   const hasDateStep = !!targetIso && hoursLeft > 0;
 
