@@ -120,7 +120,7 @@ export function LockedBuddyHub({
         </p>
         <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-stone-400">
           <ShieldCheck className="h-3.5 w-3.5 text-orange-400" />
-          21-day trial — full refund if you don&apos;t see the value. No auto-debit.
+          No auto-debit — you&apos;re in control of every renewal.
         </p>
       </div>
 

@@ -184,7 +184,7 @@ export function UnlockBuddyButton({
                 </div>
 
                 <p className="mt-3 text-center text-[11px] text-stone-400">
-                  21-day trial — full refund if you don&apos;t see the value. No auto-debit, ever.
+                  No auto-debit, ever.
                 </p>
 
                 {message && <p className="mt-3 text-center text-xs text-stone-600">{message}</p>}
