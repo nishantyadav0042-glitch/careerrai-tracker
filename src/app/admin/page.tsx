@@ -450,6 +450,12 @@ export default async function AdminPage() {
           >
             <BarChart2 className="w-3.5 h-3.5" /> Speed
           </Link>
+          <Link
+            href="/admin/growth"
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-teal-700 bg-teal-100 hover:bg-teal-200 rounded-lg px-3 py-2.5 transition-colors"
+          >
+            <TrendingUp className="w-3.5 h-3.5" /> Growth
+          </Link>
         </div>
 
         <AdminTabs tabs={adminTabs} />
