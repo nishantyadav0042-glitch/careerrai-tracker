@@ -99,7 +99,7 @@ export function InstallCoach({
             rel="noopener noreferrer"
             className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-bold text-emerald-700 active:scale-[0.98]"
           >
-            <MessageCircle className="h-4 w-4" /> Stuck? Chat with us on WhatsApp
+            <MessageCircle className="h-4 w-4" /> Facing issues? WhatsApp us
           </a>
         )}
       </div>

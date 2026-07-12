@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Share, SquarePlus, Copy, Bookmark, Plus } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Share, SquarePlus, Copy, Bookmark, Plus, MessageCircle } from 'lucide-react';
+import { supportWhatsappUrl } from '@/lib/whatsapp';
 
 // The installed-PWA entry point. Two jobs, decided by display mode:
-//  • Standalone (opened from the Home Screen): a one-time hand-off token in
-//    the URL is exchanged for a real session, so an iPhone user who installed
-//    the app lands logged in instead of on a cold login screen.
-//  • Browser (Safari): a VISUAL, step-by-step "Add to Home Screen" walkthrough
-//    (founder: show them where to tap, don't just list steps). We DON'T consume
-//    the token here — leaving it in the URL means A2HS saves it, so the first
-//    launch of the installed app can auto-log-in.
+//  • Standalone (opened from the Home Screen): a one-time hand-off token in the
+//    URL is exchanged for a real session, so the installed app lands logged in.
+//  • Browser: a fast, icon-first "Add to Home Screen" guide. Designed to be read
+//    in a glance — the Share icon is the hero and is shown glowing at BOTH the
+//    top and bottom of a phone, because Safari puts it in whichever bar the user
+//    has. We DON'T consume the token here — leaving it in the URL means A2HS
+//    saves it, so the first launch of the installed app can auto-log-in.
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return window.matchMedia?.('(display-mode: standalone)').matches
@@ -23,7 +24,7 @@ function isIOS(): boolean {
 export default function AppEntry() {
   const [state, setState] = useState<'checking' | 'exchanging' | 'guide'>('checking');
   const [ios, setIos] = useState(false);
-  const [gstep, setGstep] = useState<0 | 1>(0); // iOS walkthrough step
+  const [gstep, setGstep] = useState<0 | 1>(0);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- entry routing must run client-side after mount */
@@ -57,138 +58,150 @@ export default function AppEntry() {
     );
   }
 
+  const waUrl = supportWhatsappUrl('Hi, I need help installing the CareerRai app.');
+
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center bg-white px-6 py-8 text-center">
-      <div className="mx-auto flex w-full max-w-xs flex-1 flex-col items-center justify-center gap-5">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-900 text-2xl shadow-lg shadow-stone-900/15">📲</div>
-        <div>
-          <h1 className="text-xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your Home&nbsp;Screen</h1>
-          <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            <span className="font-semibold text-stone-700">Just 3&nbsp;MB.</span> It&apos;s your job #1 — and the only way reminders reach you{ios ? ' on iPhone' : ''}. You&apos;ll be <span className="font-semibold text-stone-700">signed in automatically.</span>
-          </p>
-        </div>
+    <div className="flex min-h-[100dvh] flex-col bg-white px-5 pb-6 pt-9">
+      <div className="mx-auto flex w-full max-w-[330px] flex-1 flex-col items-center justify-center text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-900 text-2xl shadow-lg shadow-stone-900/15">📲</div>
+        <h1 className="mt-3 text-[19px] font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Install in 2 taps</h1>
 
         {ios ? (
-          <div className="w-full">
-            {/* step dots */}
-            <div className="mb-3 flex items-center justify-center gap-1.5">
-              <span className={`h-1.5 rounded-full transition-all ${gstep === 0 ? 'w-5 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
-              <span className={`h-1.5 rounded-full transition-all ${gstep === 1 ? 'w-5 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
+          gstep === 0 ? (
+            <div className="mt-6 w-full animate-[fadeIn_.3s_ease]">
+              <Dots step={0} />
+              <p className="mt-4 text-[18px] font-bold leading-tight text-stone-900">
+                Tap <Share className="inline h-[22px] w-[22px] align-text-bottom text-blue-600" /> <span className="text-blue-600">Share</span>
+              </p>
+              <WhereIsShare />
+              <button type="button" onClick={() => setGstep(1)}
+                className="mt-5 w-full rounded-2xl bg-stone-900 py-3.5 text-[15px] font-bold text-white active:scale-[0.98]">
+                Done — next
+              </button>
             </div>
-
-            {gstep === 0 ? (
-              <div className="animate-[fadeIn_0.35s_ease]">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step 1 of 2</p>
-                <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap the Share icon</p>
-                <SafariBarMock />
-                <p className="mt-2 text-[12px] leading-snug text-stone-500">
-                  It sits next to the web address — <b>top-right</b> on most iPhones, or in the <b>bottom bar</b> on some. Look for this icon: <Share className="inline h-3.5 w-3.5 align-text-bottom text-blue-600" />
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setGstep(1)}
-                  className="mt-4 w-full rounded-2xl bg-stone-900 py-3.5 text-sm font-semibold text-white active:scale-[0.98]"
-                >
-                  I tapped Share — next →
-                </button>
-              </div>
-            ) : (
-              <div className="animate-[fadeIn_0.35s_ease]">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step 2 of 2</p>
-                <p className="mb-3 mt-0.5 text-base font-bold text-stone-900">Tap &ldquo;Add to Home Screen&rdquo;</p>
-                <ShareSheetMock />
-                <p className="mt-2 text-center text-[12px] font-bold text-rose-600">👆 Tap the circled row</p>
-                <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-left text-[12px] leading-snug text-emerald-800">
-                  <b>Then:</b> tap <b>Add</b>, open <b>CareerRai</b>{' '}from your Home Screen — you&apos;ll be signed in and land straight on your plan.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setGstep(0)}
-                  className="mt-3 w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
-                >
-                  ← Back to step 1
-                </button>
-              </div>
-            )}
-            <p className="mt-3 text-[11px] text-stone-400">Works in <b>Safari</b> only. In Chrome? Open this page in Safari first.</p>
-          </div>
+          ) : (
+            <div className="mt-6 w-full animate-[fadeIn_.3s_ease]">
+              <Dots step={1} />
+              <p className="mt-4 text-[18px] font-bold leading-tight text-stone-900">
+                Tap <span className="whitespace-nowrap">&ldquo;Add to Home&nbsp;Screen&rdquo;</span>
+              </p>
+              <ShareSheetMock />
+              <button type="button" onClick={() => setGstep(0)}
+                className="mt-4 text-xs font-medium text-stone-400 active:text-stone-600">← back</button>
+            </div>
+          )
         ) : (
-          <div className="w-full space-y-2.5 text-left">
-            <AndroidStep n={1}><>Open your browser menu (<b>⋮</b>, top-right).</></AndroidStep>
-            <AndroidStep n={2}><>Tap <span className="mx-0.5 inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 align-middle font-semibold text-stone-800"><Plus className="h-3.5 w-3.5" />Install app</span> or <b>Add to Home screen</b>.</></AndroidStep>
-            <AndroidStep n={3}><>Confirm — CareerRai installs like a normal app, signed in.</></AndroidStep>
-          </div>
+          <AndroidVisual />
         )}
       </div>
 
-      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      {waUrl && (
+        <a href={waUrl} target="_blank" rel="noopener noreferrer"
+          className="mx-auto mt-5 flex w-full max-w-[330px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 py-3 text-[14px] font-bold text-emerald-700 active:scale-[0.98]">
+          <MessageCircle className="h-[18px] w-[18px]" /> Facing issues? WhatsApp us
+        </a>
+      )}
+
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes crPing{75%,100%{transform:scale(1.9);opacity:0}}
+        .pulse{animation:crPing 1.4s cubic-bezier(0,0,.2,1) infinite}
+        @media (prefers-reduced-motion:reduce){.pulse{animation:none!important}}
+      `}</style>
     </div>
   );
 }
 
-// A faithful mock of Safari's ADDRESS BAR with the Share icon highlighted on
-// the right — Share lives next to the web address whether Safari's bar is at
-// the top or the bottom, so this reads correctly for every layout.
-function SafariBarMock() {
+function Dots({ step }: { step: 0 | 1 }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-stone-100 p-3">
-      <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2.5 shadow-sm">
-        <span className="text-[13px] font-semibold text-stone-400">aA</span>
-        <span className="min-w-0 flex-1 truncate text-center text-[13px] text-stone-500">careerrai-daily.vercel.app</span>
-        <span className="relative flex h-6 w-6 items-center justify-center">
-          {/* hand-circled annotation on the exact tap target */}
-          <span className="absolute -inset-2 animate-ping rounded-full bg-rose-400/25" />
-          <span className="absolute -inset-2 rounded-full border-[2.5px] border-rose-500" />
-          <Share className="relative h-5 w-5 text-blue-600" />
-        </span>
-      </div>
-      <p className="mt-2 text-center text-[12px] font-bold text-rose-600">👆 Tap the circled Share icon</p>
+    <div className="flex items-center justify-center gap-1.5">
+      <span className={`h-1.5 rounded-full transition-all ${step === 0 ? 'w-5 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
+      <span className={`h-1.5 rounded-full transition-all ${step === 1 ? 'w-5 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
     </div>
   );
 }
 
-// A faithful mock of the iOS Share sheet with "Add to Home Screen" highlighted.
+// Answers "where is the Share button?" for BOTH Safari layouts at a glance — the
+// icon pulses at the top bar AND the bottom bar, so the student just looks for
+// the glowing icon wherever it is on their phone. No reading required.
+function WhereIsShare() {
+  return (
+    <>
+      <div className="mx-auto mt-4 w-[146px] overflow-hidden rounded-[20px] border-[3px] border-stone-800 bg-white">
+        <div className="flex items-center gap-1.5 border-b border-stone-100 px-2 py-1.5">
+          <span className="h-2 flex-1 rounded bg-stone-200" />
+          <PulseShare />
+        </div>
+        <div className="flex h-[100px] items-center justify-center bg-stone-50">
+          <span className="text-[10px] font-semibold text-stone-300">CareerRai</span>
+        </div>
+        <div className="flex items-center justify-around border-t border-stone-100 px-3 py-1.5">
+          <span className="h-3 w-3 rounded-full bg-stone-200" />
+          <PulseShare />
+          <span className="h-3 w-3 rounded-full bg-stone-200" />
+        </div>
+      </div>
+      <p className="mt-2.5 text-[12.5px] text-stone-500">Top <b className="text-stone-700">or</b> bottom of Safari.</p>
+    </>
+  );
+}
+
+function PulseShare() {
+  return (
+    <span className="relative flex h-5 w-5 items-center justify-center">
+      <span className="pulse absolute inset-[-5px] rounded-full bg-blue-500/25" />
+      <span className="absolute inset-[-5px] rounded-full border-2 border-blue-500" />
+      <Share className="relative h-[15px] w-[15px] text-blue-600" />
+    </span>
+  );
+}
+
+// The iOS Share sheet with "Add to Home Screen" circled — the one row they tap.
 function ShareSheetMock() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-stone-50 text-left shadow-sm">
-      <div className="flex items-center gap-2.5 border-b border-stone-200 bg-white px-3 py-2.5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-900 text-sm">📲</div>
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold text-stone-900">CareerRai</p>
-          <p className="truncate text-[10px] text-stone-400">careerrai-daily.vercel.app</p>
-        </div>
+    <div className="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-white text-left shadow-sm">
+      <Row muted icon={<Copy className="h-4 w-4 text-stone-400" />} label="Copy" />
+      <Row muted icon={<Bookmark className="h-4 w-4 text-stone-400" />} label="Add Bookmark" />
+      <div className="relative flex items-center justify-between bg-blue-50 px-3.5 py-3 ring-2 ring-inset ring-blue-500">
+        <span className="text-[14px] font-bold text-stone-900">Add to Home Screen</span>
+        <span className="relative flex h-6 w-6 items-center justify-center">
+          <span className="pulse absolute inset-[-5px] rounded-full bg-blue-500/25" />
+          <span className="absolute inset-[-5px] rounded-full border-2 border-blue-500" />
+          <SquarePlus className="relative h-5 w-5 text-stone-900" />
+        </span>
       </div>
-      <div className="bg-white">
-        <ActionRow icon={<Copy className="h-4 w-4 text-stone-400" />} label="Copy" muted />
-        <ActionRow icon={<Bookmark className="h-4 w-4 text-stone-400" />} label="Add Bookmark" muted />
-        <div className="relative flex items-center justify-between bg-rose-50/70 px-3 py-2.5 ring-2 ring-inset ring-rose-400">
-          <span className="text-[13px] font-bold text-stone-900">Add to Home Screen</span>
-          <span className="relative flex h-6 w-6 items-center justify-center">
-            <span className="absolute -inset-1.5 animate-ping rounded-full bg-rose-400/25" />
-            <span className="absolute -inset-1.5 rounded-full border-[2.5px] border-rose-500" />
-            <SquarePlus className="relative h-5 w-5 text-stone-900" />
-          </span>
-        </div>
-        <ActionRow icon={<Share className="h-4 w-4 text-stone-400" />} label="Markup" muted />
-      </div>
+      <Row muted icon={<Share className="h-4 w-4 text-stone-400" />} label="Markup" />
     </div>
   );
 }
 
-function ActionRow({ icon, label, muted }: { icon: React.ReactNode; label: string; muted?: boolean }) {
+function Row({ icon, label, muted }: { icon: ReactNode; label: string; muted?: boolean }) {
   return (
-    <div className={`flex items-center justify-between border-b border-stone-100 px-3 py-2.5 ${muted ? 'opacity-55' : ''}`}>
-      <span className="text-[13px] text-stone-700">{label}</span>
-      {icon}
+    <div className={`flex items-center justify-between border-b border-stone-100 px-3.5 py-2.5 ${muted ? 'opacity-45' : ''}`}>
+      <span className="text-[13px] text-stone-700">{label}</span>{icon}
     </div>
   );
 }
 
-function AndroidStep({ n, children }: { n: number; children: React.ReactNode }) {
+// Android landing here directly (rare — the Install button routes Android to an
+// in-place coach). Same icon-first treatment: point at the ⋮ menu, show the chip.
+function AndroidVisual() {
   return (
-    <div className="flex items-start gap-2.5">
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-900 text-xs font-bold text-white">{n}</span>
-      <p className="text-sm leading-snug text-stone-700">{children}</p>
+    <div className="mt-6 w-full animate-[fadeIn_.3s_ease]">
+      <div className="mx-auto flex w-[150px] items-center justify-end rounded-t-[18px] border-[3px] border-b-0 border-stone-800 bg-white px-2.5 py-2">
+        <span className="relative flex h-6 w-6 items-center justify-center">
+          <span className="pulse absolute inset-[-5px] rounded-full bg-orange-500/25" />
+          <span className="absolute inset-[-5px] rounded-full border-2 border-orange-500" />
+          <span className="relative text-lg font-black leading-none text-stone-800">⋮</span>
+        </span>
+      </div>
+      <div className="mx-auto h-3 w-[150px] border-x-[3px] border-stone-800 bg-stone-50" />
+      <div className="mx-auto h-[3px] w-[150px] bg-stone-800" />
+      <p className="mt-4 text-[18px] font-bold text-stone-900">Tap the <span className="text-orange-600">⋮ menu</span></p>
+      <p className="mt-1 text-[12.5px] text-stone-500">then tap</p>
+      <span className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-stone-100 px-3 py-2 text-sm font-bold text-stone-800">
+        <Plus className="h-4 w-4" /> Install app
+      </span>
     </div>
   );
 }
