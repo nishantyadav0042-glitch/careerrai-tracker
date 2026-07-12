@@ -13,16 +13,17 @@ import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
+import { getStudentProfile } from '@/lib/student-profile';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [chatUnread, notifUnread, { data: profile }] = await Promise.all([
+  const [chatUnread, notifUnread, profile] = await Promise.all([
     getChatUnreadCount(user.id, 'student'),
     getNotifUnreadCount(user.id),
-    admin.from('profiles').select('role, is_premium, onboarding_completed, notif_prefs, post_signup_done, syllabus_target_date, study_target_hours, is_repeater, is_working_professional').eq('id', user.id).single(),
+    getStudentProfile(user.id),
   ]);
 
   // Route non-students to their own home (handles stale role cookies too).
