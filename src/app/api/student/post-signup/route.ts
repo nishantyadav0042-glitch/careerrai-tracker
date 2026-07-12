@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { remainingSyllabusHours } from '@/lib/study-pace';
+import { serverError } from '@/lib/api-error';
 
 // Persists the post-login sequence: the date the student (re)confirms in the
 // reconciliation step, and the one-time "done" flag once they finish it.
@@ -64,6 +65,6 @@ export async function POST(request: NextRequest) {
   }
 
   const { error } = await admin.from('profiles').update(update).eq('id', user.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError('post-signup', error);
   return NextResponse.json({ ok: true });
 }

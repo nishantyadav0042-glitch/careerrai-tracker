@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { serverError } from '@/lib/api-error';
 
 export async function PATCH(request: NextRequest) {
   const supabase = createServerClient(
@@ -24,6 +25,6 @@ export async function PATCH(request: NextRequest) {
     .update({ notif_prefs: body })
     .eq('id', user.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return serverError('notif-prefs', error);
   return NextResponse.json({ ok: true });
 }

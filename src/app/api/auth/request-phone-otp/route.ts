@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
+import { clientIp } from '@/lib/request-ip';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,9 +26,11 @@ export async function POST(request: NextRequest) {
     //   2. global daily: stop before the vendor quota is exhausted by abuse.
     // The admin phone is exempt — the founder must always be able to log in.
     // Robust parse: a blank env var (Number('')===0) must NOT disable all logins.
+    const ip = clientIp(request);
+    const isAdmin = await isAdminPhoneE164(e164);
     const parsedCeiling = Number(process.env.DAILY_OTP_CEILING);
     const DAILY_OTP_CEILING = Number.isFinite(parsedCeiling) && parsedCeiling > 0 ? parsedCeiling : 800;
-    if (!(await isAdminPhoneE164(e164))) {
+    if (!isAdmin) {
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { count: globalToday } = await admin
         .from('otp_send_events')
@@ -39,6 +42,29 @@ export async function POST(request: NextRequest) {
           { sent: false, message: "We're experiencing very high signups right now. Please try again in a little while." },
           { status: 429 }
         );
+      }
+
+      // Per-IP burst cap. The per-phone limit below is trivially bypassed by
+      // rotating numbers, which lets ONE source drain the global daily ceiling
+      // and 429 every legitimate signup. Capping sends per IP per hour makes a
+      // single-source flood far more expensive. Fail OPEN when the IP is unknown
+      // so we never block a real user we simply can't identify. Tunable via env.
+      if (ip) {
+        const parsedIpCap = Number(process.env.OTP_IP_HOURLY_CAP);
+        const OTP_IP_HOURLY_CAP = Number.isFinite(parsedIpCap) && parsedIpCap > 0 ? parsedIpCap : 30;
+        const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { count: ipSends } = await admin
+          .from('otp_send_events')
+          .select('*', { count: 'exact', head: true })
+          .eq('ip', ip)
+          .gte('sent_at', hourAgo);
+        if ((ipSends ?? 0) >= OTP_IP_HOURLY_CAP) {
+          console.error(`[request-phone-otp] per-IP hourly cap hit (${ipSends}/${OTP_IP_HOURLY_CAP})`);
+          return NextResponse.json(
+            { sent: false, message: "We're experiencing very high signups right now. Please try again in a little while." },
+            { status: 429 }
+          );
+        }
       }
     }
 
@@ -95,7 +121,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, message: "Couldn't send the OTP. Try again." }, { status: 502 });
     }
 
-    await admin.from('otp_send_events').insert({ email: e164 });
+    await admin.from('otp_send_events').insert({ email: e164, ip });
 
     const res = NextResponse.json({ sent: true });
     pending.forEach(({ name, value, options }) =>
