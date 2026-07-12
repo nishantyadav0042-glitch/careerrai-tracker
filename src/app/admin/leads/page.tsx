@@ -42,14 +42,19 @@ export default async function LeadsPage() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
+  // Test/friend accounts (is_test_account) are hidden from the leads list so
+  // founder testing never pollutes the real pipeline. Toggle it per-lead on
+  // the detail page.
   const [{ data: students }, { data: buddies }] = await Promise.all([
     admin.from('profiles')
       .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date')
       .eq('role', 'student')
+      .eq('is_test_account', false)
       .order('created_at', { ascending: false }),
     admin.from('profiles')
       .select('id, full_name, phone, created_at, college, cat_percentile, app_installed, notif_prefs')
       .eq('role', 'buddy')
+      .eq('is_test_account', false)
       .order('created_at', { ascending: false }),
   ]);
 

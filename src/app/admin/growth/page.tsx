@@ -22,13 +22,15 @@ export default async function AdminGrowthPage() {
   if (me?.role !== 'admin') redirect('/login');
 
   const [{ data: profiles }, { data: streaks }, { data: engagement }, { data: funnel }] = await Promise.all([
-    admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source'),
+    admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account'),
     admin.from('streak_data').select('student_id, last_log_date'),
     admin.from('student_engagement').select('student_id, buddy_cta_clicks'),
     admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30)),
   ]);
 
-  const students = (profiles ?? []).filter((p) => p.role === 'student');
+  // Test/friend accounts (is_test_account) are excluded from every funnel
+  // number so founder testing never inflates acquisition/activation metrics.
+  const students = (profiles ?? []).filter((p) => p.role === 'student' && p.is_test_account !== true);
   const lastLog = new Map<string, string | null>((streaks ?? []).map((s) => [s.student_id, s.last_log_date]));
   const ctaClicks = new Map<string, number>((engagement ?? []).map((e) => [e.student_id, e.buddy_cta_clicks ?? 0]));
 
