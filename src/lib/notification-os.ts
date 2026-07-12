@@ -32,7 +32,7 @@ import { sendPushToUser } from '@/lib/push';
 // between. The per-student cooldown below is the counterweight — a student
 // who stops logging AND stops tapping gets automatically quieter, no
 // human decision needed.
-export const BUDGET_ACTIVE = 9;    // active / arc students: full cadence + decision events
+export const BUDGET_ACTIVE = 10;   // active / arc students: full cadence + decision events
 export const BUDGET_SETUP = 3;     // building_plan / plan_ready: ladder touches only
 export const BUDGET_RECOVERY = 2;  // slipping / inactive / dark: recovery ladder only
 export const DAILY_BUDGET = 2;     // conservative default for any caller that doesn't say
@@ -44,7 +44,8 @@ export const DAILY_BUDGET = 2;     // conservative default for any caller that d
 export const STUDENT_BUDGET_TYPES = [
   'onboarding_morning', 'onboarding_evening', 'activation', 'builder_recovery',
   'revision_due', 'topic_earned', 'mission_changed', 'weekly_evolved', 'inactive_recovery',
-  'companion_morning', 'companion_fact', 'companion_open', 'companion_progress', 'companion_log', 'companion_close',
+  'companion_kickoff', 'companion_morning', 'companion_spark', 'companion_fact', 'companion_open',
+  'companion_wind', 'companion_progress', 'companion_log', 'companion_close',
 ];
 
 export type ExpectedAction = 'log_today' | 'finish_builder' | 'open_plan';

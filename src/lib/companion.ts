@@ -19,9 +19,9 @@
 
 import type { ExpectedAction } from './notification-os';
 
-export type CompanionSlot = 'morning' | 'fact' | 'open' | 'progress' | 'log' | 'close';
+export type CompanionSlot = 'kickoff' | 'morning' | 'spark' | 'fact' | 'open' | 'wind' | 'progress' | 'log' | 'close';
 
-export const COMPANION_SLOTS: readonly CompanionSlot[] = ['morning', 'fact', 'open', 'progress', 'log', 'close'];
+export const COMPANION_SLOTS: readonly CompanionSlot[] = ['kickoff', 'morning', 'spark', 'fact', 'open', 'wind', 'progress', 'log', 'close'];
 
 export function companionType(slot: CompanionSlot): string {
   return `companion_${slot}`;
@@ -55,6 +55,23 @@ const TIP_BANK: Record<'VARC' | 'DILR' | 'QA', string[]> = {
 export function companionTip(weakest: 'VARC' | 'DILR' | 'QA', dayOfYear: number): string {
   const bank = TIP_BANK[weakest];
   return bank[dayOfYear % bank.length];
+}
+
+// ── Strategy / mindset bank (11:00 spark slot) ──────────────────────────────
+// Section-agnostic exam craft — the "study smart" gift, distinct from the
+// section micro-tip at 13:00. Real principles, no invented numbers.
+const STRATEGY_TIPS: string[] = [
+  'Consistency beats intensity — two focused hours daily outrun a weekend cram.',
+  'Review every mock the same day you take it, while the mistakes are still fresh.',
+  'Study your weakest section first, when your mind is sharpest.',
+  'Untimed practice builds accuracy; timed practice builds temperament. You need both.',
+  'A topic you can explain out loud is a topic you own.',
+  'Sleep is a study tool — memory consolidates overnight, not during cramming.',
+  'Accuracy before speed. Speed is what accuracy becomes once the method is automatic.',
+];
+
+export function companionStrategy(dayOfYear: number): string {
+  return STRATEGY_TIPS[dayOfYear % STRATEGY_TIPS.length];
 }
 
 // ── Slot copy ───────────────────────────────────────────────────────────────
@@ -108,6 +125,29 @@ export function closeCopy(streak: number, weakest: string): SlotCopy {
     title: streak > 1 ? `Logged. ${streak}-day run.` : 'Logged. Day closed.',
     body: `Tomorrow: ${weakest} first. Good night.`,
     expectedAction: 'open_plan',
+  };
+}
+
+// 08:00 — a warm start to the day. Streak when there's a run to protect;
+// otherwise a clean fresh-day line. A gift, never a demand.
+export function kickoffCopy(streak: number, weakest: string): SlotCopy {
+  return streak > 1
+    ? { title: `🔥 ${streak}-day run`, body: `One focused ${weakest} block today keeps it alive.`, expectedAction: 'open_plan' }
+    : { title: 'Fresh day', body: `Your plan's ready — start with ${weakest} while you're sharp.`, expectedAction: 'open_plan' };
+}
+
+// 11:00 — the "study smart" strategy gift (section-agnostic craft).
+export function sparkCopy(dayOfYear: number): SlotCopy {
+  return { title: 'Study smart', body: companionStrategy(dayOfYear), expectedAction: 'open_plan' };
+}
+
+// 18:30 — the evening nudge. Only sent when they haven't logged yet (caller
+// gates), framed as "small beats zero", never guilt.
+export function windCopy(weakest: string): SlotCopy {
+  return {
+    title: 'Evening block',
+    body: `30 focused minutes on ${weakest} beats a perfect plan you skip.`,
+    expectedAction: 'log_today',
   };
 }
 
