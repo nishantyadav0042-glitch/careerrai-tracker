@@ -1,0 +1,45 @@
+rules:
+  - id: xss-dangerouslysetinnerhtml
+    languages: [tsx, jsx, typescript, javascript]
+    severity: ERROR
+    message: dangerouslySetInnerHTML — XSS risk if content is user-controlled
+    pattern: dangerouslySetInnerHTML={...}
+  - id: command-injection-exec
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: child_process exec/spawn — command injection risk
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec(...)
+          - pattern: child_process.execSync(...)
+          - pattern: require('child_process').$F(...)
+  - id: insecure-random-for-token
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: Math.random() is not cryptographically secure — do not use for tokens/ids
+    pattern: Math.random()
+  - id: eval-usage
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: eval()/Function() — code injection risk
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: raw-error-message-to-client
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: Returning raw error.message to client — info disclosure
+    pattern: NextResponse.json({ ..., error: $E.message, ... }, ...)
+  - id: sql-string-concat
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Possible SQL string concatenation
+    patterns:
+      - pattern-either:
+          - pattern: $DB.query("..." + ...)
+          - pattern: $DB.rpc(`...${...}...`)
+  - id: hardcoded-jwt-or-key
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Possible hardcoded JWT/secret literal
+    pattern-regex: (eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{20,}|rzp_live_[A-Za-z0-9]{14,})
