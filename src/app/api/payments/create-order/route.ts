@@ -49,12 +49,21 @@ export async function POST(request: NextRequest) {
       // Freemium: a free (scholarship/coupon) activation still unlocks the buddy.
       await grantPremiumAndQueueBuddy(admin, user.id);
 
-      // Burn the coupon (per-student + global) when one made it free.
+      // Burn the coupon (per-student + global) when one made it free. Upsert so a
+      // repeat free-activation for the same (coupon, student) is a no-op under the
+      // coupon_redemptions unique constraint, and bump used_count ONLY when a new
+      // redemption row actually landed — never double-count.
       if (price.couponId) {
-        await admin.from('coupon_redemptions').insert({
-          coupon_id: price.couponId, student_id: user.id, payment_id: payRow?.id ?? null,
-        });
-        await admin.rpc('increment_coupon_use', { p_coupon_id: price.couponId });
+        const { data: redeemed } = await admin
+          .from('coupon_redemptions')
+          .upsert(
+            { coupon_id: price.couponId, student_id: user.id, payment_id: payRow?.id ?? null },
+            { onConflict: 'coupon_id,student_id', ignoreDuplicates: true }
+          )
+          .select('id');
+        if (redeemed && redeemed.length > 0) {
+          await admin.rpc('increment_coupon_use', { p_coupon_id: price.couponId });
+        }
       }
 
       return NextResponse.json({ free: true });
