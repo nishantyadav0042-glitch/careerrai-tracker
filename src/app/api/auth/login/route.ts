@@ -3,15 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { clientIp } from '@/lib/request-ip';
+import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
 
 // Brute-force / credential-stuffing guard. This same route authenticates
 // student, buddy AND admin accounts, so an unthrottled password endpoint is an
-// account-takeover surface. We count FAILED attempts in a short rolling window,
-// per credential and per IP, and lock further tries with a "wait a few minutes"
-// message (/login?error=locked). A successful login clears that credential's
-// counter. All bookkeeping uses the service-role admin client; the window is
-// short so any incidental lockout self-heals quickly.
-const WINDOW_MS = 15 * 60 * 1000;
+// account-takeover surface. Every attempt is recorded UP FRONT (race-free) and
+// counted per credential (5) + per IP (30) over a 15-min window; over the limit
+// redirects to /login?error=locked. A successful login clears the counter.
 const MAX_FAILS_PER_CREDENTIAL = 5; // wrong tries against one account
 const MAX_FAILS_PER_IP = 30; // spraying many accounts from one source
 
@@ -41,26 +39,14 @@ export async function POST(request: NextRequest) {
   // to a single key.
   const e164 = normalizeIndianPhone(credential);
   const attemptKey = e164 ?? credential.toLowerCase();
-  const windowStart = new Date(Date.now() - WINDOW_MS).toISOString();
 
-  async function isLockedOut(): Promise<boolean> {
-    const [{ count: byCred }, byIp] = await Promise.all([
-      admin.from('login_attempts').select('*', { count: 'exact', head: true })
-        .eq('credential', attemptKey).gte('created_at', windowStart),
-      ip
-        ? admin.from('login_attempts').select('*', { count: 'exact', head: true })
-            .eq('ip', ip).gte('created_at', windowStart)
-        : Promise.resolve({ count: 0 as number | null }),
-    ]);
-    return (byCred ?? 0) >= MAX_FAILS_PER_CREDENTIAL || (byIp.count ?? 0) >= MAX_FAILS_PER_IP;
-  }
-  // Only failures are ever inserted, so a row = one failed attempt.
-  const recordFailure = () =>
-    admin.from('login_attempts').insert({ credential: attemptKey, ip });
-  const clearFailures = () =>
-    admin.from('login_attempts').delete().eq('credential', attemptKey);
-
-  if (await isLockedOut()) {
+  // Record this attempt and check the limit BEFORE authenticating. Recording up
+  // front is what makes parallel requests count each other — closing the
+  // check-then-act race. The row is cleared on a successful login below.
+  if (await registerAttemptAndCheck(admin, attemptKey, ip, {
+    maxPerKey: MAX_FAILS_PER_CREDENTIAL,
+    maxPerIp: MAX_FAILS_PER_IP,
+  })) {
     return NextResponse.redirect(`${origin}/login?error=locked`, { status: 302 });
   }
 
@@ -89,6 +75,7 @@ export async function POST(request: NextRequest) {
       path: '/',
       sameSite: 'lax',
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: 60 * 60 * 24 * 30,
     });
     return response;
@@ -107,7 +94,6 @@ export async function POST(request: NextRequest) {
 
     if (!profile) {
       console.error('[LOGIN] No profile found for phone:', e164);
-      await recordFailure();
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
     }
 
@@ -119,11 +105,10 @@ export async function POST(request: NextRequest) {
 
     if (authResult.error) {
       console.error('[LOGIN] Phone auth error:', authResult.error.message);
-      await recordFailure();
       return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
     }
 
-    await clearFailures();
+    await clearAttempts(admin, attemptKey);
     const role = profile.role ?? 'student';
     const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : '/student/tracker';
     return buildResponse(dest, role);
@@ -140,18 +125,16 @@ export async function POST(request: NextRequest) {
 
   if (profileError || !profile?.email) {
     console.error('[LOGIN] Profile lookup error:', profileError?.message);
-    await recordFailure();
     return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
   }
 
   const { error } = await supabase.auth.signInWithPassword({ email: profile.email, password });
   if (error) {
     console.error('[LOGIN] Email auth error:', error.message);
-    await recordFailure();
     return NextResponse.redirect(`${origin}/login?error=1`, { status: 302 });
   }
 
-  await clearFailures();
+  await clearAttempts(admin, attemptKey);
   const role = profile.role ?? 'student';
   const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : '/student/tracker';
   return buildResponse(dest, role);
