@@ -16,6 +16,7 @@ import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
+import { PushHealer } from '@/components/push-healer';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -94,6 +95,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen bg-stone-50">
+      <PushHealer />
       <InstallPing />
       <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
         <div className="flex items-center justify-between mb-6">
