@@ -25,13 +25,17 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from('topic_coverage')
-    .select('section, topic, status, updated_at, is_priority')
-    .eq('student_id', user.id);
+  const [{ data: existing }, { data: prof }] = await Promise.all([
+    admin
+      .from('topic_coverage')
+      .select('section, topic, status, updated_at, is_priority')
+      .eq('student_id', user.id),
+    admin.from('profiles').select('start_with').eq('id', user.id).maybeSingle(),
+  ]);
+  const startWith = (prof?.start_with as string | null) ?? null;
 
   if (existing && existing.length > 0) {
-    return NextResponse.json({ matrix: byGraphOrder(existing) });
+    return NextResponse.json({ matrix: byGraphOrder(existing), startWith });
   }
 
   const seedRows = VALID_SECTIONS.flatMap((section) =>
@@ -49,7 +53,7 @@ export async function GET() {
     .select('section, topic, status, updated_at, is_priority');
   if (error || !inserted) return NextResponse.json({ error: 'Could not seed coverage matrix' }, { status: 500 });
 
-  return NextResponse.json({ matrix: byGraphOrder(inserted) });
+  return NextResponse.json({ matrix: byGraphOrder(inserted), startWith });
 }
 
 // POST /api/coverage — persist coverage. Two shapes:
