@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { sendExpedifyLead } from '@/lib/expedify';
+import { buildStudentBrief } from '@/lib/student-brief';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
@@ -270,17 +271,15 @@ export async function POST(request: NextRequest) {
     // throws. Only new students (not returning logins, buddies, or admins).
     if ((isStub || !existing) && role === 'student') {
       const leadName = entry?.full_name ?? selfName ?? 'there';
-      const dreamCollege = Array.isArray(onboarding?.dream_colleges)
-        ? (onboarding.dream_colleges.find((c: unknown): c is string => typeof c === 'string') ?? null)
-        : null;
-      const targetPercentile = typeof onboarding?.target_percentile === 'number' ? onboarding.target_percentile : null;
+      const newUserId = data.user.id;
+      const brief = buildStudentBrief(leadName, onboarding);
       after(() => sendExpedifyLead({
+        studentId: newUserId,
         name: leadName,
         phone: e164,
         email: entry?.email ?? null,
         source: signupSource,
-        dreamCollege,
-        targetPercentile,
+        brief,
       }));
     }
 
