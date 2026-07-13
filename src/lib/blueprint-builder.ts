@@ -4,6 +4,7 @@
 // topic-selector, or prep-memory (see the field-by-field mapping in each
 // section below) — this computes what's already true about the Blueprint
 // being built, not a decorative progress indicator.
+import { totalSyllabusHours, REMAINING_FRACTION } from './study-pace';
 //
 // Pure and parse-free like every other engine in this codebase — the caller
 // passes in whatever's been answered so far, this derives what's now knowable.
@@ -104,16 +105,21 @@ function weeklyLoadHours(input: BlueprintPreviewInput): number | null {
 // A rough completion forecast that visibly updates as answers land — first
 // when weekly hours are known (assumes nothing covered yet), again after
 // the preparation map is declared (recomputed from what's actually left).
-// The constants are deliberately coarse and the copy says "≈": this is a
-// pace estimate, not a promise. ~5 focused hours to take one granular
-// Knowledge Graph unit from untouched to practicing, 3 to finish one still
-// at learning, 1.5 to polish one already practicing — across the 46 exam
-// units this lands in the 200-250h total-prep range, stated once here so
-// there's a single place to tune it.
-const HOURS_PER_UNTOUCHED_UNIT = 5;
-const HOURS_PER_LEARNING_UNIT = 3;
-const HOURS_PER_PRACTICING_UNIT = 1.5;
+//
+// CONSISTENCY RULE (the fix for the "3.8h/day promised, 6.6h/day demanded"
+// blunder): these per-unit constants are DERIVED from the same curated
+// per-topic model the Home ring and daily plan use (study-pace.ts:
+// totalSyllabusHours × REMAINING_FRACTION) — not hand-picked. The old flat
+// 5h/3h/1.5h summed to 230h while the ring computed 397h, so the finish-date
+// chooser promised a pace the app then contradicted the next morning. Now
+// both derive from ONE model and can never drift again. This count-based
+// approximation (average hours/unit) exists only for callers that hold
+// counts, not per-topic statuses; per-topic callers use study-pace directly.
 export const EXAM_UNIT_COUNT = 46; // VARC 9 + DILR 9 + QA 28
+const AVG_UNIT_HOURS = totalSyllabusHours() / EXAM_UNIT_COUNT; // ≈8.6h, curated
+const HOURS_PER_UNTOUCHED_UNIT = AVG_UNIT_HOURS * REMAINING_FRACTION.not_started;
+const HOURS_PER_LEARNING_UNIT = AVG_UNIT_HOURS * REMAINING_FRACTION.learning;
+const HOURS_PER_PRACTICING_UNIT = AVG_UNIT_HOURS * REMAINING_FRACTION.practicing;
 
 export interface CoverageProjection {
   weeks: number;           // ≈ weeks to finish remaining coverage at this load

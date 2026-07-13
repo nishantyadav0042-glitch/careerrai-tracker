@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { remainingPrepHours, type BlueprintPreviewInput } from '@/lib/blueprint-builder';
+import { remainingMockHours } from '@/lib/study-pace';
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => void;
@@ -55,7 +56,11 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
     coverage_learning: coverageLearning,
     coverage_total: coverageTotal,
   };
-  const hoursLeft = remainingPrepHours(input);
+  const syllabusLeft = remainingPrepHours(input);
+  // Syllabus + mock budget (a full mock ≈ 4h incl. analysis) — the same
+  // total the Home ring divides by days, so the promise made here is the
+  // promise the app keeps tomorrow.
+  const hoursLeft = syllabusLeft + remainingMockHours(syllabusLeft);
   const today = new Date();
 
   // CAT is late November of the attempt year; the syllabus must land well

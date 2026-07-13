@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { remainingSyllabusHours } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -120,7 +120,9 @@ export async function GET() {
   if (targetIso) {
     const daysLeft = Math.max(1, Math.ceil((new Date(targetIso + 'T00:00:00').getTime() - Date.now()) / 86_400_000));
     const remaining = remainingSyllabusHours(coverageRows ?? []);
-    if (remaining > 0) paceHours = Math.min(12, Math.max(1, Math.round((remaining / daysLeft) * 2) / 2));
+    // Syllabus + the mock budget (a full mock ≈ 4h incl. analysis) — the daily
+    // plan itself contains mock/sectional tasks, so the pace must fund them.
+    if (remaining > 0) paceHours = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
   }
 
   const routineProfile: RoutineProfile = {

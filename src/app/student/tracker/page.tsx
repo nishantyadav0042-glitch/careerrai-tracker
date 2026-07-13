@@ -9,7 +9,7 @@ import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
 import { CoachLine } from '@/components/coach-line';
 import { PaceRing } from '@/components/pace-ring';
-import { remainingSyllabusHours, computeRequiredPace } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
@@ -124,6 +124,7 @@ export default async function DailyTrackerPage() {
   const pace = targetIso
     ? computeRequiredPace({
         remainingHours: paceRemainingHours,
+        mockHours: remainingMockHours(paceRemainingHours),
         today: now,
         targetDate: new Date(targetIso + 'T00:00:00'),
         committedPerDay: (profile?.study_target_hours as number | null) ?? null,

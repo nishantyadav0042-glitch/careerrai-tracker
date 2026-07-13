@@ -13,6 +13,7 @@ import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
+import { remainingMockHours } from '@/lib/study-pace';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
@@ -74,7 +75,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
     const topicMemory = await computeTopicMemory(admin, user.id, archetype);
     const practicing = topicMemory.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
     const learning = topicMemory.filter((t) => t.status === 'learning').length;
-    const hoursLeft = remainingPrepHours({ coverage_total: topicMemory.length || EXAM_UNIT_COUNT, coverage_practicing: practicing, coverage_learning: learning });
+    const syllabusLeft = remainingPrepHours({ coverage_total: topicMemory.length || EXAM_UNIT_COUNT, coverage_practicing: practicing, coverage_learning: learning });
+    // Same formula as the ring: syllabus + mock budget, so the date the
+    // student confirms here is the same date the ring holds them to.
+    const hoursLeft = syllabusLeft + remainingMockHours(syllabusLeft);
     postSignupProps = {
       targetIso: (profile?.syllabus_target_date as string | null) ?? null,
       hoursLeft,
