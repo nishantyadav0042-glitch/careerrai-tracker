@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Logo } from '@/components/logo';
-import { OpenInBrowser } from '@/components/open-in-browser';
 import ScreenNeedCheck from './screens/screen-need-check';
 import ScreenTargetDate from './screens/screen-target-date';
 import ScreenDreamPercentile from './screens/screen-dream-percentile';
@@ -135,7 +134,6 @@ export default function StartPage() {
 
   return (
     <div className="min-h-screen bg-white px-4 py-8">
-      <OpenInBrowser />
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-5 flex items-center justify-between">
           <Logo size="sm" />

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { OpenInBrowser } from '@/components/open-in-browser';
 import { InstallAppButton } from '@/components/install-app-button';
 
 // Public landing at "/". Founder direction: the phone previews are SALES
@@ -295,7 +294,6 @@ export default function WelcomePage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-white text-stone-900">
-      <OpenInBrowser />
 
       <div className="shrink-0 px-6 pt-5 text-center">
         <p className="text-sm font-bold tracking-tight">CareerRai</p>
