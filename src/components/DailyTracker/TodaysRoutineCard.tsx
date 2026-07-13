@@ -7,6 +7,11 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+
+// For the swap-topic picker (student ask: "change today's topic from
+// Geometry to Number System") — same-section alternatives only.
+const SECTION_TOPICS: Record<string, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
 type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
@@ -94,6 +99,8 @@ export function TodaysRoutineCard() {
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [swapTaskId, setSwapTaskId] = useState<string | null>(null);
+  const [swapBusy, setSwapBusy] = useState(false);
   const [confidenceTaps, setConfidenceTaps] = useState<{ topic: string; confidence: ConfidenceSignal }[]>([]);
   // Reading the routine isn't the same as committing to it — viewedAt marks
   // when a real (non-empty, non-setup) routine first appeared on screen,
@@ -175,6 +182,27 @@ export function TodaysRoutineCard() {
       if (json.fullyDone) { setFullyDone(true); reportComplete(); }
     } finally {
       setBusyTaskId(null);
+    }
+  }
+
+  // Swap one of today's topics for a same-section alternative — the plan's
+  // section balance stays; which topic within it is the student's call.
+  async function swapTopic(task: RoutineTask, topic: string) {
+    if (swapBusy) return;
+    setSwapBusy(true);
+    try {
+      const res = await fetch('/api/routine/swap-topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: task.id, topic }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { if (json?.error) alert(json.error); return; }
+      routineTodayCache = null;
+      setData((prev) => (prev ? { ...prev, routine: { ...prev.routine, tasks: json.tasks as RoutineTask[] } } : prev));
+      setSwapTaskId(null);
+    } finally {
+      setSwapBusy(false);
     }
   }
 
@@ -275,12 +303,13 @@ export function TodaysRoutineCard() {
               // skip ahead is making a real choice, not cheating), just not
               // shouting for the same attention as the one thing to do now.
               if (isStart || expanded) {
+                const swapOpen = swapTaskId === task.id;
                 return (
                   <div key={task.id}>
                     <div
                       className={cn(
                         'w-full flex items-start gap-3 rounded-2xl bg-stone-100/70 p-4 transition-all',
-                        expanded && 'rounded-b-none'
+                        (expanded || swapOpen) && 'rounded-b-none'
                       )}
                     >
                       {/* Tap the circle to mark done, no confidence required —
@@ -308,7 +337,37 @@ export function TodaysRoutineCard() {
                           <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
                         )}
                       </button>
+                      {/* Swap today's topic — same section, student's choice. */}
+                      {!done && task.topic && (
+                        <button
+                          onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
+                          aria-label="Change topic"
+                          title="Change today's topic"
+                          className="mt-0.5 shrink-0 rounded-lg border border-stone-300 bg-white px-2 py-1 text-[10px] font-bold text-stone-500 transition-transform active:scale-95"
+                        >
+                          ⇄
+                        </button>
+                      )}
                     </div>
+                    {swapOpen && !done && task.topic && (
+                      <div className={cn('bg-stone-100/70 px-4 pb-4 pt-1', expanded ? '' : 'rounded-b-2xl')}>
+                        <p className="mb-1.5 text-[11px] font-semibold text-stone-500">
+                          Swap today&apos;s {task.section} topic — your plan, your call:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(SECTION_TOPICS[task.section] ?? []).filter((t) => t !== task.topic).map((t) => (
+                            <button
+                              key={t}
+                              onClick={() => swapTopic(task, t)}
+                              disabled={swapBusy}
+                              className="rounded-full border border-stone-300 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 transition-transform active:scale-95 disabled:opacity-50"
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {expanded && (
                       <div className="rounded-b-2xl bg-stone-100/70 px-4 pb-4 pt-1">
                         {/* 2x2, not a single row of 4 — "Getting there" and

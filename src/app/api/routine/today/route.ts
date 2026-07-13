@@ -51,7 +51,7 @@ export async function GET() {
     // isn't queried twice).
     admin
       .from('topic_coverage')
-      .select('section, topic, status')
+      .select('section, topic, status, is_priority')
       .eq('student_id', user.id),
     admin
       .from('daily_routines')
@@ -359,9 +359,13 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 // revision-due + (weak section only) the self-reported bonus. This is what
 // replaced the old behavior where the two non-weakest sections used the
 // exact same static topic for every student in the product.
-function buildTopicChoices(coverageRows: { topic: string; status: string }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }): Record<Section, TopicChoice> {
+function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }): Record<Section, TopicChoice> {
   const coverageByTopic = new Map<string, CoverageStatus>();
-  for (const row of coverageRows) coverageByTopic.set(row.topic, row.status as CoverageStatus);
+  const prioritySet = new Set<string>();
+  for (const row of coverageRows) {
+    coverageByTopic.set(row.topic, row.status as CoverageStatus);
+    if (row.is_priority === true) prioritySet.add(row.topic);
+  }
 
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
@@ -374,6 +378,7 @@ function buildTopicChoices(coverageRows: { topic: string; status: string }[], pr
       coverageStatus: coverageByTopic.get(topic) ?? null,
       daysSinceLastPracticed: history.daysSinceLastPracticedByTopic[topic] ?? null,
       selfReportedBonus: isWeakSection && topic === profile.weakTopic,
+      priorityBonus: prioritySet.has(topic),
     }));
     result[section] = chooseTopicForSection(candidates, revisionMultiplier);
   }

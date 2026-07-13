@@ -27,7 +27,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from('topic_coverage')
-    .select('section, topic, status, updated_at')
+    .select('section, topic, status, updated_at, is_priority')
     .eq('student_id', user.id);
 
   if (existing && existing.length > 0) {
@@ -46,7 +46,7 @@ export async function GET() {
   const { data: inserted, error } = await admin
     .from('topic_coverage')
     .upsert(seedRows, { onConflict: 'student_id,section,topic' })
-    .select('section, topic, status, updated_at');
+    .select('section, topic, status, updated_at, is_priority');
   if (error || !inserted) return NextResponse.json({ error: 'Could not seed coverage matrix' }, { status: 500 });
 
   return NextResponse.json({ matrix: byGraphOrder(inserted) });

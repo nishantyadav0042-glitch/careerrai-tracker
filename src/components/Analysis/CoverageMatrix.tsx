@@ -12,6 +12,7 @@ interface CoverageRow {
   topic: string;
   status: Status;
   updated_at: string;
+  is_priority?: boolean | null;
 }
 
 // Student-controlled cycle only — exam_ready (🟢) is earned through
@@ -85,6 +86,23 @@ export function CoverageMatrix() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Star a topic to schedule it first (student ask: "complete Arithmetic
+  // first"). Optimistic; the API caps at 5 and we roll back on rejection.
+  async function togglePriority(row: CoverageRow) {
+    const next = !(row.is_priority === true);
+    setRows((prev) => prev.map((r) => (r.topic === row.topic ? { ...r, is_priority: next } : r)));
+    const res = await fetch('/api/coverage/priority', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: row.topic, priority: next }),
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      setRows((prev) => prev.map((r) => (r.topic === row.topic ? { ...r, is_priority: !next } : r)));
+      const json = res ? await res.json().catch(() => ({})) : {};
+      if (json?.error) alert(json.error);
+    }
+  }
+
   async function cycleTopic(row: CoverageRow) {
     if (row.status === 'exam_ready') return; // system-earned, not tappable
     const key = `${row.section}:${row.topic}`;
@@ -138,22 +156,37 @@ export function CoverageMatrix() {
       {units.map((u) => rowsByTopic.get(u)).filter((r): r is CoverageRow => r != null).map((row) => {
         const key = `${row.section}:${row.topic}`;
         const revDue = isRevisionDue(row);
+        const starred = row.is_priority === true;
         return (
-          <button
+          <div
             key={key}
-            onClick={() => cycleTopic(row)}
-            disabled={busy === key}
-            title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
             className={cn(
-              'min-h-[32px] rounded-full border px-3 py-1.5 text-[11px] font-medium transition-all active:scale-95',
+              'inline-flex min-h-[32px] items-center rounded-full border text-[11px] font-medium transition-all',
               revDue ? REVISION_DUE_STYLE : STATUS_STYLE[row.status],
-              busy === key && 'opacity-50',
-              row.status === 'exam_ready' && 'cursor-default'
+              starred && 'ring-2 ring-violet-300',
+              busy === key && 'opacity-50'
             )}
           >
-            <span className="mr-1">{STATUS_GLYPH[row.status]}</span>
-            {row.topic}
-          </button>
+            <button
+              onClick={() => cycleTopic(row)}
+              disabled={busy === key}
+              title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
+              className={cn('py-1.5 pl-3 pr-1 active:scale-95 transition-transform', row.status === 'exam_ready' && 'cursor-default')}
+            >
+              <span className="mr-1">{STATUS_GLYPH[row.status]}</span>
+              {row.topic}
+            </button>
+            {/* Star = schedule this first. Separate tap target from the
+                status cycle so prioritising never mis-taps a status change. */}
+            <button
+              onClick={() => togglePriority(row)}
+              aria-label={starred ? `Remove ${row.topic} from priorities` : `Prioritise ${row.topic}`}
+              title={starred ? 'Priority — scheduled first' : 'Star to schedule first'}
+              className={cn('py-1.5 pl-0.5 pr-2 text-[13px] leading-none active:scale-90 transition-transform', starred ? 'opacity-100' : 'opacity-35 hover:opacity-70')}
+            >
+              {starred ? '★' : '☆'}
+            </button>
+          </div>
         );
       })}
     </div>
@@ -176,6 +209,7 @@ export function CoverageMatrix() {
       </div>
       <p className="mb-3 text-[10px] leading-relaxed text-stone-400">
         The dot fills — ○ ◔ ◑ ◕ — as a topic moves from just started to revision. Green is earned from your results, not a tap.
+        {' '}Tap ★ on up to 5 topics to get them scheduled first in your daily plan.
       </p>
       <div className="space-y-2">
         {KNOWLEDGE_GRAPH.map((section) => {
