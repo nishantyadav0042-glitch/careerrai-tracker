@@ -224,6 +224,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             firstName={firstName}
             dreamCollege={dreamCollegeLabel(profile.dream_colleges)}
             appInstalled={profile.app_installed === true}
+            pushOn={pushOn}
           />
         )}
 
