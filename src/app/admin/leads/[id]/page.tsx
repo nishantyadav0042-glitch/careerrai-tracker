@@ -5,12 +5,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, PhoneCall } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { assessLead, whyContactToday, stepLabel, TIER_META } from '@/lib/lead-intel';
 import { OutreachPanel } from './outreach-panel';
 import { TestToggle } from './test-toggle';
+import { WhatsAppComposer } from './whatsapp-composer';
+import { dreamCollegeLabel } from '@/lib/notification-os';
 import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -177,7 +179,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   }
   timeline.sort((a, b) => b.date.localeCompare(a.date));
 
-  const wa = profile.phone ? `https://wa.me/${(profile.phone as string).replace(/\D/g, '')}` : null;
   const firstName = ((profile.full_name as string | null) ?? 'Student').split(' ')[0];
 
   return (
@@ -214,15 +215,17 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             ].filter(Boolean).join(' · ')}
           </p>
           {profile.college != null && <p className="text-xs text-stone-400 mt-0.5">{profile.college as string}</p>}
-          <div className="mt-2 flex items-center gap-2">
-            {wa && (
-              <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white hover:bg-stone-800">
-                <PhoneCall className="w-3.5 h-3.5" /> WhatsApp {firstName}
-              </a>
-            )}
-            <span className="text-xs text-stone-400">{profile.phone as string | null}</span>
-          </div>
         </div>
+
+        {/* WhatsApp outreach — pick a message; it opens WhatsApp pre-typed. */}
+        {profile.phone && (
+          <WhatsAppComposer
+            phone={profile.phone as string}
+            firstName={firstName}
+            dreamCollege={dreamCollegeLabel(profile.dream_colleges)}
+            appInstalled={profile.app_installed === true}
+          />
+        )}
 
         {/* Why contact today — renders only when a real signal fired. */}
         {whyToday && (
