@@ -43,7 +43,7 @@ export function waMessages(v: WaVars): WaMessage[] {
       key: 'install_full',
       label: 'Install nudge',
       suggestedFor: 'not_installed',
-      text: `Hi ${firstName}! 👋 This is Nishant from CareerRai.
+      text: `Hi ${firstName}! 👋 This is Nishant from *CareerRai — the CAT Prep tracking app* you signed up on 🎯
 
 Saw you signed up but haven't installed the app yet 🙂
 
@@ -60,7 +60,7 @@ Your CAT plan is already built and waiting 💪`,
       key: 'install_short',
       label: 'Install (short)',
       suggestedFor: 'not_installed',
-      text: `Hey ${firstName}! 👋 Nishant here from CareerRai.
+      text: `Hey ${firstName}! 👋 Nishant here from *CareerRai — your CAT Prep tracking app* 🎯
 
 One small thing — please install the app so we can send you reminders and track your progress. It's what makes the whole thing work 🙂
 
@@ -71,7 +71,7 @@ One small thing — please install the app so we can send you reminders and trac
       key: 'notifications_on',
       label: 'Turn on reminders',
       suggestedFor: 'notifications_off',
-      text: `Hi ${firstName}! 👋 Nishant from CareerRai.
+      text: `Hi ${firstName}! 👋 Nishant from *CareerRai — the CAT Prep tracking app* 🎯
 
 You've got the app — nice! 🎉 One thing though: your notifications are switched off, so we can't send your daily reminders. That's the piece that actually keeps you consistent.
 
@@ -84,7 +84,7 @@ Takes 5 seconds — and it's the difference between a plan you follow and one yo
       key: 'keep_going',
       label: 'Keep going',
       suggestedFor: 'engaged',
-      text: `Hi ${firstName}! 👋 Nishant from CareerRai.
+      text: `Hi ${firstName}! 👋 Nishant from *CareerRai — the CAT Prep tracking app* 🎯
 
 Great — you're all set up! 🎉 Now the only habit that matters: open the app once a day and log your prep in 5 seconds. That's all it takes to stay on track for ${dreamCollege}.
 
