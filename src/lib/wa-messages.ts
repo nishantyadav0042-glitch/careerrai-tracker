@@ -14,13 +14,25 @@ export interface WaVars {
   siteUrl?: string;
 }
 
+// The lead's outreach state, most-blocking first: no app → app but no
+// notifications → fully set up. The suggested message matches this.
+export type LeadState = 'not_installed' | 'notifications_off' | 'engaged';
+
 export interface WaMessage {
   key: string;
   label: string;
-  // Which install state this message is written for — used to flag the
-  // suggested one on a given lead. 'any' fits either.
-  suggestedFor: 'not_installed' | 'installed' | 'any';
+  // Which state this message is written for — used to flag the suggested one
+  // on a given lead. 'any' fits every state.
+  suggestedFor: LeadState | 'any';
   text: string;
+}
+
+// Resolve a lead to one state. Install is the prerequisite (on iPhone push
+// only exists once installed), so not-installed outranks notifications-off.
+export function leadState(appInstalled: boolean, pushOn: boolean): LeadState {
+  if (!appInstalled) return 'not_installed';
+  if (!pushOn) return 'notifications_off';
+  return 'engaged';
 }
 
 export function waMessages(v: WaVars): WaMessage[] {
@@ -56,12 +68,25 @@ One small thing — please install the app so we can send you reminders and trac
 (open in Chrome/Safari → "Add to Home Screen")`,
     },
     {
-      key: 'keep_going',
-      label: 'Keep going',
-      suggestedFor: 'installed',
+      key: 'notifications_on',
+      label: 'Turn on reminders',
+      suggestedFor: 'notifications_off',
       text: `Hi ${firstName}! 👋 Nishant from CareerRai.
 
-Great — you've got the app installed! 🎉 Now the only habit that matters: open it once a day and log your prep in 5 seconds. That's all it takes to stay on track for ${dreamCollege}.
+You've got the app — nice! 🎉 One thing though: your notifications are switched off, so we can't send your daily reminders. That's the piece that actually keeps you consistent.
+
+Please switch them on 👇
+Open the app → allow notifications (or phone Settings → Notifications → CareerRai → On).
+
+Takes 5 seconds — and it's the difference between a plan you follow and one you forget 💪`,
+    },
+    {
+      key: 'keep_going',
+      label: 'Keep going',
+      suggestedFor: 'engaged',
+      text: `Hi ${firstName}! 👋 Nishant from CareerRai.
+
+Great — you're all set up! 🎉 Now the only habit that matters: open the app once a day and log your prep in 5 seconds. That's all it takes to stay on track for ${dreamCollege}.
 
 Your plan's ready whenever you are 💪`,
     },
