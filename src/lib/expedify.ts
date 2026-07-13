@@ -50,7 +50,10 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResu
       body: JSON.stringify({
         name: lead.name,
         phone: lead.phone,
-        email: lead.email ?? undefined,
+        // Expedify requires `email` (422 without it), but our signups are
+        // phone-based and usually have none — send a synthetic, clearly-fake
+        // placeholder derived from the phone so the contact always validates.
+        email: lead.email ?? `${lead.phone.replace(/\D/g, '')}@noemail.careerrai.app`,
         source: lead.source ?? 'careerrai',
         // The brief the AI agent should use on the call:
         summary: b.summary,
