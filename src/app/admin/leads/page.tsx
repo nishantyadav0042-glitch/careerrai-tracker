@@ -6,6 +6,26 @@ import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
 import { ArrowLeft } from 'lucide-react';
 import { stepLabel } from '@/lib/lead-intel';
+import { waMessages, waNumber, leadState } from '@/lib/wa-messages';
+import { dreamCollegeLabel } from '@/lib/notification-os';
+
+// Build a wa.me link with the SUGGESTED outreach message pre-typed, chosen from
+// the lead's state (no app → install nudge, installed-but-no-notifs → turn on
+// reminders, engaged → keep going). One tap opens WhatsApp ready to send.
+function waPrefilled(
+  phone: string | null,
+  fullName: string | null,
+  dreamColleges: unknown,
+  appInstalled: boolean,
+  pushOn: boolean
+): string | null {
+  if (!phone) return null;
+  const firstName = (fullName ?? 'there').split(' ')[0];
+  const state = leadState(appInstalled, pushOn);
+  const msgs = waMessages({ firstName, dreamCollege: dreamCollegeLabel(dreamColleges) });
+  const suggested = msgs.find((m) => m.suggestedFor === state) ?? msgs[0];
+  return `https://wa.me/${waNumber(phone)}?text=${encodeURIComponent(suggested.text)}`;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +67,7 @@ export default async function LeadsPage() {
   // the detail page.
   const [{ data: students }, { data: buddies }] = await Promise.all([
     admin.from('profiles')
-      .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date')
+      .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date, dream_colleges')
       .eq('role', 'student')
       .eq('is_test_account', false)
       .order('created_at', { ascending: false }),
@@ -93,7 +113,7 @@ export default async function LeadsPage() {
           <div className="space-y-2 mb-8">
             {(students ?? []).map((s) => {
               const push = (s.notif_prefs as { push?: boolean } | null)?.push === true;
-              const wa = waLink(s.phone as string | null);
+              const wa = waPrefilled(s.phone as string | null, s.full_name as string | null, s.dream_colleges, s.app_installed === true, push);
               return (
                 <div key={s.id} className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3.5">
                   <Link href={`/admin/leads/${s.id}`} className="min-w-0 flex-1">
