@@ -34,6 +34,12 @@ export interface TopicCandidateInput {
   // signal anymore. This never overrides a strong Coverage Matrix/
   // prerequisite case, it only breaks close ties toward it.
   selfReportedBonus?: boolean;
+  // Student-chosen priority (starred in the Preparation Map, max 5). Strong
+  // (+25) — a priority topic beats same-status peers decisively — but still
+  // additive: an unmet prerequisite (-18) or a heavily revision-overdue
+  // alternative can outrank it, so priority steers the plan without letting
+  // a student break their own sequencing.
+  priorityBonus?: boolean;
 }
 
 export interface TopicChoice {
@@ -104,7 +110,10 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     const selfReportPoints = c.selfReportedBonus ? 12 : 0;
     if (c.selfReportedBonus) reasons.push('Your toughest pick');
 
-    const score = coveragePoints + weightagePoints + revisionPoints + prereqPenalty + selfReportPoints;
+    const priorityPoints = c.priorityBonus ? 25 : 0;
+    if (c.priorityBonus) reasons.unshift('Your priority pick');
+
+    const score = coveragePoints + weightagePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints;
     return { topic: c.topic, score, reasons };
   });
 

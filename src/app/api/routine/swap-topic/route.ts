@@ -1,0 +1,64 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getAuthUser } from '@/lib/auth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+import { getLogDateString } from '@/lib/streak-utils';
+import { serverError } from '@/lib/api-error';
+
+const TOPICS_BY_SECTION: Record<string, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
+
+// POST /api/routine/swap-topic { taskId, topic } — student feedback: "if I
+// want to change today's topic from Geometry to Number System, I can."
+// Swaps the topic on ONE of today's frozen tasks, same section only (the
+// day's section balance is the plan's job; which topic within it is the
+// student's right). Blocked once the task is completed. The task's label,
+// target and reason are rewritten so the card reads honestly.
+export async function POST(request: NextRequest) {
+  const user = await getAuthUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = (await request.json().catch(() => ({}))) as { taskId?: unknown; topic?: unknown };
+  const taskId = typeof body.taskId === 'string' ? body.taskId : null;
+  const newTopic = typeof body.topic === 'string' ? body.topic : null;
+  if (!taskId || !newTopic) return NextResponse.json({ error: 'taskId and topic required' }, { status: 400 });
+
+  const admin = createAdminClient();
+  const today = getLogDateString();
+
+  const [{ data: routine }, { data: completions }] = await Promise.all([
+    admin.from('daily_routines').select('tasks').eq('student_id', user.id).eq('routine_date', today).maybeSingle(),
+    admin.from('routine_task_completions').select('task_id').eq('student_id', user.id).eq('routine_date', today),
+  ]);
+  if (!routine) return NextResponse.json({ error: 'No routine for today yet.' }, { status: 404 });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tasks = routine.tasks as any[];
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) return NextResponse.json({ error: 'Task not found.' }, { status: 404 });
+  if (!task.topic) return NextResponse.json({ error: 'This task has no topic to swap.' }, { status: 400 });
+  if ((completions ?? []).some((c) => c.task_id === taskId)) {
+    return NextResponse.json({ error: 'Already completed — nothing to swap.' }, { status: 400 });
+  }
+
+  const sectionTopics = TOPICS_BY_SECTION[task.section as string];
+  if (!sectionTopics?.includes(newTopic)) {
+    return NextResponse.json({ error: `Pick a ${task.section} topic.` }, { status: 400 });
+  }
+  if (newTopic === task.topic) return NextResponse.json({ ok: true, tasks });
+
+  // Rewrite the task around the student's choice — same minutes, same slot.
+  const questions = Math.max(5, Math.round((task.estMinutes as number) / 3));
+  task.topic = newTopic;
+  task.label = `${task.section} — ${newTopic}`;
+  task.target = `Solve ${questions} ${newTopic} questions`;
+  task.reason = 'You picked this today — your plan, your call.';
+
+  const { error } = await admin
+    .from('daily_routines')
+    .update({ tasks })
+    .eq('student_id', user.id)
+    .eq('routine_date', today);
+  if (error) return serverError('swap-topic', error);
+
+  return NextResponse.json({ ok: true, tasks });
+}
