@@ -41,7 +41,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (me?.role !== 'admin') redirect('/login');
 
   const { data: profile } = await admin.from('profiles')
-    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account, expedify_status, expedify_synced_at')
+    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account, expedify_status, expedify_synced_at, signup_device, signup_browser')
     .eq('id', id).in('role', ['student', 'buddy']).single();
   if (!profile) notFound();
 
@@ -67,6 +67,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <span className={cn('rounded-lg px-2.5 py-1.5 text-xs font-bold', pushOn ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-500')}>
           🔔 {pushOn ? 'Notifications on' : 'Notifications off'}
         </span>
+        {profile.signup_device && (
+          <span className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold text-stone-600">
+            {profile.signup_device === 'ios' ? '📱 iPhone' : profile.signup_device === 'android' ? '🤖 Android' : '📱 Device?'}
+            {profile.signup_browser === 'instagram' ? ' · Instagram' : profile.signup_browser === 'facebook' ? ' · Facebook' : profile.signup_browser === 'chrome' ? ' · Chrome' : profile.signup_browser === 'safari' ? ' · Safari' : profile.signup_browser === 'samsung' ? ' · Samsung' : ''}
+          </span>
+        )}
       </div>
       <TestToggle id={profile.id as string} initial={profile.is_test_account === true} />
       {profile.expedify_status && (
