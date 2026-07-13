@@ -182,17 +182,29 @@ export function builderRecoveryCopy(
 // build, then silence + the human queue. Ends forever on the first log.
 export const ACTIVATION_DAYS: readonly number[] = [0, 1, 3, 7];
 
+// The student's real dream college for notification copy — the first one they
+// picked at signup, e.g. "IIM Calcutta". Falls back to a generic phrase for
+// anyone who didn't choose one, so the copy always reads naturally mid-sentence
+// ("toward IIM Calcutta" / "toward your dream college").
+export function dreamCollegeLabel(dreamColleges: unknown): string {
+  if (Array.isArray(dreamColleges) && typeof dreamColleges[0] === 'string' && dreamColleges[0].trim()) {
+    return dreamColleges[0].trim();
+  }
+  return 'your dream college';
+}
+
 // Aspirational activation vibe (Cal AI-style: tiny daily effort → the dream
-// college). Honest — the plan is real, the first step really is tiny.
-export function activationCopy(day: number, firstName: string): { title: string; body: string } {
+// college). Honest — the plan is real, the first step really is tiny. dc is the
+// student's own target college (see dreamCollegeLabel), used mid-sentence.
+export function activationCopy(day: number, firstName: string, dc: string): { title: string; body: string } {
   if (day === 0) {
-    return { title: 'Your dream college starts now', body: `${firstName}, the plan you built is live. It begins with one 5-second log — take the first step.` };
+    return { title: 'The journey starts now', body: `${firstName}, the plan you built is live. It begins with one 5-second log toward ${dc}.` };
   }
   if (day === 1) {
-    return { title: '5 seconds to get moving', body: 'Your plan is built and waiting. One quick log tonight starts the journey to the college you want.' };
+    return { title: '5 seconds to get moving', body: `Your plan is built and waiting. One quick log tonight starts the journey to ${dc}.` };
   }
   if (day === 3) {
-    return { title: 'Your plan is holding your spot', body: `A few minutes a day is all it takes. Your dream college is still one small step away — start today.` };
+    return { title: 'Your plan is holding your spot', body: `A few minutes a day is all it takes to move toward ${dc} — start today.` };
   }
-  return { title: 'Your dream college is still waiting', body: 'Your plan reshapes around the time you have left. One log today restarts the momentum.' };
+  return { title: 'Still time to make your move', body: `Your plan reshapes around the time you have left. One log today restarts the momentum toward ${dc}.` };
 }
