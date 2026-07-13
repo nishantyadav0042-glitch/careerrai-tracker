@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { computeWeeklyDiagnosis } from '@/lib/weekly-diagnosis';
 import { getAuthUser } from '@/lib/auth';
 import { computeSummary } from '@/lib/analytics';
 import { Card } from '@/components/ui/card';
@@ -245,6 +246,10 @@ export default async function BuddyStudentDetailPage({
     { conceptual: 0, silly: 0, time: 0, panic: 0, selection: 0 }
   );
 
+  // The paid product: this week's diagnosis, computed by the engine,
+  // DELIVERED by the buddy — their voice on top of the data.
+  const weekly = await computeWeeklyDiagnosis(admin, id);
+
   return (
     <div className="space-y-5 pb-24">
       <Link href="/buddy/students" className="flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900">
@@ -258,6 +263,18 @@ export default async function BuddyStudentDetailPage({
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">{student.exam_target ?? 'CAT'} · {student.email}</p>
       </div>
+
+      {/* WEEKLY DIAGNOSIS — the paid deliverable. The engine writes it; the
+          buddy delivers it with their own advice on the call/WhatsApp. */}
+      <Card className="p-4 border-violet-200 bg-violet-50/40">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-violet-700 mb-2">📊 This week — share this with your student</p>
+        <ul className="space-y-1.5">
+          {weekly.lines.map((l) => (
+            <li key={l} className="text-sm leading-snug text-stone-800">{l}</li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] text-stone-400">Auto-generated from their real week. Add your advice and send — this is what they pay for.</p>
+      </Card>
 
       {/* Student profile dossier — everything they shared in onboarding, so the
           buddy knows who they're coaching. Collapsed by default. */}
