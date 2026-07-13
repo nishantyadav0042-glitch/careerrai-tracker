@@ -182,16 +182,9 @@ export function builderRecoveryCopy(
 // build, then silence + the human queue. Ends forever on the first log.
 export const ACTIVATION_DAYS: readonly number[] = [0, 1, 3, 7];
 
-// The student's real dream college for notification copy — the first one they
-// picked at signup, e.g. "IIM Calcutta". Falls back to a generic phrase for
-// anyone who didn't choose one, so the copy always reads naturally mid-sentence
-// ("toward IIM Calcutta" / "toward your dream college").
-export function dreamCollegeLabel(dreamColleges: unknown): string {
-  if (Array.isArray(dreamColleges) && typeof dreamColleges[0] === 'string' && dreamColleges[0].trim()) {
-    return dreamColleges[0].trim();
-  }
-  return 'your dream college';
-}
+// Re-exported for existing server callers (crons, server pages) that import it
+// from here; the definition now lives in the client-safe ./dream-college.
+export { dreamCollegeLabel } from './dream-college';
 
 // Aspirational activation vibe (Cal AI-style: tiny daily effort → the dream
 // college). Honest — the plan is real, the first step really is tiny. dc is the

@@ -7,6 +7,8 @@ import { CheckCircle2, Clock, Phone, ChevronDown, ChevronUp, UserX, AlertCircle,
 import { cn } from '@/lib/utils';
 import type { Profile } from '@/types';
 import { StudentDossier, type StudentDossierData } from '@/components/student-dossier';
+import { waMessages, leadState } from '@/lib/wa-messages';
+import { dreamCollegeLabel } from '@/lib/dream-college';
 
 // Buddy rows carry their storefront-setup answers so the admin can match on
 // expertise (strongest section, who they help best), not just a name.
@@ -37,20 +39,25 @@ interface PendingStudent {
   assigned_buddy_id: string | null;
 }
 
-// Build a WhatsApp click-to-chat link from a real (+country code) phone number.
-// We only link when the number is a genuine international one starting with "+".
-function whatsappLink(phone: string | null | undefined, name: string): string | null {
+// Build a WhatsApp click-to-chat link from a real (+country code) phone number,
+// pre-typed with the SUGGESTED outreach message from the shared templates (the
+// single source of truth in lib/wa-messages — same copy as the Leads page).
+// The message is chosen from the lead's state (no app → install nudge,
+// installed-but-notifications-off → turn on reminders, engaged → keep going);
+// with no state (never-joined invites) it defaults to the install nudge.
+function whatsappLink(
+  phone: string | null | undefined,
+  name: string,
+  opts?: { appInstalled?: boolean; pushOn?: boolean; dreamColleges?: unknown }
+): string | null {
   if (!phone || !phone.trim().startsWith('+')) return null;
   const digits = phone.replace(/[^0-9]/g, '');
   if (digits.length < 10) return null;
   const firstName = (name || '').split(' ')[0] || 'there';
-  // Include the install link in the message. Tapping it from WhatsApp opens in the
-  // phone's DEFAULT browser (Safari/Chrome) — where the app can actually be
-  // installed — unlike the Instagram in-app browser.
-  const text = encodeURIComponent(
-    `Hi ${firstName}, this is CareerRai 👋 Welcome aboard! Install the app on your phone here: https://careerrai-daily.vercel.app/start — then add it to your Home Screen for one-tap access. I'm here to help with your CAT prep.`
-  );
-  return `https://wa.me/${digits}?text=${text}`;
+  const state = leadState(opts?.appInstalled ?? false, opts?.pushOn ?? false);
+  const msgs = waMessages({ firstName, dreamCollege: dreamCollegeLabel(opts?.dreamColleges) });
+  const suggested = msgs.find((m) => m.suggestedFor === state) ?? msgs[0];
+  return `https://wa.me/${digits}?text=${encodeURIComponent(suggested.text)}`;
 }
 
 // One-line buddy credential for the dropdown: "Shreya — IIM Indore · strong DILR".
@@ -121,7 +128,11 @@ export function AdminStudentsList({
       (!student.college || !student.exam_target || !(student.dream_colleges?.length) || !student.starting_percentile);
     const facts = matchFacts(student);
     const selectedBuddy = buddies.find((b) => b.id === buddy?.id);
-    const wa = whatsappLink(student.phone, student.full_name);
+    const wa = whatsappLink(student.phone, student.full_name, {
+      appInstalled: (student as { app_installed?: boolean | null }).app_installed === true,
+      pushOn: ((student as { notif_prefs?: { push?: boolean } | null }).notif_prefs)?.push === true,
+      dreamColleges: student.dream_colleges,
+    });
     const joinedAgo = daysSinceJoin === null || daysSinceJoin === undefined
       ? null
       : daysSinceJoin === 0 ? 'today' : daysSinceJoin === 1 ? 'yesterday' : `${daysSinceJoin}d ago`;
