@@ -12,25 +12,33 @@ import type { StudentBrief } from '@/lib/student-brief';
 //  - Never throws / never blocks signup: fired via after(), timeout-guarded,
 //    errors logged and swallowed.
 //
-// Field names below are our best-guess defaults — tell me Expedify's exact
-// expected payload (field names + phone format + auth header) and I'll match it.
+// Auth: X-API-Key header, endpoint POST {base}/add/contacts (per Expedify docs).
 export interface ExpedifyLead {
-  studentId: string;
+  studentId?: string;       // omit for test fires — skips the profile status write
   name: string;
   phone: string;            // E.164, e.g. +919876543210
   email?: string | null;
-  source?: string | null;   // 'self_serve' | 'allowlist'
+  source?: string | null;   // 'self_serve' | 'allowlist' | 'test'
   brief: StudentBrief;
 }
 
-export async function sendExpedifyLead(lead: ExpedifyLead): Promise<void> {
-  const url = process.env.EXPEDIFY_WEBHOOK_URL;
-  if (!url) return; // not configured — no-op (status stays null on the card)
+// Returned so the admin test endpoint can show exactly what Expedify said;
+// production signup callers ignore it.
+export interface ExpedifyResult {
+  configured: boolean;      // false = env vars missing, nothing sent
+  ok: boolean;
+  httpStatus: number | null;
+  responseBody: string | null;
+  error: string | null;
+}
 
-  const admin = createAdminClient();
+export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResult> {
+  const url = process.env.EXPEDIFY_WEBHOOK_URL;
+  if (!url) return { configured: false, ok: false, httpStatus: null, responseBody: null, error: 'EXPEDIFY_WEBHOOK_URL not set' };
+
   const key = process.env.EXPEDIFY_API_KEY;
   const b = lead.brief;
-  let status: 'sent' | 'failed' = 'failed';
+  const result: ExpedifyResult = { configured: true, ok: false, httpStatus: null, responseBody: null, error: null };
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -58,23 +66,28 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<void> {
         weakest_section: b.weakestSection ?? undefined,
         coverage: Object.keys(b.coverage).length ? b.coverage : undefined,
       }),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(8000),
     });
-    status = res.ok ? 'sent' : 'failed';
-    if (!res.ok) {
-      console.error(`[expedify] lead hand-off HTTP ${res.status}:`, await res.text().catch(() => ''));
-    }
+    result.ok = res.ok;
+    result.httpStatus = res.status;
+    result.responseBody = (await res.text().catch(() => '')).slice(0, 2000);
+    if (!res.ok) console.error(`[expedify] lead hand-off HTTP ${res.status}:`, result.responseBody);
   } catch (err) {
+    result.error = err instanceof Error ? err.message : String(err);
     console.error('[expedify] lead hand-off failed:', err);
-    status = 'failed';
   }
 
-  // Record the outcome for the lead card (best-effort).
-  try {
-    await admin.from('profiles')
-      .update({ expedify_status: status, expedify_synced_at: new Date().toISOString() })
-      .eq('id', lead.studentId);
-  } catch (err) {
-    console.error('[expedify] status write failed:', err);
+  // Record the outcome for the lead card (best-effort; skipped for test fires).
+  if (lead.studentId) {
+    try {
+      const admin = createAdminClient();
+      await admin.from('profiles')
+        .update({ expedify_status: result.ok ? 'sent' : 'failed', expedify_synced_at: new Date().toISOString() })
+        .eq('id', lead.studentId);
+    } catch (err) {
+      console.error('[expedify] status write failed:', err);
+    }
   }
+
+  return result;
 }
