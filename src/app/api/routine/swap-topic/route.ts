@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const today = getLogDateString();
 
   const [{ data: routine }, { data: completions }] = await Promise.all([
-    admin.from('daily_routines').select('tasks').eq('student_id', user.id).eq('routine_date', today).maybeSingle(),
+    admin.from('daily_routines').select('tasks, swapped_out').eq('student_id', user.id).eq('routine_date', today).maybeSingle(),
     admin.from('routine_task_completions').select('task_id').eq('student_id', user.id).eq('routine_date', today),
   ]);
   if (!routine) return NextResponse.json({ error: 'No routine for today yet.' }, { status: 404 });
@@ -47,18 +47,25 @@ export async function POST(request: NextRequest) {
   if (newTopic === task.topic) return NextResponse.json({ ok: true, tasks });
 
   // Rewrite the task around the student's choice — same minutes, same slot.
+  const oldTopic = task.topic as string;
   const questions = Math.max(5, Math.round((task.estMinutes as number) / 3));
   task.topic = newTopic;
   task.label = `${task.section} — ${newTopic}`;
   task.target = `Solve ${questions} ${newTopic} questions`;
   task.reason = 'You picked this today — your plan, your call.';
 
+  // Never delete, always postpone: the swapped-out topic is recorded and
+  // tomorrow's generation gives it a decisive selector bonus, so a swap can
+  // never quietly lose work.
+  const swappedOut = Array.isArray(routine.swapped_out) ? (routine.swapped_out as string[]) : [];
+  if (!swappedOut.includes(oldTopic)) swappedOut.push(oldTopic);
+
   const { error } = await admin
     .from('daily_routines')
-    .update({ tasks })
+    .update({ tasks, swapped_out: swappedOut })
     .eq('student_id', user.id)
     .eq('routine_date', today);
   if (error) return serverError('swap-topic', error);
 
-  return NextResponse.json({ ok: true, tasks });
+  return NextResponse.json({ ok: true, tasks, note: `${oldTopic} will automatically come back tomorrow — nothing gets lost.` });
 }

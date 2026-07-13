@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { KNOWLEDGE_GRAPH, TOPIC_METADATA } from '@/lib/topics-constants';
+import { KNOWLEDGE_GRAPH, TOPIC_METADATA, QA_GROUPS } from '@/lib/topics-constants';
 
 type Status = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
@@ -72,13 +72,15 @@ export function CoverageMatrix() {
   const [busy, setBusy] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [startWith, setStartWith] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/coverage');
       if (!res.ok) return;
-      const json = (await res.json()) as { matrix: CoverageRow[] };
+      const json = (await res.json()) as { matrix: CoverageRow[]; startWith?: string | null };
       setRows(json.matrix);
+      setStartWith(json.startWith ?? null);
     } finally {
       setLoading(false);
     }
@@ -86,21 +88,18 @@ export function CoverageMatrix() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Star a topic to schedule it first (student ask: "complete Arithmetic
-  // first"). Optimistic; the API caps at 5 and we roll back on rejection.
-  async function togglePriority(row: CoverageRow) {
-    const next = !(row.is_priority === true);
-    setRows((prev) => prev.map((r) => (r.topic === row.topic ? { ...r, is_priority: next } : r)));
-    const res = await fetch('/api/coverage/priority', {
+  // "Start my preparation with <cluster>" — one pick, or let the engine
+  // decide. A bias inside the Topic Selector, never an override: the product
+  // rule is strong guidance with controlled flexibility.
+  async function chooseStartWith(cluster: string | null) {
+    const prev = startWith;
+    setStartWith(cluster);
+    const res = await fetch('/api/plan/start-with', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic: row.topic, priority: next }),
+      body: JSON.stringify({ cluster }),
     }).catch(() => null);
-    if (!res || !res.ok) {
-      setRows((prev) => prev.map((r) => (r.topic === row.topic ? { ...r, is_priority: !next } : r)));
-      const json = res ? await res.json().catch(() => ({})) : {};
-      if (json?.error) alert(json.error);
-    }
+    if (!res || !res.ok) setStartWith(prev);
   }
 
   async function cycleTopic(row: CoverageRow) {
@@ -156,37 +155,22 @@ export function CoverageMatrix() {
       {units.map((u) => rowsByTopic.get(u)).filter((r): r is CoverageRow => r != null).map((row) => {
         const key = `${row.section}:${row.topic}`;
         const revDue = isRevisionDue(row);
-        const starred = row.is_priority === true;
         return (
-          <div
+          <button
             key={key}
+            onClick={() => cycleTopic(row)}
+            disabled={busy === key}
+            title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
             className={cn(
-              'inline-flex min-h-[32px] items-center rounded-full border text-[11px] font-medium transition-all',
+              'min-h-[32px] rounded-full border px-3 py-1.5 text-[11px] font-medium transition-all active:scale-95',
               revDue ? REVISION_DUE_STYLE : STATUS_STYLE[row.status],
-              starred && 'ring-2 ring-violet-300',
-              busy === key && 'opacity-50'
+              busy === key && 'opacity-50',
+              row.status === 'exam_ready' && 'cursor-default'
             )}
           >
-            <button
-              onClick={() => cycleTopic(row)}
-              disabled={busy === key}
-              title={revDue ? 'Revision due' : STATUS_LABEL[row.status]}
-              className={cn('py-1.5 pl-3 pr-1 active:scale-95 transition-transform', row.status === 'exam_ready' && 'cursor-default')}
-            >
-              <span className="mr-1">{STATUS_GLYPH[row.status]}</span>
-              {row.topic}
-            </button>
-            {/* Star = schedule this first. Separate tap target from the
-                status cycle so prioritising never mis-taps a status change. */}
-            <button
-              onClick={() => togglePriority(row)}
-              aria-label={starred ? `Remove ${row.topic} from priorities` : `Prioritise ${row.topic}`}
-              title={starred ? 'Priority — scheduled first' : 'Star to schedule first'}
-              className={cn('py-1.5 pl-0.5 pr-2 text-[13px] leading-none active:scale-90 transition-transform', starred ? 'opacity-100' : 'opacity-35 hover:opacity-70')}
-            >
-              {starred ? '★' : '☆'}
-            </button>
-          </div>
+            <span className="mr-1">{STATUS_GLYPH[row.status]}</span>
+            {row.topic}
+          </button>
         );
       })}
     </div>
@@ -209,8 +193,42 @@ export function CoverageMatrix() {
       </div>
       <p className="mb-3 text-[10px] leading-relaxed text-stone-400">
         The dot fills — ○ ◔ ◑ ◕ — as a topic moves from just started to revision. Green is earned from your results, not a tap.
-        {' '}Tap ★ on up to 5 topics to get them scheduled first in your daily plan.
       </p>
+
+      {/* 🎯 Start with — one pick biases the daily plan toward that Quant
+          cluster ("I want Arithmetic first"). The engine still owns
+          sequencing; this is controlled ownership, not manual reorder. */}
+      <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+        <p className="text-[11px] font-bold text-violet-800">🎯 Start my preparation with</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {QA_GROUPS.map((g) => (
+            <button
+              key={g.label}
+              onClick={() => chooseStartWith(startWith === g.label ? null : g.label)}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95',
+                startWith === g.label
+                  ? 'border-violet-600 bg-violet-600 text-white'
+                  : 'border-stone-200 bg-white text-stone-600 hover:border-violet-300'
+              )}
+            >
+              {g.label}
+            </button>
+          ))}
+          <button
+            onClick={() => chooseStartWith(null)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95',
+              startWith == null
+                ? 'border-stone-900 bg-stone-900 text-white'
+                : 'border-stone-200 bg-white text-stone-600'
+            )}
+          >
+            Let CareerRai decide ⭐
+          </button>
+        </div>
+        <p className="mt-1.5 text-[10px] text-stone-400">Your daily plan starts with this cluster. Revision and prerequisites still apply — nothing important gets skipped.</p>
+      </div>
       <div className="space-y-2">
         {KNOWLEDGE_GRAPH.map((section) => {
           const allUnits = section.groups.flatMap((g) => g.units);

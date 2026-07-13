@@ -101,6 +101,7 @@ export function TodaysRoutineCard() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [swapTaskId, setSwapTaskId] = useState<string | null>(null);
   const [swapBusy, setSwapBusy] = useState(false);
+  const [swapNote, setSwapNote] = useState<string | null>(null);
   const [confidenceTaps, setConfidenceTaps] = useState<{ topic: string; confidence: ConfidenceSignal }[]>([]);
   // Reading the routine isn't the same as committing to it — viewedAt marks
   // when a real (non-empty, non-setup) routine first appeared on screen,
@@ -201,6 +202,12 @@ export function TodaysRoutineCard() {
       routineTodayCache = null;
       setData((prev) => (prev ? { ...prev, routine: { ...prev.routine, tasks: json.tasks as RoutineTask[] } } : prev));
       setSwapTaskId(null);
+      // "Geometry will automatically come back tomorrow" — the never-delete,
+      // always-postpone rule, said out loud so the swap feels safe.
+      if (json.note) {
+        setSwapNote(json.note as string);
+        setTimeout(() => setSwapNote(null), 5000);
+      }
     } finally {
       setSwapBusy(false);
     }
@@ -420,6 +427,12 @@ export function TodaysRoutineCard() {
               );
             })}
           </div>
+
+          {swapNote && (
+            <p className="mt-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-[11px] font-medium text-teal-800">
+              ✓ {swapNote}
+            </p>
+          )}
 
           <div className="mt-3">
             <Link href="/student/blueprint" className="text-xs font-semibold text-stone-900">My CAT Plan →</Link>

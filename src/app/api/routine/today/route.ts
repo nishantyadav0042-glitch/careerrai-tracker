@@ -6,7 +6,7 @@ import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baseline
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours } from '@/lib/study-pace';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
-import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
@@ -42,7 +42,7 @@ export async function GET() {
         is_working_professional, is_repeater, target_percentile,
         hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker
+        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with
       `)
       .eq('id', user.id)
       .single(),
@@ -142,7 +142,7 @@ export async function GET() {
   // request, the same reasoning as whySummary already being recomputed
   // fresh rather than frozen at generation time. (history itself is fetched
   // in the parallel wave above.)
-  const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history);
+  const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
 
   // A routine frozen earlier today at DIFFERENT hours (the student just
   // rescheduled their target) is stale — regenerate it, but only while
@@ -302,11 +302,11 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number> }> {
+async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[] }> {
   const [{ data: pastRoutines }, { data: pastCompletions }] = await Promise.all([
     admin
       .from('daily_routines')
-      .select('routine_date, tasks')
+      .select('routine_date, tasks, swapped_out')
       .eq('student_id', studentId)
       .order('routine_date', { ascending: false })
       .limit(14),
@@ -323,6 +323,13 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
     if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
     completedByDate.get(c.routine_date)!.add(c.task_id);
   }
+
+  // Topics swapped OUT of the most recent past day — "never delete, always
+  // postpone": these get a decisive bonus today so nothing is ever lost.
+  const lastPastDay = (pastRoutines ?? []).find((r: { routine_date: string }) => r.routine_date < today);
+  const postponedTopics: string[] = Array.isArray(lastPastDay?.swapped_out)
+    ? (lastPastDay.swapped_out as unknown[]).filter((t): t is string => typeof t === 'string')
+    : [];
 
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
   // Per-topic recency, keyed by topic name — only populated going forward,
@@ -350,7 +357,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       }
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic };
+  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics };
 }
 
 // The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for
@@ -359,13 +366,20 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 // revision-due + (weak section only) the self-reported bonus. This is what
 // replaced the old behavior where the two non-weakest sections used the
 // exact same static topic for every student in the product.
-function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null> }): Record<Section, TopicChoice> {
+function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; postponedTopics: string[] }, startWith?: string | null): Record<Section, TopicChoice> {
   const coverageByTopic = new Map<string, CoverageStatus>();
   const prioritySet = new Set<string>();
   for (const row of coverageRows) {
     coverageByTopic.set(row.topic, row.status as CoverageStatus);
     if (row.is_priority === true) prioritySet.add(row.topic);
   }
+
+  // "Start my preparation with <cluster>" → every topic in that QA cluster
+  // gets the focus bonus. Null/unknown = "Let CareerRai decide" (no bias).
+  const focusUnits = new Set<string>(
+    startWith ? (QA_GROUPS.find((g) => g.label === startWith)?.units ?? []) : []
+  );
+  const postponed = new Set(history.postponedTopics);
 
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
@@ -379,6 +393,8 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
       daysSinceLastPracticed: history.daysSinceLastPracticedByTopic[topic] ?? null,
       selfReportedBonus: isWeakSection && topic === profile.weakTopic,
       priorityBonus: prioritySet.has(topic),
+      focusBonus: focusUnits.has(topic),
+      postponedBonus: postponed.has(topic),
     }));
     result[section] = chooseTopicForSection(candidates, revisionMultiplier);
   }

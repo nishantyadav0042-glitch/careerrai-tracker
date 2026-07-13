@@ -40,6 +40,14 @@ export interface TopicCandidateInput {
   // alternative can outrank it, so priority steers the plan without letting
   // a student break their own sequencing.
   priorityBonus?: boolean;
+  // "Start my preparation with <cluster>" — the student's chosen opening
+  // cluster (e.g. Arithmetic). A steady bias, not an override: prerequisites
+  // and revision-due still apply, so ownership never breaks sequencing.
+  focusBonus?: boolean;
+  // The student swapped this topic OUT of yesterday's plan. Product rule:
+  // never delete, always postpone — +40 makes its return tomorrow all but
+  // guaranteed, so a swap can never quietly lose work.
+  postponedBonus?: boolean;
 }
 
 export interface TopicChoice {
@@ -113,7 +121,13 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     const priorityPoints = c.priorityBonus ? 25 : 0;
     if (c.priorityBonus) reasons.unshift('Your priority pick');
 
-    const score = coveragePoints + weightagePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints;
+    const focusPoints = c.focusBonus ? 22 : 0;
+    if (c.focusBonus) reasons.unshift('Your "start with" pick');
+
+    const postponedPoints = c.postponedBonus ? 40 : 0;
+    if (c.postponedBonus) reasons.unshift("Back from yesterday's swap");
+
+    const score = coveragePoints + weightagePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints + focusPoints + postponedPoints;
     return { topic: c.topic, score, reasons };
   });
 
