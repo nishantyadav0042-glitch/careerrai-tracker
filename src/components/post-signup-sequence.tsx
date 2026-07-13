@@ -140,9 +140,14 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
   const hasDateStep = !!targetIso && hoursLeft > 0;
 
-  // The ceremony opens with the PLAN (date → commit → thanks → deal); the
-  // install ask is the finale, never the opener.
-  const [step, setStep] = useState<Step>(() => (hasDateStep ? 'date' : 'commit'));
+  // Founder rule: the push-permission ask is STEP #1 after signup — before the
+  // ceremony, before anything. Push is the channel that brings students back;
+  // every screen in front of it costs reach. Flow: notifications → date →
+  // commit → thanks → deal → share → install (finale).
+  const [step, setStep] = useState<Step>('notifications');
+
+  // Where the notifications opener hands off to — the start of the ceremony.
+  const afterNotifications: Step = hasDateStep ? 'date' : 'commit';
 
   // Chosen finish date carried into the commitment copy.
   const [chosenLabel, setChosenLabel] = useState<string>(() =>
@@ -218,7 +223,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
     const result = await enablePush();
     setPushState(result);
     setPushBusy(false);
-    if (result === 'granted') setTimeout(() => setStep('responsibilities'), 900);
+    if (result === 'granted') setTimeout(() => setStep(afterNotifications), 900);
   };
 
   // Native share sheet (lands straight in WhatsApp on a phone); wa.me
@@ -346,7 +351,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => setStep('notifications')}
+              onClick={() => setStep('responsibilities')}
               className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
             >
               Continue →
@@ -359,10 +364,10 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-3xl shadow-lg shadow-orange-200">🔔</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                Now let us do our job.
+                First things first — switch on your reminders.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                A plan you forget is a plan you drop. Switch on reminders and we&apos;ll nudge you at the right time every day — your daily task, your streak, your weak spots. This is how we keep you on track to your date.
+                You&apos;re in 🎉 Now the one thing that makes this work: reminders. A plan you forget is a plan you drop — we&apos;ll nudge you at the right time every day with your task, your streak, your weak spots. This is how your plan reaches you.
               </p>
             </div>
 
@@ -389,18 +394,18 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
                 )}
                 {pushState === 'ios_needs_install' && (
                   <p className="px-2 text-[11px] leading-snug text-stone-500">
-                    On iPhone, reminders switch on right after you install the app (next step). Keep going.
+                    On iPhone, reminders switch on right after you install the app (coming up at the end). Keep going.
                   </p>
                 )}
                 {(pushState === 'unsupported' || pushState === 'error') && (
                   <p className="px-2 text-[11px] leading-snug text-stone-500">
-                    We couldn&apos;t turn them on here — installing the app in the next step fixes this. Keep going.
+                    We couldn&apos;t turn them on here — installing the app (coming up at the end) fixes this. Keep going.
                   </p>
                 )}
 
                 <button
                   type="button"
-                  onClick={() => setStep('responsibilities')}
+                  onClick={() => setStep(afterNotifications)}
                   className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
                 >
                   {pushState ? 'Continue →' : 'Maybe later'}
