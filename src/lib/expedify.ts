@@ -35,8 +35,9 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<void> {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
+        // Expedify auth: X-API-Key header (per their API docs), not Bearer.
         'Content-Type': 'application/json',
-        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+        ...(key ? { 'X-API-Key': key } : {}),
       },
       body: JSON.stringify({
         name: lead.name,
