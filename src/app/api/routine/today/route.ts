@@ -55,7 +55,7 @@ export async function GET() {
       .eq('student_id', user.id),
     admin
       .from('daily_routines')
-      .select('phase, tasks, est_minutes')
+      .select('phase, tasks, est_minutes, calibration')
       .eq('student_id', user.id)
       .eq('routine_date', today)
       .maybeSingle(),
@@ -162,7 +162,7 @@ export async function GET() {
         { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes },
         { onConflict: 'student_id,routine_date' }
       )
-      .select('phase, tasks, est_minutes')
+      .select('phase, tasks, est_minutes, calibration')
       .single();
     if (error || !inserted) return NextResponse.json({ error: 'Could not generate routine' }, { status: 500 });
     routine = inserted;
@@ -260,6 +260,7 @@ export async function GET() {
     completions: completions ?? [],
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,
+    yesterday: history.yesterday,
   });
 }
 
@@ -304,7 +305,7 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[] }> {
+async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[]; yesterday: { total: number; done: number } | null }> {
   const [{ data: pastRoutines }, { data: pastCompletions }] = await Promise.all([
     admin
       .from('daily_routines')
@@ -332,6 +333,14 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   const postponedTopics: string[] = Array.isArray(lastPastDay?.swapped_out)
     ? (lastPastDay.swapped_out as unknown[]).filter((t): t is string => typeof t === 'string')
     : [];
+  // Yesterday's score — powers the "1 of 3 done -> today's plan already
+  // adjusted" narration that makes the daily auto-adjustment VISIBLE.
+  const yesterday = lastPastDay
+    ? {
+        total: Array.isArray(lastPastDay.tasks) ? (lastPastDay.tasks as unknown[]).length : 0,
+        done: (completedByDate.get(lastPastDay.routine_date) ?? new Set()).size,
+      }
+    : null;
 
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
   // Per-topic recency, keyed by topic name — only populated going forward,
@@ -359,7 +368,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       }
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics };
+  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics, yesterday };
 }
 
 // The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for
