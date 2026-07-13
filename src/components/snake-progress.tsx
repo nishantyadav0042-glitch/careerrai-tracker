@@ -43,7 +43,7 @@ export function SnakeProgress({
     <div className="select-none">
       <div className="mb-1 flex items-center justify-between text-[11px]">
         <span className="font-bold uppercase tracking-widest transition-colors" style={{ color: look.color }}>
-          {look.name} trail
+          {clamped >= 100 ? `${look.name} trail cleared! 🎉` : `${look.name} trail`}
         </span>
         <span className="font-semibold tabular-nums text-stone-400">{answered}/{total} topics fed</span>
       </div>
@@ -85,7 +85,7 @@ export function SnakeProgress({
         >
           <div key={lunge} className="snk-lunge">
             <div
-              className="snk-bob relative h-5 w-5 rounded-full"
+              className={`relative h-5 w-5 rounded-full ${clamped >= 100 ? 'snk-party' : 'snk-bob'}`}
               style={{ background: look.color, boxShadow: '0 2px 7px rgba(0,0,0,.25)', transition: 'background .5s ease' }}
             >
               {/* eyes */}
@@ -111,12 +111,14 @@ export function SnakeProgress({
 
       <style>{`
         @keyframes snkBob { 0%,100%{transform:translateY(-1.5px)} 50%{transform:translateY(1.5px)} }
-        @keyframes snkLunge { 0%{transform:scale(1)} 35%{transform:scale(1.3)} 100%{transform:scale(1)} }
+        @keyframes snkLunge { 0%{transform:scale(1)} 35%{transform:scale(1.35)} 100%{transform:scale(1)} }
         @keyframes snkTongue { 0%,55%,100%{transform:translateY(-50%) scaleX(.25);opacity:.5} 72%,88%{transform:translateY(-50%) scaleX(1);opacity:1} }
+        @keyframes snkParty { 0%,100%{transform:rotate(0) scale(1)} 20%{transform:rotate(-18deg) scale(1.15)} 40%{transform:rotate(16deg) scale(1.2)} 60%{transform:rotate(-12deg) scale(1.15)} 80%{transform:rotate(8deg) scale(1.1)} }
         .snk-bob{animation:snkBob 1.6s ease-in-out infinite}
         .snk-lunge{animation:snkLunge .5s ease-out}
         .snk-tongue{animation:snkTongue 1s ease-in-out infinite}
-        @media (prefers-reduced-motion:reduce){ .snk-bob,.snk-lunge,.snk-tongue{animation:none!important} }
+        .snk-party{animation:snkParty .9s ease-in-out infinite}
+        @media (prefers-reduced-motion:reduce){ .snk-bob,.snk-lunge,.snk-tongue,.snk-party{animation:none!important} }
       `}</style>
     </div>
   );
