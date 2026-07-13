@@ -7,6 +7,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
+import { computeWeeklyDiagnosis } from '@/lib/weekly-diagnosis';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { assessLead, whyContactToday, stepLabel, TIER_META } from '@/lib/lead-intel';
 import { OutreachPanel } from './outreach-panel';
@@ -171,6 +172,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     avoidedSection: avoidedSignal ? avoidedSignal.key.replace('avoid_', '') : null,
   });
 
+  const weekly = base.onboardingCompleted ? await computeWeeklyDiagnosis(admin, id) : null;
+
   const totalTopics = Object.keys(TOPIC_METADATA).length;
   const studiedOnce = topicMemory.filter((t) => t.status !== 'not_started').length;
 
@@ -259,6 +262,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               Stopped at <span className="font-semibold">&ldquo;{stepLabel(base.onboardingStepReached)}&rdquo;</span> — step {base.onboardingStepReached + 1} of 11.
               Whatever they answered before stopping is saved below.
             </p>
+          </Card>
+        )}
+
+        {/* This week — the same diagnosis the buddy delivers (paid product);
+            here so the founder sees every student's live performance. */}
+        {weekly && (
+          <Card className="p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2">📊 This week</p>
+            <ul className="space-y-1.5">
+              {weekly.lines.map((l) => (
+                <li key={l} className="text-sm leading-snug text-stone-700">{l}</li>
+              ))}
+            </ul>
           </Card>
         )}
 
