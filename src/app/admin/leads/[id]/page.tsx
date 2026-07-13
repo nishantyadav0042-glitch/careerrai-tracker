@@ -41,7 +41,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (me?.role !== 'admin') redirect('/login');
 
   const { data: profile } = await admin.from('profiles')
-    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account')
+    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account, expedify_status, expedify_synced_at')
     .eq('id', id).in('role', ['student', 'buddy']).single();
   if (!profile) notFound();
 
@@ -69,6 +69,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </span>
       </div>
       <TestToggle id={profile.id as string} initial={profile.is_test_account === true} />
+      {profile.expedify_status && (
+        <span className={cn(
+          'inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold',
+          profile.expedify_status === 'sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+        )}>
+          {profile.expedify_status === 'sent' ? '📞 Expedify call triggered' : '📞 Expedify sync failed'}
+          {profile.expedify_synced_at ? ` · ${new Date(profile.expedify_synced_at as string).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+        </span>
+      )}
     </div>
   );
 
