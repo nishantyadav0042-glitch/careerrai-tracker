@@ -67,6 +67,7 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResu
         pain_points: b.painPoints.length ? b.painPoints : undefined,
         strongest_section: b.strongestSection ?? undefined,
         weakest_section: b.weakestSection ?? undefined,
+        device: b.deviceLabel ?? undefined,
         coverage: Object.keys(b.coverage).length ? b.coverage : undefined,
       }),
       signal: AbortSignal.timeout(8000),

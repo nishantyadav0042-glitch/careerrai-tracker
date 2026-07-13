@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { sendExpedifyLead } from '@/lib/expedify';
 import { buildStudentBrief } from '@/lib/student-brief';
+import { parseSignupDevice, deviceCallGuidance } from '@/lib/device-detect';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
@@ -140,6 +141,10 @@ export async function POST(request: NextRequest) {
       role === 'buddy' ? '/buddy/students' :
       '/student/tracker';
 
+    // Which phone/browser they signed up from — stored for the leads team and
+    // sent to Expedify so the AI agent gives device-specific guidance.
+    const signupDevice = parseSignupDevice(request.headers.get('user-agent'));
+
     if (!existing) {
       // No profile at all (trigger disabled / edge case) — create from allowlist.
       await admin.from('profiles').insert({
@@ -152,6 +157,8 @@ export async function POST(request: NextRequest) {
         subscription_status: role === 'student' ? 'free_beta' : null,
         is_premium: false,
         signup_source: role === 'student' ? signupSource : null,
+        signup_device: signupDevice.device,
+        signup_browser: signupDevice.browser,
         password_set: false,
       });
     } else if (isStub) {
@@ -166,6 +173,8 @@ export async function POST(request: NextRequest) {
           email: entry?.email ?? existing.email ?? null,
           phone: e164,
           buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
+          signup_device: signupDevice.device,
+          signup_browser: signupDevice.browser,
           ...(role === 'student' ? { subscription_status: 'free_beta', signup_source: signupSource } : {}),
         })
         .eq('id', data.user.id);
@@ -272,7 +281,10 @@ export async function POST(request: NextRequest) {
     if ((isStub || !existing) && role === 'student') {
       const leadName = entry?.full_name ?? selfName ?? 'there';
       const newUserId = data.user.id;
-      const brief = buildStudentBrief(leadName, onboarding);
+      const brief = buildStudentBrief(leadName, onboarding, {
+        label: signupDevice.label,
+        guidance: deviceCallGuidance(signupDevice),
+      });
       after(() => sendExpedifyLead({
         studentId: newUserId,
         name: leadName,

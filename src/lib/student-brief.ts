@@ -30,6 +30,7 @@ export interface StudentBrief {
   strongestSection: string | null;
   weakestSection: string | null;
   coverage: Record<string, SectionCoverage>;
+  deviceLabel: string | null;          // e.g. "Android · Instagram in-app browser"
   summary: string;                     // human-readable, for the agent
 }
 
@@ -40,7 +41,13 @@ function humanize(code: string): string {
   return code.replace(/_/g, ' ').trim();
 }
 
-export function buildStudentBrief(name: string, o: OnboardingForm | null | undefined): StudentBrief {
+export function buildStudentBrief(
+  name: string,
+  o: OnboardingForm | null | undefined,
+  // Optional device context (from the signup user-agent) — adds a line telling
+  // the agent which install/notification path to guide on the call.
+  device?: { label: string; guidance: string } | null
+): StudentBrief {
   const firstName = (name || 'there').split(' ')[0];
   const dreamColleges = Array.isArray(o?.dream_colleges)
     ? (o!.dream_colleges as unknown[]).filter((c): c is string => typeof c === 'string')
@@ -90,11 +97,13 @@ export function buildStudentBrief(name: string, o: OnboardingForm | null | undef
     bits.push('Has not mapped their topic coverage in detail yet.');
   }
   if (painPoints.length) bits.push(`Biggest struggles they named: ${painPoints.join(', ')}.`);
+  if (device?.guidance) bits.push(device.guidance);
   bits.push('Just signed up — has not logged a study session yet. Goal of the call: welcome them, build trust, and get them to start.');
 
   return {
     attempt, targetPercentile, dreamColleges, hoursPerDay, coaching, wantsMentor,
     targetDate, painPoints, strongestSection, weakestSection, coverage,
+    deviceLabel: device?.label ?? null,
     summary: bits.join(' '),
   };
 }

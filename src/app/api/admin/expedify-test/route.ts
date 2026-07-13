@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
       { section: 'DILR', topic: 'Arrangements', status: 'not_started' },
       { section: 'DILR', topic: 'Games & Tournaments', status: 'not_started' },
     ],
+  }, {
+    label: 'Android · Instagram in-app browser',
+    guidance: "They're on Android but signed up inside the Instagram in-app browser — push notifications don't work there. Guide them: open careerrai-daily.vercel.app in Chrome → tap \"Install app\" → allow notifications.",
   });
 
   const result = await sendExpedifyLead({
