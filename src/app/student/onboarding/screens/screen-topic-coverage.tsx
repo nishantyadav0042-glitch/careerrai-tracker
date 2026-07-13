@@ -3,7 +3,40 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
-import { SnakeProgress } from '@/components/snake-progress';
+
+// ── The companion trail ──────────────────────────────────────────────────────
+// Founder vision (drawn on a screenshot): as the student taps topics, a line
+// weaves DOWN the list through the exact cells they tapped — like a workflow
+// slowly building their plan — with a little character riding its tip. A NEW
+// character joins on every section-step ("next kaun aayega?" is the hook that
+// keeps them tapping). Emoji characters (not real Pokémon/Marvel art — that's
+// copyrighted); chosen for post-2000 nostalgia.
+const CHARACTERS: { emoji: string; name: string }[] = [
+  { emoji: '🐍', name: 'Snake' },    // the Nokia classic
+  { emoji: '⚡', name: 'Sparky' },   // electric-type energy
+  { emoji: '👾', name: 'Pixel' },    // retro arcade
+  { emoji: '🕷️', name: 'Spidey' },  // friendly neighbourhood vibes
+  { emoji: '🤖', name: 'Robo' },
+  { emoji: '🐉', name: 'Drago' },
+  { emoji: '🥷', name: 'Ninja' },
+  { emoji: '🦸', name: 'Hero' },
+  { emoji: '🚀', name: 'Rocket' },   // finale — the plan takes off
+];
+
+const SECTION_TRAIL: Record<string, string> = {
+  VARC: '#0f766e', DILR: '#2563eb', QA: '#ea580c', MOCKS: '#7c3aed', READING: '#059669',
+};
+
+// Smooth vertical S-curves through the tapped cells — the hand-drawn weave.
+function trailPath(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return '';
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]; const b = pts[i]; const my = (a.y + b.y) / 2;
+    d += ` C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.y}`;
+  }
+  return d;
+}
 
 // Student-declared states — including 'revising' ("Revision started"), the
 // per-topic state that replaced the old Revision pseudo-section. exam_ready
@@ -158,13 +191,39 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   const stepComplete = answeredOnStep === step.units.length;
   const remaining = step.units.length - answeredOnStep;
 
-  // Whole-map progress for the snake — grows across every step, not just this one.
+  // Whole-map totals (used for the finale banner).
   const allUnits = steps.flatMap((s) => s.units);
   const totalUnits = allUnits.length;
-  const answeredTotal = allUnits.reduce((n, u) => n + (statuses[u] != null ? 1 : 0), 0);
+
+  // ── Companion trail state ──────────────────────────────────────────────
+  const character = CHARACTERS[stepIdx % CHARACTERS.length];
+  const nextCharacter = CHARACTERS[(stepIdx + 1) % CHARACTERS.length];
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [trailPts, setTrailPts] = useState<{ x: number; y: number }[]>([]);
+  const [tapPulse, setTapPulse] = useState(0);
+
+  // Measure the tapped cells (in list order, top→bottom) → the weave's points,
+  // relative to the list container. Re-measured on every tap/step change.
+  useEffect(() => {
+    const c = listRef.current;
+    if (!c) { setTrailPts([]); return; }
+    const crect = c.getBoundingClientRect();
+    const pts: { x: number; y: number }[] = [];
+    for (const u of step.units) {
+      const st = statuses[u];
+      if (!st) continue;
+      const label = `${u}: ${st}`.replace(/"/g, '\\"');
+      const btn = c.querySelector(`button[aria-label="${label}"]`) as HTMLElement | null;
+      if (!btn) continue;
+      const r = btn.getBoundingClientRect();
+      pts.push({ x: r.left - crect.left + r.width / 2, y: r.top - crect.top + r.height / 2 });
+    }
+    setTrailPts(pts);
+  }, [statuses, stepIdx, step.units]);
 
   const declare = (unit: string, value: DeclaredStatus) => {
     setStatuses((prev) => ({ ...prev, [unit]: value }));
+    setTapPulse((p) => p + 1); // companion hops to the tapped cell
     setTapStreak((prev) => (prev?.status === value ? { status: value, count: prev.count + 1 } : { status: value, count: 1 }));
     setCelebration(HONESTY_LINES[value](unit));
     if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
@@ -188,6 +247,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       for (const u of filling) next[u] = value;
       return next;
     });
+    setTapPulse((p) => p + 1);
     const label = (isHabit ? HABIT_STATUS_OPTIONS : EXAM_STATUS_OPTIONS).find((o) => o.value === value)?.label ?? value;
     setCelebration(`✓ ${filling.length} topic${filling.length === 1 ? '' : 's'} marked "${label}". Tap any cell to correct one.`);
     if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
@@ -199,7 +259,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     if (!stepComplete) return;
     setTapStreak(null);
     if (stepIdx < steps.length - 1) {
-      setCelebration(`✓ ${step.reward}`);
+      setCelebration(`✓ ${step.reward} Next: ${nextCharacter.emoji} ${nextCharacter.name} joins your trail!`);
       if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
       celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
       setStepIdx(stepIdx + 1);
@@ -292,14 +352,14 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
           own explicit tap — the no-prefill doctrine survives. */}
       <div>
         <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1.5 backdrop-blur-sm">
-          {/* Snake lives in the sticky header so it stays on screen — and visibly
-              grows — as the student scrolls and taps through the topics.
-              Progress is PER SECTION-STEP, not the whole 53-topic map: one tap
-              moves the head a whole topic's length (1/6th of the bar, not 1/53
-              ≈ 6px, which read as "not working"). Each new section = a fresh
-              trail with its own colour and tongue speed. */}
-          <div className="mb-2">
-            <SnakeProgress frac={step.units.length ? answeredOnStep / step.units.length : 0} section={step.sectionId} answered={answeredOnStep} total={step.units.length} />
+          {/* This section's companion + live count. The trail itself weaves
+              through the tapped cells in the list below (founder-drawn design)
+              — a new character joins on every section. */}
+          <div className="mb-1.5 flex items-center justify-between text-[11px]">
+            <span className="font-bold uppercase tracking-widest" style={{ color: SECTION_TRAIL[step.sectionId] ?? '#7c3aed' }}>
+              {character.emoji} {character.name}&apos;s trail
+            </span>
+            <span className="font-semibold tabular-nums text-stone-400">{answeredOnStep}/{step.units.length} fed</span>
           </div>
           <div className={cn('grid items-end gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-4')}>
             {options.map(({ value, dot }) => (
@@ -309,6 +369,37 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
             ))}
           </div>
         </div>
+        <div ref={listRef} className="relative">
+          {/* Companion trail overlay — the line weaving through tapped cells,
+              with the character riding its tip. Decorative: never blocks taps. */}
+          <div className="pointer-events-none absolute inset-0 z-10">
+            {trailPts.length >= 2 && (
+              <svg className="h-full w-full">
+                <path
+                  d={trailPath(trailPts)}
+                  fill="none"
+                  stroke={SECTION_TRAIL[step.sectionId] ?? '#7c3aed'}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  opacity="0.55"
+                />
+              </svg>
+            )}
+            {trailPts.length > 0 && (
+              <div
+                className="absolute transition-all duration-500 ease-out"
+                style={{
+                  left: trailPts[trailPts.length - 1].x,
+                  top: trailPts[trailPts.length - 1].y,
+                  transform: 'translate(-50%, -85%)',
+                }}
+              >
+                <span key={tapPulse} className="chr-hop inline-block">
+                  <span className={cn('inline-block text-2xl drop-shadow', stepComplete ? 'chr-party' : 'chr-idle')}>{character.emoji}</span>
+                </span>
+              </div>
+            )}
+          </div>
         <div className="space-y-1.5">
           {step.units.map((unit) => {
             const current = statuses[unit] ?? null;
@@ -344,10 +435,19 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
             );
           })}
         </div>
+        </div>
       </div>
 
       {step.lesson && (
         <p className="text-[11px] text-stone-600 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 leading-relaxed">{step.lesson}</p>
+      )}
+
+      {/* Full-map finale — the whole crew celebrates when all 53 are mapped. */}
+      {stepComplete && stepIdx === steps.length - 1 && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-center">
+          <p className="chr-parade text-lg leading-tight">{CHARACTERS.map((c) => c.emoji).join(' ')}</p>
+          <p className="mt-1 text-sm font-bold text-violet-800">All {totalUnits} topics mapped — your plan is building! 🎉</p>
+        </div>
       )}
 
       {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
@@ -375,6 +475,18 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
             : 'Continue →'}
         </button>
       </div>
+
+      <style>{`
+        @keyframes chrIdle { 0%,100%{transform:translateY(-2px)} 50%{transform:translateY(2px)} }
+        @keyframes chrHop { 0%{transform:scale(1)} 40%{transform:scale(1.45) rotate(-8deg)} 100%{transform:scale(1)} }
+        @keyframes chrParty { 0%,100%{transform:rotate(0) scale(1)} 20%{transform:rotate(-16deg) scale(1.25)} 40%{transform:rotate(14deg) scale(1.3)} 60%{transform:rotate(-10deg) scale(1.2)} 80%{transform:rotate(6deg) scale(1.1)} }
+        @keyframes chrParade { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        .chr-idle{animation:chrIdle 1.5s ease-in-out infinite}
+        .chr-hop{animation:chrHop .45s ease-out}
+        .chr-party{animation:chrParty .9s ease-in-out infinite}
+        .chr-parade{animation:chrParade .7s ease-in-out infinite}
+        @media (prefers-reduced-motion:reduce){.chr-idle,.chr-hop,.chr-party,.chr-parade{animation:none!important}}
+      `}</style>
     </div>
   );
 }
