@@ -56,10 +56,11 @@ const CONFIDENCE_OPTIONS: { value: ConfidenceSignal; emoji: string; label: strin
 ];
 
 interface RoutineResponse {
-  routine: { phase: string; tasks: RoutineTask[]; est_minutes: number };
+  routine: { phase: string; tasks: RoutineTask[]; est_minutes: number; calibration?: string | null };
   completions: { task_id: string; is_emergency: boolean }[];
   currentStreak: number;
   isCatchUp: boolean;
+  yesterday?: { total: number; done: number } | null;
 }
 
 // Time budget filters today's list — same tasks, never invented ones.
@@ -102,6 +103,25 @@ export function TodaysRoutineCard() {
   const [swapTaskId, setSwapTaskId] = useState<string | null>(null);
   const [swapBusy, setSwapBusy] = useState(false);
   const [swapNote, setSwapNote] = useState<string | null>(null);
+  const [calibrated, setCalibrated] = useState(false);
+  const [calibrationBusy, setCalibrationBusy] = useState(false);
+
+  // One-tap daily calibration — the highest-ROI signal we collect. Fire and
+  // thank; the engine collects first and tunes later.
+  async function calibrate(verdict: 'too_easy' | 'just_right' | 'too_much') {
+    if (calibrationBusy) return;
+    setCalibrationBusy(true);
+    try {
+      const res = await fetch('/api/routine/calibrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verdict }),
+      });
+      if (res.ok) { setCalibrated(true); routineTodayCache = null; }
+    } finally {
+      setCalibrationBusy(false);
+    }
+  }
   const [confidenceTaps, setConfidenceTaps] = useState<{ topic: string; confidence: ConfidenceSignal }[]>([]);
   // Reading the routine isn't the same as committing to it — viewedAt marks
   // when a real (non-empty, non-setup) routine first appeared on screen,
@@ -266,6 +286,20 @@ export function TodaysRoutineCard() {
         )}
       </div>
 
+      {/* The engine's daily auto-adjustment, said OUT LOUD — students should
+          know the plan recalculates from what they actually did, every day. */}
+      {!fullyDone && (data.isCatchUp ? (
+        <p className="mb-2 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1.5 text-[11px] font-medium text-teal-800">
+          ⚡ Welcome back — your plan has already adjusted around the missed days. Only today matters.
+        </p>
+      ) : data.yesterday && data.yesterday.total > 0 ? (
+        <p className="mb-2 rounded-lg bg-stone-50 border border-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-stone-600">
+          {data.yesterday.done >= data.yesterday.total
+            ? `⚡ Yesterday: all ${data.yesterday.total} done — today's plan builds on it.`
+            : `⚡ Yesterday: ${data.yesterday.done} of ${data.yesterday.total} done — today's plan has already adjusted. Nothing lost.`}
+        </p>
+      ) : null)}
+
       {/* Today's Goal — the one number that matters, read at a glance. */}
       {!fullyDone && (
         <div className="flex items-center gap-1.5 mb-3">
@@ -295,6 +329,25 @@ export function TodaysRoutineCard() {
             )}
             <p className="text-sm text-stone-600">Your next step is already being built — open tomorrow and go</p>
           </div>
+          {(calibrated || data.routine.calibration) ? (
+            <p className="mt-4 text-center text-xs font-medium text-teal-700">✓ Noted — this tunes tomorrow's plan.</p>
+          ) : (
+            <div className="mt-4">
+              <p className="text-center text-xs font-semibold text-stone-500 mb-2">Today&apos;s plan was…</p>
+              <div className="flex justify-center gap-2">
+                {([['too_easy', 'Too easy'], ['just_right', 'Just right'], ['too_much', 'Too much']] as const).map(([v, label]) => (
+                  <button
+                    key={v}
+                    onClick={() => calibrate(v)}
+                    disabled={calibrationBusy}
+                    className="rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 transition-transform active:scale-95 disabled:opacity-50"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -340,6 +393,9 @@ export function TodaysRoutineCard() {
                           <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
                         </div>
                         <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
+                        {task.reason && (
+                          <p className="text-[11px] text-stone-500 mt-1">Why: {task.reason}</p>
+                        )}
                         {memoryTag(task) && (
                           <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
                         )}
