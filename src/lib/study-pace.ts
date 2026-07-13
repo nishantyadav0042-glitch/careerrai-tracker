@@ -57,6 +57,23 @@ export function totalSyllabusHours(): number {
   return Math.round(hours);
 }
 
+// ── The mock budget ─────────────────────────────────────────────────────────
+// A full CAT mock is NOT 2 hours: 2h exam + ~1.5–2h honest analysis ≈ 4h.
+// Students underestimate this massively; the engine must not. The count
+// scales with how much journey is left (~1 full mock per ~33 syllabus hours ≈
+// one every 1.5–2 weeks at typical pace), floored at 4 (even a nearly-done
+// student needs a final mock block) and capped at 15. Deterministic, stated
+// once here — every hours→date conversion adds THIS number identically.
+export const MOCK_HOURS_EACH = 4;
+
+export function recommendedMockCount(remainingSyllabus: number): number {
+  return Math.min(15, Math.max(4, Math.round(remainingSyllabus / 33)));
+}
+
+export function remainingMockHours(remainingSyllabus: number): number {
+  return recommendedMockCount(remainingSyllabus) * MOCK_HOURS_EACH;
+}
+
 export type PaceStatus = 'ahead' | 'on_pace' | 'behind' | 'unrealistic' | 'done';
 
 export interface PaceResult {
@@ -75,11 +92,15 @@ const HALF = (h: number) => Math.round(h * 2) / 2;
 
 // The daily-hours requirement to finish the remaining syllabus by targetDate,
 // decomposed into the committed base + any catch-up (or roll-over buffer).
+// mockHours (optional) adds the mock budget to the daily requirement WITHOUT
+// polluting the syllabus % — the % measures syllabus mastery, the pace
+// measures total work including mocks.
 export function computeRequiredPace(input: {
   remainingHours: number;
   today: Date;
   targetDate: Date;
   committedPerDay: number | null;
+  mockHours?: number;
 }): PaceResult {
   const { remainingHours, today, targetDate, committedPerDay } = input;
   const totalHours = totalSyllabusHours();
@@ -92,7 +113,7 @@ export function computeRequiredPace(input: {
     return { remainingHours: 0, totalHours, completedPct: 100, daysLeft, requiredPerDay: 0, committedPerDay, catchUpPerDay: 0, aheadPerDay: 0, status: 'done' };
   }
 
-  const requiredPerDay = HALF(remainingHours / daysLeft);
+  const requiredPerDay = HALF((remainingHours + (input.mockHours ?? 0)) / daysLeft);
   const base = committedPerDay;
   let catchUpPerDay = 0;
   let aheadPerDay = 0;

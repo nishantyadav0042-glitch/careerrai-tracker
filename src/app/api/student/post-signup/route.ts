@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { remainingSyllabusHours } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
 import { serverError } from '@/lib/api-error';
 
 // Persists the post-login sequence: the date the student (re)confirms in the
@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
     const remaining = remainingSyllabusHours(coverage ?? []);
     const daysLeft = Math.max(1, Math.ceil((new Date((update.syllabus_target_date as string) + 'T00:00:00').getTime() - Date.now()) / 86_400_000));
     if (remaining > 0) {
-      const h = Math.min(12, Math.max(1, Math.round((remaining / daysLeft) * 2) / 2));
+      // Same formula as the ring and today's plan: syllabus + mock budget.
+      const h = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
       update.study_target_hours = h;
       update.hours_available = h;
       update.weekend_hours_available = h;
