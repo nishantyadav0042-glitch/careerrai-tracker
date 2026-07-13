@@ -112,10 +112,10 @@ export function progressCopy(daysStudied: number, windowDays: number): SlotCopy 
   };
 }
 
-export function logCopy(): SlotCopy {
+export function logCopy(dreamCollege: string): SlotCopy {
   return {
     title: '5 seconds, one step closer',
-    body: 'A quick log tonight keeps you moving toward your dream college. Close the day right.',
+    body: `A quick log tonight keeps you moving toward ${dreamCollege}. Close the day right.`,
     expectedAction: 'log_today',
   };
 }
@@ -130,10 +130,10 @@ export function closeCopy(streak: number, weakest: string): SlotCopy {
 
 // 08:00 — a warm start to the day. Streak when there's a run to protect;
 // otherwise a clean fresh-day line. A gift, never a demand.
-export function kickoffCopy(streak: number, weakest: string): SlotCopy {
+export function kickoffCopy(streak: number, weakest: string, dreamCollege: string): SlotCopy {
   return streak > 1
-    ? { title: `🔥 ${streak}-day run`, body: `One focused ${weakest} block today keeps it alive — and your dream college closer.`, expectedAction: 'open_plan' }
-    : { title: 'A fresh day toward your goal', body: `Your plan's ready — a few minutes on ${weakest} while you're sharp moves you forward.`, expectedAction: 'open_plan' };
+    ? { title: `🔥 ${streak}-day run`, body: `One focused ${weakest} block today keeps it alive — and ${dreamCollege} closer.`, expectedAction: 'open_plan' }
+    : { title: 'A fresh day toward your goal', body: `Your plan's ready — a few minutes on ${weakest} while you're sharp moves you toward ${dreamCollege}.`, expectedAction: 'open_plan' };
 }
 
 // 11:00 — the "study smart" strategy gift (section-agnostic craft).
@@ -156,42 +156,42 @@ export function windCopy(weakest: string): SlotCopy {
 // signups who never logged, and dormant ones. Urgency is real (their own
 // inaction + the countdown to CAT); no invented statistics, no shaming. One
 // angle per slot so up to 8/day never repeats.
-export interface ActivationCtx { firstName: string; daysToExam: number; rotate: number; weakest: string }
+export interface ActivationCtx { firstName: string; daysToExam: number; rotate: number; weakest: string; dreamCollege: string }
 
 // plan_ready — onboarded, never logged. Pull them to START. Vibe (founder,
 // modelled on Cal AI's "a few pictures a day → your dream body"): tiny daily
-// effort → the dream college. Aspirational but honest — the countdown and
-// their own inaction are real; the dream is theirs.
+// effort → the student's OWN dream college. Aspirational but honest — the
+// countdown and their inaction are real; the dream (and its name) are theirs.
 export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotCopy | null {
   switch (slot) {
     case 'kickoff':
-      return { title: `${c.daysToExam} days to your dream college`, body: `${c.firstName}, it starts with one 5-second log. Your plan is built — take the first step today.`, expectedAction: 'log_today' };
+      return { title: `${c.daysToExam} days to ${c.dreamCollege}`, body: `${c.firstName}, it starts with one 5-second log. Your plan is built — take the first step today.`, expectedAction: 'log_today' };
     case 'morning':
-      return { title: 'Your dream college starts today', body: `All it takes is a few focused minutes a day. Your plan is ready — open the first task and go.`, expectedAction: 'log_today' };
+      return { title: 'Your journey starts today', body: `All it takes is a few focused minutes a day toward ${c.dreamCollege}. Your plan is ready — open the first task and go.`, expectedAction: 'log_today' };
     case 'spark':
       return { title: 'Every IIM topper began at day one', body: companionStrategy(c.rotate), expectedAction: 'open_plan' };
     case 'fact':
-      return { title: 'A few minutes a day', body: `That's all it takes to close the gap to the college you want. Your plan knows the first step — open it.`, expectedAction: 'open_plan' };
+      return { title: 'A few minutes a day', body: `That's all it takes to close the gap to ${c.dreamCollege}. Your plan knows the first step — open it.`, expectedAction: 'open_plan' };
     case 'open':
-      return { title: 'Your study window is open', body: `${c.weakest} first — a few focused minutes now moves you toward your dream college.`, expectedAction: 'log_today' };
+      return { title: 'Your study window is open', body: `${c.weakest} first — a few focused minutes now moves you toward ${c.dreamCollege}.`, expectedAction: 'log_today' };
     case 'wind':
-      return { title: `${c.daysToExam} days left — start tonight`, body: `Your dream college is built one small day at a time. 30 focused minutes tonight beats a perfect plan you never open.`, expectedAction: 'log_today' };
+      return { title: `${c.daysToExam} days left — start tonight`, body: `A dream like ${c.dreamCollege} is built one small day at a time. 30 focused minutes tonight beats a perfect plan you never open.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: `Still 0 logged · ${c.daysToExam} days to go`, body: `Every single day counts toward your dream college. One 5-second log tonight starts it.`, expectedAction: 'log_today' };
+      return { title: `Still 0 logged · ${c.daysToExam} days to go`, body: `Every single day counts toward ${c.dreamCollege}. One 5-second log tonight starts it.`, expectedAction: 'log_today' };
     case 'log':
-      return { title: '5 seconds to your dream college', body: `One quick log tonight starts your streak — and your real journey to the college you want. Do it now.`, expectedAction: 'log_today' };
+      return { title: `5 seconds to ${c.dreamCollege}`, body: `One quick log tonight starts your streak — and the journey there. Do it now.`, expectedAction: 'log_today' };
     case 'close':
       return null; // nothing to celebrate until they log
   }
 }
 
-export interface ReactivationCtx { firstName: string; daysToExam: number; daysSinceLastLog: number; weakest: string }
+export interface ReactivationCtx { firstName: string; daysToExam: number; daysSinceLastLog: number; weakest: string; dreamCollege: string }
 
 // slipping / inactive / dark — was logging, stopped. Pull them BACK, never shame.
 export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): SlotCopy | null {
   switch (slot) {
     case 'kickoff':
-      return { title: `${c.daysSinceLastLog} days since you studied`, body: `Momentum is hard to rebuild — but 10 minutes today restarts it.`, expectedAction: 'log_today' };
+      return { title: `${c.daysSinceLastLog} days since you studied`, body: `Momentum is hard to rebuild — but 10 minutes today restarts your climb to ${c.dreamCollege}.`, expectedAction: 'log_today' };
     case 'morning':
       return { title: 'Your plan reshaped for you', body: `It adjusted around the days you missed. Pick up where it now makes sense.`, expectedAction: 'open_plan' };
     case 'spark':
@@ -201,9 +201,9 @@ export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): S
     case 'open':
       return { title: 'Restart small', body: `${c.weakest}, 20 minutes. Small beats zero — and zero is how gaps grow.`, expectedAction: 'log_today' };
     case 'wind':
-      return { title: `${c.daysToExam} days to CAT`, body: `The clock doesn't pause for a break. One block tonight and you're moving again.`, expectedAction: 'log_today' };
+      return { title: `${c.daysToExam} days to CAT`, body: `The clock doesn't pause for a break. One block tonight and you're moving toward ${c.dreamCollege} again.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: 'The gap is still closeable', body: `You've done it before. Log tonight and your streak restarts from 1.`, expectedAction: 'log_today' };
+      return { title: 'The gap is still closeable', body: `You've done it before. Log tonight and your path to ${c.dreamCollege} restarts.`, expectedAction: 'log_today' };
     case 'log':
       return { title: 'Log tonight', body: `90 seconds to break the silence. Tomorrow-you will be glad you did.`, expectedAction: 'log_today' };
     case 'close':

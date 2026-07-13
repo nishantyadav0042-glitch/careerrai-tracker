@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
-import { dispatch, BUDGET_ACTIVE, BUDGET_SETUP, BUDGET_RECOVERY } from '@/lib/notification-os';
+import { dispatch, BUDGET_ACTIVE, BUDGET_SETUP, BUDGET_RECOVERY, dreamCollegeLabel } from '@/lib/notification-os';
 import { catExamDate } from '@/lib/routine-engine';
 import {
   COMPANION_SLOTS, companionType, companionTip, weakestFromCoverage,
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id, full_name, notif_prefs, created_at, is_working_professional, self_reported_weakest_section, self_reported_weak_topic, study_target_hours, hours_available, weekend_hours_available')
+    .select('id, full_name, notif_prefs, created_at, is_working_professional, self_reported_weakest_section, self_reported_weak_topic, study_target_hours, hours_available, weekend_hours_available, dream_colleges')
     .eq('role', 'student')
     .eq('onboarding_completed', true);
   if (!students?.length) return NextResponse.json({ slot, sent: 0 });
@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
     const weakest = (s.self_reported_weakest_section as 'VARC' | 'DILR' | 'QA' | null)
       ?? weakestFromCoverage(coverageById.get(s.id) ?? [])
       ?? 'DILR';
+    const dreamCollege = dreamCollegeLabel(s.dream_colleges);
     const hoursRaw = isWeekend
       ? (s.weekend_hours_available as number | null)
       : ((s.study_target_hours ?? s.hours_available) as number | null);
@@ -126,18 +127,18 @@ export async function POST(request: NextRequest) {
 
     if (stateKind === 'activation') {
       budget = BUDGET_SETUP;
-      copy = activationSlotCopy(slot, { firstName, daysToExam, rotate: daysSinceJoin, weakest });
+      copy = activationSlotCopy(slot, { firstName, daysToExam, rotate: daysSinceJoin, weakest, dreamCollege });
       reason = `Activation cadence · ${slot} · never logged · ${daysToExam}d to CAT`;
     } else if (stateKind === 'reactivation') {
       budget = BUDGET_RECOVERY;
-      copy = reactivationSlotCopy(slot, { firstName, daysToExam, daysSinceLastLog: daysSinceLastLog!, weakest });
+      copy = reactivationSlotCopy(slot, { firstName, daysToExam, daysSinceLastLog: daysSinceLastLog!, weakest, dreamCollege });
       reason = `Reactivation cadence · ${slot} · ${daysSinceLastLog}d quiet`;
     } else switch (slot) {
       case 'kickoff':
         // Morning greeting for graduated loggers — arc students get their own
         // Day-N morning elsewhere, so don't double their morning.
         if (isArc) break;
-        copy = kickoffCopy((streak?.current_streak as number | null) ?? 0, weakest);
+        copy = kickoffCopy((streak?.current_streak as number | null) ?? 0, weakest, dreamCollege);
         reason = `Companion 08:00 — morning kickoff (${weakest} weakest)`;
         break;
       case 'spark':
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
       case 'log':
         // The day's one demand. Arc students already got theirs at 20:00.
         if (loggedToday || isArc) break;
-        copy = logCopy();
+        copy = logCopy(dreamCollege);
         reason = 'Companion 21:30 — log still open';
         break;
       case 'close':

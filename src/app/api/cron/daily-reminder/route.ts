@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendDailyReminder } from '@/lib/email';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
-import { ACTIVATION_DAYS, activationCopy, dispatch, BUDGET_ACTIVE, BUDGET_SETUP } from '@/lib/notification-os';
+import { ACTIVATION_DAYS, activationCopy, dispatch, BUDGET_ACTIVE, BUDGET_SETUP, dreamCollegeLabel } from '@/lib/notification-os';
 
 // 14:30 UTC = 20:00 IST. The evening touch for students in their first two
 // weeks — two distinct populations, one send each, both through dispatch()
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_last_activity_at')
+    .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_last_activity_at, dream_colleges')
     .eq('role', 'student')
     .gte('created_at', fourteenDaysAgoIso);
   if (!students?.length) return NextResponse.json({ reminded: 0 });
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       const anchorIso = (s.onboarding_last_activity_at as string | null) ?? (s.created_at as string);
       const daysSinceBuilt = Math.floor((Date.now() - new Date(anchorIso).getTime()) / 86_400_000);
       if (!ACTIVATION_DAYS.includes(daysSinceBuilt)) continue; // off-ladder days are silent
-      const copy = activationCopy(daysSinceBuilt, firstName);
+      const copy = activationCopy(daysSinceBuilt, firstName, dreamCollegeLabel(s.dream_colleges));
       const outcome = await dispatch({
         userId: s.id,
         type: 'activation',
