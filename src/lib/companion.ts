@@ -138,7 +138,10 @@ export function kickoffCopy(streak: number, weakest: string, dreamCollege: strin
 
 // 11:00 — the "study smart" strategy gift (section-agnostic craft).
 export function sparkCopy(dayOfYear: number): SlotCopy {
-  return { title: 'Study smart', body: companionStrategy(dayOfYear), expectedAction: 'open_plan' };
+  // Alternate days: real exam craft vs a witty hook — variety beats blindness.
+  return dayOfYear % 2 === 0
+    ? { title: 'Study smart', body: companionStrategy(dayOfYear), expectedAction: 'open_plan' }
+    : { title: 'Study smart', body: companionHook(dayOfYear), expectedAction: 'open_plan' };
 }
 
 // 18:30 — the evening nudge. Only sent when they haven't logged yet (caller
@@ -156,6 +159,24 @@ export function windCopy(weakest: string): SlotCopy {
 // signups who never logged, and dormant ones. Urgency is real (their own
 // inaction + the countdown to CAT); no invented statistics, no shaming. One
 // angle per slot so up to 8/day never repeats.
+// ── Aphorism hooks (Cal-AI style) ───────────────────────────────────────────
+// A familiar phrase, twisted to point at the ONE action (the 5-second log).
+// Witty, zero guilt, no invented stats. Rotated against the emotional
+// dream-college lines so the tray never feels repetitive.
+const HOOK_LINES: string[] = [
+  'Time is money — a 5-second log is the cheapest investment in your rank.',
+  "Toppers don't study more. They just never skip the log.",
+  'A plan you can see beats a plan you remember.',
+  'Consistency compounds — like interest, but for your percentile.',
+  'The syllabus never sleeps. Luckily, a log takes 5 seconds.',
+  "You can't improve what you don't track. Tracking takes 5 seconds.",
+  'Small logs. Big ranks.',
+];
+
+export function companionHook(rotate: number): string {
+  return HOOK_LINES[rotate % HOOK_LINES.length];
+}
+
 export interface ActivationCtx { firstName: string; daysToExam: number; rotate: number; weakest: string; dreamCollege: string }
 
 // plan_ready — onboarded, never logged. Pull them to START. Vibe (founder,
@@ -171,7 +192,10 @@ export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotC
     case 'spark':
       return { title: 'Every IIM topper began at day one', body: companionStrategy(c.rotate), expectedAction: 'open_plan' };
     case 'fact':
-      return { title: 'A few minutes a day', body: `That's all it takes to close the gap to ${c.dreamCollege}. Your plan knows the first step — open it.`, expectedAction: 'open_plan' };
+      // Rotate flavors: emotional (dream college) vs witty hook (Cal-AI style).
+      return c.rotate % 2 === 0
+        ? { title: 'A few minutes a day', body: `That's all it takes to close the gap to ${c.dreamCollege}. Your plan knows the first step — open it.`, expectedAction: 'open_plan' }
+        : { title: 'One for the tray', body: companionHook(c.rotate), expectedAction: 'open_plan' };
     case 'open':
       return { title: 'Your study window is open', body: `${c.weakest} first — a few focused minutes now moves you toward ${c.dreamCollege}.`, expectedAction: 'log_today' };
     case 'wind':
@@ -197,7 +221,9 @@ export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): S
     case 'spark':
       return { title: 'Study smart', body: companionStrategy(c.daysSinceLastLog), expectedAction: 'open_plan' };
     case 'fact':
-      return { title: 'One for the tray', body: `Your plan is still here, still yours. Open it and take one step.`, expectedAction: 'open_plan' };
+      return c.daysSinceLastLog % 2 === 0
+        ? { title: 'One for the tray', body: `Your plan is still here, still yours. Open it and take one step.`, expectedAction: 'open_plan' }
+        : { title: 'One for the tray', body: companionHook(c.daysSinceLastLog), expectedAction: 'open_plan' };
     case 'open':
       return { title: 'Restart small', body: `${c.weakest}, 20 minutes. Small beats zero — and zero is how gaps grow.`, expectedAction: 'log_today' };
     case 'wind':
