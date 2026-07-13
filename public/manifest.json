@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "CareerRai - Daily Prep Tracker",
+  "name": "CareerRai - CAT Prep Tracker",
   "short_name": "CareerRai",
   "description": "Track your daily CAT exam prep with an IIM buddy who keeps you accountable.",
   "start_url": "/student/home?source=pwa",

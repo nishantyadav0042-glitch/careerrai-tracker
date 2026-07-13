@@ -182,15 +182,17 @@ export function builderRecoveryCopy(
 // build, then silence + the human queue. Ends forever on the first log.
 export const ACTIVATION_DAYS: readonly number[] = [0, 1, 3, 7];
 
+// Aspirational activation vibe (Cal AI-style: tiny daily effort → the dream
+// college). Honest — the plan is real, the first step really is tiny.
 export function activationCopy(day: number, firstName: string): { title: string; body: string } {
   if (day === 0) {
-    return { title: 'Your CAT routine is ready', body: `${firstName}, the plan you built is live. The first task takes 90 seconds.` };
+    return { title: 'Your dream college starts now', body: `${firstName}, the plan you built is live. It begins with one 5-second log — take the first step.` };
   }
   if (day === 1) {
-    return { title: 'Your routine is waiting', body: 'Built yesterday, still ready. Start with the first task tonight.' };
+    return { title: '5 seconds to get moving', body: 'Your plan is built and waiting. One quick log tonight starts the journey to the college you want.' };
   }
   if (day === 3) {
-    return { title: 'Your plan is holding your spot', body: 'Three days since you built it. The first task is still 90 seconds.' };
+    return { title: 'Your plan is holding your spot', body: `A few minutes a day is all it takes. Your dream college is still one small step away — start today.` };
   }
-  return { title: 'One week since you built your plan', body: 'It reshapes around the time you have left. Start today.' };
+  return { title: 'Your dream college is still waiting', body: 'Your plan reshapes around the time you have left. One log today restarts the momentum.' };
 }

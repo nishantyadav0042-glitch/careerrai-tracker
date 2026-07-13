@@ -114,8 +114,8 @@ export function progressCopy(daysStudied: number, windowDays: number): SlotCopy 
 
 export function logCopy(): SlotCopy {
   return {
-    title: "Today's log is open",
-    body: '90 seconds. It closes the day properly.',
+    title: '5 seconds, one step closer',
+    body: 'A quick log tonight keeps you moving toward your dream college. Close the day right.',
     expectedAction: 'log_today',
   };
 }
@@ -132,8 +132,8 @@ export function closeCopy(streak: number, weakest: string): SlotCopy {
 // otherwise a clean fresh-day line. A gift, never a demand.
 export function kickoffCopy(streak: number, weakest: string): SlotCopy {
   return streak > 1
-    ? { title: `🔥 ${streak}-day run`, body: `One focused ${weakest} block today keeps it alive.`, expectedAction: 'open_plan' }
-    : { title: 'Fresh day', body: `Your plan's ready — start with ${weakest} while you're sharp.`, expectedAction: 'open_plan' };
+    ? { title: `🔥 ${streak}-day run`, body: `One focused ${weakest} block today keeps it alive — and your dream college closer.`, expectedAction: 'open_plan' }
+    : { title: 'A fresh day toward your goal', body: `Your plan's ready — a few minutes on ${weakest} while you're sharp moves you forward.`, expectedAction: 'open_plan' };
 }
 
 // 11:00 — the "study smart" strategy gift (section-agnostic craft).
@@ -158,25 +158,28 @@ export function windCopy(weakest: string): SlotCopy {
 // angle per slot so up to 8/day never repeats.
 export interface ActivationCtx { firstName: string; daysToExam: number; rotate: number; weakest: string }
 
-// plan_ready — onboarded, never logged. Pull them to START.
+// plan_ready — onboarded, never logged. Pull them to START. Vibe (founder,
+// modelled on Cal AI's "a few pictures a day → your dream body"): tiny daily
+// effort → the dream college. Aspirational but honest — the countdown and
+// their own inaction are real; the dream is theirs.
 export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotCopy | null {
   switch (slot) {
     case 'kickoff':
-      return { title: `${c.daysToExam} days to CAT`, body: `${c.firstName}, your plan is built — and still unopened. Today is where it starts.`, expectedAction: 'log_today' };
+      return { title: `${c.daysToExam} days to your dream college`, body: `${c.firstName}, it starts with one 5-second log. Your plan is built — take the first step today.`, expectedAction: 'log_today' };
     case 'morning':
-      return { title: 'Your plan is waiting', body: `Everything's mapped. The very first task takes 90 seconds. Start now.`, expectedAction: 'log_today' };
+      return { title: 'Your dream college starts today', body: `All it takes is a few focused minutes a day. Your plan is ready — open the first task and go.`, expectedAction: 'log_today' };
     case 'spark':
-      return { title: 'Every topper started at day 1', body: companionStrategy(c.rotate), expectedAction: 'open_plan' };
+      return { title: 'Every IIM topper began at day one', body: companionStrategy(c.rotate), expectedAction: 'open_plan' };
     case 'fact':
-      return { title: 'One for the tray', body: `Your plan already knows exactly what to study first. Open it and go.`, expectedAction: 'open_plan' };
+      return { title: 'A few minutes a day', body: `That's all it takes to close the gap to the college you want. Your plan knows the first step — open it.`, expectedAction: 'open_plan' };
     case 'open':
-      return { title: 'Prime study window', body: `${c.weakest} first — your plan lays out the exact next step. Tap in.`, expectedAction: 'log_today' };
+      return { title: 'Your study window is open', body: `${c.weakest} first — a few focused minutes now moves you toward your dream college.`, expectedAction: 'log_today' };
     case 'wind':
-      return { title: `The syllabus doesn't wait`, body: `30 focused minutes tonight beats a perfect plan you never opened.`, expectedAction: 'log_today' };
+      return { title: `${c.daysToExam} days left — start tonight`, body: `Your dream college is built one small day at a time. 30 focused minutes tonight beats a perfect plan you never open.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: `Still 0 logged · ${c.daysToExam} days left`, body: `Every day skipped is ground others are covering. Start tonight — small.`, expectedAction: 'log_today' };
+      return { title: `Still 0 logged · ${c.daysToExam} days to go`, body: `Every single day counts toward your dream college. One 5-second log tonight starts it.`, expectedAction: 'log_today' };
     case 'log':
-      return { title: 'Last call today', body: `One 90-second log starts your streak — and your real prep. Do it now.`, expectedAction: 'log_today' };
+      return { title: '5 seconds to your dream college', body: `One quick log tonight starts your streak — and your real journey to the college you want. Do it now.`, expectedAction: 'log_today' };
     case 'close':
       return null; // nothing to celebrate until they log
   }
