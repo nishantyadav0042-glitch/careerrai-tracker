@@ -293,9 +293,13 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       <div>
         <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1.5 backdrop-blur-sm">
           {/* Snake lives in the sticky header so it stays on screen — and visibly
-              grows — as the student scrolls and taps through the topics. */}
+              grows — as the student scrolls and taps through the topics.
+              Progress is PER SECTION-STEP, not the whole 53-topic map: one tap
+              moves the head a whole topic's length (1/6th of the bar, not 1/53
+              ≈ 6px, which read as "not working"). Each new section = a fresh
+              trail with its own colour and tongue speed. */}
           <div className="mb-2">
-            <SnakeProgress frac={totalUnits ? answeredTotal / totalUnits : 0} section={step.sectionId} answered={answeredTotal} total={totalUnits} />
+            <SnakeProgress frac={step.units.length ? answeredOnStep / step.units.length : 0} section={step.sectionId} answered={answeredOnStep} total={step.units.length} />
           </div>
           <div className={cn('grid items-end gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-4')}>
             {options.map(({ value, dot }) => (
