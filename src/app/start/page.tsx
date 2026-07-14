@@ -133,9 +133,9 @@ export default function StartPage() {
   const showProgress = stepIdx < TOTAL_SCREENS;
 
   return (
-    <div className="min-h-screen bg-white px-4 py-8">
+    <div className="min-h-screen bg-white px-4 pt-4 pb-6">
       <div className="mx-auto w-full max-w-sm">
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-3">
             {stepIdx > 0 && (
@@ -151,7 +151,7 @@ export default function StartPage() {
           </div>
         </div>
         {showProgress && (
-          <div className="mb-6 h-1 w-full overflow-hidden rounded-full bg-stone-100">
+          <div className="mb-4 h-1 w-full overflow-hidden rounded-full bg-stone-100">
             <div className="h-full rounded-full bg-stone-900 transition-all duration-300" style={{ width: `${((stepIdx + 1) / TOTAL_SCREENS) * 100}%` }} />
           </div>
         )}
