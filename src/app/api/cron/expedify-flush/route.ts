@@ -22,34 +22,56 @@ export async function POST(request: NextRequest) {
   let sent = 0;
   for (const s of queued) {
     if (!s.phone) continue;
-    const { data: coverage } = await admin
-      .from('topic_coverage').select('section, topic, status').eq('student_id', s.id);
-    const device: SignupDevice = {
-      device: (s.signup_device as SignupDevice['device']) ?? 'other',
-      browser: (s.signup_browser as SignupDevice['browser']) ?? 'other',
-      label: `${s.signup_device === 'ios' ? 'iPhone' : s.signup_device === 'android' ? 'Android' : 'Unknown device'} · ${s.signup_browser ?? 'unknown browser'}`,
-    };
-    const brief = buildStudentBrief((s.full_name as string) ?? 'there', {
-      ambition_date: s.syllabus_target_date,
-      dream_colleges: s.dream_colleges,
-      target_percentile: s.target_percentile,
-      hours_available: s.hours_available,
-      coaching_enrolled: s.coaching_enrolled,
-      is_repeater: s.is_repeater,
-      pain_points: s.pain_points,
-      wants_mentor: s.wants_mentor,
-      topic_matrix: coverage ?? [],
-    }, { label: device.label, guidance: deviceCallGuidance(device) });
+    try {
+      // Atomically claim this row before doing anything else (bug audit,
+      // 14 July): if two flush runs somehow overlap, or sendExpedifyLead's
+      // own status-write fails silently after a real call was placed, the
+      // row would stay 'queued' and get RE-SENT — a second AI call to the
+      // same student, real money and a bad first impression. Flipping to
+      // 'sending' up front is a distinct state the .eq('queued') filter on
+      // any other run will never match, closing that window even if the
+      // final sent/failed write below never lands.
+      const { data: claimed } = await admin
+        .from('profiles')
+        .update({ expedify_status: 'sending' })
+        .eq('id', s.id)
+        .eq('expedify_status', 'queued')
+        .select('id');
+      if (!claimed || claimed.length === 0) continue; // already claimed elsewhere
 
-    const res = await sendExpedifyLead({
-      studentId: s.id as string,
-      name: (s.full_name as string) ?? 'there',
-      phone: s.phone as string,
-      email: (s.email as string | null) ?? null,
-      source: (s.signup_source as string | null) ?? 'self_serve',
-      brief,
-    });
-    if (res.ok) sent++;
+      const { data: coverage } = await admin
+        .from('topic_coverage').select('section, topic, status').eq('student_id', s.id);
+      const device: SignupDevice = {
+        device: (s.signup_device as SignupDevice['device']) ?? 'other',
+        browser: (s.signup_browser as SignupDevice['browser']) ?? 'other',
+        label: `${s.signup_device === 'ios' ? 'iPhone' : s.signup_device === 'android' ? 'Android' : 'Unknown device'} · ${s.signup_browser ?? 'unknown browser'}`,
+      };
+      const brief = buildStudentBrief((s.full_name as string) ?? 'there', {
+        ambition_date: s.syllabus_target_date,
+        dream_colleges: s.dream_colleges,
+        target_percentile: s.target_percentile,
+        hours_available: s.hours_available,
+        coaching_enrolled: s.coaching_enrolled,
+        is_repeater: s.is_repeater,
+        pain_points: s.pain_points,
+        wants_mentor: s.wants_mentor,
+        topic_matrix: coverage ?? [],
+      }, { label: device.label, guidance: deviceCallGuidance(device) });
+
+      const res = await sendExpedifyLead({
+        studentId: s.id as string,
+        name: (s.full_name as string) ?? 'there',
+        phone: s.phone as string,
+        email: (s.email as string | null) ?? null,
+        source: (s.signup_source as string | null) ?? 'self_serve',
+        brief,
+      });
+      if (res.ok) sent++;
+    } catch (err) {
+      // One lead's failure must never strand the rest of the batch (bug
+      // audit, 14 July) — the old loop had no per-lead try/catch.
+      console.error('[expedify-flush] lead failed:', s.id, err);
+    }
   }
   return NextResponse.json({ sent, queued: queued.length });
 }

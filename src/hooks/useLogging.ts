@@ -20,6 +20,7 @@ interface LoggingResponse {
   bonus?: string;
   daily_nudge?: string | null;
   milestone?: string | null;
+  report_date?: string; // the server's authoritative IST log-date for this submission
 }
 
 export interface InitialLogging {

@@ -9,10 +9,19 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Tomorrow window in IST (UTC+5:30)
-  const nowMs = Date.now();
-  const tomorrowStart = new Date(nowMs + 24 * 3_600_000);
-  const tomorrowEnd = new Date(nowMs + 48 * 3_600_000);
+  // IST CALENDAR tomorrow's [00:00, +24h) window (bug audit, 14 July) — the
+  // old `[now+24h, now+48h)` rolling window was relative to whatever instant
+  // the cron happened to fire (06:00 UTC = 11:30 IST), not the actual next
+  // IST calendar day: a session scheduled for tomorrow before 11:30 IST fell
+  // BELOW that window and got no reminder at all, while a session on the
+  // day-after before 11:30 IST fell INTO it and got a wrong "tomorrow" push
+  // two days early. Derive the boundary explicitly instead of drifting with
+  // cron run-time.
+  const IST_OFFSET_MS = 5.5 * 3_600_000;
+  const nowIstMs = Date.now() + IST_OFFSET_MS;
+  const istTodayMidnightMs = Math.floor(nowIstMs / 86_400_000) * 86_400_000;
+  const tomorrowStart = new Date(istTodayMidnightMs + 86_400_000 - IST_OFFSET_MS);
+  const tomorrowEnd = new Date(istTodayMidnightMs + 2 * 86_400_000 - IST_OFFSET_MS);
 
   const { data: sessions } = await admin
     .from('video_sessions')

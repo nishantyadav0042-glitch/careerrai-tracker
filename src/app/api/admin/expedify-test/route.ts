@@ -21,6 +21,15 @@ export async function GET(request: NextRequest) {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  // This GET has a real side effect (triggers an actual AI phone call), so a
+  // logged-in admin could be CSRF'd into firing it via a crafted link/image
+  // tag. Cheap fix without breaking the "paste the URL in your browser"
+  // workflow: require a header only same-site fetch/XHR navigation sends —
+  // a cross-site <img>/<a> GET never carries a custom header.
+  if (request.headers.get('sec-fetch-site') === 'cross-site') {
+    return NextResponse.json({ error: 'Cross-site request blocked.' }, { status: 403 });
+  }
+
   const phone = normalizeIndianPhone(request.nextUrl.searchParams.get('phone'));
   if (!phone) {
     return NextResponse.json({ error: 'Pass your own number: /api/admin/expedify-test?phone=9XXXXXXXXX — Expedify will actually call it.' }, { status: 400 });

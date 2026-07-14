@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { clientIp } from '@/lib/request-ip';
 
 // Step 13 collector — receives batched timing events from real student
 // devices (see components/perf-beacon.tsx) via sendBeacon. Tolerant of
@@ -41,6 +42,21 @@ export async function POST(request: NextRequest) {
   if (rows.length === 0) return NextResponse.json({ ok: true, stored: 0 });
 
   const admin = createAdminClient();
-  await admin.from('perf_events').insert(rows);
+
+  // Unauthenticated endpoint (a beacon can fire logged-out) — light per-IP
+  // flood guard so it can't be used to bloat perf_events for free (security
+  // audit, 14 July). Fail open: never blocks a real student's beacon.
+  const ip = clientIp(request);
+  if (ip) {
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count } = await admin
+      .from('perf_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('ip', ip)
+      .gte('created_at', since);
+    if ((count ?? 0) >= 2000) return NextResponse.json({ ok: true, stored: 0 });
+  }
+
+  await admin.from('perf_events').insert(rows.map((r) => ({ ...r, ip })));
   return NextResponse.json({ ok: true, stored: rows.length });
 }

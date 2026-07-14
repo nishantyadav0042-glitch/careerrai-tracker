@@ -9,11 +9,25 @@ import { createClient } from '@/lib/supabase/client';
 // A session running past midnight belongs to the previous calendar day
 // until 3:00:00 AM IST.  Unit-test edge cases:
 //   02:59 IST → previous day   |   03:00 IST → current day
+//
+// BUG FIX (security/bug audit, 14 July): the old implementation used
+// `now.setHours(3,0,0,0)`, which reads/writes in the RUNTIME's local
+// timezone — fine in a browser (usually IST for our students), but this
+// function is also called from server API routes (routine/today, calibrate,
+// complete-task, swap-topic, log-daily, coach-line), which run in UTC on
+// Vercel. There, setHours(3) meant 03:00 UTC = 08:30 IST, not 03:00 IST —
+// misdating every log/completion made between 3:00–8:30 AM IST onto the
+// wrong day, and disagreeing with weekly-diagnosis.ts's correct IST calc.
+// Rewritten to be timezone-independent: shift the UTC timestamp by the
+// fixed +5:30 IST offset, then only ever read/format via UTC-based methods
+// (getUTCHours/toISOString) — never local-time methods — so the result is
+// identical no matter what timezone the process itself runs in.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 export function getLogDateString(now: Date = new Date()): string {
-  const today3am = new Date(now);
-  today3am.setHours(3, 0, 0, 0);
-  const logDate = now < today3am ? new Date(today3am.getTime() - 86_400_000) : today3am;
-  return logDate.toISOString().split('T')[0];
+  const istMs = now.getTime() + IST_OFFSET_MS;
+  const istHour = new Date(istMs).getUTCHours();
+  const adjustedMs = istHour < 3 ? istMs - 86_400_000 : istMs;
+  return new Date(adjustedMs).toISOString().split('T')[0];
 }
 
 // ── Shared constants (import from here — never hardcode elsewhere) ───────────

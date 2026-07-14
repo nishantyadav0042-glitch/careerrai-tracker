@@ -56,7 +56,7 @@ export async function GET() {
       .eq('student_id', user.id),
     admin
       .from('daily_routines')
-      .select('phase, tasks, est_minutes, calibration')
+      .select('phase, tasks, est_minutes, calibration, generated_pace_hours')
       .eq('student_id', user.id)
       .eq('routine_date', today)
       .maybeSingle(),
@@ -150,20 +150,28 @@ export async function GET() {
   // A routine frozen earlier today at DIFFERENT hours (the student just
   // rescheduled their target) is stale — regenerate it, but only while
   // nothing is ticked off yet: completed work is never wiped by a resize.
+  //
+  // Compares generated_pace_hours (the pace this routine was ACTUALLY built
+  // for) against today's paceHours — pace vs pace, not minutes vs minutes
+  // (bug audit, 14 July: comparing est_minutes to a plain hours*60 target
+  // ignored that intensive/revision/repeater phases add a ~15% closing task
+  // on top, so the comparison false-positived on every request above ~5.5h/
+  // day pace and silently reverted the student's topic swaps). Legacy rows
+  // generated before this column existed have generated_pace_hours=null —
+  // treated as "not stale" rather than force-regenerating them.
   let routine = existing;
-  if (routine && (completions ?? []).length === 0 && paceHours != null) {
-    const expectedMinutes = Math.round(paceHours * 60);
-    if (Math.abs((routine.est_minutes as number) - expectedMinutes) > 45) routine = null;
+  if (routine && (completions ?? []).length === 0 && paceHours != null && routine.generated_pace_hours != null) {
+    if (Math.abs((routine.generated_pace_hours as number) - paceHours) > 0.5) routine = null;
   }
   if (!routine) {
     const generated = generateRoutine(routineProfile, new Date(), history, topicChoices);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
-        { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes },
+        { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_pace_hours: paceHours },
         { onConflict: 'student_id,routine_date' }
       )
-      .select('phase, tasks, est_minutes, calibration')
+      .select('phase, tasks, est_minutes, calibration, generated_pace_hours')
       .single();
     if (error || !inserted) return NextResponse.json({ error: 'Could not generate routine' }, { status: 500 });
     routine = inserted;
@@ -241,8 +249,10 @@ export async function GET() {
   // generated still shows up immediately, same as whySummary above.
   const coverageByTopic = new Map<string, CoverageStatus>();
   for (const row of (coverageRows ?? [])) coverageByTopic.set(row.topic, row.status as CoverageStatus);
+  // Same guard as buildHistory — never trust a stored routine's tasks column
+  // to be a well-formed array.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tasksWithStatus = (routine.tasks as any[]).map((t) => ({
+  const tasksWithStatus = (Array.isArray(routine.tasks) ? (routine.tasks as any[]) : []).map((t) => ({
     ...t,
     coverageStatus: t.topic ? coverageByTopic.get(t.topic) ?? null : null,
     // Memory tag — "Last done Nd ago" / "First time" / "Nth revision".
@@ -368,8 +378,12 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   const timesPracticedByTopic: Record<string, number> = {};
   for (const r of (pastRoutines ?? [])) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
+    // Guard against legacy/corrupt rows where tasks is null or not an array
+    // (bug audit, 14 July) — an unguarded for-of here throws, rejecting the
+    // top-level Promise.all and 500ing the ENTIRE plan for any student with
+    // even one such row: the same failure class as the earlier TDZ crash.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const t of (r.tasks as any[])) {
+    for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
       if (!completedTaskIds.has(t.id)) continue;
       const section = t.section as Section;
       const daysAgo = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);

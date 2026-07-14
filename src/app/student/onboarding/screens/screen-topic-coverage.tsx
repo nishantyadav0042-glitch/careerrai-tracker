@@ -54,6 +54,15 @@ interface Props {
   // One motivating line shown under the title on a section's first sub-step
   // only (QA's five clusters share one intro, not five).
   sectionIntro?: Partial<Record<CoverageSectionId, string>>;
+  // localStorage draft key (bug audit, 14 July): this used to be one hardcoded
+  // GLOBAL string shared by every caller and every student on a device —
+  // meaning if student A abandoned this screen mid-grid and student B opened
+  // it on the same shared device (common on a family/hostel phone), B would
+  // resume A's half-finished taps and could submit A's answers as their own
+  // coverage matrix. The post-login onboarding modal now passes a key scoped
+  // to the logged-in userId; callers that don't pass one (the pre-auth /start
+  // funnel, where no account exists yet) fall back to a versioned default.
+  draftKey?: string;
 }
 
 const EXAM_STATUS_OPTIONS: { value: DeclaredStatus; dot: string; label: string; active: string }[] = [
@@ -131,12 +140,18 @@ function buildSteps(order?: CoverageSectionId[]): MapStep[] {
 // the tab, losing connection, or the app backgrounding mid-flow silently
 // discarded the entire map. Mirrored to localStorage on every tap so a
 // reload resumes instead of restarting; cleared once the real save succeeds.
-const DRAFT_KEY = 'cr_onboarding_topic_coverage_draft';
+//
+// v2 (bug audit, 14 July): was one hardcoded global key with no version —
+// (1) shared-device students could resume each other's answers (see the
+// `draftKey` prop doc above the interface); (2) a draft saved before a
+// taxonomy change (a unit added/renamed) could resume mid-grid with stale
+// step positions. Bump this suffix whenever KNOWLEDGE_GRAPH's units change.
+const DEFAULT_DRAFT_KEY = 'cr_preauth_topic_coverage_draft_v2';
 
-function loadDraft(): { stepIdx: number; statuses: Record<string, DeclaredStatus> } | null {
+function loadDraft(key: string): { stepIdx: number; statuses: Record<string, DeclaredStatus> } | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(DRAFT_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed?.stepIdx !== 'number' || typeof parsed?.statuses !== 'object') return null;
@@ -146,8 +161,9 @@ function loadDraft(): { stepIdx: number; statuses: Record<string, DeclaredStatus
   }
 }
 
-export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoading, deferSave, onMatrixReady, sectionOrder, sectionIntro }: Props) {
-  const draft = loadDraft();
+export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoading, deferSave, onMatrixReady, sectionOrder, sectionIntro, draftKey }: Props) {
+  const DRAFT_KEY = draftKey ?? DEFAULT_DRAFT_KEY;
+  const draft = loadDraft(DRAFT_KEY);
   const steps = buildSteps(sectionOrder);
   const [stepIdx, setStepIdx] = useState(() => Math.min(draft?.stepIdx ?? 0, steps.length - 1));
   const [statuses, setStatuses] = useState<Record<string, DeclaredStatus>>(() => draft?.statuses ?? {});
@@ -256,9 +272,23 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       setStepIdx(stepIdx + 1);
       return;
     }
+    // Last step reached — but a resumed draft can have jumped its stored
+    // stepIdx past an EARLIER step that gained new units since the draft was
+    // saved (a taxonomy change), so `stepComplete` (which only checks the
+    // CURRENT step) isn't sufficient proof every unit was actually tapped.
+    // Verify every step, not just this one (bug audit, 14 July) — silently
+    // defaulting an untapped unit to 'not_started' would corrupt the exact
+    // input the planning engine trusts most. If anything's missing, send the
+    // student back to the first incomplete step instead of submitting.
+    const firstIncompleteStep = steps.findIndex((s) => s.units.some((u) => statuses[u] == null));
+    if (firstIncompleteStep !== -1 && firstIncompleteStep !== stepIdx) {
+      setStepIdx(firstIncompleteStep);
+      return;
+    }
+
     // Last step — the whole declared grid, built in canonical Knowledge
     // Graph order regardless of the display order shown above. Every unit
-    // was explicitly tapped; there are no defaulted rows.
+    // was explicitly tapped; there are no defaulted rows (verified above).
     const matrix = KNOWLEDGE_GRAPH.flatMap((s) =>
       s.groups.flatMap((g) => g.units.map((unit) => ({ section: s.id, topic: unit, status: statuses[unit] ?? 'not_started' })))
     );

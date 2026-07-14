@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { paymentsEnabled } from '@/lib/feature-flags';
-import { PLANS, isPlanId } from '@/lib/plans';
+import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { createRazorpayOrder } from '@/lib/razorpay';
 import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
@@ -26,8 +26,7 @@ export async function POST(request: NextRequest) {
 
     // Free path: a grant brought the price below Razorpay's floor — activate directly.
     if (price.finalPaise < MIN_CHARGE_PAISE) {
-      const renews = new Date();
-      renews.setMonth(renews.getMonth() + p.months);
+      const renews = addMonthsClamped(new Date(), p.months);
 
       const { data: payRow } = await admin.from('student_payments').insert({
         student_id: user.id,
@@ -62,21 +61,36 @@ export async function POST(request: NextRequest) {
           )
           .select('id');
         if (redeemed && redeemed.length > 0) {
-          await admin.rpc('increment_coupon_use', { p_coupon_id: price.couponId });
+          // increment_coupon_use is conditional on max_uses (TOCTOU fix,
+          // security audit 14 July) — false means the cap was already hit
+          // by a concurrent redemption; undo this student's row so they
+          // aren't left with a "used" coupon that never actually counted.
+          const { data: claimed } = await admin.rpc('increment_coupon_use', { p_coupon_id: price.couponId });
+          if (!claimed) {
+            await admin.from('coupon_redemptions').delete().eq('coupon_id', price.couponId).eq('student_id', user.id);
+          }
         }
       }
 
       return NextResponse.json({ free: true });
     }
 
-    // Return the existing pending order if one was created in the last 30 minutes.
-    // Prevents duplicate Razorpay orders from double-clicks or multi-tab checkouts.
+    // Return the existing pending order if one was created in the last 30 minutes
+    // AND for the SAME final price. Prevents duplicate Razorpay orders from
+    // double-clicks or multi-tab checkouts, while closing a real billing bug
+    // (audit, 14 July): the old reuse check ignored amount entirely, so a
+    // student who applied/changed a coupon after opening checkout once would
+    // get the STALE order's amount back with the NEW discountLabel shown on
+    // screen — charging full price while the UI promised a discount (or the
+    // reverse, undercharging). A price mismatch now falls through to mint a
+    // fresh order instead of silently reusing the wrong one.
     const { data: pendingOrder } = await admin
       .from('student_payments')
       .select('razorpay_order_id, amount')
       .eq('student_id', user.id)
       .eq('plan', plan)
       .eq('status', 'created')
+      .eq('amount', price.finalPaise)
       .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
