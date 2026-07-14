@@ -225,14 +225,16 @@ export async function POST(request: NextRequest) {
 
       // A non-empty topic matrix is only ever sent once the /start wizard's
       // final mandatory step completed — the same signal the old post-login
-      // Builder used to mark itself done. Set it BEFORE the write below so
-      // this student never lands back in the old post-login onboarding gate
-      // and gets asked the same questions twice.
+      // Builder used to mark itself done.
+      //
+      // BUG FIX (audit, 14 July): onboarding_completed used to be flipped
+      // true in THIS same profileUpdate, written BEFORE the coverage matrix
+      // below was even validated — so a student whose matrix failed server
+      // validation (or hit a transient DB error on the upsert) ended up with
+      // onboarding_completed=true and ZERO coverage rows, and no way back
+      // in (the pre-auth payload only replays for brand-new/stub profiles).
+      // Now it's only set after the coverage write actually succeeds.
       const matrixOk = Array.isArray(onboarding.topic_matrix) && onboarding.topic_matrix.length > 0;
-      if (matrixOk) {
-        profileUpdate.onboarding_completed = true;
-        profileUpdate.onboarding_last_activity_at = new Date().toISOString();
-      }
 
       const userId = data.user.id;
       if (Object.keys(profileUpdate).length > 0) {
@@ -267,9 +269,17 @@ export async function POST(request: NextRequest) {
             }
             return { student_id: userId, section: e.section!, topic: e.topic!, status: e.status!, updated_at: updatedAt };
           });
-          await admin.from('topic_coverage').upsert(rows, { onConflict: 'student_id,section,topic' });
+          const { error: coverageError } = await admin.from('topic_coverage').upsert(rows, { onConflict: 'student_id,section,topic' });
+          if (coverageError) {
+            console.error('[verify-phone-otp] coverage upsert failed, NOT marking onboarding complete:', coverageError.message);
+          } else {
+            await admin.from('profiles').update({
+              onboarding_completed: true,
+              onboarding_last_activity_at: new Date().toISOString(),
+            }).eq('id', userId);
+          }
         } else {
-          console.error('[verify-phone-otp] rejected pre-auth coverage matrix:', problem);
+          console.error('[verify-phone-otp] rejected pre-auth coverage matrix, NOT marking onboarding complete:', problem);
         }
       }
     }

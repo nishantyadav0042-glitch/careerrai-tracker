@@ -68,28 +68,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Rate limit: max 3 sends / 30 min, 30s cooldown (per phone)
-    const now = Date.now();
-    const since = new Date(now - 30 * 60 * 1000).toISOString();
-    const { data: recent } = await admin
-      .from('otp_send_events')
-      .select('sent_at')
-      .eq('email', e164) // reuse the otp_send_events table with phone as the key
-      .gte('sent_at', since)
-      .order('sent_at', { ascending: false });
-
-    const sends = recent ?? [];
-    if (sends.length >= 3) {
-      return NextResponse.json({ sent: false, message: 'Too many attempts. Try again in 30 minutes.' }, { status: 429 });
-    }
-    if (sends[0]) {
-      const secsSince = (now - new Date(sends[0].sent_at).getTime()) / 1000;
-      if (secsSince < 30) {
-        return NextResponse.json(
-          { sent: false, message: `Please wait ${Math.ceil(30 - secsSince)}s before requesting another code.` },
-          { status: 429 }
-        );
-      }
+    // Per-phone rate check + reservation, atomic (security audit, 14 July):
+    // claim_otp_send_slot does the count-check AND the otp_send_events insert
+    // inside one advisory-locked transaction, closing the race where
+    // concurrent requests for the same phone could all pass a separate
+    // count-then-insert check and burst past the 3-per-30-min cap.
+    const { data: slot, error: slotError } = await admin
+      .rpc('claim_otp_send_slot', { p_phone: e164, p_ip: ip })
+      .single<{ allowed: boolean; reason: string | null; wait_secs: number | null }>();
+    if (slotError) {
+      console.error('[request-phone-otp] claim_otp_send_slot error:', slotError.message);
+    } else if (slot && !slot.allowed) {
+      const message = slot.reason === 'cooldown'
+        ? `Please wait ${slot.wait_secs}s before requesting another code.`
+        : slot.reason;
+      return NextResponse.json({ sent: false, message }, { status: 429 });
     }
 
     // Trigger Supabase phone OTP — Supabase generates the code and calls our SMS hook
@@ -120,8 +113,7 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ sent: false, message: "Couldn't send the OTP. Try again." }, { status: 502 });
     }
-
-    await admin.from('otp_send_events').insert({ email: e164, ip });
+    // (send event already recorded atomically by claim_otp_send_slot above)
 
     const res = NextResponse.json({ sent: true });
     pending.forEach(({ name, value, options }) =>

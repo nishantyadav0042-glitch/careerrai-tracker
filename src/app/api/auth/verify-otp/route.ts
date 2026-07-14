@@ -1,13 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { clientIp } from '@/lib/request-ip';
+import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
+import { logSecurityEvent } from '@/lib/security-log';
 
 export async function POST(request: NextRequest) {
   try {
     const { email: rawEmail, token } = (await request.json()) as { email?: string; token?: string };
     const email = rawEmail?.trim().toLowerCase();
-    if (!email || !token || typeof token !== 'string') {
+    if (!email || !token || !/^\d{6}$/.test(token.trim())) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    }
+
+    // Brute-force cap on OTP verification — mirrors verify-phone-otp. A
+    // 6-digit code is a 10^6 space; without this, an attacker who triggered
+    // one login code to a victim's allowlisted email could spray guesses
+    // here with no lockout. Record up front (race-free), cap at 5/email +
+    // 50/IP per 15 min, clear on success.
+    const admin = createAdminClient();
+    const ip = clientIp(request);
+    const otpKey = `otpv-email:${email}`;
+    if (await registerAttemptAndCheck(admin, otpKey, ip, { maxPerKey: 5, maxPerIp: 50 })) {
+      await logSecurityEvent(admin, { type: 'otp_verify_lockout', severity: 'warning', ip });
+      return NextResponse.json(
+        { error: 'Too many attempts. Request a new code and wait a few minutes.' },
+        { status: 429 }
+      );
     }
 
     const pending: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
@@ -29,8 +48,7 @@ export async function POST(request: NextRequest) {
     if (error || !data.user) {
       return NextResponse.json({ error: 'That code is incorrect or expired.' }, { status: 401 });
     }
-
-    const admin = createAdminClient();
+    await clearAttempts(admin, otpKey);
 
     // Look up allowlist entry to get name, buddy assignment, and person type
     const { data: entry } = await admin

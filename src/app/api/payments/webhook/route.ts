@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
-import { PLANS, isPlanId } from '@/lib/plans';
+import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { grantPremiumAndQueueBuddy, revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
@@ -44,8 +44,7 @@ export async function POST(request: NextRequest) {
 
         if (row && row.status !== 'paid') {
           const months = isPlanId(row.plan) ? PLANS[row.plan].months : 1;
-          const renews = new Date();
-          renews.setMonth(renews.getMonth() + months);
+          const renews = addMonthsClamped(new Date(), months);
 
           // Single atomic DB transaction: marks payment paid, activates
           // subscription, and burns the coupon. If any step fails the webhook

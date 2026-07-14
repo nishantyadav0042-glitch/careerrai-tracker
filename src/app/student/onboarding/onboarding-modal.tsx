@@ -142,7 +142,16 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     { component: ScreenDreamColleges, sectionId: 'position' },   // 2
     { component: ScreenExamContext, sectionId: 'position' },     // 3
     { component: ScreenAboutYou, sectionId: 'position' },        // 4
-    { component: ScreenTopicCoverage, sectionId: 'coverage' },   // 5
+    {
+      component: ScreenTopicCoverage,
+      sectionId: 'coverage',
+      // Draft key scoped to the logged-in student (bug audit, 14 July) — the
+      // component's own default is a global pre-auth key; without this a
+      // shared device could resume a DIFFERENT student's half-finished
+      // coverage taps into this account. userId is known by the time this
+      // screen (index 5) is reachable — screen 0 already needs a session.
+      extraProps: { draftKey: userId ? `cr_onboarding_topic_coverage_draft_v2_${userId}` : undefined },
+    },                                                            // 5
     {
       // The finish-date chooser (replaces the old Daily Commitment screen):
       // hours + target date picked together, AFTER coverage so the date

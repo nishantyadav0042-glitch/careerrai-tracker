@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
 import type { MockDebriefData } from './MockDebriefModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
+import { getLogDateString } from '@/lib/streak-utils';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
 const PendingDebriefCard = dynamic(() => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard), { ssr: false });
@@ -142,11 +143,12 @@ export function DailyTrackerApp({
     else if (result?.daily_nudge) setLastNudge(result.daily_nudge);
     const mockSelected = data.sections.includes('Mock');
     if (mockSelected) {
-      const now = new Date();
-      const today3am = new Date();
-      today3am.setHours(3, 0, 0, 0);
-      const logDate = now < today3am ? new Date(today3am.getTime() - 86400000) : today3am;
-      setCurrentLogDate(logDate.toISOString().split('T')[0]);
+      // Use the SERVER's authoritative report_date (bug audit, 14 July) — a
+      // client-recomputed local setHours(3) could disagree with the server's
+      // IST-correct date and file the debrief under the wrong day, leaving
+      // it permanently stuck "pending" (never matched by the pending-debrief
+      // join, which reads server report_date).
+      setCurrentLogDate(result?.report_date ?? getLogDateString());
       setIsLogOpen(false);
       setIsDebriefOpen(true);
       queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });

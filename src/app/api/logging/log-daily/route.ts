@@ -104,10 +104,17 @@ export async function POST(request: NextRequest) {
     });
     if (rpcError) throw rpcError;
     const streakUpdated = rpcResult;
+    // Authoritative "is this a brand-new log" flag, computed INSIDE the same
+    // transaction as the insert (bug audit, 14 July) — the route's own
+    // pre-fetched `existingLog` is a separate read before the RPC runs, so
+    // two near-simultaneous first-time submissions could both see it as null
+    // and both fire the recovery-event/onboarding-notification side effects
+    // below. `is_new_log` reflects what the RPC itself actually inserted.
+    const isNewLog = (streakUpdated as { is_new_log?: boolean })?.is_new_log ?? !existingLog;
 
     // Miss-recovery: a fresh log today after a 2+ day gap with a prior streak is
     // a comeback — the #1 retention event. Record it and gently nudge the buddy.
-    if (!existingLog && prevStreak?.last_log_date && (prevStreak.current_streak ?? 0) > 0) {
+    if (isNewLog && prevStreak?.last_log_date && (prevStreak.current_streak ?? 0) > 0) {
       const gap = Math.round((Date.parse(dateStr) - Date.parse(prevStreak.last_log_date as string)) / 86_400_000);
       if (gap >= 2) {
         const missedDays = gap - 1;
@@ -120,7 +127,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const dailyNudge = await computePrescriptiveLine(user.id, body.sections, !existingLog, admin, body.emotional_chips);
+    const dailyNudge = await computePrescriptiveLine(user.id, body.sections, isNewLog, admin, body.emotional_chips);
 
     // Milestone message beats the random bonus — milestone days are rare and meaningful.
     const newStreak = (streakUpdated as { current_streak: number }).current_streak;
@@ -140,7 +147,7 @@ export async function POST(request: NextRequest) {
     // First-7-days celebration: an immediate "Day X done" push right after the
     // log that completed that day — the positive-reinforcement half of the
     // onboarding arc (the morning/evening crons own the "still pending" half).
-    if (!existingLog && profile.created_at && Date.now() - new Date(profile.created_at).getTime() <= 14 * 86_400_000) {
+    if (isNewLog && profile.created_at && Date.now() - new Date(profile.created_at).getTime() <= 14 * 86_400_000) {
       void (async () => {
         const { count: loggedDayCount } = await admin
           .from('daily_reports')
@@ -177,12 +184,17 @@ export async function POST(request: NextRequest) {
       sectionCount: body.sections.length,
       hasMock: body.sections.includes('Mock'),
       emotionalChips: body.emotional_chips ?? [],
-      is_first_today: !existingLog,
+      is_first_today: isNewLog,
       hour_of_day: nowUtc.getUTCHours(),
       day_of_week: nowUtc.getUTCDay(),
     }).catch(console.error);
 
-    return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge, milestone }, { status: 200 });
+    // report_date returned so the client never has to recompute the log-date
+    // boundary itself (bug audit, 14 July) — the old client-side recompute in
+    // DailyTrackerApp.handleLogSubmit used the browser's LOCAL setHours(3),
+    // which could disagree with this server's IST-correct dateStr and file a
+    // mock debrief under the wrong day, leaving it permanently "pending".
+    return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge, milestone, report_date: dateStr }, { status: 200 });
   } catch (error) {
     console.error('Logging error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

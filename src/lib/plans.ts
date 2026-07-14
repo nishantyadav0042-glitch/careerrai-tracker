@@ -18,3 +18,19 @@ export type PlanId = keyof typeof PLANS;
 export function isPlanId(value: string): value is PlanId {
   return value === 'monthly' || value === 'quarterly' || value === 'halfyear';
 }
+
+// Bug audit (14 July): `date.setMonth(date.getMonth() + n)` overflows into
+// the NEXT month whenever the target month is shorter than the current
+// day-of-month — e.g. Jan 31 + 1 month rolls to Mar 2/3, not Feb 28, because
+// JS clamps the invalid "Feb 31" forward. That silently pushed
+// subscription_renews_at a few days late (small, in the student's favor,
+// but wrong — and compounds across renewals for anyone paying on the 29-31st).
+// This clamps the day to the target month's actual last day instead.
+export function addMonthsClamped(date: Date, months: number): Date {
+  const d = new Date(date.getTime());
+  const targetMonth = d.getMonth() + months;
+  const lastDayOfTargetMonth = new Date(d.getFullYear(), targetMonth + 1, 0).getDate();
+  d.setDate(Math.min(d.getDate(), lastDayOfTargetMonth));
+  d.setMonth(targetMonth);
+  return d;
+}
