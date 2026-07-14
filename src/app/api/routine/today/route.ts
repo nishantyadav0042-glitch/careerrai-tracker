@@ -24,6 +24,7 @@ export async function GET() {
   const admin = createAdminClient();
   const today = getLogDateString();
 
+  try {
   // Every read below depends only on user.id, so this is ONE concurrent
   // wave instead of the ~9 serial round-trips this route used to make —
   // the single biggest latency cut on the home screen's study card.
@@ -262,6 +263,20 @@ export async function GET() {
     isCatchUp: gapDays != null && gapDays >= 2,
     yesterday: history.yesterday,
   });
+  } catch (err) {
+    // Observability: Vercel's log drain is not configured, so a thrown error
+    // here was INVISIBLE (Vedprakash's blank plan). Persist it where we can
+    // SELECT it, and return the message so the card can show it.
+    const msg = err instanceof Error ? `${err.message}` : String(err);
+    const stack = err instanceof Error ? (err.stack ?? '').slice(0, 1500) : null;
+    try {
+      await admin.from('security_events').insert({
+        type: 'api_error', severity: 'error',
+        metadata: { route: 'routine/today', user: user.id, msg, stack },
+      });
+    } catch { /* never mask the original error */ }
+    return NextResponse.json({ error: `Plan engine error: ${msg}` }, { status: 500 });
+  }
 }
 
 // Weakest section from the student's own declared Coverage grid: the
