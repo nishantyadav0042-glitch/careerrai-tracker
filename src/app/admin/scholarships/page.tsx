@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ArrowLeft } from 'lucide-react';
 import {
   AdminScholarshipsClient,
   type StudentOption,
@@ -85,15 +84,12 @@ export default async function AdminScholarshipsPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
-        <div className="flex items-center gap-3 mb-6">
-          <Link href="/admin" className="p-2 hover:bg-stone-100 rounded-lg transition-colors">
-            <ArrowLeft className="w-5 h-5 text-stone-600" />
-          </Link>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Admin</p>
-            <h1 className="text-2xl font-bold text-stone-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-              Scholarships
-            </h1>
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-stone-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>Money</h1>
+          <div className="mt-2 flex gap-1.5">
+            <Link href="/admin/payments" className="rounded-full bg-white border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-400">Payments</Link>
+            <Link href="/admin/coupons" className="rounded-full bg-white border border-stone-200 px-3 py-1 text-xs font-semibold text-stone-600 hover:border-stone-400">Coupons</Link>
+            <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">Scholarships</span>
           </div>
         </div>
 

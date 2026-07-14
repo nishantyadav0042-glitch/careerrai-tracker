@@ -1,9 +1,6 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Logo } from '@/components/logo';
-import { LogoutButton } from '@/components/logout-button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, PhoneCall, Flame, MousePointerClick } from 'lucide-react';
@@ -58,15 +55,6 @@ export default async function SalesQueuePage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <Logo />
-          <LogoutButton />
-        </div>
-
-        <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700 mb-4">
-          <ArrowLeft className="w-4 h-4" /> Admin
-        </Link>
-
         <div className="mb-4">
           <h1 className="text-xl font-bold text-stone-900 flex items-center gap-2">
             <PhoneCall className="w-5 h-5" /> Sales queue

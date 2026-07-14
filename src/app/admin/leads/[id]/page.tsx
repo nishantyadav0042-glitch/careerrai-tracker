@@ -2,8 +2,6 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Logo } from '@/components/logo';
-import { LogoutButton } from '@/components/logout-button';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
@@ -95,7 +93,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     return (
       <div className="min-h-screen bg-stone-50">
         <div className="max-w-2xl mx-auto px-4 py-6 pb-20 space-y-4">
-          <div className="flex items-center justify-between"><Logo /><LogoutButton /></div>
           <Link href="/admin/leads" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700">
             <ArrowLeft className="w-4 h-4" /> All leads
           </Link>
@@ -202,11 +199,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-2xl mx-auto px-4 py-6 pb-20 space-y-4">
-        <div className="flex items-center justify-between">
-          <Logo />
-          <LogoutButton />
-        </div>
-
         <Link href="/admin/leads" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700">
           <ArrowLeft className="w-4 h-4" /> All leads
         </Link>

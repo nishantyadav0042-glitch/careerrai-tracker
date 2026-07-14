@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ArrowLeft, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,10 +109,6 @@ export default async function AdminGrowthPage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 mb-4">
-          <ArrowLeft className="w-4 h-4" /> Back to admin
-        </Link>
-
         <div className="flex items-center gap-2 mb-1">
           <TrendingUp className="w-5 h-5 text-teal-700" />
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>Growth &amp; Funnel</h1>
