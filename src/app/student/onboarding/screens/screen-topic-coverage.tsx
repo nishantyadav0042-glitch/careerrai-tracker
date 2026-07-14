@@ -3,16 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
-import { MASCOTS } from '@/components/mascots';
+import { Rai, RAI_LEVELS } from '@/components/mascots';
 
 // ── The companion trail ──────────────────────────────────────────────────────
 // Founder vision (drawn on a screenshot): as the student taps topics, a line
 // weaves DOWN the list through the exact cells they tapped — like a workflow
-// slowly building their plan — with a little character riding its tip. A NEW
-// character joins on every section-step ("next kaun aayega?" is the hook that
-// keeps them tapping). v2 (founder, 14 July): the emoji cast is replaced by
-// CareerRai's own 9 original chibi mascots (see components/mascots.tsx) —
-// nostalgia-evoking but ours, one per step, Astro riding the finale.
+// slowly building their plan — with a little character riding its tip.
+// v3 (founder, 14 July, final): ONE original mascot — Rai, CareerRai's own
+// buddy — rides the whole trail and LEVELS UP each step, gaining one piece
+// of gear ("next kya milega?" replaces "next kaun aayega?"). No borrowed
+// characters, no borrowed names; the finale shows the Lv1→Lv9 evolution.
 
 const SECTION_TRAIL: Record<string, string> = {
   VARC: '#0f766e', DILR: '#2563eb', QA: '#ea580c', MOCKS: '#7c3aed', READING: '#059669',
@@ -187,8 +187,8 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   const totalUnits = allUnits.length;
 
   // ── Companion trail state ──────────────────────────────────────────────
-  const character = MASCOTS[stepIdx % MASCOTS.length];
-  const nextCharacter = MASCOTS[(stepIdx + 1) % MASCOTS.length];
+  const raiLevel = Math.min(stepIdx + 1, RAI_LEVELS.length);
+  const nextLevel = RAI_LEVELS[Math.min(stepIdx + 1, RAI_LEVELS.length - 1)];
   const listRef = useRef<HTMLDivElement | null>(null);
   const [trailPts, setTrailPts] = useState<{ x: number; y: number }[]>([]);
   const [tapPulse, setTapPulse] = useState(0);
@@ -250,7 +250,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     if (!stepComplete) return;
     setTapStreak(null);
     if (stepIdx < steps.length - 1) {
-      setCelebration(`✓ ${step.reward} Next: ${nextCharacter.name} joins your trail!`);
+      setCelebration(`✓ ${step.reward} Rai levels up: ${nextLevel.gear}`);
       if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
       celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
       setStepIdx(stepIdx + 1);
@@ -348,7 +348,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
               — a new character joins on every section. */}
           <div className="mb-1.5 flex items-center justify-between text-[11px]">
             <span className="flex items-center gap-1 font-bold uppercase tracking-widest" style={{ color: SECTION_TRAIL[step.sectionId] ?? '#7c3aed' }}>
-              <character.Mascot size={18} /> {character.name}&apos;s trail
+              <Rai size={18} level={raiLevel} /> Rai&apos;s trail · Lv {raiLevel}
             </span>
             <span className="font-semibold tabular-nums text-stone-400">{answeredOnStep}/{step.units.length} fed</span>
           </div>
@@ -387,7 +387,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
               >
                 <span key={tapPulse} className="chr-hop inline-block">
                   <span className={cn('inline-block drop-shadow', stepComplete ? 'chr-party' : 'chr-idle')}>
-                    <character.Mascot size={36} />
+                    <Rai size={36} level={raiLevel} />
                   </span>
                 </span>
               </div>
@@ -435,13 +435,13 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         <p className="text-[11px] text-stone-600 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 leading-relaxed">{step.lesson}</p>
       )}
 
-      {/* Full-map finale — the whole crew celebrates when all 53 are mapped. */}
+      {/* Full-map finale — Rai's whole evolution line, Lv1 → Lv9. */}
       {stepComplete && stepIdx === steps.length - 1 && (
         <div className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-center">
-          <div className="chr-parade flex items-end justify-center gap-1.5">
-            {MASCOTS.map((m) => <m.Mascot key={m.id} size={26} />)}
+          <div className="chr-parade flex items-end justify-center gap-1">
+            {RAI_LEVELS.map((l) => <Rai key={l.level} size={26} level={l.level} />)}
           </div>
-          <p className="mt-1 text-sm font-bold text-violet-800">All {totalUnits} topics mapped — your plan is building! 🎉</p>
+          <p className="mt-1 text-sm font-bold text-violet-800">All {totalUnits} topics mapped — Rai hit final form! 🎉</p>
         </div>
       )}
 
