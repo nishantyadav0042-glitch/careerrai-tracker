@@ -102,7 +102,7 @@
     },
     {
       "path": "/api/cron/expedify-flush",
-      "schedule": "30 4 * * *"
+      "schedule": "15 3 * * *"
     }
   ]
 }
