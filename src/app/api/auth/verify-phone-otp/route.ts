@@ -281,11 +281,16 @@ export async function POST(request: NextRequest) {
     if ((isStub || !existing) && role === 'student') {
       const leadName = entry?.full_name ?? selfName ?? 'there';
       const newUserId = data.user.id;
-      // CALL-HOURS GUARD: the AI calls the student the moment the contact is
-      // created, so never hand off at night. 9 AM–9 PM IST → immediate;
-      // otherwise mark 'queued' and the 10 AM cron (expedify-flush) sends it.
-      const istHour = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }));
-      if (istHour >= 9 && istHour < 21) {
+      // CALL-HOURS GUARD (founder-final): day leads are HOT — hand off
+      // immediately (Expedify's workflow adds the ~5-min pre-dial wait so the
+      // student finishes the post-signup ceremony first). Night leads
+      // (9 PM–8:30 AM IST) are queued; the 8:45 AM cron sends them into the
+      // morning window (8:30–9:15, before lectures). Retry ladder (60s redial,
+      // 3-call lifetime cap) and callback scheduling live in Expedify's
+      // workflow per the launch pack.
+      const istParts = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).split(':');
+      const istMinutes = Number(istParts[0]) * 60 + Number(istParts[1]);
+      if (istMinutes >= 510 && istMinutes < 1260) { // 08:30–21:00 IST
         const brief = buildStudentBrief(leadName, onboarding, {
           label: signupDevice.label,
           guidance: deviceCallGuidance(signupDevice),
