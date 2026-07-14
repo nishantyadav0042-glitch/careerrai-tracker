@@ -344,6 +344,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 
   // Topics swapped OUT of the most recent past day — "never delete, always
   // postpone": these get a decisive bonus today so nothing is ever lost.
+  const today = getLogDateString();
   const lastPastDay = (pastRoutines ?? []).find((r: { routine_date: string }) => r.routine_date < today);
   const postponedTopics: string[] = Array.isArray(lastPastDay?.swapped_out)
     ? (lastPastDay.swapped_out as unknown[]).filter((t): t is string => typeof t === 'string')
@@ -365,7 +366,6 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   // that didn't exist yet).
   const daysSinceByTopic: Record<string, number | null> = {};
   const timesPracticedByTopic: Record<string, number> = {};
-  const today = getLogDateString();
   for (const r of (pastRoutines ?? [])) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
