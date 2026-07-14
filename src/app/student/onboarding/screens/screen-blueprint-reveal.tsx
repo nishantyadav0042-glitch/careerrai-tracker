@@ -152,13 +152,15 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
         Every decision about your CAT preparation now has a home. This isn&apos;t a template — it changes every day as you study.
       </p>
 
-      <button
-        onClick={() => onNext({ onboardingCompleted: true })}
-        disabled={isLoading}
-        className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
-      >
-        {isLoading ? 'Finishing up…' : 'Start my prep →'}
-      </button>
+      <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <button
+          onClick={() => onNext({ onboardingCompleted: true })}
+          disabled={isLoading}
+          className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
+        >
+          {isLoading ? 'Finishing up…' : 'Start my prep →'}
+        </button>
+      </div>
     </div>
   );
 }
