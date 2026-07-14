@@ -281,18 +281,28 @@ export async function POST(request: NextRequest) {
     if ((isStub || !existing) && role === 'student') {
       const leadName = entry?.full_name ?? selfName ?? 'there';
       const newUserId = data.user.id;
-      const brief = buildStudentBrief(leadName, onboarding, {
-        label: signupDevice.label,
-        guidance: deviceCallGuidance(signupDevice),
-      });
-      after(() => sendExpedifyLead({
-        studentId: newUserId,
-        name: leadName,
-        phone: e164,
-        email: entry?.email ?? null,
-        source: signupSource,
-        brief,
-      }));
+      // CALL-HOURS GUARD: the AI calls the student the moment the contact is
+      // created, so never hand off at night. 9 AM–9 PM IST → immediate;
+      // otherwise mark 'queued' and the 10 AM cron (expedify-flush) sends it.
+      const istHour = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }));
+      if (istHour >= 9 && istHour < 21) {
+        const brief = buildStudentBrief(leadName, onboarding, {
+          label: signupDevice.label,
+          guidance: deviceCallGuidance(signupDevice),
+        });
+        after(() => sendExpedifyLead({
+          studentId: newUserId,
+          name: leadName,
+          phone: e164,
+          email: entry?.email ?? null,
+          source: signupSource,
+          brief,
+        }));
+      } else {
+        after(async () => {
+          await admin.from('profiles').update({ expedify_status: 'queued' }).eq('id', newUserId);
+        });
+      }
     }
 
     // Admin phone: guarantee the DB role is 'admin' so /admin (which re-checks
