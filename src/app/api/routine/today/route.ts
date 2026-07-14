@@ -271,7 +271,7 @@ export async function GET() {
     const stack = err instanceof Error ? (err.stack ?? '').slice(0, 1500) : null;
     try {
       await admin.from('security_events').insert({
-        type: 'api_error', severity: 'error',
+        event_type: 'api_error', severity: 'error',
         metadata: { route: 'routine/today', user: user.id, msg, stack },
       });
     } catch { /* never mask the original error */ }
