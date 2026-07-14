@@ -248,7 +248,23 @@ export function TodaysRoutineCard() {
       </Card>
     );
   }
-  if (!data) return null;
+  if (!data) {
+    // NEVER vanish silently (real student report: "unable to view today's
+    // task" with a blank space) — show the failure + a retry.
+    return (
+      <Card className="p-5 text-center">
+        <p className="text-sm font-semibold text-stone-800">Today&apos;s plan couldn&apos;t load</p>
+        <p className="mt-1 text-xs text-stone-500">Check your connection — your plan is safe.</p>
+        <button
+          type="button"
+          onClick={() => { routineTodayCache = null; setLoading(true); load(); }}
+          className="mt-3 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white active:scale-95"
+        >
+          Retry
+        </button>
+      </Card>
+    );
+  }
 
   const { routine } = data;
   // Budget filter: keep tasks (in priority order) while they fit; always ≥1.
