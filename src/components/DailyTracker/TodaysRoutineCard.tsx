@@ -105,6 +105,7 @@ export function TodaysRoutineCard() {
   const [swapNote, setSwapNote] = useState<string | null>(null);
   const [calibrated, setCalibrated] = useState(false);
   const [calibrationBusy, setCalibrationBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // One-tap daily calibration — the highest-ROI signal we collect. Fire and
   // thank; the engine collects first and tunes later.
@@ -144,6 +145,8 @@ export function TodaysRoutineCard() {
           // this background fetch carried the stale token -> silent 401 that
           // Retry could never fix (Vedprakash's blank card). One full reload
           // runs the middleware token refresh; guarded so it can't loop.
+          const body = await res.json().catch(() => ({}));
+          setLoadError(typeof body?.error === 'string' ? `${body.error} (${res.status})` : `Server responded ${res.status}`);
           if (res.status === 401 && !sessionStorage.getItem('cr_rt_reloaded')) {
             sessionStorage.setItem('cr_rt_reloaded', '1');
             window.location.reload();
@@ -265,7 +268,7 @@ export function TodaysRoutineCard() {
     return (
       <Card className="p-5 text-center">
         <p className="text-sm font-semibold text-stone-800">Today&apos;s plan couldn&apos;t load</p>
-        <p className="mt-1 text-xs text-stone-500">Check your connection — your plan is safe.</p>
+        <p className="mt-1 text-xs text-stone-500">{loadError ?? 'Check your connection — your plan is safe.'}</p>
         <button
           type="button"
           onClick={() => { routineTodayCache = null; setLoading(true); load(); }}
