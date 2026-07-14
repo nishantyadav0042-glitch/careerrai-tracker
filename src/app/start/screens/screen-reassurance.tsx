@@ -33,14 +33,16 @@ export default function ScreenReassurance({ onNext, isLoading, painPoints }: Pro
         <p className="mt-1 text-sm text-stone-700">A few taps across your syllabus — so the plan starts where you actually are, not from zero.</p>
       </div>
 
-      <button
-        type="button"
-        disabled={isLoading}
-        onClick={() => onNext()}
-        className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
-      >
-        Let&apos;s map it →
-      </button>
+      <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <button
+          type="button"
+          disabled={isLoading}
+          onClick={() => onNext()}
+          className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+        >
+          Let&apos;s map it →
+        </button>
+      </div>
     </div>
   );
 }

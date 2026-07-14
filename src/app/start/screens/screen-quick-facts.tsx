@@ -72,7 +72,7 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
         </div>
       </div>
 
-      <div className="flex gap-3 pt-1">
+      <div className="sticky bottom-0 z-20 flex gap-3 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         {canGoBack && (
           <button onClick={onBack} disabled={isLoading} className="flex-1 rounded-xl border border-stone-300 py-3 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50">
             Back

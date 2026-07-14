@@ -180,13 +180,15 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
             </div>
           </div>
           {error && <p className="text-xs text-rose-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
-            className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
-          >
-            {busy ? 'Sending…' : 'Send code →'}
-          </button>
+          <div className="sticky bottom-0 z-20 bg-white/95 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+            <button
+              type="submit"
+              disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
+              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
+            >
+              {busy ? 'Sending…' : 'Send code →'}
+            </button>
+          </div>
         </form>
       ) : (
         <form onSubmit={verifyAndBuild} className="space-y-4">
@@ -207,13 +209,15 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
             />
           </div>
           {error && <p className="text-xs text-rose-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={busy || isLoading || otp.length < 6}
-            className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
-          >
-            {busy ? 'Verifying…' : 'Verify & build my plan →'}
-          </button>
+          <div className="sticky bottom-0 z-20 bg-white/95 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+            <button
+              type="submit"
+              disabled={busy || isLoading || otp.length < 6}
+              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
+            >
+              {busy ? 'Verifying…' : 'Verify & build my plan →'}
+            </button>
+          </div>
           <button type="button" onClick={() => { setStep('phone'); setOtp(''); setError(null); }} className="w-full text-center text-xs font-medium text-stone-500 hover:text-stone-700">
             ← Change number
           </button>

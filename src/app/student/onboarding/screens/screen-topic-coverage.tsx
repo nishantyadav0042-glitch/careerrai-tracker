@@ -447,7 +447,9 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
 
       {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
 
-      <div className="flex gap-3 pt-1">
+      {/* Sticky CTA — the coverage steps are the tallest screens in
+          onboarding; Next/Back must never require scrolling (founder). */}
+      <div className="sticky bottom-0 z-20 flex gap-3 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         {(canGoBack || stepIdx > 0) && (
           <button onClick={handleBack} disabled={saving} className="flex-1 py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">
             Back
