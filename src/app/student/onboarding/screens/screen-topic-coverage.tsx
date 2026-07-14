@@ -304,7 +304,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   };
 
   return (
-    <div ref={scrollRef} className="space-y-4">
+    <div ref={scrollRef} className="space-y-3">
       {/* Step header: where you are + how small this step is */}
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Step {stepIdx + 1} of {steps.length}</p>
@@ -342,11 +342,11 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
           labels never scroll away (accuracy), and every row still needs its
           own explicit tap — the no-prefill doctrine survives. */}
       <div>
-        <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1.5 pt-1.5 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 -mx-1 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm">
           {/* This section's companion + live count. The trail itself weaves
               through the tapped cells in the list below (founder-drawn design)
               — a new character joins on every section. */}
-          <div className="mb-1.5 flex items-center justify-between text-[11px]">
+          <div className="mb-1 flex items-center justify-between text-[11px]">
             <span className="flex items-center gap-1 font-bold uppercase tracking-widest" style={{ color: SECTION_TRAIL[step.sectionId] ?? '#7c3aed' }}>
               <Rai size={18} level={raiLevel} /> Rai&apos;s trail · Lv {raiLevel}
             </span>
@@ -393,21 +393,21 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
               </div>
             )}
           </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {step.units.map((unit) => {
             const current = statuses[unit] ?? null;
             return (
               <div
                 key={unit}
                 className={cn(
-                  'rounded-lg border px-2 py-1.5',
+                  'rounded-lg border px-2 py-1',
                   current == null ? 'border-orange-200 bg-orange-50/40' : 'border-stone-100'
                 )}
               >
                 {/* Full-width name line — never truncated (a topic you can't
                     read is a topic you can't honestly rate). Cells align with
                     the sticky legend above. */}
-                <p className="mb-1 text-[12px] font-semibold leading-snug text-stone-800">{unit}</p>
+                <p className="mb-0.5 text-[12px] font-semibold leading-snug text-stone-800">{unit}</p>
                 <div className={cn('grid gap-1.5', isHabit ? 'grid-cols-3' : 'grid-cols-4')}>
                   {options.map(({ value, dot, active }) => (
                     <button
@@ -416,7 +416,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
                       onClick={() => declare(unit, value)}
                       aria-label={`${unit}: ${value}`}
                       className={cn(
-                        'flex h-9 w-full items-center justify-center rounded-lg border text-sm transition-all active:scale-90',
+                        'flex h-8 w-full items-center justify-center rounded-lg border text-sm transition-all active:scale-90',
                         current === value ? active : 'border-stone-200 bg-white hover:border-stone-300'
                       )}
                     >
@@ -437,9 +437,9 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
 
       {/* Full-map finale — Rai's whole evolution line, Lv1 → Lv9. */}
       {stepComplete && stepIdx === steps.length - 1 && (
-        <div className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-center">
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2 text-center">
           <div className="chr-parade flex items-end justify-center gap-1">
-            {RAI_LEVELS.map((l) => <Rai key={l.level} size={26} level={l.level} />)}
+            {RAI_LEVELS.map((l) => <Rai key={l.level} size={24} level={l.level} />)}
           </div>
           <p className="mt-1 text-sm font-bold text-violet-800">All {totalUnits} topics mapped — Rai hit final form! 🎉</p>
         </div>

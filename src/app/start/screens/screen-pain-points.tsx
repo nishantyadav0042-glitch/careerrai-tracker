@@ -33,15 +33,15 @@ export default function ScreenPainPoints({ onNext, onBack, canGoBack, isLoading 
   };
 
   return (
-    <div className="space-y-5 pt-1">
+    <div className="space-y-3.5">
       <div>
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           What&apos;s actually stopping you?
         </h1>
-        <p className="mt-1.5 text-sm text-stone-500">Pick your top 2 — real ones, not the polite answer.</p>
+        <p className="mt-1 text-sm text-stone-500">Pick your top 2 — real ones, not the polite answer.</p>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {PAINS.map(({ id, label }) => {
           const isSelected = picked.includes(id);
           const rank = picked.indexOf(id) + 1;
@@ -53,7 +53,7 @@ export default function ScreenPainPoints({ onNext, onBack, canGoBack, isLoading 
               disabled={disabled}
               onClick={() => toggle(id)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.98]',
+                'flex w-full items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2.5 text-left transition-all active:scale-[0.98]',
                 isSelected ? 'border-stone-900 bg-stone-50' : disabled ? 'border-stone-100 bg-stone-50 opacity-50' : 'border-stone-200 bg-white hover:border-stone-400'
               )}
             >

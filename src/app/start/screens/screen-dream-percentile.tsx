@@ -31,15 +31,15 @@ export default function ScreenDreamPercentile({ onNext, onBack, canGoBack, isLoa
   const canContinue = selected.length > 0 && percentile != null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3.5">
       <div>
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           Your dream colleges. Your target percentile.
         </h1>
-        <p className="mt-1.5 text-sm text-stone-500">Pick up to 3 colleges you actually want, and the percentile you&apos;re aiming for.</p>
+        <p className="mt-1 text-sm text-stone-500">Pick up to 3 colleges you actually want, and the percentile you&apos;re aiming for.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {COLLEGES.map((college) => {
           const isSelected = selected.includes(college);
           const rank = selected.indexOf(college) + 1;
@@ -50,7 +50,7 @@ export default function ScreenDreamPercentile({ onNext, onBack, canGoBack, isLoa
               onClick={() => toggle(college)}
               disabled={!isSelected && selected.length >= 3}
               className={cn(
-                'relative rounded-xl border px-3 py-2 text-sm font-medium transition-all active:scale-95',
+                'relative rounded-xl border px-2.5 py-1.5 text-[13px] font-medium transition-all active:scale-95',
                 isSelected
                   ? 'border-stone-900 bg-stone-900 text-white shadow-md'
                   : selected.length >= 3
@@ -70,15 +70,15 @@ export default function ScreenDreamPercentile({ onNext, onBack, canGoBack, isLoa
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-semibold text-stone-800">Target percentile</p>
-        <div className="flex flex-wrap gap-2">
+        <p className="mb-1.5 text-sm font-semibold text-stone-800">Target percentile</p>
+        <div className="flex flex-wrap gap-1.5">
           {PERCENTILES.map((p) => (
             <button
               key={p}
               type="button"
               onClick={() => setPercentile(p)}
               className={cn(
-                'rounded-xl border px-4 py-2 text-sm font-semibold transition-all active:scale-95',
+                'rounded-xl border px-3 py-1.5 text-sm font-semibold transition-all active:scale-95',
                 percentile === p ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 bg-white text-stone-700 hover:border-stone-900'
               )}
             >
