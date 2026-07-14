@@ -19,15 +19,31 @@ export async function GET() {
 
   const { data: rows } = await admin
     .from('profiles')
-    .select('full_name, phone, email, role, created_at, onboarding_completed, onboarding_step_reached, app_installed, notif_prefs, signup_source, syllabus_target_date, study_target_hours, pain_points, wants_mentor, buddy_id, college, target_percentile, attempt_year')
+    .select('id, full_name, phone, email, role, created_at, onboarding_completed, onboarding_step_reached, app_installed, notif_prefs, signup_source, syllabus_target_date, study_target_hours, pain_points, wants_mentor, buddy_id, college, target_percentile, attempt_year, dream_colleges, self_reported_weakest_section, expedify_status, call_feedback')
     .in('role', ['student', 'buddy'])
     .eq('is_test_account', false) // founder/friend test accounts never appear in the export
     .order('created_at', { ascending: false });
+
+  // Last-log map -> category (same rules as the Expedify pack DOC 3).
+  const { data: streaks } = await admin.from('streak_data').select('student_id, last_log_date');
+  const lastLog = new Map((streaks ?? []).map((r) => [r.student_id, r.last_log_date as string | null]));
+  const todayMs = Date.now();
+  const category = (r: any): string => {
+    if (r.role !== 'student') return '';
+    const pushOn = ((r.notif_prefs as { push?: boolean } | null)?.push) === true;
+    if (r.app_installed !== true || !pushOn) return 'A - setup stuck';
+    const ll = lastLog.get(r.id) ?? null;
+    if (!ll) return 'C - never logged';
+    const days = Math.round((todayMs - Date.parse(ll)) / 86_400_000);
+    return days >= 3 ? 'D - dormant' : 'B - active logger';
+  };
 
   const header = [
     'Name', 'Phone', 'Email', 'Type', 'Signed up', 'Journey', 'App installed',
     'Notifications on', 'Source', 'Target date', 'Hours/day', 'Pain points',
     'Wants buddy', 'Has buddy', 'College', 'Target %ile', 'Attempt year',
+    'Category', 'Dream college', 'Weakest section', 'Last log',
+    'AI call', 'Disposition', 'Drop reason', 'Momentum (0-5)', 'Call notes',
   ];
   const lines = [header.join(',')];
   for (const r of rows ?? []) {
@@ -43,6 +59,15 @@ export async function GET() {
       csvCell(r.wants_mentor === true ? 'yes' : r.wants_mentor === false ? 'no' : ''),
       csvCell(r.buddy_id ? 'yes' : 'no'),
       csvCell(r.college), csvCell(r.target_percentile), csvCell(r.attempt_year),
+      csvCell(category(r)),
+      csvCell(Array.isArray(r.dream_colleges) ? (r.dream_colleges as string[])[0] : ''),
+      csvCell(r.self_reported_weakest_section),
+      csvCell(lastLog.get((r as { id: string }).id) ?? ''),
+      csvCell(r.expedify_status ?? ''),
+      csvCell((r.call_feedback as { disposition?: string } | null)?.disposition ?? ''),
+      csvCell((r.call_feedback as { drop_reason?: string } | null)?.drop_reason ?? ''),
+      csvCell((r.call_feedback as { momentum_score?: number } | null)?.momentum_score ?? ''),
+      csvCell((r.call_feedback as { notes?: string } | null)?.notes ?? ''),
     ].join(','));
   }
 
