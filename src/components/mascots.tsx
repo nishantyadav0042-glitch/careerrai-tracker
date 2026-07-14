@@ -193,11 +193,15 @@ export interface TrailMascot {
 // without ever saying PUBG.
 export const MASCOTS: TrailMascot[] = [
   { id: 'chicken-dinner', name: 'Chicken Dinner', tag: 'winner winner', Mascot: Helmo },
-  { id: 'mili', name: 'Mili', tag: 'hostel WiFi legend', Mascot: Jetu },
+  // "Mini Militia" is Miniclip's mark; "Militia" alone is a dictionary word.
+  { id: 'militia', name: 'Militia', tag: 'hostel WiFi legend', Mascot: Jetu },
   { id: 'chintu', name: 'Chintu', tag: 'the naughty topper', Mascot: Montu },
-  { id: 'jadoo', name: 'Jadoo', tag: 'the pocket buddy', Mascot: Dobu },
+  // THE Doraemon signifier everyone quotes ("…ki pocket") — generic word.
+  { id: 'pocket', name: 'Pocket', tag: 'har problem ka gadget', Mascot: Dobu },
   { id: 'bijlee', name: 'Bijlee', tag: 'the spark', Mascot: Volty },
-  { id: 'bhaagu', name: 'Bhaagu', tag: 'bhaag Bhaagu bhaag', Mascot: Zoomi },
+  // "Subway Surfers" is SYBO's mark; "Surfer" alone is a dictionary word,
+  // and with the hoverboard design it places itself.
+  { id: 'surfer', name: 'Surfer', tag: 'catch me if you can', Mascot: Zoomi },
   { id: 'khoji', name: 'Khoji', tag: 'the explorer', Mascot: Indu },
   { id: 'gussa', name: 'Gussa', tag: 'the focused bird', Mascot: Gussa },
   { id: 'imposter', name: 'Imposter', tag: '100% not sus', Mascot: Astro },
