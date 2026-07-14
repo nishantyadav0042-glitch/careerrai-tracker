@@ -185,15 +185,20 @@ export interface TrailMascot {
   Mascot: (props: MascotProps) => React.JSX.Element;
 }
 
-// Order = the 9 coverage steps; Astro lands on the final step on purpose.
+// Order = the 9 coverage steps; the finale mascot lands on the last step on
+// purpose. Names (founder correction, 14 July): invented names carried zero
+// recognition — these are words the 2000–2008-born cohort already says daily
+// (game meme slang + Hindi), which are generic vocabulary (not trademarks)
+// yet instantly place the character: "Chicken Dinner" IS the PUBG memory
+// without ever saying PUBG.
 export const MASCOTS: TrailMascot[] = [
-  { id: 'helmo', name: 'Helmo', tag: 'the squad captain', Mascot: Helmo },
-  { id: 'jetu', name: 'Jetu', tag: 'the jetpack trooper', Mascot: Jetu },
-  { id: 'montu', name: 'Montu', tag: 'the naughty topper', Mascot: Montu },
-  { id: 'dobu', name: 'Dobu', tag: 'the pocket buddy', Mascot: Dobu },
-  { id: 'volty', name: 'Volty', tag: 'the spark', Mascot: Volty },
-  { id: 'zoomi', name: 'Zoomi', tag: 'the runner', Mascot: Zoomi },
-  { id: 'indu', name: 'Indu', tag: 'the explorer', Mascot: Indu },
+  { id: 'chicken-dinner', name: 'Chicken Dinner', tag: 'winner winner', Mascot: Helmo },
+  { id: 'mili', name: 'Mili', tag: 'hostel WiFi legend', Mascot: Jetu },
+  { id: 'chintu', name: 'Chintu', tag: 'the naughty topper', Mascot: Montu },
+  { id: 'jadoo', name: 'Jadoo', tag: 'the pocket buddy', Mascot: Dobu },
+  { id: 'bijlee', name: 'Bijlee', tag: 'the spark', Mascot: Volty },
+  { id: 'bhaagu', name: 'Bhaagu', tag: 'bhaag Bhaagu bhaag', Mascot: Zoomi },
+  { id: 'khoji', name: 'Khoji', tag: 'the explorer', Mascot: Indu },
   { id: 'gussa', name: 'Gussa', tag: 'the focused bird', Mascot: Gussa },
-  { id: 'astro', name: 'Astro', tag: 'mission control', Mascot: Astro },
+  { id: 'imposter', name: 'Imposter', tag: '100% not sus', Mascot: Astro },
 ];
