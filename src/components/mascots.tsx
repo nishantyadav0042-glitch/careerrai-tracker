@@ -192,17 +192,17 @@ export interface TrailMascot {
 // yet instantly place the character: "Chicken Dinner" IS the PUBG memory
 // without ever saying PUBG.
 export const MASCOTS: TrailMascot[] = [
+  // Founder decision (14 July, final): these appear ONLY inside the
+  // onboarding trail — never in ads, store listings, or marketing — so the
+  // famous names are used as-is for maximum recognition; the drawings stay
+  // our own originals. If a mascot ever leaves onboarding, rename first.
   { id: 'chicken-dinner', name: 'Chicken Dinner', tag: 'winner winner', Mascot: Helmo },
-  // "Mini Militia" is Miniclip's mark; "Militia" alone is a dictionary word.
-  { id: 'militia', name: 'Militia', tag: 'hostel WiFi legend', Mascot: Jetu },
-  { id: 'chintu', name: 'Chintu', tag: 'the naughty topper', Mascot: Montu },
-  // THE Doraemon signifier everyone quotes ("…ki pocket") — generic word.
-  { id: 'pocket', name: 'Pocket', tag: 'har problem ka gadget', Mascot: Dobu },
-  { id: 'bijlee', name: 'Bijlee', tag: 'the spark', Mascot: Volty },
-  // "Subway Surfers" is SYBO's mark; "Surfer" alone is a dictionary word,
-  // and with the hoverboard design it places itself.
-  { id: 'surfer', name: 'Surfer', tag: 'catch me if you can', Mascot: Zoomi },
-  { id: 'khoji', name: 'Khoji', tag: 'the explorer', Mascot: Indu },
-  { id: 'gussa', name: 'Gussa', tag: 'the focused bird', Mascot: Gussa },
+  { id: 'mini-militia', name: 'Mini Militia', tag: 'hostel WiFi legend', Mascot: Jetu },
+  { id: 'shinchan', name: 'Shinchan', tag: 'the naughty topper', Mascot: Montu },
+  { id: 'doraemon', name: 'Doraemon', tag: 'har problem ka gadget', Mascot: Dobu },
+  { id: 'pikachu', name: 'Pikachu', tag: 'the spark', Mascot: Volty },
+  { id: 'subway-surfer', name: 'Subway Surfer', tag: 'catch me if you can', Mascot: Zoomi },
+  { id: 'temple-run', name: 'Temple Run', tag: 'the explorer', Mascot: Indu },
+  { id: 'angry-bird', name: 'Angry Bird', tag: 'the focused bird', Mascot: Gussa },
   { id: 'imposter', name: 'Imposter', tag: '100% not sus', Mascot: Astro },
 ];
