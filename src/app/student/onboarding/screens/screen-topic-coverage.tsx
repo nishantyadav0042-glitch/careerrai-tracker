@@ -3,25 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
+import { MASCOTS } from '@/components/mascots';
 
 // ── The companion trail ──────────────────────────────────────────────────────
 // Founder vision (drawn on a screenshot): as the student taps topics, a line
 // weaves DOWN the list through the exact cells they tapped — like a workflow
 // slowly building their plan — with a little character riding its tip. A NEW
 // character joins on every section-step ("next kaun aayega?" is the hook that
-// keeps them tapping). Emoji characters (not real Pokémon/Marvel art — that's
-// copyrighted); chosen for post-2000 nostalgia.
-const CHARACTERS: { emoji: string; name: string }[] = [
-  { emoji: '🐍', name: 'Snake' },    // the Nokia classic
-  { emoji: '⚡', name: 'Sparky' },   // electric-type energy
-  { emoji: '👾', name: 'Pixel' },    // retro arcade
-  { emoji: '🕷️', name: 'Spidey' },  // friendly neighbourhood vibes
-  { emoji: '🤖', name: 'Robo' },
-  { emoji: '🐉', name: 'Drago' },
-  { emoji: '🥷', name: 'Ninja' },
-  { emoji: '🦸', name: 'Hero' },
-  { emoji: '🚀', name: 'Rocket' },   // finale — the plan takes off
-];
+// keeps them tapping). v2 (founder, 14 July): the emoji cast is replaced by
+// CareerRai's own 9 original chibi mascots (see components/mascots.tsx) —
+// nostalgia-evoking but ours, one per step, Astro riding the finale.
 
 const SECTION_TRAIL: Record<string, string> = {
   VARC: '#0f766e', DILR: '#2563eb', QA: '#ea580c', MOCKS: '#7c3aed', READING: '#059669',
@@ -196,8 +187,8 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
   const totalUnits = allUnits.length;
 
   // ── Companion trail state ──────────────────────────────────────────────
-  const character = CHARACTERS[stepIdx % CHARACTERS.length];
-  const nextCharacter = CHARACTERS[(stepIdx + 1) % CHARACTERS.length];
+  const character = MASCOTS[stepIdx % MASCOTS.length];
+  const nextCharacter = MASCOTS[(stepIdx + 1) % MASCOTS.length];
   const listRef = useRef<HTMLDivElement | null>(null);
   const [trailPts, setTrailPts] = useState<{ x: number; y: number }[]>([]);
   const [tapPulse, setTapPulse] = useState(0);
@@ -259,7 +250,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     if (!stepComplete) return;
     setTapStreak(null);
     if (stepIdx < steps.length - 1) {
-      setCelebration(`✓ ${step.reward} Next: ${nextCharacter.emoji} ${nextCharacter.name} joins your trail!`);
+      setCelebration(`✓ ${step.reward} Next: ${nextCharacter.name} joins your trail!`);
       if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
       celebrationTimer.current = setTimeout(() => setCelebration(null), 2600);
       setStepIdx(stepIdx + 1);
@@ -356,8 +347,8 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
               through the tapped cells in the list below (founder-drawn design)
               — a new character joins on every section. */}
           <div className="mb-1.5 flex items-center justify-between text-[11px]">
-            <span className="font-bold uppercase tracking-widest" style={{ color: SECTION_TRAIL[step.sectionId] ?? '#7c3aed' }}>
-              {character.emoji} {character.name}&apos;s trail
+            <span className="flex items-center gap-1 font-bold uppercase tracking-widest" style={{ color: SECTION_TRAIL[step.sectionId] ?? '#7c3aed' }}>
+              <character.Mascot size={18} /> {character.name}&apos;s trail
             </span>
             <span className="font-semibold tabular-nums text-stone-400">{answeredOnStep}/{step.units.length} fed</span>
           </div>
@@ -395,7 +386,9 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
                 }}
               >
                 <span key={tapPulse} className="chr-hop inline-block">
-                  <span className={cn('inline-block text-2xl drop-shadow', stepComplete ? 'chr-party' : 'chr-idle')}>{character.emoji}</span>
+                  <span className={cn('inline-block drop-shadow', stepComplete ? 'chr-party' : 'chr-idle')}>
+                    <character.Mascot size={36} />
+                  </span>
                 </span>
               </div>
             )}
@@ -445,7 +438,9 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       {/* Full-map finale — the whole crew celebrates when all 53 are mapped. */}
       {stepComplete && stepIdx === steps.length - 1 && (
         <div className="rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-center">
-          <p className="chr-parade text-lg leading-tight">{CHARACTERS.map((c) => c.emoji).join(' ')}</p>
+          <div className="chr-parade flex items-end justify-center gap-1.5">
+            {MASCOTS.map((m) => <m.Mascot key={m.id} size={26} />)}
+          </div>
           <p className="mt-1 text-sm font-bold text-violet-800">All {totalUnits} topics mapped — your plan is building! 🎉</p>
         </div>
       )}
