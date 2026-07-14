@@ -56,12 +56,18 @@ export async function GET(request: NextRequest) {
     brief,
   });
 
+  // Expedify's webhook endpoint answers 200 even when the webhook isn't
+  // attached to any workflow — a silent black hole where every lead would be
+  // received and nobody ever called. Surface it as its own verdict.
+  const noWorkflow = result.ok && /no workflows? connected/i.test(result.responseBody ?? '');
   return NextResponse.json({
     verdict: !result.configured
       ? '❌ Not configured — add EXPEDIFY_WEBHOOK_URL (+ EXPEDIFY_API_KEY) in Vercel and redeploy.'
-      : result.ok
-        ? '✅ Expedify accepted the lead. If your workflow is active, the AI should call this number within a minute.'
-        : '❌ Expedify rejected the request — see httpStatus/responseBody below (wrong key, suspended account, or field-name mismatch).',
+      : noWorkflow
+        ? '⚠️ Expedify RECEIVED the lead but NO WORKFLOW is connected to this webhook — nobody will be called. In Expedify, open your calling workflow and attach this webhook as its trigger (or connect the workflow on the webhook page), then re-run this test.'
+        : result.ok
+          ? '✅ Expedify accepted the lead. If your workflow is active, the AI should call this number within a minute.'
+          : '❌ Expedify rejected the request — see httpStatus/responseBody below (wrong key, suspended account, or field-name mismatch).',
     ...result,
     sentPhone: phone,
   });
