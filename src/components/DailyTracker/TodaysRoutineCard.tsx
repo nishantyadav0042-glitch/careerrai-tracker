@@ -139,7 +139,18 @@ export function TodaysRoutineCard() {
         json = routineTodayCache.json as RoutineResponse;
       } else {
         const res = await fetch('/api/routine/today');
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Expired session token: the page refreshed its session on load but
+          // this background fetch carried the stale token -> silent 401 that
+          // Retry could never fix (Vedprakash's blank card). One full reload
+          // runs the middleware token refresh; guarded so it can't loop.
+          if (res.status === 401 && !sessionStorage.getItem('cr_rt_reloaded')) {
+            sessionStorage.setItem('cr_rt_reloaded', '1');
+            window.location.reload();
+          }
+          return;
+        }
+        sessionStorage.removeItem('cr_rt_reloaded');
         json = (await res.json()) as RoutineResponse;
         routineTodayCache = { at: Date.now(), json };
       }
