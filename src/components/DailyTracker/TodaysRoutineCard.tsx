@@ -420,12 +420,6 @@ export function TodaysRoutineCard() {
                           <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
                         </div>
                         <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
-                        {task.reason && (
-                          <p className="text-[11px] text-stone-500 mt-1">Why: {task.reason}</p>
-                        )}
-                        {memoryTag(task) && (
-                          <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
-                        )}
                       </div>
                       {/* Swap today's topic — same section, student's choice. */}
                       {!done && task.topic && (
@@ -463,23 +457,53 @@ export function TodaysRoutineCard() {
               }
 
               return (
-                <div key={task.id} className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3">
-                  {/* Display only — completion happens in the log. */}
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
-                      done ? 'border-stone-900 bg-stone-900' : 'border-stone-300'
-                    )}
-                  >
-                    {done && <Check className="w-3 h-3 text-white" />}
-                  </span>
-                  <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
-                    <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
+                <div key={task.id}>
+                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', swapTaskId === task.id && !done && task.topic && 'rounded-b-none')}>
+                    {/* Display only — completion happens in the log. */}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
+                        done ? 'border-stone-900 bg-stone-900' : 'border-stone-300'
+                      )}
+                    >
+                      {done && <Check className="w-3 h-3 text-white" />}
+                    </span>
+                    <span className={cn('min-w-0 flex-1 text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
                       {taskTitle(task)}
                     </span>
-                    <span className="text-xs text-stone-400 shrink-0">{task.estMinutes}m</span>
+                    <span className="shrink-0 text-xs text-stone-400">{task.estMinutes}m</span>
+                    {/* Swap today's topic — same section, student's choice. */}
+                    {!done && task.topic && (
+                      <button
+                        onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
+                        aria-label="Change topic"
+                        title="Change today's topic"
+                        className="shrink-0 rounded-lg border border-stone-300 bg-white px-2 py-1 text-[10px] font-bold text-stone-500 transition-transform active:scale-95"
+                      >
+                        ⇄
+                      </button>
+                    )}
                   </div>
+                  {swapTaskId === task.id && !done && task.topic && (
+                    <div className="rounded-b-2xl bg-stone-100/70 px-4 pb-4 pt-1">
+                      <p className="mb-1.5 text-[11px] font-semibold text-stone-500">
+                        Swap today&apos;s {task.section} topic — your plan, your call:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(SECTION_TOPICS[task.section] ?? []).filter((t) => t !== task.topic).map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => swapTopic(task, t)}
+                            disabled={swapBusy}
+                            className="rounded-full border border-stone-300 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 transition-transform active:scale-95 disabled:opacity-50"
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
