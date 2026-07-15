@@ -9,6 +9,7 @@ import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { TopicStats } from '@/components/home/topic-stats';
+import { HomeMilestones } from '@/components/home/milestones';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { getStudentProfile } from '@/lib/student-profile';
@@ -194,6 +195,19 @@ export default async function DailyTrackerPage() {
     weekLabels.push(WEEKDAY[d.getUTCDay()]);
   }
 
+  // Milestone dates from the student's own CAT timeline: Mock Intensive starts
+  // the day after the syllabus finish date (once topics are done, weekly mocks
+  // take over); Revision Sprint starts 3 weeks before CAT.
+  const catDate = catExamDate(examYear);
+  const fmtDM = (d: Date) => ({ day: String(d.getDate()), mon: d.toLocaleDateString('en-IN', { month: 'short' }) });
+  const revStart = fmtDM(new Date(catDate.getTime() - 21 * 86_400_000));
+  const mockStart = fmtDM(
+    targetIso ? new Date(new Date(targetIso + 'T00:00:00').getTime() + 86_400_000)
+              : new Date(catDate.getTime() - 84 * 86_400_000)
+  );
+  const dailyHours = pace ? `${pace.requiredPerDay}h`
+    : (profile?.study_target_hours ? `${profile.study_target_hours}h` : '—');
+
   const nextSession = sessions?.[0] ?? null;
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const todaySession =
@@ -220,12 +234,12 @@ export default async function DailyTrackerPage() {
     notifPrefs.password_prompt_dismissed !== true;
 
   return (
-    <div className="min-h-screen bg-stone-50 px-4 pt-3 pb-2">
-      <div className="max-w-md mx-auto space-y-2.5">
+    <div className="min-h-screen bg-stone-50 px-2.5 pt-3 pb-2">
+      <div className="mx-auto max-w-md space-y-2.5">
         {/* Greeting + streak card */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 px-1">
           <div className="min-w-0">
-            <h1 className="text-xl font-extrabold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+            <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-stone-900">
               Hello, {firstName}! <span aria-hidden>👋</span>
             </h1>
             <p className="text-[13px] text-stone-500">Discipline today, success tomorrow.</p>
@@ -298,6 +312,13 @@ export default async function DailyTrackerPage() {
             <TodaysRoutineCard />
           </div>
         </div>
+
+        {/* Milestones: next-7-days pace, mock intensive, revision sprint */}
+        <HomeMilestones
+          dailyHours={dailyHours}
+          mockDay={mockStart.day} mockMon={mockStart.mon}
+          revDay={revStart.day} revMon={revStart.mon}
+        />
 
         <div className="pb-20" />
       </div>
