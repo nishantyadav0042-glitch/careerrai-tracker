@@ -20,13 +20,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
   }
 
+  // Context of the grant: 'standalone' = real installed-app push (deliverable),
+  // 'browser'/'twa' = browser-tab push (often undeliverable, esp. iOS Safari).
+  // This is the field that finally distinguishes the two — the root cause of
+  // "permission on, notifications never arrive".
+  const rawCtx = typeof body?.context === 'string' ? body.context : null;
+  const pushContext = rawCtx && ['standalone', 'twa', 'browser', 'unknown'].includes(rawCtx) ? rawCtx : null;
+
   const admin = createAdminClient();
   // Merge push:true into existing prefs — never clobber daily_reminder/email/time.
   const { data: profile } = await admin.from('profiles').select('notif_prefs').eq('id', user.id).single();
   const notif_prefs = { ...(profile?.notif_prefs as Record<string, unknown> ?? {}), push: true };
   // A fresh subscription resurrects the channel — clear the death stamp.
   await admin.from('profiles')
-    .update({ push_subscription: subscription, notif_prefs, push_died_at: null })
+    .update({
+      push_subscription: subscription,
+      notif_prefs,
+      push_died_at: null,
+      ...(pushContext ? { push_context: pushContext } : {}),
+    })
     .eq('id', user.id);
 
   return NextResponse.json({ ok: true });

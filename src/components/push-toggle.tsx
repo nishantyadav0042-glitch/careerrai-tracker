@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { track, detectDisplayMode } from '@/lib/journey';
 import { Bell, BellOff, Check, X, Loader2 } from 'lucide-react';
 
 // Web Push requires the applicationServerKey as a Uint8Array.
@@ -155,9 +156,10 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON() }),
+      body: JSON.stringify({ subscription: sub.toJSON(), context: detectDisplayMode() }),
     });
     if (!res.ok) { endStep('fail', `Server returned ${res.status}.`); throw new Error(`Server returned ${res.status}`); }
+    track('push_enabled', { context: detectDisplayMode(), source: 'push_toggle' });
     endStep('ok', 'Subscribed — now tap “Send a test alert”.');
     setEnabled(true);
   }

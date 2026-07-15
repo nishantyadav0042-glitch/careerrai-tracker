@@ -7,8 +7,10 @@ import {
   COMPANION_SLOTS, companionType, companionTip, weakestFromCoverage,
   morningCopy, factCopy, openCopy, progressCopy, logCopy, closeCopy,
   kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
+  planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
+import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
 
 // The Study Companion cadence (see lib/companion.ts for the philosophy).
 // One route, six Pro cron slots — vercel.json calls it with ?slot=…:
@@ -121,6 +123,19 @@ export async function POST(request: NextRequest) {
     const hoursToday = hoursRaw
       ?? (isWeekend ? (s.is_working_professional ? 4 : 3) : (s.is_working_professional ? 1.5 : 2.5));
 
+    // Topic-level plan — computed only for engaged loggers on the slots that
+    // name a topic (morning preview, study-window, progress, log). This is
+    // what turns "DILR is your weakest" into "Geometry today → RC next": the
+    // exact plan the student sees when they open the app (read-or-generate,
+    // same engine). Never computed for activation/reactivation states — those
+    // students aren't studying today, so a topic name is noise, not help.
+    const PLAN_SLOTS: CompanionSlot[] = ['morning', 'open', 'progress', 'log'];
+    let plan: TodaysPlan | null = null;
+    if (stateKind === 'active' && PLAN_SLOTS.includes(slot)) {
+      plan = await computeTodaysPlan(admin, s.id, now);
+    }
+    const planEstHours = plan ? Math.round((plan.tasks.reduce((a, t) => a + t.estMinutes, 0) / 60) * 2) / 2 : 0;
+
     let copy: SlotCopy | null = null;
     let reason = '';
     let budget: number = BUDGET_ACTIVE;
@@ -153,8 +168,15 @@ export async function POST(request: NextRequest) {
       case 'morning':
         // Arc students get their own Day-N morning copy at 10:00 — no double.
         if (isArc || loggedToday) break;
-        copy = morningCopy(weakest, hoursToday);
-        reason = `Companion 09:30 — plan preview (${weakest} weakest, ${hoursToday}h committed)`;
+        if (plan && plan.topicTasks.length > 0) {
+          const firstTopic = plan.topicTasks[0].topic!;
+          const secondTopic = plan.topicTasks[1]?.topic ?? null;
+          copy = planMorningCopy(firstName, firstTopic, secondTopic, plan.totalCount, planEstHours);
+          reason = `Companion 09:30 — plan preview (topic: ${firstTopic}${secondTopic ? ` → ${secondTopic}` : ''})`;
+        } else {
+          copy = morningCopy(weakest, hoursToday);
+          reason = `Companion 09:30 — plan preview (${weakest} weakest, ${hoursToday}h committed)`;
+        }
         break;
       case 'fact':
         copy = factCopy(companionTip(weakest, dayOfYear));
@@ -162,11 +184,24 @@ export async function POST(request: NextRequest) {
         break;
       case 'open':
         if (loggedToday) break;
-        copy = openCopy((s.self_reported_weak_topic as string | null) ?? null, weakest, hoursToday);
-        reason = 'Companion 17:00 — study window opens';
+        if (plan && plan.nextTask?.topic) {
+          copy = planOpenCopy(plan.nextTask.topic, plan.nextTask.target, hoursToday);
+          reason = `Companion 17:00 — study window (next: ${plan.nextTask.topic})`;
+        } else {
+          copy = openCopy((s.self_reported_weak_topic as string | null) ?? null, weakest, hoursToday);
+          reason = 'Companion 17:00 — study window opens';
+        }
         break;
       case 'progress': {
         if (loggedToday) break;
+        // Topic progress wins when they've actually started today's plan —
+        // "2 of 3 done ✓ — RC is next" is the founder's exact ask. Only when
+        // some blocks are ticked and one remains, so it's always true praise.
+        if (plan && plan.doneCount >= 1 && !plan.allDone && plan.nextTask?.topic) {
+          copy = planProgressCopy(plan.doneCount, plan.totalCount, plan.nextTask.topic);
+          reason = `Companion 20:30 — topic progress (${plan.doneCount}/${plan.totalCount}, next: ${plan.nextTask.topic})`;
+          break;
+        }
         const studied = days.size >= 1 ? [...days].filter((d) => d >= new Date(now.getTime() - 20 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })).length : 0;
         // Under 5 days the number reads as guilt, not encouragement — silence.
         if (studied < 5) break;
@@ -177,8 +212,13 @@ export async function POST(request: NextRequest) {
       case 'log':
         // The day's one demand. Arc students already got theirs at 20:00.
         if (loggedToday || isArc) break;
-        copy = logCopy(dreamCollege);
-        reason = 'Companion 21:30 — log still open';
+        if (plan && plan.topicTasks.length > 0) {
+          copy = planLogCopy(plan.nextTask?.topic ?? null, dreamCollege);
+          reason = `Companion 21:30 — log (${plan.nextTask?.topic ? `left: ${plan.nextTask.topic}` : 'plan cleared'})`;
+        } else {
+          copy = logCopy(dreamCollege);
+          reason = 'Companion 21:30 — log still open';
+        }
         break;
       case 'close':
         if (!loggedToday) break; // no log, no celebration — and no guilt either

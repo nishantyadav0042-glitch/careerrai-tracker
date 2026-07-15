@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { track } from '@/lib/journey';
 import { getLogDateString } from '@/lib/streak-utils';
 import type { StreakData } from '@/types';
 
@@ -81,6 +82,7 @@ export function useLogging(studentId: string, initial?: InitialLogging | null) {
       return (await response.json()) as LoggingResponse;
     },
     onSuccess: (data) => {
+      track('daily_log', { report_date: data?.report_date, streak: data?.streak });
       setFeedbackData(data);
       setShowFeedback(true);
       queryClient.invalidateQueries({ queryKey: ['streak'] });

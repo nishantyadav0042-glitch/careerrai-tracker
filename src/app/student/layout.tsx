@@ -92,10 +92,15 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // premium, and only once no higher-priority modal is up. The component itself
   // throttles to once per calendar day.
   const noBlockingModal = !showOnboarding && !showPostSignup && !showFirstPushAsk && !showSecondPushAsk;
-  // Install journey (browser users, not yet installed) takes the daily slot; the
-  // buddy nudge only shows for buddy-less non-premium students on other days.
-  const showInstallJourney = noBlockingModal;
-  const showBuddyNudge = noBlockingModal && !profile?.buddy_id && profile?.is_premium !== true;
+  // Fix #1 (activation): install is the finish line, gated on the authoritative
+  // app_installed flag. For a plan-built student who genuinely hasn't installed,
+  // the install journey shows every session (the component throttles to once per
+  // session) and OUTRANKS the buddy nudge — no home-screen icon is the #1 reason
+  // daily logs never happen, so nothing competes with it until the app is on the
+  // phone. Once app_installed is true, the buddy nudge takes the slot again.
+  const appInstalled = profile?.app_installed === true;
+  const showInstallJourney = noBlockingModal && !appInstalled;
+  const showBuddyNudge = noBlockingModal && appInstalled && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -129,7 +134,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           )}
         </>
       ) : null}
-      {showInstallJourney && <InstallJourney />}
+      {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );

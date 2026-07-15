@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { PerfBeacon } from '@/components/perf-beacon';
 import { MetaPixel } from '@/components/meta-pixel';
+import { JourneyTracker } from '@/components/journey-tracker';
 
 // Supabase is in ap-southeast-1 (Singapore). Running server functions in the
 // same region eliminates ~250ms round-trip latency per DB query.
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           {children}
           <PerfBeacon />
+          <JourneyTracker />
         </Providers>
         <MetaPixel />
       </body>
