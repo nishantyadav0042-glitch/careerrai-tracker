@@ -4,8 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/access';
 import { BuddyPitch, type BuddyPitchData } from '@/components/buddy-pitch';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
-import { resolveCatExamDate } from '@/lib/routine-engine';
-import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { getChatUnreadCount } from '@/lib/chat-unread';
 import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
@@ -38,50 +36,39 @@ export default async function BuddyPage() {
   if (!isPremium(profile)) {
     const nowD = new Date();
     const fourteenAgo = new Date(nowD.getTime() - 14 * 86_400_000).toISOString().split('T')[0];
-    const weekAgoIso = new Date(nowD.getTime() - 7 * 86_400_000).toISOString();
-    const [{ data: reports }, { data: coverageRows }, { data: streakRow }, { data: xp }, recommendedBuddies] = await Promise.all([
+    const [{ data: reports }, { data: coverageRows }, { data: streakRow }, recommendedBuddies] = await Promise.all([
       admin.from('daily_reports').select('report_date, study_duration, mock_taken').eq('student_id', user.id).limit(500),
-      admin.from('topic_coverage').select('status, updated_at').eq('student_id', user.id),
-      admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
-      admin.from('profiles').select('attempt_year, self_reported_weakest_section').eq('id', user.id).single(),
+      admin.from('topic_coverage').select('status').eq('student_id', user.id),
+      admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', user.id).maybeSingle(),
       getRecommendedBuddiesForStudent(admin, user.id),
     ]);
 
-    const cat = resolveCatExamDate(nowD, (xp?.attempt_year as number | null) ?? null);
-    const daysToCat = Math.max(0, Math.ceil((cat.getTime() - nowD.getTime()) / 86_400_000));
-    const mocksLeft = Math.max(0, Math.ceil(daysToCat / 7));
-
     const reps = reports ?? [];
     const mocksTaken = reps.filter((r) => r.mock_taken).length;
-    const studyHours = Math.round(reps.reduce((s, r) => s + (Number(r.study_duration) || 0), 0));
     const loggedDays = new Set(reps.filter((r) => (r.report_date as string) >= fourteenAgo).map((r) => r.report_date)).size;
+    const streak = (streakRow?.current_streak as number | null) ?? 0;
+    const topicsStudied = (coverageRows ?? []).filter((c) => ['practicing', 'revising', 'exam_ready'].includes(c.status as string)).length;
+    const lastLog = streakRow?.last_log_date as string | null;
+    const daysQuiet = lastLog ? Math.max(1, Math.round((nowD.getTime() - new Date(lastLog + 'T00:00:00').getTime()) / 86_400_000)) : 4;
 
-    const cov = coverageRows ?? [];
-    const studiedStatuses = new Set(['practicing', 'revising', 'exam_ready']);
-    const topicsStudied = cov.filter((c) => studiedStatuses.has(c.status as string)).length;
-    const revisionDue = cov.filter((c) =>
-      ['learning', 'practicing', 'revising'].includes(c.status as string) && (c.updated_at as string) < weekAgoIso
-    ).length;
-
-    // Next 4 weekly mock dates (upcoming Sundays).
-    const nextMocks: { n: number; label: string }[] = [];
-    const d = new Date(nowD);
-    d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7)); // next Sunday
-    for (let i = 0; i < 4 && mocksLeft > i; i++) {
-      nextMocks.push({ n: i + 1, label: d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) });
-      d.setDate(d.getDate() + 7);
-    }
+    // Preparation-health scores (0-100) from real signals. Accountability is
+    // deliberately low without a mentor — that's the gap the screen sells.
+    const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+    const consistency = clamp((loggedDays / 14) * 100);
+    const planning = clamp(58 + topicsStudied * 2);
+    const mockAnalysis = clamp(18 + mocksTaken * 15);
+    const accountability = clamp(8 + streak * 4);
+    const overall = clamp(consistency * 0.35 + planning * 0.35 + mockAnalysis * 0.2 + accountability * 0.1);
+    const delta = Math.max(2, Math.min(9, 3 + Math.floor(loggedDays / 3)));
 
     const data: BuddyPitchData = {
       firstName: profile?.full_name?.split(' ')[0] ?? 'there',
-      daysToCat, mocksLeft, mocksTaken, nextMocks,
-      topicsStudied, totalTopics: Object.keys(TOPIC_METADATA).length,
-      studyHours, revisionDue,
-      streak: (streakRow?.current_streak as number | null) ?? 0,
-      loggedDays,
-      weakestSection: (xp?.self_reported_weakest_section as string | null) ?? 'DILR',
+      overall, delta, consistency, planning, mockAnalysis, accountability,
+      lastMockN: Math.max(1, mocksTaken),
+      skipTopic: 'Geometry',
+      daysQuiet: Math.min(daysQuiet, 9),
     };
-    return <BuddyPitch data={data} recommendedBuddies={recommendedBuddies} fullName={profile?.full_name ?? undefined} />;
+    return <BuddyPitch data={data} recommendedBuddies={recommendedBuddies} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;
