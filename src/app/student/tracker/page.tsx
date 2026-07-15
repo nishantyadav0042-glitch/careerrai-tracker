@@ -8,14 +8,15 @@ import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
 import { CoachLine } from '@/components/coach-line';
-import { PaceRing } from '@/components/pace-ring';
+import { PaceCard } from '@/components/home/pace-card';
+import { TopicStats } from '@/components/home/topic-stats';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
-import { Flame, CalendarCheck } from 'lucide-react';
+import { Flame, CalendarCheck, ChevronRight } from 'lucide-react';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -63,7 +64,7 @@ export default async function DailyTrackerPage() {
       .select('report_date, study_duration')
       .eq('student_id', user.id)
       .order('report_date', { ascending: false })
-      .limit(2),
+      .limit(500),
     admin
       .from('daily_reports')
       .select('report_date, updated_at')
@@ -182,6 +183,18 @@ export default async function DailyTrackerPage() {
   const hasLoggedYesterday = logs?.some((l) => l.report_date === yesterdayStr) ?? false;
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
+  // Total study time (all logs) + a 7-day study-hours sparkline for the pace card.
+  const totalStudyHours = (logs ?? []).reduce((s, l) => s + (Number(l.study_duration) || 0), 0);
+  const hoursByDate = new Map((logs ?? []).map((l) => [l.report_date, Number(l.study_duration) || 0]));
+  const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const week: number[] = [];
+  const weekLabels: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(todayDate.getTime() - i * 86_400_000);
+    week.push(hoursByDate.get(d.toISOString().split('T')[0]) ?? 0);
+    weekLabels.push(WEEKDAY[d.getUTCDay()]);
+  }
+
   const nextSession = sessions?.[0] ?? null;
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const todaySession =
@@ -208,22 +221,33 @@ export default async function DailyTrackerPage() {
     notifPrefs.password_prompt_dismissed !== true;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
-      <div className="max-w-md mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-            Hello, {firstName}
-          </h1>
-          <span className="inline-flex items-center gap-1 text-sm font-bold text-stone-700 shrink-0">
-            <Flame className={currentStreak > 0 ? 'w-4 h-4 text-stone-900' : 'w-4 h-4 text-stone-300'} />
-            {currentStreak}
-          </span>
+    <div className="min-h-screen bg-stone-50 p-4 sm:p-6">
+      <div className="max-w-md mx-auto space-y-4">
+        {/* Greeting + streak card */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-extrabold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+              Hello, {firstName}! <span aria-hidden>👋</span>
+            </h1>
+            <p className="mt-0.5 text-sm text-stone-500">Discipline today, success tomorrow.</p>
+          </div>
+          <Link href="/student/journey"
+            className="flex shrink-0 items-center gap-2 rounded-2xl border border-stone-200/70 bg-white px-3.5 py-2.5 shadow-sm transition-colors hover:border-stone-300">
+            <Flame className={currentStreak > 0 ? 'h-6 w-6 text-orange-500' : 'h-6 w-6 text-stone-300'} />
+            <div className="leading-none">
+              <div className="text-xl font-extrabold text-stone-900 tabular-nums">{currentStreak}</div>
+              <div className="mt-0.5 text-[11px] font-medium text-stone-500">day streak</div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-stone-300" />
+          </Link>
         </div>
 
-        {/* The daily-hours ring — the number that keeps them honest: how many
-            hours today to hit their own date, catch-up/roll-over baked in.
+        {/* Progress card — % of syllabus done, pace, weekly trend, reschedule.
             Shown whenever they've committed to a finish date. */}
-        {pace && targetIso && <PaceRing pace={pace} targetIso={targetIso} />}
+        {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
+
+        {/* Four at-a-glance study stats */}
+        <TopicStats completed={startedOnceCount} inProgress={learningCount} total={totalTopics} studyHours={totalStudyHours} />
 
         {/* Fallback pace strip only when there's no ring (no target date yet). */}
         {!pace && finishStrip && (
@@ -253,23 +277,16 @@ export default async function DailyTrackerPage() {
             there's nothing honest to say yet. */}
         <CoachLine />
 
-        {/* Browser: Install card on top, plan, then the log. INSTALLED app:
-            the install card hides itself and Today's Log takes its slot at
-            the top (founder: logging is the daily action — once the app is
-            in, it leads). Pure CSS via the standalone media query — no
-            flicker, no client JS. */}
-        <div className="flex flex-col gap-6">
+        {/* Mockup order: Today's Focus (the log) first, then Today's Plan.
+            Install card stays pinned on top for browser users; it hides itself
+            in the installed app. */}
+        <div className="flex flex-col gap-4">
           <div className="order-1 empty:hidden">
             <InstallAppButton variant="card" />
           </div>
 
-          {/* Question 1: what should I study? */}
-          <div className="order-2 [@media(display-mode:standalone)]:order-3">
-            <TodaysRoutineCard />
-          </div>
-
-          {/* Question 2: have I logged today's study? */}
-          <div className="order-3 [@media(display-mode:standalone)]:order-1">
+          {/* Today's Focus — have I logged today's study? */}
+          <div className="order-2">
             <DailyTrackerApp
               studentId={user.id}
               todaySession={todaySession}
@@ -280,6 +297,11 @@ export default async function DailyTrackerPage() {
               yesterdayStr={yesterdayStr}
               yesterdayLabel={yesterdayLabel}
             />
+          </div>
+
+          {/* Today's Plan — what should I study? */}
+          <div className="order-3">
+            <TodaysRoutineCard />
           </div>
         </div>
 
