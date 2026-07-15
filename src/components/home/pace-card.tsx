@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, CheckCircle2, CalendarDays, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronRight } from 'lucide-react';
 import type { PaceResult } from '@/lib/study-pace';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
@@ -115,15 +115,11 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           </div>
         </div>
 
-        {/* Detail */}
+        {/* Detail — one clean line, no repeated pace stats */}
         <div className="min-w-0 flex-1">
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
-          <p className="mt-1 text-[15px] font-extrabold leading-tight text-stone-900">{headline}</p>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-stone-600">
-            <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-stone-400" /><b className="font-bold text-stone-900">{pace.requiredPerDay}h</b>/day</span>
-            <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-stone-400" /><b className="font-bold text-stone-900">{pace.remainingHours}h</b> left</span>
-            <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3 text-stone-400" /><b className="font-bold text-stone-900">{pace.daysLeft}</b>d to go</span>
-          </div>
+          <p className="mt-1 text-[16px] font-extrabold leading-tight text-stone-900">{headline}</p>
+          <p className="mt-0.5 flex items-center gap-1 text-[12px] text-stone-500"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
         </div>
 
         {/* Weekly sparkline — always inline */}
