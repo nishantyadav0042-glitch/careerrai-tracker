@@ -220,22 +220,22 @@ export default async function DailyTrackerPage() {
     notifPrefs.password_prompt_dismissed !== true;
 
   return (
-    <div className="min-h-screen bg-stone-50 p-4 sm:p-6">
-      <div className="max-w-md mx-auto space-y-4">
+    <div className="min-h-screen bg-stone-50 px-4 pt-3 pb-2">
+      <div className="max-w-md mx-auto space-y-2.5">
         {/* Greeting + streak card */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+            <h1 className="text-xl font-extrabold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
               Hello, {firstName}! <span aria-hidden>👋</span>
             </h1>
-            <p className="mt-0.5 text-sm text-stone-500">Discipline today, success tomorrow.</p>
+            <p className="text-[13px] text-stone-500">Discipline today, success tomorrow.</p>
           </div>
           <Link href="/student/journey"
-            className="flex shrink-0 items-center gap-2 rounded-2xl border border-stone-200/70 bg-white px-3.5 py-2.5 shadow-sm transition-colors hover:border-stone-300">
-            <Flame className={currentStreak > 0 ? 'h-6 w-6 text-orange-500' : 'h-6 w-6 text-stone-300'} />
+            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-stone-200/70 bg-white px-3 py-2 shadow-sm transition-colors hover:border-stone-300">
+            <Flame className={currentStreak > 0 ? 'h-5 w-5 text-orange-500' : 'h-5 w-5 text-stone-300'} />
             <div className="leading-none">
-              <div className="text-xl font-extrabold text-stone-900 tabular-nums">{currentStreak}</div>
-              <div className="mt-0.5 text-[11px] font-medium text-stone-500">day streak</div>
+              <div className="text-lg font-extrabold text-stone-900 tabular-nums">{currentStreak}</div>
+              <div className="text-[10px] font-medium text-stone-500">day streak</div>
             </div>
             <ChevronRight className="h-4 w-4 text-stone-300" />
           </Link>
@@ -274,7 +274,7 @@ export default async function DailyTrackerPage() {
         {/* Mockup order: Today's Focus (the log) first, then Today's Plan.
             Install card stays pinned on top for browser users; it hides itself
             in the installed app. */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2.5">
           <div className="order-1 empty:hidden">
             <InstallAppButton variant="card" />
           </div>
@@ -299,7 +299,7 @@ export default async function DailyTrackerPage() {
           </div>
         </div>
 
-        <div className="pb-16" />
+        <div className="pb-20" />
       </div>
     </div>
   );
