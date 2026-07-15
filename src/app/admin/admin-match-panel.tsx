@@ -93,6 +93,9 @@ export function AdminMatchPanel({ unmatchedStudents, buddies }: AdminMatchPanelP
           You are the matching algorithm until ~100 students. Match on{' '}
           <strong className="text-white">journey, not brand.</strong>
         </p>
+        <p className="text-xs text-stone-400 mt-1.5">
+          Only <strong className="text-stone-200">upgraded students</strong> appear here — a Buddy is a paid feature.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
