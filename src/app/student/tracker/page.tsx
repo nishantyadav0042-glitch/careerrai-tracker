@@ -7,7 +7,6 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
-import { CoachLine } from '@/components/coach-line';
 import { PaceCard } from '@/components/home/pace-card';
 import { TopicStats } from '@/components/home/topic-stats';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
@@ -271,11 +270,6 @@ export default async function DailyTrackerPage() {
         )}
 
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
-
-        {/* Daily coach line — AI rewords the deterministic status facts into one
-            warm sentence (server-cached per day). Loads after paint; silent if
-            there's nothing honest to say yet. */}
-        <CoachLine />
 
         {/* Mockup order: Today's Focus (the log) first, then Today's Plan.
             Install card stays pinned on top for browser users; it hides itself

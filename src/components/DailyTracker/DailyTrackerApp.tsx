@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
-import { Flame, Video } from 'lucide-react';
+import { Video, Star, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
 import type { MockDebriefData } from './MockDebriefModal';
@@ -190,45 +190,48 @@ export function DailyTrackerApp({
         </div>
       )}
 
-      {/* Today's Log — Home's second hero, same visual weight as Today's
-          Study Plan. A session happening today is nested inside it rather
-          than its own section, so Home still structurally has exactly two
-          things on it. */}
+      {/* Today's Focus — the log entry point, styled per the 15 Jul mockup:
+          a star, the TODAY'S FOCUS label + one-line focus, and the black
+          "Log today's study" action. Stacks on mobile, side-by-side on wider
+          screens. */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs uppercase tracking-widest text-stone-900 font-semibold">Today&apos;s Log</p>
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-stone-500">
-            <Flame className={currentStreak > 0 ? 'w-3.5 h-3.5 text-stone-900' : 'w-3.5 h-3.5 text-stone-300'} />
-            {currentStreak > 0 ? `${currentStreak}d streak` : 'No streak yet'}
-          </span>
-        </div>
-
         {todaySession && <div className="mb-3"><SessionStrip session={todaySession} /></div>}
 
-        {hasLoggedToday ? (
-          <div className="py-2 text-center">
-            <p className="text-base font-bold text-stone-900">Logged ✓</p>
-            <p className="text-xs text-stone-500 mt-1">That&apos;s what tomorrow&apos;s plan is built from.</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Star className="h-6 w-6 fill-amber-400 text-amber-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
+              <p className="mt-0.5 text-[17px] font-extrabold leading-snug text-stone-900">
+                {hasLoggedToday ? 'Logged today ✓' : 'Be consistent, not perfect.'}
+              </p>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-2.5">
-            <button
-              onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
-              disabled={isSubmitting}
-              className="w-full rounded-xl bg-stone-900 py-3.5 text-sm font-bold text-white active:scale-[0.99] transition-all disabled:opacity-50"
-            >
-              {isSubmitting ? 'Logging…' : "Log today's study →"}
-            </button>
-            {!hasLoggedYesterday && yesterdayStr && (
+
+          {hasLoggedToday ? (
+            <p className="shrink-0 text-xs text-stone-400 sm:text-right">Tomorrow&apos;s plan is built from it.</p>
+          ) : (
+            <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
               <button
-                onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-                className="w-full text-center text-xs text-stone-400 hover:text-stone-600"
+                onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-5 py-3.5 text-sm font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
               >
-                Missed {yesterdayLabel}? Log it too →
+                {isSubmitting ? 'Logging…' : <>Log today&apos;s study <ArrowRight className="h-4 w-4" /></>}
               </button>
-            )}
-          </div>
-        )}
+              {!hasLoggedYesterday && yesterdayStr && (
+                <button
+                  onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
+                  className="text-center text-[11px] text-stone-400 hover:text-stone-600 sm:text-right"
+                >
+                  Missed {yesterdayLabel}? Log it too
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </Card>
 
       <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />
