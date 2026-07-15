@@ -18,7 +18,11 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { task_id: taskId, is_emergency: isEmergency, confidence } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string };
+  // skip_day_close: the integrated log flow completes topics AFTER writing the
+  // daily_report itself (with the student's real hours/mood), so this route
+  // must NOT re-write it via the RPC (which would overwrite mood etc.). It
+  // still records the completion + advances coverage.
+  const { task_id: taskId, is_emergency: isEmergency, confidence, skip_day_close: skipDayClose } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string; skip_day_close?: boolean };
   if (!taskId || typeof taskId !== 'string') return NextResponse.json({ error: 'task_id required' }, { status: 400 });
   if (confidence !== undefined && !VALID_CONFIDENCE.includes(confidence as ConfidenceSignal)) {
     return NextResponse.json({ error: 'confidence must be green, blue, yellow, or red' }, { status: 400 });
@@ -91,7 +95,7 @@ export async function POST(request: NextRequest) {
   const emergencyMinimumDone = emergencyDay && completedIds.has(tasks[0].id);
 
   let dayClosed = false;
-  if ((fullyDone || emergencyMinimumDone) && completions && completions.length > 0) {
+  if ((fullyDone || emergencyMinimumDone) && completions && completions.length > 0 && !skipDayClose) {
     const completedTasks = tasks.filter((t) => completedIds.has(t.id));
     const routineMinutes = completedTasks.reduce((s, t) => s + t.estMinutes, 0);
     const routineSections = [...new Set(completedTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))]

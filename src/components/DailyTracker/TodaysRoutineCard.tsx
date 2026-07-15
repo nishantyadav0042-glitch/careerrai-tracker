@@ -197,6 +197,13 @@ export function TodaysRoutineCard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // When the daily log completes topics, re-pull so this card shows them done.
+  useEffect(() => {
+    const onUpdated = () => { routineTodayCache = null; load(); };
+    window.addEventListener('cr-routine-updated', onUpdated);
+    return () => window.removeEventListener('cr-routine-updated', onUpdated);
+  }, [load]);
+
   async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal) {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
@@ -402,20 +409,10 @@ export function TodaysRoutineCard() {
                         (expanded || swapOpen) && 'rounded-b-none'
                       )}
                     >
-                      {/* Tap the circle to mark done, no confidence required —
-                          a real one-tap complete. Tap the task itself to open
-                          the confidence picker for those who want to log it. */}
-                      <button
-                        onClick={() => { if (!done) reportStart(); toggleTask(task); }}
-                        disabled={busyTaskId === task.id}
-                        aria-label="Mark complete"
-                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-900 active:scale-90 transition-transform"
-                      />
-                      <button
-                        onClick={() => handleTaskTap(task, done)}
-                        disabled={busyTaskId === task.id}
-                        className="min-w-0 flex-1 text-left active:scale-[0.99] transition-transform"
-                      >
+                      {/* Display only — you mark topics done when you fill the
+                          log, not here. The only action on the plan is swap. */}
+                      <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300" />
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-stone-900 text-white">
                             {isStart ? 'Start Here' : 'Next'}
@@ -429,7 +426,7 @@ export function TodaysRoutineCard() {
                         {memoryTag(task) && (
                           <p className="text-[11px] text-stone-400 mt-0.5">{memoryTag(task)}</p>
                         )}
-                      </button>
+                      </div>
                       {/* Swap today's topic — same section, student's choice. */}
                       {!done && task.topic && (
                         <button
@@ -461,54 +458,28 @@ export function TodaysRoutineCard() {
                         </div>
                       </div>
                     )}
-                    {expanded && (
-                      <div className="rounded-b-2xl bg-stone-100/70 px-4 pb-4 pt-1">
-                        {/* 2x2, not a single row of 4 — "Getting there" and
-                            "Struggling" don't fit four-across on a phone
-                            without wrapping mid-word. */}
-                        <div className="grid grid-cols-2 gap-2">
-                          {CONFIDENCE_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.value}
-                              onClick={() => toggleTask(task, opt.value)}
-                              disabled={busyTaskId === task.id}
-                              className="flex flex-col items-center gap-0.5 rounded-lg border border-stone-300 bg-white py-2 text-xs font-medium text-stone-700 active:scale-[0.97] transition-all"
-                            >
-                              <span className="text-lg leading-none">{opt.emoji}</span>
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               }
 
               return (
-                <div key={task.id} className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3 transition-colors hover:bg-stone-100">
-                  {/* Circle = one-tap complete, no confidence required. */}
-                  <button
-                    onClick={() => { if (!done) reportStart(); toggleTask(task); }}
-                    disabled={busyTaskId === task.id}
-                    aria-label="Mark complete"
+                <div key={task.id} className="w-full flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3">
+                  {/* Display only — completion happens in the log. */}
+                  <span
+                    aria-hidden
                     className={cn(
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 active:scale-90 transition-transform',
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
                       done ? 'border-stone-900 bg-stone-900' : 'border-stone-300'
                     )}
                   >
                     {done && <Check className="w-3 h-3 text-white" />}
-                  </button>
-                  <button
-                    onClick={() => handleTaskTap(task, done)}
-                    disabled={busyTaskId === task.id}
-                    className="flex-1 min-w-0 flex items-center justify-between gap-3 text-left"
-                  >
+                  </span>
+                  <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
                     <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
                       {taskTitle(task)}
                     </span>
                     <span className="text-xs text-stone-400 shrink-0">{task.estMinutes}m</span>
-                  </button>
+                  </div>
                 </div>
               );
             })}
