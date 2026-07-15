@@ -2,6 +2,7 @@
 
 import { Video } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
+import { DeleteAccountButton } from '@/components/delete-account-button';
 
 // Formerly its own page (/student/settings) — now the "Settings" tab
 // inside the merged Profile panel. Sign-out lived on both the old Settings
@@ -25,6 +26,12 @@ export function SettingsSection() {
       <div>
         <h2 className="text-lg font-semibold text-stone-900 mb-3">Account</h2>
         <LogoutButton />
+      </div>
+
+      {/* Store-required account deletion (Google Play + Apple 5.1.1(v)). */}
+      <div className="border-t border-stone-200 pt-5">
+        <h2 className="text-lg font-semibold text-stone-900 mb-2">Danger zone</h2>
+        <DeleteAccountButton />
       </div>
     </div>
   );
