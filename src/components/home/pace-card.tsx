@@ -24,7 +24,7 @@ function fmt(iso: string): string {
 // Compact 7-day sparkline. `week` is 7 daily study-hours ending today; the last
 // point (today) is emphasised. Labels are single-letter weekdays under it.
 function Sparkline({ week, labels, color }: { week: number[]; labels: string[]; color: string }) {
-  const w = 150, h = 46, pad = 4;
+  const w = 104, h = 34, pad = 4;
   const max = Math.max(1, ...week);
   const step = week.length > 1 ? (w - pad * 2) / (week.length - 1) : 0;
   const pts = week.map((v, i) => {
@@ -68,7 +68,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   const [err, setErr] = useState<string | null>(null);
 
   const tone = TONE[pace.status];
-  const R = 38, C = 2 * Math.PI * R;
+  const R = 30, C = 2 * Math.PI * R;
   const offset = C * (1 - pace.completedPct / 100);
   const todayIso = new Date().toISOString().split('T')[0];
 
@@ -100,26 +100,26 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
         : `${pace.requiredPerDay}h a day, steady`;
 
   return (
-    <div className="rounded-3xl border border-stone-200/70 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-3">
+    <div className="rounded-2xl border border-stone-200/70 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-2.5">
         {/* Ring — % of syllabus done */}
         <div className="relative shrink-0">
-          <svg width="90" height="90" viewBox="0 0 90 90">
-            <circle cx="45" cy="45" r={R} fill="none" stroke="#f1f0ef" strokeWidth="8" />
-            <circle cx="45" cy="45" r={R} fill="none" stroke={tone.ring} strokeWidth="8" strokeLinecap="round"
-              strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 45 45)" />
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r={R} fill="none" stroke="#f1f0ef" strokeWidth="7" />
+            <circle cx="36" cy="36" r={R} fill="none" stroke={tone.ring} strokeWidth="7" strokeLinecap="round"
+              strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 36 36)" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-xl font-extrabold leading-none text-stone-900">{pace.completedPct}<span className="text-sm font-bold">%</span></span>
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-stone-400">Progress</span>
+            <span className="text-lg font-extrabold leading-none text-stone-900">{pace.completedPct}<span className="text-[11px] font-bold">%</span></span>
+            <span className="text-[8px] font-semibold uppercase tracking-wide text-stone-400">Progress</span>
           </div>
         </div>
 
         {/* Detail — one clean line, no repeated pace stats */}
         <div className="min-w-0 flex-1">
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
-          <p className="mt-1 text-[16px] font-extrabold leading-tight text-stone-900">{headline}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-[12px] text-stone-500"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
+          <p className="mt-0.5 text-[14px] font-extrabold leading-tight text-stone-900">{headline}</p>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-500"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
         </div>
 
         {/* Weekly sparkline — always inline */}
@@ -128,7 +128,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
         </div>
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between border-t border-stone-100 pt-2.5">
+      <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
         <span className="text-[12px] text-stone-500">Finish by <span className="font-bold text-stone-800">{fmt(targetIso)}</span></span>
         <button type="button" onClick={() => { setEditing((v) => !v); setErr(null); }}
           className="inline-flex items-center gap-0.5 text-[12px] font-bold text-indigo-600 hover:underline">

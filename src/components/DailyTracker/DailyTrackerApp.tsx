@@ -193,30 +193,30 @@ export function DailyTrackerApp({
       {/* Today's Focus — star + TODAY'S FOCUS label + one-line focus on the
           left, the black "Log today's study" action on the right. Always
           side-by-side (compact) to keep Home to one screen. */}
-      <Card className="p-3.5">
-        {todaySession && <div className="mb-3"><SessionStrip session={todaySession} /></div>}
+      <Card className="p-2.5">
+        {todaySession && <div className="mb-2"><SessionStrip session={todaySession} /></div>}
 
-        <div className="flex flex-row items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
-              <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
+        <div className="flex flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
-              <p className="mt-0.5 text-[14px] font-extrabold leading-snug text-stone-900">
+              <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
+              <p className="text-[13px] font-extrabold leading-tight text-stone-900">
                 {hasLoggedToday ? 'Logged today ✓' : 'Be consistent, not perfect.'}
               </p>
             </div>
           </div>
 
           {hasLoggedToday ? (
-            <p className="shrink-0 text-right text-[11px] text-stone-400">Tomorrow&apos;s plan<br />builds on it.</p>
+            <p className="shrink-0 text-right text-[10px] text-stone-400">Tomorrow&apos;s plan<br />builds on it.</p>
           ) : (
-            <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex shrink-0 flex-col items-end gap-0.5">
               <button
                 onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
                 disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-2.5 text-[13px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-[12px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
               >
                 {isSubmitting ? 'Logging…' : <>Log today&apos;s study <ArrowRight className="h-3.5 w-3.5" /></>}
               </button>

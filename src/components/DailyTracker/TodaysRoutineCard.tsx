@@ -295,9 +295,9 @@ export function TodaysRoutineCard() {
   const completedWithTopic = routine.tasks.filter((t) => completedIds.has(t.id) && t.topic);
 
   return (
-    <Card className="p-5">
+    <Card className="p-3">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs uppercase tracking-widest text-stone-900 font-semibold">Today&apos;s Study Plan</p>
+        <p className="text-[11px] uppercase tracking-widest text-stone-900 font-semibold">Today&apos;s Study Plan</p>
         {!fullyDone && (
           <div className="flex gap-1 text-[11px] font-semibold">
             {TIME_OPTIONS.map(({ value, label }) => (
@@ -319,11 +319,11 @@ export function TodaysRoutineCard() {
       {/* The engine's daily auto-adjustment, said OUT LOUD — students should
           know the plan recalculates from what they actually did, every day. */}
       {!fullyDone && (data.isCatchUp ? (
-        <p className="mb-2 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1.5 text-[11px] font-medium text-teal-800">
+        <p className="mb-1.5 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1.5 text-[11px] font-medium text-teal-800">
           ⚡ Welcome back — your plan has already adjusted around the missed days. Only today matters.
         </p>
       ) : data.yesterday && data.yesterday.total > 0 ? (
-        <p className="mb-2 rounded-lg bg-stone-50 border border-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-stone-600">
+        <p className="mb-1.5 rounded-lg bg-stone-50 border border-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-stone-600">
           {data.yesterday.done >= data.yesterday.total
             ? `⚡ Yesterday: all ${data.yesterday.total} done — today's plan builds on it.`
             : `⚡ Yesterday: ${data.yesterday.done} of ${data.yesterday.total} done — today's plan has already adjusted. Nothing lost.`}
@@ -332,14 +332,14 @@ export function TodaysRoutineCard() {
 
       {/* Today's Goal — the one number that matters, read at a glance. */}
       {!fullyDone && (
-        <div className="flex items-center gap-1.5 mb-3">
+        <div className="flex items-center gap-1.5 mb-1.5">
           {routine.tasks.map((t) => (
             <span
               key={t.id}
-              className={cn('h-2 w-2 rounded-full', completedIds.has(t.id) ? 'bg-stone-900' : 'bg-stone-200')}
+              className={cn('h-1.5 w-1.5 rounded-full', completedIds.has(t.id) ? 'bg-stone-900' : 'bg-stone-200')}
             />
           ))}
-          <span className="text-xs text-stone-400 ml-1">{doneCount} of {routine.tasks.length} done</span>
+          <span className="text-[11px] text-stone-400 ml-1">{doneCount} of {routine.tasks.length} done</span>
         </div>
       )}
 
@@ -381,7 +381,7 @@ export function TodaysRoutineCard() {
         </div>
       ) : (
         <>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {tasks.map((task, idx) => {
               const done = completedIds.has(task.id);
               const isStart = idx === 0 && !done;
@@ -398,7 +398,7 @@ export function TodaysRoutineCard() {
                   <div key={task.id}>
                     <div
                       className={cn(
-                        'w-full flex items-start gap-3 rounded-2xl bg-stone-100/70 p-4 transition-all',
+                        'w-full flex items-start gap-2.5 rounded-2xl bg-stone-100/70 p-2.5 transition-all',
                         (expanded || swapOpen) && 'rounded-b-none'
                       )}
                     >
