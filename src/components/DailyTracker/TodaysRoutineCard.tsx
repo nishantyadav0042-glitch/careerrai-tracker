@@ -297,7 +297,7 @@ export function TodaysRoutineCard() {
   return (
     <Card className="p-3">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-[11px] uppercase tracking-widest text-stone-900 font-semibold">Today&apos;s Study Plan</p>
+        <p className="text-[11px] uppercase tracking-widest text-red-600 font-semibold">Today&apos;s Study Plan</p>
         {!fullyDone && (
           <div className="flex gap-1 text-[11px] font-semibold">
             {TIME_OPTIONS.map(({ value, label }) => (
