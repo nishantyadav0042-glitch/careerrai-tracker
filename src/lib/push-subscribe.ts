@@ -1,6 +1,8 @@
 // One call to turn on push: request OS permission, subscribe, and persist to the
 // server. Returns a precise outcome so the UI can react (guide to Settings on a
 // hard denial, tell iPhone-in-browser users to install first). Never throws.
+import { track } from '@/lib/journey';
+
 export type EnablePushResult = 'granted' | 'denied' | 'ios_needs_install' | 'unsupported' | 'error';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -45,11 +47,17 @@ export async function enablePush(): Promise<EnablePushResult> {
       });
     }
 
+    const context = isStandalone() ? 'standalone' : 'browser';
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON() }),
+      body: JSON.stringify({ subscription: sub.toJSON(), context }),
     });
+    if (res.ok) {
+      // Record WHERE push was granted — a browser-context grant is the tell for
+      // a subscription that usually can't deliver.
+      track('push_enabled', { context, deliverable: context === 'standalone' });
+    }
     return res.ok ? 'granted' : 'error';
   } catch {
     return 'error';

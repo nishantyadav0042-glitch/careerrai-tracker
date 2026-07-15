@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Download, Share, Globe, X } from 'lucide-react';
+import { track } from '@/lib/journey';
 
 // ONE clean install screen, forked by platform. No overlays, no arrows, no
 // multi-button sheets — a single action each. Skippable (never blocks the app),
@@ -90,8 +91,9 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
     else return; // desktop → nothing, let other nudges run
     if (!claimThisSession()) return; // once per session, but every session until installed
     setJourney(j);
+    track('install_prompt_shown', { journey: j, planReady });
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [appInstalled]);
+  }, [appInstalled, planReady]);
 
   async function installAndroid() {
     setBusy(true);
@@ -108,10 +110,12 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
     setBusy(false);
     if (prompt) {
       await prompt.prompt();
-      await prompt.userChoice;
+      const choice = await prompt.userChoice;
+      track('install_prompt_result', { outcome: choice?.outcome ?? 'unknown' });
       deferredPrompt = null;
       setJourney(null);
     } else {
+      track('install_redirect_chrome', {});
       openInChrome(); // criteria not met — send to Chrome
     }
   }
@@ -174,7 +178,7 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
           </>
         )}
 
-        <button type="button" onClick={() => setJourney(null)} className="mt-2 w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
+        <button type="button" onClick={() => { track('install_dismissed', { journey }); setJourney(null); }} className="mt-2 w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
           Maybe later
         </button>
       </div>

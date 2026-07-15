@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
 
 // Founder flow: notification permission is asked INSIDE the installed app —
@@ -86,9 +87,10 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub.toJSON() }),
+        body: JSON.stringify({ subscription: sub.toJSON(), context: detectDisplayMode() }),
       });
       if (!res.ok) throw new Error('subscribe failed');
+      track('push_enabled', { context: detectDisplayMode(), source: 'standalone_ask' });
       // Full reload so every server-rendered gate sees push=true and clears.
       window.location.reload();
     } catch {

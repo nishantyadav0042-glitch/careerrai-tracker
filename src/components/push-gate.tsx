@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { track, detectDisplayMode } from '@/lib/journey';
 import { useRouter } from 'next/navigation';
 import { Bell, Check, Loader2 } from 'lucide-react';
 
@@ -153,9 +154,10 @@ export function PushGate({ mode, notifPrefs }: PushGateProps) {
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub.toJSON() }),
+        body: JSON.stringify({ subscription: sub.toJSON(), context: detectDisplayMode() }),
       });
       if (!res.ok) { setError(`Couldn’t save your subscription (server returned ${res.status}). Please try again.`); setPhase('intro'); return; }
+      track('push_enabled', { context: detectDisplayMode(), source: 'push_gate' });
 
       setPhase('done');
       setTimeout(dismiss, 900);
