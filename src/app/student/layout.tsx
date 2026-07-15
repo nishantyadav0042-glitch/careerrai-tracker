@@ -106,8 +106,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
     <div className="min-h-screen bg-stone-50">
       <PushHealer />
       <InstallPing />
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
-        <div className="flex items-center justify-between mb-6">
+      <div className="max-w-2xl mx-auto px-3 pt-2 pb-16">
+        <div className="flex items-center justify-between mb-2">
           <Logo />
           <div className="flex items-center gap-2">
             <Badge color="stone">Student</Badge>
