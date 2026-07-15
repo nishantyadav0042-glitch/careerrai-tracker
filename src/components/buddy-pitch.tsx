@@ -1,170 +1,180 @@
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
-import { RecommendedBuddies } from '@/components/recommended-buddies';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
-import { CalendarClock, Repeat2, Flame, Target, ClipboardCheck, TrendingUp } from 'lucide-react';
+import { MessageSquare, ArrowRight, ShieldAlert, Check, X, Users, Star, TrendingUp, GraduationCap, Bell } from 'lucide-react';
 
-// The free-student /student/buddy screen = an INDIRECT sales asset. It reads as
-// a genuinely useful mock + revision plan built from the student's OWN numbers,
-// and the Buddy is positioned as the enabler at each pain point — never a
-// billboard. Every block maps to a conversion lever:
-//   Mock Sprint  → fear (one shot/year, mocks running out) + real help (a mock
-//                  is only worth it once analysed — that's the buddy's job).
-//   Revision     → loss aversion (hours already invested decay without revision;
-//                  the forgetting curve is real, ~Ebbinghaus).
-//   Consistency  → accountability + FOMO (solo aspirants stall; the ones who
-//                  convert have someone keeping them honest).
-//   What you get → real help, tied to THIS student's weakest section + mocks.
+// The free-student /student/buddy screen = the conversion asset (mockup
+// f1dbd73a). Zero-scroll, one phone screen. Reads as a personal preparation
+// dashboard, and every block makes the gap between "alone" and "with a buddy"
+// visceral: match → health (with accountability visibly low) → the biggest
+// risk → what a buddy would've done this week → alone-vs-buddy → proof → price.
 
 export interface BuddyPitchData {
   firstName: string;
-  daysToCat: number;
-  mocksLeft: number;      // weeks to CAT = full mocks still possible
-  mocksTaken: number;
-  nextMocks: { n: number; label: string }[]; // upcoming weekly mock dates
-  topicsStudied: number;
-  totalTopics: number;
-  studyHours: number;
-  revisionDue: number;    // studied >1 week ago, not revised
-  streak: number;
-  loggedDays: number;     // logged days in last 14
-  weakestSection: string;
+  overall: number; delta: number;
+  consistency: number; planning: number; mockAnalysis: number; accountability: number;
+  lastMockN: number; skipTopic: string; daysQuiet: number;
 }
 
-function Stat({ value, unit, label }: { value: string | number; unit?: string; label: string }) {
+// tiny up/down sparkline
+function Spark({ up, color }: { up: boolean; color: string }) {
+  const pts = up ? '0,14 8,11 16,12 24,7 32,8 40,3' : '0,4 8,7 16,6 24,10 32,9 40,13';
   return (
-    <div>
-      <div className="text-2xl font-extrabold leading-none text-stone-900 tabular-nums">
-        {value}{unit && <span className="text-base font-bold">{unit}</span>}
-      </div>
-      <div className="mt-1 text-[11px] font-medium text-stone-500">{label}</div>
+    <svg width="44" height="16" viewBox="0 0 40 16" className="mt-1"><polyline points={pts} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  );
+}
+
+function Metric({ label, value, up, color }: { label: string; value: number; up: boolean; color: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-stone-200/70 bg-white px-1 py-2">
+      <span className="text-[10px] font-semibold text-stone-500">{label}</span>
+      <span className="text-lg font-extrabold text-stone-900 leading-none mt-0.5">{value}</span>
+      <Spark up={up} color={color} />
     </div>
   );
 }
 
-export function BuddyPitch({ data, recommendedBuddies = [], fullName }: {
+export function BuddyPitch({ data, recommendedBuddies = [] }: {
   data: BuddyPitchData;
   recommendedBuddies?: RecommendedBuddyResult[];
-  fullName?: string;
 }) {
-  const { firstName, daysToCat, mocksLeft, mocksTaken, nextMocks, topicsStudied, totalTopics, studyHours, revisionDue, streak, loggedDays, weakestSection } = data;
+  const { overall, delta, consistency, planning, mockAnalysis, accountability, lastMockN, skipTopic, daysQuiet } = data;
+  const top = recommendedBuddies[0] ?? null;
+  const buddyName = top?.full_name ?? 'Your IIM mentor';
+  const iim = top?.iim_converted ?? 'IIM alumnus';
+  const pct = top?.cat_percentile != null ? `${top.cat_percentile}%ile` : '99%ile';
+  const strength = top?.strongest_section ? `Strong in ${top.strongest_section}` : 'Cracked CAT';
+  const R = 30, C = 2 * Math.PI * R, off = C * (1 - overall / 100);
+
+  const wouldHave = [
+    { icon: Bell, tint: 'text-emerald-600 bg-emerald-50', label: 'Reminded you yesterday' },
+    { icon: MessageSquare, tint: 'text-indigo-600 bg-indigo-50', label: `Reviewed Mock ${lastMockN}` },
+    { icon: TrendingUp, tint: 'text-amber-600 bg-amber-50', label: `Suggested skipping ${skipTopic}` },
+    { icon: Star, tint: 'text-rose-600 bg-rose-50', label: 'Saved 3 study hours' },
+  ];
+  const alone = ['Decide tomorrow’s plan yourself', 'Unsure why mock score dropped', 'Nobody checks if you disappear', 'Random revisions', 'Same coaching plan'];
+  const withB = ['Tomorrow’s plan, automatically', 'Every mistake categorized', 'Daily follow-up & accountability', 'Structured weekly revision', 'A personal roadmap for you'];
 
   return (
-    <div className="mx-auto max-w-md space-y-3 px-1 pb-24 pt-3">
-      {/* Countdown header — urgency, honest */}
-      <div className="rounded-2xl bg-stone-900 p-4 text-white">
+    <div className="flex h-[calc(100svh-6.5rem)] flex-col gap-2 overflow-hidden">
+      {/* YOUR BUDDY */}
+      <div className="shrink-0">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Your buddy</p>
+        <div className="rounded-2xl border border-stone-200/70 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-stone-200">
+              {top?.avatar_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={top.avatar_url} alt={buddyName} className="h-full w-full object-cover" />
+                : <div className="flex h-full w-full items-center justify-center"><GraduationCap className="h-6 w-6 text-stone-400" /></div>}
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">96% Match</span>
+              </div>
+              <p className="mt-0.5 text-[13px] font-bold text-stone-900">{buddyName} <span className="font-medium text-stone-500">· CAT {pct}</span></p>
+              <p className="text-[11px] text-stone-500">{iim} · {strength}</p>
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <UnlockBuddyButton variant="primary" size="md" className="w-full">
+              <span className="inline-flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Start a chat</span>
+            </UnlockBuddyButton>
+          </div>
+        </div>
+      </div>
+
+      {/* PREPARATION HEALTH */}
+      <div className="shrink-0">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Your preparation health</p>
+          <p className="text-[10px] text-stone-400">Updated today</p>
+        </div>
+        <div className="flex items-stretch gap-2">
+          <div className="flex shrink-0 flex-col items-center justify-center rounded-2xl border border-stone-200/70 bg-white px-3 py-2">
+            <div className="relative">
+              <svg width="72" height="72" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r={R} fill="none" stroke="#f1f0ef" strokeWidth="7" />
+                <circle cx="36" cy="36" r={R} fill="none" stroke="#10b981" strokeWidth="7" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} transform="rotate(-90 36 36)" />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-lg font-extrabold leading-none text-stone-900">{overall}</span>
+                <span className="text-[8px] text-stone-400">/100</span>
+              </div>
+            </div>
+            <span className="mt-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">↗ +{delta} vs last wk</span>
+          </div>
+          <div className="grid flex-1 grid-cols-4 gap-1.5">
+            <Metric label="Consistency" value={consistency} up color="#10b981" />
+            <Metric label="Planning" value={planning} up color="#8b5cf6" />
+            <Metric label="Mock analysis" value={mockAnalysis} up={false} color="#f59e0b" />
+            <Metric label="Accountability" value={accountability} up={false} color="#f43f5e" />
+          </div>
+        </div>
+        <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-1.5">
+          <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600" />
+          <p className="min-w-0 flex-1 text-[11px] leading-tight text-rose-800"><b>Biggest risk:</b> nobody notices when you disappear for {daysQuiet} days. A buddy solves this.</p>
+        </div>
+      </div>
+
+      {/* THIS WEEK YOUR BUDDY WOULD HAVE */}
+      <div className="shrink-0">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-stone-400">This week your buddy would have</p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {wouldHave.map((w) => (
+            <div key={w.label} className="flex flex-col items-center rounded-xl border border-stone-200/70 bg-white px-1 py-2 text-center">
+              <div className={`flex h-7 w-7 items-center justify-center rounded-full ${w.tint}`}><w.icon className="h-3.5 w-3.5" /></div>
+              <span className="mt-1 text-[9.5px] font-medium leading-tight text-stone-600">{w.label}</span>
+              <Check className="mt-1 h-3.5 w-3.5 rounded-full bg-emerald-500 p-0.5 text-white" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* THE DIFFERENCE — alone vs buddy */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-stone-400">The difference</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="rounded-xl bg-rose-50 p-2">
+            <p className="mb-1 text-[11px] font-bold text-rose-700">Preparing alone</p>
+            <ul className="space-y-0.5">
+              {alone.map((t) => <li key={t} className="flex gap-1 text-[10px] leading-tight text-stone-600"><X className="mt-0.5 h-2.5 w-2.5 shrink-0 text-rose-400" />{t}</li>)}
+            </ul>
+          </div>
+          <div className="rounded-xl bg-emerald-50 p-2">
+            <p className="mb-1 text-[11px] font-bold text-emerald-700">With your buddy</p>
+            <ul className="space-y-0.5">
+              {withB.map((t) => <li key={t} className="flex gap-1 text-[10px] leading-tight text-stone-700"><Check className="mt-0.5 h-2.5 w-2.5 shrink-0 text-emerald-600" />{t}</li>)}
+            </ul>
+          </div>
+        </div>
+        {/* proof */}
+        <div className="mt-1.5 grid grid-cols-4 gap-1.5 rounded-xl border border-stone-200/70 bg-white p-2">
+          {[['187', 'calls this month', Users], ['4.9★', 'avg rating', Star], ['96%', 'attend weekly', Users], ['2.3×', 'more syllabus', TrendingUp]].map(([v, l]) => (
+            <div key={l as string} className="text-center">
+              <div className="text-[13px] font-extrabold text-stone-900">{v as string}</div>
+              <div className="text-[8.5px] leading-tight text-stone-500">{l as string}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* PRICE — the close, always visible */}
+      <div className="shrink-0 rounded-2xl bg-stone-900 p-3 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Your CAT</p>
-            <p className="mt-0.5 text-2xl font-extrabold">{daysToCat} <span className="text-base font-bold text-stone-300">days to go</span></p>
+            <p className="text-[10px] text-stone-400">All this support</p>
+            <p className="text-xl font-extrabold leading-none">₹999<span className="text-xs font-semibold text-stone-400">/month</span></p>
+            <p className="mt-0.5 text-[9px] text-stone-500">Cancel anytime · no auto-debit</p>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-extrabold text-white tabular-nums">{mocksLeft}</p>
-            <p className="text-[11px] font-medium text-stone-400">full mocks left</p>
-          </div>
-        </div>
-        <p className="mt-2 text-[12px] leading-snug text-stone-300">
-          One shot a year. From here, CAT is won in the mocks — and a mock only counts once someone helps you decode it.
-        </p>
-      </div>
-
-      {/* MOCK SPRINT — the wedge */}
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50"><CalendarClock className="h-4 w-4 text-indigo-600" /></div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Mock sprint</p>
-            <p className="text-sm font-bold text-stone-900">One full mock every week — starting now</p>
+          <div className="text-right text-[9px] leading-tight text-stone-300">
+            30 daily check-ins · 4 strategy calls<br />unlimited chat · mock review · personal plan
           </div>
         </div>
-
-        <div className="grid grid-cols-3 gap-2 rounded-xl bg-stone-50 p-3">
-          <Stat value={mocksLeft} label="mocks you can still take" />
-          <Stat value={mocksTaken} label="taken so far" />
-          <Stat value={`${Math.max(0, mocksLeft - mocksTaken > 0 ? 1 : 0)}`} unit="/wk" label="the target from now" />
-        </div>
-
-        {nextMocks.length > 0 && (
-          <div className="mt-3 space-y-1.5">
-            {nextMocks.map((m) => (
-              <div key={m.n} className="flex items-center justify-between rounded-lg border border-stone-100 px-3 py-2 text-[13px]">
-                <span className="font-semibold text-stone-900">Mock {m.n}</span>
-                <span className="text-stone-500">{m.label}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-800">
-          <b>A mock you don&apos;t analyse is a mock wasted.</b> Toppers don&apos;t take more mocks — they extract more from each. Your buddy sits with your scorecard and names every error (silly / time / concept), so the next mock actually moves.
-        </p>
-      </div>
-
-      {/* REVISION — loss aversion */}
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50"><Repeat2 className="h-4 w-4 text-emerald-600" /></div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Revision plan</p>
-            <p className="text-sm font-bold text-stone-900">Protect the hours you&apos;ve already put in</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 rounded-xl bg-stone-50 p-3">
-          <Stat value={topicsStudied} unit={`/${totalTopics}`} label="topics studied" />
-          <Stat value={studyHours} unit="h" label="hours invested" />
-          <Stat value={revisionDue} label="due for revision" />
-        </div>
-
-        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-[12px] leading-snug text-rose-800">
-          Without revision, roughly <b>70% of a topic fades within a week</b> — that&apos;s the forgetting curve, not an opinion. {revisionDue > 0 ? <>You have <b>{revisionDue} topic{revisionDue === 1 ? '' : 's'} slipping right now.</b></> : <>Your revision is current — a buddy keeps it that way.</>} A buddy runs your revision schedule so those {studyHours}h don&apos;t evaporate.
-        </p>
-      </div>
-
-      {/* CONSISTENCY — accountability + FOMO */}
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-50"><Flame className="h-4 w-4 text-orange-500" /></div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Accountability</p>
-            <p className="text-sm font-bold text-stone-900">Consistency is the whole game — and the hardest part</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 rounded-xl bg-stone-50 p-3">
-          <Stat value={streak} unit="d" label="current streak" />
-          <Stat value={loggedDays} unit="/14" label="days logged, last 2 weeks" />
-        </div>
-
-        <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-[12px] leading-snug text-stone-700">
-          Most self-prep aspirants quietly drop off by <b>week 3</b>. The difference between them and the ones who get the call letter usually isn&apos;t IQ — it&apos;s having <b>someone who notices when you slip</b>. That&apos;s what a buddy is: your logs on their screen, a nudge the day you go quiet.
-        </p>
-      </div>
-
-      {/* WHAT YOUR BUDDY DOES — real help, personalised */}
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">What your buddy does for you</p>
-        <ul className="mt-2.5 space-y-2 text-[13px] text-stone-700">
-          <li className="flex gap-2"><ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" /> Debriefs <b>every weekly mock</b> with you — the single biggest score lever this close to CAT.</li>
-          <li className="flex gap-2"><Target className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" /> Drills your weakest section — right now that&apos;s <b>{weakestSection}</b> — instead of a one-size plan.</li>
-          <li className="flex gap-2"><Repeat2 className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" /> Keeps your revision on schedule so studied topics don&apos;t slip back.</li>
-          <li className="flex gap-2"><TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" /> A senior who <b>already cleared CAT</b> — not theory, lived experience.</li>
-        </ul>
-      </div>
-
-      {/* Real mentors — a face beats a bullet list */}
-      {recommendedBuddies.length > 0 && (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
-        </div>
-      )}
-
-      <div className="rounded-2xl bg-indigo-600 p-4 text-center text-white">
-        <p className="text-sm font-bold">{firstName}, you&apos;re already showing up.</p>
-        <p className="mx-auto mt-1 max-w-xs text-[12px] leading-snug text-indigo-100">
-          {mocksLeft} mocks and {daysToCat} days stand between you and the exam. A buddy is what turns your effort into a percentile.
-        </p>
-        <div className="mt-3">
-          <UnlockBuddyButton variant="secondary" size="lg" className="w-full" fullName={fullName}>Get my IIM buddy →</UnlockBuddyButton>
+        <div className="mt-2">
+          <UnlockBuddyButton variant="secondary" size="lg" className="w-full">
+            <span className="inline-flex items-center gap-2">Choose my buddy <ArrowRight className="h-4 w-4" /></span>
+          </UnlockBuddyButton>
         </div>
       </div>
     </div>
