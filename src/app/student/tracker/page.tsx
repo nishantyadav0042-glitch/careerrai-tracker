@@ -9,7 +9,7 @@ import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallAppButton } from '@/components/install-app-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { TopicStats } from '@/components/home/topic-stats';
-import { HomeMilestones } from '@/components/home/milestones';
+import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { getStudentProfile } from '@/lib/student-profile';
@@ -184,7 +184,6 @@ export default async function DailyTrackerPage() {
   const yesterdayLabel = yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
   // Total study time (all logs) + a 7-day study-hours sparkline for the pace card.
-  const totalStudyHours = (logs ?? []).reduce((s, l) => s + (Number(l.study_duration) || 0), 0);
   const hoursByDate = new Map((logs ?? []).map((l) => [l.report_date, Number(l.study_duration) || 0]));
   const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const week: number[] = [];
@@ -195,18 +194,25 @@ export default async function DailyTrackerPage() {
     weekLabels.push(WEEKDAY[d.getUTCDay()]);
   }
 
-  // Milestone dates from the student's own CAT timeline: Mock Intensive starts
-  // the day after the syllabus finish date (once topics are done, weekly mocks
-  // take over); Revision Sprint starts 3 weeks before CAT.
+  // The three anchor dates: syllabus done (their target), mocks begin (day
+  // after syllabus), revision begins (3 weeks before CAT).
   const catDate = catExamDate(examYear);
-  const fmtDM = (d: Date) => ({ day: String(d.getDate()), mon: d.toLocaleDateString('en-IN', { month: 'short' }) });
-  const revStart = fmtDM(new Date(catDate.getTime() - 21 * 86_400_000));
-  const mockStart = fmtDM(
+  const fmtDM = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const syllabusLabel = targetIso ? fmtDM(new Date(targetIso + 'T00:00:00')) : '—';
+  const revLabel = fmtDM(new Date(catDate.getTime() - 21 * 86_400_000));
+  const mockLabel = fmtDM(
     targetIso ? new Date(new Date(targetIso + 'T00:00:00').getTime() + 86_400_000)
               : new Date(catDate.getTime() - 84 * 86_400_000)
   );
-  const dailyHours = pace ? `${pace.requiredPerDay}h`
-    : (profile?.study_target_hours ? `${profile.study_target_hours}h` : '—');
+
+  // Topics still untouched (not started) — the third "where you stand" number.
+  const untouchedTopics = Math.max(0, totalTopics - startedOnceCount - learningCount);
+
+  // Rotating home: plan leads during the day, the log leads in the evening
+  // (6 PM–2 AM IST) — when the student's job shifts from "what to study" to
+  // "did I log it".
+  const istHour = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }));
+  const eveningLogFirst = istHour >= 18 || istHour < 2;
 
   const nextSession = sessions?.[0] ?? null;
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
@@ -233,14 +239,27 @@ export default async function DailyTrackerPage() {
     daysSinceJoin >= 1 &&
     notifPrefs.password_prompt_dismissed !== true;
 
+  // The two rotating blocks. In the morning/day the plan leads (what to study);
+  // in the evening the log leads (did you do it). Defined once, ordered below.
+  const logBlock = (
+    <DailyTrackerApp
+      studentId={user.id}
+      todaySession={todaySession}
+      hasBuddy={!!buddyId}
+      initialPendingDebrief={serverPendingDebrief}
+      initialLogging={initialLogging}
+      hasLoggedYesterday={hasLoggedYesterday}
+      yesterdayStr={yesterdayStr}
+      yesterdayLabel={yesterdayLabel}
+    />
+  );
+  const planBlock = <TodaysRoutineCard />;
+
   return (
-    // Fixed to the viewport height with overflow locked → the home never
-    // scrolls (mockup is one phone screen). The plan card flexes to absorb any
-    // slack; everything else is fixed-height and compact.
-    <div className="h-[calc(100svh-7.5rem)] overflow-hidden bg-stone-50">
-      <div className="mx-auto flex h-full max-w-md flex-col gap-1.5">
+    <div className="bg-stone-50 px-1 pb-4">
+      <div className="mx-auto flex max-w-md flex-col gap-2">
         {/* Greeting + streak card */}
-        <div className="flex shrink-0 items-center justify-between gap-3 px-1">
+        <div className="flex items-center justify-between gap-3 px-1">
           <div className="min-w-0">
             <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-stone-900">
               Hello, {firstName}! <span aria-hidden>👋</span>
@@ -258,12 +277,17 @@ export default async function DailyTrackerPage() {
           </Link>
         </div>
 
-        {/* Progress card — % of syllabus done, pace, weekly trend, reschedule.
-            Shown whenever they've committed to a finish date. */}
+        {/* In the evening, the log jumps to the top. */}
+        {eveningLogFirst && logBlock}
+
+        {/* Progress card — % done, pace, weekly trend, reschedule. */}
         {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
 
-        {/* Four at-a-glance study stats */}
-        <TopicStats completed={startedOnceCount} inProgress={learningCount} total={totalTopics} studyHours={totalStudyHours} />
+        {/* Important dates — syllabus / mocks / revision */}
+        {targetIso && <ImportantDates syllabus={syllabusLabel} mocks={mockLabel} revision={revLabel} />}
+
+        {/* Where you stand — covered / in progress / untouched */}
+        <TopicStats covered={startedOnceCount} inProgress={learningCount} untouched={untouchedTopics} />
 
         {/* Fallback pace strip only when there's no ring (no target date yet). */}
         {!pace && finishStrip && (
@@ -271,8 +295,6 @@ export default async function DailyTrackerPage() {
             href="/student/blueprint"
             className={
               'flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors ' +
-              // Pure B&W: urgency reads off weight/fill, not hue. Behind = solid
-              // black (loudest), tight = grey fill, on-track = quiet outline.
               (finishStrip.tone === 'critical'
                 ? 'border-stone-900 bg-stone-900 text-white hover:bg-stone-800'
                 : finishStrip.tone === 'tight'
@@ -282,44 +304,19 @@ export default async function DailyTrackerPage() {
           >
             <CalendarCheck className="h-4 w-4 shrink-0" />
             <span className="min-w-0 truncate">{finishStrip.label}</span>
-            <span className="ml-auto shrink-0 text-[10px] font-bold opacity-60">{startedOnceCount}/{totalTopics} topics →</span>
           </Link>
         )}
 
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
 
         {/* Install card (browser only; hides itself in the installed app) */}
-        <div className="shrink-0 empty:hidden">
-          <InstallAppButton variant="card" />
-        </div>
+        <div className="empty:hidden"><InstallAppButton variant="card" /></div>
 
-        {/* Today's Focus — the log */}
-        <div className="shrink-0">
-          <DailyTrackerApp
-            studentId={user.id}
-            todaySession={todaySession}
-            hasBuddy={!!buddyId}
-            initialPendingDebrief={serverPendingDebrief}
-            initialLogging={initialLogging}
-            hasLoggedYesterday={hasLoggedYesterday}
-            yesterdayStr={yesterdayStr}
-            yesterdayLabel={yesterdayLabel}
-          />
-        </div>
+        {/* Daily study plan (what to study, with swap) */}
+        {planBlock}
 
-        {/* Today's Plan — flexes to fill remaining space, never pushes the page taller */}
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <TodaysRoutineCard />
-        </div>
-
-        {/* Milestones: next-7-days pace, mock intensive, revision sprint */}
-        <div className="shrink-0">
-          <HomeMilestones
-            dailyHours={dailyHours}
-            mockDay={mockStart.day} mockMon={mockStart.mon}
-            revDay={revStart.day} revMon={revStart.mon}
-          />
-        </div>
+        {/* During the day, the log sits under the plan. */}
+        {!eveningLogFirst && logBlock}
       </div>
     </div>
   );
