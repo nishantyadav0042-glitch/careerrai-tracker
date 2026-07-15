@@ -190,41 +190,40 @@ export function DailyTrackerApp({
         </div>
       )}
 
-      {/* Today's Focus — the log entry point, styled per the 15 Jul mockup:
-          a star, the TODAY'S FOCUS label + one-line focus, and the black
-          "Log today's study" action. Stacks on mobile, side-by-side on wider
-          screens. */}
-      <Card className="p-5">
+      {/* Today's Focus — star + TODAY'S FOCUS label + one-line focus on the
+          left, the black "Log today's study" action on the right. Always
+          side-by-side (compact) to keep Home to one screen. */}
+      <Card className="p-3.5">
         {todaySession && <div className="mb-3"><SessionStrip session={todaySession} /></div>}
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100">
-              <Star className="h-6 w-6 fill-amber-400 text-amber-500" />
+        <div className="flex flex-row items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
-              <p className="mt-0.5 text-[17px] font-extrabold leading-snug text-stone-900">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
+              <p className="mt-0.5 text-[14px] font-extrabold leading-snug text-stone-900">
                 {hasLoggedToday ? 'Logged today ✓' : 'Be consistent, not perfect.'}
               </p>
             </div>
           </div>
 
           {hasLoggedToday ? (
-            <p className="shrink-0 text-xs text-stone-400 sm:text-right">Tomorrow&apos;s plan is built from it.</p>
+            <p className="shrink-0 text-right text-[11px] text-stone-400">Tomorrow&apos;s plan<br />builds on it.</p>
           ) : (
-            <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
+            <div className="flex shrink-0 flex-col items-end gap-1">
               <button
                 onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
                 disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-5 py-3.5 text-sm font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-2.5 text-[13px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
               >
-                {isSubmitting ? 'Logging…' : <>Log today&apos;s study <ArrowRight className="h-4 w-4" /></>}
+                {isSubmitting ? 'Logging…' : <>Log today&apos;s study <ArrowRight className="h-3.5 w-3.5" /></>}
               </button>
               {!hasLoggedYesterday && yesterdayStr && (
                 <button
                   onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-                  className="text-center text-[11px] text-stone-400 hover:text-stone-600 sm:text-right"
+                  className="text-right text-[10px] text-stone-400 hover:text-stone-600"
                 >
                   Missed {yesterdayLabel}? Log it too
                 </button>

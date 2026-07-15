@@ -68,7 +68,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   const [err, setErr] = useState<string | null>(null);
 
   const tone = TONE[pace.status];
-  const R = 46, C = 2 * Math.PI * R;
+  const R = 38, C = 2 * Math.PI * R;
   const offset = C * (1 - pace.completedPct / 100);
   const todayIso = new Date().toISOString().split('T')[0];
 
@@ -100,44 +100,39 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
         : `${pace.requiredPerDay}h a day, steady`;
 
   return (
-    <div className="rounded-3xl border border-stone-200/70 bg-white p-5 shadow-sm">
-      <div className="flex items-start gap-4">
+    <div className="rounded-3xl border border-stone-200/70 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-3">
         {/* Ring — % of syllabus done */}
         <div className="relative shrink-0">
-          <svg width="112" height="112" viewBox="0 0 112 112">
-            <circle cx="56" cy="56" r={R} fill="none" stroke="#f1f0ef" strokeWidth="9" />
-            <circle cx="56" cy="56" r={R} fill="none" stroke={tone.ring} strokeWidth="9" strokeLinecap="round"
-              strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 56 56)" />
+          <svg width="90" height="90" viewBox="0 0 90 90">
+            <circle cx="45" cy="45" r={R} fill="none" stroke="#f1f0ef" strokeWidth="8" />
+            <circle cx="45" cy="45" r={R} fill="none" stroke={tone.ring} strokeWidth="8" strokeLinecap="round"
+              strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 45 45)" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-extrabold leading-none text-stone-900">{pace.completedPct}<span className="text-base font-bold">%</span></span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">Progress</span>
+            <span className="text-xl font-extrabold leading-none text-stone-900">{pace.completedPct}<span className="text-sm font-bold">%</span></span>
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-stone-400">Progress</span>
           </div>
         </div>
 
         {/* Detail */}
         <div className="min-w-0 flex-1">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
-          <p className="mt-1.5 text-[17px] font-extrabold leading-tight text-stone-900">{headline}</p>
-          <div className="mt-2 space-y-1 text-[13px] text-stone-600">
-            <div className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-stone-400" /><b className="font-bold text-stone-900">{pace.requiredPerDay}h</b> / day</div>
-            <div className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-stone-400" /><b className="font-bold text-stone-900">{pace.remainingHours}h</b> left</div>
-            <div className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-stone-400" /><b className="font-bold text-stone-900">{pace.daysLeft}</b> day{pace.daysLeft === 1 ? '' : 's'} to go</div>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
+          <p className="mt-1 text-[15px] font-extrabold leading-tight text-stone-900">{headline}</p>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-stone-600">
+            <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-stone-400" /><b className="font-bold text-stone-900">{pace.requiredPerDay}h</b>/day</span>
+            <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-stone-400" /><b className="font-bold text-stone-900">{pace.remainingHours}h</b> left</span>
+            <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3 text-stone-400" /><b className="font-bold text-stone-900">{pace.daysLeft}</b>d to go</span>
           </div>
         </div>
 
-        {/* Weekly sparkline — hidden on the narrowest screens to avoid crowding */}
-        <div className="hidden shrink-0 sm:block">
+        {/* Weekly sparkline — always inline */}
+        <div className="hidden shrink-0 min-[380px]:block">
           <Sparkline week={week} labels={weekLabels} color={tone.ring} />
         </div>
       </div>
 
-      {/* Sparkline for narrow screens, full width */}
-      <div className="mt-3 sm:hidden">
-        <Sparkline week={week} labels={weekLabels} color={tone.ring} />
-      </div>
-
-      <div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-3">
+      <div className="mt-2.5 flex items-center justify-between border-t border-stone-100 pt-2.5">
         <span className="text-[12px] text-stone-500">Finish by <span className="font-bold text-stone-800">{fmt(targetIso)}</span></span>
         <button type="button" onClick={() => { setEditing((v) => !v); setErr(null); }}
           className="inline-flex items-center gap-0.5 text-[12px] font-bold text-indigo-600 hover:underline">

@@ -134,9 +134,13 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
 // needs every day — what to do now, and where they stand. Everything else
 // (mocks, analysis, buddy, chat) is real but secondary, so it moved to
 // More rather than competing for the same visual weight in the primary bar.
+// Home + My Buddy are the two primary tabs now. The old "My CAT Plan" tab
+// duplicated the home screen, so it moved into More; its middle slot goes to
+// My Buddy — mocks are the backbone of CAT, and the Buddy is the backbone of
+// mocks, so the mentor gets primary billing.
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
-  { href: '/student/blueprint', icon: Compass, label: 'My CAT Plan' },
+  { href: '/student/buddy', icon: Users, label: 'My Buddy' },
 ];
 
 // Mocks folded into Analysis (one "how am I doing" panel with two tabs),
@@ -145,7 +149,7 @@ const STUDENT_MAIN: NavItem[] = [
 // top-level destinations). Three real screens instead of seven.
 const STUDENT_MORE: NavItem[] = [
   { href: '/student/analysis', icon: TrendingUp, label: 'Analysis' },
-  { href: '/student/buddy', imgSrc: '/buddy-nav-icon.jpg', label: 'Buddy' },
+  { href: '/student/blueprint', icon: Compass, label: 'My CAT Plan' },
   { href: '/student/profile', icon: User, label: 'Profile' },
 ];
 
@@ -168,8 +172,9 @@ function withBadge(items: NavItem[], label: string, unread: number): NavItem[] {
 }
 
 export function StudentBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
-  // Chat lives inside the Buddy panel now — badge Buddy, not a separate Chat item.
-  return <NavBar items={STUDENT_MAIN} moreItems={withBadge(STUDENT_MORE, 'Buddy', chatUnread)} />;
+  // Chat lives inside the Buddy panel — badge the primary My Buddy tab so an
+  // unread mentor reply is visible without opening More.
+  return <NavBar items={withBadge(STUDENT_MAIN, 'My Buddy', chatUnread)} moreItems={STUDENT_MORE} />;
 }
 
 export function BuddyBottomNav({ chatUnread = 0 }: { chatUnread?: number }) {
