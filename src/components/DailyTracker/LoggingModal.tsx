@@ -22,10 +22,13 @@ export interface LoggingData {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
-  completedTaskIds?: string[]; // today's plan tasks the student ticked as covered
+  // Plan tasks to complete, with how far they got: 'green' = fully done,
+  // 'blue' = half done (advances coverage less). Absent confidence = uncover
+  // a previously-done task.
+  completedTasks?: { id: string; confidence?: 'green' | 'blue' }[];
 }
 
-const HOURS_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
+const HOURS_OPTIONS = [0, 2, 4, 6, 8, 10];
 // 'Mock' is an explicit Yes/No question; we still fold 'Mock' into `sections`
 // on submit so the server (mock_taken = sections.includes('Mock')) and the
 // debrief flow are unchanged. The study sections themselves are now derived
@@ -49,7 +52,7 @@ export function LoggingModal({
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
-  const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(new Set());
+  const [taskChoice, setTaskChoice] = useState<Map<string, 'half' | 'full'>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
 
   // Pull today's plan when the log opens — its topics become the "what did you
@@ -69,23 +72,25 @@ export function LoggingModal({
         if (cancelled) return;
         setPlanTasks(rawTasks.map((t) => ({ id: String(t.id), section: t.section, topic: t.topic ?? null, label: String(t.label ?? ''), target: t.target ?? null })));
         const done = new Set<string>(rawTasks.filter((t) => doneIds.has(String(t.id))).map((t) => String(t.id)));
-        setCheckedTaskIds(new Set(done));
         setInitialDoneIds(done);
+        // Already-done topics default to "fully done".
+        setTaskChoice(new Map([...done].map((id) => [id, 'full' as const])));
       } catch { /* best effort — plan just won't prefill */ }
     })();
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  const toggleTask = (id: string) => setCheckedTaskIds((prev) => {
-    const n = new Set(prev);
-    if (n.has(id)) n.delete(id); else n.add(id);
+  // Tap Half/Full to set how far you got; tap the same one again to clear it.
+  const setChoice = (id: string, choice: 'half' | 'full') => setTaskChoice((prev) => {
+    const n = new Map(prev);
+    if (n.get(id) === choice) n.delete(id); else n.set(id, choice);
     return n;
   });
 
-  // Must answer the mock question; must have ticked a covered topic OR a mock.
+  // Must answer the mock question; must have marked a topic OR a mock.
   const isValid =
     hours !== null && energy !== null && mockTaken !== null &&
-    (mockTaken === true || checkedTaskIds.size > 0);
+    (mockTaken === true || taskChoice.size > 0);
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -95,23 +100,30 @@ export function LoggingModal({
       setError(null);
       // Sections are now DERIVED from the plan topics the student ticked (plus
       // the mock answer folded in) — one source of truth, no separate picker.
-      const checkedTasks = planTasks.filter((t) => checkedTaskIds.has(t.id));
-      const derived = [...new Set(checkedTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
+      const coveredTasks = planTasks.filter((t) => taskChoice.has(t.id));
+      const derived = [...new Set(coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
-      // Only tasks whose tick STATE changed — complete-task toggles, so sending
-      // an already-done task would un-complete it.
-      const toggled = planTasks.filter((t) => checkedTaskIds.has(t.id) !== initialDoneIds.has(t.id)).map((t) => t.id);
+      // Send only tasks whose state CHANGED (complete-task toggles): newly
+      // covered → complete with confidence (full=green, half=blue); a
+      // previously-done task now cleared → uncover (no confidence).
+      const completedTasks: { id: string; confidence?: 'green' | 'blue' }[] = [];
+      for (const t of planTasks) {
+        const choice = taskChoice.get(t.id);
+        const wasDone = initialDoneIds.has(t.id);
+        if (choice && !wasDone) completedTasks.push({ id: t.id, confidence: choice === 'full' ? 'green' : 'blue' });
+        else if (!choice && wasDone) completedTasks.push({ id: t.id });
+      }
       const result = await onSubmit({
         hours,
         sections: finalSections,
         energy,
         notes: notes.trim() || undefined,
         emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
-        completedTaskIds: toggled,
+        completedTasks,
       });
       // Reset form
       setHours(null);
-      setCheckedTaskIds(new Set());
+      setTaskChoice(new Map());
       setInitialDoneIds(new Set());
       setMockTaken(null);
       setEnergy(null);
@@ -220,34 +232,40 @@ export function LoggingModal({
             )}
           </div>
 
-          {/* Today's plan — tick what you covered. This IS the study plan;
-              ticking a topic here marks it done in the plan and advances its
-              coverage everywhere. */}
+          {/* Today's plan — mark how far you got on each topic. This IS the
+              study plan; your choice marks the task done + advances coverage
+              everywhere. */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Today&apos;s plan — tick what you covered
+              Today&apos;s plan — how far did you get?
             </label>
             {planTasks.length === 0 ? (
               <p className="text-xs text-zinc-500">No plan topics for today{mockTaken ? ' — a mock alone is enough.' : '.'}</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {planTasks.map((t) => {
-                  const checked = checkedTaskIds.has(t.id);
+                  const choice = taskChoice.get(t.id);
                   return (
-                    <button
-                      key={t.id}
-                      onClick={() => toggleTask(t.id)}
-                      className={cn(
-                        'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors',
-                        checked ? 'bg-orange-500/15 border border-orange-500/50' : 'bg-zinc-800 border border-transparent hover:bg-zinc-700'
-                      )}
-                    >
-                      <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2', checked ? 'border-orange-500 bg-orange-500' : 'border-zinc-500')}>
-                        {checked && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{t.target || t.label}</span>
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-zinc-400">{t.section}</span>
-                    </button>
+                    <div key={t.id} className="rounded-xl bg-zinc-800 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{t.target || t.label}</span>
+                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-zinc-400">{t.section}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setChoice(t.id, 'half')}
+                          className={cn('rounded-lg py-1.5 text-xs font-bold transition-colors', choice === 'half' ? 'bg-amber-500 text-white' : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600')}
+                        >
+                          Half done
+                        </button>
+                        <button
+                          onClick={() => setChoice(t.id, 'full')}
+                          className={cn('flex items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-bold transition-colors', choice === 'full' ? 'bg-emerald-500 text-white' : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600')}
+                        >
+                          {choice === 'full' && <Check className="h-3 w-3" strokeWidth={3} />} Fully done
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>

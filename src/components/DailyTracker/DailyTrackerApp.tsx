@@ -145,15 +145,15 @@ export function DailyTrackerApp({
     // advances — one action, consistent everywhere. skip_day_close because the
     // log above already wrote today's daily_report (real hours/mood). Only for
     // today's log, never a backdate (the plan tasks are today's).
-    if (!backdated && data.completedTaskIds && data.completedTaskIds.length > 0) {
-      await Promise.all(data.completedTaskIds.map((taskId) =>
+    if (!backdated && data.completedTasks && data.completedTasks.length > 0) {
+      await Promise.all(data.completedTasks.map((t) =>
         fetch('/api/routine/complete-task', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: taskId, confidence: 'blue', skip_day_close: true }),
+          body: JSON.stringify({ task_id: t.id, ...(t.confidence ? { confidence: t.confidence } : {}), skip_day_close: true }),
         }).catch(() => {})
       ));
-      // Tell the plan card to re-pull so the ticked topics show as done.
+      // Tell the plan card to re-pull so the marked topics show as done.
       try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* noop */ }
     }
     if (result?.milestone) setLastNudge(result.milestone);

@@ -72,10 +72,6 @@ interface RoutineResponse {
 // in-between trims with no distinct meaning and no visible effect most
 // days, just four buttons competing with the actual task below them.
 type TimeBudget = 30 | 'planned';
-const TIME_OPTIONS: { value: TimeBudget; label: string }[] = [
-  { value: 'planned', label: '🟢 Planned' },
-  { value: 30, label: '⏱️ Less time today (30m)' },
-];
 
 // Fallback for routines generated before targets existed.
 function taskTitle(task: RoutineTask): string {
@@ -95,7 +91,7 @@ const ROUTINE_CACHE_MS = 30_000;
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
-  const [budget, setBudget] = useState<TimeBudget>('planned');
+  const [budget] = useState<TimeBudget>('planned');
   const [fullyDone, setFullyDone] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -306,20 +302,7 @@ export function TodaysRoutineCard() {
       <div className="flex items-center justify-between mb-1">
         <p className="text-[11px] uppercase tracking-widest text-red-600 font-semibold">Today&apos;s Study Plan</p>
         {!fullyDone && (
-          <div className="flex gap-1 text-[11px] font-semibold">
-            {TIME_OPTIONS.map(({ value, label }) => (
-              <button
-                key={String(value)}
-                onClick={() => setBudget(value)}
-                className={cn(
-                  'rounded-full px-2 py-0.5 transition-colors',
-                  budget === value ? 'bg-stone-200 text-stone-900' : 'text-stone-400'
-                )}
-              >
-                {value === 30 ? 'Less time' : label}
-              </button>
-            ))}
-          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-stone-200 px-2 py-0.5 text-[11px] font-semibold text-stone-900">🟢 Planned</span>
         )}
       </div>
 
