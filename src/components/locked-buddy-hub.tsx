@@ -48,7 +48,8 @@ export function LockedBuddyHub({
   ];
 
   return (
-    <div className="mx-auto max-w-md space-y-6 px-1 py-6">
+    <>
+    <div className="mx-auto max-w-md space-y-6 px-1 pt-6 pb-28">
       {/* Hero */}
       <div className="text-center">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-purple-100 text-3xl">🔒</div>
@@ -68,12 +69,7 @@ export function LockedBuddyHub({
         </div>
       </div>
 
-      {/* Real mentors, ranked for this student — a face beats a bullet list */}
-      {recommendedBuddies.length > 0 && (
-        <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
-      )}
-
-      {/* Why a buddy — value props */}
+      {/* USP FIRST — our strength up top, not buried under profiles */}
       <div className="space-y-2.5">
         {props.map((p) => (
           <div key={p.title} className="flex gap-3 rounded-2xl border border-stone-200 bg-white p-3.5">
@@ -87,6 +83,11 @@ export function LockedBuddyHub({
           </div>
         ))}
       </div>
+
+      {/* Then the mentor — one best match, others one tap away */}
+      {recommendedBuddies.length > 0 && (
+        <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
+      )}
 
       {/* Proof of the product — the sample debrief */}
       <div>
@@ -129,9 +130,14 @@ export function LockedBuddyHub({
         </p>
       </div>
 
-      <UnlockBuddyButton variant="primary" size="lg" className="w-full" fullName={fullName}>
+    </div>
+
+    {/* Constant unlock button — always visible, just above the bottom nav */}
+    <div className="fixed inset-x-0 bottom-16 z-20 mx-auto max-w-md px-3">
+      <UnlockBuddyButton variant="primary" size="lg" className="w-full shadow-xl shadow-stone-900/20" fullName={fullName}>
         Unlock your IIM buddy →
       </UnlockBuddyButton>
     </div>
+    </>
   );
 }

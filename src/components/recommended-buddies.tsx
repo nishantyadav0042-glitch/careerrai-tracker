@@ -1,7 +1,9 @@
+'use client';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { type MatchBuddy } from '@/lib/buddy-match';
-import { Briefcase, ExternalLink, Sparkles, Lock } from 'lucide-react';
+import { Briefcase, ExternalLink, Sparkles, Lock, ChevronDown } from 'lucide-react';
 
 // The free-tier buddy showcase: real, verified IIM-alumni mentors the student
 // can browse for free — messaging/booking is what the subscription unlocks.
@@ -22,17 +24,22 @@ function journeyLabel(b: MatchBuddy): string | null {
 }
 
 export function RecommendedBuddies({ buddies, studentName }: { buddies: RecommendedBuddy[]; studentName?: string }) {
+  const [showAll, setShowAll] = useState(false);
   if (buddies.length === 0) return null;
+
+  // Lead with just the best match; the rest are one tap away. A single face
+  // keeps the USP above it in view instead of a long scroll of profiles.
+  const shown = showAll ? buddies : buddies.slice(0, 1);
 
   return (
     <div>
-      <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Recommended buddies for you</div>
+      <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your best-matched buddy</div>
       <p className="text-xs text-stone-400 mt-1 mb-4">
-        Real IIM seniors, matched to your profile. Browse free — subscribe to connect with one.
+        A real IIM senior, matched to your profile. Browse free — subscribe to connect.
       </p>
 
       <div className="space-y-3">
-        {buddies.map((b, i) => {
+        {shown.map((b, i) => {
           const initials = (b.full_name || 'B').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
           const journey = journeyLabel(b);
           const firstName = b.full_name.split(' ')[0];
@@ -110,8 +117,18 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
         })}
       </div>
 
+      {!showAll && buddies.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white py-2.5 text-xs font-semibold text-stone-600 hover:border-stone-300"
+        >
+          See {buddies.length - 1} other {buddies.length - 1 === 1 ? 'buddy' : 'buddies'} <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      )}
+
       <p className="mt-3 text-center text-[11px] text-stone-400">
-        Your buddy tracks you daily, decodes every mock, and meets you weekly — 21-day full refund.
+        One buddy the whole journey — switch anytime. 21-day full refund.
       </p>
     </div>
   );
