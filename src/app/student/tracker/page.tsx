@@ -257,7 +257,7 @@ export default async function DailyTrackerPage() {
 
   return (
     <div className="bg-stone-50 px-1 pb-4">
-      <div className="mx-auto flex max-w-md flex-col gap-2">
+      <div className="mx-auto flex max-w-md flex-col gap-1.5">
         {/* Greeting + streak card */}
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="min-w-0">
