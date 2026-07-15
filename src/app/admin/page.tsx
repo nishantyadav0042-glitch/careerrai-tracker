@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { PushGate } from '@/components/push-gate';
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getStreakBreakers } from '@/lib/streak-breakers';
 
 function getTodayIST() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -46,9 +47,10 @@ export default async function AdminTodayPage() {
   const inactiveBuddies = buddies.filter((b) => !b.last_seen_at || (b.last_seen_at as string) < twoDaysAgo).length;
   const hotLeads = students.filter((s) => ((s.call_feedback as { disposition?: string } | null)?.disposition ?? '').toUpperCase() === 'HOT').length;
 
-  const [{ count: loggedToday }, { data: streaks }] = await Promise.all([
+  const [{ count: loggedToday }, { data: streaks }, streakBreakers] = await Promise.all([
     admin.from('daily_reports').select('student_id', { count: 'exact', head: true }).gte('created_at', todayStartIst),
     admin.from('streak_data').select('student_id, last_log_date'),
+    getStreakBreakers(admin),
   ]);
   const todayMs = new Date(today + 'T00:00:00').getTime();
   const studentIds = new Set(students.map((s) => s.id));
@@ -71,6 +73,7 @@ export default async function AdminTodayPage() {
   const attention = [
     { label: 'Logged today', val: `${loggedToday ?? 0}/${totalStudents}`, href: '/admin/students', hot: false },
     { label: 'Remind to log today', val: notLoggedToday, href: '/admin/reminders', hot: notLoggedToday > 0 },
+    { label: 'Streak breakers — skipped yesterday', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'HOT from AI calls', val: hotLeads, href: '/admin/sales-queue', hot: hotLeads > 0 },
     { label: 'Going cold (4+ days)', val: goingCold, href: '/admin/leads', hot: goingCold > 0 },
   ];
