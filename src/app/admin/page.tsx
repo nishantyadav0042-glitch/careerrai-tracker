@@ -7,6 +7,10 @@ import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight }
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
 
+// Always render live — the dashboard is a real-time ops panel; a cached copy
+// showing stale counts (a payment just made, a fresh log) reads as "broken".
+export const dynamic = 'force-dynamic';
+
 function getTodayIST() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
@@ -45,12 +49,15 @@ export default async function AdminTodayPage() {
   const upgradedToday = students.filter((s) => s.is_premium === true && isToday(s.premium_since as string | null)).length;
   const newLeadsToday = students.filter((s) => isToday(s.created_at as string | null)).length;
   const inactiveBuddies = buddies.filter((b) => !b.last_seen_at || (b.last_seen_at as string) < twoDaysAgo).length;
-  const hotLeads = students.filter((s) => ((s.call_feedback as { disposition?: string } | null)?.disposition ?? '').toUpperCase() === 'HOT').length;
 
-  const [{ count: loggedToday }, { data: streaks }, streakBreakers] = await Promise.all([
+  const [{ count: loggedToday }, { data: streaks }, streakBreakers, { data: salesReadyRows }] = await Promise.all([
     admin.from('daily_reports').select('student_id', { count: 'exact', head: true }).gte('created_at', todayStartIst),
     admin.from('streak_data').select('student_id, last_log_date'),
     getStreakBreakers(admin),
+    // Same source the Sales queue page reads, so the tile number matches the
+    // list it opens (was "HOT from AI calls", which counted call dispositions
+    // that don't exist yet → tile said 0 while the page showed the real queue).
+    admin.from('student_engagement').select('student_id').eq('sales_ready', true).is('sales_called_at', null).limit(500),
   ]);
   const todayMs = new Date(today + 'T00:00:00').getTime();
   const studentIds = new Set(students.map((s) => s.id));
@@ -59,6 +66,13 @@ export default async function AdminTodayPage() {
     const days = Math.floor((todayMs - new Date(r.last_log_date + 'T00:00:00').getTime()) / 86_400_000);
     return days >= 4;
   }).length;
+
+  // Match the Sales queue page exactly: sales-ready, not yet called, still free.
+  const salesReadyIds = (salesReadyRows ?? []).map((r) => r.student_id as string);
+  const { data: salesReadyProfs } = salesReadyIds.length
+    ? await admin.from('profiles').select('id, is_premium').in('id', salesReadyIds)
+    : { data: [] as { id: string; is_premium: boolean | null }[] };
+  const salesReadyToCall = (salesReadyProfs ?? []).filter((p) => p.is_premium !== true).length;
 
   const tiles = [
     { label: 'Total students', val: totalStudents, icon: Users, href: '/admin/students', accent: 'text-stone-900' },
@@ -74,7 +88,7 @@ export default async function AdminTodayPage() {
     { label: 'Logged today', val: `${loggedToday ?? 0}/${totalStudents}`, href: '/admin/students', hot: false },
     { label: 'Remind to log today', val: notLoggedToday, href: '/admin/reminders', hot: notLoggedToday > 0 },
     { label: 'Streak breakers — skipped yesterday', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
-    { label: 'HOT from AI calls', val: hotLeads, href: '/admin/sales-queue', hot: hotLeads > 0 },
+    { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
     { label: 'Going cold (4+ days)', val: goingCold, href: '/admin/leads', hot: goingCold > 0 },
   ];
 

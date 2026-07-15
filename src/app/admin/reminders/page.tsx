@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
 import { ArrowLeft } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 // "Remind to log today" — the founder's door from the dashboard. Lists every
 // onboarded student who hasn't filled TODAY's log yet (app 3 AM IST log-day),
 // each with a one-tap WhatsApp reminder. Students who might still log late

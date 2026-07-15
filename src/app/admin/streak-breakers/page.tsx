@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getStreakBreakers } from '@/lib/streak-breakers';
 import { ArrowLeft } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 // "Streak breakers — skipped yesterday": logged the day before yesterday, missed
 // yesterday, still silent today. WhatsApp-button-only, one tap per student with
 // a simple direct message pre-filled.
