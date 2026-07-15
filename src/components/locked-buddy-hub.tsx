@@ -2,7 +2,7 @@ import { SampleDebrief } from '@/components/sample-debrief';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
-import { Users, Target, LineChart, MessageCircle, ShieldCheck, Check } from 'lucide-react';
+import { Users, CalendarDays, LineChart, MessageCircle, Repeat2, ShieldCheck, Check } from 'lucide-react';
 
 // The buddy upsell — a full-page SALES ASSET shown on /student/buddy and
 // /student/chat for free users instead of the real hub. Sells the one thing
@@ -18,27 +18,32 @@ export function LockedBuddyHub({
 }) {
   const heading = variant === 'chat' ? 'Chat is part of your IIM buddy 🔒' : 'Unlock your IIM buddy 🔒';
 
-  // The core value props — framed as outcomes, not features.
+  // The USP — every line is the actual promise, no fluff.
   const props = [
     {
       icon: Users,
-      title: '1-on-1, never a group',
-      body: 'A senior who knows your name, your weak section and your last mock — not one of 200 in a batch.',
-    },
-    {
-      icon: Target,
-      title: 'A personalised strategy',
-      body: 'Built around YOUR gaps and re-tuned every week — not the same plan handed to everyone.',
-    },
-    {
-      icon: LineChart,
-      title: 'Every mock decoded with you',
-      body: 'They sit with your scorecard and name each error — silly, time, concept — so the next mock actually moves.',
+      title: 'Only 1:1 — batches don’t exist',
+      body: 'One senior who knows your name, your weak section and your last mock. Never one of 200 in a batch.',
     },
     {
       icon: MessageCircle,
-      title: 'Daily accountability',
-      body: 'They see your logs, nudge you when you slip, and keep you honest right up to CAT.',
+      title: 'An elder sibling, a message away',
+      body: 'Not a formal tutor — someone who’s been exactly where you are. Chat anytime you’re stuck or spiralling.',
+    },
+    {
+      icon: CalendarDays,
+      title: 'Ask for a session any day you want',
+      body: 'Need to talk it out? Request a call on the day that suits you — no fixed slots, no batch timetable.',
+    },
+    {
+      icon: LineChart,
+      title: 'Analyse every mock together',
+      body: 'They sit with your scorecard and name each error — silly, time, concept — so the next mock actually moves.',
+    },
+    {
+      icon: Repeat2,
+      title: 'One buddy the whole journey — switch anytime',
+      body: 'The same mentor from now to CAT, so nothing gets re-explained. Not clicking? Switch to another, no questions asked.',
     },
   ];
 
