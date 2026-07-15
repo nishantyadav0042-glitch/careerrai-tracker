@@ -234,10 +234,13 @@ export default async function DailyTrackerPage() {
     notifPrefs.password_prompt_dismissed !== true;
 
   return (
-    <div className="min-h-screen bg-stone-50 px-2.5 pt-3 pb-2">
-      <div className="mx-auto max-w-md space-y-2.5">
+    // Fixed to the viewport height with overflow locked → the home never
+    // scrolls (mockup is one phone screen). The plan card flexes to absorb any
+    // slack; everything else is fixed-height and compact.
+    <div className="h-[calc(100svh-7.5rem)] overflow-hidden bg-stone-50">
+      <div className="mx-auto flex h-full max-w-md flex-col gap-1.5">
         {/* Greeting + streak card */}
-        <div className="flex items-center justify-between gap-3 px-1">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-1">
           <div className="min-w-0">
             <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-stone-900">
               Hello, {firstName}! <span aria-hidden>👋</span>
@@ -285,42 +288,38 @@ export default async function DailyTrackerPage() {
 
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
 
-        {/* Mockup order: Today's Focus (the log) first, then Today's Plan.
-            Install card stays pinned on top for browser users; it hides itself
-            in the installed app. */}
-        <div className="flex flex-col gap-2.5">
-          <div className="order-1 empty:hidden">
-            <InstallAppButton variant="card" />
-          </div>
+        {/* Install card (browser only; hides itself in the installed app) */}
+        <div className="shrink-0 empty:hidden">
+          <InstallAppButton variant="card" />
+        </div>
 
-          {/* Today's Focus — have I logged today's study? */}
-          <div className="order-2">
-            <DailyTrackerApp
-              studentId={user.id}
-              todaySession={todaySession}
-              hasBuddy={!!buddyId}
-              initialPendingDebrief={serverPendingDebrief}
-              initialLogging={initialLogging}
-              hasLoggedYesterday={hasLoggedYesterday}
-              yesterdayStr={yesterdayStr}
-              yesterdayLabel={yesterdayLabel}
-            />
-          </div>
+        {/* Today's Focus — the log */}
+        <div className="shrink-0">
+          <DailyTrackerApp
+            studentId={user.id}
+            todaySession={todaySession}
+            hasBuddy={!!buddyId}
+            initialPendingDebrief={serverPendingDebrief}
+            initialLogging={initialLogging}
+            hasLoggedYesterday={hasLoggedYesterday}
+            yesterdayStr={yesterdayStr}
+            yesterdayLabel={yesterdayLabel}
+          />
+        </div>
 
-          {/* Today's Plan — what should I study? */}
-          <div className="order-3">
-            <TodaysRoutineCard />
-          </div>
+        {/* Today's Plan — flexes to fill remaining space, never pushes the page taller */}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <TodaysRoutineCard />
         </div>
 
         {/* Milestones: next-7-days pace, mock intensive, revision sprint */}
-        <HomeMilestones
-          dailyHours={dailyHours}
-          mockDay={mockStart.day} mockMon={mockStart.mon}
-          revDay={revStart.day} revMon={revStart.mon}
-        />
-
-        <div className="pb-20" />
+        <div className="shrink-0">
+          <HomeMilestones
+            dailyHours={dailyHours}
+            mockDay={mockStart.day} mockMon={mockStart.mon}
+            revDay={revStart.day} revMon={revStart.mon}
+          />
+        </div>
       </div>
     </div>
   );
