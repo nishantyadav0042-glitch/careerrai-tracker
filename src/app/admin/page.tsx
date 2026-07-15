@@ -6,6 +6,7 @@ import { PushGate } from '@/components/push-gate';
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
+import { getLogDateString } from '@/lib/streak-utils';
 
 // Always render live — the dashboard is a real-time ops panel; a cached copy
 // showing stale counts (a payment just made, a fresh log) reads as "broken".
@@ -50,8 +51,11 @@ export default async function AdminTodayPage() {
   const newLeadsToday = students.filter((s) => isToday(s.created_at as string | null)).length;
   const inactiveBuddies = buddies.filter((b) => !b.last_seen_at || (b.last_seen_at as string) < twoDaysAgo).length;
 
-  const [{ count: loggedToday }, { data: streaks }, streakBreakers, { data: salesReadyRows }] = await Promise.all([
-    admin.from('daily_reports').select('student_id', { count: 'exact', head: true }).gte('created_at', todayStartIst),
+  const logDay = getLogDateString(); // app 3 AM IST log-day — same boundary the logged-today list uses
+  const [{ data: todayReports }, { data: streaks }, streakBreakers, { data: salesReadyRows }] = await Promise.all([
+    // report_date (not created_at) so the tile counts the SAME thing the
+    // "Logged today" list shows — the students whose log belongs to today.
+    admin.from('daily_reports').select('student_id').eq('report_date', logDay),
     admin.from('streak_data').select('student_id, last_log_date'),
     getStreakBreakers(admin),
     // Same source the Sales queue page reads, so the tile number matches the
@@ -61,6 +65,10 @@ export default async function AdminTodayPage() {
   ]);
   const todayMs = new Date(today + 'T00:00:00').getTime();
   const studentIds = new Set(students.map((s) => s.id));
+  // Distinct non-test students whose log is dated today (matches /admin/logged-today).
+  const loggedToday = new Set(
+    (todayReports ?? []).map((r) => r.student_id as string).filter((id) => studentIds.has(id))
+  ).size;
   const goingCold = (streaks ?? []).filter((r) => {
     if (!studentIds.has(r.student_id as string) || !r.last_log_date) return false;
     const days = Math.floor((todayMs - new Date(r.last_log_date + 'T00:00:00').getTime()) / 86_400_000);
@@ -85,7 +93,7 @@ export default async function AdminTodayPage() {
 
   const notLoggedToday = Math.max(0, totalStudents - (loggedToday ?? 0));
   const attention = [
-    { label: 'Logged today', val: `${loggedToday ?? 0}/${totalStudents}`, href: '/admin/students', hot: false },
+    { label: 'Logged today', val: `${loggedToday}/${totalStudents}`, href: '/admin/logged-today', hot: false },
     { label: 'Remind to log today', val: notLoggedToday, href: '/admin/reminders', hot: notLoggedToday > 0 },
     { label: 'Streak breakers — skipped yesterday', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
