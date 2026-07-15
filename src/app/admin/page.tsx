@@ -67,8 +67,10 @@ export default async function AdminTodayPage() {
     { label: 'Buddies silent 2+ days', val: inactiveBuddies, icon: MoonStar, href: '/admin/students', accent: inactiveBuddies > 0 ? 'text-rose-600' : 'text-emerald-700' },
   ];
 
+  const notLoggedToday = Math.max(0, totalStudents - (loggedToday ?? 0));
   const attention = [
     { label: 'Logged today', val: `${loggedToday ?? 0}/${totalStudents}`, href: '/admin/students', hot: false },
+    { label: 'Remind to log today', val: notLoggedToday, href: '/admin/reminders', hot: notLoggedToday > 0 },
     { label: 'HOT from AI calls', val: hotLeads, href: '/admin/sales-queue', hot: hotLeads > 0 },
     { label: 'Going cold (4+ days)', val: goingCold, href: '/admin/leads', hot: goingCold > 0 },
   ];
