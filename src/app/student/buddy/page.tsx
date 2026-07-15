@@ -2,8 +2,10 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/access';
-import { LockedBuddyHub } from '@/components/locked-buddy-hub';
+import { BuddyPitch, type BuddyPitchData } from '@/components/buddy-pitch';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
+import { resolveCatExamDate } from '@/lib/routine-engine';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { getChatUnreadCount } from '@/lib/chat-unread';
 import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
@@ -30,11 +32,56 @@ export default async function BuddyPage() {
     .eq('id', user.id)
     .single();
 
-  // Freemium paywall: the real buddy hub is premium-only. Free users get the
-  // locked "buddy-taste" state with the unlock CTA.
+  // Freemium: free users get the Buddy conversion dashboard — an indirect sales
+  // asset built from their OWN numbers (mock sprint, revision plan, consistency),
+  // with the Buddy positioned as the enabler at each pain point.
   if (!isPremium(profile)) {
-    const recommendedBuddies = await getRecommendedBuddiesForStudent(admin, user.id);
-    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} recommendedBuddies={recommendedBuddies} />;
+    const nowD = new Date();
+    const fourteenAgo = new Date(nowD.getTime() - 14 * 86_400_000).toISOString().split('T')[0];
+    const weekAgoIso = new Date(nowD.getTime() - 7 * 86_400_000).toISOString();
+    const [{ data: reports }, { data: coverageRows }, { data: streakRow }, { data: xp }, recommendedBuddies] = await Promise.all([
+      admin.from('daily_reports').select('report_date, study_duration, mock_taken').eq('student_id', user.id).limit(500),
+      admin.from('topic_coverage').select('status, updated_at').eq('student_id', user.id),
+      admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
+      admin.from('profiles').select('attempt_year, self_reported_weakest_section').eq('id', user.id).single(),
+      getRecommendedBuddiesForStudent(admin, user.id),
+    ]);
+
+    const cat = resolveCatExamDate(nowD, (xp?.attempt_year as number | null) ?? null);
+    const daysToCat = Math.max(0, Math.ceil((cat.getTime() - nowD.getTime()) / 86_400_000));
+    const mocksLeft = Math.max(0, Math.ceil(daysToCat / 7));
+
+    const reps = reports ?? [];
+    const mocksTaken = reps.filter((r) => r.mock_taken).length;
+    const studyHours = Math.round(reps.reduce((s, r) => s + (Number(r.study_duration) || 0), 0));
+    const loggedDays = new Set(reps.filter((r) => (r.report_date as string) >= fourteenAgo).map((r) => r.report_date)).size;
+
+    const cov = coverageRows ?? [];
+    const studiedStatuses = new Set(['practicing', 'revising', 'exam_ready']);
+    const topicsStudied = cov.filter((c) => studiedStatuses.has(c.status as string)).length;
+    const revisionDue = cov.filter((c) =>
+      ['learning', 'practicing', 'revising'].includes(c.status as string) && (c.updated_at as string) < weekAgoIso
+    ).length;
+
+    // Next 4 weekly mock dates (upcoming Sundays).
+    const nextMocks: { n: number; label: string }[] = [];
+    const d = new Date(nowD);
+    d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7)); // next Sunday
+    for (let i = 0; i < 4 && mocksLeft > i; i++) {
+      nextMocks.push({ n: i + 1, label: d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) });
+      d.setDate(d.getDate() + 7);
+    }
+
+    const data: BuddyPitchData = {
+      firstName: profile?.full_name?.split(' ')[0] ?? 'there',
+      daysToCat, mocksLeft, mocksTaken, nextMocks,
+      topicsStudied, totalTopics: Object.keys(TOPIC_METADATA).length,
+      studyHours, revisionDue,
+      streak: (streakRow?.current_streak as number | null) ?? 0,
+      loggedDays,
+      weakestSection: (xp?.self_reported_weakest_section as string | null) ?? 'DILR',
+    };
+    return <BuddyPitch data={data} recommendedBuddies={recommendedBuddies} fullName={profile?.full_name ?? undefined} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;
