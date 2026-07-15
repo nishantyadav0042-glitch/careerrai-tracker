@@ -137,8 +137,25 @@ export function DailyTrackerApp({
   } = useLogging(studentId, initialLogging);
 
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
-    const result = await submitLog({ ...data, ...(logDateOverride ? { log_date: logDateOverride } : {}) });
+    const backdated = logDateOverride;
+    const result = await submitLog({ ...data, ...(backdated ? { log_date: backdated } : {}) });
     setLogDateOverride(null);
+
+    // Integrated flow: the ticked plan topics become plan completions + coverage
+    // advances — one action, consistent everywhere. skip_day_close because the
+    // log above already wrote today's daily_report (real hours/mood). Only for
+    // today's log, never a backdate (the plan tasks are today's).
+    if (!backdated && data.completedTaskIds && data.completedTaskIds.length > 0) {
+      await Promise.all(data.completedTaskIds.map((taskId) =>
+        fetch('/api/routine/complete-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId, confidence: 'blue', skip_day_close: true }),
+        }).catch(() => {})
+      ));
+      // Tell the plan card to re-pull so the ticked topics show as done.
+      try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* noop */ }
+    }
     if (result?.milestone) setLastNudge(result.milestone);
     else if (result?.daily_nudge) setLastNudge(result.daily_nudge);
     const mockSelected = data.sections.includes('Mock');

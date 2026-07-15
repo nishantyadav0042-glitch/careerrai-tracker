@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EmotionalChips } from './EmotionalChips';
+
+// Today's plan tasks, pulled into the log so "what did you cover" IS the plan —
+// one place to fill, and ticking a topic here completes it in the plan too.
+interface PlanTask { id: string; section: string; topic: string | null; label: string; target: string | null; }
 
 interface LoggingModalProps {
   isOpen: boolean;
@@ -18,13 +22,14 @@ export interface LoggingData {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
+  completedTaskIds?: string[]; // today's plan tasks the student ticked as covered
 }
 
 const HOURS_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
-// 'Mock' is no longer a study chip — it's now an explicit Yes/No question below,
-// so it can't be missed. We still send 'Mock' inside `sections` on submit so the
-// server (mock_taken = sections.includes('Mock')) and debrief flow are unchanged.
-const SECTIONS = ['VARC', 'DILR', 'QA', 'Revision'];
+// 'Mock' is an explicit Yes/No question; we still fold 'Mock' into `sections`
+// on submit so the server (mock_taken = sections.includes('Mock')) and the
+// debrief flow are unchanged. The study sections themselves are now derived
+// from the plan topics the student ticks above.
 const ENERGY_OPTIONS = [
   { emoji: '🙏', label: 'Drained', value: '🙏' },
   { emoji: '💪', label: 'Solid', value: '💪' },
@@ -38,25 +43,49 @@ export function LoggingModal({
   isSubmitting = false,
 }: LoggingModalProps) {
   const [hours, setHours] = useState<number | null>(null);
-  const [sections, setSections] = useState<string[]>([]);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
   const [energy, setEnergy] = useState<string | null>(null);
   const [emotionalChips, setEmotionalChips] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
+  const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(new Set());
+  const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
 
-  const toggleSection = (section: string) => {
-    if (sections.includes(section)) {
-      setSections(sections.filter((s) => s !== section));
-    } else {
-      setSections([...sections, section]);
-    }
-  };
+  // Pull today's plan when the log opens — its topics become the "what did you
+  // cover" list, pre-ticked with anything already marked done.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/routine/today');
+        if (!res.ok) return;
+        const json = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawTasks = (json?.routine?.tasks ?? []) as any[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const doneIds = new Set((json?.completions ?? []).map((c: any) => String(c.task_id)));
+        if (cancelled) return;
+        setPlanTasks(rawTasks.map((t) => ({ id: String(t.id), section: t.section, topic: t.topic ?? null, label: String(t.label ?? ''), target: t.target ?? null })));
+        const done = new Set<string>(rawTasks.filter((t) => doneIds.has(String(t.id))).map((t) => String(t.id)));
+        setCheckedTaskIds(new Set(done));
+        setInitialDoneIds(done);
+      } catch { /* best effort — plan just won't prefill */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
-  // Must answer the mock question; must have logged a study area OR a mock.
+  const toggleTask = (id: string) => setCheckedTaskIds((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  // Must answer the mock question; must have ticked a covered topic OR a mock.
   const isValid =
     hours !== null && energy !== null && mockTaken !== null &&
-    (mockTaken === true || sections.length > 0);
+    (mockTaken === true || checkedTaskIds.size > 0);
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -64,21 +93,26 @@ export function LoggingModal({
     navigator.vibrate?.(50);
     try {
       setError(null);
-      // Fold the explicit mock answer back into `sections` so the server and the
-      // debrief redirect keep working off sections.includes('Mock').
-      const finalSections = mockTaken
-        ? [...sections.filter((s) => s !== 'Mock'), 'Mock']
-        : sections.filter((s) => s !== 'Mock');
+      // Sections are now DERIVED from the plan topics the student ticked (plus
+      // the mock answer folded in) — one source of truth, no separate picker.
+      const checkedTasks = planTasks.filter((t) => checkedTaskIds.has(t.id));
+      const derived = [...new Set(checkedTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
+      const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
+      // Only tasks whose tick STATE changed — complete-task toggles, so sending
+      // an already-done task would un-complete it.
+      const toggled = planTasks.filter((t) => checkedTaskIds.has(t.id) !== initialDoneIds.has(t.id)).map((t) => t.id);
       const result = await onSubmit({
         hours,
         sections: finalSections,
         energy,
         notes: notes.trim() || undefined,
         emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
+        completedTaskIds: toggled,
       });
       // Reset form
       setHours(null);
-      setSections([]);
+      setCheckedTaskIds(new Set());
+      setInitialDoneIds(new Set());
       setMockTaken(null);
       setEnergy(null);
       setEmotionalChips([]);
@@ -186,27 +220,38 @@ export function LoggingModal({
             )}
           </div>
 
-          {/* Sections */}
+          {/* Today's plan — tick what you covered. This IS the study plan;
+              ticking a topic here marks it done in the plan and advances its
+              coverage everywhere. */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Sections studied <span className="normal-case font-normal text-zinc-600">(optional if you only gave a mock)</span>
+              Today&apos;s plan — tick what you covered
             </label>
-            <div className="flex flex-wrap gap-2">
-              {SECTIONS.map((section) => (
-                <button
-                  key={section}
-                  onClick={() => toggleSection(section)}
-                  className={cn(
-                    'px-4 py-2 rounded-full font-semibold text-sm transition-all active:scale-95',
-                    sections.includes(section)
-                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
-                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                  )}
-                >
-                  {section}
-                </button>
-              ))}
-            </div>
+            {planTasks.length === 0 ? (
+              <p className="text-xs text-zinc-500">No plan topics for today{mockTaken ? ' — a mock alone is enough.' : '.'}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {planTasks.map((t) => {
+                  const checked = checkedTaskIds.has(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => toggleTask(t.id)}
+                      className={cn(
+                        'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors',
+                        checked ? 'bg-orange-500/15 border border-orange-500/50' : 'bg-zinc-800 border border-transparent hover:bg-zinc-700'
+                      )}
+                    >
+                      <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2', checked ? 'border-orange-500 bg-orange-500' : 'border-zinc-500')}>
+                        {checked && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{t.target || t.label}</span>
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-zinc-400">{t.section}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Energy */}
