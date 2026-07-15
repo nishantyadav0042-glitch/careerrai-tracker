@@ -128,6 +128,55 @@ export function closeCopy(streak: number, weakest: string): SlotCopy {
   };
 }
 
+// ── Plan-aware copy (topic-level) ───────────────────────────────────────────
+// The founder's ask: notifications should name today's ACTUAL topic and
+// what's next ("Geometry today → RC next"), not just the weakest section or
+// the dream college. These take the concrete topics/targets the Routine
+// Engine chose (via computeTodaysPlan) — every word is true from the
+// student's own generated plan. Callers use these when a plan exists and
+// fall back to the section-level copy above when it doesn't.
+
+// 09:30 — the day's plan preview, named. "Start with Geometry, then RC."
+export function planMorningCopy(firstName: string, firstTopic: string, secondTopic: string | null, blocks: number, estHours: number): SlotCopy {
+  const hrs = estHours >= 1 ? `~${estHours}h` : '';
+  return {
+    title: `${firstName}, today: ${firstTopic}`,
+    body: secondTopic
+      ? `Start with ${firstTopic}, then ${secondTopic}${blocks > 2 ? ` (+${blocks - 2} more)` : ''}. ${hrs} planned — tap to begin →`
+      : `${firstTopic} is today's focus.${hrs ? ` ${hrs} planned.` : ''} Tap to begin →`,
+    expectedAction: 'log_today',
+  };
+}
+
+// 17:00 — study window opens, on the first not-yet-done topic with its target.
+export function planOpenCopy(nextTopic: string, target: string | null, hoursToday: number): SlotCopy {
+  return {
+    title: 'Study window’s open',
+    body: target
+      ? `${nextTopic} — ${target}. Your ${hoursToday}h starts now.`
+      : `${nextTopic} first — your ${hoursToday}h window starts now.`,
+    expectedAction: 'log_today',
+  };
+}
+
+// 20:30 — progress-aware. "Geometry done ✓ — RC is next." Only sent when at
+// least one block is ticked and one remains, so it's always true encouragement.
+export function planProgressCopy(doneCount: number, totalCount: number, nextTopic: string): SlotCopy {
+  return {
+    title: `${doneCount} of ${totalCount} done ✓`,
+    body: `${nextTopic} is next — finish the set and log the day →`,
+    expectedAction: 'log_today',
+  };
+}
+
+// 21:30 — the one demand, but concrete. "One block left: RC." If everything's
+// already done, it's a pure log nudge; otherwise it names the remaining topic.
+export function planLogCopy(nextTopic: string | null, dreamCollege: string): SlotCopy {
+  return nextTopic
+    ? { title: `One block left: ${nextTopic}`, body: `Finish it, log the day, done. ${dreamCollege} gets a little closer.`, expectedAction: 'log_today' }
+    : { title: 'Plan done — just log it', body: `You cleared today's plan. 5 seconds to log it and lock the streak.`, expectedAction: 'log_today' };
+}
+
 // 08:00 — a warm start to the day. Streak when there's a run to protect;
 // otherwise a clean fresh-day line. A gift, never a demand.
 export function kickoffCopy(streak: number, weakest: string, dreamCollege: string): SlotCopy {
