@@ -16,10 +16,10 @@ export default function ScreenSocialProof({ onNext, isLoading }: Props) {
     <div className="space-y-4 pt-1">
       <div>
         <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          A student messaged us this.
+          A student texted us this at 1 AM.
         </h1>
         <p className="mt-2 text-sm text-stone-500">
-          Out of nowhere — we hadn&apos;t even asked for feedback. 💬
+          We never asked for feedback. He just needed us to know. 💬
         </p>
       </div>
 
