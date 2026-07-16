@@ -11,6 +11,7 @@ import ScreenRealityCheck from './screens/screen-reality-check';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
+import ScreenSocialProof from './screens/screen-social-proof';
 import ScreenPathChoice from './screens/screen-path-choice';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
@@ -45,7 +46,8 @@ function draftKey(userId: string): string {
   //     inside the installed app now, never before install/signup.
   // v6: reality-check gut-check screen inserted before the coverage grid.
   // v7: two-paths (loss-aversion) screen inserted before the build animation.
-  return `cr_onboarding_draft_v7_${userId}`;
+  // v8: real WhatsApp testimonial screenshot inserted after Meet-Buddy.
+  return `cr_onboarding_draft_v8_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
@@ -175,10 +177,12 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       },
     },                                                           // 6
     { component: ScreenMeetBuddy, sectionId: null },             // 8
+    // Real, unprompted testimonial screenshot (Cal AI-style proof).
+    { component: ScreenSocialProof, sectionId: null },           // 9
     // Loss-aversion beat (founder): the two futures, right before the plan
     // builds — fear landing at the emotional crescendo.
-    { component: ScreenPathChoice, sectionId: null },            // 9
-    { component: ScreenBuildAnimation, sectionId: null },        // 10
+    { component: ScreenPathChoice, sectionId: null },            // 10
+    { component: ScreenBuildAnimation, sectionId: null },        // 11
     {
       // Last screen (founder cut: the success-goal question duplicated the
       // percentile ask, and the contract/oath screen was one tap too many —
@@ -220,8 +224,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 6: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
       case 7: return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
       case 8: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
-      case 9: return 'Two ways this year can go.';
-      case 10: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      case 9: return 'A message we didn’t expect.';
+      case 10: return 'Two ways this year can go.';
+      case 11: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       default: return null;
     }
   })();
