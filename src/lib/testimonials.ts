@@ -7,13 +7,16 @@ export interface Testimonial {
   quote: string;
   name: string;
   context: string; // e.g. "CAT aspirant", "targeting IIM-A"
+  when?: string;   // recency label, e.g. "this week" — keep accurate as it ages
 }
 
 export const TESTIMONIALS: Testimonial[] = [
   {
-    // Vedprakash, unprompted on WhatsApp, 15 Jul 2026.
+    // Vedprakash, unprompted on WhatsApp, 15 Jul 2026. Consent given for
+    // first name + screenshot.
     quote: 'Genuinely loved this product — it’s too good, and best for all students.',
     name: 'Vedprakash',
     context: 'CAT aspirant',
+    when: 'this week',
   },
 ];

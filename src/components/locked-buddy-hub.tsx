@@ -94,12 +94,14 @@ export function LockedBuddyHub({
         </div>
       </div>
 
-      {/* Real, live social proof — updates itself, never fabricated */}
+      {/* Real, live social proof — LOUD (founder), updates itself, never fabricated */}
       {proofLine && (
-        <p className="flex items-center justify-center gap-1.5 text-center text-xs font-medium text-stone-500">
-          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-          {proofLine}
-        </p>
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-center">
+          <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-green-800">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
+            {proofLine}
+          </p>
+        </div>
       )}
 
       {/* The mentor — one best match, others one tap away */}

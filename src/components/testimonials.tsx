@@ -25,7 +25,14 @@ export function Testimonials({ max = 3, screenshot = true }: { max?: number; scr
           <blockquote className="text-[17px] font-bold leading-snug text-stone-900">
             &ldquo;{t.quote}&rdquo;
           </blockquote>
-          <figcaption className="mt-2 text-xs font-semibold text-stone-500">— {t.name} · {t.context}</figcaption>
+          <figcaption className="mt-2 flex items-center gap-2 text-xs font-semibold text-stone-500">
+            <span>— {t.name} · {t.context}</span>
+            {t.when && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> {t.when}
+              </span>
+            )}
+          </figcaption>
         </figure>
       ))}
 
