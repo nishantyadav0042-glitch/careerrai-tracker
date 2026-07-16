@@ -16,9 +16,9 @@ interface Props {
 const TOTAL = KNOWLEDGE_GRAPH.flatMap((s) => s.groups.flatMap((g) => g.units)).length;
 
 const QUESTIONS = [
-  `Do you know EXACTLY how many of the ${TOTAL} areas in the CAT syllabus you've already covered?`,
-  'Do you know EXACTLY which ones you’ve left completely untouched?',
-  'Do you know EXACTLY which ones are still remaining right now?',
+  `Do you know EXACTLY how many of the ${TOTAL} CAT topics you've completed?`,
+  'If CAT happened tomorrow, do you know your weakest topics?',
+  'After every mock, do you know exactly what to study next?',
 ];
 
 // Reality-check (founder): a gut-check RIGHT BEFORE the coverage grid. Most
@@ -71,7 +71,7 @@ export default function ScreenRealityCheck({ onNext, isLoading }: Props) {
         <div className="rounded-2xl bg-stone-900 p-4 text-white">
           <p className="text-sm leading-relaxed">
             {noCount >= 2
-              ? 'That’s the real problem — not low marks. You can’t fix what you can’t see. Let’s make it exact in the next 2 minutes.'
+              ? 'You’re not alone — most CAT aspirants can’t answer these either. That’s exactly why we built CareerRai. Let’s make it exact in the next 2 minutes.'
               : noCount === 1
                 ? 'Almost — but “almost sure” is exactly where prep quietly drifts. Let’s make it exact.'
                 : 'Impressive — most can’t. Let’s lock it in so your whole plan is built on it.'}

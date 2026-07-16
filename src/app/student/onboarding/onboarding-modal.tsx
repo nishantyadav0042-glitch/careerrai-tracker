@@ -11,6 +11,7 @@ import ScreenRealityCheck from './screens/screen-reality-check';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
+import ScreenPathChoice from './screens/screen-path-choice';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
 import { BlueprintPanel } from './components/blueprint-panel';
@@ -43,7 +44,8 @@ function draftKey(userId: string): string {
   // v5: notification-permission screen removed — reminders are only asked for
   //     inside the installed app now, never before install/signup.
   // v6: reality-check gut-check screen inserted before the coverage grid.
-  return `cr_onboarding_draft_v6_${userId}`;
+  // v7: two-paths (loss-aversion) screen inserted before the build animation.
+  return `cr_onboarding_draft_v7_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
@@ -172,8 +174,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         ambitionDate: (onboardingData.ambition_date as string | undefined) ?? null,
       },
     },                                                           // 6
-    { component: ScreenMeetBuddy, sectionId: null },             // 7
-    { component: ScreenBuildAnimation, sectionId: null },        // 8
+    { component: ScreenMeetBuddy, sectionId: null },             // 8
+    // Loss-aversion beat (founder): the two futures, right before the plan
+    // builds — fear landing at the emotional crescendo.
+    { component: ScreenPathChoice, sectionId: null },            // 9
+    { component: ScreenBuildAnimation, sectionId: null },        // 10
     {
       // Last screen (founder cut: the success-goal question duplicated the
       // percentile ask, and the contract/oath screen was one tap too many —
@@ -215,7 +220,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 6: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
       case 7: return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
       case 8: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
-      case 9: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      case 9: return 'Two ways this year can go.';
+      case 10: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       default: return null;
     }
   })();

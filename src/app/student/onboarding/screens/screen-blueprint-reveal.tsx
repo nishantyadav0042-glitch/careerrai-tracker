@@ -148,9 +148,12 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
         ))}
       </div>
 
-      <p className="text-xs text-stone-500 text-center leading-relaxed">
-        Every decision about your CAT preparation now has a home. This isn&apos;t a template — it changes every day as you study.
-      </p>
+      <div className="text-center">
+        <p className="text-sm font-semibold leading-snug text-stone-800">
+          From today, you don&apos;t have to guess your CAT preparation anymore.
+        </p>
+        <p className="mt-1 text-xs text-stone-400">It changes every day as you study — never a static template.</p>
+      </div>
 
       <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         <button
