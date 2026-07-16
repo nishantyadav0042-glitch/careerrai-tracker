@@ -7,6 +7,7 @@ import ScreenAmbitionDate from './screens/screen-ambition-date';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
 import ScreenExamContext from './screens/screen-exam-context';
 import ScreenAboutYou from './screens/screen-about-you';
+import ScreenRealityCheck from './screens/screen-reality-check';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
@@ -41,7 +42,8 @@ function draftKey(userId: string): string {
   // v4: opening funnel added (need-check → ambition date → permission).
   // v5: notification-permission screen removed — reminders are only asked for
   //     inside the installed app now, never before install/signup.
-  return `cr_onboarding_draft_v5_${userId}`;
+  // v6: reality-check gut-check screen inserted before the coverage grid.
+  return `cr_onboarding_draft_v6_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
@@ -142,6 +144,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     { component: ScreenDreamColleges, sectionId: 'position' },   // 2
     { component: ScreenExamContext, sectionId: 'position' },     // 3
     { component: ScreenAboutYou, sectionId: 'position' },        // 4
+    // Reality-check (founder): the gut-check that makes the coverage grid feel
+    // like a relief instead of a chore. sectionId null — a pattern-interrupt,
+    // not a plan input.
+    { component: ScreenRealityCheck, sectionId: null },          // 5
     {
       component: ScreenTopicCoverage,
       sectionId: 'coverage',
@@ -192,7 +198,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   // proves the previous answer mattered. Loss-aversion, never cheerleading,
   // no invented statistics; every personalized fact is something they just
   // typed. Fallbacks cover the screens before that data exists.
-  const asksLeft = currentScreen >= 1 && currentScreen <= 6 ? 7 - currentScreen : null;
+  const asksLeft = currentScreen >= 1 && currentScreen <= 7 ? 8 - currentScreen : null;
   const leftLabel = asksLeft == null ? null : asksLeft === 1 ? 'Last section' : `${asksLeft} left`;
   const hFirstName = typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
     ? onboardingData.full_name.trim().split(' ')[0] : null;
@@ -205,10 +211,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 2: return 'Every answer changes what you study tomorrow.';
       case 3: return hFirstDream ? `${hFirstDream} is the target. Set your pace.` : 'Your attempt year sets the pace of the plan.';
       case 4: return hAttemptYear ? `CAT ${hAttemptYear}. Now make the plan yours.` : 'The more honest, the better the plan.';
-      case 5: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
-      case 6: return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
-      case 7: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
-      case 8: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      case 5: return 'A 30-second gut check.';
+      case 6: return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
+      case 7: return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
+      case 8: return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
+      case 9: return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       default: return null;
     }
   })();
