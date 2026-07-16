@@ -39,7 +39,7 @@ function logCtaClick() {
 }
 
 export function UnlockBuddyButton({
-  children = 'Unlock your buddy',
+  children = 'Get my 1:1 mentor',
   variant = 'primary',
   size = 'md',
   className = '',
@@ -81,7 +81,7 @@ export function UnlockBuddyButton({
 
       // A scholarship/coupon already made it free → premium activated server-side.
       if (data.free) {
-        setMessage('Done! Your buddy is being unlocked — refreshing…');
+        setMessage('Done! Setting up your 1:1 mentor — refreshing…');
         // Soft refresh: re-runs server components for fresh premium state
         // without a full app reload at the highest-value moment.
         setTimeout(() => router.refresh(), 1500);
