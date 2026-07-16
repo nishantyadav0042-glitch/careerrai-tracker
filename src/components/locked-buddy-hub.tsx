@@ -16,50 +16,25 @@ export function LockedBuddyHub({
   fullName?: string;
   recommendedBuddies?: RecommendedBuddyResult[];
 }) {
-  const heading = variant === 'chat' ? 'Chat is part of your IIM buddy 🔒' : 'Unlock your IIM buddy 🔒';
+  const heading = variant === 'chat' ? 'Chat is part of your IIM buddy' : 'Unlock your IIM buddy';
 
-  // The USP — every line is the actual promise, no fluff.
+  // The USP — title-only, compact. The mentor profile is the hero; these are
+  // one-line reasons, not paragraphs, so the buddy shows without scrolling.
   const props = [
-    {
-      icon: Users,
-      title: 'Only 1:1 — batches don’t exist',
-      body: 'One senior who knows your name, your weak section and your last mock. Never one of 200 in a batch.',
-    },
-    {
-      icon: MessageCircle,
-      title: 'An elder sibling, a message away',
-      body: 'Not a formal tutor — someone who’s been exactly where you are. Chat anytime you’re stuck or spiralling.',
-    },
-    {
-      icon: CalendarDays,
-      title: 'Ask for a session any day you want',
-      body: 'Need to talk it out? Request a call on the day that suits you — no fixed slots, no batch timetable.',
-    },
-    {
-      icon: LineChart,
-      title: 'Analyse every mock together',
-      body: 'They sit with your scorecard and name each error — silly, time, concept — so the next mock actually moves.',
-    },
-    {
-      icon: Repeat2,
-      title: 'One buddy the whole journey — switch anytime',
-      body: 'The same mentor from now to CAT, so nothing gets re-explained. Not clicking? Switch to another, no questions asked.',
-    },
+    { icon: Users, title: 'Only 1:1 — batches don’t exist' },
+    { icon: MessageCircle, title: 'An elder sibling, a message away' },
+    { icon: CalendarDays, title: 'Ask for a session any day you want' },
+    { icon: LineChart, title: 'Analyse every mock together' },
+    { icon: Repeat2, title: 'One buddy the whole journey — switch anytime' },
   ];
 
   return (
     <>
-    <div className="mx-auto max-w-md space-y-6 px-1 pt-6 pb-28">
-      {/* Hero */}
+    <div className="mx-auto max-w-md space-y-4 px-1 pt-3 pb-28">
+      {/* Hero — compact: heading + proof chips, no lock, no paragraph */}
       <div className="text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-purple-100 text-3xl">🔒</div>
         <h1 className="text-xl font-bold text-stone-900">{heading}</h1>
-        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-stone-600">
-          The app keeps you consistent. An <span className="font-semibold text-stone-800">IIM senior</span> is what
-          turns consistency into a <span className="font-semibold text-stone-800">call letter</span>.
-        </p>
-        {/* Social proof — honest: no invented mentor count */}
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-[11px]">
           <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 font-semibold text-teal-700">
             <span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> Verified IIM alumni mentors
           </span>
@@ -69,17 +44,14 @@ export function LockedBuddyHub({
         </div>
       </div>
 
-      {/* USP FIRST — our strength up top, not buried under profiles */}
-      <div className="space-y-2.5">
+      {/* USP — compact one-line rows, title only */}
+      <div className="space-y-1.5">
         {props.map((p) => (
-          <div key={p.title} className="flex gap-3 rounded-2xl border border-stone-200 bg-white p-3.5">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-50">
-              <p.icon className="h-4 w-4 text-purple-600" />
+          <div key={p.title} className="flex items-center gap-2.5 rounded-xl border border-stone-200 bg-white px-3 py-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-50">
+              <p.icon className="h-3.5 w-3.5 text-purple-600" />
             </div>
-            <div>
-              <p className="text-sm font-semibold text-stone-900">{p.title}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-stone-600">{p.body}</p>
-            </div>
+            <p className="text-[13px] font-semibold text-stone-900">{p.title}</p>
           </div>
         ))}
       </div>
