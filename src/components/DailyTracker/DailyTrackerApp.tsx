@@ -231,6 +231,7 @@ export function DailyTrackerApp({
           ) : (
             <div className="flex shrink-0 flex-col items-end gap-0.5">
               <button
+                data-tour="log"
                 onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
                 disabled={isSubmitting}
                 className="inline-flex items-center justify-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-[12px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"

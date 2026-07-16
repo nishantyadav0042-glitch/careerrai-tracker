@@ -17,6 +17,7 @@ import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { Flame, CalendarCheck, ChevronRight } from 'lucide-react';
+import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 
 export const metadata = {
@@ -318,6 +319,8 @@ export default async function DailyTrackerPage() {
         {/* During the day, the log sits under the plan. */}
         {!eveningLogFirst && logBlock}
       </div>
+      {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy). */}
+      <AppTour />
     </div>
   );
 }

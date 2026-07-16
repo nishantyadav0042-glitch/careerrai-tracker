@@ -298,7 +298,7 @@ export function TodaysRoutineCard() {
   const completedWithTopic = routine.tasks.filter((t) => completedIds.has(t.id) && t.topic);
 
   return (
-    <Card className="p-3">
+    <Card className="p-3" data-tour="plan">
       <div className="flex items-center justify-between mb-1">
         <p className="text-[11px] uppercase tracking-widest text-red-600 font-semibold">Today&apos;s Study Plan</p>
         {!fullyDone && (
@@ -410,6 +410,7 @@ export function TodaysRoutineCard() {
                       {/* Swap today's topic — same section, student's choice. */}
                       {!done && task.topic && (
                         <button
+                          data-tour="swap"
                           onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
                           aria-label="Change today's topic"
                           title="Change today's topic"
