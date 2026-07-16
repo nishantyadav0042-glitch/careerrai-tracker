@@ -18,6 +18,15 @@ function isStandalone(): boolean {
     || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
 }
 
+// iOS in a WKWebView wrapper (our App Store build) cannot deliver web push, so a
+// "turn on notifications" prompt there is a dead-end — hide it on iOS. (Android
+// TWA push works, so Android standalone still gets it.)
+function isIOS(): boolean {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua)
+    || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1);
+}
+
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -40,6 +49,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
     // memory — the founder wants this on every open until it's done.
     const evaluate = () => {
       if (!isStandalone()) return;
+      if (isIOS()) return; // web push is a no-op in the iOS wrapper — don't prompt
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
       if (Notification.permission === 'granted') return; // subscribed; server flag will catch up
       setShow(true);

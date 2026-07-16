@@ -36,6 +36,10 @@ function fmt(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 }
 
+// Kill-switch for the microphone feature (App Store safety — see the render
+// guard below). Set true to re-enable once Info.plist declares mic usage.
+const VOICE_NOTES_ENABLED = false;
+
 export function VoiceNoteRecorder({
   studentId,
   studentName,
@@ -260,6 +264,13 @@ export function VoiceNoteRecorder({
 
   const reviewProgress =
     duration > 0 ? Math.min(100, (playTime / duration) * 100) : 0;
+
+  // Voice notes are disabled for the App Store submission — a WKWebView wrapper
+  // that touches the mic needs an NSMicrophoneUsageDescription in Info.plist or
+  // it crashes on access. Rendering null means getUserMedia is never called, so
+  // no mic permission (and no crash/rejection risk). Flip to true once the
+  // Info.plist string is in place. (Founder: "crash microphone as of now.")
+  if (!VOICE_NOTES_ENABLED) return null;
 
   return (
     <>

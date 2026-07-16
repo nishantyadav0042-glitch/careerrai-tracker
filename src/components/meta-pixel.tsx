@@ -2,7 +2,7 @@
 
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Meta Pixel for the WEB app (this is the correct integration for a PWA — the
 // Facebook App ID / Client token / Android SDK route is only for native apps).
@@ -33,9 +33,19 @@ function captureAttribution() {
 export function MetaPixel() {
   const pathname = usePathname();
   const first = useRef(true);
+  // Meta Pixel is cross-site ad tracking → in the INSTALLED app it would trigger
+  // Apple's App Tracking Transparency requirement (Guideline 5.1.2). We can't
+  // show an ATT prompt from a WKWebView wrapper, so the pixel runs on the WEB
+  // only. In standalone (installed app / iOS wrapper) it never loads → no
+  // tracking → no ATT needed. First-party attribution capture still runs.
+  const [webOnly, setWebOnly] = useState(false);
 
   useEffect(() => {
     captureAttribution();
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches
+      || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot capability detection after mount
+    if (!standalone) setWebOnly(true);
   }, []);
 
   // The inline script fires the FIRST PageView; fire subsequent SPA navigations here.
@@ -49,7 +59,7 @@ export function MetaPixel() {
     }
   }, [pathname]);
 
-  if (!PIXEL_ID) return null;
+  if (!PIXEL_ID || !webOnly) return null;
 
   return (
     <Script id="meta-pixel" strategy="afterInteractive">
