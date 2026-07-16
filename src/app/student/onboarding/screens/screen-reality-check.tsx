@@ -82,7 +82,7 @@ export default function ScreenRealityCheck({ onNext, isLoading }: Props) {
             onClick={() => onNext({ reality_check_no_count: noCount })}
             className="mt-3 w-full rounded-xl bg-white py-3 text-sm font-bold text-stone-900 transition-all active:scale-[0.98] disabled:opacity-60"
           >
-            Map all {TOTAL} — no worries, we&apos;ll solve this &rarr;
+            Map all {TOTAL} — show me exactly where I stand &rarr;
           </button>
         </div>
       )}
