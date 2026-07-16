@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { sendExpedifyLead } from '@/lib/expedify';
 import { buildStudentBrief } from '@/lib/student-brief';
+import { SITE_HOST } from '@/lib/site';
 
 // One-tap end-to-end test of the Expedify hand-off, admin-only. Fires a
 // realistic dummy lead through the EXACT same pipeline a real signup uses and
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
     ],
   }, {
     label: 'Android · Instagram in-app browser',
-    guidance: "They're on Android but signed up inside the Instagram in-app browser — push notifications don't work there. Guide them: open careerrai-daily.vercel.app in Chrome → tap \"Install app\" → allow notifications.",
+    guidance: `They're on Android but signed up inside the Instagram in-app browser — push notifications don't work there. Guide them: open ${SITE_HOST} in Chrome → tap "Install app" → allow notifications.`,
   });
 
   const result = await sendExpedifyLead({

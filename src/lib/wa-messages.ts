@@ -6,7 +6,8 @@
 
 // The public site — the PWA "download": opening this in Chrome/Safari lets them
 // Add to Home Screen. (No Play Store for a PWA.) Change here if the domain moves.
-export const SITE_URL = 'https://careerrai-daily.vercel.app';
+export { SITE_URL } from '@/lib/site';
+import { SITE_URL } from '@/lib/site';
 
 export interface WaVars {
   firstName: string;

@@ -5,6 +5,7 @@ import { InstallAppButton } from '@/components/install-app-button';
 import { cn } from '@/lib/utils';
 import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
+import { SITE_URL } from '@/lib/site';
 
 // Press-and-hold-to-commit (Cal-AI style): the ring fills over ~2.5s while
 // held; release early and it resets with a nudge to hold again; complete it
@@ -229,7 +230,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   // Native share sheet (lands straight in WhatsApp on a phone); wa.me
   // fallback for browsers without navigator.share. Copy a CAT aspirant would
   // actually forward — their own milestone, not an ad.
-  const shareText = `I just locked my CAT syllabus date and got a day-by-day study plan 🎯 Daily plan + honest tracking + a real IIM buddy. It's free — build yours: ${typeof window !== 'undefined' ? window.location.origin : 'https://careerrai-daily.vercel.app'}`;
+  const shareText = `I just locked my CAT syllabus date and got a day-by-day study plan 🎯 Daily plan + honest tracking + a real IIM buddy. It's free — build yours: ${typeof window !== 'undefined' ? window.location.origin : SITE_URL}`;
   const doShare = async () => {
     try {
       if (navigator.share) {

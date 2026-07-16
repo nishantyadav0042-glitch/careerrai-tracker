@@ -5,6 +5,8 @@
 //   ios                 → "Safari → Share → Add to Home Screen, THEN allow notifications"
 // Pure string parsing, no library; unknowns degrade to 'other'.
 
+import { SITE_HOST } from '@/lib/site';
+
 export interface SignupDevice {
   device: 'android' | 'ios' | 'other';
   browser: 'instagram' | 'facebook' | 'chrome' | 'safari' | 'samsung' | 'webview' | 'other';
@@ -46,7 +48,7 @@ export function deviceCallGuidance(d: SignupDevice): string {
     return `They're on an iPhone (signed up via ${d.label.split(' · ')[1]}). On iPhone, notifications only work AFTER installing: guide them to open the site in Safari → Share button → "Add to Home Screen", then open the app and allow notifications.`;
   }
   if (d.device === 'android' && (d.browser === 'instagram' || d.browser === 'facebook' || d.browser === 'webview')) {
-    return `They're on Android but signed up inside the ${d.label.split(' · ')[1]} — push notifications don't work there. Guide them: open careerrai-daily.vercel.app in Chrome → tap "Install app" → allow notifications.`;
+    return `They're on Android but signed up inside the ${d.label.split(' · ')[1]} — push notifications don't work there. Guide them: open ${SITE_HOST} in Chrome → tap "Install app" → allow notifications.`;
   }
   if (d.device === 'android') {
     return `They're on Android (${d.label.split(' · ')[1]}). One tap covers everything: allow notifications when asked; installing from Chrome's "Install app" makes it feel like a real app.`;
