@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PushGate } from '@/components/push-gate';
+import { TestPushButton } from '@/components/test-push-button';
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
@@ -137,6 +138,16 @@ export default async function AdminTodayPage() {
       </div>
 
       {!adminPushEnabled && <PushGate mode="staff" />}
+
+      {/* One-tap end-to-end push verification (founder: "I didn't get a single
+          notification"). Confirms subscription → FCM → device on demand. */}
+      <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="text-sm font-semibold text-stone-900">Notification self-test</p>
+        <p className="mb-3 mt-0.5 text-xs text-stone-500">
+          Enable push above (in the installed app), then fire a test to confirm it reaches your phone.
+        </p>
+        <TestPushButton />
+      </div>
     </div>
   );
 }
