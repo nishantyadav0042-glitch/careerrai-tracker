@@ -4,6 +4,7 @@ import { Providers } from '@/components/providers';
 import { PerfBeacon } from '@/components/perf-beacon';
 import { MetaPixel } from '@/components/meta-pixel';
 import { JourneyTracker } from '@/components/journey-tracker';
+import { MetaEscape } from '@/components/install/meta-escape';
 
 // Supabase is in ap-southeast-1 (Singapore). Running server functions in the
 // same region eliminates ~250ms round-trip latency per DB query.
@@ -44,6 +45,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PerfBeacon />
           <JourneyTracker />
         </Providers>
+        {/* Paid traffic lands in Meta's in-app browser (install + push dead end).
+            Self-gates: renders only inside FB/IG/Messenger webviews. */}
+        <MetaEscape />
         <MetaPixel />
       </body>
     </html>
