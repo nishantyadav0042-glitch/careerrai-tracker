@@ -240,14 +240,15 @@ export default async function DailyTrackerPage() {
     daysSinceJoin >= 1 &&
     notifPrefs.password_prompt_dismissed !== true;
 
-  // App tour is the lowest-priority overlay. It may only start once the app is
-  // actually installed AND the reminders step is done (push enabled) — otherwise
-  // it lands on top of the "switch on reminders" screen, or in a browser tab,
-  // which is exactly the blunder the founder caught. The component adds a final
-  // standalone-display-mode guard on the client.
+  // First-run sequence in the INSTALLED app (founder): app tour FIRST, then the
+  // "switch on notifications" ask right after it finishes. So the tour only
+  // needs the app installed and onboarding/post-signup settled — it must NOT
+  // wait for push (push is what we ask for AT THE END of the tour). It must
+  // never run in a browser tab or over the reminders screen; the component adds
+  // a standalone-display-mode guard, and the notification ask holds back until
+  // the tour is complete.
   const tourReady =
     profile?.app_installed === true &&
-    notifPrefs.push === true &&
     profile?.onboarding_completed === true &&
     profile?.post_signup_done === true;
 

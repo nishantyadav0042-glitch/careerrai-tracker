@@ -9,11 +9,12 @@ import { useCallback, useEffect, useState } from 'react';
 // tour points at the actual buttons, not a mockup.
 //
 // WHEN it runs (founder: "why is the tour starting on the reminders screen
-// instead of after app installation"): the tour is the LOWEST-priority overlay.
-// It fires only when `enabled` is true (parent has cleared onboarding,
-// post-signup and the reminders ask) AND the app is actually installed —
-// running in standalone display mode, never a browser tab. That's the settled
-// home screen, which is exactly where a "quick tour" belongs.
+// instead of after app installation"): the tour fires only when `enabled` is
+// true (parent has cleared onboarding + post-signup) AND the app is actually
+// installed — running in standalone display mode, never a browser tab. That's
+// the settled home screen, which is exactly where a "quick tour" belongs.
+// On finish it fires TOUR_DONE_EVENT so the "switch on notifications" ask can
+// come up straight after — the founder's sequence is install → tour → reminders.
 interface TourStep { sel: string; title: string; body: string }
 
 const STEPS: TourStep[] = [
@@ -23,6 +24,9 @@ const STEPS: TourStep[] = [
   { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'A 1:1 IIM mentor who reviews your prep and tells you what to fix — lives right here.' },
 ];
 const KEY = 'cr_app_tour_v1';
+// Broadcast the moment the tour ends so the notification ask (a sibling overlay
+// in the layout) can appear immediately after — install → tour → notifications.
+export const TOUR_DONE_EVENT = 'cr-app-tour-done';
 
 export function AppTour({ enabled = false }: { enabled?: boolean }) {
   const [idx, setIdx] = useState(-1);      // -1 not started, -2 finished
@@ -39,6 +43,8 @@ export function AppTour({ enabled = false }: { enabled?: boolean }) {
   const finish = useCallback(() => {
     try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
     setIdx(-2);
+    // Tour's over — cue the "switch on notifications" ask to come up next.
+    try { window.dispatchEvent(new Event(TOUR_DONE_EVENT)); } catch { /* ignore */ }
   }, []);
 
   // Start once, after the page has settled — but ONLY in the installed app and

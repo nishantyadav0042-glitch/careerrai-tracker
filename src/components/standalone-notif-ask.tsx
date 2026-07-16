@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
+import { TOUR_DONE_EVENT } from '@/components/app-tour';
+
+// The app tour writes this flag when it finishes. Notifications are asked
+// AFTER the tour (founder: install → tour → switch on notifications), so this
+// overlay stays down until the flag is set — never overlapping the coach-marks.
+const TOUR_KEY = 'cr_app_tour_v1';
 
 // Founder flow: notification permission is asked INSIDE the installed app —
 // before install (especially on iPhone) the permission is a dead ask, since
@@ -52,6 +58,9 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
       if (isIOS()) return; // web push is a no-op in the iOS wrapper — don't prompt
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
       if (Notification.permission === 'granted') return; // subscribed; server flag will catch up
+      // Sequence: never come up before the app tour has finished, so we never
+      // cover the coach-marks. First-run users see the tour, then this.
+      try { if (localStorage.getItem(TOUR_KEY) !== '1') return; } catch { return; }
       setShow(true);
     };
     evaluate();
@@ -60,7 +69,12 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
     // re-ask there so "Later" only hides it until the next time they open the app.
     const onVisible = () => { if (document.visibilityState === 'visible') evaluate(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    // The tour just ended → ask right now (same mount, no navigation).
+    window.addEventListener(TOUR_DONE_EVENT, evaluate);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(TOUR_DONE_EVENT, evaluate);
+    };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [pushEnabled]);
 
