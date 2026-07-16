@@ -46,9 +46,17 @@ export async function sendPushToUser(
       tag: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       data: { url: payload.url ?? '/', notifId: payload.notifId ?? null },
     };
+    // Urgency: 'high' is the fix for "notifications only show when I open the
+    // app". The web-push default is NORMAL urgency, which Android's Doze /
+    // battery-saver is allowed to DEFER — so background pushes get batched and
+    // only flush when the device next wakes (i.e. when the user picks up the
+    // phone and opens the app). High urgency tells the push service to deliver
+    // immediately even in Doze. TTL 24h so a reminder that couldn't be
+    // delivered (device off) expires instead of arriving a day late.
     await webpush.sendNotification(
       profile.push_subscription as webpush.PushSubscription,
-      JSON.stringify(tagged)
+      JSON.stringify(tagged),
+      { urgency: 'high', TTL: 24 * 60 * 60 }
     );
     return { ok: true };
   } catch (err: unknown) {
