@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/access';
 import { LockedBuddyHub } from '@/components/locked-buddy-hub';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
+import { getSocialProof } from '@/lib/social-proof';
 import { getChatUnreadCount } from '@/lib/chat-unread';
 import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
@@ -34,8 +35,11 @@ export default async function BuddyPage() {
   // the 1:1 USP, a sample mock debrief, and the unlock. (Restored the older
   // profile-first design per founder feedback.)
   if (!isPremium(profile)) {
-    const recommendedBuddies = await getRecommendedBuddiesForStudent(admin, user.id);
-    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} recommendedBuddies={recommendedBuddies} />;
+    const [recommendedBuddies, proof] = await Promise.all([
+      getRecommendedBuddiesForStudent(admin, user.id),
+      getSocialProof(admin),
+    ]);
+    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} recommendedBuddies={recommendedBuddies} proof={proof} />;
   }
 
   const buddyId = profile?.buddy_id ?? null;

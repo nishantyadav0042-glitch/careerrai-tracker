@@ -2,6 +2,7 @@ import { SampleDebrief } from '@/components/sample-debrief';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
+import type { SocialProof } from '@/lib/social-proof';
 import { ListChecks, LineChart, Wrench, RefreshCw, ShieldCheck, Check } from 'lucide-react';
 
 // The buddy paywall — a full-page SALES ASSET on /student/buddy and /student/chat
@@ -18,12 +19,20 @@ import { ListChecks, LineChart, Wrench, RefreshCw, ShieldCheck, Check } from 'lu
 // mentor is introduced, so the buddy reads as the obvious answer, not another
 // mentorship upsell.
 export function LockedBuddyHub({
-  variant, fullName, recommendedBuddies = [],
+  variant, fullName, recommendedBuddies = [], proof,
 }: {
   variant: 'buddy' | 'chat';
   fullName?: string;
   recommendedBuddies?: RecommendedBuddyResult[];
+  proof?: SocialProof;
 }) {
+  // Real, live proof — only shown when the count is genuinely meaningful
+  // (never a fabricated floor). mappedTotal is our strongest honest number.
+  const proofLine = proof && proof.mappedTotal >= 25
+    ? `${proof.mappedTotal} aspirants have mapped their full CAT syllabus here`
+    : proof && proof.startedTotal >= 25
+      ? `${proof.startedTotal} aspirants are preparing with CareerRai`
+      : null;
   // FEAR + COST — the hook. No mention of the solution yet.
   const fear = variant === 'chat'
     ? 'Not sure what to do next?'
@@ -83,6 +92,14 @@ export function LockedBuddyHub({
           </span>
         </div>
       </div>
+
+      {/* Real, live social proof — updates itself, never fabricated */}
+      {proofLine && (
+        <p className="flex items-center justify-center gap-1.5 text-center text-xs font-medium text-stone-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+          {proofLine}
+        </p>
+      )}
 
       {/* The mentor — one best match, others one tap away */}
       {recommendedBuddies.length > 0 && (
