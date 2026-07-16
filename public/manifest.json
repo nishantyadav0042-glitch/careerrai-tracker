@@ -1,5 +1,7 @@
 {
   "id": "/",
+  "lang": "en-IN",
+  "dir": "ltr",
   "name": "CareerRai - CAT Prep Tracker",
   "short_name": "CareerRai",
   "description": "Track your daily CAT exam prep with an IIM buddy who keeps you accountable.",
@@ -32,5 +34,28 @@
     }
   ],
   "categories": ["education", "productivity"],
+  "screenshots": [
+    {
+      "src": "/screenshots/welcome.png",
+      "sizes": "1200x2400",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Build your personal CAT study plan"
+    },
+    {
+      "src": "/screenshots/onboarding.png",
+      "sizes": "1200x2400",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "A plan built around exactly where you are"
+    },
+    {
+      "src": "/screenshots/diagnostic.png",
+      "sizes": "1200x2400",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Know your CAT readiness in minutes"
+    }
+  ],
   "prefer_related_applications": false
 }
