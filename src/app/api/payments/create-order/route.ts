@@ -107,7 +107,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const order = await createRazorpayOrder(price.finalPaise, `careerrai_${user.id.slice(0, 8)}_${Date.now()}`);
+    // notes document the true nature of the charge on the order/receipt: a 1:1,
+    // person-to-person mentorship service (live sessions + daily guidance), which
+    // is exempt from mandatory app-store billing. Not framed as "digital content".
+    const order = await createRazorpayOrder(
+      price.finalPaise,
+      `careerrai_${user.id.slice(0, 8)}_${Date.now()}`,
+      {
+        service: '1:1 CAT mentorship',
+        plan: p.label,
+        description: `${p.label} of 1:1 mentorship with an IIM mentor — live weekly sessions & daily guidance`,
+      },
+    );
 
     // Record the intent; the webhook flips it to 'paid' after signature verify.
     await admin.from('student_payments').insert({

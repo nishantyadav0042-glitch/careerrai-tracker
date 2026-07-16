@@ -10,7 +10,11 @@ export interface RazorpayOrder {
   status: string;
 }
 
-export async function createRazorpayOrder(amountPaise: number, receipt: string): Promise<RazorpayOrder> {
+export async function createRazorpayOrder(
+  amountPaise: number,
+  receipt: string,
+  notes?: Record<string, string>,
+): Promise<RazorpayOrder> {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
   if (!keyId || !keySecret) throw new Error('Razorpay not configured');
@@ -19,7 +23,7 @@ export async function createRazorpayOrder(amountPaise: number, receipt: string):
   const res = await fetch('https://api.razorpay.com/v1/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
-    body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, payment_capture: 1 }),
+    body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, payment_capture: 1, ...(notes ? { notes } : {}) }),
   });
 
   if (!res.ok) {

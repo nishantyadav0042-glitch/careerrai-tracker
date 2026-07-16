@@ -97,12 +97,14 @@ export function UnlockBuddyButton({
         amount: data.amount,
         currency: data.currency,
         name: 'CareerRai',
-        description: `${PLANS[planId].label} — IIM buddy`,
+        // Reviewer- and payer-visible: names the charge as a 1:1 live
+        // mentorship service (person-to-person), the store-billing-exempt category.
+        description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
         prefill: fullName ? { name: fullName } : undefined,
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; reassure + refresh.
-          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} — IIM buddy` }, data.orderId);
+          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `1:1 CAT mentorship (${PLANS[planId].label})` }, data.orderId);
           setMessage('Payment received — confirming your buddy… 🎉');
           setTimeout(() => router.refresh(), 4000);
         },
@@ -186,7 +188,7 @@ export function UnlockBuddyButton({
                 </div>
 
                 <p className="mt-3 text-center text-[11px] text-stone-400">
-                  No auto-debit, ever.
+                  1:1 mentorship from a real IIM mentor — live weekly sessions &amp; daily guidance. No auto-debit, ever.
                 </p>
 
                 {message && <p className="mt-3 text-center text-xs text-stone-600">{message}</p>}
