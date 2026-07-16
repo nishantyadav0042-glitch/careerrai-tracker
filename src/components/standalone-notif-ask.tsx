@@ -113,10 +113,10 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
         </div>
         <div>
           <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-            You did your first job.<br />Now let us do ours.
+            80% of students improve<br />with timely reminders.
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            Our job #1 is reminding you, every day — today&apos;s plan, revision alerts, course-corrects. Switch on notifications so they actually reach you.
+            Students who keep reminders on stay consistent — today&apos;s plan, revision alerts, gentle course-corrects. Switch on your notifications so they actually reach you.
           </p>
         </div>
         {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{err}</p>}

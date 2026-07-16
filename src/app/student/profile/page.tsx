@@ -8,6 +8,7 @@ import { rankBuddies, matchReason, type MatchBuddy, type MatchStudent } from '@/
 import type { RecommendedBuddy } from '@/components/recommended-buddies';
 import { ProfilePanelTabs } from '@/components/profile-panel-tabs';
 import { ProfileOverview } from './profile-overview';
+import { EveningBuddyPop } from '@/components/evening-buddy-pop';
 import { HistorySection } from './history-section';
 import { SettingsSection } from './settings-section';
 
@@ -141,6 +142,17 @@ export default async function StudentProfilePage() {
         history={<HistorySection />}
         settings={<SettingsSection />}
       />
+
+      {/* Evening nudge: free students (no buddy yet) get a once-a-evening pop
+          of their best-matched mentor, linking to the full buddy profile. */}
+      {!profile.buddy_id && recommendedBuddies.length > 0 && (
+        <EveningBuddyPop
+          name={recommendedBuddies[0].full_name}
+          avatarUrl={recommendedBuddies[0].avatar_url}
+          college={recommendedBuddies[0].iim_converted}
+          percentile={recommendedBuddies[0].cat_percentile}
+        />
+      )}
     </div>
   );
 }
