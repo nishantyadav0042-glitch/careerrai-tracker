@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from 'react';
 
 // Spotlight coach-mark tour (founder: "we never gave a quick app tour").
 // Dims the screen and cuts a spotlight over one real element at a time, with a
-// tooltip. Runs ONCE after onboarding (localStorage flag); replayable from
-// Settings by clearing the flag. Targets are marked with data-tour="…" on the
-// real components, so the tour points at the actual buttons, not a mockup.
+// tooltip. Runs ONCE (localStorage flag); replayable from Settings by clearing
+// the flag. Targets are marked with data-tour="…" on the real components, so the
+// tour points at the actual buttons, not a mockup.
+//
+// WHEN it runs (founder: "why is the tour starting on the reminders screen
+// instead of after app installation"): the tour is the LOWEST-priority overlay.
+// It fires only when `enabled` is true (parent has cleared onboarding,
+// post-signup and the reminders ask) AND the app is actually installed —
+// running in standalone display mode, never a browser tab. That's the settled
+// home screen, which is exactly where a "quick tour" belongs.
 interface TourStep { sel: string; title: string; body: string }
 
 const STEPS: TourStep[] = [
@@ -17,7 +24,7 @@ const STEPS: TourStep[] = [
 ];
 const KEY = 'cr_app_tour_v1';
 
-export function AppTour() {
+export function AppTour({ enabled = false }: { enabled?: boolean }) {
   const [idx, setIdx] = useState(-1);      // -1 not started, -2 finished
   const [rect, setRect] = useState<DOMRect | null>(null);
 
@@ -34,13 +41,22 @@ export function AppTour() {
     setIdx(-2);
   }, []);
 
-  // Start once, after the page has settled.
+  // Start once, after the page has settled — but ONLY in the installed app and
+  // only once the parent says every higher-priority overlay is cleared.
   useEffect(() => {
     /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    if (!enabled) return;
+    // Installed-app only: a browser tab still shows the address bar and the
+    // reminders/install prompts, so the tour there lands on the wrong screen.
+    const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { standalone?: boolean }) : null;
+    const standalone =
+      (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches) ||
+      nav?.standalone === true;
+    if (!standalone) return;
     try { if (localStorage.getItem(KEY)) return; } catch { return; }
     const t = setTimeout(() => setIdx(0), 900);
     return () => clearTimeout(t);
-  }, []);
+  }, [enabled]);
 
   // On each step: skip steps whose target isn't on screen; scroll it into view;
   // measure (and re-measure after scroll + on resize/scroll).

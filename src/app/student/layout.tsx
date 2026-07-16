@@ -6,7 +6,6 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
-import { OnboardingGate } from './onboarding/onboarding-gate';
 import { PushGate } from '@/components/push-gate';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
@@ -117,11 +116,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {showOnboarding ? (
-        <OnboardingGate />
-      ) : showPostSignup && postSignupProps ? (
+      {/* ONE onboarding system (founder): /start is the single funnel — it asks
+          the target date once and marks onboarding_completed on success, and the
+          post-signup sequence reconciles that date a second time. The old
+          in-app OnboardingModal used to auto-fire here whenever
+          onboarding_completed was false, re-asking every question (the third
+          date ask). It's gone from this gate now; the modal component still
+          powers profile editing, just not a second onboarding. */}
+      {showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
-      ) : !pushEnabled ? (
+      ) : !pushEnabled && !showOnboarding ? (
         // Founder flow: in the INSTALLED app, the notification ask is "our
         // job #1 — switch on notifications" (renders only in standalone mode;
         // returns null in a browser tab, where the PushGates below apply).

@@ -240,6 +240,17 @@ export default async function DailyTrackerPage() {
     daysSinceJoin >= 1 &&
     notifPrefs.password_prompt_dismissed !== true;
 
+  // App tour is the lowest-priority overlay. It may only start once the app is
+  // actually installed AND the reminders step is done (push enabled) — otherwise
+  // it lands on top of the "switch on reminders" screen, or in a browser tab,
+  // which is exactly the blunder the founder caught. The component adds a final
+  // standalone-display-mode guard on the client.
+  const tourReady =
+    profile?.app_installed === true &&
+    notifPrefs.push === true &&
+    profile?.onboarding_completed === true &&
+    profile?.post_signup_done === true;
+
   // The two rotating blocks. In the morning/day the plan leads (what to study);
   // in the evening the log leads (did you do it). Defined once, ordered below.
   const logBlock = (
@@ -319,8 +330,9 @@ export default async function DailyTrackerPage() {
         {/* During the day, the log sits under the plan. */}
         {!eveningLogFirst && logBlock}
       </div>
-      {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy). */}
-      <AppTour />
+      {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
+          Gated: installed app only, after onboarding + reminders are settled. */}
+      <AppTour enabled={tourReady} />
     </div>
   );
 }

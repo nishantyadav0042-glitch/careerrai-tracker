@@ -7,7 +7,6 @@ import ScreenTargetDate from './screens/screen-target-date';
 import ScreenDreamPercentile from './screens/screen-dream-percentile';
 import ScreenQuickFacts from './screens/screen-quick-facts';
 import ScreenPainPoints from './screens/screen-pain-points';
-import ScreenReassurance from './screens/screen-reassurance';
 import ScreenRealityCheck from '@/app/student/onboarding/screens/screen-reality-check';
 import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
 import ScreenMentor from './screens/screen-mentor';
@@ -17,17 +16,18 @@ import type { CoverageSectionId } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
 
 // Screen names for the funnel beacon — index matches stepIdx.
-const FUNNEL_STEPS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reassurance', 'reality-check', 'topic-coverage', 'mentor', 'social-proof', 'login-build'];
+const FUNNEL_STEPS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'mentor', 'social-proof', 'login-build'];
 
 // Founder-directed rebuild: every onboarding question now happens BEFORE
 // the account exists — "you decide the date, you own the plan" comes first,
 // signup comes last as "log in while we build." Nothing here writes to
 // Supabase until ScreenLoginBuild's verify call, which hands the whole
 // accumulated payload over in one request.
-const TOTAL_SCREENS = 10; // excludes the final login/build screen from the progress bar
+const TOTAL_SCREENS = 9; // excludes the final login/build screen from the progress bar
 // v2: bumping the key invalidates every draft saved before clear-on-signup existed.
 // v3: reality-check (3 questions) + social-proof (testimonial) screens added.
-const DRAFT_KEY = 'cr_preauth_draft_v3';
+// v4: removed the standalone reassurance screen (redundant with reality-check).
+const DRAFT_KEY = 'cr_preauth_draft_v4';
 // A draft older than this is an abandoned lead, not a session to resume —
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -111,12 +111,9 @@ export default function StartPage() {
       content = <ScreenPainPoints onNext={advance} {...shared} />;
       break;
     case 5:
-      content = <ScreenReassurance onNext={advance} isLoading={false} painPoints={(data.pain_points as string[]) ?? []} />;
-      break;
-    case 6:
       content = <ScreenRealityCheck onNext={advance} {...shared} />;
       break;
-    case 7:
+    case 6:
       content = (
         <ScreenTopicCoverage
           onNext={advance}
@@ -128,10 +125,10 @@ export default function StartPage() {
         />
       );
       break;
-    case 8:
+    case 7:
       content = <ScreenMentor onNext={advance} {...shared} />;
       break;
-    case 9:
+    case 8:
       content = <ScreenSocialProof onNext={advance} {...shared} />;
       break;
     default:
