@@ -31,6 +31,35 @@ const FINAL_PAUSE_MS = 900;
 
 export default function ScreenBuildAnimation({ onNext }: Props) {
   const [doneCount, setDoneCount] = useState(0);
+  // Live, real proof rotated while the plan builds (Cal AI-style) — every line
+  // is a genuine DB count, only shown when it's meaningful (>=25). No PII, no
+  // fabricated numbers.
+  const [proofLines, setProofLines] = useState<string[]>([]);
+  const [proofIdx, setProofIdx] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/social-proof');
+        if (!res.ok) return;
+        const p = await res.json();
+        if (cancelled) return;
+        const lines: string[] = [];
+        if ((p.mappedTotal ?? 0) >= 25) lines.push(`${p.mappedTotal} aspirants have mapped their full syllabus`);
+        if ((p.startedTotal ?? 0) >= 25) lines.push(`${p.startedTotal} aspirants are preparing with CareerRai`);
+        if ((p.plannedThisWeek ?? 0) >= 25) lines.push(`${p.plannedThisWeek} students are on a plan this week`);
+        setProofLines(lines);
+      } catch { /* noop — proof is a nicety, never blocks the build */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (proofLines.length < 2) return;
+    const id = setInterval(() => setProofIdx((i) => (i + 1) % proofLines.length), 1700);
+    return () => clearInterval(id);
+  }, [proofLines]);
 
   useEffect(() => {
     if (doneCount > STEPS.length) {
@@ -63,6 +92,13 @@ export default function ScreenBuildAnimation({ onNext }: Props) {
       </div>
       {doneCount >= STEPS.length && (
         <p className="text-center text-sm font-bold text-stone-900 pt-2">Almost there…</p>
+      )}
+
+      {proofLines.length > 0 && (
+        <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-stone-400 transition-opacity">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
+          {proofLines[proofIdx % proofLines.length]}
+        </p>
       )}
     </div>
   );
