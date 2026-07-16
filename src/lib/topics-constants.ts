@@ -143,8 +143,8 @@ export const TOPIC_METADATA: Record<string, TopicMetadata> = {
   // everything else in the cluster hangs off.
   'Percentages':               { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 5, revisionFrequencyDays: 5, sequenceRank: 1,  prerequisites: [] },
   'Profit & Loss':             { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 2,  prerequisites: ['Percentages'] },
-  'Ratio & Proportion':        { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 3,  prerequisites: [] },
-  'Average':                   { section: 'QA', difficulty: 2, estimatedHours: 6,  weightage: 3, revisionFrequencyDays: 7, sequenceRank: 4,  prerequisites: [] },
+  'Ratio & Proportion':        { section: 'QA', difficulty: 2, estimatedHours: 8,  weightage: 5, revisionFrequencyDays: 6, sequenceRank: 3,  prerequisites: [] },
+  'Average':                   { section: 'QA', difficulty: 2, estimatedHours: 6,  weightage: 4, revisionFrequencyDays: 7, sequenceRank: 4,  prerequisites: [] },
   'Mixtures':                  { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 5,  prerequisites: ['Ratio & Proportion'] },
   'Time & Work':               { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 4, revisionFrequencyDays: 6, sequenceRank: 6,  prerequisites: ['Ratio & Proportion'] },
   'Pipes & Cisterns':          { section: 'QA', difficulty: 3, estimatedHours: 4,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 7,  prerequisites: ['Time & Work'] },
@@ -167,16 +167,19 @@ export const TOPIC_METADATA: Record<string, TopicMetadata> = {
   'Mensuration':               { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 20, prerequisites: ['Triangles'] },
   'Coordinate Geometry':       { section: 'QA', difficulty: 3, estimatedHours: 8,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 21, prerequisites: ['Lines & Angles'] },
 
-  // ── QA / Modern Math
-  'Permutation & Combination': { section: 'QA', difficulty: 4, estimatedHours: 10, weightage: 3, revisionFrequencyDays: 6, sequenceRank: 22, prerequisites: [] },
-  'Probability':               { section: 'QA', difficulty: 4, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 23, prerequisites: ['Permutation & Combination'] },
-  'Set Theory':                { section: 'QA', difficulty: 2, estimatedHours: 5,  weightage: 2, revisionFrequencyDays: 8, sequenceRank: 24, prerequisites: [] },
+  // ── QA / Modern Math — the SMALLEST QA area (P&C + Probability + Set Theory
+  // together are only ~2-3 questions/year). Weightage lowered to match real CAT
+  // frequency so these never outrank Arithmetic/Algebra (16 Jul recalibration).
+  'Permutation & Combination': { section: 'QA', difficulty: 4, estimatedHours: 10, weightage: 2, revisionFrequencyDays: 6, sequenceRank: 22, prerequisites: [] },
+  'Probability':               { section: 'QA', difficulty: 4, estimatedHours: 8,  weightage: 2, revisionFrequencyDays: 6, sequenceRank: 23, prerequisites: ['Permutation & Combination'] },
+  'Set Theory':                { section: 'QA', difficulty: 2, estimatedHours: 5,  weightage: 1, revisionFrequencyDays: 8, sequenceRank: 24, prerequisites: [] },
 
-  // ── QA / Number System
-  'Divisibility':              { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 25, prerequisites: [] },
-  'HCF & LCM':                 { section: 'QA', difficulty: 2, estimatedHours: 5,  weightage: 3, revisionFrequencyDays: 7, sequenceRank: 26, prerequisites: ['Divisibility'] },
+  // ── QA / Number System — small area (~1-2 questions/year). Remainders is the
+  // one relatively frequent topic; the rest are low. Recalibrated 16 Jul.
+  'Divisibility':              { section: 'QA', difficulty: 3, estimatedHours: 6,  weightage: 2, revisionFrequencyDays: 6, sequenceRank: 25, prerequisites: [] },
+  'HCF & LCM':                 { section: 'QA', difficulty: 2, estimatedHours: 5,  weightage: 2, revisionFrequencyDays: 7, sequenceRank: 26, prerequisites: ['Divisibility'] },
   'Remainders':                { section: 'QA', difficulty: 4, estimatedHours: 8,  weightage: 3, revisionFrequencyDays: 6, sequenceRank: 27, prerequisites: ['Divisibility'] },
-  'Base System':               { section: 'QA', difficulty: 4, estimatedHours: 5,  weightage: 2, revisionFrequencyDays: 8, sequenceRank: 28, prerequisites: [] },
+  'Base System':               { section: 'QA', difficulty: 4, estimatedHours: 5,  weightage: 1, revisionFrequencyDays: 8, sequenceRank: 28, prerequisites: [] },
 };
 
 // Highest-weightage topic in a section, ties broken by earliest sequence —
