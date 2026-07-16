@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
     // Round to the nearest half-hour and mirror to both columns the routine
     // engine reads, matching the finish-date chooser.
     const h = Math.round(body.study_target_hours * 2) / 2;
-    update.study_target_hours = h;
-    update.hours_available = h;
-    update.weekend_hours_available = h;
+    update.study_target_hours = h;                 // numeric — keeps the half-hour
+    update.hours_available = Math.round(h);         // smallint columns — whole hours only
+    update.weekend_hours_available = Math.round(h);
   }
   if (body.done === true) update.post_signup_done = true;
 
@@ -59,9 +59,9 @@ export async function POST(request: NextRequest) {
     if (remaining > 0) {
       // Same formula as the ring and today's plan: syllabus + mock budget.
       const h = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
-      update.study_target_hours = h;
-      update.hours_available = h;
-      update.weekend_hours_available = h;
+      update.study_target_hours = h;                 // numeric — keeps the half-hour (e.g. 6.5)
+      update.hours_available = Math.round(h);         // smallint columns — whole hours only
+      update.weekend_hours_available = Math.round(h);
     }
   }
 
