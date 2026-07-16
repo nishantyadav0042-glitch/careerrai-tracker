@@ -11,7 +11,7 @@
 // has never touched the Coverage Matrix still gets a sensible answer (see
 // CoverageStatus 'unknown' below) — this is additive, not a breaking change.
 
-import { TOPIC_METADATA } from './topics-constants';
+import { TOPIC_METADATA, qaCluster } from './topics-constants';
 
 // Student-controlled states (declared in the Blueprint Builder):
 //   not_started (⚪ Haven't Started) · learning (🟡 Learning Concepts) ·
@@ -86,6 +86,28 @@ function coverageReason(topic: string, status: CoverageStatus | null): string | 
 // tightens (<1), a working professional's loosens (>1), applied to every
 // topic's revisionFrequencyDays before checking overdue, not a separate
 // rule per archetype.
+// The expert "why this topic" line for the CHOSEN topic — legible reasoning in
+// the student's mental-model language (weightage share + their own progress), so
+// an experienced student can see the engine understands CAT, not a black box.
+// Student-action reasons win (it's THEIR call); then revision-due; then the
+// weightage+coverage rationale.
+function expertWhy(c: TopicCandidateInput, revisionMultiplier: number): string {
+  const meta = TOPIC_METADATA[c.topic];
+  if (c.postponedBonus) return "Back from yesterday's swap — as promised";
+  if (c.priorityBonus) return 'Your priority pick';
+  if (c.focusBonus) return 'Your chosen starting point';
+  if (meta && c.daysSinceLastPracticed != null && c.daysSinceLastPracticed > meta.revisionFrequencyDays * revisionMultiplier) {
+    return `Revision due — last practised ${c.daysSinceLastPracticed}d ago`;
+  }
+  const started = c.coverageStatus === 'learning';
+  const cl = qaCluster(c.topic);
+  if (cl) return started ? `${cl.name} — ${cl.share}. Finish what you started.` : `${cl.name} — ${cl.share}.`;
+  // VARC / DILR: weightage tier (RC, Arrangements, DI carry most marks)
+  const high = (meta?.weightage ?? 3) >= 4;
+  if (started) return 'Finish what you started.';
+  return high ? 'A high-scoring area — worth the marks.' : 'On your plan for today.';
+}
+
 export function chooseTopicForSection(candidates: TopicCandidateInput[], revisionMultiplier = 1): TopicChoice {
   const scored = candidates.map((c) => {
     const meta = TOPIC_METADATA[c.topic];
@@ -147,7 +169,10 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
 
   scored.sort((a, b) => b.score - a.score);
   const winner = scored[0];
-  return { topic: winner.topic, score: winner.score, reasons: winner.reasons.slice(0, 2) };
+  const winnerCand = candidates.find((c) => c.topic === winner.topic)!;
+  // The chosen topic leads with the expert "why"; keep a secondary keyword reason.
+  const why = expertWhy(winnerCand, revisionMultiplier);
+  return { topic: winner.topic, score: winner.score, reasons: [why, ...winner.reasons].slice(0, 2) };
 }
 
 export type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';

@@ -403,6 +403,9 @@ export function TodaysRoutineCard() {
                           <span className="text-xs text-stone-400 ml-auto shrink-0">{task.estMinutes}m</span>
                         </div>
                         <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
+                        {!done && task.reason && (
+                          <p className="mt-0.5 text-[11px] leading-snug text-stone-500">{task.reason}</p>
+                        )}
                       </div>
                       {/* Swap today's topic — same section, student's choice. */}
                       {!done && task.topic && (
@@ -452,9 +455,14 @@ export function TodaysRoutineCard() {
                     >
                       {done && <Check className="w-3 h-3 text-white" />}
                     </span>
-                    <span className={cn('min-w-0 flex-1 text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
-                      {taskTitle(task)}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
+                        {taskTitle(task)}
+                      </span>
+                      {!done && task.reason && (
+                        <p className="mt-0.5 text-[11px] leading-snug text-stone-500">{task.reason}</p>
+                      )}
+                    </div>
                     <span className="shrink-0 text-xs text-stone-400">{task.estMinutes}m</span>
                     {/* Swap today's topic — same section, student's choice. */}
                     {!done && task.topic && (

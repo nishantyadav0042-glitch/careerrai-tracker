@@ -182,6 +182,22 @@ export const TOPIC_METADATA: Record<string, TopicMetadata> = {
   'Base System':               { section: 'QA', difficulty: 4, estimatedHours: 5,  weightage: 1, revisionFrequencyDays: 8, sequenceRank: 28, prerequisites: [] },
 };
 
+// QA sub-cluster + its approximate share of the Quant section, derived from the
+// sequenceRank ranges above. Powers the expert "why this topic" line on the plan
+// card ("Algebra — ~a third of Quant"). Shares from published CAT analyses
+// (Arithmetic ~38%, Algebra ~33%, Geometry ~14%, Number System / Modern Math the
+// rest).
+export function qaCluster(topic: string): { name: string; share: string } | null {
+  const m = TOPIC_METADATA[topic];
+  if (!m || m.section !== 'QA') return null;
+  const r = m.sequenceRank;
+  if (r <= 9)  return { name: 'Arithmetic',    share: 'the biggest area in Quant (~40%)' };
+  if (r <= 15) return { name: 'Algebra',       share: '~a third of Quant' };
+  if (r <= 21) return { name: 'Geometry',      share: '~15% of Quant' };
+  if (r <= 24) return { name: 'Modern Math',   share: 'a small slice of Quant' };
+  return              { name: 'Number System', share: 'a small slice of Quant' };
+}
+
 // Highest-weightage topic in a section, ties broken by earliest sequence —
 // this is what DEFAULT_TOPIC_BY_SECTION and the Coverage Matrix's ordering
 // actually read from, so "highest-weightage" is a real claim now, not just
