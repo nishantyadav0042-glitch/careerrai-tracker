@@ -1,6 +1,7 @@
 import { SampleDebrief } from '@/components/sample-debrief';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
+import { Testimonials } from '@/components/testimonials';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import type { SocialProof } from '@/lib/social-proof';
 import { ListChecks, LineChart, Wrench, RefreshCw, ShieldCheck, Check } from 'lucide-react';
@@ -113,6 +114,9 @@ export function LockedBuddyHub({
         </p>
         <SampleDebrief />
       </div>
+
+      {/* Real testimonials — renders only when a genuine quote exists */}
+      <Testimonials max={3} />
 
       {/* Group vs 1:1 contrast — the wedge */}
       <div className="grid grid-cols-2 gap-2 text-xs">
