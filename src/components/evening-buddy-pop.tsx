@@ -62,7 +62,7 @@ export function EveningBuddyPop({ name, avatarUrl, college, percentile }: Props)
           <X className="h-5 w-5" />
         </button>
 
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-500">Your best-matched buddy</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-500">Preparing the right way?</p>
 
         <div className="mx-auto mt-3 h-20 w-20">
           {avatarUrl ? (
@@ -81,7 +81,7 @@ export function EveningBuddyPop({ name, avatarUrl, college, percentile }: Props)
         </p>
 
         <p className="mt-3 text-sm leading-relaxed text-stone-600">
-          Check out {firstName}&apos;s profile — see exactly how a 1:1 IIM mentor would guide you to CAT.
+          {firstName} would tell you exactly what to study next — and re-point your plan after every mock. No more second-guessing.
         </p>
 
         <button

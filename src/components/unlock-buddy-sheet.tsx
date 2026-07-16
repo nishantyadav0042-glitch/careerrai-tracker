@@ -148,17 +148,17 @@ export function UnlockBuddyButton({
               </div>
             ) : (
               <>
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl">🔓</div>
-                <h2 className="text-center text-lg font-bold text-stone-900">Unlock your IIM buddy</h2>
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl">🎯</div>
+                <h2 className="text-center text-lg font-bold text-stone-900">Stop second-guessing your prep</h2>
                 <p className="mt-1 text-center text-sm text-stone-600">
-                  A <span className="font-semibold text-stone-800">real IIM senior</span> who tracks you daily,
-                  decodes every mock with you, and meets you every week.
+                  A <span className="font-semibold text-stone-800">real IIM senior</span> reviews your preparation,
+                  analyses every mock, and tells you exactly what to do next.
                 </p>
 
                 <ul className="mt-4 space-y-2 text-sm text-stone-700">
-                  <li className="flex gap-2"><span>🎯</span> A plan for tomorrow, built from today&apos;s logs</li>
-                  <li className="flex gap-2"><span>📊</span> Every mock decoded with you — each error named</li>
-                  <li className="flex gap-2"><span>🎥</span> Weekly 1-on-1 video session</li>
+                  <li className="flex gap-2"><span>✅</span> Know exactly what to study next</li>
+                  <li className="flex gap-2"><span>✅</span> Understand why your mock score changed</li>
+                  <li className="flex gap-2"><span>✅</span> Fix mistakes before they become habits</li>
                 </ul>
 
                 <div className="mt-5 space-y-2">

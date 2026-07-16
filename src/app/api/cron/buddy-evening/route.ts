@@ -57,10 +57,10 @@ export async function POST(request: NextRequest) {
     const firstName = (top.full_name || 'Your buddy').split(' ')[0];
     const cred = [top.iim_converted, top.cat_percentile ? `CAT ${top.cat_percentile}%ile` : null]
       .filter(Boolean).join(', ');
-    const title = 'Your IIM buddy is waiting 👋';
+    const title = 'Are you studying the right things?';
     const body = cred
-      ? `${firstName} (${cred}) is your best match — tap to see their profile.`
-      : `${firstName} is your best-matched mentor — tap to see their profile.`;
+      ? `${firstName} (${cred}) tells you exactly what to study, skip & fix — tap to see how.`
+      : `${firstName} tells you exactly what to study, skip & fix — tap to see how.`;
     const url = '/student/buddy';
 
     const { data: row } = await admin
