@@ -21,6 +21,10 @@
       "schedule": "30 3 * * *"
     },
     {
+      "path": "/api/cron/buddy-evening",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/cron/session-tomorrow",
       "schedule": "0 6 * * *"
     },
