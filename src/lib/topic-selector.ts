@@ -56,15 +56,19 @@ export interface TopicChoice {
   reasons: string[];
 }
 
-// Coverage status maps to points the same way everywhere it appears — a
-// topic nobody has looked at yet (or never logged in the Matrix) leads;
-// something already "strong" only wins if it's genuinely revision-overdue.
+// Coverage status → points. REBALANCED after real student feedback (16 Jul:
+// "I'd done Arithmetic + Geometry and expected Algebra next, but got PNC").
+// Old model over-rewarded novelty (not_started=30 >> everything), so a brand-new
+// LOW-weightage topic beat an in-progress HIGH-weightage one. New philosophy:
+// FINISH what you started before opening new topics — an in-progress ('learning')
+// topic leads; untouched ones then surface by weightage (the dominant driver
+// below). "Strong" topics mostly return via revision-due, not raw coverage.
 const COVERAGE_POINTS: Record<CoverageStatus | 'unknown', number> = {
-  unknown: 26,
-  not_started: 30,
-  learning: 20,
-  practicing: 10,
-  revising: 6,
+  learning: 30,     // in progress — finish it before starting something new
+  not_started: 22,
+  unknown: 20,
+  practicing: 12,   // usually resurfaced via revision-due, below
+  revising: 8,
   exam_ready: 2,
 };
 
@@ -91,7 +95,17 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     const covReason = coverageReason(c.topic, c.coverageStatus);
     if (covReason) reasons.push(covReason);
 
-    const weightagePoints = (meta?.weightage ?? 3) * 3; // 3–15
+    // Weightage is now the PRIMARY driver (8–40): CAT is a weightage game, so a
+    // high-scoring area (Algebra, Percentages, RC) must beat a low-scoring one
+    // (PNC, Vocabulary) unless revision-due or an unmet prerequisite says
+    // otherwise. This is the core of the 16 Jul fix.
+    const weightagePoints = (meta?.weightage ?? 3) * 8; // 8–40
+    if (meta && meta.weightage >= 4) reasons.push('High-scoring area');
+
+    // Pedagogical order: earlier-sequence topics (Arithmetic → Algebra →
+    // Geometry → Modern Math → Number System) get a mild nudge so the plan
+    // advances through the cluster sensibly instead of jumping ahead.
+    const sequencePoints = meta ? Math.max(0, 30 - meta.sequenceRank) * 0.5 : 0;
 
     let revisionPoints = 0;
     if (meta && c.daysSinceLastPracticed != null) {
@@ -127,7 +141,7 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     const postponedPoints = c.postponedBonus ? 40 : 0;
     if (c.postponedBonus) reasons.unshift("Back from yesterday's swap");
 
-    const score = coveragePoints + weightagePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints + focusPoints + postponedPoints;
+    const score = coveragePoints + weightagePoints + sequencePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints + focusPoints + postponedPoints;
     return { topic: c.topic, score, reasons };
   });
 

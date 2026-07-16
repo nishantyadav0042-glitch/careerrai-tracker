@@ -408,11 +408,11 @@ export function TodaysRoutineCard() {
                       {!done && task.topic && (
                         <button
                           onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
-                          aria-label="Change topic"
+                          aria-label="Change today's topic"
                           title="Change today's topic"
-                          className="mt-0.5 shrink-0 rounded-lg border border-stone-300 bg-white px-2 py-1 text-[10px] font-bold text-stone-500 transition-transform active:scale-95"
+                          className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-transform active:scale-95"
                         >
-                          ⇄
+                          ⇄ Swap
                         </button>
                       )}
                     </div>
@@ -460,11 +460,11 @@ export function TodaysRoutineCard() {
                     {!done && task.topic && (
                       <button
                         onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
-                        aria-label="Change topic"
+                        aria-label="Change today's topic"
                         title="Change today's topic"
-                        className="shrink-0 rounded-lg border border-stone-300 bg-white px-2 py-1 text-[10px] font-bold text-stone-500 transition-transform active:scale-95"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-transform active:scale-95"
                       >
-                        ⇄
+                        ⇄ Swap
                       </button>
                     )}
                   </div>
