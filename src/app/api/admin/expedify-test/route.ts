@@ -33,8 +33,11 @@ export async function GET(request: NextRequest) {
 
   const phone = normalizeIndianPhone(request.nextUrl.searchParams.get('phone'));
   if (!phone) {
-    return NextResponse.json({ error: 'Pass your own number: /api/admin/expedify-test?phone=9XXXXXXXXX — Expedify will actually call it.' }, { status: 400 });
+    return NextResponse.json({ error: 'Pass your own number: /api/admin/expedify-test?phone=9XXXXXXXXX — Expedify will actually call it. Optional &type=new|followup.' }, { status: 400 });
   }
+  // Two test-contact shapes their team asked for: a brand-new signup vs a
+  // follow-up (existing student being re-engaged).
+  const isFollowUp = request.nextUrl.searchParams.get('type') === 'followup';
 
   // A realistic brief, exactly the shape a real /start signup produces.
   const brief = buildStudentBrief('Test Student', {
@@ -59,10 +62,11 @@ export async function GET(request: NextRequest) {
   });
 
   const result = await sendExpedifyLead({
-    name: 'Test Student (CareerRai)',
+    name: isFollowUp ? 'Test Follow-up (CareerRai)' : 'Test Student (CareerRai)',
     phone,
     email: null,
     source: 'test',
+    leadType: isFollowUp ? 'follow_up' : 'new_lead',
     brief,
   });
 
