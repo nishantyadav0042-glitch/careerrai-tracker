@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
-import { InstallAppButton } from '@/components/install-app-button';
+import { InstallButton } from '@/components/install/install-button';
 import { OpenInBrowser } from '@/components/open-in-browser';
 
 function isStandalone(): boolean {
@@ -68,7 +68,7 @@ export default function GetAppPage() {
                 Your CAT prep app. Just ~3 MB — installs in seconds, no app store needed.
               </p>
             </div>
-            <InstallAppButton variant="banner" />
+            <InstallButton variant="banner" />
             <p className="text-xs text-stone-400">
               Already installed?{' '}
               <Link href="/login" className="font-semibold text-stone-600 underline">Open the app →</Link>

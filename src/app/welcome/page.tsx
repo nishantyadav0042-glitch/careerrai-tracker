@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { InstallAppButton } from '@/components/install-app-button';
+import { InstallButton } from '@/components/install/install-button';
 
 // Public landing at "/". Founder direction: the phone previews are SALES
 // ASSETS — colourful, dense, and convincing like Cal AI's, not flat
@@ -350,7 +350,7 @@ export default function WelcomePage() {
           >
             Build my free study plan →
           </Link>
-          <InstallAppButton variant="text" />
+          <InstallButton variant="text" />
           <div className="flex items-center justify-center gap-1.5 pt-0.5 text-[11px] text-stone-400">
             <span>Already have a plan?</span>
             <Link href="/login" className="font-semibold text-stone-600 underline-offset-2 hover:underline">Log in</Link>

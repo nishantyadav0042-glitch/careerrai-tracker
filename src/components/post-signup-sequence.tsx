@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { InstallAppButton } from '@/components/install-app-button';
+import { InstallButton } from '@/components/install/install-button';
 import { cn } from '@/lib/utils';
 import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
@@ -296,7 +296,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
               <p className="mt-2 text-sm text-stone-500">Just ~3 MB, once. One tap to your plan every day — and it&apos;s the only way our reminders reach you.</p>
             </div>
             <div className="space-y-2 pt-2">
-              <InstallAppButton variant="banner" />
+              <InstallButton variant="banner" />
               <button type="button" onClick={() => setVisible(false)} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
                 Maybe later — take me to my plan
               </button>
