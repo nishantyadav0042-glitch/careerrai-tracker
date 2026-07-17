@@ -43,6 +43,8 @@ export function VoiceNotePlayer({
   // Fetch a signed URL only when no server-pre-signed URL was provided.
   useEffect(() => {
     if (!feedbackId || initialSignedUrl) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- reset the
+       error flag when the feedback target changes; bounded, no cascade */
     setUrlError(false);
     fetch('/api/voice-notes/signed-url', {
       method: 'POST',

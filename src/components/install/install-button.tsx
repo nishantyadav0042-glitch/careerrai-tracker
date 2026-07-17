@@ -11,8 +11,15 @@
 
 import { Download, Share, Globe, Smartphone } from 'lucide-react';
 import { useInstall } from '@/lib/install/use-install';
+import type { InstallUiKind } from '@/lib/install/use-install';
 
 type Variant = 'card' | 'banner' | 'text';
+
+// Module-level lookups — components must never be created during render.
+const UI_ICON: Partial<Record<InstallUiKind, typeof Download>> = {
+  'escape-sheet': Globe,
+  'ios-coachmark': Share,
+};
 
 export function InstallButton({ variant = 'card' }: { variant?: Variant }) {
   const { ui, install, busy, ready, env } = useInstall();
@@ -22,7 +29,7 @@ export function InstallButton({ variant = 'card' }: { variant?: Variant }) {
   if (!ready || ui === 'hidden') return null;
 
   const label = labelFor(ui, env.platform);
-  const Icon = iconFor(ui);
+  const Icon = UI_ICON[ui] ?? Download;
 
   if (variant === 'text') {
     return (
@@ -95,10 +102,4 @@ function subFor(ui: ReturnType<typeof useInstall>['ui']): string {
     case 'android-guide': return 'From your browser menu · ~3 MB · one-tap access.';
     default: return 'Just ~3 MB · add it to your Home Screen for one-tap access.';
   }
-}
-
-function iconFor(ui: ReturnType<typeof useInstall>['ui']) {
-  if (ui === 'escape-sheet') return Globe;
-  if (ui === 'ios-coachmark') return Share;
-  return Download;
 }

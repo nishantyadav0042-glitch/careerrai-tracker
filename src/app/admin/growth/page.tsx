@@ -34,6 +34,7 @@ export default async function AdminGrowthPage() {
   const lastLog = new Map<string, string | null>((streaks ?? []).map((s) => [s.student_id, s.last_log_date]));
   const ctaClicks = new Map<string, number>((engagement ?? []).map((e) => [e.student_id, e.buddy_cta_clicks ?? 0]));
 
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const now = Date.now();
   const within = (iso: string | null | undefined, days: number) => !!iso && now - Date.parse(iso) <= days * DAY;
 

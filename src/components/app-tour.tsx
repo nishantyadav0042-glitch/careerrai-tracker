@@ -50,7 +50,7 @@ export function AppTour({ enabled = false }: { enabled?: boolean }) {
   // Start once, after the page has settled — but ONLY in the installed app and
   // only once the parent says every higher-priority overlay is cleared.
   useEffect(() => {
-    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+     
     if (!enabled) return;
     // Installed-app only: a browser tab still shows the address bar and the
     // reminders/install prompts, so the tour there lands on the wrong screen.

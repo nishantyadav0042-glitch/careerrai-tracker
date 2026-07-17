@@ -218,7 +218,7 @@ export async function loadStudentUrgency(
       streakBroken,
       mockDropDetected: (dropAlerts?.length || 0) > 0,
       noFeedbackDays: daysSinceFeedback,
-      performanceDropping: false, // TODO: Implement trend analysis
+      performanceDropping: false, // trend analysis not computed yet — mock-drop alerts cover the acute case above
       lowPercentile: (student.cat_percentile || 0) < 30
     };
 

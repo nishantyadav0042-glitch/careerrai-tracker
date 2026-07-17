@@ -116,7 +116,7 @@ function SetPasswordForm() {
                   mismatch ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/10' : 'border-stone-300 focus:border-stone-900 focus:ring-stone-900/10'
                 )}
               />
-              {mismatch && <p className="text-xs text-rose-600 mt-1">Passwords don't match.</p>}
+              {mismatch && <p className="text-xs text-rose-600 mt-1">Passwords don&apos;t match.</p>}
             </div>
 
             {error && <p className="text-xs text-rose-600">{error}</p>}
@@ -136,7 +136,7 @@ function SetPasswordForm() {
               onClick={skip}
               className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
-              Skip for now — I'll use OTP each time
+              Skip for now — I&apos;ll use OTP each time
             </button>
           </div>
 

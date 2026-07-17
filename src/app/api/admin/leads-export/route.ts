@@ -28,7 +28,7 @@ export async function GET() {
   const { data: streaks } = await admin.from('streak_data').select('student_id, last_log_date');
   const lastLog = new Map((streaks ?? []).map((r) => [r.student_id, r.last_log_date as string | null]));
   const todayMs = Date.now();
-  const category = (r: any): string => {
+  const category = (r: { role: string | null; notif_prefs: unknown; app_installed: boolean | null; id: string }): string => {
     if (r.role !== 'student') return '';
     const pushOn = ((r.notif_prefs as { push?: boolean } | null)?.push) === true;
     if (r.app_installed !== true || !pushOn) return 'A - setup stuck';

@@ -597,13 +597,13 @@ export function CatReadinessClient() {
               <div className="bg-[#1A1A2E] rounded-2xl p-5">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-3">The real gap</p>
                 <p className="text-sm text-stone-300 leading-relaxed">
-                  You probably have the brain for CAT. What you're missing isn't intelligence — it's someone who keeps you consistent when motivation runs out. That's the whole game. And that's exactly what an IIM buddy does.
+                  You probably have the brain for CAT. What you&apos;re missing isn&apos;t intelligence — it&apos;s someone who keeps you consistent when motivation runs out. That&apos;s the whole game. And that&apos;s exactly what an IIM buddy does.
                 </p>
               </div>
               <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-teal-600 mb-2">What CareerRai is</p>
                 <p className="text-sm text-stone-700 leading-relaxed">
-                  An IIM buddy tracking you daily — like an elder sibling who's already cracked CAT. Not coaching. Not content. Consistency, accountability, and honest strategy from someone who's been exactly where you are.
+                  An IIM buddy tracking you daily — like an elder sibling who&apos;s already cracked CAT. Not coaching. Not content. Consistency, accountability, and honest strategy from someone who&apos;s been exactly where you are.
                 </p>
               </div>
             </>
@@ -616,7 +616,7 @@ export function CatReadinessClient() {
                 Claim your free IIM buddy session
               </h2>
               <p className="text-sm text-stone-600 mb-5 leading-relaxed">
-                Enter your details to see your full personalised diagnosis and book a free 15-min session with an IIM buddy who's cracked CAT.
+                Enter your details to see your full personalised diagnosis and book a free 15-min session with an IIM buddy who&apos;s cracked CAT.
               </p>
               <form onSubmit={handleGateSubmit} className="space-y-3">
                 <input
@@ -654,7 +654,7 @@ export function CatReadinessClient() {
 
               <div className="rounded-2xl p-5 text-center shadow-lg shadow-orange-600/20 text-white" style={{ background:'linear-gradient(135deg,#ea580c,#d97706)' }}>
                 <p className="text-base font-black mb-1">Claim my free IIM buddy session</p>
-                <p className="text-xs text-orange-100 mb-4">15 minutes · someone who's cracked CAT · 100% free</p>
+                <p className="text-xs text-orange-100 mb-4">15 minutes · someone who&apos;s cracked CAT · 100% free</p>
                 {whatsappUrl ? (
                   <a
                     href={whatsappUrl} target="_blank" rel="noopener noreferrer"
@@ -664,7 +664,7 @@ export function CatReadinessClient() {
                     Book on WhatsApp — free
                   </a>
                 ) : (
-                  <p className="text-sm text-orange-200">WhatsApp booking coming soon</p>
+                  <p className="text-sm text-orange-200">We&apos;ll WhatsApp you within 24 hours to book your session.</p>
                 )}
               </div>
 

@@ -1,7 +1,5 @@
 'use client';
-/* eslint-disable react-hooks/purity -- Date.now() below only ever runs
-   inside a click handler (reportStart, called from handleTaskTap), never
-   during render; the linter can't see that from the call site. */
+ 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
@@ -350,7 +348,7 @@ export function TodaysRoutineCard() {
             <p className="text-sm text-stone-600">Your next step is already being built — open tomorrow and go</p>
           </div>
           {(calibrated || data.routine.calibration) ? (
-            <p className="mt-4 text-center text-xs font-medium text-teal-700">✓ Noted — this tunes tomorrow's plan.</p>
+            <p className="mt-4 text-center text-xs font-medium text-teal-700">✓ Noted — this tunes tomorrow&apos;s plan.</p>
           ) : (
             <div className="mt-4">
               <p className="text-center text-xs font-semibold text-stone-500 mb-2">Today&apos;s plan was…</p>

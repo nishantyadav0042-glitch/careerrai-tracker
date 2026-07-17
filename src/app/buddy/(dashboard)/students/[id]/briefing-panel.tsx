@@ -34,6 +34,7 @@ export function BriefingPanel({ studentId, initial }: BriefingPanelProps) {
 
   const ageLabel = briefing
     ? (() => {
+        // eslint-disable-next-line react-hooks/purity -- display-only relative age; fresh "now" each render is the point
         const mins = Math.round((Date.now() - new Date(briefing.generated_at).getTime()) / 60_000);
         if (mins < 60) return `${mins}m ago`;
         if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
