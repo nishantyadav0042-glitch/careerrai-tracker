@@ -37,7 +37,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
             <h1 className="text-2xl md:text-3xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
               Test Complete!
             </h1>
-            <p className="text-sm text-stone-500 mt-2">Your CAT Readiness Assessment</p>
+            <p className="text-sm text-stone-500 mt-2">Your CAT Readiness Test</p>
           </div>
 
           {/* Score Display */}
@@ -146,7 +146,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
           <Card className="p-4 mb-6 bg-amber-50 border-amber-200">
             <div className="flex items-center gap-2 mb-3">
               <Calendar className="w-4 h-4 text-amber-600" />
-              <span className="text-xs font-semibold uppercase text-amber-700">Next Steps (Your Buddy&apos;s Advice)</span>
+              <span className="text-xs font-semibold uppercase text-amber-700">Recommended next steps</span>
             </div>
             <ul className="space-y-2">
               {feedback.next_steps.map((step, i) => (
@@ -162,7 +162,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
             <div className="text-sm text-stone-900">
               <p className="font-semibold mb-2">💎 Why CareerRai is Different:</p>
               <ul className="space-y-1 text-xs text-stone-700">
-                <li>✓ <strong>Personalized Buddy</strong>: Not just a test - a real buddy analyzing YOUR data</li>
+                <li>✓ <strong>Personalised buddy</strong>: not just a test — a real buddy analysing YOUR data</li>
                 <li>✓ <strong>Smart Feedback</strong>: AI-powered insights + human touch from your buddy</li>
                 <li>✓ <strong>Real Data</strong>: Percentiles based on actual CAT 2023-2025 results</li>
                 <li>✓ <strong>Growth Timeline</strong>: Know exactly when you&apos;ll hit your target score</li>
@@ -182,7 +182,7 @@ export function CATResult({ score, categories, onComplete }: CATResultProps) {
 
           {/* Footer Message */}
           <p className="text-xs text-center text-stone-500 mt-4">
-            Your buddy will review this and share personalized insights in their feedback.
+            Your buddy will review this and share personalised insights in their feedback.
           </p>
         </Card>
       </div>

@@ -20,8 +20,8 @@ interface TourStep { sel: string; title: string; body: string }
 const STEPS: TourStep[] = [
   { sel: '[data-tour="plan"]',  title: 'Your plan for today', body: 'Built around the highest-scoring CAT topics for exactly where you are. Each task tells you why it’s there.' },
   { sel: '[data-tour="swap"]',  title: 'Not feeling a topic?', body: 'Tap ⇄ Swap to change it — your plan, your call. It comes back tomorrow, never lost.' },
-  { sel: '[data-tour="log"]',   title: 'Log in 5 seconds',     body: 'Done studying? Log it. This one habit keeps your whole plan on track.' },
-  { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'A 1:1 IIM mentor who reviews your prep and tells you what to fix — lives right here.' },
+  { sel: '[data-tour="log"]',   title: 'Log it in seconds',     body: 'Done studying? Log it. This one habit keeps your whole plan on track.' },
+  { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'Your 1:1 IIM buddy reviews your prep and tells you what to fix — right here.' },
 ];
 const KEY = 'cr_app_tour_v1';
 // Broadcast the moment the tour ends so the notification ask (a sibling overlay

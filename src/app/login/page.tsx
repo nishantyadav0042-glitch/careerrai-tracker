@@ -130,7 +130,7 @@ function LoginForm() {
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs font-medium text-stone-600">
               <span className="inline-flex items-center gap-1">
-                <span className="text-teal-600">✓</span> Personalized for every student
+                <span className="text-teal-600">✓</span> Personalised for every student
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="text-teal-600">✓</span> Updates till CAT day

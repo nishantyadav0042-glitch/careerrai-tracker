@@ -99,7 +99,7 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
           {ambition ? `You chose ${fmt(ambition)} to finish your CAT syllabus. Lock it with the real math.` : 'When do you want to finish your syllabus?'}
         </p>
         <p className="text-xs text-stone-500 mt-0.5">
-          Based on the {coverageTotal ?? 46} topics you just mapped — the hours decide the date. Choose what you can actually commit.
+          Based on the {coverageTotal ? `${coverageTotal} ` : ''}topics you just mapped — the hours decide the date. Choose what you can actually commit.
         </p>
       </div>
 

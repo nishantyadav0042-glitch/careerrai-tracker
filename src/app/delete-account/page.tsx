@@ -49,7 +49,7 @@ export default function DeleteAccountPage() {
         </p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[15px]">
           <li>Profile and login details (name, phone, email)</li>
-          <li>Daily study logs, hours, topics, notes and streaks</li>
+          <li>Daily study logs, hours, topics, notes, and streaks</li>
           <li>Study plan and topic coverage</li>
           <li>Mock scores and debriefs</li>
           <li>Buddy chats and session history</li>

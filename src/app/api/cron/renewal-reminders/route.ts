@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       user_id: p.id,
       type: 'renewal_reminder',
       title: daysLeft === 1 ? 'Your journey pauses tomorrow' : `Your journey pauses in ${daysLeft} days`,
-      body: 'Reactivate from your profile to keep your streak, mocks, debriefs and buddy without a break.',
+      body: 'Reactivate from your profile to keep your streak, mocks, debriefs, and buddy without a break.',
       data: { days: daysLeft },
       read: false,
       channel: 'in_app',

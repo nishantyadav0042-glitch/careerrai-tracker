@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error || !data.user) {
-      return NextResponse.json({ error: 'That code is incorrect or expired.' }, { status: 401 });
+      return NextResponse.json({ error: 'That OTP is incorrect or expired.' }, { status: 401 });
     }
     await clearAttempts(admin, otpKey);
 

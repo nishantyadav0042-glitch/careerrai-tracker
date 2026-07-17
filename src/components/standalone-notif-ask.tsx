@@ -140,7 +140,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
             80% of students improve<br />with timely reminders.
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            Students who keep reminders on stay consistent — today&apos;s plan, revision alerts, gentle course-corrects. Switch on your notifications so they actually reach you.
+            Students who keep reminders on stay consistent — today&apos;s plan, revision alerts, and gentle nudges. Switch on your notifications so they actually reach you.
           </p>
         </div>
         {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{err}</p>}

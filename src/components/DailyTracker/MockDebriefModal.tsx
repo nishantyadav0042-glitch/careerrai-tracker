@@ -466,7 +466,7 @@ export function MockDebriefModal({
             )}
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Saving...' : 'Save Debrief'}
+            {isSubmitting ? 'Saving…' : 'Save Debrief'}
           </button>
         </div>
       </div>

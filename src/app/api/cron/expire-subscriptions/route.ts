@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       user_id: p.id,
       type: 'membership',
       title: 'Your journey is paused — not gone',
-      body: 'Your streak, mocks, debriefs and buddy are saved. Reactivate anytime to continue exactly where you left off.',
+      body: 'Your streak, mocks, debriefs, and buddy are saved. Reactivate anytime to continue exactly where you left off.',
       data: {},
       read: false,
       channel: 'in_app',
