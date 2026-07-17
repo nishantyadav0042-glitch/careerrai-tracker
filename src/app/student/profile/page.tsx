@@ -30,6 +30,8 @@ export default async function StudentProfilePage() {
   const firstMonthEnd = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   const isInFirstMonth = new Date() <= new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000);
   const REFUND_DAYS_REQUIRED = 20;
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
 
   // Fire all remaining queries in parallel — reduces 7 sequential round-trips to 1 batch.
   const [
@@ -47,7 +49,7 @@ export default async function StudentProfilePage() {
       ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio').eq('id', profile.buddy_id).single()
       : Promise.resolve({ data: null }),
     profile.buddy_id
-      ? admin.from('buddy_feedback').select('created_at, feedback_date').eq('buddy_id', profile.buddy_id).gte('created_at', new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()).limit(20)
+      ? admin.from('buddy_feedback').select('created_at, feedback_date').eq('buddy_id', profile.buddy_id).gte('created_at', thirtyDaysAgoIso).limit(20)
       : Promise.resolve({ data: null }),
     admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id),
     admin.from('streak_data').select('current_streak, longest_streak').eq('student_id', user.id).maybeSingle(),

@@ -25,7 +25,10 @@ export function GoalEditor({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+   
+   
   const examDate = resolveCatExamDate(new Date(), attemptYear);
+  // eslint-disable-next-line react-hooks/purity -- same per-render "now" as the line above
   const daysToCat = Math.max(0, Math.ceil((examDate.getTime() - Date.now()) / 86_400_000));
 
   async function save() {

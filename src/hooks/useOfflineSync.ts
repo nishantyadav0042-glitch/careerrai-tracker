@@ -128,7 +128,7 @@ export function useOfflineSync() {
   }, [isOnline, pendingLogs]);
 
   // Auto-sync when coming online
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+   
   useEffect(() => {
     if (isOnline) {
       syncPendingLogs();

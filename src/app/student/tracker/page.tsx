@@ -216,7 +216,7 @@ export default async function DailyTrackerPage() {
   const eveningLogFirst = istHour >= 18 || istHour < 2;
 
   const nextSession = sessions?.[0] ?? null;
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+   
   const todaySession =
     // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
     nextSession && new Date(nextSession.scheduled_at).getTime() - Date.now() < 24 * 3_600_000
