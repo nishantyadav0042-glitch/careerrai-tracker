@@ -137,7 +137,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
         </div>
         <div>
           <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-            80% of students improve<br />with timely reminders.
+            Your plan works only<br />if it reaches you.
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
             Students who keep reminders on stay consistent — today&apos;s plan, revision alerts, and gentle nudges. Switch on your notifications so they actually reach you.
