@@ -1,8 +1,28 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+// Alternate hosts that must land on the canonical domain. The old
+// careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
+// and their push subscriptions live on that origin and must keep working.
+const CANONICAL_HOST = 'careerrai.in';
+const REDIRECT_HOSTS = new Set(['www.careerrai.in', 'careerrai.com', 'www.careerrai.com']);
+
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
+
+  // Canonical-domain enforcement (domain cutover): any alternate host 308s to
+  // careerrai.in with path + query preserved, regardless of how the hosting
+  // dashboard's per-domain redirects are configured. PRECONDITION (loop
+  // safety): careerrai.in itself must serve directly (no edge redirect off it)
+  // before this ships — verified as part of the cutover checklist.
+  const host = request.headers.get('host')?.toLowerCase() ?? '';
+  if (REDIRECT_HOSTS.has(host)) {
+    const canonical = request.nextUrl.clone();
+    canonical.host = CANONICAL_HOST;
+    canonical.protocol = 'https:';
+    canonical.port = '';
+    return NextResponse.redirect(canonical, 308);
+  }
 
   // Supabase sends magic-link emails to its configured Site URL, which may be
   // the domain root rather than /auth/callback. Intercept the auth params here

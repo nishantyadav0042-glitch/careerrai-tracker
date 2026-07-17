@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Share2, Check } from 'lucide-react';
+import { SITE_HOST } from '@/lib/site';
 
 interface ShareProgressButtonProps {
   daysLogged: number;
@@ -17,7 +18,7 @@ export function ShareProgressButton({ daysLogged, bestStreak, percentile }: Shar
     bestStreak > 1 ? `📈 Best streak: ${bestStreak} days` : null,
     percentile ? `🎯 CAT Readiness: ${Math.round(percentile)}%ile` : null,
     '',
-    'careerrai-daily.vercel.app',
+    SITE_HOST,
   ]
     .filter((l) => l !== null)
     .join('\n');

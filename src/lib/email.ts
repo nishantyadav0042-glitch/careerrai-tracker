@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { SITE_URL } from '@/lib/site';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM = 'CareerRai <noreply@careerrai.com>';
@@ -14,7 +15,7 @@ export async function sendDailyReminder(to: string, name: string) {
       <h2 style="font-size:20px;color:#1c1917">CareerRai Daily Check-in</h2>
       <p style="color:#57534e">Hey ${name},</p>
       <p style="color:#57534e">Your daily report is pending. It takes 90 seconds — track your study hours, mock scores, and mood so your buddy can support you.</p>
-      <a href="https://careerrai-daily.vercel.app/student/today" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
+      <a href="${SITE_URL}/student/today" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
         Fill today's report →
       </a>
       <p style="margin-top:24px;font-size:12px;color:#a8a29e">CareerRai · Bharat-first peer mentorship · 0% commission</p>
@@ -45,7 +46,7 @@ export async function sendBuilderRecovery(
       <h2 style="font-size:20px;color:#1c1917">Your plan is saved — not lost</h2>
       <p style="color:#57534e">${hasName ? `Hey ${name}, e` : 'E'}verything you entered is safe. You stopped at <strong>${stepLabelText}</strong> — ${screensLeft} screen${screensLeft === 1 ? '' : 's'} left, about 2 minutes.</p>
       <p style="color:#57534e">The moment it's done, CareerRai builds today's routine around the time you actually have.</p>
-      <a href="https://careerrai-daily.vercel.app/student/tracker" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
+      <a href="${SITE_URL}/student/tracker" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
         Finish my plan →
       </a>
       <p style="margin-top:24px;font-size:12px;color:#a8a29e">CareerRai · Bharat-first peer mentorship · 0% commission</p>
@@ -77,7 +78,7 @@ export async function sendBuddyWeeklyDigest(
       <h2 style="font-size:20px;color:#1c1917">Weekly digest — ${buddyName}</h2>
       <p style="color:#57534e">Here's how your students did this week:</p>
       <table style="width:100%;border-collapse:collapse">${rows}</table>
-      <a href="https://careerrai-daily.vercel.app/buddy/students" style="display:inline-block;margin-top:20px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
+      <a href="${SITE_URL}/buddy/students" style="display:inline-block;margin-top:20px;padding:12px 24px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600">
         View full dashboard →
       </a>
       <p style="margin-top:24px;font-size:12px;color:#a8a29e">CareerRai · Bharat-first peer mentorship</p>
@@ -101,7 +102,7 @@ export async function sendRedFlagAlert(
       <ul style="color:#9f1239;padding-left:20px">
         ${flags.map(f => `<li style="margin:6px 0">${f}</li>`).join('')}
       </ul>
-      <a href="https://careerrai-daily.vercel.app/buddy/students" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#dc2626;color:white;border-radius:10px;text-decoration:none;font-weight:600">
+      <a href="${SITE_URL}/buddy/students" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#dc2626;color:white;border-radius:10px;text-decoration:none;font-weight:600">
         Check in with ${studentName.split(' ')[0]} →
       </a>
       <p style="margin-top:24px;font-size:12px;color:#a8a29e">CareerRai · Bharat-first peer mentorship</p>
