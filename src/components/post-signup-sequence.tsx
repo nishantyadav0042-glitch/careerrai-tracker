@@ -136,8 +136,18 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const [pushState, setPushState] = useState<EnablePushResult | null>(null);
 
   // A new student has completed onboarding — the signup conversion for ad
-  // campaigns. Fires once (this sequence renders only right after onboarding).
-  useEffect(() => { trackMeta('CompleteRegistration'); }, []);
+  // campaigns. MUST fire once per student, but this sequence re-renders on
+  // every visit until post_signup_done flips (and on iOS it remounts after the
+  // /app install-guide round-trip) — which is exactly how Meta ended up
+  // counting ~2x more "leads" than real signups. localStorage guard = one
+  // conversion per device, ever.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('cr_meta_reg_fired') === '1') return;
+      localStorage.setItem('cr_meta_reg_fired', '1');
+    } catch { /* storage blocked — fire anyway, better one dupe than zero signal */ }
+    trackMeta('CompleteRegistration');
+  }, []);
 
   const hasDateStep = !!targetIso && hoursLeft > 0;
 
