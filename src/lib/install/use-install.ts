@@ -36,6 +36,11 @@ if (typeof window !== 'undefined') {
     capturedInstalled = true;
     deferredPrompt = null;
     window.dispatchEvent(new Event('cr-install-done'));
+    // Parity with the legacy button: after an Android install, forward this
+    // browser tab into the app instead of stranding it on the marketing page.
+    if (!window.matchMedia?.('(display-mode: standalone)').matches) {
+      window.setTimeout(() => { window.location.href = '/student/tracker'; }, 700);
+    }
   });
 }
 

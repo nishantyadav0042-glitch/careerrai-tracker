@@ -6,7 +6,7 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString } from '@/lib/streak-utils';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
-import { InstallAppButton } from '@/components/install-app-button';
+import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { TopicStats } from '@/components/home/topic-stats';
 import { ImportantDates } from '@/components/home/important-dates';
@@ -323,7 +323,7 @@ export default async function DailyTrackerPage() {
         {showPasswordReminder && <SetPasswordReminder notifPrefs={notifPrefs} />}
 
         {/* Install card (browser only; hides itself in the installed app) */}
-        <div className="empty:hidden"><InstallAppButton variant="card" /></div>
+        <div className="empty:hidden"><InstallButton variant="card" /></div>
 
         {/* Daily study plan (what to study, with swap) */}
         {planBlock}

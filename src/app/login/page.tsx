@@ -3,7 +3,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft } from 'lucide-react';
 import Image from 'next/image';
-import { InstallAppButton } from '@/components/install-app-button';
+import { InstallButton } from '@/components/install/install-button';
 import { cn } from '@/lib/utils';
 
 type LoginMode = 'otp-phone' | 'otp-phone-verify' | 'password';
@@ -143,7 +143,7 @@ function LoginForm() {
 
           {/* Install-app CTA — prime real estate, pushes students to install the app */}
           <div className="mb-4">
-            <InstallAppButton variant="banner" />
+            <InstallButton variant="banner" />
           </div>
 
           <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl shadow-stone-900/5">
@@ -183,7 +183,7 @@ function LoginForm() {
                 </button>
 
                 <div className="pt-1 text-center">
-                  <InstallAppButton variant="text" />
+                  <InstallButton variant="text" />
                 </div>
 
                 <div className="pt-1 text-center">
