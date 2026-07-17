@@ -335,7 +335,7 @@ export function LoggingModal({
             )}
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Logging...' : mockTaken ? 'Log & Debrief →' : 'Log Day'}
+            {isSubmitting ? 'Logging…' : mockTaken ? 'Log & Debrief →' : 'Log Today'}
           </button>
           <p className="text-[11px] text-zinc-600 text-center mt-2">15 seconds. The app answers back.</p>
         </div>

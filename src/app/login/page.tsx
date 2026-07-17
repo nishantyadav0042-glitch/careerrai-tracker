@@ -228,7 +228,7 @@ function LoginForm() {
                 {mode === 'otp-phone' && (
                   <form onSubmit={requestPhoneOtp} className="space-y-4">
                     <div>
-                      <p className="text-sm font-semibold text-stone-900 mb-0.5">Login with mobile OTP</p>
+                      <p className="text-sm font-semibold text-stone-900 mb-0.5">Log in with mobile OTP</p>
                       <p className="text-xs text-stone-500">
                         We&apos;ll send a 6-digit code via SMS.
                       </p>
@@ -272,7 +272,7 @@ function LoginForm() {
                         onClick={() => { setMode('password'); clearMsg(); }}
                         className="text-xs text-stone-500 hover:text-stone-800 font-medium"
                       >
-                        Login with password instead
+                        Log in with password instead
                       </button>
                     </div>
                   </form>
@@ -351,7 +351,7 @@ function LoginForm() {
                     <form action="/api/auth/login" method="POST" className="space-y-4">
                       <div>
                         <p className="text-sm font-semibold text-stone-900 mb-0.5">
-                          Login with password
+                          Log in with password
                         </p>
                         <p className="text-xs text-stone-500">
                           Enter your mobile number and password.

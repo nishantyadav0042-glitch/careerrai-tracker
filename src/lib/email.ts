@@ -8,7 +8,7 @@ function log(subject: string, to: string) {
 }
 
 export async function sendDailyReminder(to: string, name: string) {
-  const subject = `Hey ${name} — don't break your streak today 🔥`;
+  const subject = `Hey ${name} — your 90-second log is ready 🔥`;
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
       <h2 style="font-size:20px;color:#1c1917">CareerRai Daily Check-in</h2>

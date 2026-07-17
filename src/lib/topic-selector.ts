@@ -134,7 +134,7 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
       const adjustedFrequency = meta.revisionFrequencyDays * revisionMultiplier;
       const overdue = Math.min(Math.max(c.daysSinceLastPracticed - adjustedFrequency, 0), 10);
       revisionPoints = overdue * 3;
-      if (overdue > 0) reasons.push(`Last practiced ${c.daysSinceLastPracticed} day${c.daysSinceLastPracticed === 1 ? '' : 's'} ago`);
+      if (overdue > 0) reasons.push(`Last practised ${c.daysSinceLastPracticed} day${c.daysSinceLastPracticed === 1 ? '' : 's'} ago`);
     }
 
     // Prerequisite gate: a real edge, not a rank-order guess. A topic whose

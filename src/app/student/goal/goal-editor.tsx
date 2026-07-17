@@ -101,7 +101,7 @@ export function GoalEditor({
           <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">Current Standing</h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center bg-stone-50 rounded-xl p-3">
-              <div className="text-xs text-stone-500 mb-1">Current CRS</div>
+              <div className="text-xs text-stone-500 mb-1">Current percentile</div>
               <div className="text-2xl font-bold text-stone-900">
                 {currentCRS !== null ? (
                   <>{Math.round(Number(currentCRS))}<span className="text-sm text-stone-500 font-normal">%ile</span></>

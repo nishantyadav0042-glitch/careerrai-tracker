@@ -250,7 +250,7 @@ export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotC
     case 'wind':
       return { title: `${c.daysToExam} days left — start tonight`, body: `A dream like ${c.dreamCollege} is built one small day at a time. 30 focused minutes tonight beats a perfect plan you never open.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: `Still 0 logged · ${c.daysToExam} days to go`, body: `Every single day counts toward ${c.dreamCollege}. One 5-second log tonight starts it.`, expectedAction: 'log_today' };
+      return { title: `Your first log starts it · ${c.daysToExam} days to CAT`, body: `Every single day counts toward ${c.dreamCollege}. One 5-second log tonight starts it.`, expectedAction: 'log_today' };
     case 'log':
       return { title: `5 seconds to ${c.dreamCollege}`, body: `One quick log tonight starts your streak — and the journey there. Do it now.`, expectedAction: 'log_today' };
     case 'close':

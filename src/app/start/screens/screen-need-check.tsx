@@ -38,7 +38,7 @@ export default function ScreenNeedCheck({ onNext, isLoading }: Props) {
       </div>
 
       <p className="text-center text-[11px] leading-relaxed text-stone-400">
-        Toppers who prepare with a written plan and daily accountability are the ones who show up consistent on exam day — not the ones with the most hours.
+        Toppers who prepare with a written plan and daily accountability are the ones who show up consistently on exam day — not the ones with the most hours.
       </p>
     </div>
   );

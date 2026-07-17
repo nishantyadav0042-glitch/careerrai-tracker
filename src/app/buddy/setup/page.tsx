@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { SetupFormClient } from './setup-form-client';
 
 export const metadata = {
-  title: 'Setup your profile · CareerRai',
+  title: 'Set up your profile · CareerRai',
 };
 
 export default async function BuddySetupPage() {

@@ -115,12 +115,9 @@ export function BuddyOverview({
 
       {!buddyId ? (
         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
-          <p className="text-stone-600 font-medium">No buddy assigned yet</p>
+          <p className="text-stone-600 font-medium">Finding your IIM mentor</p>
           <p className="text-sm text-stone-400 mt-1">
-            We&apos;re matching you with a buddy — voice notes and sessions will appear here.
-          </p>
-          <p className="text-sm font-medium text-orange-700 mt-3">
-            Please ask your admin to assign a buddy to you ASAP.
+            We&apos;re matching you with the right mentor now — your sessions and voice notes will appear here within 24 hours.
           </p>
         </div>
       ) : (
