@@ -163,7 +163,7 @@ export function LockedBuddyHub({
     {/* Constant CTA — always visible, just above the bottom nav */}
     <div className="fixed inset-x-0 bottom-16 z-20 mx-auto max-w-md px-3">
       <UnlockBuddyButton variant="primary" size="lg" className="w-full shadow-xl shadow-stone-900/20" fullName={fullName}>
-        Get my preparation reviewed →
+        Get my 1:1 IIM mentor →
       </UnlockBuddyButton>
     </div>
     </>

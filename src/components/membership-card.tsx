@@ -60,7 +60,13 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         body: JSON.stringify({ plan: planId, coupon: coupon.trim() || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) { setMessage(data.error ?? "Couldn't start checkout."); return; }
+      if (!res.ok) {
+        // Payments kill-switch (403): degrade to the human path like the
+        // unlock sheet does — never show a raw server string to a paying student.
+        if (res.status === 403) { setMessage('Online payment is briefly unavailable — our team will reach out to set up your 1:1 mentor.'); return; }
+        setMessage(data.error ?? "We couldn't start checkout. Please try again.");
+        return;
+      }
 
       // A scholarship/coupon brought the price to zero — already activated.
       if (data.free) {
@@ -80,19 +86,19 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         amount: data.amount,
         currency: data.currency,
         name: 'CareerRai',
-        description: `${PLANS[planId].label} membership`,
+        description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
         prefill: { name: fullName },
         theme: { color: '#E8652D' },
         handler: () => {
           // Confirmation is server-side via webhook; just reassure + refresh.
-          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `${PLANS[planId].label} membership` }, data.orderId);
-          setMessage('Payment received — confirming your membership…');
+          trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `1:1 CAT mentorship (${PLANS[planId].label})` }, data.orderId);
+          setMessage('Payment received — setting up your 1:1 mentor…');
           setTimeout(() => router.refresh(), 4000);
         },
       });
       rzp.open();
     } catch {
-      setMessage('Something went wrong. Try again.');
+      setMessage('Something went wrong with the payment. Nothing was charged — please try again.');
     } finally {
       setBusy(null);
     }
@@ -114,7 +120,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Membership</div>
+        <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your mentorship</div>
         <Badge color={badge.color}>{badge.text}</Badge>
       </div>
 
@@ -126,7 +132,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       )}
       {status === 'active' && (
         <p className="text-sm text-stone-600 mb-4">
-          {plan && PLANS[plan as PlanId] ? `${PLANS[plan as PlanId].label} plan` : 'Active plan'}
+          {plan && PLANS[plan as PlanId] ? `${PLANS[plan as PlanId].label} mentorship — active` : 'Mentorship active'}
           {renewsAt && <> · renews {new Date(renewsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</>}
         </p>
       )}
@@ -137,7 +143,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         </p>
       )}
       {status === 'refund_requested' && (
-        <p className="text-sm text-stone-600 mb-4">Refund requested — your founder is processing it manually.</p>
+        <p className="text-sm text-stone-600 mb-4">Refund requested — our team is processing it. You&apos;ll hear from us shortly.</p>
       )}
 
       {showPlans && (

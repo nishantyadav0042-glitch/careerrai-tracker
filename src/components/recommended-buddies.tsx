@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { type MatchBuddy } from '@/lib/buddy-match';
-import { Briefcase, ExternalLink, Sparkles, Lock, ChevronDown } from 'lucide-react';
+import { Briefcase, ExternalLink, Sparkles, ChevronDown } from 'lucide-react';
 
 // The free-tier buddy showcase: real, verified IIM-alumni mentors the student
 // can browse for free — messaging/booking is what the subscription unlocks.
@@ -35,7 +35,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
     <div>
       <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Your best-matched buddy</div>
       <p className="text-xs text-stone-400 mt-1 mb-4">
-        A real IIM senior, matched to your profile. Browse free — subscribe to connect.
+        A real IIM senior, matched to your profile. Browse free — start 1:1 mentorship to connect.
       </p>
 
       <div className="space-y-3">
@@ -109,7 +109,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
                   </a>
                 ) : <span />}
                 <UnlockBuddyButton variant="teal" size="sm">
-                  <Lock className="w-3.5 h-3.5" /> Connect with {firstName}
+                  Start with {firstName} &rarr;
                 </UnlockBuddyButton>
               </div>
             </div>

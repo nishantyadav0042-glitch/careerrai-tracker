@@ -29,19 +29,19 @@ export const ONBOARDING_DAYS: Record<number, OnboardingDay> = {
     done: { title: 'Day 2 ✅ — 2 din lagatar!', body: (n) => `Pattern bann raha hai, ${n}. Kal Day 3 — mat rukna.` },
   },
   3: {
-    pending: { title: 'Day 3 ka log baaki hai', body: (n) => `${n}, teesra din — yahi wo point hai jahan log rukte hain. Tum mat rukna.` },
+    pending: { title: 'Day 3 ka log ready hai', body: (n) => `${n}, teesra din sabse important hota hai — 90 seconds mein aaj ka log karo, habit yahin banti hai.` },
     done: { title: 'Day 3 — halfway to habit 🔥', body: (n) => `3 din ho gaye, ${n}. Ab aadat banna shuru ho rahi hai.` },
   },
   4: {
-    pending: { title: 'Day 4 — peeche mat hato', body: (n) => `${n}, 3 din ki mehnat hai. Aaj ka log karo, chain mat todo.` },
+    pending: { title: 'Day 4 — momentum tumhare saath hai', body: (n) => `${n}, 3 din ki mehnat jam gayi hai. Aaj ka quick log — aur streak 4 ki.` },
     done: { title: 'Day 4 ✅', body: (n) => `4/7, ${n}. Teen din aur — habit lock hone waali hai.` },
   },
   5: {
-    pending: { title: 'Day 5 — bas 2 din aur', body: (n) => `${n}, itna aage aake rukna? Aaj ka log 90 seconds ka hai.` },
-    done: { title: 'Day 5 — 2 din baaki 🎯', body: (n) => `${n}, itni consistency rare hai. Weekend mein bhi mat rukna.` },
+    pending: { title: 'Day 5 — bas 2 din aur', body: (n) => `${n}, Day 5 aa gaya. Aaj ka log 90 seconds ka hai — aur hafta almost poora.` },
+    done: { title: 'Day 5 — 2 din baaki 🎯', body: (n) => `${n}, itni consistency rare hai. Weekend mein bhi milte hain.` },
   },
   6: {
-    pending: { title: 'Day 6 — kal last din hai', body: (n) => `${n}, kal 7 poore honge. Aaj mat chhodo, itna paas hoke.` },
+    pending: { title: 'Day 6 — kal last din hai', body: (n) => `${n}, aaj ka log karo — kal 7 poore. Finish line saamne hai.` },
     done: { title: 'Day 6 — kal 7 poore! 🔥', body: (n) => `${n}, ek din aur — pura hafta complete karoge.` },
   },
   7: {

@@ -506,7 +506,7 @@ export function CatReadinessClient() {
           </h1>
 
           <p className="text-stone-400 text-sm text-center leading-relaxed mb-8">
-            Answer {total} quick questions so we match you with the right IIM buddy. Takes 3 minutes — no signup needed.
+            Answer {total} quick questions so we match you with the right IIM buddy. Takes about 4 minutes.
           </p>
 
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-8 space-y-3">
@@ -528,7 +528,7 @@ export function CatReadinessClient() {
           >
             Claim my free session <ArrowRight className="w-5 h-5" />
           </button>
-          <p className="text-center text-xs text-stone-600 mt-3">{total} quick taps · ~3 minutes · no spam</p>
+          <p className="text-center text-xs text-stone-600 mt-3">{total} quick taps · ~4 minutes · no spam</p>
         </div>
       </div>
     );

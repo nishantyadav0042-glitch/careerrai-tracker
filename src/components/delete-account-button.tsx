@@ -23,11 +23,11 @@ export function DeleteAccountButton() {
       const res = await fetch('/api/account/delete', { method: 'POST' });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error || 'Something went wrong. Please try again.');
+        throw new Error(j.error || "We couldn't delete your account, so nothing was changed. Please check your connection and try again, or email business@careerrai.com.");
       }
       window.location.href = '/welcome?deleted=1';
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+      setError(e instanceof Error ? e.message : "We couldn't delete your account, so nothing was changed. Please check your connection and try again, or email business@careerrai.com.");
       setBusy(false);
     }
   }

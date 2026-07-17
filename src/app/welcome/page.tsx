@@ -280,6 +280,13 @@ const RENDER: Record<ScreenId, () => React.ReactElement> = {
 export default function WelcomePage() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Account deletion lands here with ?deleted=1 — the loudest action a user can
+  // take deserves explicit confirmation (Apple 5.1.1(v)), not a silent redirect.
+  const [deleted, setDeleted] = useState(false);
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- reading the URL is client-only */
+    try { if (new URLSearchParams(window.location.search).get('deleted') === '1') setDeleted(true); } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -294,6 +301,17 @@ export default function WelcomePage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-white text-stone-900">
+
+      {deleted && (
+        <div className="shrink-0 bg-emerald-50 px-6 py-3 text-center">
+          <p className="text-sm font-semibold text-emerald-800">
+            Your account and all your data have been permanently deleted. You&apos;ve been signed out.
+          </p>
+          <button type="button" onClick={() => setDeleted(false)} className="mt-1 text-xs font-medium text-emerald-700 underline underline-offset-2">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="shrink-0 px-6 pt-5 text-center">
         <p className="text-sm font-bold tracking-tight">CareerRai</p>
