@@ -8,9 +8,9 @@ export function TopicStats({ covered, inProgress, untouched }: {
   covered: number; inProgress: number; untouched: number;
 }) {
   const cards = [
-    { val: covered, label: 'Covered', Icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { val: covered, label: 'Studied', Icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { val: inProgress, label: 'In progress', Icon: BookOpen, color: 'text-orange-500', bg: 'bg-orange-50' },
-    { val: untouched, label: 'Untouched', Icon: Circle, color: 'text-stone-400', bg: 'bg-stone-100' },
+    { val: untouched, label: 'Not started', Icon: Circle, color: 'text-stone-400', bg: 'bg-stone-100' },
   ];
   return (
     <div className="grid grid-cols-3 gap-2">

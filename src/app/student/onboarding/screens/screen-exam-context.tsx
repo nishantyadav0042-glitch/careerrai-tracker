@@ -172,7 +172,7 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm font-medium">%ile</span>
         </div>
         {targetPercentile.trim() !== '' && !percentileValid && (
-          <p className="text-xs text-red-600 mt-1">Enter a percentile between 50 and 99.99</p>
+          <p className="text-xs text-red-600 mt-1">Enter a percentile between 50 and 99.99.</p>
         )}
       </div>
 

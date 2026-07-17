@@ -57,7 +57,7 @@ export default async function SessionHistoryPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <p className={`text-sm font-medium truncate ${isCancelled ? 'text-stone-400 line-through' : 'text-stone-800'}`}>
-                        {s.title || (isOrientation ? 'Free Orientation' : 'Guidance Session')}
+                        {s.title || (isOrientation ? 'Free Orientation' : '1:1 mentorship session')}
                       </p>
                       {isOrientation && (
                         <span className="shrink-0 text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">

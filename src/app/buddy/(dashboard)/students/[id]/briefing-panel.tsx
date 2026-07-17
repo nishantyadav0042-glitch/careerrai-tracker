@@ -74,7 +74,7 @@ export function BriefingPanel({ studentId, initial }: BriefingPanelProps) {
       )}
 
       <p className="text-[10px] text-teal-500">
-        Facts only — AI summarizes, you interpret. Never shown to the student.
+        Facts only — AI summarises, you interpret. Never shown to the student.
       </p>
     </div>
   );

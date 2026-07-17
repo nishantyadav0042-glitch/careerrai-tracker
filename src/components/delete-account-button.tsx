@@ -43,7 +43,7 @@ export function DeleteAccountButton() {
         Delete my account
       </button>
       <p className="mt-2 text-xs text-stone-500">
-        Permanently erases your logs, streak, plan and profile. This can&apos;t be undone.
+        Permanently erases your logs, streak, plan, and profile. This can&apos;t be undone.
       </p>
 
       {open && (

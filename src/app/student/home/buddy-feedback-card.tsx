@@ -136,7 +136,7 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName, initialFeedba
 
       {/* Feedback Items */}
       {loading ? (
-        <div className="text-center py-8 text-stone-500">Loading feedback...</div>
+        <div className="text-center py-8 text-stone-500">Loading feedback…</div>
       ) : feedbacks.length === 0 ? (
         <div className="bg-white border-2 border-stone-200 rounded-xl p-6 text-center">
           <MessageSquare className="w-5 h-5 text-stone-300 mx-auto mb-2" />

@@ -59,7 +59,7 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
     // summary fetch succeeded.
     return (
       <div className="space-y-6 text-center py-8">
-        <p className="text-sm text-stone-600">Your Blueprint is built — head to your homepage to see it.</p>
+        <p className="text-sm text-stone-600">Your CAT Plan is built — head to Home to see it.</p>
         <button
           onClick={() => onNext({ onboardingCompleted: true })}
           disabled={isLoading}
@@ -75,7 +75,7 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <Sparkles className="w-8 h-8 text-orange-500 animate-pulse" />
-        <p className="text-sm text-stone-500">Building your Blueprint…</p>
+        <p className="text-sm text-stone-500">Building your CAT Plan…</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
 
         {data.weakestSection && (
           <div className="border-t border-stone-100 pt-3">
-            <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-1">Your Blueprint&apos;s focus</p>
+            <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-1">Your plan&apos;s focus</p>
             <p className="text-sm font-semibold text-stone-800">{data.weakestSection}{data.weakTopic ? ` — ${data.weakTopic}` : ''}</p>
           </div>
         )}

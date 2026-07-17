@@ -81,7 +81,7 @@ export function EveningBuddyPop({ name, avatarUrl, college, percentile }: Props)
         </p>
 
         <p className="mt-3 text-sm leading-relaxed text-stone-600">
-          {firstName} would tell you exactly what to study next — and re-point your plan after every mock. No more second-guessing.
+          {firstName} would tell you exactly what to study next — and update your plan after every mock. No more second-guessing.
         </p>
 
         <button

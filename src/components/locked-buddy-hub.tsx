@@ -81,7 +81,7 @@ export function LockedBuddyHub({
       {/* 3 — MECHANISM. Only now introduce the buddy — as the how, not the pitch. */}
       <div className="rounded-2xl border border-purple-100 bg-purple-50/60 p-4 text-center">
         <p className="text-sm leading-relaxed text-stone-700">
-          Here’s how: your <span className="font-semibold text-stone-900">IIM Buddy</span> reviews your
+          Here’s how: your <span className="font-semibold text-stone-900">IIM buddy</span> reviews your
           preparation, analyses every mock, and tells you <span className="font-semibold text-stone-900">exactly what to do next</span>.
         </p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
@@ -142,7 +142,7 @@ export function LockedBuddyHub({
 
       {/* Price + guarantee */}
       <div className="rounded-2xl bg-stone-900 px-4 py-4 text-center">
-        <p className="text-sm text-stone-300">Your IIM Buddy, from</p>
+        <p className="text-sm text-stone-300">Your IIM buddy, from</p>
         <p className="mt-0.5">
           <span className="text-3xl font-bold text-white">₹999</span>
           <span className="text-sm text-stone-400">/month</span>

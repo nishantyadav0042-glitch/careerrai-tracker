@@ -101,7 +101,7 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
         setTimeout(() => { window.location.href = json.dest; }, 900);
       } else {
         setBuilding(false);
-        setError(json.error ?? 'That code is incorrect or expired.');
+        setError(json.error ?? 'That OTP is incorrect or expired.');
       }
     } catch {
       setBuilding(false);
@@ -186,14 +186,14 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
               disabled={busy || isLoading || phone.length < 10 || name.trim().length < 2}
               className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-50"
             >
-              {busy ? 'Sending…' : 'Send code →'}
+              {busy ? 'Sending…' : 'Send OTP →'}
             </button>
           </div>
         </form>
       ) : (
         <form onSubmit={verifyAndBuild} className="space-y-4">
           <div>
-            <p className="mb-1.5 text-sm font-semibold text-stone-900">Enter the code</p>
+            <p className="mb-1.5 text-sm font-semibold text-stone-900">Enter the OTP</p>
             <p className="mb-3 text-xs text-stone-500">Sent to +91 {phone}</p>
             <input
               type="text"

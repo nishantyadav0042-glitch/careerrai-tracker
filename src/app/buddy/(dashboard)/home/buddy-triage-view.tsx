@@ -64,17 +64,17 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
       <div className="grid grid-cols-3 gap-4">
         <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
           <div className="text-3xl font-bold text-red-600">{criticalCount}</div>
-          <p className="text-sm text-red-700 font-medium">Need Attention</p>
+          <p className="text-sm text-red-700 font-medium">Need attention</p>
         </Card>
 
         <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
           <div className="text-3xl font-bold text-amber-600">{warningCount}</div>
-          <p className="text-sm text-amber-700 font-medium">Check In Soon</p>
+          <p className="text-sm text-amber-700 font-medium">Check in soon</p>
         </Card>
 
         <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
           <div className="text-3xl font-bold text-emerald-600">{students.length}</div>
-          <p className="text-sm text-emerald-700 font-medium">Total Students</p>
+          <p className="text-sm text-emerald-700 font-medium">Total students</p>
         </Card>
       </div>
 
@@ -104,7 +104,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
       {isLoading ? (
         <div className="text-center py-12">
           <div className="w-10 h-10 border-3 border-orange-200 border-t-orange-600 rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-stone-600">Loading students...</p>
+          <p className="text-stone-600">Loading students…</p>
         </div>
       ) : filteredStudents.length === 0 ? (
         <Card className="p-12 text-center bg-stone-50">
@@ -138,7 +138,7 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
                       </h3>
                     </div>
                     <p className="text-sm text-stone-600">
-                      CAT Percentile:{' '}
+                      CAT percentile:{' '}
                       <span className="font-semibold text-stone-900">
                         {student.cat_percentile?.toFixed(1) || 'N/A'}%
                       </span>

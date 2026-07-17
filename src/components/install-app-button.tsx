@@ -175,7 +175,7 @@ export function InstallAppButton({ variant = 'card' }: { variant?: 'card' | 'ban
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-stone-900">Install the CareerRai app</p>
-        <p className="mt-0.5 text-xs text-stone-500">Just ~3 MB · add it to your home screen for one-tap access.</p>
+        <p className="mt-0.5 text-xs text-stone-500">Just ~3 MB · add it to your Home Screen for one-tap access.</p>
       </div>
       <Smartphone className="w-4 h-4 shrink-0 text-orange-600" />
     </button>

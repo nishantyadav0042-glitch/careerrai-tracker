@@ -583,8 +583,8 @@ export function CatReadinessClient() {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="bg-white/90 backdrop-blur-sm border border-stone-200 rounded-2xl px-6 py-5 shadow text-center">
                     <Lock className="w-5 h-5 mx-auto mb-2 text-stone-400" />
-                    <p className="text-sm font-bold text-stone-900">Diagnosis locked</p>
-                    <p className="text-xs text-stone-500 mt-0.5">Claim your free session below to unlock it</p>
+                    <p className="text-sm font-bold text-stone-900">Your full diagnosis is ready</p>
+                    <p className="text-xs text-stone-500 mt-0.5">Add your details below to see it</p>
                   </div>
                 </div>
               )}
@@ -616,7 +616,7 @@ export function CatReadinessClient() {
                 Claim your free IIM buddy session
               </h2>
               <p className="text-sm text-stone-600 mb-5 leading-relaxed">
-                Enter your details to unlock your personalised diagnosis and book a free 15-min session with an IIM buddy who's cracked CAT.
+                Enter your details to see your full personalised diagnosis and book a free 15-min session with an IIM buddy who's cracked CAT.
               </p>
               <form onSubmit={handleGateSubmit} className="space-y-3">
                 <input
