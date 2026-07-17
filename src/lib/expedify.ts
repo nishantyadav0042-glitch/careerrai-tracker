@@ -19,6 +19,9 @@ export interface ExpedifyLead {
   phone: string;            // E.164, e.g. +919876543210
   email?: string | null;
   source?: string | null;   // 'self_serve' | 'allowlist' | 'test'
+  // Contact type for Expedify's routing: a brand-new signup vs a follow-up
+  // (re-engagement of an existing student). Defaults to 'new_lead'.
+  leadType?: 'new_lead' | 'follow_up';
   brief: StudentBrief;
 }
 
@@ -55,6 +58,7 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResu
         // placeholder derived from the phone so the contact always validates.
         email: lead.email ?? `${lead.phone.replace(/\D/g, '')}@noemail.careerrai.app`,
         source: lead.source ?? 'careerrai',
+        lead_type: lead.leadType ?? 'new_lead',
         // The brief the AI agent should use on the call:
         summary: b.summary,
         attempt: b.attempt ?? undefined,
