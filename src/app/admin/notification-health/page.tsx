@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { STUDENT_BUDGET_TYPES } from '@/lib/notification-os';
 import { cn } from '@/lib/utils';
+import { waMessages, waNumber } from '@/lib/wa-messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +86,7 @@ export default async function NotificationHealthPage() {
       .limit(2000),
     admin.from('daily_reports').select('student_id, report_date').gte('report_date', reportsWindowStart),
     admin.from('profiles')
-      .select('id, full_name, notif_prefs, push_subscription, push_died_at, onboarding_completed')
+      .select('id, full_name, phone, dream_colleges, notif_prefs, push_subscription, push_died_at, onboarding_completed, is_test_account')
       .eq('role', 'student'),
   ]);
 
@@ -152,6 +153,12 @@ export default async function NotificationHealthPage() {
     return p.push === true && s.push_subscription != null;
   }).length;
   const pushDead = allStudents.filter((s) => s.push_died_at != null).length;
+  // Actionable subset: currently dead AND the student explicitly wants push —
+  // the exact list the push-recovery cron emails daily, surfaced here too so
+  // it's never "a number nobody checks" between digest runs.
+  const pushDeadAndWanted = allStudents
+    .filter((s) => s.push_died_at != null && (s.notif_prefs as Record<string, unknown> | null)?.push === true && s.is_test_account !== true)
+    .sort((a, b) => new Date(b.push_died_at!).getTime() - new Date(a.push_died_at!).getTime());
 
   const recent = rows.slice(0, 15);
 
@@ -194,6 +201,47 @@ export default async function NotificationHealthPage() {
             <p className="text-[10px] text-stone-400">endpoint 410 — likely uninstalled</p>
           </div>
         </div>
+
+        {/* Actionable: currently push-dead AND wanted — the exact list the
+            daily push-recovery digest emails, one-tap WhatsApp ready. A dead
+            subscription can never be revived server-side (a hard property of
+            Web Push everywhere), so this list is the real fix, not a metric. */}
+        {pushDeadAndWanted.length > 0 && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 mb-6">
+            <h2 className="text-sm font-bold text-rose-900 mb-1">
+              {pushDeadAndWanted.length} student{pushDeadAndWanted.length === 1 ? '' : 's'} want reminders but push can&apos;t reach them
+            </h2>
+            <p className="text-[11px] text-rose-700 mb-3">
+              Their subscription died — no server-side fix exists for this. One WhatsApp nudge to reopen the app fixes it silently (their permission is usually still granted).
+            </p>
+            <div className="space-y-1.5">
+              {pushDeadAndWanted.map((s) => {
+                const firstName = (s.full_name || 'Student').split(' ')[0];
+                const dreamCollege = (s.dream_colleges as string[] | null)?.[0] ?? 'their dream college';
+                const msg = waMessages({ firstName, dreamCollege }).find((m) => m.key === 'push_recovery')!;
+                const waLink = s.phone ? `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(msg.text)}` : null;
+                return (
+                  <div key={s.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 border border-rose-100">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-stone-900 truncate">{s.full_name ?? 'Unknown'}</p>
+                      <p className="text-[10px] text-stone-400">
+                        {s.phone ?? 'no phone'} · died {new Date(s.push_died_at!).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    {waLink ? (
+                      <a href={waLink} target="_blank" rel="noopener noreferrer"
+                        className="shrink-0 rounded-lg bg-stone-900 px-3 py-1.5 text-[11px] font-bold text-white active:scale-95">
+                        WhatsApp →
+                      </a>
+                    ) : (
+                      <span className="shrink-0 text-[10px] text-rose-500">no phone on file</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* By type */}
         <div className="rounded-2xl border border-stone-200 bg-white p-4 mb-4">

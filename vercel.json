@@ -107,6 +107,10 @@
     {
       "path": "/api/cron/expedify-flush",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/push-recovery",
+      "schedule": "0 5 * * *"
     }
   ]
 }

@@ -17,7 +17,7 @@ export interface WaVars {
 
 // The lead's outreach state, most-blocking first: no app → app but no
 // notifications → fully set up. The suggested message matches this.
-export type LeadState = 'not_installed' | 'notifications_off' | 'engaged';
+export type LeadState = 'not_installed' | 'notifications_off' | 'push_died' | 'engaged';
 
 export interface WaMessage {
   key: string;
@@ -80,6 +80,18 @@ Please switch them on 👇
 Open the app → allow notifications (or phone Settings → Notifications → CareerRai → On).
 
 Takes 5 seconds — and it's the difference between a plan you follow and one you forget 💪`,
+    },
+    {
+      key: 'push_recovery',
+      label: 'Reminders stopped (push died)',
+      suggestedFor: 'push_died',
+      text: `Hi ${firstName}! 👋 Nishant from *CareerRai — the CAT prep tracking app* 🎯
+
+Quick heads-up — your phone stopped letting the app send you reminders (this happens sometimes, nothing you did wrong). So your daily nudges have gone quiet.
+
+30-second fix 👉 just open the CareerRai app once — that alone reconnects it, no settings to change. If it doesn't ask you anything, you're already fixed.
+
+Wanted you to know right away so you don't lose the habit 💪`,
     },
     {
       key: 'keep_going',

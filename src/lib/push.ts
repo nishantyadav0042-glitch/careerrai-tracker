@@ -16,7 +16,36 @@ async function getVapidConfigured() {
   return true;
 }
 
-export interface PushResult { ok: boolean; reason?: string }
+export interface PushResult { ok: boolean; reason?: string; terminal?: boolean }
+
+// Immediate report the instant a subscription is confirmed dead — not a
+// dashboard number nobody checks, an actual email to the inbox already used
+// for App Store review contact (business@careerrai.com). Deliberately does
+// NOT depend on anyone opening the app: email is a channel nothing else in
+// this incident touches. Throttled per-student to one alert per 24h so a
+// student who fails 10 sends in a row (e.g. a batch job retrying) doesn't
+// spam the inbox — the daily push-recovery digest is the durable record.
+async function reportPushDeath(userId: string): Promise<void> {
+  const admin = createAdminClient();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await admin.from('notifications').select('id', { count: 'exact', head: true })
+    .eq('user_id', userId).eq('type', 'push_death_alerted').gte('created_at', since);
+  if ((count ?? 0) > 0) return; // already alerted for this student in the last 24h
+
+  const { data: profile } = await admin.from('profiles').select('full_name, phone').eq('id', userId).single();
+  await admin.from('notifications').insert({
+    user_id: userId, type: 'push_death_alerted', title: 'Push subscription died', body: '',
+    channel: 'internal', read: true, reason: 'Immediate death report — see reportPushDeath in push.ts',
+  });
+
+  const { sendAdminAlert } = await import('@/lib/email');
+  await sendAdminAlert(
+    `⚠️ Push died: ${profile?.full_name ?? userId}`,
+    `<p><strong>${profile?.full_name ?? 'A student'}</strong> (${profile?.phone ?? 'no phone on file'}) just lost their push subscription — CareerRai can no longer reach them via push.</p><p>They asked for reminders (push preference is ON). This is reported immediately per policy: a dead subscription can never be revived server-side; the only way back is getting them to reopen the app once (their notification permission is likely still granted, so re-opening silently heals it — no re-prompt needed) or reaching them on another channel (WhatsApp/call).</p>`
+  ).catch((e) => console.error('[push] admin alert send failed:', e));
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function sendPushToUser(
   userId: string,
@@ -31,6 +60,28 @@ export async function sendPushToUser(
   const { data: profile } = await admin.from('profiles').select('push_subscription').eq('id', userId).single();
   if (!profile?.push_subscription) return { ok: false, reason: 'no_subscription' };
 
+  // A dead subscription (410/404) is TERMINAL — no retry can revive it, this is
+  // a hard property of the Web Push standard on every platform. Anything else
+  // (503 from the push service, a DNS blip, a momentary timeout) is TRANSIENT —
+  // retrying once after a short backoff is the difference between a reminder
+  // that silently vanishes and one that actually lands. Previously ANY non-410/
+  // 404 failure was dropped with zero retry.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const result = await attemptSend(admin, userId, profile.push_subscription as webpush.PushSubscription, payload);
+    if (result.ok || result.terminal) return result;
+    if (attempt < 2) { console.warn(`[push] attempt ${attempt} failed for ${userId}, retrying…`); await sleep(1500); }
+    else return result;
+  }
+  return { ok: false, reason: 'unreachable' };
+}
+
+async function attemptSend(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  userId: string,
+  subscription: webpush.PushSubscription,
+  payload: { title: string; body: string; url?: string; notifId?: string }
+): Promise<PushResult & { terminal?: boolean }> {
   try {
     // Every push needs a UNIQUE tag. sw.js falls back to a single shared tag when
     // none is set — per the Web Push spec, two notifications sharing a tag
@@ -54,7 +105,7 @@ export async function sendPushToUser(
     // immediately even in Doze. TTL 24h so a reminder that couldn't be
     // delivered (device off) expires instead of arriving a day late.
     await webpush.sendNotification(
-      profile.push_subscription as webpush.PushSubscription,
+      subscription,
       JSON.stringify(tagged),
       { urgency: 'high', TTL: 24 * 60 * 60 }
     );
@@ -66,12 +117,17 @@ export async function sendPushToUser(
     // stamp push_died_at: a dead endpoint usually means the PWA was
     // uninstalled, which is a CRM signal ("push can't reach them — email or
     // a call are the only doors left"), not just an error to swallow.
-    if (statusCode === 410 || statusCode === 404) {
+    const terminal = statusCode === 410 || statusCode === 404;
+    if (terminal) {
       await admin.from('profiles')
         .update({ push_subscription: null, push_died_at: new Date().toISOString() })
         .eq('id', userId);
+      // Report immediately — a dead subscription means push can no longer
+      // reach this student at all, and nothing else will notice unless we
+      // say so right now. Fire-and-forget: never let alerting break the send path.
+      void reportPushDeath(userId).catch((e) => console.error('[push] death report failed:', e));
     }
     console.error(`[push] send failed (status ${statusCode}) for ${userId}`);
-    return { ok: false, reason: `send_failed_${statusCode ?? 'unknown'}` };
+    return { ok: false, reason: `send_failed_${statusCode ?? 'unknown'}`, terminal };
   }
 }
