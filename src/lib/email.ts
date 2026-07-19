@@ -8,6 +8,15 @@ function log(subject: string, to: string) {
   console.log(`[Email stub] To: ${to} | Subject: ${subject}`);
 }
 
+// Real-time ops alert to the founder's own inbox — same address already used
+// for App Store review contact, so it's a live, checked channel independent
+// of the PWA/app being open. Used for anything that needs "report immediately".
+export async function sendAdminAlert(subject: string, html: string): Promise<void> {
+  const to = 'business@careerrai.com';
+  if (!resend) { log(subject, to); return; }
+  await resend.emails.send({ from: FROM, to, subject, html });
+}
+
 export async function sendDailyReminder(to: string, name: string) {
   const subject = `Hey ${name} — your 90-second log is ready 🔥`;
   const html = `
