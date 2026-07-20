@@ -145,8 +145,9 @@ export interface SalesReadyRow extends RealStudent {
   buddy_cta_clicks: number;
   mock_opened: boolean;
   signed_up_at: string | null;
-  streak: number;               // live streak only
+  streak: number;               // momentum streak
   lastLogDays: number | null;   // null = never logged
+  mentorDoor: 'history' | 'intent' | null; // crossed a free-mentor door (dormant until enabled)
 }
 
 export async function getSalesReadyToCall(admin: any, students?: RealStudent[]): Promise<SalesReadyRow[]> {
@@ -160,12 +161,14 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
     .limit(1000);
   const ids = (rows ?? []).map((r: any) => r.student_id as string).filter((id: string) => byId.has(id));
   if (ids.length === 0) return [];
-  const [{ data: profs }, { data: streaks }] = await Promise.all([
+  const [{ data: profs }, { data: streaks }, { data: doors }] = await Promise.all([
     admin.from('profiles').select('id, is_premium').in('id', ids),
     admin.from('streak_data').select('student_id, current_streak, last_log_date, shields').in('student_id', ids),
+    admin.from('mentor_grants').select('student_id, door').in('student_id', ids),
   ]);
   const premiumIds = new Set((profs ?? []).filter((p: any) => p.is_premium === true).map((p: any) => p.id as string));
   const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id, s]));
+  const doorById = new Map((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
   return (rows ?? [])
     .filter((r: any) => byId.has(r.student_id) && !premiumIds.has(r.student_id))
     .map((r: any) => {
@@ -178,6 +181,7 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
         signed_up_at: (r.signed_up_at as string | null) ?? null,
         streak: momentumStreak(st?.current_streak, st?.shields, st?.last_log_date).streak,
         lastLogDays: daysSinceLastLog(st?.last_log_date),
+        mentorDoor: doorById.get(r.student_id) ?? null,
       };
     })
     // Hottest first, honestly: unlock clicks, then a LIVE streak, then freshest activity.

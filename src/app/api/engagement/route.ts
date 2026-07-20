@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
+import { recordDoorCrossed } from '@/lib/mentor-doors';
 
 // Records free-user engagement signals (§D) that drive the sales-ready trigger.
 // The hottest signal is buddy_cta_clicks — every reach for the locked buddy.
@@ -45,6 +46,32 @@ export async function POST(request: NextRequest) {
       .update({ sales_ready: true, sales_ready_at: new Date().toISOString() })
       .eq('student_id', user.id)
       .eq('sales_ready', false);
+
+    // Mentor Door 2 — INTENT (founder, 21 July): a second tap on the locked
+    // buddy ≥1 hour after the first is a raised hand, not browsing. Record the
+    // crossing (grant stays dormant until MENTOR_DOORS_ENABLED); always roll
+    // the last-tap timestamp forward.
+    try {
+      const { data: eng } = await admin
+        .from('student_engagement')
+        .select('buddy_cta_last_at, intent_door_at')
+        .eq('student_id', user.id)
+        .maybeSingle();
+      const lastAt = eng?.buddy_cta_last_at ? new Date(eng.buddy_cta_last_at as string).getTime() : null;
+      const crossed =
+        eng?.intent_door_at == null &&
+        lastAt != null &&
+        Date.now() - lastAt >= 60 * 60 * 1000;
+      await admin
+        .from('student_engagement')
+        .update({
+          buddy_cta_last_at: now,
+          ...(crossed ? { intent_door_at: now } : {}),
+          updated_at: now,
+        })
+        .eq('student_id', user.id);
+      if (crossed) await recordDoorCrossed(admin, user.id, 'intent');
+    } catch { /* door bookkeeping must never break engagement tracking */ }
   } else {
     const flag =
       event === 'tour_completed' ? { tour_completed: true } :

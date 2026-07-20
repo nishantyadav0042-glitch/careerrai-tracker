@@ -11,6 +11,7 @@ import { MILESTONE_MESSAGES } from '@/lib/messages';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { sendPushToUser } from '@/lib/push';
 import { generateBuddyBriefing } from '@/lib/buddy-briefing';
+import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 
 interface LoggingRequest {
   hours: number;
@@ -185,6 +186,11 @@ export async function POST(request: NextRequest) {
     // #10 product analytics: hour_of_day + day_of_week drive retention heatmaps;
     // is_first_today distinguishes new logs from edits for funnel analysis.
     const nowUtc = new Date();
+    // Mentor Door 1 — HISTORY: after every log, check whether this student's
+    // preparation history just became rich enough for real mentoring (5 logged
+    // days, or 3 + a mock). Recorded dormant; fire-and-forget.
+    if (isNewLog) void checkHistoryDoorAfterLog(admin, user.id);
+
     logAnalyticsEvent(user.id, 'log_submitted', {
       hours: body.hours,
       sectionCount: body.sections.length,
