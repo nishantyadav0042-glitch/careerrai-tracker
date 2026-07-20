@@ -304,19 +304,28 @@ export default async function DailyTrackerPage() {
     const studied = entries.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
     const untouchedN = entries.filter((t) => t.status === 'not_started').length;
     const inProg = entries.filter((t) => t.status === 'learning').length;
+    // "Remaining" = untouched + still-in-learning — a topic merely opened is
+    // NOT done (21 July fix: "0 of 28 untouched" while 8/28 studied read as
+    // nonsense; the honest gap for a section is everything not yet finished).
+    const remaining = untouchedN + inProg;
     const gap = entries.length ? (untouchedN * 2 + inProg) / entries.length : 0;
-    return { name: sec, studied, total: entries.length, untouchedN, gap };
+    return { name: sec, studied, total: entries.length, untouchedN, remaining, gap };
   });
   const tieOrder: Record<string, number> = { DILR: 0, QA: 1, VARC: 2 };
   const weakestSec = [...bySection].sort((a, b) => b.gap - a.gap || tieOrder[a.name] - tieOrder[b.name])[0];
   const insightFresh = bySection.every((s) => s.studied === 0 && s.total - s.untouchedN === 0);
+  // "Start here": highest-weightage topics in the weakest section — untouched
+  // first; if everything is at least opened, the high-weightage ones still in
+  // 'learning' ("finish what you started") so this list is never empty-handed.
+  const byWeight = (a: { topic: string }, b: { topic: string }) =>
+    (TOPIC_METADATA[b.topic]?.weightage ?? 0) - (TOPIC_METADATA[a.topic]?.weightage ?? 0);
+  const weakestEntries = topicMemory.filter((t) => TOPIC_METADATA[t.topic]?.section === weakestSec.name);
+  const focusUntouched = weakestEntries.filter((t) => t.status === 'not_started').sort(byWeight);
+  const focusInProgress = weakestEntries.filter((t) => t.status === 'learning').sort(byWeight);
   const focusTopics = insightFresh
     ? ['Percentages (QA)', 'Reading Comprehension (VARC)', 'Arrangements (DILR)'].slice(0, 2)
-    : topicMemory
-        .filter((t) => TOPIC_METADATA[t.topic]?.section === weakestSec.name && t.status === 'not_started')
-        .sort((a, b) => (TOPIC_METADATA[b.topic]?.weightage ?? 0) - (TOPIC_METADATA[a.topic]?.weightage ?? 0))
-        .slice(0, 2)
-        .map((t) => t.topic);
+    : [...focusUntouched, ...focusInProgress].slice(0, 2).map((t) => t.topic);
+  const focusMode: 'start' | 'finish' = focusUntouched.length > 0 || insightFresh ? 'start' : 'finish';
 
   return (
     <div className="bg-stone-50 px-1 pb-4">
@@ -418,10 +427,11 @@ export default async function DailyTrackerPage() {
       {tourReady && (
         <FirstInsight
           weakest={weakestSec.name}
-          untouched={weakestSec.untouchedN}
+          remaining={weakestSec.remaining}
           sectionTotal={weakestSec.total}
           sections={bySection.map(({ name, studied, total }) => ({ name, studied, total }))}
           focusTopics={focusTopics}
+          focusMode={focusMode}
           fresh={insightFresh}
         />
       )}
