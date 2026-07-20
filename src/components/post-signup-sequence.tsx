@@ -92,6 +92,43 @@ function HoldToCommit({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// The setup journey, made visible (founder, 21 July: "it should feel like a
+// journey, not a boring job — sticky like a magnet till app notifications are
+// on"). Five stations, always on screen: what's done gets a tick, the current
+// one pulses, and the unfinished ones PULL — the student can see exactly how
+// close the finish line is, and the finish line is reminders ON in the app.
+const JOURNEY = ['Your date', 'Commitment', 'Install', 'Open app', 'Reminders on'] as const;
+
+function JourneyRail({ current }: { current: number }) {
+  return (
+    <div className="mb-5">
+      <div className="flex items-center">
+        {JOURNEY.map((label, i) => (
+          <div key={label} className={i === 0 ? 'flex items-center' : 'flex flex-1 items-center'}>
+            {i > 0 && <div className={`h-0.5 flex-1 ${i <= current ? 'bg-stone-900' : 'bg-stone-200'}`} />}
+            <div
+              className={
+                'grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9px] font-bold ' +
+                (i < current
+                  ? 'bg-stone-900 text-white'
+                  : i === current
+                    ? 'bg-orange-500 text-white ring-4 ring-orange-100'
+                    : 'bg-stone-200 text-stone-500')
+              }
+            >
+              {i < current ? '✓' : i + 1}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex justify-between">
+        <span className="text-[9px] font-semibold text-stone-400">{JOURNEY[0]}</span>
+        <span className={`text-[9px] font-bold ${current >= JOURNEY.length - 1 ? 'text-orange-600' : 'text-stone-400'}`}>{JOURNEY[JOURNEY.length - 1]}</span>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   // The date the student picked in the pre-auth funnel, and the hours of prep
   // still remaining from their declared coverage — both computed server-side so
@@ -291,10 +328,11 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'installFirst' && (
           <div className="space-y-6 text-center">
+            <JourneyRail current={2} />
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                Your first step: install your app.
+                {chosenLabel ? `${chosenLabel} is locked. Now install your app.` : 'Your next step: install your app.'}
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
                 We will remind you <b>what to study</b> and <b>when to study</b> — and send your <b>daily insight every evening</b> (your pattern, your gap, one advice, like the one you just saw). All of it reaches you only through the installed app. ~3 MB, once.
@@ -315,12 +353,13 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'openApp' && (
           <div className="space-y-5 text-center">
+            <JourneyRail current={3} />
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
                 App downloaded? Open CareerRai in the app now.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                From today, your daily prep lives there — one tap from your Home Screen. Didn&apos;t get the install popup? The 10-second route:
+                One station left after this: the app will ask to <b>switch on reminders</b> the moment it opens — say yes, and your setup is complete. Didn&apos;t get the install popup? The 10-second route:
               </p>
             </div>
             <InstallLiveGuide />
@@ -336,6 +375,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'date' && (
           <div className="space-y-5">
+            <JourneyRail current={0} />
             <div>
               <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
                 You chose {chosenLabel} to finish your CAT syllabus.
@@ -370,6 +410,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'commit' && (
           <div className="space-y-5 text-center">
+            <JourneyRail current={1} />
             <div>
               <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Commit to your goal</h1>
               <div className="mx-auto mt-4 max-w-xs rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-left">
@@ -384,10 +425,13 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'thanks' && (
           <div className="space-y-6 text-center">
+            <JourneyRail current={2} />
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-3xl shadow-lg shadow-violet-200">🙏</div>
             <div>
-              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Thank you for trusting us.</h1>
-              <p className="mt-2 text-sm text-stone-500">We don&apos;t take it lightly. From here on, we work for your date.</p>
+              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>That hold meant something.</h1>
+              <p className="mt-2 text-sm text-stone-500">
+                {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}We don&apos;t take it lightly — from here, we work for your date. <b>Two minutes of setup left</b>: app on your phone, open it, reminders on. Then we take over the remembering.
+              </p>
             </div>
             <button
               type="button"

@@ -141,6 +141,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
           <BellRing className="h-8 w-8 text-white" />
         </div>
         <div>
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-orange-500">The last step of your setup</p>
           <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
             Your plan works only<br />if it reaches you.
           </h1>
