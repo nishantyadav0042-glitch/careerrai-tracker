@@ -6,6 +6,8 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
 import { FirstInsight } from '@/components/first-insight';
+import { DailyInsightCard } from '@/components/home/daily-insight-card';
+import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
@@ -327,6 +329,13 @@ export default async function DailyTrackerPage() {
     : [...focusUntouched, ...focusInProgress].slice(0, 2).map((t) => t.topic);
   const focusMode: 'start' | 'finish' = focusUntouched.length > 0 || insightFresh ? 'start' : 'finish';
 
+  // Today's insight ON the home screen (founder: in-app, not just push) —
+  // same rule engine as the 5 PM notification, topicMemory reused from this
+  // page's own computation. Null (fewer than 2 logged days) renders nothing.
+  const dailyInsight = (logs ?? []).length >= 2
+    ? await computeDailyInsight(admin, user.id, archetype, { topicMemory }).catch(() => null)
+    : null;
+
   return (
     <div className="bg-stone-50 px-1 pb-4">
       <div className="mx-auto flex max-w-md flex-col gap-1.5">
@@ -373,6 +382,10 @@ export default async function DailyTrackerPage() {
             </p>
           </div>
         )}
+
+        {/* Today's insight — the pattern, the advice, every open. In a
+            browser tab it doubles as the install hook. */}
+        {dailyInsight && <DailyInsightCard title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
 
         {/* In the evening, the log jumps to the top. */}
         {eveningLogFirst && logBlock}

@@ -28,14 +28,17 @@ export interface DailyInsight {
 export async function computeDailyInsight(
   admin: any,
   studentId: string,
-  archetype: { isRepeater: boolean; isWorkingProfessional: boolean }
+  archetype: { isRepeater: boolean; isWorkingProfessional: boolean },
+  // Callers that already computed topic memory this request (the Home page)
+  // pass it in — one expensive scan, two consumers.
+  prefetched?: { topicMemory?: Awaited<ReturnType<typeof computeTopicMemory>> }
 ): Promise<DailyInsight | null> {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
   const [{ data: reports }, { data: routines }, { data: completions }, topicMemory] = await Promise.all([
     admin.from('daily_reports').select('report_date').eq('student_id', studentId).gte('report_date', fourteenDaysAgo),
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', studentId).gte('routine_date', fourteenDaysAgo),
     admin.from('routine_task_completions').select('routine_date, task_id, confidence').eq('student_id', studentId).gte('routine_date', fourteenDaysAgo),
-    computeTopicMemory(admin, studentId, archetype),
+    prefetched?.topicMemory ? Promise.resolve(prefetched.topicMemory) : computeTopicMemory(admin, studentId, archetype),
   ]);
 
   const loggedDays = new Set((reports ?? []).map((r: any) => r.report_date as string)).size;
