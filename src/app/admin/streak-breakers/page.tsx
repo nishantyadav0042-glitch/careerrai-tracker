@@ -21,7 +21,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function message(first: string): string {
-  return `Hi ${first}, you skipped your log yesterday. Daily log is the backbone of your plan — get back on track and fill today's log 🔥 Any issues, please let me know. — Team CareerRai`;
+  return `Hi ${first}, you missed yesterday's log — but good news: your Momentum Shield covered it, so your streak is SAFE 🛡️ Log today's study and keep it climbing 🔥 Any issues, please tell me. — Team CareerRai`;
 }
 
 export default async function StreakBreakersPage() {

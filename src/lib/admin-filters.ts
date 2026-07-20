@@ -70,22 +70,36 @@ export async function getLoggedToday(admin: any, students?: RealStudent[]): Prom
 }
 
 export interface LiveStreakRow extends RealStudent {
-  streak: number;
+  streak: number;       // momentum streak (after pending shield/decay math)
+  shields: number;      // shields remaining after covering pending misses
   lastLogDate: string;
+  active: boolean;      // logged today/yesterday; false = alive only because shields/decay protect it
 }
 
-export async function getLiveStreaks(admin: any, students?: RealStudent[]): Promise<LiveStreakRow[]> {
+// "Streaks alive": every student whose MOMENTUM streak is ≥1 right now — the
+// actively-logging AND the shield-protected (missed days covered by shields or
+// still surviving decay). Deterministic: momentumStreak(stored, shields,
+// last_log) ≥ 1.
+export async function getStreaksAlive(admin: any, students?: RealStudent[]): Promise<LiveStreakRow[]> {
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
-  const { data: streaks } = await admin.from('streak_data').select('student_id, current_streak, last_log_date');
+  const { data: streaks } = await admin.from('streak_data').select('student_id, current_streak, last_log_date, shields');
   const rows: LiveStreakRow[] = [];
   for (const st of streaks ?? []) {
     const s = byId.get(st.student_id as string);
-    if (!s) continue;
-    const live = liveStreak(st.current_streak as number | null, st.last_log_date as string | null);
-    if (live >= 1) rows.push({ ...s, streak: live, lastLogDate: st.last_log_date as string });
+    if (!s || !st.last_log_date) continue;
+    const m = momentumStreak(st.current_streak as number | null, st.shields as number | null, st.last_log_date as string | null);
+    if (m.streak >= 1) {
+      rows.push({
+        ...s,
+        streak: m.streak,
+        shields: m.shields,
+        lastLogDate: st.last_log_date as string,
+        active: liveStreak(st.current_streak as number | null, st.last_log_date as string | null) >= 1,
+      });
+    }
   }
-  return rows.sort((a, b) => b.streak - a.streak);
+  return rows.sort((a, b) => Number(b.active) - Number(a.active) || b.streak - a.streak);
 }
 
 export interface RemindRow extends RealStudent {

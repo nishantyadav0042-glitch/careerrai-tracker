@@ -4,10 +4,11 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PushGate } from '@/components/push-gate';
 import { TestPushButton } from '@/components/test-push-button';
+import { StreakRestoreBroadcastButton } from '@/components/streak-restore-broadcast-button';
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
-import { getRealStudents, getLoggedToday, getLiveStreaks, getRemindToLog, getSalesReadyToCall, getGoingCold } from '@/lib/admin-filters';
+import { getRealStudents, getLoggedToday, getStreaksAlive, getRemindToLog, getSalesReadyToCall, getGoingCold } from '@/lib/admin-filters';
 
 // Always render live — the dashboard is a real-time ops panel; a cached copy
 // showing stale counts (a payment just made, a fresh log) reads as "broken".
@@ -56,9 +57,9 @@ export default async function AdminTodayPage() {
   // dashboard contradicted itself.
   const real = await getRealStudents(admin);
   const totalStudents = real.length;
-  const [loggedList, liveList, remindList, streakBreakers, salesList, coldList] = await Promise.all([
+  const [loggedList, aliveList, remindList, streakBreakers, salesList, coldList] = await Promise.all([
     getLoggedToday(admin, real),
-    getLiveStreaks(admin, real),
+    getStreaksAlive(admin, real),
     getRemindToLog(admin, real),
     getStreakBreakers(admin),
     getSalesReadyToCall(admin, real),
@@ -78,9 +79,9 @@ export default async function AdminTodayPage() {
 
   const attention = [
     { label: 'Logged today', val: `${loggedToday}/${totalStudents}`, href: '/admin/logged-today', hot: false },
-    { label: 'Live streaks (logged today/yesterday)', val: liveList.length, href: '/admin/live-streaks', hot: false },
+    { label: 'Streaks alive (incl. 🛡️ shield-protected)', val: aliveList.length, href: '/admin/live-streaks', hot: false },
     { label: 'Remind to log today', val: remindList.length, href: '/admin/reminders', hot: remindList.length > 0 },
-    { label: 'Streak breakers — skipped yesterday', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
+    { label: '🛡️ Shield used yesterday — win them back', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
     { label: 'Going cold (4+ days)', val: coldList.length, href: '/admin/going-cold', hot: coldList.length > 0 },
   ];
@@ -122,6 +123,17 @@ export default async function AdminTodayPage() {
       </div>
 
       {!adminPushEnabled && <PushGate mode="staff" />}
+
+      {/* Momentum Shield announcement — tells every student their streak is
+          restored (loggers) or that 3 shields are waiting (never-logged), via
+          in-app bell + push where notifications are on. Idempotent. */}
+      <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="text-sm font-semibold text-stone-900">Momentum Shield announcement</p>
+        <p className="mb-3 mt-0.5 text-xs text-stone-500">
+          One tap: students who logged before hear “your streak is restored — start from today”; everyone else gets “3 shields waiting, start tonight”. Nobody is messaged twice.
+        </p>
+        <StreakRestoreBroadcastButton />
+      </div>
 
       {/* One-tap end-to-end push verification (founder: "I didn't get a single
           notification"). Confirms subscription → FCM → device on demand. */}
