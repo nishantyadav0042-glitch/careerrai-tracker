@@ -103,7 +103,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen bg-stone-50">
-      <PushHealer />
+      {/* serverPushDead: the send path flagged this student's subscription as
+          gone (410/404) — or we've never held one despite the client possibly
+          having permission. Either way the healer must mint a FRESH sub, not
+          re-upload whatever stale one the browser still returns. */}
+      <PushHealer serverPushDead={!!profile?.push_died_at || !profile?.push_subscription} />
       <InstallPing />
       <div className="max-w-2xl mx-auto px-3 pt-2 pb-16">
         <div className="flex items-center justify-between mb-2">

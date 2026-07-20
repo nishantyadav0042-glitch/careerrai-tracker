@@ -10,6 +10,19 @@ import { TOUR_DONE_EVENT } from '@/components/app-tour';
 // overlay stays down until the flag is set — never overlapping the coach-marks.
 const TOUR_KEY = 'cr_app_tour_v1';
 
+// First-run sequencing signal for whatever comes AFTER this ask (today: the
+// first-log prompt). `window.__crNotifAskVisible` is the live "am I covering
+// the screen" flag; the event fires whenever the ask settles down (decided not
+// to show, or the student tapped Later). Enabling reloads the page, so that
+// path needs no event — the next mount starts clean.
+export const NOTIF_ASK_SETTLED_EVENT = 'cr-notif-ask-settled';
+function setAskVisible(visible: boolean) {
+  try {
+    (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible = visible;
+    if (!visible) window.dispatchEvent(new Event(NOTIF_ASK_SETTLED_EVENT));
+  } catch { /* ignore */ }
+}
+
 // Founder flow: notification permission is asked INSIDE the installed app —
 // before install (especially on iPhone) the permission is a dead ask, since
 // iOS only delivers web push to an installed PWA. This overlay fires in
@@ -49,18 +62,21 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
-    if (pushEnabled) { setShow(false); return; }
+    if (pushEnabled) { setAskVisible(false); setShow(false); return; }
 
     // Show whenever notifications aren't on yet. Deliberately NO "skip"
     // memory — the founder wants this on every open until it's done.
+    // Every early-return marks the ask as settled (it isn't going to cover the
+    // screen), so the next step in the first-run sequence can proceed.
     const evaluate = () => {
-      if (!isStandalone()) return;
-      if (isIOS()) return; // web push is a no-op in the iOS wrapper — don't prompt
-      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-      if (Notification.permission === 'granted') return; // subscribed; server flag will catch up
+      if (!isStandalone()) { setAskVisible(false); return; }
+      if (isIOS()) { setAskVisible(false); return; } // web push is a no-op in the iOS wrapper — don't prompt
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); return; }
+      if (Notification.permission === 'granted') { setAskVisible(false); return; } // subscribed; server flag will catch up
       // Sequence: never come up before the app tour has finished, so we never
       // cover the coach-marks. First-run users see the tour, then this.
       try { if (localStorage.getItem(TOUR_KEY) !== '1') return; } catch { return; }
+      setAskVisible(true);
       setShow(true);
     };
     evaluate();
@@ -92,6 +108,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
         if (permission === 'denied') {
           setErr('Blocked by the phone — enable notifications for CareerRai in Settings.');
         } else {
+          setAskVisible(false);
           setShow(false);
         }
         setBusy(false);
@@ -126,6 +143,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
 
   function later() {
     // Hide for now only — no persistence, so it returns on the next app open.
+    setAskVisible(false);
     setShow(false);
   }
 
