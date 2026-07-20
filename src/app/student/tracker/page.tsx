@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
+import { FirstInsight } from '@/components/first-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
@@ -290,6 +291,33 @@ export default async function DailyTrackerPage() {
   );
   const planBlock = <TodaysRoutineCard />;
 
+  // ── Day-1 insight (founder, 21 July): the FIRST thing shown in the
+  // installed app is VALUE — "where you lack as of today", straight from the
+  // student's own coverage matrix. Weakest section by gap ratio (untouched
+  // count double-weighted vs in-progress, ties DILR → QA → VARC — same
+  // deterministic default as the plan engine), plus the highest-weightage
+  // untouched topics in it as "start here". Never invented: all counts come
+  // from topicMemory.
+  const SECTIONS: Array<'QA' | 'VARC' | 'DILR'> = ['QA', 'VARC', 'DILR'];
+  const bySection = SECTIONS.map((sec) => {
+    const entries = topicMemory.filter((t) => TOPIC_METADATA[t.topic]?.section === sec);
+    const studied = entries.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
+    const untouchedN = entries.filter((t) => t.status === 'not_started').length;
+    const inProg = entries.filter((t) => t.status === 'learning').length;
+    const gap = entries.length ? (untouchedN * 2 + inProg) / entries.length : 0;
+    return { name: sec, studied, total: entries.length, untouchedN, gap };
+  });
+  const tieOrder: Record<string, number> = { DILR: 0, QA: 1, VARC: 2 };
+  const weakestSec = [...bySection].sort((a, b) => b.gap - a.gap || tieOrder[a.name] - tieOrder[b.name])[0];
+  const insightFresh = bySection.every((s) => s.studied === 0 && s.total - s.untouchedN === 0);
+  const focusTopics = insightFresh
+    ? ['Percentages (QA)', 'Reading Comprehension (VARC)', 'Arrangements (DILR)'].slice(0, 2)
+    : topicMemory
+        .filter((t) => TOPIC_METADATA[t.topic]?.section === weakestSec.name && t.status === 'not_started')
+        .sort((a, b) => (TOPIC_METADATA[b.topic]?.weightage ?? 0) - (TOPIC_METADATA[a.topic]?.weightage ?? 0))
+        .slice(0, 2)
+        .map((t) => t.topic);
+
   return (
     <div className="bg-stone-50 px-1 pb-4">
       <div className="mx-auto flex max-w-md flex-col gap-1.5">
@@ -385,6 +413,18 @@ export default async function DailyTrackerPage() {
           streak was restored under the new rules; new students just live with
           shields from day one). */}
       <MomentumShieldIntro streak={momentum.streak} shields={momentum.shields} enabled={(logs ?? []).length > 0} />
+      {/* Day-1 insight — VALUE first, before the notification ask, tour, and
+          buddy pitch (all gated on it via first-run-events). */}
+      {tourReady && (
+        <FirstInsight
+          weakest={weakestSec.name}
+          untouched={weakestSec.untouchedN}
+          sectionTotal={weakestSec.total}
+          sections={bySection.map(({ name, studied, total }) => ({ name, studied, total }))}
+          focusTopics={focusTopics}
+          fresh={insightFresh}
+        />
+      )}
     </div>
   );
 }

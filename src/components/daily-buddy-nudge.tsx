@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { claimDailyModal } from '@/lib/daily-modal';
-import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, tourDone, notifAskVisible, logModalOpen } from '@/lib/first-run-events';
+import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
 
 // A gentle once-a-day nudge for students who don't have an IIM buddy yet.
 // Throttled to one appearance per calendar day (localStorage). The parent
@@ -27,7 +27,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       // 1.4s settle: lets the notif ask evaluate and the first-log prompt
       // (700ms after tour) claim the screen first if it's going to.
       timer = setTimeout(() => {
-        if (shown || !tourDone() || notifAskVisible() || logModalOpen()) return;
+        if (shown || !tourDone() || notifAskVisible() || insightVisible() || logModalOpen()) return;
          
         if (claimDailyModal()) { shown = true; setShow(true); }
       }, 1400);
@@ -35,10 +35,12 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
     attempt();
     window.addEventListener(TOUR_DONE_EVENT, attempt);
     window.addEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
+    window.addEventListener(INSIGHT_DONE_EVENT, attempt);
     return () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener(TOUR_DONE_EVENT, attempt);
       window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
+      window.removeEventListener(INSIGHT_DONE_EVENT, attempt);
     };
   }, []);
 

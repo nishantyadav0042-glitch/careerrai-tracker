@@ -11,7 +11,7 @@ import type { MockDebriefData } from './MockDebriefModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { getLogDateString } from '@/lib/streak-utils';
 import { track } from '@/lib/journey';
-import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT } from '@/lib/first-run-events';
+import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
 const PendingDebriefCard = dynamic(() => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard), { ssr: false });
@@ -155,7 +155,7 @@ export function DailyTrackerApp({
     const tourDone = () => { try { return localStorage.getItem('cr_app_tour_v1') === '1'; } catch { return false; } };
     const askUp = () => { try { return (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible === true; } catch { return false; } };
     const maybeOpen = () => {
-      if (fired || !tourDone() || askUp()) return;
+      if (fired || !tourDone() || askUp() || insightVisible()) return;
       fired = true;
       try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
       track('first_log_prompt');
@@ -167,10 +167,12 @@ export function DailyTrackerApp({
     deferred(); // page load: tour may already be done from a previous session
     window.addEventListener(TOUR_DONE_EVENT, deferred);
     window.addEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
+    window.addEventListener(INSIGHT_DONE_EVENT, deferred);
     return () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener(TOUR_DONE_EVENT, deferred);
       window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
+      window.removeEventListener(INSIGHT_DONE_EVENT, deferred);
     };
   }, [firstLogNudge, hasLoggedToday]);
 
