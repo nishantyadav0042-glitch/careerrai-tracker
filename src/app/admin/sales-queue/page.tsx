@@ -5,15 +5,15 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, PhoneCall, Flame, MousePointerClick } from 'lucide-react';
-import { liveStreak, daysSinceLastLog } from '@/lib/streak-utils';
+import { getSalesReadyToCall } from '@/lib/admin-filters';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Sales queue · CareerRai' };
 
 // The founder's evening call list: free users flagged sales-ready (§D), hottest
-// first (most buddy-CTA clicks). Each row is someone whose usage data you can
-// open the call with ("you logged Mon–Wed, missed Thu…").
+// first. Membership + ordering come from the SAME shared filter the dashboard
+// count uses (lib/admin-filters.ts) — the card's number is this list's length.
 export default async function SalesQueuePage() {
   // Local JWT verification — middleware already paid the network auth hop.
   const user = await getAuthUser();
@@ -23,53 +23,11 @@ export default async function SalesQueuePage() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  // Sales-ready, not yet called, hottest (most buddy-CTA clicks) first.
-  const { data: rows } = await admin
-    .from('student_engagement')
-    .select('student_id, buddy_cta_clicks, mock_opened, first_log_at, signed_up_at, sales_ready_at, sales_called_at')
-    .eq('sales_ready', true)
-    .is('sales_called_at', null)
-    .order('buddy_cta_clicks', { ascending: false })
-    .limit(200);
-
-  const ids = (rows ?? []).map((r) => r.student_id);
-  const [{ data: profs }, { data: streaks }] = await Promise.all([
-    ids.length
-      ? admin.from('profiles').select('id, full_name, phone, is_premium').in('id', ids)
-      : Promise.resolve({ data: [] as { id: string; full_name: string | null; phone: string | null; is_premium: boolean | null }[] }),
-    ids.length
-      ? admin.from('streak_data').select('student_id, current_streak, last_log_date').in('student_id', ids)
-      : Promise.resolve({ data: [] as { student_id: string; current_streak: number; last_log_date: string | null }[] }),
-  ]);
-  const profById = new Map((profs ?? []).map((p) => [p.id, p]));
-  const streakById = new Map((streaks ?? []).map((s) => [s.student_id, s]));
-
-  // Only show those who are still free (a paid student isn't a sales lead anymore).
-  // Streaks go through liveStreak — the stored current_streak is frozen at the
-  // last log, and showing it raw is how this page said "7-day streak" about a
-  // student the dashboard simultaneously counted as a streak-breaker.
-  const queue = (rows ?? [])
-    .map((r) => {
-      const s = streakById.get(r.student_id);
-      return {
-        ...r,
-        prof: profById.get(r.student_id),
-        streak: liveStreak(s?.current_streak, s?.last_log_date),
-        lastLogDays: daysSinceLastLog(s?.last_log_date),
-      };
-    })
-    .filter((r) => r.prof && !r.prof.is_premium)
-    // Hottest first, honestly: unlock clicks, then a LIVE streak, then freshest activity.
-    .sort((a, b) =>
-      (b.buddy_cta_clicks - a.buddy_cta_clicks)
-      || (b.streak - a.streak)
-      || ((a.lastLogDays ?? 999) - (b.lastLogDays ?? 999))
-    );
-
-  // eslint-disable-next-line react-hooks/purity
+  const queue = await getSalesReadyToCall(admin);
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const nowMs = Date.now();
   const daysSince = (iso: string | null) =>
-    iso ? Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000) : null;
+    iso ? Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000)) : null;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -93,16 +51,14 @@ export default async function SalesQueuePage() {
         ) : (
           <div className="space-y-2.5">
             {queue.map((r) => {
-              const name = r.prof?.full_name ?? 'Student';
-              const phone = r.prof?.phone ?? null;
-              const wa = phone ? `https://wa.me/${phone.replace(/\D/g, '')}` : null;
-              const signupDays = daysSince(r.signed_up_at);
+              const name = r.full_name ?? 'Student';
+              const wa = r.phone ? `https://wa.me/${r.phone.replace(/\D/g, '')}` : null;
               return (
-                <Card key={r.student_id} className="p-4">
+                <Card key={r.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-stone-900 truncate">{name}</p>
-                      <p className="text-xs text-stone-500">{phone ?? 'no phone'}</p>
+                      <p className="text-xs text-stone-500">{r.phone ?? 'no phone'}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {r.buddy_cta_clicks > 0 && (
                           <Badge color="purple">
@@ -120,7 +76,7 @@ export default async function SalesQueuePage() {
                           <Badge color="stone">never logged</Badge>
                         )}
                         {r.mock_opened && <Badge color="stone">opened a mock</Badge>}
-                        {signupDays != null && <Badge color="stone">{signupDays}d in</Badge>}
+                        {r.signed_up_at != null && <Badge color="stone">{daysSince(r.signed_up_at)}d in</Badge>}
                       </div>
                     </div>
                     {wa && (
