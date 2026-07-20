@@ -7,7 +7,7 @@ import { TestPushButton } from '@/components/test-push-button';
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
-import { getLogDateString, liveStreak } from '@/lib/streak-utils';
+import { getRealStudents, getLoggedToday, getLiveStreaks, getRemindToLog, getSalesReadyToCall, getGoingCold } from '@/lib/admin-filters';
 
 // Always render live — the dashboard is a real-time ops panel; a cached copy
 // showing stale counts (a payment just made, a fresh log) reads as "broken".
@@ -45,48 +45,27 @@ export default async function AdminTodayPage() {
   const isToday = (iso: string | null | undefined) =>
     !!iso && new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === today;
 
-  const totalStudents = students.length;
   const upgraded = students.filter((s) => s.is_premium === true).length;
   const upgradedToday = students.filter((s) => s.is_premium === true && isToday(s.premium_since as string | null)).length;
   const newLeadsToday = students.filter((s) => isToday(s.created_at as string | null)).length;
   const inactiveBuddies = buddies.filter((b) => !b.last_seen_at || (b.last_seen_at as string) < twoDaysAgo).length;
 
-  const logDay = getLogDateString(); // app 3 AM IST log-day — same boundary the logged-today list uses
-  const [{ data: todayReports }, { data: streaks }, streakBreakers, { data: salesReadyRows }] = await Promise.all([
-    // report_date (not created_at) so the tile counts the SAME thing the
-    // "Logged today" list shows — the students whose log belongs to today.
-    admin.from('daily_reports').select('student_id').eq('report_date', logDay),
-    admin.from('streak_data').select('student_id, last_log_date, current_streak'),
+  // Founder rule (20 July): every attention card's count is `list.length` of
+  // the SAME shared filter its page renders (lib/admin-filters.ts). No card
+  // computes its number one way and its list another — that's how the
+  // dashboard contradicted itself.
+  const real = await getRealStudents(admin);
+  const totalStudents = real.length;
+  const [loggedList, liveList, remindList, streakBreakers, salesList, coldList] = await Promise.all([
+    getLoggedToday(admin, real),
+    getLiveStreaks(admin, real),
+    getRemindToLog(admin, real),
     getStreakBreakers(admin),
-    // Same source the Sales queue page reads, so the tile number matches the
-    // list it opens (was "HOT from AI calls", which counted call dispositions
-    // that don't exist yet → tile said 0 while the page showed the real queue).
-    admin.from('student_engagement').select('student_id').eq('sales_ready', true).is('sales_called_at', null).limit(500),
+    getSalesReadyToCall(admin, real),
+    getGoingCold(admin, real),
   ]);
-  const todayMs = new Date(today + 'T00:00:00').getTime();
-  const studentIds = new Set(students.map((s) => s.id));
-  // Distinct non-test students whose log is dated today (matches /admin/logged-today).
-  const loggedToday = new Set(
-    (todayReports ?? []).map((r) => r.student_id as string).filter((id) => studentIds.has(id))
-  ).size;
-  const goingCold = (streaks ?? []).filter((r) => {
-    if (!studentIds.has(r.student_id as string) || !r.last_log_date) return false;
-    const days = Math.floor((todayMs - new Date(r.last_log_date + 'T00:00:00').getTime()) / 86_400_000);
-    return days >= 4;
-  }).length;
-  // Streaks that are actually ALIVE (last log today/yesterday) — the stored
-  // current_streak alone is frozen at the last log, so counting it raw would
-  // contradict "Logged today" (the 20 July mix-up).
-  const liveStreaks = (streaks ?? []).filter(
-    (r) => studentIds.has(r.student_id as string) && liveStreak(r.current_streak as number | null, r.last_log_date as string | null) >= 1
-  ).length;
-
-  // Match the Sales queue page exactly: sales-ready, not yet called, still free.
-  const salesReadyIds = (salesReadyRows ?? []).map((r) => r.student_id as string);
-  const { data: salesReadyProfs } = salesReadyIds.length
-    ? await admin.from('profiles').select('id, is_premium').in('id', salesReadyIds)
-    : { data: [] as { id: string; is_premium: boolean | null }[] };
-  const salesReadyToCall = (salesReadyProfs ?? []).filter((p) => p.is_premium !== true).length;
+  const loggedToday = loggedList.length;
+  const salesReadyToCall = salesList.length;
 
   const tiles = [
     { label: 'Total students', val: totalStudents, icon: Users, href: '/admin/students', accent: 'text-stone-900' },
@@ -97,14 +76,13 @@ export default async function AdminTodayPage() {
     { label: 'Buddies silent 2+ days', val: inactiveBuddies, icon: MoonStar, href: '/admin/students', accent: inactiveBuddies > 0 ? 'text-rose-600' : 'text-emerald-700' },
   ];
 
-  const notLoggedToday = Math.max(0, totalStudents - (loggedToday ?? 0));
   const attention = [
     { label: 'Logged today', val: `${loggedToday}/${totalStudents}`, href: '/admin/logged-today', hot: false },
-    { label: 'Live streaks (logged today/yesterday)', val: liveStreaks, href: '/admin/logged-today', hot: false },
-    { label: 'Remind to log today', val: notLoggedToday, href: '/admin/reminders', hot: notLoggedToday > 0 },
+    { label: 'Live streaks (logged today/yesterday)', val: liveList.length, href: '/admin/live-streaks', hot: false },
+    { label: 'Remind to log today', val: remindList.length, href: '/admin/reminders', hot: remindList.length > 0 },
     { label: 'Streak breakers — skipped yesterday', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
-    { label: 'Going cold (4+ days)', val: goingCold, href: '/admin/leads', hot: goingCold > 0 },
+    { label: 'Going cold (4+ days)', val: coldList.length, href: '/admin/going-cold', hot: coldList.length > 0 },
   ];
 
   return (
