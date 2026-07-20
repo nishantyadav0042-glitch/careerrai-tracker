@@ -111,10 +111,6 @@
     {
       "path": "/api/cron/push-recovery",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/admin/streak-restore-broadcast",
-      "schedule": "*/10 * * * *"
     }
   ]
 }
