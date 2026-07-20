@@ -1,5 +1,41 @@
 import { Star } from 'lucide-react';
-import { TESTIMONIALS } from '@/lib/testimonials';
+import { TESTIMONIALS, WA_CHATS, type WaChat } from '@/lib/testimonials';
+
+// A REAL WhatsApp conversation rendered live (WhatsApp-light styling) instead
+// of a raw screenshot — same authenticity, but the student's phone number is
+// hidden by construction: only a first name + context ever appear.
+export function WhatsAppLiveChat({ chat }: { chat: WaChat }) {
+  return (
+    <figure className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
+      <div className="flex items-center gap-2.5 bg-[#075E54] px-3 py-2.5">
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/20 text-sm font-bold text-white">
+          {chat.name.charAt(0)}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold leading-tight text-white">{chat.name}</p>
+          <p className="truncate text-[10px] text-white/70">{chat.context}</p>
+        </div>
+      </div>
+      <div className="space-y-2 bg-[#ECE5DD] px-3 py-3">
+        {chat.messages.map((m, i) => (
+          <div key={i} className={m.from === 'careerrai' ? 'flex justify-end' : 'flex justify-start'}>
+            <div
+              className={
+                'max-w-[85%] whitespace-pre-line rounded-lg px-2.5 py-1.5 text-[13px] leading-snug text-stone-900 shadow-sm ' +
+                (m.from === 'careerrai' ? 'bg-[#DCF8C6]' : 'bg-white')
+              }
+            >
+              {m.text}
+              <span className="ml-2 whitespace-nowrap align-bottom text-[9px] text-stone-400">
+                {m.time}{m.from === 'careerrai' ? ' ✓✓' : ''}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </figure>
+  );
+}
 
 // LOUD, real social proof (founder: "testimonials are our trust speaking —
 // make them bold"). Big quote cards + the actual unprompted WhatsApp screenshot
@@ -36,19 +72,24 @@ export function Testimonials({ max = 3, screenshot = true }: { max?: number; scr
         </figure>
       ))}
 
-      {/* The receipt — a real, unprompted message. Nothing sells like proof. */}
+      {/* The receipts — real, unprompted messages. Nothing sells like proof. */}
       {screenshot && (
-        <figure className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
-          <figcaption className="bg-stone-900 px-3 py-2 text-center text-xs font-bold text-white">
-            He messaged us this himself — we never even asked 👇
-          </figcaption>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/testimonials/vedprakash-wa.jpg"
-            alt="A CareerRai student's unprompted WhatsApp message praising the app"
-            className="block w-full"
-          />
-        </figure>
+        <>
+          <figure className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
+            <figcaption className="bg-stone-900 px-3 py-2 text-center text-xs font-bold text-white">
+              He messaged us this himself — we never even asked 👇
+            </figcaption>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/testimonials/vedprakash-wa.jpg"
+              alt="A CareerRai student's unprompted WhatsApp message praising the app"
+              className="block w-full"
+            />
+          </figure>
+          {WA_CHATS.map((chat) => (
+            <WhatsAppLiveChat key={chat.name} chat={chat} />
+          ))}
+        </>
       )}
     </div>
   );
