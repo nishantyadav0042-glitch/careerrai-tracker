@@ -3,25 +3,15 @@
 import { useEffect, useState } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
-import { TOUR_DONE_EVENT } from '@/components/app-tour';
+import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT } from '@/lib/first-run-events';
 
-// The app tour writes this flag when it finishes. Notifications are asked
-// AFTER the tour (founder: install → tour → switch on notifications), so this
-// overlay stays down until the flag is set — never overlapping the coach-marks.
-const TOUR_KEY = 'cr_app_tour_v1';
+// Founder order (21 July): the notification ask is JOB #1 in the installed
+// app — it fires BEFORE the app tour (the tour and the buddy pitch both wait
+// for this to settle via NOTIF_ASK_SETTLED_EVENT / the visibility flag in
+// lib/first-run-events). Previously it waited for the tour, which let the
+// tour and buddy pitch stack on screen while notifications went un-asked.
 
-// First-run sequencing signal for whatever comes AFTER this ask (today: the
-// first-log prompt). `window.__crNotifAskVisible` is the live "am I covering
-// the screen" flag; the event fires whenever the ask settles down (decided not
-// to show, or the student tapped Later). Enabling reloads the page, so that
-// path needs no event — the next mount starts clean.
-export const NOTIF_ASK_SETTLED_EVENT = 'cr-notif-ask-settled';
-function setAskVisible(visible: boolean) {
-  try {
-    (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible = visible;
-    if (!visible) window.dispatchEvent(new Event(NOTIF_ASK_SETTLED_EVENT));
-  } catch { /* ignore */ }
-}
+export { NOTIF_ASK_SETTLED_EVENT };
 
 // Founder flow: notification permission is asked INSIDE the installed app —
 // before install (especially on iPhone) the permission is a dead ask, since
@@ -64,18 +54,15 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
     if (pushEnabled) { setAskVisible(false); setShow(false); return; }
 
-    // Show whenever notifications aren't on yet. Deliberately NO "skip"
-    // memory — the founder wants this on every open until it's done.
-    // Every early-return marks the ask as settled (it isn't going to cover the
-    // screen), so the next step in the first-run sequence can proceed.
+    // Show whenever notifications aren't on yet — FIRST, before the tour.
+    // Deliberately NO "skip" memory — the founder wants this on every open
+    // until it's done. Every early-return marks the ask as settled (it isn't
+    // going to cover the screen), so the tour and buddy pitch can proceed.
     const evaluate = () => {
       if (!isStandalone()) { setAskVisible(false); return; }
       if (isIOS()) { setAskVisible(false); return; } // web push is a no-op in the iOS wrapper — don't prompt
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); return; }
       if (Notification.permission === 'granted') { setAskVisible(false); return; } // subscribed; server flag will catch up
-      // Sequence: never come up before the app tour has finished, so we never
-      // cover the coach-marks. First-run users see the tour, then this.
-      try { if (localStorage.getItem(TOUR_KEY) !== '1') return; } catch { return; }
       setAskVisible(true);
       setShow(true);
     };
@@ -85,11 +72,8 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
     // re-ask there so "Later" only hides it until the next time they open the app.
     const onVisible = () => { if (document.visibilityState === 'visible') evaluate(); };
     document.addEventListener('visibilitychange', onVisible);
-    // The tour just ended → ask right now (same mount, no navigation).
-    window.addEventListener(TOUR_DONE_EVENT, evaluate);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener(TOUR_DONE_EVENT, evaluate);
     };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [pushEnabled]);

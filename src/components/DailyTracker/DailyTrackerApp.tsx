@@ -11,8 +11,7 @@ import type { MockDebriefData } from './MockDebriefModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { getLogDateString } from '@/lib/streak-utils';
 import { track } from '@/lib/journey';
-import { NOTIF_ASK_SETTLED_EVENT } from '@/components/standalone-notif-ask';
-import { TOUR_DONE_EVENT } from '@/components/app-tour';
+import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT } from '@/lib/first-run-events';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
 const PendingDebriefCard = dynamic(() => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard), { ssr: false });

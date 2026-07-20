@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { NOTIF_ASK_SETTLED_EVENT, notifAskVisible, TOUR_KEY } from '@/lib/first-run-events';
 
 // Spotlight coach-mark tour (founder: "we never gave a quick app tour").
 // Dims the screen and cuts a spotlight over one real element at a time, with a
@@ -23,10 +24,11 @@ const STEPS: TourStep[] = [
   { sel: '[data-tour="log"]',   title: 'Log it in seconds',     body: 'Done studying? Log it. This one habit keeps your whole plan on track.' },
   { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'Your 1:1 IIM buddy reviews your prep and tells you what to fix — right here.' },
 ];
-const KEY = 'cr_app_tour_v1';
-// Broadcast the moment the tour ends so the notification ask (a sibling overlay
-// in the layout) can appear immediately after — install → tour → notifications.
-export const TOUR_DONE_EVENT = 'cr-app-tour-done';
+const KEY = TOUR_KEY;
+// Broadcast the moment the tour ends so the buddy pitch and first-log prompt
+// can take their turn — the founder's order is notifications → tour → buddy.
+export { TOUR_DONE_EVENT } from '@/lib/first-run-events';
+import { TOUR_DONE_EVENT } from '@/lib/first-run-events';
 
 export function AppTour({ enabled = false }: { enabled?: boolean }) {
   const [idx, setIdx] = useState(-1);      // -1 not started, -2 finished
@@ -47,10 +49,12 @@ export function AppTour({ enabled = false }: { enabled?: boolean }) {
     try { window.dispatchEvent(new Event(TOUR_DONE_EVENT)); } catch { /* ignore */ }
   }, []);
 
-  // Start once, after the page has settled — but ONLY in the installed app and
-  // only once the parent says every higher-priority overlay is cleared.
+  // Start once, after the page has settled — but ONLY in the installed app,
+  // only once the parent says every higher-priority overlay is cleared, and
+  // NEVER while the notification ask is on screen (founder order, 21 July:
+  // notifications first, THEN the tour — they used to stack).
   useEffect(() => {
-     
+
     if (!enabled) return;
     // Installed-app only: a browser tab still shows the address bar and the
     // reminders/install prompts, so the tour there lands on the wrong screen.
@@ -60,8 +64,18 @@ export function AppTour({ enabled = false }: { enabled?: boolean }) {
       nav?.standalone === true;
     if (!standalone) return;
     try { if (localStorage.getItem(KEY)) return; } catch { return; }
-    const t = setTimeout(() => setIdx(0), 900);
-    return () => clearTimeout(t);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tryStart = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { if (!notifAskVisible()) setIdx(0); }, 900);
+    };
+    tryStart();
+    // Notification ask just settled (enabled → page reloads; "Later" → event).
+    window.addEventListener(NOTIF_ASK_SETTLED_EVENT, tryStart);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, tryStart);
+    };
   }, [enabled]);
 
   // On each step: skip steps whose target isn't on screen; scroll it into view;

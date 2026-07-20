@@ -108,7 +108,14 @@ function expertWhy(c: TopicCandidateInput, revisionMultiplier: number): string {
   return high ? 'A high-scoring area — worth the marks.' : 'On your plan for today.';
 }
 
-export function chooseTopicForSection(candidates: TopicCandidateInput[], revisionMultiplier = 1): TopicChoice {
+// revisionSeason (founder, 21 July): from 1 SEPTEMBER of the exam year,
+// structured revision opens — overdue revision outweighs starting something
+// new, and HIGH-WEIGHTAGE overdue topics (Arithmetic, Algebra, RC,
+// Arrangements — where CAT marks actually live) jump the queue. This mirrors
+// how toppers actually prep: syllabus + weekly mocks through August, then
+// September onwards the marks come from revising what you know, weightage
+// first — not from chasing low-yield new topics.
+export function chooseTopicForSection(candidates: TopicCandidateInput[], revisionMultiplier = 1, revisionSeason = false): TopicChoice {
   const scored = candidates.map((c) => {
     const meta = TOPIC_METADATA[c.topic];
     const reasons: string[] = [];
@@ -133,7 +140,14 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     if (meta && c.daysSinceLastPracticed != null) {
       const adjustedFrequency = meta.revisionFrequencyDays * revisionMultiplier;
       const overdue = Math.min(Math.max(c.daysSinceLastPracticed - adjustedFrequency, 0), 10);
-      revisionPoints = overdue * 3;
+      // Revision season doubles the pull of overdue topics, and overdue
+      // HIGH-weightage topics get a further jump — September onwards the
+      // plan revises where the marks are before it opens anything new.
+      revisionPoints = overdue * (revisionSeason ? 6 : 3);
+      if (revisionSeason && overdue > 0 && (meta.weightage ?? 3) >= 4) {
+        revisionPoints += 15;
+        reasons.push('Revision season — high-weightage first');
+      }
       if (overdue > 0) reasons.push(`Last practised ${c.daysSinceLastPracticed} day${c.daysSinceLastPracticed === 1 ? '' : 's'} ago`);
     }
 
