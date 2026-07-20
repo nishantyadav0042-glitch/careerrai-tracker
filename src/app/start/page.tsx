@@ -9,6 +9,7 @@ import ScreenQuickFacts from './screens/screen-quick-facts';
 import ScreenPainPoints from './screens/screen-pain-points';
 import ScreenRealityCheck from '@/app/student/onboarding/screens/screen-reality-check';
 import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
+import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
 import ScreenSocialProof from '@/app/student/onboarding/screens/screen-social-proof';
 import ScreenLoginBuild from './screens/screen-login-build';
@@ -16,18 +17,20 @@ import type { CoverageSectionId } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
 
 // Screen names for the funnel beacon — index matches stepIdx.
-const FUNNEL_STEPS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'mentor', 'social-proof', 'login-build'];
+const FUNNEL_STEPS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'instant-insight', 'mentor', 'social-proof', 'login-build'];
 
 // Founder-directed rebuild: every onboarding question now happens BEFORE
 // the account exists — "you decide the date, you own the plan" comes first,
 // signup comes last as "log in while we build." Nothing here writes to
 // Supabase until ScreenLoginBuild's verify call, which hands the whole
 // accumulated payload over in one request.
-const TOTAL_SCREENS = 9; // excludes the final login/build screen from the progress bar
+const TOTAL_SCREENS = 10; // excludes the final login/build screen from the progress bar
 // v2: bumping the key invalidates every draft saved before clear-on-signup existed.
 // v3: reality-check (3 questions) + social-proof (testimonial) screens added.
 // v4: removed the standalone reassurance screen (redundant with reality-check).
-const DRAFT_KEY = 'cr_preauth_draft_v4';
+// v5: Instant Insight screen inserted after topic-coverage (founder: WOW value
+//     before signup — the diagnosis IS the pitch for daily insights + install).
+const DRAFT_KEY = 'cr_preauth_draft_v5';
 // A draft older than this is an abandoned lead, not a session to resume —
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -126,9 +129,23 @@ export default function StartPage() {
       );
       break;
     case 7:
-      content = <ScreenMentor onNext={advance} {...shared} />;
+      // Instant Insight (founder, 21 July): the WOW diagnosis from the matrix
+      // they tapped 10 seconds ago — instant value BEFORE signup, and the
+      // living demo of the daily-insight system they're joining.
+      content = (
+        <ScreenInstantInsight
+          onNext={advance}
+          {...shared}
+          matrix={(data.topic_matrix as { section: string; topic: string; status: 'not_started' | 'learning' | 'practicing' | 'revising' }[] | undefined) ?? null}
+          isRepeater={data.is_repeater === true}
+          targetPercentile={(data.target_percentile as number | undefined) ?? null}
+        />
+      );
       break;
     case 8:
+      content = <ScreenMentor onNext={advance} {...shared} />;
+      break;
+    case 9:
       content = <ScreenSocialProof onNext={advance} {...shared} />;
       break;
     default:
