@@ -6,7 +6,7 @@ import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { callGemini } from '@/lib/gemini';
-import { getLogDateString } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak } from '@/lib/streak-utils';
 
 // The daily "coach line": ONE warm sentence reflecting the student's real prep
 // status. The MOAT RULE holds — every number is computed deterministically
@@ -91,7 +91,7 @@ export async function GET() {
 
   const { data: streak } = await admin
     .from('streak_data')
-    .select('current_streak')
+    .select('current_streak, last_log_date')
     .eq('student_id', user.id)
     .maybeSingle();
 
@@ -103,7 +103,7 @@ export async function GET() {
     finishStatus: finish.status,
     finishWindow: finish.windowLabel,
     targetDate: (profile?.syllabus_target_date as string | null) ?? null,
-    currentStreak: streak?.current_streak ?? 0,
+    currentStreak: liveStreak(streak?.current_streak, streak?.last_log_date),
   };
 
   const raw = await callGemini({

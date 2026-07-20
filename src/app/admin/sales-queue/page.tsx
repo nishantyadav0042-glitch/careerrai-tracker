@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, PhoneCall, Flame, MousePointerClick } from 'lucide-react';
+import { liveStreak, daysSinceLastLog } from '@/lib/streak-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,16 +38,33 @@ export default async function SalesQueuePage() {
       ? admin.from('profiles').select('id, full_name, phone, is_premium').in('id', ids)
       : Promise.resolve({ data: [] as { id: string; full_name: string | null; phone: string | null; is_premium: boolean | null }[] }),
     ids.length
-      ? admin.from('streak_data').select('student_id, current_streak').in('student_id', ids)
-      : Promise.resolve({ data: [] as { student_id: string; current_streak: number }[] }),
+      ? admin.from('streak_data').select('student_id, current_streak, last_log_date').in('student_id', ids)
+      : Promise.resolve({ data: [] as { student_id: string; current_streak: number; last_log_date: string | null }[] }),
   ]);
   const profById = new Map((profs ?? []).map((p) => [p.id, p]));
-  const streakById = new Map((streaks ?? []).map((s) => [s.student_id, s.current_streak]));
+  const streakById = new Map((streaks ?? []).map((s) => [s.student_id, s]));
 
   // Only show those who are still free (a paid student isn't a sales lead anymore).
+  // Streaks go through liveStreak — the stored current_streak is frozen at the
+  // last log, and showing it raw is how this page said "7-day streak" about a
+  // student the dashboard simultaneously counted as a streak-breaker.
   const queue = (rows ?? [])
-    .map((r) => ({ ...r, prof: profById.get(r.student_id), streak: streakById.get(r.student_id) ?? 0 }))
-    .filter((r) => r.prof && !r.prof.is_premium);
+    .map((r) => {
+      const s = streakById.get(r.student_id);
+      return {
+        ...r,
+        prof: profById.get(r.student_id),
+        streak: liveStreak(s?.current_streak, s?.last_log_date),
+        lastLogDays: daysSinceLastLog(s?.last_log_date),
+      };
+    })
+    .filter((r) => r.prof && !r.prof.is_premium)
+    // Hottest first, honestly: unlock clicks, then a LIVE streak, then freshest activity.
+    .sort((a, b) =>
+      (b.buddy_cta_clicks - a.buddy_cta_clicks)
+      || (b.streak - a.streak)
+      || ((a.lastLogDays ?? 999) - (b.lastLogDays ?? 999))
+    );
 
   // eslint-disable-next-line react-hooks/purity
   const nowMs = Date.now();
@@ -55,6 +74,9 @@ export default async function SalesQueuePage() {
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-2xl mx-auto px-4 py-6">
+        <Link href="/admin" className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-800">
+          <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
+        </Link>
         <div className="mb-4">
           <h1 className="text-xl font-bold text-stone-900 flex items-center gap-2">
             <PhoneCall className="w-5 h-5" /> Sales queue
@@ -88,10 +110,14 @@ export default async function SalesQueuePage() {
                             {r.buddy_cta_clicks} unlock {r.buddy_cta_clicks === 1 ? 'click' : 'clicks'}
                           </Badge>
                         )}
-                        {r.streak >= 1 && (
+                        {r.streak >= 1 ? (
                           <Badge color="orange">
                             <Flame className="w-3 h-3 mr-0.5 inline" />{r.streak}-day streak
                           </Badge>
+                        ) : r.lastLogDays != null ? (
+                          <Badge color="red">last log {r.lastLogDays === 0 ? 'today' : `${r.lastLogDays}d ago`}</Badge>
+                        ) : (
+                          <Badge color="stone">never logged</Badge>
                         )}
                         {r.mock_opened && <Badge color="stone">opened a mock</Badge>}
                         {signupDays != null && <Badge color="stone">{signupDays}d in</Badge>}

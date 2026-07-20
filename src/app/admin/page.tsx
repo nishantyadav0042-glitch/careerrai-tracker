@@ -7,7 +7,7 @@ import { TestPushButton } from '@/components/test-push-button';
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
-import { getLogDateString } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak } from '@/lib/streak-utils';
 
 // Always render live — the dashboard is a real-time ops panel; a cached copy
 // showing stale counts (a payment just made, a fresh log) reads as "broken".
@@ -31,7 +31,6 @@ export default async function AdminTodayPage() {
   const adminPushEnabled = (adminProfile?.notif_prefs as { push?: boolean } | null)?.push === true;
 
   const today = getTodayIST();
-  const todayStartIst = new Date(`${today}T00:00:00+05:30`).toISOString();
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
 
@@ -57,7 +56,7 @@ export default async function AdminTodayPage() {
     // report_date (not created_at) so the tile counts the SAME thing the
     // "Logged today" list shows — the students whose log belongs to today.
     admin.from('daily_reports').select('student_id').eq('report_date', logDay),
-    admin.from('streak_data').select('student_id, last_log_date'),
+    admin.from('streak_data').select('student_id, last_log_date, current_streak'),
     getStreakBreakers(admin),
     // Same source the Sales queue page reads, so the tile number matches the
     // list it opens (was "HOT from AI calls", which counted call dispositions
@@ -75,6 +74,12 @@ export default async function AdminTodayPage() {
     const days = Math.floor((todayMs - new Date(r.last_log_date + 'T00:00:00').getTime()) / 86_400_000);
     return days >= 4;
   }).length;
+  // Streaks that are actually ALIVE (last log today/yesterday) — the stored
+  // current_streak alone is frozen at the last log, so counting it raw would
+  // contradict "Logged today" (the 20 July mix-up).
+  const liveStreaks = (streaks ?? []).filter(
+    (r) => studentIds.has(r.student_id as string) && liveStreak(r.current_streak as number | null, r.last_log_date as string | null) >= 1
+  ).length;
 
   // Match the Sales queue page exactly: sales-ready, not yet called, still free.
   const salesReadyIds = (salesReadyRows ?? []).map((r) => r.student_id as string);
@@ -95,6 +100,7 @@ export default async function AdminTodayPage() {
   const notLoggedToday = Math.max(0, totalStudents - (loggedToday ?? 0));
   const attention = [
     { label: 'Logged today', val: `${loggedToday}/${totalStudents}`, href: '/admin/logged-today', hot: false },
+    { label: 'Live streaks (logged today/yesterday)', val: liveStreaks, href: '/admin/logged-today', hot: false },
     { label: 'Remind to log today', val: notLoggedToday, href: '/admin/reminders', hot: notLoggedToday > 0 },
     { label: 'Streak breakers — skipped yesterday', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },

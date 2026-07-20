@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 
 const MAX_BYTES = 15 * 1024 * 1024; // ~15MB ≈ well over 90s of opus
 
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     // Resolve sender/recipient and authorize the pair
     const { data: student } = await admin
       .from('profiles')
-      .select('id, full_name, buddy_id, current_streak')
+      .select('id, full_name, buddy_id, current_streak, last_log_date')
       .eq('id', studentId)
       .single();
     if (!student) {
@@ -159,8 +160,8 @@ export async function POST(request: NextRequest) {
       feedbackId: row.id,
       // little human nudge for the buddy UI
       streakNudge:
-        feedbackType === 'buddy_feedback' && (student.current_streak ?? 0) >= 7
-          ? `Nice — ${student.full_name.split(' ')[0]} is on a ${student.current_streak}-day streak, this is a great moment.`
+        feedbackType === 'buddy_feedback' && liveStreak(student.current_streak, student.last_log_date) >= 7
+          ? `Nice — ${student.full_name.split(' ')[0]} is on a ${liveStreak(student.current_streak, student.last_log_date)}-day streak, this is a great moment.`
           : null,
     });
   } catch (error) {

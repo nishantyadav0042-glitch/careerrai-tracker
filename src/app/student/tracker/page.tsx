@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
-import { getLogDateString } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak } from '@/lib/streak-utils';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
@@ -223,7 +223,9 @@ export default async function DailyTrackerPage() {
       ? nextSession
       : null;
 
-  const currentStreak = streakRow?.current_streak ?? 0;
+  // liveStreak, not the raw stored value: after a missed day the flame shows 0
+  // (honest), instead of the streak the student HAD at their last log.
+  const currentStreak = liveStreak(streakRow?.current_streak, streakRow?.last_log_date ?? null);
 
   // Day-2+ password nudge (founder call: the set-password wall moved out of
   // first login — from day 2 it's offered as the convenience it actually
