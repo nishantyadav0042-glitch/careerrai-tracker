@@ -297,7 +297,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
                 Your first step: install your app.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                We will remind you <b>what to study</b> and <b>when to study</b> — every day. Those reminders reach you only through the installed app. ~3 MB, once.
+                We will remind you <b>what to study</b> and <b>when to study</b> — and send your <b>daily insight every evening</b> (your pattern, your gap, one advice, like the one you just saw). All of it reaches you only through the installed app. ~3 MB, once.
               </p>
             </div>
             <div className="space-y-2 pt-2">
