@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
 import { overAiHourlyLimit, recordAiCall } from '@/lib/ai-rate-limit';
 
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Verify buddy owns this student
     const { data: student } = await admin
       .from('profiles')
-      .select('buddy_id, full_name, current_streak')
+      .select('buddy_id, full_name, current_streak, last_log_date')
       .eq('id', studentId)
       .single();
     if (!student || student.buddy_id !== user.id) {
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       : '3';
 
     const factsContext = [
-      `Current streak: ${student.current_streak ?? 0} days`,
+      `Current streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
       `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day, avg stress ${avgStress}/5`,
       latestDebrief
         ? `Latest mock (${latestDebrief.taken_on}): ${latestDebrief.overall_percentile ?? '?'}%ile`
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     if (!(await geminiEnabled())) {
       // Rule-based fallback — buddy still gets something useful
-      const draft = ruleDraft(student.current_streak ?? 0, daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
+      const draft = ruleDraft(liveStreak(student.current_streak, student.last_log_date), daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
       return NextResponse.json({ draft });
     }
 
@@ -94,7 +95,7 @@ ${safeContext}`;
 
     const draft = aiDraft
       ? stripNames(aiDraft, [student.full_name])
-      : ruleDraft(student.current_streak ?? 0, daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
+      : ruleDraft(liveStreak(student.current_streak, student.last_log_date), daysLogged, avgHours, latestDebrief?.overall_percentile ?? null);
 
     return NextResponse.json({ draft });
   } catch (error) {

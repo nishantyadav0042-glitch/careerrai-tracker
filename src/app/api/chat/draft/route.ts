@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
 import { overAiHourlyLimit, recordAiCall } from '@/lib/ai-rate-limit';
 
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     // Verify buddy role and ownership
     const { data: student } = await admin
       .from('profiles')
-      .select('buddy_id, full_name, current_streak')
+      .select('buddy_id, full_name, current_streak, last_log_date')
       .eq('id', studentId)
       .single();
     if (!student || student.buddy_id !== user.id) {
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
       : '0';
 
     const factsSnapshot = [
-      `Streak: ${student.current_streak ?? 0} days`,
+      `Streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
       `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
       latestDebrief ? `Latest mock: ${latestDebrief.overall_percentile ?? '?'}%ile (${latestDebrief.taken_on})` : 'No recent mock',
     ].join(' | ');

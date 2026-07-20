@@ -55,22 +55,46 @@ export interface StreakData {
 
 /**
  * Calculate if streak is active based on last log date
- * Streak is active if last log was today or yesterday
- * Breaks if last log was >24 hours ago
+ * Streak is active if last log was today or yesterday (app 3 AM IST log-day)
+ *
+ * 20 July fix: this used local-time setHours() — the exact timezone bug the
+ * header of this file documents. On Vercel (UTC) "today" started at 5:30 AM
+ * IST and ignored the 3 AM boundary. Now derived from getLogDateString, so
+ * client and server agree.
  */
-export function isStreakActive(lastLogDate: string | null): boolean {
+export function isStreakActive(lastLogDate: string | null, now: Date = new Date()): boolean {
   if (!lastLogDate) return false;
+  const today = getLogDateString(now);
+  const y = new Date(today + 'T00:00:00Z');
+  y.setUTCDate(y.getUTCDate() - 1);
+  const yesterday = y.toISOString().slice(0, 10);
+  return lastLogDate === today || lastLogDate === yesterday;
+}
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+/**
+ * The streak a student actually HAS right now — 0 if broken.
+ *
+ * streak_data.current_streak is written at log time and never decays on its
+ * own, so any surface reading it raw shows the streak the student HAD at
+ * their last log (the 20 July admin contradiction: a "7-day streak" badge on
+ * the sales queue for a student who hadn't logged in 2 days, while the
+ * dashboard correctly counted him as a streak-breaker). Every DISPLAY of a
+ * streak must go through this.
+ */
+export function liveStreak(
+  currentStreak: number | null | undefined,
+  lastLogDate: string | null | undefined,
+  now: Date = new Date()
+): number {
+  if (!currentStreak) return 0;
+  return isStreakActive(lastLogDate ?? null, now) ? currentStreak : 0;
+}
 
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const lastDate = new Date(lastLogDate);
-  lastDate.setHours(0, 0, 0, 0);
-
-  return lastDate.getTime() === today.getTime() || lastDate.getTime() === yesterday.getTime();
+/** Whole days between the student's last log-day and today's log-day. */
+export function daysSinceLastLog(lastLogDate: string | null | undefined, now: Date = new Date()): number | null {
+  if (!lastLogDate) return null;
+  const today = getLogDateString(now);
+  return Math.max(0, Math.round((Date.parse(today) - Date.parse(lastLogDate)) / MS_PER_DAY));
 }
 
 /**

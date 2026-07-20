@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish, phaseBoundaryDates } from '@/lib/study-plan';
@@ -46,7 +47,7 @@ export async function GET() {
       `)
       .eq('id', user.id).single(),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
-    admin.from('streak_data').select('current_streak').eq('student_id', user.id).maybeSingle(),
+    admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', user.id).maybeSingle(),
     buildCompletionRecords(admin, user.id, '2000-01-01'),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
@@ -216,7 +217,7 @@ export async function GET() {
     currentStage: stage,
     biggestBlocker: blocker,
     coverageTally,
-    currentStreak: streak?.current_streak ?? 0,
+    currentStreak: liveStreak(streak?.current_streak, streak?.last_log_date),
     targetPercentile: profile.target_percentile,
     prepMemory,
     weeklyEvolution,

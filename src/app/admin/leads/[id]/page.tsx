@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
@@ -155,7 +156,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     daysSinceJoin,
     daysSinceLastLog,
     loggedDaysLast7: prepMemory.last7.daysStudied,
-    currentStreak: (streak?.current_streak as number | null) ?? 0,
+    currentStreak: liveStreak(streak?.current_streak as number | null, streak?.last_log_date as string | null),
     buddyCtaClicks: (engagement?.buddy_cta_clicks as number | null) ?? 0,
     mocksLogged: prepMemory.mockTrend.count,
     isPremium: profile.is_premium === true,

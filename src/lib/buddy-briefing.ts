@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { liveStreak } from '@/lib/streak-utils';
 import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
 
 // Shared generator behind the buddy's AI facts-briefing — used by the manual
@@ -23,7 +24,7 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
 
   const { data: student } = await admin
     .from('profiles')
-    .select('buddy_id, full_name, current_streak')
+    .select('buddy_id, full_name, current_streak, last_log_date')
     .eq('id', studentId)
     .single();
   if (!student || student.buddy_id !== buddyId) return null;
@@ -74,7 +75,7 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   }).join('\n');
 
   const factsContext = [
-    `Streak: ${student.current_streak ?? 0} days`,
+    `Streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
     `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
     `Avg confidence: ${avgConfidence}/5, avg stress: ${avgStress}/5`,
     topTopics ? `Topics covered: ${topTopics}` : 'No topics logged',
@@ -99,10 +100,10 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
       summaryText = stripNames(aiResult, [student.full_name]);
       source = 'ai';
     } else {
-      summaryText = fallbackBriefing(daysLogged, avgHours, avgStress, student.current_streak ?? 0, (debriefs ?? []) as MockDebrief[]);
+      summaryText = fallbackBriefing(daysLogged, avgHours, avgStress, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[]);
     }
   } else {
-    summaryText = fallbackBriefing(daysLogged, avgHours, avgStress, student.current_streak ?? 0, (debriefs ?? []) as MockDebrief[]);
+    summaryText = fallbackBriefing(daysLogged, avgHours, avgStress, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[]);
   }
 
   const generated_at = new Date().toISOString();
