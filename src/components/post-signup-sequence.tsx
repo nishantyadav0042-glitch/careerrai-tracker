@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { InstallButton } from '@/components/install/install-button';
+import { InstallLiveGuide } from '@/components/install/install-live-guide';
 import { cn } from '@/lib/utils';
 import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
@@ -99,7 +100,7 @@ interface Props {
   hoursLeft: number;
 }
 
-type Step = 'install' | 'date' | 'commit' | 'thanks' | 'notifications' | 'responsibilities' | 'share';
+type Step = 'date' | 'commit' | 'thanks' | 'notifications' | 'installFirst' | 'openApp' | 'share';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -206,21 +207,20 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
     setStep('commit');
   };
 
-  // "Let's start" on the deal screen. The ceremony is complete — mark it done
-  // FIRST (so the iOS install navigation to /app can never re-trigger it),
-  // then the share ask, then the install finale. Share comes BEFORE install
-  // on purpose: iOS install navigates away to /app, and anything after it
-  // would never be seen.
-  const finish = async () => {
+  // Install is now the headline act, straight after the commitment (founder,
+  // 20 July: "your first step — install your app; we'll remind you what to
+  // study and when"). The ceremony is marked done BEFORE the install screen
+  // shows, so the iOS install navigation to /app can never re-trigger it.
+  const goInstallFirst = async () => {
     setBusy(true);
     await persist({ done: true });
     setBusy(false);
-    setStep('share');
+    if (isStandalone()) { setStep('share'); return; } // already in the app — nothing to install
+    setStep('installFirst');
   };
 
   const afterShare = () => {
-    if (isStandalone()) { setVisible(false); return; }
-    setStep('install');
+    setVisible(false);
   };
 
   // The whole point of the sequence: ask for push permission at peak intent,
@@ -289,19 +289,48 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
           </div>
         )}
 
-        {step === 'install' && (
+        {step === 'installFirst' && (
           <div className="space-y-6 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
-              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your first job: install the app.</h1>
-              <p className="mt-2 text-sm text-stone-500">Just ~3 MB, once. One tap to your plan every day — and it&apos;s the only way our reminders reach you.</p>
+              <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+                Your first step: install your app.
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">
+                We will remind you <b>what to study</b> and <b>when to study</b> — every day. Those reminders reach you only through the installed app. ~3 MB, once.
+              </p>
             </div>
             <div className="space-y-2 pt-2">
               <InstallButton variant="banner" />
-              <button type="button" onClick={() => setVisible(false)} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
-                Maybe later — take me to my plan
+              <button
+                type="button"
+                onClick={() => setStep('openApp')}
+                className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
+              >
+                Continue →
               </button>
             </div>
+          </div>
+        )}
+
+        {step === 'openApp' && (
+          <div className="space-y-5 text-center">
+            <div>
+              <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+                App downloaded? Open CareerRai in the app now.
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">
+                From today, your daily prep lives there — one tap from your Home Screen. Didn&apos;t get the install popup? The 10-second route:
+              </p>
+            </div>
+            <InstallLiveGuide />
+            <button
+              type="button"
+              onClick={() => setStep('share')}
+              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+            >
+              Done — continue →
+            </button>
           </div>
         )}
 
@@ -362,8 +391,9 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => setStep('responsibilities')}
-              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+              disabled={busy}
+              onClick={goInstallFirst}
+              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
             >
               Continue →
             </button>
@@ -426,45 +456,6 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
           </div>
         )}
 
-        {step === 'responsibilities' && (
-          <div className="space-y-5">
-            <div className="text-center">
-              <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>The deal, plainly.</h1>
-              <p className="mt-1.5 text-sm text-stone-500">Three jobs each. We both show up daily.</p>
-            </div>
-            <div className="space-y-3">
-              <div className="rounded-2xl border-2 border-stone-900 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Your 3 jobs</p>
-                <ul className="mt-2 space-y-1.5">
-                  {['Install the app — now, just once', 'Complete your study plan', 'Log your prep daily — right here'].map((t, i) => (
-                    <li key={t} className="flex items-center gap-2 text-sm font-medium text-stone-800">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[9px] font-bold text-white">{i + 1}</span>{t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Our 3 jobs</p>
-                <ul className="mt-2 space-y-1.5">
-                  {['Remind you, every day', 'Track your strengths & weak spots', 'Plan tomorrow, so you never guess'].map((t, i) => (
-                    <li key={t} className="flex items-center gap-2 text-sm font-medium text-stone-800">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[9px] font-bold text-stone-700">{i + 1}</span>{t}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-[11px] leading-snug text-stone-400">Our reminders reach you through the app — that&apos;s why installing is your job #1.</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={finish}
-              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
-            >
-              {busy ? 'Starting…' : "Let's start →"}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
