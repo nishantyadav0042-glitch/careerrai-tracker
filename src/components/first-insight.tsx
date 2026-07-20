@@ -23,10 +23,11 @@ export interface SectionStanding {
 
 interface Props {
   weakest: string;            // section with the biggest gap
-  untouched: number;          // not-started topics in that section
+  remaining: number;          // topics not yet finished in that section (untouched + in-progress)
   sectionTotal: number;       // total topics in that section
   sections: SectionStanding[];
   focusTopics: string[];      // top high-weightage gaps in the weakest section
+  focusMode: 'start' | 'finish'; // untouched topics to open vs opened topics to finish
   fresh: boolean;             // true = nothing studied anywhere yet
 }
 
@@ -36,7 +37,7 @@ function isStandalone(): boolean {
     || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
 }
 
-export function FirstInsight({ weakest, untouched, sectionTotal, sections, focusTopics, fresh }: Props) {
+export function FirstInsight({ weakest, remaining, sectionTotal, sections, focusTopics, focusMode, fresh }: Props) {
   const [show, setShow] = useState(false);
 
   /* eslint-disable react-hooks/set-state-in-effect -- one-time first-run gate, client-only detection */
@@ -58,8 +59,6 @@ export function FirstInsight({ weakest, untouched, sectionTotal, sections, focus
     setInsightVisible(false); // dispatches INSIGHT_DONE — notif ask takes the stage
   };
 
-  const maxTotal = Math.max(...sections.map((s) => s.total), 1);
-
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-white">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-5 px-6 py-10">
@@ -72,7 +71,7 @@ export function FirstInsight({ weakest, untouched, sectionTotal, sections, focus
             {fresh ? (
               <>You&apos;re starting fresh — every topic is open. That&apos;s not a gap, it&apos;s a clean slate.</>
             ) : (
-              <>From your syllabus map, your biggest gap right now is <b>{weakest}</b> — {untouched} of {sectionTotal} topics untouched.</>
+              <>From your syllabus map, your biggest gap right now is <b>{weakest}</b> — {remaining} of {sectionTotal} topics still to finish.</>
             )}
           </p>
         </div>
@@ -98,7 +97,7 @@ export function FirstInsight({ weakest, untouched, sectionTotal, sections, focus
           <div className="flex items-start gap-2.5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
             <Target className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
             <p className="text-sm leading-relaxed text-stone-700">
-              <b>Start here:</b> {focusTopics.join(' & ')} — {fresh ? 'these carry the most marks in CAT.' : `the highest-mark ${weakest} areas you haven't covered yet.`}
+              <b>{focusMode === 'finish' ? 'Finish first:' : 'Start here:'}</b> {focusTopics.join(' & ')} — {fresh ? 'these carry the most marks in CAT.' : focusMode === 'finish' ? `the highest-mark ${weakest} topics you've opened but not finished.` : `the highest-mark ${weakest} areas you haven't covered yet.`}
             </p>
           </div>
         )}
