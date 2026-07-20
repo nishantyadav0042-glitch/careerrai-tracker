@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
-import { getLogDateString, liveStreak } from '@/lib/streak-utils';
+import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
+import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
+import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
@@ -223,9 +225,14 @@ export default async function DailyTrackerPage() {
       ? nextSession
       : null;
 
-  // liveStreak, not the raw stored value: after a missed day the flame shows 0
-  // (honest), instead of the streak the student HAD at their last log.
-  const currentStreak = liveStreak(streakRow?.current_streak, streakRow?.last_log_date ?? null);
+  // Momentum Shield display: same shield/decay math the streak RPC applies at
+  // the next log, so the number shown mid-miss is exactly what gets persisted.
+  const momentum = momentumStreak(
+    streakRow?.current_streak,
+    (streakRow as StreakData | null)?.shields,
+    streakRow?.last_log_date ?? null
+  );
+  const currentStreak = momentum.streak;
 
   // Day-2+ password nudge (founder call: the set-password wall moved out of
   // first login — from day 2 it's offered as the convenience it actually
@@ -289,9 +296,34 @@ export default async function DailyTrackerPage() {
               <div className="text-lg font-extrabold text-stone-900 tabular-nums">{currentStreak}</div>
               <div className="text-[10px] font-medium text-stone-500">day streak</div>
             </div>
+            <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600">
+              <Shield className="h-3 w-3" />{momentum.shields}
+            </span>
             <ChevronRight className="h-4 w-4 text-stone-300" />
           </Link>
         </div>
+
+        {/* Momentum Shield status — only speaks when something happened. A
+            shield covered a miss → gratitude, not guilt. Shields gone and the
+            streak slipping → one honest line with the fix (log today). */}
+        {!initialLogging.hasLoggedToday && momentum.shieldsUsed > 0 && momentum.decayed === 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+            <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>
+              You missed {momentum.missedDays === 1 ? 'a day' : `${momentum.missedDays} days`} — {momentum.shieldsUsed === 1 ? 'a Momentum Shield' : `${momentum.shieldsUsed} Momentum Shields`} covered it.
+              Your <b>{momentum.streak}-day streak is safe</b>. {momentum.shields} shield{momentum.shields === 1 ? '' : 's'} left — log today.
+            </p>
+          </div>
+        )}
+        {!initialLogging.hasLoggedToday && momentum.decayed > 0 && momentum.streak > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
+            <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>
+              Shields are used up, so your streak is slipping — down {momentum.decayed} to <b>{momentum.streak} days</b>.
+              It never resets to zero. Log today and it climbs again.
+            </p>
+          </div>
+        )}
 
         {/* In the evening, the log jumps to the top. */}
         {eveningLogFirst && logBlock}
@@ -337,6 +369,10 @@ export default async function DailyTrackerPage() {
       {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
           Gated: installed app only, after onboarding + reminders are settled. */}
       <AppTour enabled={tourReady} />
+      {/* One-time Momentum Shield briefing — existing loggers only (their past
+          streak was restored under the new rules; new students just live with
+          shields from day one). */}
+      <MomentumShieldIntro streak={momentum.streak} shields={momentum.shields} enabled={(logs ?? []).length > 0} />
     </div>
   );
 }

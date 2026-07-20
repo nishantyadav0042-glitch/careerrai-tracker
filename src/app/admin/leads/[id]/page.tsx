@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { liveStreak } from '@/lib/streak-utils';
+import { momentumStreak } from '@/lib/streak-utils';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { computePrepMemory, computeTopicMemory } from '@/lib/prep-memory-data';
@@ -134,7 +134,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ] = await Promise.all([
     computePrepMemory(admin, id, archetype, signupDate),
     computeTopicMemory(admin, id, archetype),
-    admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', id).maybeSingle(),
+    admin.from('streak_data').select('current_streak, last_log_date, shields').eq('student_id', id).maybeSingle(),
     admin.from('student_engagement').select('buddy_cta_clicks').eq('student_id', id).maybeSingle(),
     admin.from('lead_outreach').select('owner, status, next_follow_up, notes').eq('student_id', id).maybeSingle(),
     admin.from('daily_reports').select('report_date, study_duration, mock_taken').eq('student_id', id).order('report_date', { ascending: false }).limit(10),
@@ -156,7 +156,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     daysSinceJoin,
     daysSinceLastLog,
     loggedDaysLast7: prepMemory.last7.daysStudied,
-    currentStreak: liveStreak(streak?.current_streak as number | null, streak?.last_log_date as string | null),
+    currentStreak: momentumStreak(streak?.current_streak as number | null, (streak?.shields as number | null) ?? null, streak?.last_log_date as string | null).streak,
     buddyCtaClicks: (engagement?.buddy_cta_clicks as number | null) ?? 0,
     mocksLogged: prepMemory.mockTrend.count,
     isPremium: profile.is_premium === true,
