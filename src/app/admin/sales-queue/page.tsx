@@ -75,6 +75,7 @@ export default async function SalesQueuePage() {
                         ) : (
                           <Badge color="stone">never logged</Badge>
                         )}
+                        {r.mentorDoor && <Badge color="green">🚪 {r.mentorDoor} door</Badge>}
                         {r.mock_opened && <Badge color="stone">opened a mock</Badge>}
                         {r.signed_up_at != null && <Badge color="stone">{daysSince(r.signed_up_at)}d in</Badge>}
                       </div>

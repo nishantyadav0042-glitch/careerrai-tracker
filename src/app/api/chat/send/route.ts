@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendNotification } from '@/lib/notifications';
 import { resolvePair } from '@/lib/chat';
+import { resolveGrantAccess, MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 import { serverError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
@@ -29,8 +30,25 @@ export async function POST(request: NextRequest) {
   const studentId = typeof payload.studentId === 'string' ? payload.studentId : undefined;
 
   const admin = createAdminClient();
-  const pair = await resolvePair(admin, user.id, studentId);
-  if (!pair) return NextResponse.json({ error: 'Not paired' }, { status: 403 });
+  let pair = await resolvePair(admin, user.id, studentId);
+  // Mentor Doors: a free student with an ACTIVE grant (or their granted buddy)
+  // chats through the same pipe — capped at 3 student messages, ever, to one
+  // buddy. The 4th attempt returns the upgrade ask instead of a send.
+  if (!pair) {
+    const grantAccess = await resolveGrantAccess(admin, user.id, studentId);
+    if (!grantAccess) return NextResponse.json({ error: 'Not paired' }, { status: 403 });
+    if (user.id === grantAccess.studentId && grantAccess.remaining <= 0) {
+      return NextResponse.json(
+        {
+          error: 'free_messages_used',
+          upgrade: true,
+          message: `You've used all ${MENTOR_FREE_MESSAGES} free questions. Upgrade to keep talking to your buddy — unlimited chat, weekly 1-on-1s, every mock decoded.`,
+        },
+        { status: 403 }
+      );
+    }
+    pair = { studentId: grantAccess.studentId, buddyId: grantAccess.buddyId };
+  }
 
   const { data: message, error } = await admin
     .from('chat_messages')

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolvePair } from '@/lib/chat';
+import { resolveGrantAccess } from '@/lib/mentor-doors';
 import { serverError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
@@ -23,8 +24,13 @@ export async function POST(request: NextRequest) {
   const studentId = typeof payload.studentId === 'string' ? payload.studentId : undefined;
 
   const admin = createAdminClient();
-  const pair = await resolvePair(admin, user.id, studentId);
-  if (!pair) return NextResponse.json({ error: 'Not paired' }, { status: 403 });
+  let pair = await resolvePair(admin, user.id, studentId);
+  if (!pair) {
+    // Mentor Doors: grant-based chats mark reads through the same pipe.
+    const grantAccess = await resolveGrantAccess(admin, user.id, studentId);
+    if (!grantAccess) return NextResponse.json({ error: 'Not paired' }, { status: 403 });
+    pair = { studentId: grantAccess.studentId, buddyId: grantAccess.buddyId };
+  }
 
   // Mark all incoming (not sent by me) unread messages in this pair as read.
   const { error } = await admin
