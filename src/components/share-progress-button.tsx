@@ -16,7 +16,7 @@ export function ShareProgressButton({ daysLogged, bestStreak, percentile }: Shar
   const shareText = [
     `🔥 I've been preparing for CAT for ${daysLogged} days with my IIM buddy on CareerRai!`,
     bestStreak > 1 ? `📈 Best streak: ${bestStreak} days` : null,
-    percentile ? `🎯 CAT Readiness: ${Math.round(percentile)}%ile` : null,
+    percentile ? `🎯 Latest percentile: ${Math.round(percentile)}%ile` : null,
     '',
     SITE_HOST,
   ]

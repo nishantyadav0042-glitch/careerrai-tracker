@@ -136,7 +136,7 @@ export function GoalEditor({
           )}
           {currentCRS === null && (
             <p className="text-xs text-stone-400 text-center">
-              Take the CAT Readiness Test to see your current score.
+              Your latest recorded percentile will appear here.
             </p>
           )}
         </div>
