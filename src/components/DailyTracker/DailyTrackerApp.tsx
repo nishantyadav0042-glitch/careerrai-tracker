@@ -10,6 +10,9 @@ import type { LoggingData } from './LoggingModal';
 import type { MockDebriefData } from './MockDebriefModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { getLogDateString } from '@/lib/streak-utils';
+import { track } from '@/lib/journey';
+import { NOTIF_ASK_SETTLED_EVENT } from '@/components/standalone-notif-ask';
+import { TOUR_DONE_EVENT } from '@/components/app-tour';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
 const PendingDebriefCard = dynamic(() => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard), { ssr: false });
@@ -62,6 +65,7 @@ interface DailyTrackerAppProps {
   hasLoggedYesterday?: boolean;
   yesterdayStr?: string;   // ISO date for the API
   yesterdayLabel?: string; // "Jun 16" for the UI
+  firstLogNudge?: boolean; // student has NEVER logged — auto-open the log once after tour + notif ask
 }
 
 // Home's second hero, not a buried strip — Today's Log is one of the app's
@@ -77,6 +81,7 @@ export function DailyTrackerApp({
   hasLoggedYesterday = true,
   yesterdayStr = '',
   yesterdayLabel = '',
+  firstLogNudge = false,
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
@@ -135,6 +140,40 @@ export function DailyTrackerApp({
     setShowFeedback,
     submitLog,
   } = useLogging(studentId, initialLogging);
+
+  // First-log moment (20 July zero-log fix): the journey funnels install →
+  // tour → notifications and then just… ends — the first log was outsourced to
+  // an evening push most new students can't receive. This auto-opens the real
+  // log modal ONCE (per device) for a student who has never logged, after the
+  // tour is done and the notification ask isn't covering the screen. In-app,
+  // at the peak of the first session — not hours later on a dead channel.
+  useEffect(() => {
+    if (!firstLogNudge || hasLoggedToday) return;
+    const KEY = 'cr_first_log_prompt_v1';
+    try { if (localStorage.getItem(KEY)) return; } catch { return; }
+    let fired = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tourDone = () => { try { return localStorage.getItem('cr_app_tour_v1') === '1'; } catch { return false; } };
+    const askUp = () => { try { return (window as Window & { __crNotifAskVisible?: boolean }).__crNotifAskVisible === true; } catch { return false; } };
+    const maybeOpen = () => {
+      if (fired || !tourDone() || askUp()) return;
+      fired = true;
+      try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
+      track('first_log_prompt');
+      setIsLogOpen(true);
+    };
+    // Small delay on each trigger so sibling listeners (the notif ask's own
+    // evaluate) run first and set their visibility flag before we check it.
+    const deferred = () => { if (timer) clearTimeout(timer); timer = setTimeout(maybeOpen, 700); };
+    deferred(); // page load: tour may already be done from a previous session
+    window.addEventListener(TOUR_DONE_EVENT, deferred);
+    window.addEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(TOUR_DONE_EVENT, deferred);
+      window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, deferred);
+    };
+  }, [firstLogNudge, hasLoggedToday]);
 
   const handleLogSubmit = async (data: LoggingData): Promise<{ mockSelected: boolean }> => {
     const backdated = logDateOverride;

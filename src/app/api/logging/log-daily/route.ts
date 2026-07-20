@@ -29,10 +29,16 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as LoggingRequest;
 
-    if (!Number.isInteger(body.hours) || body.hours < 0 || body.hours > 6) {
-      return NextResponse.json({ error: 'Invalid hours (0-6)' }, { status: 400 });
+    // Zero-log bug (20 July): the modal has offered 8/10-hour options since
+    // 15 July, but this cap still said 6 — every 8h/10h log bounced with a 400
+    // and the student saw "Failed to log". The serious day-1 students are
+    // exactly the ones picking 8-10h.
+    if (!Number.isInteger(body.hours) || body.hours < 0 || body.hours > 10) {
+      return NextResponse.json({ error: 'Invalid hours (0-10)' }, { status: 400 });
     }
-    if (!Array.isArray(body.sections) || body.sections.length === 0) {
+    // An honest "didn't study today" log (0 hours, no mock) carries no
+    // sections — allowed. Any log with real hours must say what was studied.
+    if (!Array.isArray(body.sections) || (body.sections.length === 0 && body.hours !== 0)) {
       return NextResponse.json({ error: 'Select at least one section' }, { status: 400 });
     }
     if (!body.sections.every((s) => (VALID_SECTIONS as readonly string[]).includes(s))) {

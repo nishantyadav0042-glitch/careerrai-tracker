@@ -264,6 +264,7 @@ export default async function DailyTrackerPage() {
       hasLoggedYesterday={hasLoggedYesterday}
       yesterdayStr={yesterdayStr}
       yesterdayLabel={yesterdayLabel}
+      firstLogNudge={(logs ?? []).length === 0}
     />
   );
   const planBlock = <TodaysRoutineCard />;
