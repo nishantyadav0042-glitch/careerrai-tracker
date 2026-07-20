@@ -145,6 +145,10 @@ export interface StreakData {
   current_streak: number;
   longest_streak: number;
   last_log_date: string | null;
+  // Momentum Shields: missed days consume shields (streak untouched), then
+  // decay the streak by 1/day. 21 consecutive logged days earn one back (max 3).
+  shields: number;
+  earn_run: number;
   milestone_sent_7: boolean;
   milestone_sent_21: boolean;
   created_at: string;

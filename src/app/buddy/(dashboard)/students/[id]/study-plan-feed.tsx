@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { liveStreak } from '@/lib/streak-utils';
+import { momentumStreak } from '@/lib/streak-utils';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { Card } from '@/components/ui/card';
@@ -21,7 +21,7 @@ export async function StudyPlanFeed({ studentId }: { studentId: string }) {
 
   const [{ data: coverage }, { data: streak }] = await Promise.all([
     admin.from('topic_coverage').select('status').eq('student_id', studentId),
-    admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', studentId).maybeSingle(),
+    admin.from('streak_data').select('current_streak, last_log_date, shields').eq('student_id', studentId).maybeSingle(),
   ]);
 
   const stage = profile.current_stage as Stage | null;
@@ -54,8 +54,8 @@ export async function StudyPlanFeed({ studentId }: { studentId: string }) {
           <p className="text-sm font-bold text-stone-900">{phase.label} <span className="font-normal text-stone-400">· {weeksRemaining}w to CAT</span></p>
           <p className="text-xs text-stone-500 mt-0.5">{phase.objective}</p>
         </div>
-        {liveStreak(streak?.current_streak, streak?.last_log_date) ? (
-          <span className="shrink-0 text-xs font-semibold text-orange-600">🔥 {liveStreak(streak?.current_streak, streak?.last_log_date)}d</span>
+        {momentumStreak(streak?.current_streak, streak?.shields, streak?.last_log_date).streak ? (
+          <span className="shrink-0 text-xs font-semibold text-orange-600">🔥 {momentumStreak(streak?.current_streak, streak?.shields, streak?.last_log_date).streak}d</span>
         ) : null}
       </div>
 

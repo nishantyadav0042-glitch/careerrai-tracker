@@ -1,4 +1,4 @@
-import { getLogDateString, liveStreak, daysSinceLastLog, MS_PER_DAY } from '@/lib/streak-utils';
+import { getLogDateString, liveStreak, momentumStreak, daysSinceLastLog, MS_PER_DAY } from '@/lib/streak-utils';
 
 // ── The dashboard's single source of truth ───────────────────────────────────
 //
@@ -148,7 +148,7 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
   if (ids.length === 0) return [];
   const [{ data: profs }, { data: streaks }] = await Promise.all([
     admin.from('profiles').select('id, is_premium').in('id', ids),
-    admin.from('streak_data').select('student_id, current_streak, last_log_date').in('student_id', ids),
+    admin.from('streak_data').select('student_id, current_streak, last_log_date, shields').in('student_id', ids),
   ]);
   const premiumIds = new Set((profs ?? []).filter((p: any) => p.is_premium === true).map((p: any) => p.id as string));
   const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id, s]));
@@ -162,7 +162,7 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
         buddy_cta_clicks: (r.buddy_cta_clicks as number | null) ?? 0,
         mock_opened: r.mock_opened === true,
         signed_up_at: (r.signed_up_at as string | null) ?? null,
-        streak: liveStreak(st?.current_streak, st?.last_log_date),
+        streak: momentumStreak(st?.current_streak, st?.shields, st?.last_log_date).streak,
         lastLogDays: daysSinceLastLog(st?.last_log_date),
       };
     })

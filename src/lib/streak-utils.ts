@@ -97,6 +97,46 @@ export function daysSinceLastLog(lastLogDate: string | null | undefined, now: Da
   return Math.max(0, Math.round((Date.parse(today) - Date.parse(lastLogDate)) / MS_PER_DAY));
 }
 
+// ── Momentum Shield display math (founder spec, 20 July) ─────────────────────
+// Streaks never hard-reset. Missed days consume shields first (streak
+// untouched); with shields gone, each missed day decays the streak by 1.
+// 21 consecutive logged days earn +1 shield (max 3) — that part lives in the
+// upsert_log_and_streak replay in Postgres. THIS function mirrors the same
+// shield/decay math over the days since the last log, so what a student sees
+// mid-miss is exactly what the RPC will persist at their next log (+1 for
+// that log). Today never counts as a miss — it's still loggable.
+export interface MomentumState {
+  streak: number;        // the streak the student holds right now
+  shields: number;       // shields remaining after covering pending misses
+  missedDays: number;    // full days missed since last log (excluding today)
+  shieldsUsed: number;   // of those, days covered by shields
+  decayed: number;       // of those, days that ate into the streak
+}
+
+export function momentumStreak(
+  currentStreak: number | null | undefined,
+  shields: number | null | undefined,
+  lastLogDate: string | null | undefined,
+  now: Date = new Date()
+): MomentumState {
+  const s = currentStreak ?? 0;
+  const h = shields ?? 3;
+  const since = daysSinceLastLog(lastLogDate, now);
+  if (s <= 0 || since == null) {
+    return { streak: Math.max(0, s), shields: h, missedDays: 0, shieldsUsed: 0, decayed: 0 };
+  }
+  const missed = Math.max(0, since - 1);
+  const used = Math.min(h, missed);
+  const decay = missed - used;
+  return {
+    streak: Math.max(0, s - decay),
+    shields: h - used,
+    missedDays: missed,
+    shieldsUsed: used,
+    decayed: Math.min(decay, s),
+  };
+}
+
 /**
  * Get number of days in current streak
  * Returns 0 if streak is broken
