@@ -212,11 +212,13 @@ export default async function DailyTrackerPage() {
   const fmtDM = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   const syllabusLabel = targetIso ? fmtDM(new Date(targetIso + 'T00:00:00')) : '—';
   const mockSeasonStart = new Date(examYear, 7, 1); // 1 Aug of the CAT year
-  const mockLabel = now >= mockSeasonStart ? 'Weekly · on' : `${fmtDM(mockSeasonStart)} · weekly`;
-  const revStarted = topicMemory.some(
-    (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
-  );
-  const revLabel = revStarted ? 'Rolling · on' : 'From 1st topic';
+  const mockLabel = now >= mockSeasonStart ? 'Every week' : `Starts ${fmtDM(mockSeasonStart)}`;
+  // Revision season (founder, 21 July): structured revision opens 1 September
+  // — high-weightage topics first (the selector's September boost drives the
+  // actual plan; see topic-selector.ts). Before that the engine still cycles
+  // studied topics via spaced revision, but the anchor speaks the season.
+  const revSeasonStart = new Date(examYear, 8, 1); // 1 Sep
+  const revLabel = now >= revSeasonStart ? 'Daily · weighted' : `Starts ${fmtDM(revSeasonStart)}`;
 
   // Topics still untouched (not started) — the third "where you stand" number.
   const untouchedTopics = Math.max(0, totalTopics - startedOnceCount - learningCount);

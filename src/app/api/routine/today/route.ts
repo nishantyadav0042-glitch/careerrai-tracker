@@ -422,6 +422,10 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
   const postponed = new Set(history.postponedTopics);
 
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
+  // Revision season: from 1 September of the exam year, overdue revision of
+  // high-weightage topics outranks starting new material (topic-selector.ts).
+  const seasonYear = profile.attemptYear ?? new Date().getFullYear();
+  const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
   const result = {} as Record<Section, TopicChoice>;
 
@@ -436,7 +440,7 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
       focusBonus: focusUnits.has(topic),
       postponedBonus: postponed.has(topic),
     }));
-    result[section] = chooseTopicForSection(candidates, revisionMultiplier);
+    result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason);
   }
   return result;
 }

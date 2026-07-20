@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
+import { setLogModalOpen } from '@/lib/first-run-events';
 import { EmotionalChips } from './EmotionalChips';
 
 // Today's plan tasks, pulled into the log so "what did you cover" IS the plan —
@@ -69,7 +70,9 @@ export function LoggingModal({
   // Telemetry (20 July): the zero-log incident was invisible because the modal
   // emitted nothing — we couldn't tell "never opened" from "opened and gave up".
   useEffect(() => {
+    setLogModalOpen(isOpen);
     if (isOpen) track('log_open');
+    return () => setLogModalOpen(false);
   }, [isOpen]);
 
   // Pull today's plan when the log opens — its topics become the "what did you
@@ -230,7 +233,7 @@ export function LoggingModal({
             </div>
             {hours === 0 && (
               <p className="text-xs text-amber-400/90 mt-2">
-                0-hour logs keep your record honest — they don&apos;t extend your study streak.
+                An honest 0-hour day still counts — your streak and your record stay truthful.
               </p>
             )}
           </div>

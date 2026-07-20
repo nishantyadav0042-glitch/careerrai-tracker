@@ -4,22 +4,42 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { claimDailyModal } from '@/lib/daily-modal';
+import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, tourDone, notifAskVisible, logModalOpen } from '@/lib/first-run-events';
 
-// A gentle once-a-day nudge for students who don't have an IIM buddy yet —
-// shown when they open the app, promoting what a buddy does. Throttled to one
-// appearance per calendar day (localStorage), so it never feels naggy. The
-// parent (student layout) only mounts this for buddy-less, non-premium students
-// and only when no higher-priority modal (onboarding / post-signup / push ask)
-// is on screen, so it can't stack.
+// A gentle once-a-day nudge for students who don't have an IIM buddy yet.
+// Throttled to one appearance per calendar day (localStorage). The parent
+// (student layout) only mounts this for buddy-less, non-premium students.
+//
+// Founder order (21 July — it used to stack ON TOP of the running app tour):
+// this is LAST in the first-run queue. It waits for (1) the notification ask
+// to settle, (2) the app tour to be completed, and (3) the log modal to not
+// be open — and only THEN claims the daily-modal slot, so a blocked attempt
+// doesn't burn today's slot.
 export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    // Shares the one-modal-per-day gate with the install journey, so a student
-    // never sees both in a day. Install journey mounts first, so it wins when
-    // both are eligible.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (claimDailyModal()) setShow(true);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let shown = false;
+    const attempt = () => {
+      if (shown) return;
+      if (timer) clearTimeout(timer);
+      // 1.4s settle: lets the notif ask evaluate and the first-log prompt
+      // (700ms after tour) claim the screen first if it's going to.
+      timer = setTimeout(() => {
+        if (shown || !tourDone() || notifAskVisible() || logModalOpen()) return;
+         
+        if (claimDailyModal()) { shown = true; setShow(true); }
+      }, 1400);
+    };
+    attempt();
+    window.addEventListener(TOUR_DONE_EVENT, attempt);
+    window.addEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(TOUR_DONE_EVENT, attempt);
+      window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
+    };
   }, []);
 
   if (!show) return null;
