@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Shield, Flame } from 'lucide-react';
 import { track } from '@/lib/journey';
+import { INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
 // One-time "what's new" briefing for the Momentum Shield update (founder,
 // 20 July). Shown once per device to students who had already logged before
@@ -14,7 +15,7 @@ const KEY = 'cr_shield_intro_v1';
 export function MomentumShieldIntro({ streak, shields, enabled }: { streak: number; shields: number; enabled: boolean }) {
   const [show, setShow] = useState(false);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- one-time gate read from localStorage after mount */
+   
   useEffect(() => {
     if (!enabled) return;
     try {
@@ -22,11 +23,27 @@ export function MomentumShieldIntro({ streak, shields, enabled }: { streak: numb
     } catch {
       return;
     }
-    setShow(true);
-    track('shield_intro_shown', { streak, shields });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let fired = false;
+    const attempt = () => {
+      if (fired) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (fired || insightVisible()) return;
+        fired = true;
+        setShow(true);
+        track('shield_intro_shown', { streak, shields });
+      }, 400);
+    };
+    attempt();
+    window.addEventListener(INSIGHT_DONE_EVENT, attempt);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(INSIGHT_DONE_EVENT, attempt);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+   
 
   if (!show) return null;
 
