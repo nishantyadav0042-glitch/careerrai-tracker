@@ -197,16 +197,26 @@ export default async function DailyTrackerPage() {
     weekLabels.push(WEEKDAY[d.getUTCDay()]);
   }
 
-  // The three anchor dates: syllabus done (their target), mocks begin (day
-  // after syllabus), revision begins (3 weeks before CAT).
-  const catDate = catExamDate(examYear);
+  // The three anchor dates, corrected (founder, 20 July — matches how CAT prep
+  // actually works and what the routine engine already does):
+  // * Syllabus — the student's own target date.
+  // * Mocks — weekly from AUGUST (AIMCAT/SIMCAT season opens then), NOT "day
+  //   after syllabus ends". Serious aspirants run one mock a week alongside
+  //   syllabus and ramp up near the exam; waiting for a finished syllabus is a
+  //   classic mistake the app must not encode.
+  // * Revision — ROLLING: it begins the moment the first topics are studied
+  //   (the engine's spaced revision-due scheduling already works this way);
+  //   showing "8 Nov" made revision look like a far-away phase instead of a
+  //   daily habit. The final 3-week consolidation still happens — inside the
+  //   plan — but the anchor strip now tells the truth: revision is continuous.
   const fmtDM = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   const syllabusLabel = targetIso ? fmtDM(new Date(targetIso + 'T00:00:00')) : '—';
-  const revLabel = fmtDM(new Date(catDate.getTime() - 21 * 86_400_000));
-  const mockLabel = fmtDM(
-    targetIso ? new Date(new Date(targetIso + 'T00:00:00').getTime() + 86_400_000)
-              : new Date(catDate.getTime() - 84 * 86_400_000)
+  const mockSeasonStart = new Date(examYear, 7, 1); // 1 Aug of the CAT year
+  const mockLabel = now >= mockSeasonStart ? 'Weekly · on' : `${fmtDM(mockSeasonStart)} · weekly`;
+  const revStarted = topicMemory.some(
+    (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
   );
+  const revLabel = revStarted ? 'Rolling · on' : 'From 1st topic';
 
   // Topics still untouched (not started) — the third "where you stand" number.
   const untouchedTopics = Math.max(0, totalTopics - startedOnceCount - learningCount);

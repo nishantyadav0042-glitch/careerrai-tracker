@@ -1,8 +1,10 @@
 import { CheckCircle2, ClipboardList, Repeat2 } from 'lucide-react';
 
-// The three dates that anchor the plan: syllabus done, mocks begin, revision
-// begins. One tight strip — no big cards, no "next 7 days" (that lives in My
-// CAT Plan now). Daily hours live in the progress card above, not repeated here.
+// The three anchors of the plan: syllabus (the student's target date), weekly
+// mocks (August onwards — AIMCAT/SIMCAT season, alongside syllabus), and
+// rolling revision (starts with the first studied topics, not a far-away
+// date). One tight strip — no big cards. Daily hours live in the progress
+// card above, not repeated here.
 export function ImportantDates({ syllabus, mocks, revision }: {
   syllabus: string; mocks: string; revision: string;
 }) {
