@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     await clearAttempts(admin, attemptKey);
     const role = profile.role ?? 'student';
-    const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : '/student/tracker';
+    const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : role === 'sales' ? '/sales' : '/student/tracker';
     return buildResponse(dest, role);
   }
 
@@ -141,6 +141,6 @@ export async function POST(request: NextRequest) {
 
   await clearAttempts(admin, attemptKey);
   const role = profile.role ?? 'student';
-  const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : '/student/tracker';
+  const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : role === 'sales' ? '/sales' : '/student/tracker';
   return buildResponse(dest, role);
 }

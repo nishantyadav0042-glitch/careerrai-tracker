@@ -107,3 +107,60 @@ export async function buildSalesQueue(admin?: any): Promise<SalesQueue> {
   opportunities.sort((a, b) => b.convScore - a.convScore);
   return { opportunities, target: 25, doneToday };
 }
+
+// ── Callbacks due — the promises the salesperson made ("call me at 6") ──
+
+export interface CallbackCard {
+  studentId: string; name: string; phone: string | null; waNumber: string | null;
+  callbackAt: string; overdue: boolean; note: string | null; status: string | null;
+}
+
+export async function getCallbacksDue(admin?: any): Promise<CallbackCard[]> {
+  const db = admin ?? createAdminClient();
+  const nowIso = new Date().toISOString();
+  const { data: rows } = await db.from('lead_outreach')
+    .select('student_id, status, callback_at, notes')
+    .not('callback_at', 'is', null)
+    .lte('callback_at', nowIso)
+    .order('callback_at', { ascending: true });
+  const open = (rows ?? []).filter((r: any) => r.status !== 'converted' && r.status !== 'not_interested');
+  if (open.length === 0) return [];
+  const ids = open.map((r: any) => r.student_id);
+  const { data: profs } = await db.from('profiles').select('id, full_name, phone').in('id', ids);
+  const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
+  const now = Date.now();
+  return open.map((r: any) => {
+    const p = byId.get(r.student_id) as any;
+    return {
+      studentId: r.student_id, name: p?.full_name ?? 'Student', phone: p?.phone ?? null, waNumber: waNumber(p?.phone ?? null),
+      callbackAt: r.callback_at, overdue: new Date(r.callback_at).getTime() < now - 60_000,
+      note: r.notes ?? null, status: r.status ?? null,
+    };
+  });
+}
+
+// ── Full leads board — every free lead, prioritized, with current status ──
+
+export interface LeadRow {
+  studentId: string; name: string; firstName: string; phone: string | null; waNumber: string | null;
+  convScore: number; tier: Tier; status: string | null; callbackAt: string | null;
+  lastActivity: string; why: string[]; script: string;
+}
+
+export async function getLeadsBoard(admin?: any): Promise<LeadRow[]> {
+  const db = admin ?? createAdminClient();
+  const { opportunities } = await buildSalesQueue(db); // open opportunities (scored)
+  // buildSalesQueue already excludes closed leads; for a full board we also want
+  // the closed/contacted ones as reference. Pull their statuses and merge.
+  const { data: allOut } = await db.from('lead_outreach').select('student_id, status, callback_at');
+  const outById = new Map((allOut ?? []).map((o: any) => [o.student_id, o]));
+  return opportunities.map((o) => {
+    const out = outById.get(o.studentId) as any;
+    return {
+      studentId: o.studentId, name: o.name, firstName: o.firstName, phone: o.phone, waNumber: o.waNumber,
+      convScore: o.convScore, tier: o.tier, status: (out?.status as string | null) ?? o.status ?? null,
+      callbackAt: (out?.callback_at as string | null) ?? null,
+      lastActivity: o.lastActivity, why: o.why, script: o.script,
+    };
+  });
+}
