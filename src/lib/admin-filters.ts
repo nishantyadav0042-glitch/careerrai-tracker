@@ -189,4 +189,63 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
       (b.buddy_cta_clicks - a.buddy_cta_clicks) || (b.streak - a.streak) || ((a.lastLogDays ?? 999) - (b.lastLogDays ?? 999)));
 }
 
+export interface WantsBuddyRow {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  created_at: string;
+  app_installed: boolean;
+  buddy_cta_clicks: number;
+  streak: number;               // momentum streak
+  lastLogDays: number | null;   // null = never logged
+  mentorDoor: 'history' | 'intent' | null;
+}
+
+// "Wants a buddy" (founder, 21 July): students who EXPLICITLY answered yes to
+// the mentor question in onboarding, still free, still unassigned — a
+// declared want, not an inferred one. Deterministic: wants_mentor = true AND
+// buddy_id IS NULL AND not premium, real students only. Sorted hottest:
+// unlock taps → live momentum streak → freshest activity → newest signup.
+export async function getWantsBuddy(admin: any): Promise<WantsBuddyRow[]> {
+  const { data: students } = await admin
+    .from('profiles')
+    .select('id, full_name, phone, created_at, app_installed')
+    .eq('role', 'student')
+    .eq('wants_mentor', true)
+    .is('buddy_id', null)
+    .not('is_premium', 'is', true)
+    .not('is_test_account', 'is', true)
+    .not('is_demo', 'is', true);
+  const ids = (students ?? []).map((s: any) => s.id as string);
+  if (ids.length === 0) return [];
+  const [{ data: eng }, { data: streaks }, { data: doors }] = await Promise.all([
+    admin.from('student_engagement').select('student_id, buddy_cta_clicks').in('student_id', ids),
+    admin.from('streak_data').select('student_id, current_streak, last_log_date, shields').in('student_id', ids),
+    admin.from('mentor_grants').select('student_id, door').in('student_id', ids),
+  ]);
+  const engById = new Map((eng ?? []).map((e: any) => [e.student_id as string, (e.buddy_cta_clicks as number | null) ?? 0]));
+  const streakById = new Map((streaks ?? []).map((s: any) => [s.student_id as string, s]));
+  const doorById = new Map((doors ?? []).map((d: any) => [d.student_id as string, d.door as 'history' | 'intent']));
+  return (students ?? [])
+    .map((s: any) => {
+      const st = streakById.get(s.id) as any;
+      return {
+        id: s.id as string,
+        full_name: (s.full_name as string | null) ?? null,
+        phone: (s.phone as string | null) ?? null,
+        created_at: s.created_at as string,
+        app_installed: s.app_installed === true,
+        buddy_cta_clicks: engById.get(s.id) ?? 0,
+        streak: momentumStreak(st?.current_streak, st?.shields, st?.last_log_date).streak,
+        lastLogDays: daysSinceLastLog(st?.last_log_date),
+        mentorDoor: doorById.get(s.id) ?? null,
+      };
+    })
+    .sort((a: WantsBuddyRow, b: WantsBuddyRow) =>
+      (b.buddy_cta_clicks - a.buddy_cta_clicks)
+      || (b.streak - a.streak)
+      || ((a.lastLogDays ?? 999) - (b.lastLogDays ?? 999))
+      || b.created_at.localeCompare(a.created_at));
+}
+
 export { MS_PER_DAY };
