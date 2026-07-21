@@ -38,8 +38,13 @@ function waLink(phone: string | null): string | null {
   return `https://wa.me/${digits.startsWith('91') ? digits : `91${digits}`}`;
 }
 
+// Date + clock time, always IST — Vercel renders in UTC, so without the
+// explicit timeZone a 6:12 pm signup would show as 12:42 pm.
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const d = new Date(iso);
+  const day = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+  return `${day}, ${time}`;
 }
 
 function StatusChip({ on, yes, no }: { on: boolean; yes: string; no: string }) {
