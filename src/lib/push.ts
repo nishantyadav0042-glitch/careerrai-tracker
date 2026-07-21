@@ -60,6 +60,24 @@ export async function sendPushToUser(
   const { data: profile } = await admin.from('profiles').select('push_subscription').eq('id', userId).single();
   if (!profile?.push_subscription) return { ok: false, reason: 'no_subscription' };
 
+  // Absolute ceiling (founder, 21 July): no student receives more than 10
+  // pushes in a day, AT ANY COST. Enforced here — the lowest level every
+  // push path passes through — so budget-exempt sends (broadcasts, chat,
+  // session reminders) count too, not just dispatch()-gated nudges. The
+  // per-state budgets (4-8) stay the real cadence; this is the hard stop.
+  const istDayStart =
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
+  const { count: pushedToday } = await admin
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .not('pushed_at', 'is', null)
+    .gte('pushed_at', istDayStart);
+  if ((pushedToday ?? 0) >= 10) {
+    console.warn(`[push] daily hard cap (10) reached for ${userId} — push suppressed`);
+    return { ok: false, reason: 'daily_cap' };
+  }
+
   // A dead subscription (410/404) is TERMINAL — no retry can revive it, this is
   // a hard property of the Web Push standard on every platform. Anything else
   // (503 from the push service, a DNS blip, a momentary timeout) is TRANSIENT —

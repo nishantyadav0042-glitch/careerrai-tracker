@@ -129,12 +129,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
           powers profile editing, just not a second onboarding. */}
       {showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
-      ) : !pushEnabled && !showOnboarding ? (
+      ) : (!pushEnabled || !profile?.push_subscription) && !showOnboarding ? (
         // Founder flow: in the INSTALLED app, the notification ask is "our
         // job #1 — switch on notifications" (renders only in standalone mode;
         // returns null in a browser tab, where the PushGates below apply).
+        // ALSO fires when prefs say push=ON but the server holds no live
+        // subscription (21 July audit): the OS revoked the permission, which
+        // is what killed the endpoint — these students believed reminders
+        // were on while nothing could reach them, and no UI ever re-asked.
         <>
-          <StandaloneNotifAsk pushEnabled={pushEnabled} />
+          <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
           {showFirstPushAsk ? (
             <PushGate mode="first" notifPrefs={notifPrefs} />
           ) : (

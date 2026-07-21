@@ -45,14 +45,20 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
-export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
+// serverSubDead (21 July audit): the server holds NO live subscription for
+// this student even though their prefs say push is on — their OS revoked the
+// permission (which is also what killed the push endpoint). These students
+// were permanently unreachable: prefs said ON so this ask never rendered, and
+// the healer never prompts. Now they get the same overlay with reconnect copy.
+export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pushEnabled: boolean; serverSubDead?: boolean }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const reconnect = pushEnabled && serverSubDead;
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
-    if (pushEnabled) { setAskVisible(false); setShow(false); return; }
+    if (pushEnabled && !serverSubDead) { setAskVisible(false); setShow(false); return; }
 
     // Show whenever notifications aren't on yet — FIRST, before the tour.
     // Deliberately NO "skip" memory — the founder wants this on every open
@@ -79,7 +85,7 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
       window.removeEventListener(INSIGHT_DONE_EVENT, evaluate);
     };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [pushEnabled]);
+  }, [pushEnabled, serverSubDead]);
 
   if (!show) return null;
 
@@ -141,12 +147,16 @@ export function StandaloneNotifAsk({ pushEnabled }: { pushEnabled: boolean }) {
           <BellRing className="h-8 w-8 text-white" />
         </div>
         <div>
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-orange-500">The last step of your setup</p>
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-orange-500">
+            {reconnect ? 'Your reminders got disconnected' : 'The last step of your setup'}
+          </p>
           <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-            Your plan works only<br />if it reaches you.
+            {reconnect ? <>Your daily plan stopped<br />reaching you.</> : <>Your plan works only<br />if it reaches you.</>}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">
-            Students who keep reminders on stay consistent — today&apos;s plan, revision alerts, and gentle nudges. Switch on your notifications so they actually reach you.
+            {reconnect
+              ? 'Your phone switched off CareerRai’s notifications, so your daily plan and reminders have gone quiet. One tap reconnects them.'
+              : 'Students who keep reminders on stay consistent — today’s plan, revision alerts, and gentle nudges. Switch on your notifications so they actually reach you.'}
           </p>
         </div>
         {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{err}</p>}
