@@ -107,6 +107,20 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Recommended buddy — a specific, relevant mentor beats "a buddy" */}
+      {v.recommendedBuddy && (
+        <div className="mt-3 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-purple-600">Recommend this buddy</p>
+          <p className="text-[15px] font-bold text-stone-900">
+            {v.recommendedBuddy.name}
+            {v.recommendedBuddy.percentile != null && <span className="ml-1 text-[12px] font-semibold text-stone-500">{v.recommendedBuddy.percentile}%ile</span>}
+            {v.recommendedBuddy.college && <span className="ml-1 text-[12px] font-semibold text-stone-500">· {v.recommendedBuddy.college}</span>}
+          </p>
+          {v.recommendedBuddy.reason && <p className="mt-0.5 text-[13px] text-stone-700">Why: {v.recommendedBuddy.reason}</p>}
+          <p className="mt-1.5 text-[11px] text-stone-500">Name a real, relevant mentor on the call — it converts far better than pitching “a buddy.”</p>
+        </div>
+      )}
+
       {/* The pitch */}
       <div className="mt-3 rounded-2xl border-2 border-teal-600 bg-teal-50 p-4">
         <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-teal-700">Your opening pitch</p>

@@ -11,8 +11,12 @@ import { MetaEscape } from '@/components/install/meta-escape';
 export const preferredRegion = 'sin1';
 
 export const metadata: Metadata = {
-  title: 'CareerRai',
-  description: 'Daily prep tracking with your IIM buddy.',
+  // Descriptor-led for STRANGERS (the Google result, the share card): say what
+  // it is and tease the buddy in the same breath. The emotional "for the
+  // students, by the students" line lives IN-APP (the logo), where affinity is
+  // built — not here, where clarity wins.
+  title: 'CareerRai — CAT prep, tracked. With a real IIM buddy.',
+  description: 'Your CAT prep, on track — a daily plan, a live syllabus tracker, and a real IIM buddy who reads your mocks. Log in or start free.',
   icons: {
     // Favicons bypass next/image optimization entirely — this used to point at
     // the 223KB monogram, shipping it raw on every page's first paint. 5KB now.

@@ -315,6 +315,8 @@ export default function WelcomePage() {
 
       <div className="shrink-0 px-6 pt-5 text-center">
         <p className="text-sm font-bold tracking-tight">CareerRai</p>
+        {/* Descriptor for strangers — clarity in the first 3 seconds. */}
+        <p className="mt-0.5 text-[11px] font-medium text-stone-400">CAT prep, tracked — with a real IIM buddy</p>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 py-4">

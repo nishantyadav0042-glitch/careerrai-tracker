@@ -2,6 +2,7 @@ import { getStudentMomentum } from '@/lib/momentum';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { bandMeta } from '@/lib/momentum';
+import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -30,6 +31,7 @@ export interface ConversionView {
   pitch: string;
   history: CallHistoryItem[];
   status: string | null;
+  recommendedBuddy: { name: string; percentile: number | null; college: string | null; reason: string | null } | null;
 }
 
 const FINISHED = new Set(['practicing', 'revising', 'exam_ready']);
@@ -112,8 +114,20 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   if (momentum.band === 'champion' || momentum.band === 'on_track') objections.push({ objection: '"I already study daily"', response: 'Exactly — you\'re putting in the hours. A buddy makes sure those hours go to the right topics instead of guesswork. Same effort, more score.' });
   if (buddyTaps >= 1) objections.push({ objection: '"Let me think about it"', response: 'You already looked at the buddy, so you know you want the guidance. The only real question is risk — and the full refund removes it. Try the 3 free messages tonight.' });
 
+  // Recommended buddy — a specific, relevant mentor beats "a buddy". Reuses the
+  // same matching engine the student-facing showcase uses (section fit first).
+  let recommendedBuddy: ConversionView['recommendedBuddy'] = null;
+  try {
+    const recs = await getRecommendedBuddiesForStudent(admin, id);
+    const top = recs[0];
+    if (top) recommendedBuddy = { name: top.full_name, percentile: top.cat_percentile, college: top.iim_converted ?? null, reason: top.reason };
+  } catch { /* best-effort — the pitch still stands without a named buddy */ }
+
   const first = (p.full_name ?? '').trim().split(' ')[0] || 'there';
-  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you. It's Rs 999, full refund if you don't find value, and 3 free messages to start. Shall I set it up?`;
+  const buddyLine = recommendedBuddy
+    ? ` For you I'd pair ${recommendedBuddy.name}${recommendedBuddy.college ? ` (${recommendedBuddy.college})` : ''}${recommendedBuddy.reason ? ` — ${recommendedBuddy.reason.toLowerCase()}` : ''}.`
+    : '';
+  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you.${buddyLine} It's Rs 999, full refund if you don't find value, and 3 free messages to start. Shall I set it up?`;
 
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),
@@ -126,5 +140,6 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     pitch,
     history: (acts ?? []).map((a: any) => ({ at: a.created_at, actor: a.actor, status: a.status, note: a.note })),
     status: (lead?.status as string | null) ?? null,
+    recommendedBuddy,
   };
 }
