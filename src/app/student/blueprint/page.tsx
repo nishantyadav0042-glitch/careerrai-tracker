@@ -125,13 +125,20 @@ export default function MyCatPlanPage() {
           </div>
         </div>
 
-        {/* Studied through / in progress / due revision / not started / mocks.
-            'In progress' (learning) is its own row so a student who has merely
-            opened topics sees real next actions instead of a false "done". */}
+        {/* Finished / started-not-finished / due revision / not started / mocks.
+            Label fix (21 July, founder: "how can it be 0/46 while 3 are in
+            progress"): the old "studied once" read as contradicting "in
+            progress" — colloquially an in-progress topic HAS been studied
+            once. "Finished" vs "started, not finished" can never clash.
+            When nothing is finished yet, the started row leads — a new
+            student's first line should be what they're DOING, not a zero. */}
         <div className="bg-white rounded-2xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
-          <PlanRow href="/student/analysis" icon="✅" label={`${studiedOnceCount}/${totalTopics} studied once`} cta="View" />
-          {learningCount > 0 && (
-            <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} in progress`} cta="Continue" />
+          {studiedOnceCount === 0 && learningCount > 0 && (
+            <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} started — finish these first`} cta="Continue" />
+          )}
+          <PlanRow href="/student/analysis" icon="✅" label={`${studiedOnceCount}/${totalTopics} finished`} cta="View" />
+          {studiedOnceCount > 0 && learningCount > 0 && (
+            <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} started, not finished`} cta="Continue" />
           )}
           {/* Revision only appears once something is ACTUALLY due — a brand-new
               student who hasn't studied anything should never see a "0 due for
