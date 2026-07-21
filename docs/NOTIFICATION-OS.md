@@ -69,6 +69,42 @@ install speed, over cleverness.
 
 ---
 
+## 2b. Student psychology — what we are actually operating on
+
+Notifications act on a human under exam pressure. Design for the mind, not the
+message queue.
+
+- **Attention is borrowed, never owned.** Every notification is an interruption
+  of a stressed student's day. It must return more than it takes or it is theft.
+- **Habit formation beats motivation.** Motivation is a spike; a habit is the
+  asset. The system's job is a daily *cue → action (log) → reward (progress
+  seen)* loop so studying survives the days motivation doesn't show up.
+- **Consistency compounds; guilt corrodes.** We reward showing up (even a 0-hour
+  honest log) and never punish a miss. A shield protects the streak; nothing
+  resets it to zero. Guilt makes students avoid the app — the opposite of reach.
+- **Identity is the deepest lever.** "You're the kind of student who logs daily"
+  outlasts "log now." Copy reinforces the identity the student is building.
+- **Exam pressure distorts time.** Under stress students over-study comfort zones
+  and avoid weak, high-weightage topics. Notifications gently point at the gap —
+  as help, never as a scolding.
+- **Reward must be real and legible.** The reward is *seeing preparation improve*
+  (progress, a protected streak, a pattern named) — never fabricated praise.
+
+## 2c. Notification economics — attention is a budget
+
+- **Every notification competes** for one finite attention budget. Sending a
+  weak one spends budget that a strong one needed.
+- **Fatigue is cumulative.** Volume without value trains the student to ignore
+  us; once ignored, even the important push is invisible. The ≤10/day cap and
+  4–6 preferred load exist because of fatigue, not politeness.
+- **Priority is ruthless.** When several notifications qualify, the highest-value
+  one is sent and the rest are suppressed — not queued.
+- **Trust is the currency.** A push that over-promises (a reminder we can't
+  deliver, a claim that isn't true) is a withdrawal that makes every future push
+  easier to ignore. The permission screen promises only what the engine sends.
+- **Urgency and novelty are powerful and perishable.** Use real urgency (a mock
+  today, revision overdue) sparingly; manufactured urgency burns trust fast.
+
 ## 3. Student state machine
 
 Exactly one state per student (`src/lib/notification-os.ts :: computeStudentState`):
@@ -183,10 +219,54 @@ for students push can't reach.
 
 ## 10. Personalization (target architecture)
 
-Each student trends toward a profile: preferred time, preferred message, preferred
-frequency, preferred tone, best channel, a fatigue score, a motivation profile.
-Rules detect; a model may *phrase* — never invent facts, never fabricate stats,
-never a testimonial that didn't happen.
+Every student trends toward a profile the engine learns and acts on:
+
+| Dimension | What it means | Signal source |
+|---|---|---|
+| **Preferred time** | when this student actually opens/acts | open + click timestamps |
+| **Preferred message** | which nudge types convert for them | acted-on type history |
+| **Preferred frequency** | how much reaches without fatigue | ignore streaks, click rate |
+| **Preferred tone** | warm vs blunt, English vs Hinglish | response by tone |
+| **Best channel** | push / in-app / WhatsApp / email / nothing | per-channel receipt+act rate |
+| **Fatigue score** | how close to ignoring us they are | consecutive ignored pushes |
+| **Motivation profile** | streak-driven vs goal-driven vs social | which framing moves them |
+
+**Rule of personalization:** rules DETECT the fact; a model may only PHRASE it.
+Never let a model invent a fact, a statistic, or a testimonial. A personalized
+message is a true fact about the student's own preparation, said in the way that
+student best receives it.
+
+---
+
+## 10b. Core principles (numbered — the working rules)
+
+Philosophy above; these are the day-to-day rules every change is checked against.
+
+1. A notification exists to bring a student back when they're not in the app.
+2. Notifications are infrastructure; treat them like payments.
+3. Decision-first, never cron-first. A clock is not a reason.
+4. One student, one state; the state owns the message.
+5. Never trust a subscription — verify device delivery.
+6. Never trust a permission — verify on every open.
+7. Reuse a healthy subscription; rotate only on confirmed death or key change.
+8. Persist with retry; never strand an endpoint.
+9. Subscriptions are born only in the installed app.
+10. Silent self-heal for everything except an OS-revoked permission.
+11. The hard cap is 10/day; the preferred load is 4–6; recovery states get fewer.
+12. One MEANINGFUL touch/day, not one push/day.
+13. Suppress if the student already studied today.
+14. Every send records why-this-student, why-now, what we hoped they'd do.
+15. Highest-value notification wins the slot; the rest are suppressed, not queued.
+16. Never punish a miss; protect the streak, never reset it to zero.
+17. Every honest log counts — including a 0-hour day.
+18. Promise on the permission screen only what the engine actually sends.
+19. No invented statistics, no fabricated testimonials, ever.
+20. A failure only a human notices — not a dashboard — is unacceptable.
+21. "Accepted by the push service" is never reported as "delivered."
+22. Success is a study caused, not a tap earned.
+23. Reward is real progress made legible, never manufactured praise.
+24. Point at the weak, high-weightage gap as help — never as a scolding.
+25. Mirror the student's language (English/Hinglish); intent fixed, wording flexible.
 
 ---
 
