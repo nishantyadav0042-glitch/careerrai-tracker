@@ -8,6 +8,7 @@ import {
   computeHealthScalars, computeAgeCohorts, evaluateAlerts, confidenceFor,
   METRIC_OWNER, type HealthScalars, type Confidence,
 } from '@/lib/mission-control';
+import { getRosterMomentum, momentumDistribution, bandMeta } from '@/lib/momentum';
 import { AutoRefresh } from '@/components/auto-refresh';
 
 export const dynamic = 'force-dynamic';
@@ -45,9 +46,10 @@ export default async function MissionControlPage() {
 
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const yesterdayIso = new Date(Date.now() - 20 * 3600_000).toISOString();
-  const [now, cohorts, prevRows, snap24Rows] = await Promise.all([
+  const [now, cohorts, roster, prevRows, snap24Rows] = await Promise.all([
     computeHealthScalars(admin),
     computeAgeCohorts(admin),
+    getRosterMomentum(admin),
     admin.from('metric_snapshots').select('metrics, captured_at').order('captured_at', { ascending: false }).limit(1),
     // Nearest snapshot ~24h old for the "vs yesterday" delta.
     admin.from('metric_snapshots').select('metrics, captured_at')
@@ -63,6 +65,11 @@ export default async function MissionControlPage() {
   // The headline. "How many students could we reliably reach in the next 5
   // minutes if we absolutely had to." One number for the whole ecosystem.
   const score = now.reachabilityPct;
+
+  const dist = momentumDistribution(roster);
+  const bandColor: Record<string, string> = {
+    emerald: 'bg-emerald-500', teal: 'bg-teal-500', amber: 'bg-amber-400', orange: 'bg-orange-500', rose: 'bg-rose-500',
+  };
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -111,6 +118,38 @@ export default async function MissionControlPage() {
           <Tile label="Same-day deaths · 7d" value={now.sameDayDeaths7d} delta={<Delta now={now.sameDayDeaths7d} prev={prev?.sameDayDeaths7d ?? null} goodIsUp={false} />} owner={METRIC_OWNER.sameDayDeaths} conf="exact" tone={now.sameDayDeaths7d > 0 ? 'bad' : 'good'} />
           <Tile label="Delivery today" value={deliveryPct == null ? '—' : `${deliveryPct}%`} sub={`${now.receivedToday}/${now.pushedToday} received`} owner={METRIC_OWNER.delivery} conf={studyConf} />
           <Tile label="Clicks today" value={now.clickedToday} sub={now.pushedToday ? `of ${now.pushedToday} pushed` : ''} owner={METRIC_OWNER.delivery} conf={studyConf} />
+        </div>
+
+        {/* Student Momentum — the central variable. The whole roster, banded.
+            Each band links to the list of exactly those students. */}
+        <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-4">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Student momentum · {roster.length} students</p>
+            <Link href="/admin/momentum" className="text-[11px] font-semibold text-teal-700 hover:text-teal-800">open the list →</Link>
+          </div>
+          <p className="mb-3 text-[11px] text-stone-500">One score per student (study recency + consistency + notification engagement + intent). This is who is winning and who needs rescuing — tap a band.</p>
+          <div className="mb-2 flex h-3 overflow-hidden rounded-full">
+            {dist.map((d) => {
+              const m = bandMeta(d.band);
+              const pct = roster.length ? (d.count / roster.length) * 100 : 0;
+              return <div key={d.band} className={bandColor[m.color]} style={{ width: `${pct}%` }} title={`${m.label}: ${d.count}`} />;
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+            {dist.map((d) => {
+              const m = bandMeta(d.band);
+              return (
+                <Link key={d.band} href={`/admin/momentum?band=${d.band}`} className="rounded-lg border border-stone-100 bg-stone-50 p-2 hover:border-stone-300">
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn('h-2 w-2 rounded-full', bandColor[m.color])} />
+                    <span className="text-lg font-bold text-stone-900 tabular-nums">{d.count}</span>
+                  </div>
+                  <div className="text-[10px] font-semibold text-stone-500">{m.label}</div>
+                </Link>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-stone-400">Owner: shared — Learning OS drives it up, Notification OS keeps it reachable, Sales acts on the top bands.</p>
         </div>
 
         {/* Leading indicators — subscription-age cohorts. Watch the young ones. */}
