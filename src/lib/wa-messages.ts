@@ -40,68 +40,37 @@ export function waMessages(v: WaVars): WaMessage[] {
   const { firstName, dreamCollege } = v;
   const site = v.siteUrl ?? SITE_URL;
   return [
+    // Founder rule (21 July): one short block, no emojis, no long paragraphs —
+    // "nobody sees that". State the problem bluntly, ask for feedback.
     {
       key: 'install_full',
       label: 'Install nudge',
       suggestedFor: 'not_installed',
-      text: `Hi ${firstName}! 👋 This is Nishant from *CareerRai — the CAT prep tracking app* you signed up on 🎯
-
-Saw you signed up but haven't installed the app yet 🙂
-
-Quick heads-up — CareerRai works best once it's installed on your phone. That's how we send your daily reminders and track your prep properly, so you don't lose momentum.
-
-Takes 10 seconds 👇
-${site}
-
-Tip: open the link in Chrome/Safari → tap "Add to Home Screen."
-
-Your CAT plan is already built and waiting 💪`,
+      text: `Hi ${firstName}, Nishant from CareerRai, CAT prep tracking app. Your plan is built but you haven't installed our app — so we can't share your daily study plan or the topics you have to study today. Install: ${site} (open in Chrome, tap "Add to Home Screen"). Agar koi problem aa rahi hai, feel free to tell me — would love your feedback.`,
     },
     {
       key: 'install_short',
       label: 'Install (short)',
       suggestedFor: 'not_installed',
-      text: `Hey ${firstName}! 👋 Nishant here from *CareerRai — your CAT Prep tracking app* 🎯
-
-One small thing — please install the app so we can send you reminders and track your progress. It's what makes the whole thing work 🙂
-
-10-sec install 👉 ${site}
-(open in Chrome/Safari → "Add to Home Screen")`,
+      text: `Hi ${firstName}, Nishant from CareerRai. Please install the app — without it your daily plan and reminders can't reach you. ${site} → open in Chrome → "Add to Home Screen". Koi dikkat ho to bata do.`,
     },
     {
       key: 'notifications_on',
       label: 'Turn on reminders',
       suggestedFor: 'notifications_off',
-      text: `Hi ${firstName}! 👋 Nishant from *CareerRai — the CAT prep tracking app* 🎯
-
-You've got the app — nice! 🎉 One thing though: your notifications are switched off, so we can't send your daily reminders. That's the piece that actually keeps you consistent.
-
-Please switch them on 👇
-Open the app → allow notifications (or phone Settings → Notifications → CareerRai → On).
-
-Takes 5 seconds — and it's the difference between a plan you follow and one you forget 💪`,
+      text: `Hi ${firstName}, Nishant from CareerRai. You have the app but notifications are off — so we can't send your daily study plan or today's topics. Open the app and allow notifications (or phone Settings > Notifications > CareerRai > On). Koi problem aa rahi ho to bata do.`,
     },
     {
       key: 'push_recovery',
       label: 'Reminders stopped (push died)',
       suggestedFor: 'push_died',
-      text: `Hi ${firstName}! 👋 Nishant from *CareerRai — the CAT prep tracking app* 🎯
-
-Quick heads-up — your phone stopped letting the app send you reminders (this happens sometimes, nothing you did wrong). So your daily nudges have gone quiet.
-
-30-second fix 👉 just open the CareerRai app once — that alone reconnects it, no settings to change. If it doesn't ask you anything, you're already fixed.
-
-Wanted you to know right away so you don't lose the habit 💪`,
+      text: `Hi ${firstName}, Nishant from CareerRai. Your phone stopped receiving our daily reminders — nothing you did wrong. Fix is simple: open the CareerRai app once, it reconnects automatically. Koi dikkat ho to bata do.`,
     },
     {
       key: 'keep_going',
       label: 'Keep going',
       suggestedFor: 'engaged',
-      text: `Hi ${firstName}! 👋 Nishant from *CareerRai — the CAT prep tracking app* 🎯
-
-Great — you're all set up! 🎉 Now the only habit that matters: open the app once a day and log your prep in 5 seconds. That's all it takes to stay on track for ${dreamCollege}.
-
-Your plan's ready whenever you are 💪`,
+      text: `Hi ${firstName}, Nishant from CareerRai. You are fully set up. One habit from here: log your prep daily, takes 30 seconds. That is what keeps you on track for ${dreamCollege}. Any feedback, tell me directly.`,
     },
   ];
 }
