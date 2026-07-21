@@ -348,15 +348,15 @@ export default function WelcomePage() {
             href="/start"
             className="flex w-full items-center justify-center rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white shadow-lg shadow-stone-900/15 transition-transform active:scale-[0.98]"
           >
-            Build my free study plan →
+            Start your journey →
+          </Link>
+          <Link
+            href="/login"
+            className="flex w-full items-center justify-center rounded-2xl border border-stone-300 bg-white py-3.5 text-sm font-semibold text-stone-800 transition-transform active:scale-[0.98]"
+          >
+            Already a student or buddy? Log in
           </Link>
           <InstallButton variant="text" />
-          <div className="flex items-center justify-center gap-1.5 pt-0.5 text-[11px] text-stone-400">
-            <span>Already have a plan?</span>
-            <Link href="/login" className="font-semibold text-stone-600 underline-offset-2 hover:underline">Log in</Link>
-            <span className="text-stone-300">·</span>
-            <Link href="/login" className="font-medium text-stone-500 hover:text-stone-700">I’m an IIM Buddy</Link>
-          </div>
           <p className="text-center text-[11px] text-stone-400">Free to start · no credit card</p>
         </div>
       </div>

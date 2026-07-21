@@ -15,6 +15,7 @@ export default async function Home() {
   const role = cookieStore.get('user_role')?.value;
   if (role === 'buddy') redirect('/buddy/home');
   if (role === 'admin') redirect('/admin');
+  if (role === 'sales') redirect('/sales');
   if (role === 'student') redirect('/student/tracker');
 
   // Slow path (cookie missing): look up role from DB.
@@ -27,5 +28,6 @@ export default async function Home() {
 
   if (profile?.role === 'buddy') redirect('/buddy/home');
   if (profile?.role === 'admin') redirect('/admin');
+  if (profile?.role === 'sales') redirect('/sales');
   redirect('/student/tracker');
 }
