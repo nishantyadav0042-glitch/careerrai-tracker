@@ -56,13 +56,49 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, targe
   const finishedWeight = weight(weakest.finished);
   const inversion = !fresh && heavyUntouched.length > 0 && untouchedHeavyWeight > finishedWeight && weakest.finished.length > 0;
 
-  // The strongest true sentence available, in priority order.
+  // ── The recognition library (founder, 21 July: "damn, this is true, I've
+  // been making this mistake for months") ────────────────────────────────────
+  // Each pattern names a BEHAVIOUR the student will recognise as their own —
+  // not a stat. Priority = recognition power. Every fact is computed from
+  // their taps; the habit rows (Full Length Mocks, Error Log, Mock Analysis,
+  // reading) come straight from the matrix's MOCKS/READING sections.
+  const raw = matrix ?? [];
+  const habit = (name: string) => raw.find((m) => m.topic === name)?.status ?? null;
+  const statusOf = (name: string) => entries.find((m) => m.topic === name)?.status ?? null;
+  const totalFinished = bySection.reduce((s, x) => s + x.finished.length, 0);
+  const totalLearning = bySection.reduce((s, x) => s + x.learning.length, 0);
+  const groupStats = (units: string[]) => {
+    const g = entries.filter((m) => units.includes(m.topic));
+    return {
+      finished: g.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
+      untouched: g.filter((m) => m.status === 'not_started').length,
+      total: g.length,
+    };
+  };
+  const arith = groupStats(['Percentages', 'Profit & Loss', 'Ratio & Proportion', 'Average', 'Mixtures', 'Time & Work', 'Pipes & Cisterns', 'Time Speed Distance', 'SI & CI']);
+  const hardQa = groupStats(['Linear Equations', 'Quadratic Equations', 'Functions', 'Inequalities', 'Logarithms', 'Progressions', 'Divisibility', 'HCF & LCM', 'Remainders', 'Base System', 'Lines & Angles', 'Triangles', 'Quadrilaterals', 'Circles', 'Mensuration', 'Coordinate Geometry']);
+  const rcStatus = statusOf('Reading Comprehension');
+  const vaTouched = entries.filter((m) => ['Para Jumbles', 'Para Summary', 'Odd One Out', 'Para Completion', 'Vocabulary'].includes(m.topic) && m.status !== 'not_started').length;
+  const fullMocks = habit('Full Length Mocks');
+  const errorLog = habit('Error Log');
+  const mockAnalysis = habit('Mock Analysis');
+
   let flag: string;
   if (fresh) {
     flag = `You're starting clean — no gap yet, only open ground. The highest-mark ground: Arithmetic in QA, Reading Comprehension in VARC, Arrangements in DILR. Start where the marks are, not where the syllabus begins.`;
   } else if (inversion) {
     const names = heavyUntouched.slice(0, 3).map((m) => m.topic).join(', ');
-    flag = `The ${heavyUntouched.length} high-mark ${weakest.sec} topic${heavyUntouched.length === 1 ? '' : 's'} you haven't touched — ${names} — carr${heavyUntouched.length === 1 ? 'ies' : 'y'} more mark-weight than everything you've finished in ${weakest.sec} combined. This is the gap quietly deciding your percentile.`;
+    flag = `The ${heavyUntouched.length} high-mark ${weakest.sec} topic${heavyUntouched.length === 1 ? '' : 's'} you haven't touched — ${names} — carr${heavyUntouched.length === 1 ? 'ies' : 'y'} more mark-weight than everything you've finished in ${weakest.sec} combined. All those study hours went somewhere the paper barely asks about. This is the gap quietly deciding your percentile.`;
+  } else if (totalFinished >= 8 && fullMocks === 'not_started') {
+    flag = `${totalFinished} topics finished — and not one full mock. You've been preparing a SYLLABUS, not an exam, and the difference only shows up on exam day. Serious aspirants mock weekly from August; every week without one is a week of blind prep.`;
+  } else if (fullMocks != null && fullMocks !== 'not_started' && (errorLog === 'not_started' || mockAnalysis === 'not_started')) {
+    flag = `You take mocks — but ${errorLog === 'not_started' ? 'keep no error log' : 'skip the analysis'}. A mock without an error log repeats the same mistakes on the next one; you've been paying the exam fee without collecting the lesson. Ask any topper — the error log is the habit they credit most.`;
+  } else if (arith.untouched >= 5 && hardQa.finished >= 2) {
+    flag = `You've put real work into ${hardQa.finished} of the harder QA chapters — while ${arith.untouched} Arithmetic topics sit untouched. Arithmetic is QA's single biggest scoring block. This is the classic coaching-sequence trap: months on the tough chapters, while the paper's easiest marks wait.`;
+  } else if (vaTouched >= 1 && rcStatus !== 'practicing' && rcStatus !== 'revising') {
+    flag = `You've worked on Verbal Ability but Reading Comprehension isn't in practice — and RC alone is roughly two-thirds of VARC's marks. Polishing the small questions while the big block waits is the most common VARC mistake there is.`;
+  } else if (totalLearning >= 6 && totalLearning >= 2 * Math.max(1, totalFinished)) {
+    flag = `${totalLearning + totalFinished} topics opened, only ${totalFinished} finished. Half-open topics FEEL like progress — they're not. In CAT, ${Math.max(totalFinished, 8)} finished topics beat ${totalLearning + totalFinished} half-learned ones, because half-learned scores zero under exam pressure.`;
   } else if (heavyUntouched.length > 0) {
     const names = heavyUntouched.slice(0, 2).map((m) => m.topic).join(' and ');
     flag = `${names} — among the highest-mark areas in ${weakest.sec} — ${heavyUntouched.length === 1 ? 'is' : 'are'} still untouched in your map. Most students discover this in their first mock. You just discovered it in 4 minutes.`;
@@ -70,7 +106,7 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, targe
     flag = `Your ${weakest.sec} pattern: ${weakest.learning.length} topics opened, only ${weakest.finished.length} finished. Started-but-unfinished is the most expensive place a topic can sit — it costs time AND marks.`;
   } else {
     const strongest = [...bySection].sort((a, b) => a.gap - b.gap)[0];
-    flag = `Your coverage is strongest in ${strongest.sec} and thinnest in ${weakest.sec} — ${weakest.untouched.length + weakest.learning.length} of ${weakest.secEntries.length} topics still to finish there. That imbalance is fixable, and your plan will attack it first.`;
+    flag = `Your coverage is strongest in ${strongest.sec} and thinnest in ${weakest.sec} — ${weakest.untouched.length + weakest.learning.length} of ${weakest.secEntries.length} topics still to finish there. That imbalance is a comfort-zone pattern: we study what we're already good at. Your plan will refuse it, politely.`;
   }
 
   const repeaterLine = isRepeater && !fresh && weakest.untouched.length >= 3
