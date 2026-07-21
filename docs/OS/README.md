@@ -21,6 +21,15 @@ ever-larger prompt re-typed each session.
 | **Trust OS** | mentor quality, testimonials, moderation, payments, refunds, safety | [`OS/TRUST-OS.md`](./TRUST-OS.md) | Constitution |
 | **Analytics OS** | events, dashboards, experimentation, health metrics, business KPIs | [`OS/ANALYTICS-OS.md`](./ANALYTICS-OS.md) | Constitution |
 
+## The Engineering Playbook binds all five
+
+The five Constitutions define *what* to become; **[`ENGINEERING_PLAYBOOK.md`](../../ENGINEERING_PLAYBOOK.md)**
+defines *how* every engineer and AI agent must build it — the build sequence,
+Definition of Done, testing matrix, incident severity (P0–P3), rollback,
+observability, security, and the Chief-Architect governance stance (refuse to
+ship anything that violates a Constitution, including your own work). Read it
+before you build, alongside the relevant OS.
+
 ## How to use these documents
 
 1. **Before building** in a domain, read that OS's Constitution. Identify which
