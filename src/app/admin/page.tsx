@@ -103,6 +103,14 @@ export default async function AdminTodayPage() {
         <span className="font-mono text-2xl">→</span>
       </Link>
 
+      <Link href="/admin/sales" className="mb-2 flex items-center justify-between rounded-2xl border border-teal-700 bg-teal-700 p-4 text-white transition-transform hover:scale-[1.01]">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-teal-200">Sales — Today&apos;s Opportunities</div>
+          <div className="mt-0.5 text-sm font-semibold">Most likely to buy · ready script · follow-up tracking</div>
+        </div>
+        <span className="font-mono text-2xl">→</span>
+      </Link>
+
       <Link href="/admin/mission-control" className="mb-3 flex items-center justify-between rounded-2xl border border-stone-900 bg-stone-900 p-4 text-white transition-transform hover:scale-[1.01]">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Mission Control</div>
