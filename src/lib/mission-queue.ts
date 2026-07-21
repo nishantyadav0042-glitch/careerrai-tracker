@@ -55,20 +55,21 @@ function waNumber(phone: string | null): string | null {
   return d.length === 12 && d.startsWith('91') ? d : null;
 }
 
-// The messages — Nishant's voice: short, blunt, Hinglish, one objective, warm.
-// No invented facts, no fake stats. These match the founder's own examples.
+// The messages — Nishant's voice, founder's format (23 July): problem FIRST,
+// mostly English, only the closing nudge in Hinglish, no emoji, one objective.
+// No invented facts, no fake stats.
 function buildMessage(objective: Objective, first: string): string {
   switch (objective) {
     case 'log':
-      return `Hi ${first}, Nishant here (jisne CareerRai banaya). Aaj app pe log nahi hua. Koi issue hai to seedha batao — main help karunga. Warna 2 min mein kar lo yaar.`;
+      return `${first}, you haven't filled today's log on the CareerRai app. Nishant here, I built CareerRai. If something is stopping you, tell me directly and I will help. Warna 2 min lagenge, kar lo yaar.`;
     case 'reconnect':
-      return `Hi ${first}, Nishant here. Tumhare reminders band ho gaye — isliye daily plan nahi pahunch raha. App ek baar kholo, wapas apne aap on ho jayega. Koi dikkat ho to batao.`;
+      return `${first}, your notifications on CareerRai have stopped, so your daily study plan isn't reaching you. Nishant here, I built CareerRai. Just open the app once and they reconnect on their own. Koi dikkat ho to seedha bata do.`;
     case 'buddy':
-      return `Hi ${first}, Nishant here. Tum consistent padh rahe ho aur buddy bhi dekha. Ek personal mentor chahiye jo tumhara plan aur weak areas track kare? Bas YES bol do.`;
+      return `${first}, you're studying consistently and you checked out the buddy option. Nishant here, I built CareerRai. A personal mentor can track your plan, weak areas and mocks for you. Chahiye to bas YES bhej do, main set kar deta hoon.`;
     case 'install':
-      return `Hi ${first}, Nishant here. Plan ready hai par app install nahi hua — isliye daily plan aur reminders nahi bhej pa raha. 10 sec: ${SITE_URL} Chrome mein kholo → "Add to Home Screen".`;
+      return `${first}, your CAT plan is ready but the app isn't installed yet, so your daily plan and reminders can't reach you. Nishant here, I built CareerRai. It takes 10 seconds: open ${SITE_URL} in Chrome and tap Add to Home Screen. Koi problem aaye to bata do.`;
     case 'winback':
-      return `Hi ${first}, Nishant here. Kuch din se padhai ruk gayi. Sab theek? Aaj bas 20 min, ek topic — utna hi kaafi hai. Main saath hoon, bata do kahan atka.`;
+      return `${first}, your studies on CareerRai have been paused for a few days. Nishant here, I built CareerRai. Is everything okay? Aaj bas 20 minutes, ek topic — utna hi kaafi hai. Kahan atka bata do, main saath hoon.`;
   }
 }
 
