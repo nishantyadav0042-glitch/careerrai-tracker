@@ -65,7 +65,7 @@ function buildMessage(objective: Objective, first: string): string {
     case 'reconnect':
       return `${first}, your notifications on CareerRai have stopped, so your daily study plan isn't reaching you. Nishant here, I built CareerRai. Just open the app once and they reconnect on their own. Koi dikkat ho to seedha bata do.`;
     case 'buddy':
-      return `${first}, you're studying consistently and you checked out the buddy option. Nishant here, I built CareerRai. A personal mentor can track your plan, weak areas and mocks for you. Chahiye to bas YES bhej do, main set kar deta hoon.`;
+      return `${first}, you're studying consistently and you checked out the Exam Buddy option. Nishant here, I built CareerRai. An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you — it's just Rs 999, and if you don't find real value you get a full refund, so there's no risk. You also get 3 free messages to try it first. Zyada details chahiye to bata do, bhej deta hoon.`;
     case 'install':
       return `${first}, your CAT plan is ready but the app isn't installed yet, so your daily plan and reminders can't reach you. Nishant here, I built CareerRai. It takes 10 seconds: open ${SITE_URL} in Chrome and tap Add to Home Screen. Koi problem aaye to bata do.`;
     case 'winback':
@@ -167,7 +167,12 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
     else if (dsl != null && dsl >= 15) likelihood = 'low';
 
     // ── Rank (highest-recovery first) ──
-    const objectiveWeight: Record<Objective, number> = { reconnect: 100, buddy: 95, log: 80, install: 60, winback: 40 };
+    // Founder strategy (23 July): the outreach's MAIN job is maximizing logs
+    // and daily-log retention. So log leads; reconnect and install rank high
+    // because they're prerequisites TO logging (a student we can't reach or who
+    // hasn't installed can't be nudged to log). Buddy is opportunistic revenue,
+    // deliberately BELOW the log-serving objectives — never the focus.
+    const objectiveWeight: Record<Objective, number> = { log: 100, reconnect: 96, install: 82, buddy: 68, winback: 55 };
     const likWeight = likelihood === 'high' ? 30 : likelihood === 'medium' ? 15 : 0;
     const sessionBoost = sessions > 0 ? 20 : 0;
     const rank = objectiveWeight[objective] + likWeight + sessionBoost - (dsl ?? 30) * 0.5;
