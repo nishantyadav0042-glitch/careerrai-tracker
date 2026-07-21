@@ -29,3 +29,8 @@ Constitution, plus one Engineering Playbook that governs how anything ships.
 
 If a change would violate a Constitution, the change is wrong — escalate to the
 founder, don't ship the violation.
+
+**Before building in a subsystem, read `docs/ENGINEERING-MEMORY.md`** for the
+incidents that touched it — permanent record of what went wrong, why, and what
+now prevents it. Never repeat a logged mistake. When a new incident happens, add
+an entry.
