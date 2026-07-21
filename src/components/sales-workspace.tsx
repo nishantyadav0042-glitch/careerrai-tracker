@@ -47,7 +47,7 @@ export function SalesWorkspace({ cards, removeOnSave = false }: { cards: LeadRow
         <div key={c.studentId} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
           <div className="px-4 pt-3">
             <div className="flex items-center justify-between">
-              <a href={`/admin/student/${c.studentId}`} className="text-[15px] font-bold text-stone-900 hover:underline">{c.name}</a>
+              <a href={`/sales/student/${c.studentId}`} className="text-[15px] font-bold text-stone-900 hover:underline">{c.name}</a>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-lg font-extrabold text-stone-900">{c.convScore}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${TIER[c.tier]}`}>{c.tier.toUpperCase()}</span>
