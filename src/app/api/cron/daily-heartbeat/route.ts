@@ -42,20 +42,23 @@ export async function GET(request: NextRequest) {
   const loggedIds = new Set((todayLogs ?? []).map((r) => r.student_id as string));
 
   let sent = 0;
-  let skipped = 0;
+  let skippedAlreadyPushed = 0;
+  let skippedAlreadyStudied = 0;
   for (const s of students ?? []) {
-    if (pushedIds.has(s.id)) { skipped++; continue; }
-    const first = ((s.full_name as string | null) ?? '').trim().split(' ')[0] || 'there';
-    const loggedToday = loggedIds.has(s.id);
+    // Behaviour-driven, not volume-driven (founder, 22 July): the guarantee is
+    // ONE MEANINGFUL touch/day, not one push/day. Two suppressions:
+    //   1. Already pushed today — the ladders already reached them.
+    //   2. Already STUDIED today — a student who logged has done the thing this
+    //      nudge exists to cause; pinging them anyway is noise, not help.
+    if (pushedIds.has(s.id)) { skippedAlreadyPushed++; continue; }
+    if (loggedIds.has(s.id)) { skippedAlreadyStudied++; continue; }
     const outcome = await dispatch({
       userId: s.id,
       type: 'daily_heartbeat',
-      title: loggedToday ? `Good work today, ${first}` : 'Aaj ka log baki hai',
-      body: loggedToday
-        ? 'Today is logged. Same time tomorrow — consistency is the whole game.'
-        : '30 seconds, that’s all a log takes. Even an honest 0-hour day counts — what matters is showing up.',
+      title: 'Aaj ka log baki hai',
+      body: '30 seconds, that’s all a log takes. Even an honest 0-hour day counts — what matters is showing up.',
       url: '/student/tracker',
-      reason: 'Daily guarantee: reachable student had zero pushes today — every reachable student hears from us daily',
+      reason: 'Daily guarantee: reachable student who neither studied nor was pushed today — one meaningful touch',
       expectedAction: 'log_today',
       prefs: (s.notif_prefs as Record<string, unknown> | null) ?? {},
       dailyBudget: BUDGET_RECOVERY,
@@ -63,5 +66,10 @@ export async function GET(request: NextRequest) {
     if (outcome === 'sent') sent++;
   }
 
-  return NextResponse.json({ reachable: (students ?? []).length, alreadyPushedToday: skipped, heartbeatsSent: sent });
+  return NextResponse.json({
+    reachable: (students ?? []).length,
+    skippedAlreadyPushed,
+    skippedAlreadyStudied,
+    heartbeatsSent: sent,
+  });
 }

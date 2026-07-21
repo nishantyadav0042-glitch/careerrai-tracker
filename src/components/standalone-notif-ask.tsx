@@ -110,6 +110,10 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       const ok = await persistSubscription(sub, detectDisplayMode());
       if (!ok) throw new Error('subscribe failed');
       track('push_enabled', { context: detectDisplayMode(), source: 'standalone_ask' });
+      // Verification loop: prove the brand-new subscription delivers end to end.
+      // Fire-and-forget — the reload below shouldn't wait on it, and the beacon
+      // stamps push_verified_at when the device receives it.
+      void fetch('/api/push/welcome', { method: 'POST' }).catch(() => {});
       // Full reload so every server-rendered gate sees push=true and clears.
       window.location.reload();
     } catch {

@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { STUDENT_BUDGET_TYPES } from '@/lib/notification-os';
 import { cn } from '@/lib/utils';
 import { waMessages, waNumber } from '@/lib/wa-messages';
-import { getNotificationHealth } from '@/lib/notification-health';
+import { getNotificationHealth, getReliabilityMetrics } from '@/lib/notification-health';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,9 +165,14 @@ export default async function NotificationHealthPage() {
 
   // Reachability health engine — the "can we reach them AT ALL" funnel, separate
   // from the "did a send work" funnel below.
-  const health = await getNotificationHealth(admin);
+  const [health, reliability] = await Promise.all([
+    getNotificationHealth(admin),
+    getReliabilityMetrics(admin),
+  ]);
   const h = health.byState;
   const reachPct = (n: number) => (health.funnel.total ? `${Math.round((n / health.funnel.total) * 100)}%` : '0%');
+  const recvPct = reliability.today.pushed ? Math.round((reliability.today.received / reliability.today.pushed) * 100) : null;
+  const clickPctToday = reliability.today.pushed ? Math.round((reliability.today.clicked / reliability.today.pushed) * 100) : null;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -207,6 +212,33 @@ export default async function NotificationHealthPage() {
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-stone-400">
             Disconnected = wants push but the subscription died (the reconnect screen recovers these on next open). “Delivery not yet confirmed” shrinks as service workers update and start beaconing back device-level receipts.
+          </p>
+        </div>
+
+        {/* Reliability command center — survival over time (the platform KPI),
+            today's delivery pipeline, and same-day deaths (the bug we fixed;
+            this must trend to zero). */}
+        <div className="mb-5 rounded-2xl border border-stone-200 bg-white p-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-3">Reliability</p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {reliability.survival.map((s) => (
+              <div key={s.ageDays} className="rounded-xl bg-stone-50 border border-stone-100 p-3">
+                <p className="text-xl font-bold text-stone-900">{s.pct == null ? '—' : `${s.pct}%`}</p>
+                <p className="text-[11px] font-semibold text-stone-500">{s.ageDays}-day survival</p>
+                <p className="text-[10px] text-stone-400">{s.alive}/{s.cohort} subs alive</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">today: pushed {reliability.today.pushed}</span>
+            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">device-received {reliability.today.received}{recvPct != null ? ` · ${recvPct}%` : ''}</span>
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">clicked {reliability.today.clicked}{clickPctToday != null ? ` · ${clickPctToday}%` : ''}</span>
+            <span className={cn('rounded-full px-2.5 py-1', reliability.sameDayDeaths7d > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700')}>
+              same-day deaths (7d): {reliability.sameDayDeaths7d}
+            </span>
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-stone-400">
+            Survival = of subscriptions old enough to face each window, how many still deliver — the one number the notification platform is judged on. Device-received % climbs as the delivery beacon rolls out across service workers.
           </p>
         </div>
 
