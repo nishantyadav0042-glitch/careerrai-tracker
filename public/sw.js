@@ -1,4 +1,4 @@
-﻿// Service Worker — push notifications + installability (v5: click beacon + deep links)
+﻿// Service Worker — push notifications + installability (v6: delivery beacon)
 //
 // Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
 // site has a service worker with a REAL fetch handler. So we add one — but it is
@@ -45,12 +45,27 @@ self.addEventListener('push', (event) => {
     ...notificationData,
   };
 
-  event.waitUntil(
+  // Delivery beacon: stamps received_at the moment the push ARRIVES on the
+  // device — the SW wakes for this even with the app fully closed, so this is
+  // the device-level proof that delivery does not depend on app opens.
+  // Best-effort: a failed beacon must never block showing the notification.
+  const work = [
     self.registration.showNotification(
       notificationData.title || 'CareerRai',
       options
-    )
-  );
+    ),
+  ];
+  const notifId = notificationData.data && notificationData.data.notifId;
+  if (notifId) {
+    work.push(
+      fetch('/api/push/received', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: notifId }),
+      }).catch(() => {})
+    );
+  }
+  event.waitUntil(Promise.all(work));
 });
 
 // Handle notification clicks

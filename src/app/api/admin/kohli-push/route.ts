@@ -21,6 +21,36 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  // Targeted end-to-end test: ?student=<uuid> pushes to that ONE account
+  // (test accounts allowed, resend allowed) — for verifying a specific
+  // device with the app force-stopped. Stamp chain: pushed_at (service
+  // accepted) → received_at (device got it, app still closed) → clicked_at.
+  const target = request.nextUrl.searchParams.get('student');
+  if (target) {
+    const { data: row } = await admin
+      .from('notifications')
+      .insert({
+        user_id: target, type: 'e2e_test',
+        title: 'CareerRai delivery test',
+        body: 'If you can read this with the app closed, the push pipeline to this device is fully working.',
+        data: { url: '/student/tracker' }, read: false, channel: 'in_app',
+        reason: 'Founder-ordered end-to-end delivery test on a specific device',
+        expected_action: 'open_plan',
+      })
+      .select('id')
+      .single();
+    const res = await sendPushToUser(target, {
+      title: 'CareerRai delivery test',
+      body: 'If you can read this with the app closed, the push pipeline to this device is fully working.',
+      url: '/student/tracker', notifId: row?.id as string,
+    });
+    if (res.ok && row?.id) {
+      await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
+    }
+    return NextResponse.json({ target, pushAccepted: res.ok, reason: res.reason ?? null, notifId: row?.id ?? null });
+  }
+
   const { data: students } = await admin
     .from('profiles')
     .select('id, full_name')
