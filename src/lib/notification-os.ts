@@ -50,6 +50,7 @@ export const STUDENT_BUDGET_TYPES = [
   'revision_due', 'topic_earned', 'mission_changed', 'weekly_evolved', 'inactive_recovery',
   'companion_kickoff', 'companion_morning', 'companion_spark', 'companion_fact', 'companion_open',
   'companion_wind', 'companion_progress', 'companion_log', 'companion_close',
+  'daily_heartbeat',
 ];
 
 export type ExpectedAction = 'log_today' | 'finish_builder' | 'open_plan';
