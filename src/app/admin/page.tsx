@@ -95,6 +95,14 @@ export default async function AdminTodayPage() {
         <p className="mt-0.5 text-xs text-stone-500">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' })} · tap any number to open the list behind it</p>
       </div>
 
+      <Link href="/admin/mission-control" className="mb-3 flex items-center justify-between rounded-2xl border border-stone-900 bg-stone-900 p-4 text-white transition-transform hover:scale-[1.01]">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Mission Control</div>
+          <div className="mt-0.5 text-sm font-semibold">Reachability score · live health · leading indicators</div>
+        </div>
+        <span className="font-mono text-2xl">→</span>
+      </Link>
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {tiles.map(({ label, val, icon: Icon, href, accent }) => (
           <Link key={label} href={href} className="group rounded-2xl border border-stone-200 bg-white p-4 transition-colors hover:border-stone-400">

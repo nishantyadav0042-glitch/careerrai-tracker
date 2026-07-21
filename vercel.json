@@ -119,6 +119,10 @@
     {
       "path": "/api/cron/daily-heartbeat",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/cron/metric-snapshot",
+      "schedule": "0 * * * *"
     }
   ]
 }
