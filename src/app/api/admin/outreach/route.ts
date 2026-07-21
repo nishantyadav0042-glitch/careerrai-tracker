@@ -45,3 +45,39 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+// Tonight's Mission: record a founder outreach action (sent / skipped /
+// snoozed) so the queue never resurfaces a student the founder handled.
+export async function POST(request: NextRequest) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
+  );
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const admin = createAdminClient();
+  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const body = await request.json().catch(() => ({}));
+  const { studentId, objective, action, message, snoozeHours } = body ?? {};
+  if (typeof studentId !== 'string' || !['sent', 'skipped', 'snoozed'].includes(action)) {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+  }
+  const snoozed_until = action === 'snoozed'
+    ? new Date(Date.now() + (Number(snoozeHours) || 24) * 3600_000).toISOString()
+    : null;
+
+  const { error } = await admin.from('founder_outreach').insert({
+    student_id: studentId,
+    objective: typeof objective === 'string' ? objective : 'log',
+    action,
+    message: typeof message === 'string' ? message : null,
+    snoozed_until,
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
+}

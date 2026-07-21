@@ -95,10 +95,18 @@ export default async function AdminTodayPage() {
         <p className="mt-0.5 text-xs text-stone-500">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' })} · tap any number to open the list behind it</p>
       </div>
 
+      <Link href="/admin/mission" className="mb-2 flex items-center justify-between rounded-2xl border-2 border-orange-500 bg-gradient-to-r from-orange-500 to-orange-600 p-4 text-white transition-transform hover:scale-[1.01]">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-orange-100">Tonight&apos;s Mission</div>
+          <div className="mt-0.5 text-sm font-semibold">Who to message now · why · ready-to-send · one tap</div>
+        </div>
+        <span className="font-mono text-2xl">→</span>
+      </Link>
+
       <Link href="/admin/mission-control" className="mb-3 flex items-center justify-between rounded-2xl border border-stone-900 bg-stone-900 p-4 text-white transition-transform hover:scale-[1.01]">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Mission Control</div>
-          <div className="mt-0.5 text-sm font-semibold">Reachability score · live health · leading indicators</div>
+          <div className="mt-0.5 text-sm font-semibold">Reachability score · live health · momentum · leading indicators</div>
         </div>
         <span className="font-mono text-2xl">→</span>
       </Link>
