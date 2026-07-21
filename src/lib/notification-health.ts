@@ -104,3 +104,52 @@ export async function getNotificationHealth(admin?: any): Promise<{
 
   return { students, funnel, byState };
 }
+
+export interface SurvivalPoint { ageDays: number; cohort: number; alive: number; pct: number | null }
+export interface ReliabilityMetrics {
+  survival: SurvivalPoint[];               // 7/14/28-day subscription survival
+  today: { pushed: number; received: number; clicked: number };  // the delivery pipeline today
+  sameDayDeaths7d: number;                 // subscriptions that died the same day they were born, last 7d
+}
+
+// The reliability numbers the platform is judged on: does a subscription still
+// deliver weeks after it was created (survival), is today's pipeline flowing
+// (delivery → receipt → click), and are we still losing subs on signup day
+// (the bug we fixed — this must trend to zero).
+export async function getReliabilityMetrics(admin?: any): Promise<ReliabilityMetrics> {
+  const db = admin ?? createAdminClient();
+  const now = Date.now();
+  const dayStart = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
+
+  const [{ data: subs }, { data: pushedToday }, { data: deaths }] = await Promise.all([
+    db.from('profiles')
+      .select('push_subscription, push_subscribed_at')
+      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
+      .not('push_subscribed_at', 'is', null),
+    db.from('notifications').select('pushed_at, received_at, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', dayStart),
+    db.from('profiles').select('created_at, push_died_at')
+      .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
+      .not('push_died_at', 'is', null).gte('push_died_at', new Date(now - 7 * 86_400_000).toISOString()),
+  ]);
+
+  const survival: SurvivalPoint[] = [7, 14, 28].map((ageDays) => {
+    const cutoff = now - ageDays * 86_400_000;
+    // Cohort = subscriptions old enough to have faced this window.
+    const cohortRows = (subs ?? []).filter((r: any) => new Date(r.push_subscribed_at).getTime() <= cutoff);
+    const alive = cohortRows.filter((r: any) => r.push_subscription != null).length;
+    const cohort = cohortRows.length;
+    return { ageDays, cohort, alive, pct: cohort ? Math.round((alive / cohort) * 100) : null };
+  });
+
+  const today = {
+    pushed: (pushedToday ?? []).length,
+    received: (pushedToday ?? []).filter((r: any) => r.received_at != null).length,
+    clicked: (pushedToday ?? []).filter((r: any) => r.clicked_at != null).length,
+  };
+
+  const sameDayDeaths7d = (deaths ?? []).filter(
+    (r: any) => new Date(r.push_died_at).toISOString().slice(0, 10) === new Date(r.created_at).toISOString().slice(0, 10)
+  ).length;
+
+  return { survival, today, sameDayDeaths7d };
+}

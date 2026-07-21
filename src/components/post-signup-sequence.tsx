@@ -189,13 +189,18 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
   const hasDateStep = !!targetIso && hoursLeft > 0;
 
-  // Founder rule: the push-permission ask is STEP #1 after signup — before the
-  // ceremony, before anything. Push is the channel that brings students back;
-  // every screen in front of it costs reach. Flow: notifications → date →
-  // commit → thanks → deal → share → install (finale).
-  const [step, setStep] = useState<Step>('notifications');
+  // Permission architecture (22 July, evidence-backed): NO notification
+  // permission is requested here. This sequence runs pre-install, in the
+  // browser, and production data showed browser-context subscriptions dying at
+  // ~75% (vs ~8% for installed-app subscriptions). We ask for push ONLY inside
+  // the installed app, right after the first Career Insight (StandaloneNotifAsk)
+  // — so the subscription is born in its permanent home and never has to
+  // survive the browser→WebAPK transition. Flow now: date → commit → thanks →
+  // install (the finale that leads into the installed app, where we ask).
+  const [step, setStep] = useState<Step>(hasDateStep ? 'date' : 'commit');
 
-  // Where the notifications opener hands off to — the start of the ceremony.
+  // Retained only for the (now-unused) notifications screen's hand-off target,
+  // kept so the enum stays exhaustive without a dead 'notifications' entry path.
   const afterNotifications: Step = hasDateStep ? 'date' : 'commit';
 
   // Chosen finish date carried into the commitment copy.

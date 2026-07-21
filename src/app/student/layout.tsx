@@ -6,7 +6,6 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Logo } from '@/components/logo';
 import { Badge } from '@/components/ui/badge';
 import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
-import { PushGate } from '@/components/push-gate';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
@@ -55,17 +54,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // ready") instead of a cold request. Decline that one too and it's over.
   const notifPrefs = (profile?.notif_prefs as Record<string, unknown> | null) ?? {};
   const pushEnabled = notifPrefs.push === true;
-  const pushPrompted = notifPrefs.push_prompted === true;
-  const pushReprompted = notifPrefs.push_reprompted === true;
-  // New students meet the permission INSIDE the Builder now (screen 3,
-  // "you own the plan, we own the reminders" — asked right after they pick
-  // their date, so it has a reason attached). This pre-Builder gate only
-  // remains for already-onboarded accounts that were never prompted.
-  // Post-login sequence (once, right after onboarding completes): install →
-  // reconcile the date → commit → thank you → the two-way deal. Supersedes the
-  // pre-Builder push gates for new students (they already met the permission
-  // inside the funnel). Only the hoursLeft compute below runs, and only when
-  // the sequence is actually about to render.
+  // Permission architecture (22 July): students are NEVER asked for push in a
+  // browser tab — only inside the installed app (StandaloneNotifAsk), after the
+  // first Career Insight. The browser PushGate asks are retired for students;
+  // the post-signup sequence no longer asks either. Only the hoursLeft compute
+  // below runs, and only when the sequence is actually about to render.
   const showPostSignup = !showOnboarding && profile?.post_signup_done !== true;
 
   let postSignupProps: { targetIso: string | null; hoursLeft: number } | null = null;
@@ -84,13 +77,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
     };
   }
 
-  const showFirstPushAsk = !showOnboarding && !showPostSignup && !pushEnabled && !pushPrompted;
-  const showSecondPushAsk = !showOnboarding && !showPostSignup && !pushEnabled && pushPrompted && !pushReprompted;
-
   // Daily "try a buddy" nudge — only for students with no buddy yet and not
   // premium, and only once no higher-priority modal is up. The component itself
   // throttles to once per calendar day.
-  const noBlockingModal = !showOnboarding && !showPostSignup && !showFirstPushAsk && !showSecondPushAsk;
+  const noBlockingModal = !showOnboarding && !showPostSignup;
   // Fix #1 (activation): install is the finish line, gated on the authoritative
   // app_installed flag. For a plan-built student who genuinely hasn't installed,
   // the install journey shows every session (the component throttles to once per
@@ -130,21 +120,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
       {showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
       ) : (!pushEnabled || !profile?.push_subscription) && !showOnboarding ? (
-        // Founder flow: in the INSTALLED app, the notification ask is "our
-        // job #1 — switch on notifications" (renders only in standalone mode;
-        // returns null in a browser tab, where the PushGates below apply).
-        // ALSO fires when prefs say push=ON but the server holds no live
-        // subscription (21 July audit): the OS revoked the permission, which
-        // is what killed the endpoint — these students believed reminders
-        // were on while nothing could reach them, and no UI ever re-asked.
-        <>
-          <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
-          {showFirstPushAsk ? (
-            <PushGate mode="first" notifPrefs={notifPrefs} />
-          ) : (
-            showSecondPushAsk && <PushGate mode="second" notifPrefs={notifPrefs} />
-          )}
-        </>
+        // Permission architecture (22 July): the notification permission is
+        // requested ONLY inside the installed app, right after the first Career
+        // Insight — StandaloneNotifAsk renders solely in standalone mode and
+        // returns null in a browser tab. The old browser PushGate asks are gone
+        // for students: production data showed browser-context subscriptions
+        // dying at ~75% vs ~8% for installed-app ones, so we no longer mint a
+        // subscription anywhere but its permanent home. StandaloneNotifAsk also
+        // fires when prefs say push=ON but the server holds no live
+        // subscription (the reconnect case).
+        <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
       ) : null}
       {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
