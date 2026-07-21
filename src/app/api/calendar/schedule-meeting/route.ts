@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createDailyRoom } from '@/lib/daily';
@@ -16,15 +15,17 @@ interface ScheduleMeetingRequest {
   sessionType?: SessionType;
 }
 
-/**
- * A video room link that needs ZERO accounts, ZERO OAuth and ZERO verification —
- * for the buddy or the student. A unique Jitsi room both sides just tap to join
- * in the browser. (Replaced Google Meet, which forced every buddy to connect a
- * Google account and pass Google's app-verification wall.)
- */
-function createVideoLink(): string {
-  return `https://meet.jit.si/CareerRai-${randomUUID()}`;
-}
+// Video provider history (21 July postmortem):
+// - Google Meet: removed — forced per-buddy Google OAuth + Google's
+//   app-verification wall.
+// - meet.jit.si fallback: removed — Jitsi's public server now requires the
+//   first participant to LOG IN as "moderator", so anonymous links dead-end.
+// - Daily.co is the ONE provider (card on file, free tier 10k participant-
+//   minutes/mo): public rooms, join with a display name only, no accounts for
+//   buddies or students, auto-expiring.
+// Rule learned the hard way: NEVER hand out a link we can't verify — if Daily
+// fails, refuse loudly so the buddy retries, instead of scheduling a session
+// around a dead link that only fails at meeting time.
 
 /**
  * POST /api/calendar/schedule-meeting
@@ -107,12 +108,17 @@ export async function POST(request: NextRequest) {
         : `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`
     );
 
-    // Prefer a Daily.co room (best quality, one server key, no per-user auth);
-    // fall back to a no-account Jitsi link if Daily isn't configured or errors,
-    // so scheduling never breaks.
+    // Daily.co room — the one provider (see postmortem above). If it fails,
+    // refuse the booking with a clear message rather than saving a dead link.
     const end = new Date(start.getTime() + durationMinutes * 60_000);
     const roomExp = new Date(end.getTime() + 6 * 60 * 60 * 1000); // expire 6h after the session
-    const meetLink = (await createDailyRoom({ expiresAt: roomExp })) ?? createVideoLink();
+    const meetLink = await createDailyRoom({ expiresAt: roomExp });
+    if (!meetLink) {
+      return NextResponse.json(
+        { error: 'The video system is unavailable right now — please try again in a minute. (Admin: check /api/admin/video-health.)' },
+        { status: 503 }
+      );
+    }
 
     // ── Persist session ──────────────────────────────────────────
     const { data: session, error: sessionError } = await admin
