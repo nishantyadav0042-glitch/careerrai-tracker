@@ -8,7 +8,7 @@ import { StreakRestoreBroadcastButton } from '@/components/streak-restore-broadc
 import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStreakBreakers } from '@/lib/streak-breakers';
-import { getRealStudents, getLoggedToday, getStreaksAlive, getRemindToLog, getSalesReadyToCall, getGoingCold } from '@/lib/admin-filters';
+import { getRealStudents, getLoggedToday, getStreaksAlive, getRemindToLog, getSalesReadyToCall, getGoingCold, getWantsBuddy } from '@/lib/admin-filters';
 
 // Always render live — the dashboard is a real-time ops panel; a cached copy
 // showing stale counts (a payment just made, a fresh log) reads as "broken".
@@ -57,13 +57,14 @@ export default async function AdminTodayPage() {
   // dashboard contradicted itself.
   const real = await getRealStudents(admin);
   const totalStudents = real.length;
-  const [loggedList, aliveList, remindList, streakBreakers, salesList, coldList] = await Promise.all([
+  const [loggedList, aliveList, remindList, streakBreakers, salesList, coldList, wantsBuddyList] = await Promise.all([
     getLoggedToday(admin, real),
     getStreaksAlive(admin, real),
     getRemindToLog(admin, real),
     getStreakBreakers(admin),
     getSalesReadyToCall(admin, real),
     getGoingCold(admin, real),
+    getWantsBuddy(admin),
   ]);
   const loggedToday = loggedList.length;
   const salesReadyToCall = salesList.length;
@@ -83,6 +84,7 @@ export default async function AdminTodayPage() {
     { label: 'Remind to log today', val: remindList.length, href: '/admin/reminders', hot: remindList.length > 0 },
     { label: '🛡️ Shield used yesterday — win them back', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
+    { label: '💛 Want a buddy — said yes at signup', val: wantsBuddyList.length, href: '/admin/wants-buddy', hot: wantsBuddyList.length > 0 },
     { label: 'Going cold (4+ days)', val: coldList.length, href: '/admin/going-cold', hot: coldList.length > 0 },
   ];
 
