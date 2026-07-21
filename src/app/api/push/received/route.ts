@@ -23,11 +23,21 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  await admin
+  const now = new Date().toISOString();
+  const { data: row } = await admin
     .from('notifications')
-    .update({ received_at: new Date().toISOString() })
+    .update({ received_at: now })
     .eq('id', id)
-    .is('received_at', null);
+    .is('received_at', null)
+    .select('user_id')
+    .single();
+
+  // Device-level delivery is the ONLY true proof of health — stamp it on the
+  // profile so the health engine can score "verified delivery, not just
+  // accepted by the push service."
+  if (row?.user_id) {
+    await admin.from('profiles').update({ push_verified_at: now }).eq('id', row.user_id as string);
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -29,14 +29,19 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
   // Merge push:true into existing prefs — never clobber daily_reminder/email/time.
-  const { data: profile } = await admin.from('profiles').select('notif_prefs').eq('id', user.id).single();
+  const { data: profile } = await admin.from('profiles').select('notif_prefs, push_subscribed_at').eq('id', user.id).single();
   const notif_prefs = { ...(profile?.notif_prefs as Record<string, unknown> ?? {}), push: true };
+  const now = new Date().toISOString();
   // A fresh subscription resurrects the channel — clear the death stamp.
+  // push_subscribed_at is set ONCE (first-ever sub) so we can measure true
+  // subscription lifetime; push_resubscribed_at moves on every (re)persist.
   await admin.from('profiles')
     .update({
       push_subscription: subscription,
       notif_prefs,
       push_died_at: null,
+      push_subscribed_at: (profile?.push_subscribed_at as string | null) ?? now,
+      push_resubscribed_at: now,
       ...(pushContext ? { push_context: pushContext } : {}),
     })
     .eq('id', user.id);

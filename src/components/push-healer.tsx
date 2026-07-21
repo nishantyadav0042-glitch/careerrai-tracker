@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { detectDisplayMode } from '@/lib/journey';
+import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 
 // Silent push self-heal. Web-push subscriptions die (endpoint rotation, the push
 // service returning 410, storage cleared) — and the app used to assume
@@ -24,17 +25,6 @@ import { detectDisplayMode } from '@/lib/journey';
 //    installed app's, not the doomed browser-tab one.
 let healedThisSession = false;
 
-const STANDALONE_RESUB_KEY = 'cr_standalone_resub_v1';
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
 export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolean }) {
   useEffect(() => {
     if (healedThisSession) return;
@@ -45,48 +35,23 @@ export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolea
         if (Notification.permission !== 'granted') return; // only heal — never prompt here
 
         const displayMode = detectDisplayMode();
-        // First standalone open on this device → the WebAPK migration moment.
-        let firstStandaloneOpen = false;
-        if (displayMode === 'standalone' || displayMode === 'twa') {
-          try {
-            firstStandaloneOpen = localStorage.getItem(STANDALONE_RESUB_KEY) !== '1';
-          } catch { /* ignore */ }
-        }
-
         await navigator.serviceWorker.register('/sw.js');
         const reg = await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
 
-        // A present-but-doomed subscription: the server saw it 410/404, or this
-        // is the first open after install (tab-era endpoints often die here).
-        // Kill it and mint a fresh one — re-uploading it heals nothing.
-        if (sub && (serverPushDead || firstStandaloneOpen)) {
-          try { await sub.unsubscribe(); } catch { /* ignore */ }
-          sub = null;
-        }
+        const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
+        if (!keyRes.ok) return;
+        const { key } = await keyRes.json();
+        if (!key) return;
 
-        if (!sub) {
-          const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
-          if (!keyRes.ok) return;
-          const { key } = await keyRes.json();
-          if (!key) return;
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(key) as unknown as BufferSource,
-          });
-        }
-
-        // Re-persist to the server (heals push_subscription=null / push_died_at)
-        // WITH the grant context, so push_context reflects where the sub
-        // actually lives now (installed app vs browser tab).
-        const res = await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscription: sub.toJSON(), context: displayMode }),
-        });
-        if (res.ok && firstStandaloneOpen) {
-          try { localStorage.setItem(STANDALONE_RESUB_KEY, '1'); } catch { /* ignore */ }
-        }
+        // The 21 July fix: we ROTATE the endpoint only when the server has
+        // confirmed the current one dead (410/404). Every other open — including
+        // the first standalone open after a WebAPK install — REUSES the existing
+        // healthy subscription and simply re-persists it with the correct
+        // context. The old code force-rotated on first standalone open, which
+        // unsubscribed a working sub and (on a failed persist) stranded it as a
+        // corpse — the same-day death we were seeing. Reuse can't strand.
+        const sub = await getLiveSubscription(reg, key, { forceRotate: serverPushDead });
+        await persistSubscription(sub, displayMode);
       } catch {
         /* silent — never break the app over a push heal */
       }
