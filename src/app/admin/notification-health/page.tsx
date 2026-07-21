@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { STUDENT_BUDGET_TYPES } from '@/lib/notification-os';
 import { cn } from '@/lib/utils';
 import { waMessages, waNumber } from '@/lib/wa-messages';
+import { getNotificationHealth } from '@/lib/notification-health';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,13 +163,50 @@ export default async function NotificationHealthPage() {
 
   const recent = rows.slice(0, 15);
 
+  // Reachability health engine — the "can we reach them AT ALL" funnel, separate
+  // from the "did a send work" funnel below.
+  const health = await getNotificationHealth(admin);
+  const h = health.byState;
+  const reachPct = (n: number) => (health.funnel.total ? `${Math.round((n / health.funnel.total) * 100)}%` : '0%');
+
   return (
     <div className="min-h-screen bg-stone-50">
       <div className="max-w-3xl mx-auto px-4 py-6 pb-20">
         <div className="mb-5">
           <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Notification Health</h1>
           <p className="text-sm text-stone-500 mt-0.5">
-            Last 14 days. Acted is the only KPI — did the expected behaviour happen after the send.
+            Reachability now + send performance over the last 14 days.
+          </p>
+        </div>
+
+        {/* Reachability funnel: opted-in → subscribed → delivery-verified.
+            Every student is in exactly one state; the count is the truth of
+            how many we can actually reach with the app closed. */}
+        <div className="mb-5 rounded-2xl border border-stone-200 bg-white p-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-3">Reachability — {health.funnel.total} students</p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {[
+              { label: 'Opted in', value: health.funnel.optedIn, sub: reachPct(health.funnel.optedIn) },
+              { label: 'Subscribed', value: health.funnel.subscribed, sub: reachPct(health.funnel.subscribed) },
+              { label: 'Delivery-verified', value: health.funnel.verified, sub: reachPct(health.funnel.verified) },
+            ].map((t) => (
+              <div key={t.label} className="rounded-xl bg-stone-50 border border-stone-100 p-3">
+                <p className="text-xl font-bold text-stone-900">{t.value}</p>
+                <p className="text-[11px] font-semibold text-stone-500">{t.label}</p>
+                <p className="text-[10px] text-stone-400">{t.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">✅ healthy {h.healthy}</span>
+            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">delivery not yet confirmed {h.unverified}</span>
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">⚠ stale {h.stale}</span>
+            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">🔌 disconnected {h.disconnected}</span>
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">never opted in {h.never_opted_in}</span>
+            {h.opted_out > 0 && <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-500">opted out {h.opted_out}</span>}
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-stone-400">
+            Disconnected = wants push but the subscription died (the reconnect screen recovers these on next open). “Delivery not yet confirmed” shrinks as service workers update and start beaconing back device-level receipts.
           </p>
         </div>
 

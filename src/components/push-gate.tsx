@@ -3,17 +3,8 @@ import { useState } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { useRouter } from 'next/navigation';
 import { Bell, Check, Loader2 } from 'lucide-react';
+import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 
-// Web Push requires the applicationServerKey as a Uint8Array.
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const clean = base64String.trim();
-  const padding = '='.repeat((4 - (clean.length % 4)) % 4);
-  const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const output = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
-  return output;
-}
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -141,22 +132,14 @@ export function PushGate({ mode, notifPrefs }: PushGateProps) {
 
       await navigator.serviceWorker.register('/sw.js');
       const reg = await navigator.serviceWorker.ready;
-      const existing = await reg.pushManager.getSubscription();
-      if (existing) { try { await existing.unsubscribe(); } catch { /* ignore */ } }
-
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
+      // Reuse a healthy sub, rotate only on a key change — no gratuitous
+      // unsubscribe()+subscribe() that could strand an endpoint (21 July fix).
+      const sub = await getLiveSubscription(reg, publicKey);
 
       // Sets notif_prefs.push = true server-side (merge-safe) — the gate
-      // never renders again once this succeeds, on either mode.
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub.toJSON(), context: detectDisplayMode() }),
-      });
-      if (!res.ok) { setError(`Couldn’t save your subscription (server returned ${res.status}). Please try again.`); setPhase('intro'); return; }
+      // never renders again once this succeeds, on either mode. Retried persist.
+      const ok = await persistSubscription(sub, detectDisplayMode());
+      if (!ok) { setError('Couldn’t save your subscription. Please try again.'); setPhase('intro'); return; }
       track('push_enabled', { context: detectDisplayMode(), source: 'push_gate' });
 
       setPhase('done');

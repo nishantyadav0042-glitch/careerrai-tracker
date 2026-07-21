@@ -2,17 +2,7 @@
 import { useState, useEffect } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { Bell, BellOff, Check, X, Loader2 } from 'lucide-react';
-
-// Web Push requires the applicationServerKey as a Uint8Array.
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const clean = base64String.trim();
-  const padding = '='.repeat((4 - (clean.length % 4)) % 4);
-  const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const output = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
-  return output;
-}
+import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -134,31 +124,22 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
     endStep('ok');
 
     startStep('Subscribing with your browser');
-    // Drop any stale subscription that was bound to a different key.
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) {
-      try { await existing.unsubscribe(); } catch { /* ignore */ }
-    }
+    // Reuse a healthy sub bound to the current key; rotate only on a key change.
+    // The old blind unsubscribe()+subscribe() rotated the endpoint every time,
+    // which stranded a corpse whenever the persist that follows failed.
     let sub: PushSubscription;
     try {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
+      sub = await getLiveSubscription(reg, publicKey);
     } catch (e) {
       endStep('fail', e instanceof Error ? e.message : 'Your browser/network blocked the push service.');
       throw e;
     }
     endStep('ok');
 
-    // 4. Persist.
+    // 4. Persist (retried).
     startStep('Saving to your account');
-    const res = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), context: detectDisplayMode() }),
-    });
-    if (!res.ok) { endStep('fail', `Server returned ${res.status}.`); throw new Error(`Server returned ${res.status}`); }
+    const ok = await persistSubscription(sub, detectDisplayMode());
+    if (!ok) { endStep('fail', 'Could not save to the server.'); throw new Error('persist failed'); }
     track('push_enabled', { context: detectDisplayMode(), source: 'push_toggle' });
     endStep('ok', 'Subscribed — now tap “Send a test alert”.');
     setEnabled(true);

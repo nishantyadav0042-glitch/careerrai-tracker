@@ -2,17 +2,9 @@
 // server. Returns a precise outcome so the UI can react (guide to Settings on a
 // hard denial, tell iPhone-in-browser users to install first). Never throws.
 import { track } from '@/lib/journey';
+import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 
 export type EnablePushResult = 'granted' | 'denied' | 'ios_needs_install' | 'unsupported' | 'error';
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
 
 function isStandalone(): boolean {
   return window.matchMedia?.('(display-mode: standalone)').matches
@@ -39,26 +31,17 @@ export async function enablePush(): Promise<EnablePushResult> {
 
     await navigator.serviceWorker.register('/sw.js');
     const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(key) as unknown as BufferSource,
-      });
-    }
+    // Reuse a healthy sub (this path already never rotated); persist with retry.
+    const sub = await getLiveSubscription(reg, key);
 
     const context = isStandalone() ? 'standalone' : 'browser';
-    const res = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), context }),
-    });
-    if (res.ok) {
+    const ok = await persistSubscription(sub, context);
+    if (ok) {
       // Record WHERE push was granted — a browser-context grant is the tell for
       // a subscription that usually can't deliver.
       track('push_enabled', { context, deliverable: context === 'standalone' });
     }
-    return res.ok ? 'granted' : 'error';
+    return ok ? 'granted' : 'error';
   } catch {
     return 'error';
   }

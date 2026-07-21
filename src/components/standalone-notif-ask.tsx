@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
 import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
+import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 
 // Founder order (21 July): the notification ask is JOB #1 in the installed
 // app — it fires BEFORE the app tour (the tour and the buddy pitch both wait
@@ -34,15 +35,6 @@ function isIOS(): boolean {
   const ua = navigator.userAgent || '';
   return /iPad|iPhone|iPod/.test(ua)
     || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1);
-}
-
-function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = window.atob(b64);
-  const output = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
-  return output;
 }
 
 // serverSubDead (21 July audit): the server holds NO live subscription for
@@ -112,18 +104,11 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       if (!publicKey) throw new Error('no key');
       await navigator.serviceWorker.register('/sw.js');
       const reg = await navigator.serviceWorker.ready;
-      const existing = await reg.pushManager.getSubscription();
-      if (existing) { try { await existing.unsubscribe(); } catch { /* ignore */ } }
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub.toJSON(), context: detectDisplayMode() }),
-      });
-      if (!res.ok) throw new Error('subscribe failed');
+      // Reuse a healthy sub, rotate only if the key changed — never the blind
+      // unsubscribe()+subscribe() that stranded endpoints (21 July fix).
+      const sub = await getLiveSubscription(reg, publicKey);
+      const ok = await persistSubscription(sub, detectDisplayMode());
+      if (!ok) throw new Error('subscribe failed');
       track('push_enabled', { context: detectDisplayMode(), source: 'standalone_ask' });
       // Full reload so every server-rendered gate sees push=true and clears.
       window.location.reload();
