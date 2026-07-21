@@ -25,7 +25,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function reminderText(firstName: string): string {
-  return `Hi ${firstName}, you haven't filled your log with us today. Daily log is the backbone of your plan — don't miss out, fill it today. Any issues, please let me know. — Team CareerRai`;
+  return `Hi ${firstName}, Nishant from CareerRai. You haven't logged today's study yet — it takes 30 seconds and keeps your plan accurate. Log it now. Koi dikkat ho to bata do.`;
 }
 
 export default async function AdminRemindersPage() {

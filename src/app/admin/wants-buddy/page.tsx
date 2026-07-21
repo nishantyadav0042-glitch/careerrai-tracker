@@ -21,7 +21,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function message(first: string): string {
-  return `Hi ${first}, Nishant here from CareerRai. Signup ke time aapne bola tha ki ek mentor/buddy chahiye jo aapki CAT prep guide kare. Wo ab ready hai — ek personal buddy jo aapka plan, weak areas aur mocks track karega. Interested? Bas YES reply kar do, main details bhejta hoon.`;
+  return `Hi ${first}, Nishant from CareerRai. Signup pe aapne bola tha ki ek mentor chahiye — wo ab ready hai. Ek personal buddy jo aapka plan, weak areas aur mocks track karega. Interested? Bas YES reply kar do.`;
 }
 
 // The list behind "Want a buddy": students who EXPLICITLY said yes to the
