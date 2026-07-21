@@ -39,6 +39,13 @@ export default async function WantsBuddyPage() {
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const nowMs = Date.now();
   const daysIn = (iso: string) => Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000));
+  // Signup moment in IST — Vercel renders in UTC, so the timeZone must be explicit.
+  const joinedAt = (iso: string) => {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+    const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+    return `${day}, ${time}`;
+  };
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -93,7 +100,7 @@ export default async function WantsBuddyPage() {
                             <Smartphone className="w-3 h-3 mr-0.5 inline" />installed
                           </Badge>
                         )}
-                        <Badge color="stone">joined {daysIn(r.created_at)}d ago</Badge>
+                        <Badge color="stone">joined {joinedAt(r.created_at)} · {daysIn(r.created_at)}d ago</Badge>
                       </div>
                     </div>
                     {wa && (
