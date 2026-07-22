@@ -137,13 +137,25 @@ export function createMasteryEngine<T extends MasteryTopicSpec>(graph: SectionGr
     if (!priority) throw new Error('No selectable topic — all unlocked topics are exam_ready');
 
     const otherPool = pool.filter((t) => t.cluster !== priority.cluster);
-    const secondary = secondaryValid ? swappedSecondary! : bestInPool(otherPool, new Set([priority.topic]));
+    // Never surface the same topic in both slots. A swapped-in secondary can
+    // collide with the priority when the priority later shifts onto that same
+    // topic (e.g. the student masters the original priority, and the weakest-
+    // cluster pick lands on the topic they'd swapped into the secondary slot).
+    // Only honour the swapped secondary when it differs from the priority;
+    // otherwise fall back to the best other-cluster topic that isn't priority.
+    const honorSwappedSecondary = secondaryValid && swappedSecondary!.topic !== priority.topic;
+    const secondary = honorSwappedSecondary ? swappedSecondary! : bestInPool(otherPool, new Set([priority.topic]));
 
     return {
       priority, secondary,
       reasons: {
-        priority: priorityValid ? 'You chose this' : `${priority.cluster} is your weakest cluster right now`,
-        secondary: secondary ? (secondaryValid ? 'You chose this' : `Highest-value topic outside ${priority.cluster}, for variety`) : null,
+        // Only claim "weakest cluster" when the priority actually came from it —
+        // if the weakest cluster was fully prereq-locked, the priority is the
+        // best topic the student can start now, from another cluster.
+        priority: priorityValid ? 'You picked this'
+          : priority.cluster === weak ? `${weak} is your weakest area right now`
+          : `The best topic to start right now`,
+        secondary: secondary ? (honorSwappedSecondary ? 'You picked this' : `A strong topic from another area, for a change`) : null,
       },
     };
   }
@@ -170,11 +182,23 @@ export function createMasteryEngine<T extends MasteryTopicSpec>(graph: SectionGr
   function sessionsForBudget(state: MasteryStudentState, spec: T, minutesAvailable: number): TopicSessionPlan {
     const progress = progressFor(state, spec.topic);
     const stage = progress.stage;
+    if (stage === 'exam_ready') {
+      return { topic: spec.topic, stage, sessionsToday: 0, minutesUsed: 0, sessionsRemainingAtStage: 0 };
+    }
     const perSession = SESSION_MINUTES[stage];
-    const prescribed = stage === 'exam_ready' ? 0 : spec.sessions[stage];
+    const prescribed = spec.sessions[stage];
     const remainingAtStage = Math.max(0, prescribed - progress.sessionsDoneAtStage);
-    const sessionsToday = Math.max(0, Math.min(remainingAtStage, Math.floor(minutesAvailable / perSession)));
-    return { topic: spec.topic, stage, sessionsToday, minutesUsed: sessionsToday * perSession, sessionsRemainingAtStage: remainingAtStage - sessionsToday };
+    // A topic that made it onto today's plan is ALWAYS actionable — never a
+    // "0 sessions (0 min)" dead card. Two guards:
+    //  • at least 1 session even when the day's minute budget is tight (a small
+    //    secondary slice could otherwise floor to 0); we trust the student to
+    //    fit a short session.
+    //  • at least 1 session even when all prescribed sessions are already done
+    //    (remainingAtStage === 0, reachable by tapping "Need more" up to the
+    //    cap): that one session is the "Got it" that clears the stage.
+    const capacity = Math.max(1, Math.floor(minutesAvailable / perSession));
+    const sessionsToday = Math.min(Math.max(1, remainingAtStage), capacity);
+    return { topic: spec.topic, stage, sessionsToday, minutesUsed: sessionsToday * perSession, sessionsRemainingAtStage: Math.max(0, remainingAtStage - sessionsToday) };
   }
 
   // B3/C4: advance only when prescribed sessions done AND the "got it" tap.

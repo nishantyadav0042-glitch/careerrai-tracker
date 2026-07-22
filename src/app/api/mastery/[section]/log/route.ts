@@ -44,6 +44,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (body?.action === 'revision') {
     const spec = cfg.graph.byName.get(body.topic);
     if (!spec) return NextResponse.json({ error: 'Unknown topic' }, { status: 400 });
+    // Revision only applies once a topic is Exam Ready — otherwise a stray
+    // revision log would burn its post-mastery consolidation before it's earned.
+    if (e.progressFor(state, spec.topic).stage !== 'exam_ready') {
+      return NextResponse.json({ error: 'This topic is not in revision yet' }, { status: 400 });
+    }
     e.applyRevisionSession(state, spec, body.wentCold === true);
     await saveTopicProgress(admin, user.id, cfg.key, e.progressFor(state, spec.topic));
     return NextResponse.json({ ok: true });
