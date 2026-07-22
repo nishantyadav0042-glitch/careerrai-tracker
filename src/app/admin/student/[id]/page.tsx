@@ -138,6 +138,55 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
           <p className="mt-1.5 text-[12px] text-stone-600">{s.adaptation.note}</p>
         </div>
 
+        {/* Coaching Decision — the mentor's one call for today, above the plan */}
+        <div className="mt-3 rounded-2xl border border-stone-900 bg-stone-900 p-4 text-white">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-stone-400">Today&apos;s Decision · {s.intelligence.decision.type.replace(/_/g, ' ')}</p>
+          <p className="text-sm font-bold">{s.intelligence.decision.headline}</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-stone-300">{s.intelligence.decision.why}</p>
+          <p className="mt-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-[12px] font-semibold text-white">→ {s.intelligence.decision.microAction}</p>
+        </div>
+
+        {/* Performance heartbeat — Learning Velocity + the ranked bottlenecks */}
+        <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Performance Engine</p>
+            <span className={cn('rounded px-2 py-0.5 text-[11px] font-bold text-white',
+              s.intelligence.performance.projectedConfidence === 'high' ? 'bg-emerald-500' : s.intelligence.performance.projectedConfidence === 'low' ? 'bg-rose-500' : 'bg-amber-500')}>
+              {s.intelligence.performance.projectedConfidence} confidence
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-stone-900">{s.intelligence.performance.learningVelocity}</span>
+            <span className="text-sm text-stone-500">/100 Learning Velocity</span>
+            <span className={cn('ml-auto text-xs font-bold',
+              s.intelligence.performance.direction === 'accelerating' ? 'text-emerald-600' : s.intelligence.performance.direction === 'stalling' ? 'text-rose-600' : 'text-stone-500')}>
+              {s.intelligence.performance.direction === 'accelerating' ? '↗ accelerating' : s.intelligence.performance.direction === 'stalling' ? '↘ losing pace' : '→ steady'}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {s.intelligence.performance.metrics.map((m) => (
+              <div key={m.key} className="rounded-lg bg-stone-50 px-2 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">{m.label}</p>
+                <p className="text-sm font-bold text-stone-800">{m.value}</p>
+              </div>
+            ))}
+          </div>
+          {s.intelligence.constraints.top && (
+            <div className="mt-3 border-t border-stone-100 pt-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Top bottleneck</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {s.intelligence.constraints.ranked.slice(0, 3).map((c, i) => (
+                  <span key={c.key} className={cn('rounded px-2 py-0.5 text-xs font-semibold',
+                    i === 0 ? 'bg-rose-500 text-white' : 'bg-stone-100 text-stone-600')}>
+                    {c.label} {c.severity}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[12px] text-stone-600">{s.intelligence.constraints.top.note}</p>
+            </div>
+          )}
+        </div>
+
         {/* The timeline — the story */}
         <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-stone-400">Timeline</p>

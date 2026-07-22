@@ -1,6 +1,10 @@
 import { getStudentMomentum, type StudentMomentum } from '@/lib/momentum';
 import { computeCapacity, type Capacity } from '@/lib/capacity-engine';
 import { computeAdaptation, type Adaptation, ADAPTATION_WINDOW_DAYS } from '@/lib/adaptation-engine';
+import { assembleIntelligence, type StudentIntelligence } from '@/lib/intelligence';
+import { getPhase } from '@/lib/routine-engine';
+import { weeksToExam } from '@/lib/study-plan';
+import type { Blocker } from '@/lib/mission-engine';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -27,6 +31,7 @@ export interface Student360 {
   facts: { logsTotal: number; lastLogDate: string | null; opensPush: boolean };
   capacity: Capacity;
   adaptation: Adaptation;
+  intelligence: StudentIntelligence;
   timeline: TimelineEvent[];
 }
 
@@ -37,16 +42,20 @@ const daysAgo = (iso: string | null | undefined, now: number) =>
 export async function getStudent360(admin: any, id: string): Promise<Student360 | null> {
   const now = Date.now();
   const windowStart = new Date(now - ADAPTATION_WINDOW_DAYS * DAY).toISOString().slice(0, 10);
-  const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }, { data: winRoutines }, { data: winCompletions }] = await Promise.all([
-    admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at, study_target_hours, hours_available').eq('id', id).single(),
+  const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }, { data: winRoutines }, { data: winCompletions }, { data: coverageRows }, { data: debriefs }] = await Promise.all([
+    admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at, study_target_hours, hours_available, baseline_varc, baseline_dilr, baseline_qa, target_percentile, biggest_blocker, attempt_year, current_stage, is_repeater, is_working_professional').eq('id', id).single(),
     getStudentMomentum(admin, id),
-    admin.from('daily_reports').select('report_date, created_at, study_duration, plan_fit').eq('student_id', id).order('report_date', { ascending: false }),
+    admin.from('daily_reports').select('report_date, created_at, study_duration, plan_fit, mock_taken').eq('student_id', id).order('report_date', { ascending: false }),
     admin.from('notifications').select('type, title, pushed_at, clicked_at').eq('user_id', id).not('pushed_at', 'is', null).order('pushed_at', { ascending: false }).limit(200),
     admin.from('student_engagement').select('signed_up_at, buddy_cta_last_at, intent_door_at, sales_called_at, mock_opened').eq('student_id', id).maybeSingle(),
     admin.from('mentor_grants').select('door, created_at').eq('student_id', id),
-    // Adaptation input: plan-day completion over the recent window.
+    // Adaptation + intelligence input: plan-day completion + per-section recency.
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', id).gte('routine_date', windowStart),
     admin.from('routine_task_completions').select('routine_date, task_id').eq('student_id', id).gte('routine_date', windowStart),
+    // Constraint / Performance input: syllabus coverage snapshot.
+    admin.from('topic_coverage').select('section, topic, status').eq('student_id', id),
+    // Mock-pending signal: mocks analysed (debriefs) vs mocks logged.
+    admin.from('mock_debriefs').select('taken_on').eq('student_id', id).order('taken_on', { ascending: false }).limit(10),
   ]);
   if (!p || !momentum) return null;
 
@@ -70,6 +79,80 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
 
   events.sort((a, b) => b.ts - a.ts);
 
+  // ── Learning-intelligence assembly, all off rows already fetched ──
+  // Capacity → Adaptation → (Constraint + Performance → Coaching Decision).
+  const todayStr = new Date(now).toISOString().slice(0, 10);
+  const winReports = (reports ?? []).filter((r: any) => r.report_date >= windowStart);
+  const hrs = winReports.map((r: any) => Number(r.study_duration) || 0);
+  const capacity = computeCapacity(hrs, winReports.length, (p.study_target_hours ?? p.hours_available) as number | null);
+
+  const completedByDate = new Map<string, Set<string>>();
+  for (const c of winCompletions ?? []) {
+    if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
+    completedByDate.get(c.routine_date)!.add(c.task_id);
+  }
+  let completedTasks = 0, plannedTasks = 0, planDays = 0;
+  const daysSinceSection: Record<string, number> = {};
+  for (const r of winRoutines ?? []) {
+    const tasks = Array.isArray(r.tasks) ? (r.tasks as any[]) : [];
+    if (r.routine_date < todayStr && tasks.length > 0) {
+      planDays++;
+      plannedTasks += tasks.length;
+      completedTasks += Math.min(tasks.length, (completedByDate.get(r.routine_date) ?? new Set()).size);
+    }
+    const done = completedByDate.get(r.routine_date) ?? new Set();
+    const ago = Math.round((Date.parse(todayStr) - Date.parse(r.routine_date)) / DAY);
+    for (const t of tasks) {
+      if (!done.has(t.id)) continue;
+      if (['VARC', 'DILR', 'QA'].includes(t.section) && (daysSinceSection[t.section] == null || ago < daysSinceSection[t.section])) daysSinceSection[t.section] = ago;
+    }
+  }
+  const planFits = winReports.map((r: any) => r.plan_fit).filter((f: any): f is string => typeof f === 'string');
+  const adaptation = computeAdaptation(planFits, completedTasks, plannedTasks, planDays);
+
+  const tenAgo = new Date(now - 10 * DAY).toISOString().slice(0, 10);
+  const twentyAgo = new Date(now - 20 * DAY).toISOString().slice(0, 10);
+  let recentActive10 = 0, priorActive10 = 0;
+  for (const r of winReports) {
+    if ((Number(r.study_duration) || 0) <= 0) continue;
+    if (r.report_date > tenAgo) recentActive10++;
+    else if (r.report_date > twentyAgo) priorActive10++;
+  }
+  const recencyVals = Object.values(daysSinceSection);
+  const cov = (coverageRows ?? []) as { status: string }[];
+  const coverage = cov.length > 0
+    ? { total: cov.length, notStarted: cov.filter((r) => r.status === 'not_started').length, confident: cov.filter((r) => r.status === 'exam_ready' || r.status === 'mastered').length }
+    : null;
+  const debriefDates = new Set((debriefs ?? []).map((d: any) => d.taken_on));
+  const lastMock = winReports.find((r: any) => r.mock_taken === true);
+  const daysSincePendingMock = lastMock && !debriefDates.has(lastMock.report_date)
+    ? Math.round((Date.parse(todayStr) - Date.parse(lastMock.report_date)) / DAY) : null;
+  const baselines = [p.baseline_varc, p.baseline_dilr, p.baseline_qa].map((v: any) => v as number | null).filter((v): v is number => v != null);
+  const capacityGapHours = capacity.claimedHours != null && capacity.sustainableHours != null
+    ? Math.max(0, Math.round((capacity.claimedHours - capacity.sustainableHours) * 2) / 2) : 0;
+  const nowDate = new Date(now);
+  const attemptYear = (p.attempt_year as number | null) ?? null;
+  const intelligence = assembleIntelligence({
+    phase: getPhase(nowDate, attemptYear, (p.current_stage as any) ?? null, p.is_repeater === true),
+    loggedDays: winReports.length,
+    activeDays21: hrs.filter((h: number) => h > 0).length,
+    recentActive10, priorActive10,
+    capacityTrust: capacity.trust,
+    capacityGapHours,
+    volumeFactor: adaptation.volumeFactor,
+    tooMuchRatio: adaptation.tooMuchRatio,
+    momentumScore: momentum.score,
+    coverage,
+    maxDaysSincePracticed: recencyVals.length ? Math.max(...recencyVals) : null,
+    daysSincePendingMock,
+    mocksTaken: winReports.filter((r: any) => r.mock_taken === true).length,
+    weakestBaseline: baselines.length ? Math.min(...baselines) : null,
+    blocker: (p.biggest_blocker as Blocker | null) ?? null,
+    targetPercentile: (p.target_percentile as number | null) ?? null,
+    weeksToExam: weeksToExam(nowDate, attemptYear),
+    gapDays: momentum.signals.daysSinceLastLog,
+  });
+
   return {
     profile: {
       id: p.id, full_name: p.full_name ?? null, phone: p.phone ?? null,
@@ -89,31 +172,9 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
       lastLogDate: (reports ?? [])[0]?.report_date ?? null,
       opensPush: momentum.signals.openedPushRecently,
     },
-    capacity: (() => {
-      const win = (reports ?? []).filter((r: any) => r.report_date >= windowStart);
-      const hrs = win.map((r: any) => Number(r.study_duration) || 0);
-      return computeCapacity(hrs, win.length, (p.study_target_hours ?? p.hours_available) as number | null);
-    })(),
-    adaptation: (() => {
-      const win = (reports ?? []).filter((r: any) => r.report_date >= windowStart);
-      const planFits = win.map((r: any) => r.plan_fit).filter((f: any): f is string => typeof f === 'string');
-      const completedByDate = new Map<string, Set<string>>();
-      for (const c of winCompletions ?? []) {
-        if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
-        completedByDate.get(c.routine_date)!.add(c.task_id);
-      }
-      const todayStr = new Date(now).toISOString().slice(0, 10);
-      let completedTasks = 0, plannedTasks = 0, planDays = 0;
-      for (const r of winRoutines ?? []) {
-        const taskCount = Array.isArray(r.tasks) ? (r.tasks as unknown[]).length : 0;
-        if (r.routine_date < todayStr && taskCount > 0) {
-          planDays++;
-          plannedTasks += taskCount;
-          completedTasks += Math.min(taskCount, (completedByDate.get(r.routine_date) ?? new Set()).size);
-        }
-      }
-      return computeAdaptation(planFits, completedTasks, plannedTasks, planDays);
-    })(),
+    capacity,
+    adaptation,
+    intelligence,
     timeline: events.slice(0, 60),
   };
 }

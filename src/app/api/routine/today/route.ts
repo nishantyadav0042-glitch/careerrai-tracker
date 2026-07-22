@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type HistoryInput } from '@/lib/routine-engine';
+import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
+import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -80,7 +81,7 @@ export async function GET() {
     // the recent window.
     admin
       .from('daily_reports')
-      .select('study_duration, plan_fit')
+      .select('study_duration, plan_fit, report_date, mock_taken')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
   ]);
@@ -269,6 +270,61 @@ export async function GET() {
     phases: ROADMAP_PHASES,
   };
 
+  // Intelligence layer (LIS 2 + 5 + 10): the Constraint profile (biggest
+  // bottleneck), the Performance heartbeat (Learning Velocity + direction), and
+  // — composed from both — the Coaching Decision: the single highest-leverage
+  // call for today that frames the plan below it. All from data already
+  // fetched; purely additive to the response (does not reshape the task list).
+  const activeDays21 = recentStudyHours.filter((h: number) => h > 0).length;
+  const tenAgoStr = new Date(Date.now() - 10 * 86_400_000).toISOString().slice(0, 10);
+  const twentyAgoStr = new Date(Date.now() - 20 * 86_400_000).toISOString().slice(0, 10);
+  let recentActive10 = 0, priorActive10 = 0;
+  for (const r of (recentReports ?? []) as { study_duration: unknown; report_date: string }[]) {
+    if ((Number(r.study_duration) || 0) <= 0) continue;
+    if (r.report_date > tenAgoStr) recentActive10++;
+    else if (r.report_date > twentyAgoStr) priorActive10++;
+  }
+  const covRows = (coverageRows ?? []) as { status: string }[];
+  const coverage = covRows.length > 0
+    ? {
+        total: covRows.length,
+        notStarted: covRows.filter((r) => r.status === 'not_started').length,
+        confident: covRows.filter((r) => r.status === 'exam_ready' || r.status === 'mastered').length,
+      }
+    : null;
+  const recencyVals = Object.values(history.daysSinceLastPracticed).filter((v): v is number => v != null);
+  const maxDaysSincePracticed = recencyVals.length ? Math.max(...recencyVals) : null;
+  const mocksTaken = ((recentReports ?? []) as { mock_taken: unknown }[]).filter((r) => r.mock_taken === true).length;
+  const baselines = [profile.baseline_varc, profile.baseline_dilr, profile.baseline_qa]
+    .map((v) => v as number | null)
+    .filter((v): v is number => v != null);
+  const weakestBaseline = baselines.length ? Math.min(...baselines) : null;
+  const capacityGapHours = capacity.claimedHours != null && capacity.sustainableHours != null
+    ? Math.max(0, Math.round((capacity.claimedHours - capacity.sustainableHours) * 2) / 2)
+    : 0;
+
+  const intelligence = assembleIntelligence({
+    phase: routine.phase as Phase,
+    loggedDays: recentStudyHours.length,
+    activeDays21,
+    recentActive10,
+    priorActive10,
+    capacityTrust: capacity.trust,
+    capacityGapHours,
+    volumeFactor: adaptation.volumeFactor,
+    tooMuchRatio: adaptation.tooMuchRatio,
+    momentumScore: momentumProxy(gapDays, activeDays21),
+    coverage,
+    maxDaysSincePracticed,
+    daysSincePendingMock,
+    mocksTaken,
+    weakestBaseline,
+    blocker: biggestBlocker,
+    targetPercentile: routineProfile.targetPercentile,
+    weeksToExam: weeksRemaining,
+    gapDays,
+  });
+
   // Task copy ("Solve 5 RC questions") barely changes day to day even
   // though the topic's coverage status genuinely advances underneath it —
   // the engine adapts, but that's invisible unless it's said out loud. Coverage
@@ -306,6 +362,11 @@ export async function GET() {
     adaptation: adaptation.trust === 'learning'
       ? { volumeFactor: adaptation.volumeFactor, note: adaptation.note }
       : null,
+    // Coaching Decision (LIS L5) — the one call framing today; Performance
+    // heartbeat + the ranked bottlenecks behind it.
+    decision: intelligence.decision,
+    performance: intelligence.performance,
+    constraints: intelligence.constraints.ranked,
   });
   } catch (err) {
     // Observability: Vercel's log drain is not configured, so a thrown error

@@ -54,8 +54,13 @@ preventing 99?"** Each student gets a *ranked* profile across: time · knowledge
 consistency · revision · speed · accuracy · confidence · energy · mock-anxiety ·
 discipline. **Planning becomes constraint optimisation, not topic allocation.**
 **Store (planned):** `student_constraints` (student_id, constraint, severity,
-source, updated_at). **Status:** Planned. **Seed:** onboarding pain_points +
-behaviour already hint at these.
+source, updated_at). **Status:** v1 in `src/lib/constraint-engine.ts`.
+`computeConstraints` ranks the bottlenecks it has honest signals for today —
+consistency, time, coverage, revision, speed, mock-anxiety, discipline, accuracy
+— each with a 0-100 severity, a `behaviour`/`onboarding`/`blend` source, and its
+evidence; the onboarding blocker seeds the profile cold. Computed live (not yet
+persisted); surfaced on admin Student 360 and fed to the Coaching Decision.
+**Seed:** onboarding `biggest_blocker` + behaviour.
 
 ### 3. Capacity Engine — behaviour beats input  ◀ **the moat, building now**
 Not "available vs required hours." Computes four capacities:
@@ -86,8 +91,15 @@ Above the plan. Each day: *what is the single highest-leverage decision?* —
 "don't study new concepts, you're forgetting → revise" · "skip the plan, take a
 mock" · "you're exhausted → revision only" · "you're ahead → pull revision
 forward." **The plan is the implementation of this decision**, not the decision
-itself. **Status:** Planned (the notification decision-engine is a primitive
-seed).
+itself. **Status:** v1 in `src/lib/coach-decision.ts` (`decideToday`). A
+deterministic priority ladder over the other engines' outputs — analyse-mock →
+recover → rebuild-consistency → revise-don't-learn → take-a-mock → push-ahead →
+follow-plan — emitting exactly ONE call (headline · why · micro-action · tone)
+that frames the plan the student reads first. Composed in `src/lib/intelligence.ts`
+from Constraint + Performance; returned by the plan API and shown on admin 360.
+Distinct from `decision-engine.ts` (the notification-layer seed), which remains
+the notification selector. v1 surfaces the call; it does not yet destructively
+rewrite the task list (Capacity + Adaptation already resize it).
 
 ### 6. Planning Engine — today as a consequence
 Inputs are no longer hours → questions. They are Identity + Constraints +
@@ -129,7 +141,14 @@ explicit weekly redistribution.
 Not hours or questions. **Learning Velocity** (how much closer to target
 percentile today), consistency, retention, revision health, mock readiness,
 weak-area trend, projected-percentile confidence. The founder/CEO dashboard of
-learning. **Status:** Planned.
+learning. **Status:** v1 in `src/lib/performance-engine.ts` (`computePerformance`).
+Learning Velocity is an honest *proxy* — a weighted blend of consistency,
+coverage, revision health and mock readiness (each 0-100, explainable) — with a
+direction (accelerating / steady / stalling) read against the student's OWN prior
+window, and a projected-confidence hedge. Labelled a proxy on purpose: when
+calibrated percentile tracking lands it replaces the blend without changing the
+interface. Surfaced on admin 360; feeds the Coaching Decision. **Deferred (v2):**
+real percentile model from mock-score history.
 
 ---
 
@@ -169,8 +188,12 @@ a sign it's mis-scoped.
 5. **Adaptation Engine** — per-student pace + weekly redistribution (kills the
    doom-loop). *Shipped v1: `volumeFactor` learned from plan_fit + completion
    ratio, applied to task volume; motivation-first (behaviour only lightens).*
-6. **Decision Engine** — the daily highest-leverage call.
+6. **Decision Engine** — the daily highest-leverage call. *Shipped v1:
+   `coach-decision.ts` priority ladder, composed in `intelligence.ts`, surfaced
+   on the plan API + admin 360.*
 7. **Constraint & Performance Engines** — bottleneck profile + Learning Velocity.
+   *Shipped v1: `constraint-engine.ts` (ranked bottlenecks) + `performance-engine.ts`
+   (Learning Velocity proxy + direction); both feed the Decision and show on admin 360.*
 
 Nothing here is built before its number without the data the prior layer produces.
 That ordering *is* the moat: the engine earns each number by measuring it.
