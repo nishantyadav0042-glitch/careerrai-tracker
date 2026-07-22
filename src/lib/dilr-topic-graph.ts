@@ -8,18 +8,18 @@
 //   2. Stage order is Concept → Easy → Medium → Hard → Exam Ready, THEN
 //      Revision. The LID's "Revision: N sessions" becomes initialRevisionSessions,
 //      a post-mastery consolidation burst.
-//   3. Bonus concept applied — but research-honestly, DILR has FEWER low-value
-//      topics than QA (almost everything is 4–5★). Only two earn "bonus":
-//      Data Sufficiency (the LID itself grades it "Declining as a standalone
-//      format", the sole 3★), and Routes & Paths (a near-duplicate application
-//      of Networks & Routes — mastering Networks covers most of it). Not forced
-//      to 5–7; the data doesn't support dropping more.
+//   3. Bonus concept applied research-honestly (founder: base it on the 5–7yr
+//      pattern). DILR has FEWER low-value topics than QA — almost everything is
+//      4–5★ and TRENDING UP (modern CAT is dominated by hybrid DI-LR sets). The
+//      single genuinely fading topic is Data Sufficiency: the LID grades it
+//      "Declining as a standalone format" and public 5-year analyses show CAT
+//      DILR moved to integrated set-based formats where standalone DS is rare.
+//      So DS is the only bonus — not forced to a QA-like count.
 //
-// FLAGS for founder review (not invented — surfaced honestly):
-//   - The summary said "20 total (7 DI + 11 LR + 2 Integrated)" but 19 cards
-//     were shared (7 DI + 10 LR + 2 Integrated). Using the 19 real cards.
-//   - "Networks & Routes" (card 15) and "Routes & Paths" (card 16) overlap
-//     heavily — hence Routes & Paths as bonus.
+// Founder decisions applied (22 Jul):
+//   - "Networks & Routes" and the overlapping "Routes & Paths" cards MERGED
+//     into one core topic, Networks & Routes (it covers route/path reasoning).
+//   - 18 topics total (7 DI + 9 LR + 2 Integrated) after the merge.
 //   - Prerequisites reflect TRUE build-dependencies (charts before Mixed,
 //     Linear→Circular→Seating), not the LID's longer suggested study order, so
 //     the plan keeps sensible parallelism and never gates a core topic behind a
@@ -78,10 +78,11 @@ const LR: DilrTopicSpec[] = [
     difficulty: { concept: 5, practice: 8, retention: 6, exam: 9 }, sessions: { concept: 2, easy: 2, medium: 4, hard: 5 }, initialRevisionSessions: 2 },
   { topic: 'Binary Logic', cluster: 'Logical Reasoning', isBonus: false, prerequisites: [], weightage: 4,
     difficulty: { concept: 6, practice: 7, retention: 5, exam: 8 }, sessions: { concept: 2, easy: 2, medium: 3, hard: 4 }, initialRevisionSessions: 2 },
+  // Networks & Routes — merged with the former "Routes & Paths" card (they
+  // overlapped: both are node/edge/path reasoning). One core topic now,
+  // covering networks AND route/path deduction.
   { topic: 'Networks & Routes', cluster: 'Logical Reasoning', isBonus: false, prerequisites: ['Distribution & Assignment'], weightage: 4,
-    difficulty: { concept: 6, practice: 8, retention: 6, exam: 9 }, sessions: { concept: 2, easy: 2, medium: 3, hard: 5 }, initialRevisionSessions: 2 },
-  { topic: 'Routes & Paths', cluster: 'Logical Reasoning', isBonus: true, prerequisites: ['Networks & Routes'], weightage: 4,
-    difficulty: { concept: 5, practice: 8, retention: 5, exam: 8 }, sessions: { concept: 2, easy: 2, medium: 3, hard: 4 }, initialRevisionSessions: 2 },
+    difficulty: { concept: 6, practice: 8, retention: 6, exam: 9 }, sessions: { concept: 2, easy: 2, medium: 4, hard: 5 }, initialRevisionSessions: 2 },
   { topic: 'Ordering & Ranking', cluster: 'Logical Reasoning', isBonus: false, prerequisites: ['Linear Arrangements'], weightage: 5,
     difficulty: { concept: 4, practice: 8, retention: 5, exam: 8 }, sessions: { concept: 2, easy: 2, medium: 4, hard: 5 }, initialRevisionSessions: 2 },
 ];
