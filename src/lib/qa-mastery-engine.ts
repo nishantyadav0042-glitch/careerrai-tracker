@@ -16,6 +16,7 @@ export const QA_GRAPH: SectionGraph<QaTopicSpec> = {
 };
 
 const engine = createMasteryEngine<QaTopicSpec>(QA_GRAPH);
+export const qaEngine = engine; // the full engine object, for the section registry
 
 export const {
   progressFor, topicRoi, isUnlocked, weakestCluster, pickActiveTopics, swapTopic, splitTimeBudget,

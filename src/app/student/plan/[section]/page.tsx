@@ -1,48 +1,52 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-// The QA Mastery plan screen (Sections C+D, live). Gated server-side by
-// profiles.qa_model_enabled — if off, the API 404s and we show the fallback
-// note instead of the plan.
+// Section-agnostic Mastery plan screen (QA / DILR / VARC). The section comes
+// from the route (/student/plan/qa, /student/plan/dilr); everything else is the
+// same UI. Gated server-side by the section's <section>_model_enabled flag.
 
 interface Slot {
   topic: string; cluster: string; stageLabel: string; stageNumber: number; stageTotal: number;
   sessionsToday: number; minutes: number; sessionsRemainingAtStage: number; target: string; why: string;
 }
 interface Plan {
-  enabled: boolean; allDone?: boolean; budgetMinutes: number;
+  enabled: boolean; allDone?: boolean; budgetMinutes: number; label?: string;
   core: { mastered: number; total: number };
   revision: { topic: string; reason: string; minutes: number } | null;
   priority?: Slot; secondary?: Slot | null;
   swapOptions?: { topic: string; cluster: string; weightage: number }[];
 }
 
-export default function QaPlanPage() {
+export default function MasteryPlanPage() {
+  const params = useParams();
+  const section = String(params?.section ?? 'qa').toLowerCase();
+
   const [plan, setPlan] = useState<Plan | null>(null);
   const [state, setState] = useState<'loading' | 'off' | 'ready' | 'error'>('loading');
   const [busy, setBusy] = useState<string | null>(null);
-  const [needMore, setNeedMore] = useState<string | null>(null); // topic awaiting error-type tap
+  const [needMore, setNeedMore] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<'priority' | 'secondary' | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/qa/today');
+      const res = await fetch(`/api/mastery/${section}/today`);
       if (res.status === 404) { setState('off'); return; }
       if (!res.ok) { setState('error'); return; }
       setPlan(await res.json());
       setState('ready');
     } catch { setState('error'); }
-  }, []);
+  }, [section]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount; setState only fires after the awaited response
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount; setState only after the awaited response
   useEffect(() => { load(); }, [load]);
 
   const post = async (body: Record<string, unknown>, key: string) => {
     setBusy(key);
     try {
-      const res = await fetch('/api/qa/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await fetch(`/api/mastery/${section}/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error ?? 'Something went wrong'); return; }
       navigator.vibrate?.(30);
       setNeedMore(null); setSwapFor(null);
@@ -50,28 +54,24 @@ export default function QaPlanPage() {
     } finally { setBusy(null); }
   };
 
-  if (state === 'loading') return <Shell><p className="text-zinc-500 text-sm">Loading your Quant plan…</p></Shell>;
-  if (state === 'off') return <Shell><Card><p className="text-sm text-zinc-300">The new Quant plan isn&apos;t switched on for this account yet.</p></Card></Shell>;
+  if (state === 'loading') return <Shell><p className="text-zinc-500 text-sm">Loading your plan…</p></Shell>;
+  if (state === 'off') return <Shell><Card><p className="text-sm text-zinc-300">This plan isn&apos;t switched on for your account yet.</p></Card></Shell>;
   if (state === 'error' || !plan) return <Shell><Card><p className="text-sm text-rose-300">Couldn&apos;t load your plan. Pull to refresh.</p></Card></Shell>;
+
+  const title = plan.label ? `Today's ${plan.label}` : "Today's plan";
 
   return (
     <Shell>
-      {/* Header — core progress */}
       <div className="mb-4">
-        <h1 className="text-xl font-bold text-white">Today&apos;s Quant</h1>
-        <p className="mt-1 text-xs text-zinc-500">
-          {plan.core.mastered} / {plan.core.total} core topics Exam Ready · ~{plan.budgetMinutes} min planned
-        </p>
+        <h1 className="text-xl font-bold text-white">{title}</h1>
+        <p className="mt-1 text-xs text-zinc-500">{plan.core.mastered} / {plan.core.total} core topics Exam Ready · ~{plan.budgetMinutes} min planned</p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-          <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.round((plan.core.mastered / plan.core.total) * 100)}%` }} />
+          <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.round((plan.core.mastered / Math.max(1, plan.core.total)) * 100)}%` }} />
         </div>
       </div>
 
-      {plan.allDone && (
-        <Card><p className="text-sm font-semibold text-emerald-300">🎉 Every Quant topic is Exam Ready. Keep them warm with revision and mocks.</p></Card>
-      )}
+      {plan.allDone && <Card><p className="text-sm font-semibold text-emerald-300">🎉 Every topic here is Exam Ready. Keep them warm with revision and mocks.</p></Card>}
 
-      {/* Revision — additive, on top */}
       {plan.revision && (
         <div className="mb-3 rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
           <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400">🔖 Quick revision · {plan.revision.minutes} min</p>
@@ -86,22 +86,18 @@ export default function QaPlanPage() {
         </div>
       )}
 
-      {/* Active topics */}
-      {plan.priority && <TopicCard slot={plan.priority} isPriority
-        busy={busy} needMore={needMore} setNeedMore={setNeedMore} onLog={post} onSwap={() => setSwapFor('priority')} />}
-      {plan.secondary && <TopicCard slot={plan.secondary}
-        busy={busy} needMore={needMore} setNeedMore={setNeedMore} onLog={post} onSwap={() => setSwapFor('secondary')} />}
+      {plan.priority && <TopicCard slot={plan.priority} isPriority busy={busy} needMore={needMore} setNeedMore={setNeedMore} onLog={post} onSwap={() => setSwapFor('priority')} />}
+      {plan.secondary && <TopicCard slot={plan.secondary} busy={busy} needMore={needMore} setNeedMore={setNeedMore} onLog={post} onSwap={() => setSwapFor('secondary')} />}
 
-      {/* Swap sheet */}
       {swapFor && plan.swapOptions && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/70 backdrop-blur-sm" onClick={() => setSwapFor(null)}>
-          <div className="w-full rounded-t-3xl border border-zinc-800 bg-zinc-950 p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full rounded-t-3xl border border-zinc-800 bg-zinc-950 p-5" onClick={(ev) => ev.stopPropagation()}>
             <p className="mb-1 text-sm font-bold text-white">Swap the {swapFor} topic</p>
             <p className="mb-3 text-xs text-zinc-500">Pick anything you&apos;d rather do — progress on the current one is kept.</p>
             <div className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+              {plan.swapOptions.length === 0 && <p className="text-xs text-zinc-500">Nothing else is unlocked to swap to right now.</p>}
               {plan.swapOptions.map((o) => (
-                <button key={o.topic} disabled={!!busy}
-                  onClick={() => post({ action: 'swap', slot: swapFor, topic: o.topic }, `swap-${o.topic}`)}
+                <button key={o.topic} disabled={!!busy} onClick={() => post({ action: 'swap', slot: swapFor, topic: o.topic }, `swap-${o.topic}`)}
                   className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left active:scale-[0.99] disabled:opacity-50">
                   <span className="text-sm font-semibold text-white">{o.topic}</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-500">{o.cluster}</span>
@@ -117,9 +113,8 @@ export default function QaPlanPage() {
 }
 
 function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwap }: {
-  slot: Slot; isPriority?: boolean;
-  busy: string | null; needMore: string | null; setNeedMore: (t: string | null) => void;
-  onLog: (body: Record<string, unknown>, key: string) => void; onSwap: () => void;
+  slot: Slot; isPriority?: boolean; busy: string | null; needMore: string | null;
+  setNeedMore: (t: string | null) => void; onLog: (body: Record<string, unknown>, key: string) => void; onSwap: () => void;
 }) {
   const asking = needMore === slot.topic;
   return (
@@ -129,15 +124,12 @@ function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwa
         <button onClick={onSwap} className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-300">⇄ Swap</button>
       </div>
       <p className="mt-1 text-lg font-bold text-white">{slot.topic}</p>
-      <span className="mt-1.5 inline-block rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-bold text-orange-300">
-        ▲ Stage {slot.stageNumber}/{slot.stageTotal} · {slot.stageLabel}
-      </span>
+      <span className="mt-1.5 inline-block rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-bold text-orange-300">▲ Stage {slot.stageNumber}/{slot.stageTotal} · {slot.stageLabel}</span>
       <p className="mt-2 text-[13px] text-zinc-400">
         <b className="text-zinc-200">{slot.sessionsToday} session{slot.sessionsToday === 1 ? '' : 's'} ({slot.minutes} min)</b>
         {slot.sessionsRemainingAtStage === 0 ? ' · clears the stage today' : ` · ${slot.sessionsRemainingAtStage} left after today`}
       </p>
       <p className="mt-1.5 text-[11px] italic text-zinc-600">{slot.why}</p>
-
       {!asking ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button disabled={!!busy} onClick={() => onLog({ action: 'study', topic: slot.topic, sessionsDone: slot.sessionsToday, gotIt: true }, `got-${slot.topic}`)}
@@ -162,9 +154,5 @@ function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwa
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto max-w-md px-1 py-2">{children}</div>;
-}
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">{children}</div>;
-}
+function Shell({ children }: { children: React.ReactNode }) { return <div className="mx-auto max-w-md px-1 py-2">{children}</div>; }
+function Card({ children }: { children: React.ReactNode }) { return <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">{children}</div>; }
