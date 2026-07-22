@@ -31,6 +31,11 @@ import { QA_TOPICS, QA_TOPICS_BY_NAME, QA_CORE_TOPICS, QA_STAGE_ORDER, type QaTo
 export const SESSION_MINUTES: Record<QaStage, number> = { concept: 25, easy: 40, medium: 40, hard: 40, exam_ready: 40 };
 export const REVISION_SESSION_MINUTES = 20;
 
+// Where a "Need more" tap says the struggle came from (Section D2) — a small,
+// optional signal captured only on a bad session; the seed of the coach's
+// "you slip on calculation, not concept" read over time.
+export type ErrorType = 'concept' | 'calculation';
+
 export interface StudentTopicProgress {
   topic: string;
   stage: QaStage;
@@ -39,6 +44,11 @@ export interface StudentTopicProgress {
   // reaches exam_ready — the consolidation burst (file header, correction #2).
   initialRevisionSessionsDone: number;
   lastTouchedDaysAgo: number | null; // null = never touched
+  // ── Section D behaviour memory ──
+  conceptStruggles: number;      // D2: "Need more" + "didn't get the concept"
+  calcStruggles: number;         // D2: "Need more" + "calculation slip"
+  revisionMisses: number;        // D3: times a revision session came back "went cold" — decays faster for this student, so tighten its cycle
+  mockFlaggedForRevision: boolean; // D4: a weekly mock exposed this (already exam-ready) topic — jumps the decay queue
 }
 
 export interface QaStudentState {
@@ -47,8 +57,11 @@ export interface QaStudentState {
   swappedIn: Partial<Record<'priority' | 'secondary', string>>; // today's manual overrides
 }
 
-function progressFor(state: QaStudentState, topic: string): StudentTopicProgress {
-  return state.progressByTopic.get(topic) ?? { topic, stage: 'concept', sessionsDoneAtStage: 0, initialRevisionSessionsDone: 0, lastTouchedDaysAgo: null };
+export function progressFor(state: QaStudentState, topic: string): StudentTopicProgress {
+  return state.progressByTopic.get(topic) ?? {
+    topic, stage: 'concept', sessionsDoneAtStage: 0, initialRevisionSessionsDone: 0, lastTouchedDaysAgo: null,
+    conceptStruggles: 0, calcStruggles: 0, revisionMisses: 0, mockFlaggedForRevision: false,
+  };
 }
 
 // ── C1: ordering ─────────────────────────────────────────────────────────
@@ -226,9 +239,12 @@ export function advanceIfReady(state: QaStudentState, spec: QaTopicSpec, session
 
 // Revision frequency is derived from the topic's OWN retention-difficulty
 // score (a founder-supplied prior, LID) — higher retention-difficulty decays
-// faster, so it comes back sooner. Clamped to a sane 4-10 day range.
-export function revisionFrequencyDays(spec: QaTopicSpec): number {
-  return Math.min(10, Math.max(4, Math.round(12 - spec.difficulty.retention)));
+// faster, so it comes back sooner. `misses` (Section D3: "went cold" taps)
+// tighten the cycle further for THIS student — the plan learns that this
+// person forgets this topic fast. Clamped to a sane 2-10 day range.
+export function revisionFrequencyDays(spec: QaTopicSpec, misses = 0): number {
+  const base = Math.round(12 - spec.difficulty.retention);
+  return Math.min(10, Math.max(2, base - misses));
 }
 
 export interface RevisionTask { topic: string; reason: string }
@@ -250,7 +266,14 @@ export function dueRevision(state: QaStudentState): RevisionTask | null {
       if (!best || urgency > best.urgency) best = { topic: spec.topic, reason: 'Just mastered — lock it in', urgency };
       continue;
     }
-    const freq = revisionFrequencyDays(spec);
+    // D4: a topic the last mock exposed jumps the decay queue — a real
+    // exam-condition miss beats any calendar timer.
+    if (progress.mockFlaggedForRevision) {
+      const urgency = 900;
+      if (!best || urgency > best.urgency) best = { topic: spec.topic, reason: 'Slipped in your last mock — shore it up', urgency };
+      continue;
+    }
+    const freq = revisionFrequencyDays(spec, progress.revisionMisses);
     const daysSince = progress.lastTouchedDaysAgo ?? freq + 1;
     if (daysSince >= freq) {
       const urgency = daysSince - freq;
@@ -273,4 +296,80 @@ export function taskCopy(spec: QaTopicSpec, plan: TopicSessionPlan): string {
   const next = QA_STAGE_ORDER[nextIdx];
   const tail = plan.sessionsRemainingAtStage === 0 && next ? ` · clears to ${stageLabel(next)} today` : plan.sessionsRemainingAtStage === 0 ? ' · Exam Ready today' : ` · ${plan.sessionsRemainingAtStage} session${plan.sessionsRemainingAtStage === 1 ? '' : 's'} left after today`;
   return `${spec.topic} · ${label} — ${plan.sessionsToday} session${plan.sessionsToday === 1 ? '' : 's'} (${plan.minutesUsed} min)${tail}`;
+}
+
+// ── Section D: the daily log — what a student taps, and how it moves state ──
+//
+// Deliberately minimal (founder, 22 Jul):
+//   D1 study session  — ONE tap: "Got it" / "Need more". That's it.
+//   D2 error type     — one OPTIONAL tap, shown only after "Need more":
+//                       "didn't get the concept" vs "calculation slip".
+//   D3 revision       — a LIGHTER tap: "still fresh" / "went cold" (not the
+//                       full Got-it/Need-more — revision is quick).
+//   D4 mock write-back — a topic that flopped in the weekly mock auto-flags
+//                       for revision, jumping the decay queue.
+
+export interface StudySessionLog {
+  sessionsDone: number;      // how many of today's prescribed sessions they actually did
+  gotIt: boolean;            // D1 — the one tap
+  errorType?: ErrorType;     // D2 — only meaningful when gotIt === false
+}
+
+// D1 + D2: apply a day's study on one topic. Records the struggle signal first
+// (so it survives), then runs the stage-advance gate (sessions-done AND the
+// tap). Returns whether the stage cleared, for the "→ Easy unlocked" moment.
+export function applyStudySession(state: QaStudentState, spec: QaTopicSpec, log: StudySessionLog): AdvanceResult {
+  if (!log.gotIt && log.errorType) {
+    const p = progressFor(state, spec.topic);
+    state.progressByTopic.set(spec.topic, {
+      ...p,
+      conceptStruggles: p.conceptStruggles + (log.errorType === 'concept' ? 1 : 0),
+      calcStruggles: p.calcStruggles + (log.errorType === 'calculation' ? 1 : 0),
+    });
+  }
+  return advanceIfReady(state, spec, log.sessionsDone, log.gotIt);
+}
+
+// D3: a revision session. "still fresh" just resets the decay clock. "went
+// cold" means they'd genuinely forgotten it — record a miss so THIS student's
+// cycle for THIS topic tightens (revisionFrequencyDays), and keep it in the
+// consolidation burst if it was still there. Either way the topic was touched,
+// so the clock resets and any mock flag is cleared (they've now addressed it).
+export function applyRevisionSession(state: QaStudentState, spec: QaTopicSpec, wentCold: boolean): void {
+  const p = progressFor(state, spec.topic);
+  const inConsolidation = p.initialRevisionSessionsDone < spec.initialRevisionSessions;
+  state.progressByTopic.set(spec.topic, {
+    ...p,
+    initialRevisionSessionsDone: inConsolidation ? p.initialRevisionSessionsDone + 1 : p.initialRevisionSessionsDone,
+    revisionMisses: wentCold ? p.revisionMisses + 1 : p.revisionMisses,
+    lastTouchedDaysAgo: 0,
+    mockFlaggedForRevision: false,
+  });
+}
+
+// D4: fold a weekly mock's per-topic results back into the ladder. Only flags
+// topics that are ALREADY exam_ready — a topic still being learned doesn't need
+// a mock to tell it it isn't done. A flagged topic surfaces in dueRevision()
+// ahead of the calendar (see urgency 900 there).
+export interface MockTopicResult { topic: string; performedPoorly: boolean }
+
+export function applyMockResults(state: QaStudentState, results: MockTopicResult[]): string[] {
+  const flagged: string[] = [];
+  for (const r of results) {
+    if (!r.performedPoorly) continue;
+    const p = progressFor(state, r.topic);
+    if (p.stage === 'exam_ready') {
+      state.progressByTopic.set(r.topic, { ...p, mockFlaggedForRevision: true });
+      flagged.push(r.topic);
+    }
+  }
+  return flagged;
+}
+
+// The dominant struggle signal for a topic, for the coach/behaviour read
+// (null until there's a clear lean). "You slip on calculation here, not concept."
+export function dominantStruggle(state: QaStudentState, topic: string): ErrorType | null {
+  const p = progressFor(state, topic);
+  if (p.conceptStruggles === p.calcStruggles) return null;
+  return p.conceptStruggles > p.calcStruggles ? 'concept' : 'calculation';
 }
