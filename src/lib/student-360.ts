@@ -1,4 +1,5 @@
 import { getStudentMomentum, type StudentMomentum } from '@/lib/momentum';
+import { computeCapacity, type Capacity } from '@/lib/capacity-engine';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -23,6 +24,7 @@ export interface Student360 {
   };
   momentum: StudentMomentum;
   facts: { logsTotal: number; lastLogDate: string | null; opensPush: boolean };
+  capacity: Capacity;
   timeline: TimelineEvent[];
 }
 
@@ -33,9 +35,9 @@ const daysAgo = (iso: string | null | undefined, now: number) =>
 export async function getStudent360(admin: any, id: string): Promise<Student360 | null> {
   const now = Date.now();
   const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }] = await Promise.all([
-    admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at').eq('id', id).single(),
+    admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at, study_target_hours, hours_available').eq('id', id).single(),
     getStudentMomentum(admin, id),
-    admin.from('daily_reports').select('report_date, created_at').eq('student_id', id).order('report_date', { ascending: false }),
+    admin.from('daily_reports').select('report_date, created_at, study_duration').eq('student_id', id).order('report_date', { ascending: false }),
     admin.from('notifications').select('type, title, pushed_at, clicked_at').eq('user_id', id).not('pushed_at', 'is', null).order('pushed_at', { ascending: false }).limit(200),
     admin.from('student_engagement').select('signed_up_at, buddy_cta_last_at, intent_door_at, sales_called_at, mock_opened').eq('student_id', id).maybeSingle(),
     admin.from('mentor_grants').select('door, created_at').eq('student_id', id),
@@ -81,6 +83,11 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
       lastLogDate: (reports ?? [])[0]?.report_date ?? null,
       opensPush: momentum.signals.openedPushRecently,
     },
+    capacity: (() => {
+      const win = (reports ?? []).filter((r: any) => r.report_date >= new Date(now - 21 * DAY).toISOString().slice(0, 10));
+      const hrs = win.map((r: any) => Number(r.study_duration) || 0);
+      return computeCapacity(hrs, win.length, (p.study_target_hours ?? p.hours_available) as number | null);
+    })(),
     timeline: events.slice(0, 60),
   };
 }

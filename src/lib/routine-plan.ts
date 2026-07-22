@@ -23,6 +23,7 @@ import {
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
+import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 
@@ -192,7 +193,7 @@ export async function computeTodaysPlan(
   try {
     const today = getLogDateString();
 
-    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }] = await Promise.all([
+    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }, { data: recentReports }] = await Promise.all([
       admin
         .from('profiles')
         .select(`
@@ -211,6 +212,8 @@ export async function computeTodaysPlan(
         .eq('routine_date', today)
         .maybeSingle(),
       admin.from('routine_task_completions').select('task_id').eq('student_id', studentId).eq('routine_date', today),
+      admin.from('daily_reports').select('study_duration').eq('student_id', studentId)
+        .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
     ]);
 
     if (!profile) return null;
@@ -234,12 +237,18 @@ export async function computeTodaysPlan(
       }
     }
 
+    // Capacity Engine (LIS L3) — same cap as today/route.ts so the notification
+    // copy names the same plan size the tracker shows.
+    const claimedHours = (profile.study_target_hours ?? profile.hours_available) as number | null;
+    const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
+    const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
+
     const routineProfile: RoutineProfile = {
       isWorkingProfessional: !!profile.is_working_professional,
       isRepeater: !!profile.is_repeater,
       targetPercentile: profile.target_percentile as number | null,
-      weekdayHours: paceHours ?? ((profile.study_target_hours ?? profile.hours_available) as number | null),
-      weekendHours: paceHours ?? (profile.weekend_hours_available as number | null),
+      weekdayHours: capBudget(paceHours ?? claimedHours, capacity),
+      weekendHours: capBudget(paceHours ?? (profile.weekend_hours_available as number | null), capacity),
       weakestSection: weakest,
       strongestSection: strongest,
       weakTopic,

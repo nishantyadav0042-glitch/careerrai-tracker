@@ -5,6 +5,7 @@ import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, t
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
+import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -36,6 +37,7 @@ export async function GET() {
     { data: streak },
     history,
     { daysSincePendingMock, pendingMockName },
+    { data: recentReports },
   ] = await Promise.all([
     admin
       .from('profiles')
@@ -72,6 +74,13 @@ export async function GET() {
       .maybeSingle(),
     buildHistory(admin, user.id),
     buildMissionInputs(admin, user.id, today),
+    // Capacity Engine input: actual study hours over the recent window, so the
+    // plan is sized to what this student sustains, not what they claimed.
+    admin
+      .from('daily_reports')
+      .select('study_duration')
+      .eq('student_id', user.id)
+      .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
@@ -126,12 +135,19 @@ export async function GET() {
     if (remaining > 0) paceHours = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
   }
 
+  // Capacity Engine (LIS L3): believe behaviour over the claimed number. The
+  // date-driven pace proposes a budget; capacity caps it at what this student
+  // actually sustains, so the plan is completable instead of aspirational.
+  const claimedHours = (profile.study_target_hours ?? profile.hours_available) as number | null;
+  const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
+  const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
+
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
     targetPercentile: profile.target_percentile as number | null,
-    weekdayHours: paceHours ?? ((profile.study_target_hours ?? profile.hours_available) as number | null),
-    weekendHours: paceHours ?? (profile.weekend_hours_available as number | null),
+    weekdayHours: capBudget(paceHours ?? claimedHours, capacity),
+    weekendHours: capBudget(paceHours ?? (profile.weekend_hours_available as number | null), capacity),
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
