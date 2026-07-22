@@ -72,6 +72,16 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   const offset = C * (1 - pace.completedPct / 100);
   const todayIso = new Date().toISOString().split('T')[0];
 
+  // Reschedule negotiation (founder, 23 July): moving the date must TELL the
+  // student what it costs before they commit — "this date needs Xh/day, OK?"
+  // Remaining work = the steady per-day requirement × days left (self-consistent
+  // with the pace engine, no extra fetch). We never silently invent hours.
+  const committedPerDay = pace.committedPerDay ?? pace.requiredPerDay;
+  const daysToNew = date ? Math.max(1, Math.ceil((new Date(date + 'T00:00:00').getTime() - new Date(todayIso + 'T00:00:00').getTime()) / 86_400_000)) : null;
+  const remainingHours = pace.requiredPerDay * pace.daysLeft;
+  const requiredForNew = daysToNew ? Math.round((remainingHours / daysToNew) * 2) / 2 : null;
+  const tooDemanding = requiredForNew != null && requiredForNew > committedPerDay + 0.5;
+
   async function saveDate() {
     if (!date) return;
     setBusy(true); setErr(null);
@@ -137,15 +147,39 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
       </div>
 
       {editing && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-3">
-          <input type="date" value={date} min={todayIso} onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-sm text-stone-900" />
-          <button type="button" disabled={busy || !date} onClick={saveDate}
-            className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
-            {busy ? 'Saving…' : 'Set new date'}
-          </button>
-          {err && <span className="text-[11px] text-rose-600">{err}</span>}
-          <span className="w-full text-[10.5px] text-stone-400">Your daily hours recalculate the moment you move the date.</span>
+        <div className="mt-3 space-y-2.5 border-t border-stone-100 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="date" value={date} min={todayIso} onChange={(e) => setDate(e.target.value)}
+              className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-sm text-stone-900" />
+          </div>
+
+          {/* The truth about the date they just picked — before they commit. */}
+          {requiredForNew != null && (
+            tooDemanding ? (
+              <div className="rounded-xl border-2 border-rose-400 bg-rose-50 p-3">
+                <p className="text-[12px] font-bold text-rose-700">⚠ That date is demanding.</p>
+                <p className="mt-0.5 text-[12.5px] leading-relaxed text-stone-700">
+                  Finishing by <b>{fmt(date)}</b> means <b className="text-rose-700">{requiredForNew}h every single day</b> — more than your usual <b>{committedPerDay}h</b>. Are you sure you can sustain this? A date you actually hit beats one that looks good and breaks you.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[12.5px] leading-relaxed text-stone-700">
+                  Finishing by <b>{fmt(date)}</b> means about <b className="text-emerald-700">{requiredForNew}h a day</b> — that fits your routine.
+                </p>
+              </div>
+            )
+          )}
+
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={busy || !date} onClick={saveDate}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${tooDemanding ? 'bg-rose-600' : 'bg-stone-900'}`}>
+              {busy ? 'Saving…' : tooDemanding ? `Yes, I'll do ${requiredForNew}h/day` : 'Set this date'}
+            </button>
+            <button type="button" onClick={() => { setEditing(false); setDate(''); setErr(null); }}
+              className="text-xs font-medium text-stone-500 hover:text-stone-700">Cancel</button>
+            {err && <span className="text-[11px] text-rose-600">{err}</span>}
+          </div>
         </div>
       )}
     </div>
