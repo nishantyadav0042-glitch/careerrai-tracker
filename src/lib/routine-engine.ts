@@ -194,12 +194,56 @@ export function personalizationSummary(profile: RoutineProfile, isWeekendToday: 
   return `Built from your setup: ${weakLabel} · ${hoursLabel}`;
 }
 
-// ~3 focused minutes per question is the pacing instruction the target is
-// built from (concept-first tasks reserve a third of the slot for the
-// concept). A goal to aim at, stated once here.
-function questionTarget(minutes: number, conceptFirst: boolean): number {
-  const practiceMinutes = conceptFirst ? Math.round(minutes * 0.67) : minutes;
-  return Math.max(5, Math.round(practiceMinutes / 3));
+// ── Learning Engine (LIS Layer 4): pace × phase × unit ───────────────────────
+// Volume is NOT a flat 3 min/question. The old rule was a SOLVING speed applied
+// to LEARNING — which is how a foundation-phase student got "72 questions."
+// Learning is slow (concept → attempt → solution → retry); practice is faster;
+// revision is retrieval. And CAT topics live in different UNITS — QA in
+// questions, DILR in sets, RC in passages — so we prescribe the natural unit,
+// capped so a day is always completable (motivation > math). Priors:
+// docs/research/LEARNING-CAPACITY-ENGINE.md §2b.
+type StudyUnit = 'question' | 'set' | 'passage';
+
+function unitFor(section: Section, topic: string): StudyUnit {
+  if (section === 'DILR') return 'set';
+  if (section === 'VARC' && /reading comprehension/i.test(topic)) return 'passage';
+  return 'question';
+}
+
+// Minutes per unit, by phase (foundation=learning, intensive=practice, revision).
+function minutesPerUnit(unit: StudyUnit, section: Section, phase: Phase): number {
+  if (unit === 'set' || unit === 'passage') return phase === 'foundation' ? 30 : phase === 'revision' ? 10 : 15;
+  const verbal = section === 'VARC';
+  if (phase === 'foundation') return verbal ? 6 : 10; // learning
+  if (phase === 'revision') return verbal ? 1.5 : 2;  // retrieval
+  return verbal ? 3.5 : 4;                            // practice (intensive)
+}
+
+// Motivation cap — a single task is never crushing, however many hours the day
+// holds. Completing 12 achievable questions beats abandoning 72.
+function unitCap(unit: StudyUnit, phase: Phase): number {
+  if (unit === 'set' || unit === 'passage') return phase === 'foundation' ? 3 : phase === 'revision' ? 6 : 5;
+  if (phase === 'foundation') return 12;
+  if (phase === 'revision') return 30;
+  return 22;
+}
+
+function taskVolume(section: Section, topic: string, minutes: number, phase: Phase): { count: number; unit: StudyUnit } {
+  const unit = unitFor(section, topic);
+  // Foundation reserves a third of the slot for the concept before practice.
+  const practiceMin = phase === 'foundation' ? Math.round(minutes * 0.67) : minutes;
+  const raw = Math.round(practiceMin / minutesPerUnit(unit, section, phase));
+  const floor = unit === 'question' ? 3 : 1;
+  return { count: Math.max(floor, Math.min(unitCap(unit, phase), raw)), unit };
+}
+
+// The instruction, in the topic's natural unit and the phase's verb.
+function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase): string {
+  const { count: n, unit } = taskVolume(section, topic, minutes, phase);
+  const s = n === 1 ? '' : 's';
+  if (unit === 'passage') return phase === 'foundation' ? `Read + solve ${n} RC passage${s}` : `${n} RC passage${s}, timed`;
+  if (unit === 'set') return phase === 'foundation' ? `Learn ${topic}, then ${n} set${s}` : `Solve ${n} ${topic} set${s}`;
+  return phase === 'foundation' ? `Learn ${topic}, solve ${n} questions` : `Solve ${n} ${topic} questions`;
 }
 
 export interface HistoryInput {
@@ -247,16 +291,13 @@ export function generateRoutine(
 
   const weakChoice = topicChoices[weak];
   const priorityMinutes = Math.round(totalMinutes * weakShare);
-  const priorityQuestions = questionTarget(priorityMinutes, phase === 'foundation');
 
   tasks.push({
     id: `${weak.toLowerCase()}-priority`,
     section: weak,
     topic: weakChoice.topic,
     label: `${weak} — ${weakChoice.topic}`,
-    target: phase === 'foundation'
-      ? `Learn ${weakChoice.topic}, solve ${priorityQuestions} questions`
-      : `Solve ${priorityQuestions} ${weakChoice.topic} questions`,
+    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phase),
     estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
@@ -270,7 +311,7 @@ export function generateRoutine(
       section,
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
-      target: `Solve ${questionTarget(minutes, false)} ${choice.topic} questions`,
+      target: targetPhrase(section, choice.topic, minutes, phase),
       estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });
