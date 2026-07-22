@@ -19,8 +19,11 @@ interface LoggingRequest {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
+  plan_fit?: string; // Review Engine: 'too_much' | 'right' | 'too_little'
   log_date?: string; // optional backdate — must be today or yesterday (IST)
 }
+
+const VALID_PLAN_FIT = ['too_much', 'right', 'too_little'] as const;
 
 export async function POST(request: NextRequest) {
   try {
@@ -110,6 +113,16 @@ export async function POST(request: NextRequest) {
       p_emotional_chips: body.emotional_chips ?? [],
     });
     if (rpcError) throw rpcError;
+
+    // Review Engine signal — persisted on the row the RPC just wrote (kept out
+    // of the RPC so its transaction contract is untouched). Best-effort: a
+    // failed capture must never fail the log.
+    if (typeof body.plan_fit === 'string' && (VALID_PLAN_FIT as readonly string[]).includes(body.plan_fit)) {
+      void admin.from('daily_reports').update({ plan_fit: body.plan_fit })
+        .eq('student_id', user.id).eq('report_date', dateStr)
+        .then(({ error }: { error: unknown }) => { if (error) console.error('[log] plan_fit update failed', error); });
+    }
+
     const streakUpdated = rpcResult;
     // Authoritative "is this a brand-new log" flag, computed INSIDE the same
     // transaction as the insert (bug audit, 14 July) — the route's own

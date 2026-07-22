@@ -24,6 +24,7 @@ export interface LoggingData {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
+  plan_fit?: string; // Review Engine: 'too_much' | 'right' | 'too_little'
   // Plan tasks to complete, with how far they got: 'green' = fully done,
   // 'blue' = half done (advances coverage less). Absent confidence = uncover
   // a previously-done task.
@@ -58,6 +59,7 @@ export function LoggingModal({
   const [hours, setHours] = useState<number | null>(null);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
   const [energy, setEnergy] = useState<string | null>(null);
+  const [planFit, setPlanFit] = useState<string | null>(null);
   const [emotionalChips, setEmotionalChips] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +165,7 @@ export function LoggingModal({
         energy,
         notes: notes.trim() || undefined,
         emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
+        plan_fit: planFit ?? undefined,
         completedTasks,
       });
       // Reset form
@@ -172,6 +175,7 @@ export function LoggingModal({
       setOffSections([]);
       setMockTaken(null);
       setEnergy(null);
+      setPlanFit(null);
       setEmotionalChips([]);
       setNotes('');
       if (!result.mockSelected) onClose();
@@ -318,6 +322,42 @@ export function LoggingModal({
               </div>
             )}
           </div>
+
+          {/* Plan-fit — the Review Engine signal the Adaptation Engine learns
+              from: was today's volume right for this student? One tap, optional,
+              only when there was a plan and they actually studied. This is how
+              we catch "too many questions" (the Pranav calibration) from
+              behaviour instead of waiting for a WhatsApp complaint. */}
+          {planTasks.length > 0 && hours !== null && hours > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
+                How did today&apos;s plan feel? <span className="normal-case font-normal text-zinc-600">(optional)</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'too_much', label: 'Too much', hint: '😮‍💨' },
+                  { value: 'right', label: 'Just right', hint: '👍' },
+                  { value: 'too_little', label: 'Too little', hint: '💪' },
+                ].map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setPlanFit((prev) => (prev === o.value ? null : o.value))}
+                    className={cn(
+                      'flex flex-col items-center gap-1 py-3 rounded-2xl transition-all active:scale-95',
+                      planFit === o.value
+                        ? 'bg-zinc-700 ring-2 ring-orange-500 ring-offset-2 ring-offset-zinc-950'
+                        : 'bg-zinc-800 hover:bg-zinc-700'
+                    )}
+                  >
+                    <span className="text-xl">{o.hint}</span>
+                    <span className="text-xs font-semibold text-zinc-300">{o.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-zinc-600 mt-1.5">We use this to tune tomorrow&apos;s load — no wrong answer.</p>
+            </div>
+          )}
 
           {/* Off-plan sections — the honest path for study that wasn't on
               today's app plan (coaching class, own material, day-1 students).
