@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { KNOWLEDGE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
+import { KNOWLEDGE_GRAPH, ONBOARDING_CORE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
 import { Rai, RAI_LEVELS } from '@/components/mascots';
 
 // ── The companion trail ──────────────────────────────────────────────────────
@@ -104,9 +104,13 @@ interface MapStep {
 }
 
 function buildSteps(order?: CoverageSectionId[]): MapStep[] {
+  // Onboarding shows the CORE subset only (3 exam sections, QA last, one step
+  // each, + a short habit tail) — NOT the full KNOWLEDGE_GRAPH. The save in
+  // handleNext still writes the whole graph, so un-asked topics are recorded
+  // not_started and the rest of the app stays complete.
   const sections = order
-    ? order.map((id) => KNOWLEDGE_GRAPH.find((s) => s.id === id)).filter((s): s is KnowledgeSection => !!s)
-    : KNOWLEDGE_GRAPH;
+    ? order.map((id) => ONBOARDING_CORE_GRAPH.find((s) => s.id === id)).filter((s): s is KnowledgeSection => !!s)
+    : ONBOARDING_CORE_GRAPH;
   return sections.flatMap((section) =>
     section.groups.map((group) => ({
       sectionId: section.id,
@@ -127,7 +131,7 @@ function buildSteps(order?: CoverageSectionId[]): MapStep[] {
   lesson:
     step.title === 'VARC' ? '💡 Reading Comprehension carries most VARC marks — a daily reading habit moves this section more than any drill.'
     : step.title === 'DILR' ? '💡 DILR is a set-selection game: choosing the right 2 sets to attempt matters more than raw speed.'
-    : step.title === 'QA · Algebra' ? '💡 Arithmetic + Algebra contribute the majority of CAT Quant questions. Good thing we mapped these carefully.'
+    : step.title === 'QA' ? '💡 Arithmetic + Algebra contribute the majority of CAT Quant questions — these core topics are where your Quant score is made.'
     : null,
   }));
 }
@@ -146,7 +150,7 @@ function buildSteps(order?: CoverageSectionId[]): MapStep[] {
 // `draftKey` prop doc above the interface); (2) a draft saved before a
 // taxonomy change (a unit added/renamed) could resume mid-grid with stale
 // step positions. Bump this suffix whenever KNOWLEDGE_GRAPH's units change.
-const DEFAULT_DRAFT_KEY = 'cr_preauth_topic_coverage_draft_v2';
+const DEFAULT_DRAFT_KEY = 'cr_preauth_topic_coverage_draft_v3';
 
 function loadDraft(key: string): { stepIdx: number; statuses: Record<string, DeclaredStatus> } | null {
   if (typeof window === 'undefined') return null;

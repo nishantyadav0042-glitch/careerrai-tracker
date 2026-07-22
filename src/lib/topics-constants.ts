@@ -79,6 +79,39 @@ export const UNIT_ORDER: Record<string, number> = Object.fromEntries(
   KNOWLEDGE_GRAPH.flatMap((s) => s.groups).flatMap((g) => g.units).map((u, i) => [u, i])
 );
 
+// ── Onboarding core subset (founder, 22 Jul) ──────────────────────────────
+// The onboarding coverage matrix must be SHORT: only the CORE topics, three
+// exam sections (VARC, DILR, QA — QA last), each as ONE step (not QA's five
+// cluster sub-steps), plus a short prep-habits tail. ~45 units the student
+// actually taps, instead of the full 53. This is ONLY what onboarding SHOWS;
+// the full KNOWLEDGE_GRAPH above is unchanged and still drives every other
+// engine, and the coverage save still writes the whole graph (un-asked topics
+// default to not_started) so the Analysis map, planner and pace stay complete.
+//
+// QA is trimmed from 28 to its highest-value 22: the six lowest-weightage /
+// most peripheral topics — Mixtures, Pipes & Cisterns, Logarithms, HCF & LCM,
+// Set Theory, Base System — are dropped from ONBOARDING only (never the graph;
+// they're still in the Analysis matrix and can be marked there any time).
+export const ONBOARDING_QA_CORE = [
+  'Percentages', 'Profit & Loss', 'Ratio & Proportion', 'Average', 'Time & Work', 'Time Speed Distance', 'SI & CI',
+  'Linear Equations', 'Quadratic Equations', 'Functions', 'Inequalities', 'Progressions',
+  'Lines & Angles', 'Triangles', 'Quadrilaterals', 'Circles', 'Mensuration', 'Coordinate Geometry',
+  'Permutation & Combination', 'Probability',
+  'Divisibility', 'Remainders',
+]; // 22 — one QA step, the last (3rd) core section
+export const ONBOARDING_MOCK_CORE = ['Sectional Tests', 'Full Length Mocks', 'Mock Analysis']; // 3
+export const ONBOARDING_READING_CORE = ['Daily Editorials', 'Business & Economy Reading'];     // 2
+
+// VARC 9 + DILR 9 + QA 22 = 40 core exam topics, + 5 prep-habit "things" = 45.
+// Order = VARC, DILR, QA (QA last core section), then the habit tail.
+export const ONBOARDING_CORE_GRAPH: KnowledgeSection[] = [
+  { id: 'VARC', label: 'VARC', groups: [{ label: null, units: VERBAL_TOPICS }] },
+  { id: 'DILR', label: 'DILR', groups: [{ label: null, units: LRDI_TOPICS }] },
+  { id: 'QA', label: 'QA', groups: [{ label: null, units: ONBOARDING_QA_CORE }] },
+  { id: 'MOCKS', label: 'Mock Preparation', groups: [{ label: null, units: ONBOARDING_MOCK_CORE }] },
+  { id: 'READING', label: 'Reading Habit', groups: [{ label: null, units: ONBOARDING_READING_CORE }] },
+];
+
 // CAT topic metadata — the content facts every planning rule should read
 // from, rather than hardcoding topic names or ordering directly. This is
 // static reference data (same shape as the topic lists above), not a

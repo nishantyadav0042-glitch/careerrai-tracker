@@ -160,7 +160,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // shared device could resume a DIFFERENT student's half-finished
       // coverage taps into this account. userId is known by the time this
       // screen (index 5) is reachable — screen 0 already needs a session.
-      extraProps: { draftKey: userId ? `cr_onboarding_topic_coverage_draft_v2_${userId}` : undefined },
+      extraProps: { draftKey: userId ? `cr_onboarding_topic_coverage_draft_v3_${userId}` : undefined },
     },                                                            // 5
     {
       // The finish-date chooser (replaces the old Daily Commitment screen):
