@@ -180,13 +180,17 @@ export function swapTopic(state: QaStudentState, slot: 'priority' | 'secondary',
 
 export interface TimeSplit { priorityMinutes: number; secondaryMinutes: number }
 
-// Hybrid: proportional to weightage, floored so the smaller topic is never
-// token minutes (min 30% of the budget when both slots are filled).
+// C3, hybrid + priority-leads: the base split is proportional to weightage, but
+// the PRIORITY topic (the day's focus) always leads — it gets at least half,
+// up to 75% when it also out-weighs the secondary. So a low-weightage focus
+// topic is never handed less time than its sidekick (which was the bug: a
+// weak-cluster priority like Lines & Angles losing minutes to a heavier
+// secondary), and the secondary is never starved below 25%.
 export function splitTimeBudget(totalMinutes: number, priority: QaTopicSpec, secondary: QaTopicSpec | null): TimeSplit {
   if (!secondary) return { priorityMinutes: totalMinutes, secondaryMinutes: 0 };
   const wSum = priority.weightage + secondary.weightage;
   const rawPriorityShare = wSum > 0 ? priority.weightage / wSum : 0.5;
-  const priorityShare = Math.min(0.7, Math.max(0.3, rawPriorityShare));
+  const priorityShare = Math.min(0.75, Math.max(0.5, rawPriorityShare));
   const priorityMinutes = Math.round(totalMinutes * priorityShare);
   return { priorityMinutes, secondaryMinutes: totalMinutes - priorityMinutes };
 }
