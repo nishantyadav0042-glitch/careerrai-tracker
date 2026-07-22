@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadMasteryState } from '@/lib/mastery-state';
-import { sectionConfig } from '@/lib/mastery-sections';
+import { sectionConfig, sectionBudgetShare } from '@/lib/mastery-sections';
 import { stageLabel, REVISION_SESSION_MINUTES, type MasteryTopicSpec } from '@/lib/mastery-engine';
 
 // GET /api/mastery/[section]/today — the mastery plan for one section. Gated by
@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ section
   const admin = createAdminClient();
   const { data } = await admin
     .from('profiles')
-    .select('qa_model_enabled, dilr_model_enabled, qa_include_bonus, dilr_include_bonus, study_target_hours, hours_available')
+    .select('qa_model_enabled, dilr_model_enabled, varc_model_enabled, qa_include_bonus, dilr_include_bonus, varc_include_bonus, study_target_hours, hours_available')
     .eq('id', user.id).single();
   const profile = data as Record<string, unknown> | null;
   if (!profile || profile[cfg.enabledCol] !== true) {
@@ -30,8 +30,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ section
   const includeBonus = profile[cfg.bonusCol] === true;
   const state = await loadMasteryState(admin, user.id, cfg.key, cfg.graph.byName, includeBonus);
 
+  // Cross-section time weighting: give this section its normalised share of the
+  // day, over whichever mastery sections the student has enabled. QA is heaviest
+  // (widest syllabus); a single-section student still gets their whole budget.
+  const enabledKeys = [
+    profile.qa_model_enabled === true ? 'QA' : null,
+    profile.dilr_model_enabled === true ? 'DILR' : null,
+    profile.varc_model_enabled === true ? 'VARC' : null,
+  ].filter(Boolean) as string[];
   const dailyHours = ((profile.study_target_hours ?? profile.hours_available ?? 3) as number);
-  const budgetMinutes = Math.max(60, Math.round(dailyHours * 60 * 0.4));
+  const share = sectionBudgetShare(cfg.key, enabledKeys);
+  const budgetMinutes = Math.max(60, Math.round(dailyHours * 60 * share));
   const e = cfg.engine;
 
   const slot = (spec: MasteryTopicSpec, minutes: number, why: string) => {

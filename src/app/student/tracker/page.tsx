@@ -361,6 +361,16 @@ export default async function DailyTrackerPage() {
             <span className="shrink-0 text-2xl" aria-hidden>🧩</span>
           </Link>
         )}
+        {profile?.varc_model_enabled && (
+          <Link href="/student/plan/varc"
+            className="flex items-center justify-between gap-3 rounded-2xl bg-stone-900 px-4 py-3 text-white shadow-sm transition-colors hover:bg-stone-800">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300">New · VARC Mastery</p>
+              <p className="text-sm font-bold leading-snug">Open your topic-by-topic VARC plan →</p>
+            </div>
+            <span className="shrink-0 text-2xl" aria-hidden>📖</span>
+          </Link>
+        )}
         {/* Greeting + streak card */}
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="min-w-0">
