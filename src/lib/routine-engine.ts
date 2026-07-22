@@ -284,10 +284,19 @@ export function generateRoutine(
 
   const tasks: RoutineTask[] = [];
 
-  // Daily floor, in do-order: weakest section leads (biased ~15% more time),
-  // then the other two, then a mock/revision task depending on phase.
-  const weakShare = 0.40;
-  const otherShare = (1 - weakShare) / nonWeak.length;
+  // Identity fork (LIS L1→Planning): a working professional's weekday time is
+  // scarce, so we don't spread it thin across all three sections — the plan
+  // focuses on the weak area + ONE other (highest ROI), and the weekend gets
+  // the full spread + a real mock. Freshers / full-time aspirants keep all
+  // three. This is what makes the persona *feel* like a different coach, not a
+  // coefficient.
+  const leanWeekday = profile.isWorkingProfessional && !weekend && phase !== 'revision';
+  const activeNonWeak = leanWeekday ? nonWeak.slice(0, 1) : nonWeak;
+
+  // Weakest section leads (bigger share when the day is lean), then the
+  // other(s), then a mock/revision task depending on phase.
+  const weakShare = leanWeekday ? 0.55 : 0.40;
+  const otherShare = (1 - weakShare) / activeNonWeak.length;
 
   const weakChoice = topicChoices[weak];
   const priorityMinutes = Math.round(totalMinutes * weakShare);
@@ -303,7 +312,7 @@ export function generateRoutine(
     isImplementationIntention: true,
   });
 
-  nonWeak.forEach((section, i) => {
+  activeNonWeak.forEach((section, i) => {
     const choice = topicChoices[section];
     const minutes = Math.round(totalMinutes * otherShare);
     tasks.push({

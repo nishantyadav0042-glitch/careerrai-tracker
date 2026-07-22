@@ -23,6 +23,7 @@ interface OnboardingPayload {
   hours_available?: unknown;
   coaching_enrolled?: unknown;
   is_repeater?: unknown;
+  is_working_professional?: unknown;
   pain_points?: unknown;
   wants_mentor?: unknown;
   push_subscription?: unknown;
@@ -210,6 +211,10 @@ export async function POST(request: NextRequest) {
       }
       if (typeof onboarding.coaching_enrolled === 'boolean') profileUpdate.coaching_enrolled = onboarding.coaching_enrolled;
       if (typeof onboarding.is_repeater === 'boolean') profileUpdate.is_repeater = onboarding.is_repeater;
+      // Identity Engine (LIS L1): capture whether they're working — the persona
+      // that most changes the plan shape (was never asked, so a working student
+      // like Pranav got a full-time-aspirant plan).
+      if (typeof onboarding.is_working_professional === 'boolean') profileUpdate.is_working_professional = onboarding.is_working_professional;
       if (Array.isArray(onboarding.pain_points)) {
         profileUpdate.pain_points = onboarding.pain_points.filter((p): p is string => typeof p === 'string').slice(0, 2);
       }

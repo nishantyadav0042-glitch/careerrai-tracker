@@ -33,14 +33,20 @@ function Chip({ active, label, onClick }: { active: boolean; label: string; onCl
 
 // Three fast facts, one screen, no essay questions — coaching status,
 // attempt history, and daily hours available all in one quick tap-through.
+type Situation = 'working' | 'college' | 'fulltime';
+
 export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading, ambitionDate }: Props) {
   const [hours, setHours] = useState<number | null>(null);
   const [coaching, setCoaching] = useState<boolean | null>(null);
   const [repeater, setRepeater] = useState<boolean | null>(null);
+  const [situation, setSituation] = useState<Situation | null>(null);
   const [alert, setAlert] = useState<Feasibility | null>(null);
 
-  const canContinue = hours != null && coaching != null && repeater != null;
-  const payload = { hours_available: hours, coaching_enrolled: coaching, is_repeater: repeater };
+  const canContinue = hours != null && coaching != null && repeater != null && situation != null;
+  // Identity Engine: 'working' is the persona that most reshapes the plan
+  // (scarce time → highest-ROI, lighter weekdays). College / full-time both
+  // read as not-working-professional for now.
+  const payload = { hours_available: hours, coaching_enrolled: coaching, is_repeater: repeater, is_working_professional: situation === 'working' };
 
   // The capacity reality-check: does their finish date fit the hours they can
   // give? If not, STOP and show it boldly — they decide, we never silently hand
@@ -134,6 +140,15 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading,
         <div className="flex gap-2">
           <Chip active={repeater === false} label="First attempt" onClick={() => setRepeater(false)} />
           <Chip active={repeater === true} label="Repeating" onClick={() => setRepeater(true)} />
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-semibold text-stone-800">Right now you&apos;re a…</p>
+        <div className="flex flex-wrap gap-2">
+          <Chip active={situation === 'working'} label="Working professional" onClick={() => setSituation('working')} />
+          <Chip active={situation === 'college'} label="College student" onClick={() => setSituation('college')} />
+          <Chip active={situation === 'fulltime'} label="Full-time aspirant" onClick={() => setSituation('fulltime')} />
         </div>
       </div>
 
