@@ -111,6 +111,41 @@ evidence arrives — a null is honest, a guessed 50 is not. Build it by derivati
 (Principle 2), not new surveys.
 *Validation:* Milestone Zero — predicts mock performance better than completion.
 
+**Engine 1b — Mastery / Topic Progression (the "topic is a journey, not a checkbox" insight).**
+Source: a real student — *"SI doesn't finish today; tomorrow CI, then practice, then
+medium, then hard. A DILR/Quant chapter takes 3–4 days each. So plan accordingly."*
+The unit of learning is **not the topic** — it's the student's **position inside the
+topic's journey**. The planner today asks "what topic next?" and frames each task as
+"Learn X" (a false one-day finish). It must instead ask **"what is the next mastery
+milestone inside the current topic?"** and never move on until the state actually
+advances.
+- **One GENERIC lifecycle for every topic** — `Concept → Easy → Medium → Hard → Mixed
+  → Mock-ready` — paced by the topic's *existing* difficulty/hours. NOT 10 hand-authored
+  states × hundreds of topics (a content mountain that would never ship).
+- **This is one engine, not three.** Mastery/Progression is the *data model* (where in
+  the journey); the **Mission** is its *presentation* (today's single winnable objective
+  with a success criterion — "recognise when SI applies + 5 easy Qs; ignore the hard ones").
+  Knowledge State (Engine 1) is the complement: Mastery = *where*, Knowledge State = *how
+  well*. Do not build "Topic Progression" + "Mission" + "Learning Journey" as separate
+  engines — that ships none.
+- **We are ~40% there already:** `topic_coverage.status`
+  (`not_started→learning→practicing→revising→exam_ready`) is a real 5-state lifecycle in
+  the DB, and the daily log already captures partial progress (half/full). The gap is
+  that the planner reasons about topics not states, and the copy hides the journey.
+- **Objective it serves:** *end every session with a felt sense of progress* — completion
+  psychology → momentum psychology. Task copy shifts from "12 questions (fail if you miss
+  4)" to a mission with an achievable success criterion; a per-topic progress bar makes
+  mastery visible; logging is ONE tap that maps to a stage (never a checklist — friction
+  is the enemy of consistency, our #1 constraint) and the plan **resumes, never restarts**.
+- **Discipline (where the essay over-reaches):** ship the FELT version first (mission +
+  progress bar + resume + multi-day continuity — all mostly copy + light logic on the
+  engine we have, and student-visible immediately because it's the task text), PROVE it
+  lifts consistency, THEN add mastery-% math, completion-probability, per-struggle
+  forgetting. The ₹-value is captured by shipping the feeling fast, not by perfect
+  modelling before a single student sees it.
+*Validation:* students on mission-framing finish more sessions "successfully" and log
+more consistently than on the old topic framing.
+
 **Evidence + Trust layer (Engines 5 + 8, merged).**
 One first-class `evidence` object on every recommendation: why, the numbers
 behind it, confidence, trade-offs. Mostly already latent in the Constraint/
