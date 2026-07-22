@@ -5,6 +5,7 @@
 
 import { QA_GRAPH, qaEngine } from './qa-mastery-engine';
 import { DILR_GRAPH, dilrEngine } from './dilr-mastery-engine';
+import { VARC_GRAPH, varcEngine } from './varc-mastery-engine';
 import type { SectionGraph, MasteryTopicSpec, createMasteryEngine } from './mastery-engine';
 
 type AnyEngine = ReturnType<typeof createMasteryEngine<MasteryTopicSpec>>;
@@ -33,8 +34,36 @@ const SECTIONS: Record<string, SectionConfig> = {
     engine: dilrEngine as unknown as AnyEngine,
     enabledCol: 'dilr_model_enabled', bonusCol: 'dilr_include_bonus',
   },
+  varc: {
+    key: 'VARC', label: 'VARC',
+    graph: VARC_GRAPH as unknown as SectionGraph<MasteryTopicSpec>,
+    engine: varcEngine as unknown as AnyEngine,
+    enabledCol: 'varc_model_enabled', bonusCol: 'varc_include_bonus',
+  },
 };
 
 export function sectionConfig(param: string | undefined | null): SectionConfig | null {
   return param ? (SECTIONS[param.toLowerCase()] ?? null) : null;
+}
+
+// ── Cross-section time weighting ─────────────────────────────────────────
+// Toppers don't split prep evenly. QA carries the widest syllabus (33 core
+// topics vs ~14 each for DILR/VARC) and the most independent formula work, so
+// it earns the largest daily share; DILR and VARC are lighter on new-topic
+// load and lean more on repeated exposure. These are the founder-approved
+// priors (QA heaviest), calibrated against topper study patterns — not an even
+// third each. Shares are normalised over whichever sections a student has the
+// mastery model enabled for, so a QA-only student still gets 100% of their
+// time on QA.
+export const SECTION_WEIGHTS: Record<string, number> = { QA: 0.40, DILR: 0.30, VARC: 0.30 };
+
+// The fraction of a student's daily study budget this section should get, given
+// the full set of sections they have enabled. Falls back to an even split if a
+// key is somehow unweighted, and to 1 (whole budget) when nothing else is on.
+export function sectionBudgetShare(sectionKey: string, enabledKeys: string[]): number {
+  const keys = enabledKeys.length > 0 ? enabledKeys : [sectionKey];
+  const weightOf = (k: string) => SECTION_WEIGHTS[k] ?? 0.30;
+  const total = keys.reduce((s, k) => s + weightOf(k), 0);
+  if (total <= 0) return 1 / keys.length;
+  return weightOf(sectionKey) / total;
 }

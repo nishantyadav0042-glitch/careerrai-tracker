@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const admin = createAdminClient();
   const { data } = await admin.from('profiles')
-    .select('qa_model_enabled, dilr_model_enabled, qa_include_bonus, dilr_include_bonus')
+    .select('qa_model_enabled, dilr_model_enabled, varc_model_enabled, qa_include_bonus, dilr_include_bonus, varc_include_bonus')
     .eq('id', user.id).single();
   const profile = data as Record<string, unknown> | null;
   if (!profile || profile[cfg.enabledCol] !== true) {
