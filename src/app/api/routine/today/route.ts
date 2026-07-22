@@ -176,6 +176,17 @@ export async function GET() {
   // in the parallel wave above.)
   const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
 
+  // Learning Ladder (Mastery v1): the coverage status of each chosen topic, so
+  // generateRoutine can phrase the task as "Level Up X · Ln/6" and stay on the
+  // topic across days instead of implying a one-day finish.
+  const statusByTopic = new Map<string, CoverageStatus>();
+  for (const row of (coverageRows ?? [])) statusByTopic.set(row.topic, row.status as CoverageStatus);
+  const chosenStatus: Partial<Record<Section, CoverageStatus | null>> = {
+    VARC: statusByTopic.get(topicChoices.VARC.topic) ?? null,
+    DILR: statusByTopic.get(topicChoices.DILR.topic) ?? null,
+    QA: statusByTopic.get(topicChoices.QA.topic) ?? null,
+  };
+
   // A routine frozen earlier today at DIFFERENT hours (the student just
   // rescheduled their target) is stale — regenerate it, but only while
   // nothing is ticked off yet: completed work is never wiped by a resize.
@@ -193,7 +204,7 @@ export async function GET() {
     if (Math.abs((routine.generated_pace_hours as number) - paceHours) > 0.5) routine = null;
   }
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor);
+    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor, chosenStatus);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(

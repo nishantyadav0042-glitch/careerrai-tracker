@@ -119,9 +119,12 @@ topic's journey**. The planner today asks "what topic next?" and frames each tas
 "Learn X" (a false one-day finish). It must instead ask **"what is the next mastery
 milestone inside the current topic?"** and never move on until the state actually
 advances.
-- **One GENERIC lifecycle for every topic** — `Concept → Easy → Medium → Hard → Mixed
-  → Mock-ready` — paced by the topic's *existing* difficulty/hours. NOT 10 hand-authored
-  states × hundreds of topics (a content mountain that would never ship).
+- **FIVE simple rungs** — `Concept → Easy → Medium → Hard → Exam Ready` — mapping 1:1
+  onto the 5 coverage states already stored, so v1 needs no schema. The difficulty
+  ladder is a QUANT idea: **QA** uses it fully, **DILR** loosely (set-worded: Concept →
+  Easy sets → Moderate sets → Hard sets → Exam Ready), and **VARC has NO ladder** —
+  reading/inference/timing isn't easy-medium-hard, so it keeps its own phrasing. NOT 10
+  hand-authored states × hundreds of topics (a content mountain that would never ship).
 - **This is one engine, not three.** Mastery/Progression is the *data model* (where in
   the journey); the **Mission** is its *presentation* (today's single winnable objective
   with a success criterion — "recognise when SI applies + 5 easy Qs; ignore the hard ones").
