@@ -36,7 +36,12 @@ export function GoalEditor({
     // Writes the user's own row (RLS-scoped). Not on the page-load path.
     await supabase
       .from('profiles')
-      .update({ target_percentile: targetPercentile, study_target_hours: studyHours })
+      // Keep the two daily-hours columns in lock-step. study_target_hours is
+      // canonical (readers use `study_target_hours ?? hours_available`), but the
+      // buddy dossier / admin list / some crons still read hours_available
+      // directly — writing only one column here made them show a stale, older
+      // daily-hours number. Both move together now.
+      .update({ target_percentile: targetPercentile, study_target_hours: studyHours, hours_available: Math.round(studyHours) })
       .eq('id', userId);
     setSaving(false);
     setSaved(true);
