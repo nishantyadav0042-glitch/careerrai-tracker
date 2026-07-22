@@ -8,7 +8,6 @@ import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
-import { seedStage, type LadderStage } from '@/lib/learning-ladder';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -57,7 +56,7 @@ export async function GET() {
     // isn't queried twice).
     admin
       .from('topic_coverage')
-      .select('section, topic, status, is_priority, ladder_stage')
+      .select('section, topic, status, is_priority')
       .eq('student_id', user.id),
     admin
       .from('daily_routines')
@@ -177,21 +176,6 @@ export async function GET() {
   // in the parallel wave above.)
   const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
 
-  // Learning Ladder (Mastery v1): the current stage (1–5) of each chosen topic,
-  // so generateRoutine phrases the task as "Level Up X · Stage n/5" and the
-  // student climbs the topic across days. Uses the stored ladder_stage; falls
-  // back to seeding from the old coverage status so nobody restarts at zero.
-  const stageByTopic = new Map<string, LadderStage>();
-  for (const row of (coverageRows ?? []) as { topic: string; status: string; ladder_stage?: number | null }[]) {
-    const st = row.ladder_stage;
-    stageByTopic.set(row.topic, (st != null ? Math.min(5, Math.max(1, st)) : seedStage(row.status as CoverageStatus)) as LadderStage);
-  }
-  const chosenStage: Partial<Record<Section, LadderStage>> = {
-    VARC: stageByTopic.get(topicChoices.VARC.topic) ?? 1,
-    DILR: stageByTopic.get(topicChoices.DILR.topic) ?? 1,
-    QA: stageByTopic.get(topicChoices.QA.topic) ?? 1,
-  };
-
   // A routine frozen earlier today at DIFFERENT hours (the student just
   // rescheduled their target) is stale — regenerate it, but only while
   // nothing is ticked off yet: completed work is never wiped by a resize.
@@ -209,7 +193,7 @@ export async function GET() {
     if (Math.abs((routine.generated_pace_hours as number) - paceHours) > 0.5) routine = null;
   }
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor, chosenStage);
+    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
