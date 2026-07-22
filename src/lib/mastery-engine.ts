@@ -137,13 +137,25 @@ export function createMasteryEngine<T extends MasteryTopicSpec>(graph: SectionGr
     if (!priority) throw new Error('No selectable topic — all unlocked topics are exam_ready');
 
     const otherPool = pool.filter((t) => t.cluster !== priority.cluster);
-    const secondary = secondaryValid ? swappedSecondary! : bestInPool(otherPool, new Set([priority.topic]));
+    // Never surface the same topic in both slots. A swapped-in secondary can
+    // collide with the priority when the priority later shifts onto that same
+    // topic (e.g. the student masters the original priority, and the weakest-
+    // cluster pick lands on the topic they'd swapped into the secondary slot).
+    // Only honour the swapped secondary when it differs from the priority;
+    // otherwise fall back to the best other-cluster topic that isn't priority.
+    const honorSwappedSecondary = secondaryValid && swappedSecondary!.topic !== priority.topic;
+    const secondary = honorSwappedSecondary ? swappedSecondary! : bestInPool(otherPool, new Set([priority.topic]));
 
     return {
       priority, secondary,
       reasons: {
-        priority: priorityValid ? 'You chose this' : `${priority.cluster} is your weakest cluster right now`,
-        secondary: secondary ? (secondaryValid ? 'You chose this' : `Highest-value topic outside ${priority.cluster}, for variety`) : null,
+        // Only claim "weakest cluster" when the priority actually came from it —
+        // if the weakest cluster was fully prereq-locked, the priority is the
+        // best topic the student can start now, from another cluster.
+        priority: priorityValid ? 'You picked this'
+          : priority.cluster === weak ? `${weak} is your weakest area right now`
+          : `The best topic to start right now`,
+        secondary: secondary ? (honorSwappedSecondary ? 'You picked this' : `A strong topic from another area, for a change`) : null,
       },
     };
   }

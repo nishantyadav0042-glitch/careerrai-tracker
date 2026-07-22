@@ -67,12 +67,12 @@ export default function MasteryPlanPage() {
       const topic = String(body.topic ?? '');
       if (body.action === 'study') {
         if (j.stageCleared && j.newStage === 'exam_ready') setToast(`🎉 ${topic} is Exam Ready!`);
-        else if (j.stageCleared) setToast(`✓ ${topic} cleared to ${STAGE_LABEL[j.newStage as string] ?? 'the next stage'}`);
-        else setToast(`✓ Logged — ${topic} is moving forward`);
+        else if (j.stageCleared) setToast(`✓ ${topic} moved up to ${STAGE_LABEL[j.newStage as string] ?? 'the next stage'}`);
+        else setToast(`✓ Saved — ${topic} is moving up`);
       } else if (body.action === 'revision') {
-        setToast(body.wentCold ? `Noted — ${topic} back in the revision cycle` : `✓ ${topic} still fresh`);
+        setToast(body.wentCold ? `Saved — ${topic} back for revision` : `✓ ${topic} still fresh`);
       } else if (body.action === 'swap') {
-        setToast(`✓ Swapped in ${topic}`);
+        setToast(`✓ Swapped to ${topic}`);
       }
       setNeedMore(null); setSwapFor(null);
       await load();
@@ -160,7 +160,7 @@ function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwa
       <span className="mt-1.5 inline-block rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-bold text-orange-300">▲ Stage {slot.stageNumber}/{slot.stageTotal} · {slot.stageLabel}</span>
       <p className="mt-2 text-[13px] text-zinc-400">
         <b className="text-zinc-200">{slot.sessionsToday} session{slot.sessionsToday === 1 ? '' : 's'} ({slot.minutes} min)</b>
-        {slot.sessionsRemainingAtStage === 0 ? ' · clears the stage today' : ` · ${slot.sessionsRemainingAtStage} left after today`}
+        {slot.sessionsRemainingAtStage === 0 ? ' · you finish this stage today' : ` · ${slot.sessionsRemainingAtStage} more after today`}
       </p>
       <p className="mt-1.5 text-[11px] italic text-zinc-600">{slot.why}</p>
       {!asking ? (
@@ -172,12 +172,12 @@ function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwa
         </div>
       ) : (
         <div className="mt-3">
-          <p className="mb-2 text-[11px] text-zinc-500">What tripped you up? (optional)</p>
+          <p className="mb-2 text-[11px] text-zinc-500">What went wrong? (optional)</p>
           <div className="grid grid-cols-2 gap-2">
             <button disabled={!!busy} onClick={() => onLog({ action: 'study', topic: slot.topic, sessionsDone: slot.sessionsToday, gotIt: false, errorType: 'concept' }, `nm-c-${slot.topic}`)}
               className="rounded-xl bg-zinc-800 py-2.5 text-xs font-semibold text-zinc-200 active:scale-95 disabled:opacity-50">Didn&apos;t get the concept</button>
             <button disabled={!!busy} onClick={() => onLog({ action: 'study', topic: slot.topic, sessionsDone: slot.sessionsToday, gotIt: false, errorType: 'calculation' }, `nm-x-${slot.topic}`)}
-              className="rounded-xl bg-zinc-800 py-2.5 text-xs font-semibold text-zinc-200 active:scale-95 disabled:opacity-50">Calculation slips</button>
+              className="rounded-xl bg-zinc-800 py-2.5 text-xs font-semibold text-zinc-200 active:scale-95 disabled:opacity-50">Calculation mistakes</button>
           </div>
           <button disabled={!!busy} onClick={() => onLog({ action: 'study', topic: slot.topic, sessionsDone: slot.sessionsToday, gotIt: false }, `nm-${slot.topic}`)}
             className="mt-2 w-full py-1.5 text-[11px] font-medium text-zinc-500">Skip — just log &ldquo;need more&rdquo;</button>
