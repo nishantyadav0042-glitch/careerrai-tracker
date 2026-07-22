@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getRosterMomentum, bandMeta, type MomentumBand } from '@/lib/momentum';
+import { SITE_URL } from '@/lib/site';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -35,7 +36,7 @@ function buildScript(first: string, tappedBuddy: boolean): string {
   const lead = tappedBuddy
     ? `${first}, you've been preparing seriously for CAT and you checked out the Exam Buddy on CareerRai.`
     : `${first}, you've been studying consistently on CareerRai — that's exactly when a mentor makes the biggest difference.`;
-  return `${lead} An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you. It's Rs 999, and if you don't find real value you get a full refund — so there's no risk. You also get 3 free messages to start. Can I show you how it works? Bata do, details bhej deta hoon.`;
+  return `${lead} An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you. It's Rs 999, and if you don't find real value you get a full refund — so there's no risk. You also get 3 free messages to start. Can I show you how it works? Bata do, details bhej deta hoon. App: ${SITE_URL}`;
 }
 
 export async function buildSalesQueue(admin?: any): Promise<SalesQueue> {

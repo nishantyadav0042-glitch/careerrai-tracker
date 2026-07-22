@@ -3,6 +3,7 @@ import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { bandMeta } from '@/lib/momentum';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
+import { SITE_URL } from '@/lib/site';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -127,7 +128,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   const buddyLine = recommendedBuddy
     ? ` For you I'd pair ${recommendedBuddy.name}${recommendedBuddy.college ? ` (${recommendedBuddy.college})` : ''}${recommendedBuddy.reason ? ` — ${recommendedBuddy.reason.toLowerCase()}` : ''}.`
     : '';
-  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you.${buddyLine} It's Rs 999, full refund if you don't find value, and 3 free messages to start. Shall I set it up?`;
+  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you.${buddyLine} It's Rs 999, full refund if you don't find value, and 3 free messages to start. Shall I set it up? App: ${SITE_URL}`;
 
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),
