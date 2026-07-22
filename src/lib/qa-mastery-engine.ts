@@ -373,3 +373,19 @@ export function dominantStruggle(state: QaStudentState, topic: string): ErrorTyp
   if (p.conceptStruggles === p.calcStruggles) return null;
   return p.conceptStruggles > p.calcStruggles ? 'concept' : 'calculation';
 }
+
+// ── API helpers ─────────────────────────────────────────────────────────
+
+// Topics the student could swap TO right now: unlocked, not yet mastered,
+// excluding whatever's already on today's plan — ranked ROI-first.
+export function swapCandidates(state: QaStudentState, excludeTopics: string[]): QaTopicSpec[] {
+  const ex = new Set(excludeTopics);
+  return selectablePool(state).filter((t) => !ex.has(t.topic)).sort((a, b) => topicRoi(b) - topicRoi(a));
+}
+
+// Core-syllabus progress, for the header ("18 / 33 topics Exam Ready").
+export function coreProgress(state: QaStudentState): { mastered: number; total: number } {
+  const total = QA_CORE_TOPICS.length;
+  const mastered = QA_CORE_TOPICS.filter((t) => progressFor(state, t.topic).stage === 'exam_ready').length;
+  return { mastered, total };
+}
