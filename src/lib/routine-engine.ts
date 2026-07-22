@@ -228,18 +228,22 @@ function unitCap(unit: StudyUnit, phase: Phase): number {
   return 22;
 }
 
-function taskVolume(section: Section, topic: string, minutes: number, phase: Phase): { count: number; unit: StudyUnit } {
+// `volumeFactor` (Adaptation Engine, LIS Layer 9) scales the priced volume by
+// what we've LEARNED about this student's real pace — never the time budget
+// (Capacity owns that) and never past the motivation cap / floor below. 1.0 =
+// no adaptation yet.
+function taskVolume(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1): { count: number; unit: StudyUnit } {
   const unit = unitFor(section, topic);
   // Foundation reserves a third of the slot for the concept before practice.
   const practiceMin = phase === 'foundation' ? Math.round(minutes * 0.67) : minutes;
-  const raw = Math.round(practiceMin / minutesPerUnit(unit, section, phase));
+  const raw = Math.round((practiceMin / minutesPerUnit(unit, section, phase)) * volumeFactor);
   const floor = unit === 'question' ? 3 : 1;
   return { count: Math.max(floor, Math.min(unitCap(unit, phase), raw)), unit };
 }
 
 // The instruction, in the topic's natural unit and the phase's verb.
-function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase): string {
-  const { count: n, unit } = taskVolume(section, topic, minutes, phase);
+function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1): string {
+  const { count: n, unit } = taskVolume(section, topic, minutes, phase, volumeFactor);
   const s = n === 1 ? '' : 's';
   if (unit === 'passage') return phase === 'foundation' ? `Read + solve ${n} RC passage${s}` : `${n} RC passage${s}, timed`;
   if (unit === 'set') return phase === 'foundation' ? `Learn ${topic}, then ${n} set${s}` : `Solve ${n} ${topic} set${s}`;
@@ -262,7 +266,10 @@ export function generateRoutine(
   // revision-due + (for the weak section only) the self-report bonus. This
   // is what replaced the old static "same topic for every student" default
   // for the two non-weakest sections.
-  topicChoices: Record<Section, TopicChoice>
+  topicChoices: Record<Section, TopicChoice>,
+  // Adaptation Engine (LIS L9): multiplies task volume by this student's
+  // learned pace. 1.0 until there's enough behaviour to adapt.
+  volumeFactor = 1
 ): GeneratedRoutine {
   const phase = getPhase(now, profile.attemptYear, profile.currentStage, profile.isRepeater);
   const weekend = isWeekend(now);
@@ -306,7 +313,7 @@ export function generateRoutine(
     section: weak,
     topic: weakChoice.topic,
     label: `${weak} — ${weakChoice.topic}`,
-    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phase),
+    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phase, volumeFactor),
     estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
@@ -320,7 +327,7 @@ export function generateRoutine(
       section,
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
-      target: targetPhrase(section, choice.topic, minutes, phase),
+      target: targetPhrase(section, choice.topic, minutes, phase, volumeFactor),
       estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });

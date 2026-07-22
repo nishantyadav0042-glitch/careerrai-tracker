@@ -123,6 +123,21 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
           <p className="mt-1.5 text-[12px] text-stone-600">{s.capacity.note}</p>
         </div>
 
+        {/* Adaptation Engine — learned pace: how much work fits inside those hours */}
+        <div className={cn('mt-3 rounded-2xl border p-4', s.adaptation.trust === 'learning' ? 'border-indigo-200 bg-indigo-50' : 'border-stone-200 bg-white')}>
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-stone-400">Adaptation Engine</p>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded bg-white px-2 py-0.5 font-semibold text-stone-700 ring-1 ring-stone-200">
+              {s.adaptation.completionRatio != null ? `finishes ~${Math.round(s.adaptation.completionRatio * 100)}% of the plan` : 'no plan-days yet'}
+            </span>
+            {s.adaptation.planFitCount > 0 && (
+              <span className="rounded bg-white px-2 py-0.5 font-semibold text-stone-700 ring-1 ring-stone-200">{s.adaptation.planFitCount} plan-fit tap{s.adaptation.planFitCount === 1 ? '' : 's'}</span>
+            )}
+            <span className={cn('rounded px-2 py-0.5 font-bold', s.adaptation.trust === 'learning' ? 'bg-indigo-500 text-white' : 'bg-stone-400 text-white')}>volume ×{s.adaptation.volumeFactor}</span>
+          </div>
+          <p className="mt-1.5 text-[12px] text-stone-600">{s.adaptation.note}</p>
+        </div>
+
         {/* The timeline — the story */}
         <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-stone-400">Timeline</p>

@@ -1,5 +1,6 @@
 import { getStudentMomentum, type StudentMomentum } from '@/lib/momentum';
 import { computeCapacity, type Capacity } from '@/lib/capacity-engine';
+import { computeAdaptation, type Adaptation, ADAPTATION_WINDOW_DAYS } from '@/lib/adaptation-engine';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,6 +26,7 @@ export interface Student360 {
   momentum: StudentMomentum;
   facts: { logsTotal: number; lastLogDate: string | null; opensPush: boolean };
   capacity: Capacity;
+  adaptation: Adaptation;
   timeline: TimelineEvent[];
 }
 
@@ -34,13 +36,17 @@ const daysAgo = (iso: string | null | undefined, now: number) =>
 
 export async function getStudent360(admin: any, id: string): Promise<Student360 | null> {
   const now = Date.now();
-  const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }] = await Promise.all([
+  const windowStart = new Date(now - ADAPTATION_WINDOW_DAYS * DAY).toISOString().slice(0, 10);
+  const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }, { data: winRoutines }, { data: winCompletions }] = await Promise.all([
     admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at, study_target_hours, hours_available').eq('id', id).single(),
     getStudentMomentum(admin, id),
-    admin.from('daily_reports').select('report_date, created_at, study_duration').eq('student_id', id).order('report_date', { ascending: false }),
+    admin.from('daily_reports').select('report_date, created_at, study_duration, plan_fit').eq('student_id', id).order('report_date', { ascending: false }),
     admin.from('notifications').select('type, title, pushed_at, clicked_at').eq('user_id', id).not('pushed_at', 'is', null).order('pushed_at', { ascending: false }).limit(200),
     admin.from('student_engagement').select('signed_up_at, buddy_cta_last_at, intent_door_at, sales_called_at, mock_opened').eq('student_id', id).maybeSingle(),
     admin.from('mentor_grants').select('door, created_at').eq('student_id', id),
+    // Adaptation input: plan-day completion over the recent window.
+    admin.from('daily_routines').select('routine_date, tasks').eq('student_id', id).gte('routine_date', windowStart),
+    admin.from('routine_task_completions').select('routine_date, task_id').eq('student_id', id).gte('routine_date', windowStart),
   ]);
   if (!p || !momentum) return null;
 
@@ -84,9 +90,29 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
       opensPush: momentum.signals.openedPushRecently,
     },
     capacity: (() => {
-      const win = (reports ?? []).filter((r: any) => r.report_date >= new Date(now - 21 * DAY).toISOString().slice(0, 10));
+      const win = (reports ?? []).filter((r: any) => r.report_date >= windowStart);
       const hrs = win.map((r: any) => Number(r.study_duration) || 0);
       return computeCapacity(hrs, win.length, (p.study_target_hours ?? p.hours_available) as number | null);
+    })(),
+    adaptation: (() => {
+      const win = (reports ?? []).filter((r: any) => r.report_date >= windowStart);
+      const planFits = win.map((r: any) => r.plan_fit).filter((f: any): f is string => typeof f === 'string');
+      const completedByDate = new Map<string, Set<string>>();
+      for (const c of winCompletions ?? []) {
+        if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
+        completedByDate.get(c.routine_date)!.add(c.task_id);
+      }
+      const todayStr = new Date(now).toISOString().slice(0, 10);
+      let completedTasks = 0, plannedTasks = 0, planDays = 0;
+      for (const r of winRoutines ?? []) {
+        const taskCount = Array.isArray(r.tasks) ? (r.tasks as unknown[]).length : 0;
+        if (r.routine_date < todayStr && taskCount > 0) {
+          planDays++;
+          plannedTasks += taskCount;
+          completedTasks += Math.min(taskCount, (completedByDate.get(r.routine_date) ?? new Set()).size);
+        }
+      }
+      return computeAdaptation(planFits, completedTasks, plannedTasks, planDays);
     })(),
     timeline: events.slice(0, 60),
   };

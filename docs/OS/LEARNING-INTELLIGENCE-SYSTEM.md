@@ -112,7 +112,18 @@ Adaptation. **Store:** extend `daily_reports` / `routine_task_completions`.
 Tomorrow ≠ today. Geometry expected 90 min, took 170 → learn. Night sessions
 always skipped → learn. Every day the planner gets more human. Owns the
 **catch-up doom-loop fix** (redistribute the week, never pile on) and per-student
-pace learning. **Status:** Planned — the highest long-term moat.
+pace learning. **Status:** v1 in `src/lib/adaptation-engine.ts`. `computeAdaptation`
+learns a per-student `volumeFactor` from two behavioural signals — the explicit
+`plan_fit` tap (Review Engine) and the plan-completion ratio — and scales task
+VOLUME by it in the routine engine (Capacity still owns the hours; the motivation
+cap still owns the ceiling). Rule is asymmetric/motivation-first: **behaviour can
+only lighten the day; only an explicit "too little" earns a heavier one.** The
+doom-loop's other half — pace pile-on as `remaining ÷ daysLeft` climbs — is
+already broken upstream by Capacity capping the hours + "postpone, never delete."
+Surfaced on admin Student 360 and returned to the client as `adaptation` when it's
+actually learned something. **Deferred (v2):** per-topic time learning (needs
+`routine_task_completions.actual_minutes` to accrue), session-level skip learning,
+explicit weekly redistribution.
 
 ### 10. Performance Engine — the heartbeat
 Not hours or questions. **Learning Velocity** (how much closer to target
@@ -156,7 +167,8 @@ a sign it's mis-scoped.
    forks in Planning/Execution.
 4. **Review Engine enrichment** — capture the signals Adaptation needs.
 5. **Adaptation Engine** — per-student pace + weekly redistribution (kills the
-   doom-loop).
+   doom-loop). *Shipped v1: `volumeFactor` learned from plan_fit + completion
+   ratio, applied to task volume; motivation-first (behaviour only lightens).*
 6. **Decision Engine** — the daily highest-leverage call.
 7. **Constraint & Performance Engines** — bottleneck profile + Learning Velocity.
 

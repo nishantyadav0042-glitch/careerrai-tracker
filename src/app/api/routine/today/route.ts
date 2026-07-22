@@ -6,6 +6,7 @@ import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baseline
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
+import { computeAdaptation } from '@/lib/adaptation-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -74,11 +75,12 @@ export async function GET() {
       .maybeSingle(),
     buildHistory(admin, user.id),
     buildMissionInputs(admin, user.id, today),
-    // Capacity Engine input: actual study hours over the recent window, so the
-    // plan is sized to what this student sustains, not what they claimed.
+    // Capacity + Adaptation input: actual study hours (size the plan to what
+    // this student sustains) and the plan_fit tap (learn their real pace) over
+    // the recent window.
     admin
       .from('daily_reports')
-      .select('study_duration')
+      .select('study_duration, plan_fit')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
   ]);
@@ -142,6 +144,16 @@ export async function GET() {
   const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
   const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
 
+  // Adaptation Engine (LIS L9): learn this student's real pace from behaviour —
+  // the explicit plan_fit taps + how much of the plan they actually finish —
+  // and scale today's task VOLUME by it (Capacity already sized the hours). The
+  // rule is motivation-first: behaviour can only lighten the day; only an
+  // explicit "too little" earns a heavier one.
+  const recentPlanFits = (recentReports ?? [])
+    .map((r: { plan_fit: unknown }) => r.plan_fit)
+    .filter((f: unknown): f is string => typeof f === 'string');
+  const adaptation = computeAdaptation(recentPlanFits, history.completedTasks, history.plannedTasks, history.planDays);
+
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
@@ -180,7 +192,7 @@ export async function GET() {
     if (Math.abs((routine.generated_pace_hours as number) - paceHours) > 0.5) routine = null;
   }
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices);
+    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
@@ -288,6 +300,12 @@ export async function GET() {
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,
     yesterday: history.yesterday,
+    // Adaptation Engine surface — only sent when the engine has actually
+    // learned something, so the client can show "we adjusted today's load"
+    // instead of a silent, invisible change.
+    adaptation: adaptation.trust === 'learning'
+      ? { volumeFactor: adaptation.volumeFactor, note: adaptation.note }
+      : null,
   });
   } catch (err) {
     // Observability: Vercel's log drain is not configured, so a thrown error
@@ -346,7 +364,7 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[]; yesterday: { total: number; done: number } | null }> {
+async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[]; yesterday: { total: number; done: number } | null; completedTasks: number; plannedTasks: number; planDays: number }> {
   const [{ data: pastRoutines }, { data: pastCompletions }] = await Promise.all([
     admin
       .from('daily_routines')
@@ -392,8 +410,19 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   // that didn't exist yet).
   const daysSinceByTopic: Record<string, number | null> = {};
   const timesPracticedByTopic: Record<string, number> = {};
+  // Adaptation Engine fuel: how much of each past day's plan the student
+  // actually finished. Today is excluded (still in progress); completions are
+  // capped at the day's task count so a regenerated routine can't push the
+  // ratio above 100%.
+  let completedTasks = 0, plannedTasks = 0, planDays = 0;
   for (const r of (pastRoutines ?? [])) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
+    const taskCount = Array.isArray(r.tasks) ? (r.tasks as unknown[]).length : 0;
+    if (r.routine_date < today && taskCount > 0) {
+      planDays++;
+      plannedTasks += taskCount;
+      completedTasks += Math.min(taskCount, completedTaskIds.size);
+    }
     // Guard against legacy/corrupt rows where tasks is null or not an array
     // (bug audit, 14 July) — an unguarded for-of here throws, rejecting the
     // top-level Promise.all and 500ing the ENTIRE plan for any student with
@@ -413,7 +442,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       }
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics, yesterday };
+  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics, yesterday, completedTasks, plannedTasks, planDays };
 }
 
 // The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for
