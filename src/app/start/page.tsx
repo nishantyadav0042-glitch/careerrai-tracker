@@ -108,7 +108,7 @@ export default function StartPage() {
       content = <ScreenDreamPercentile onNext={advance} {...shared} />;
       break;
     case 3:
-      content = <ScreenQuickFacts onNext={advance} {...shared} />;
+      content = <ScreenQuickFacts onNext={advance} ambitionDate={data.ambition_date as string | undefined} {...shared} />;
       break;
     case 4:
       content = <ScreenPainPoints onNext={advance} {...shared} />;
