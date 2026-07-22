@@ -103,8 +103,11 @@ export function StudentDossier({ data }: { data: StudentDossierData }) {
           value={data.is_repeater === true ? 'Repeater' : data.is_repeater === false ? 'First attempt' : null}
         />
         <Row icon={Trophy} label="Target %ile" value={data.target_percentile != null ? `${data.target_percentile}%ile` : null} />
-        <Row icon={Clock} label="Hours/day available" value={data.hours_available != null ? `${data.hours_available} hrs` : null} />
-        <Row icon={Clock} label="Daily commitment" value={data.study_target_hours != null ? `${data.study_target_hours} hrs/day` : null} />
+        {/* One daily-hours number (study_target_hours is canonical). Showing
+            both hours_available and study_target_hours as separate rows made a
+            student look like "4 hrs available / 8 hrs/day commitment" whenever
+            the two columns had drifted. */}
+        <Row icon={Clock} label="Daily study hours" value={(() => { const h = data.study_target_hours ?? data.hours_available; return h != null ? `${h} hrs/day` : null; })()} />
       </Section>
 
       {/* Dream colleges (step: Dream Colleges) */}
