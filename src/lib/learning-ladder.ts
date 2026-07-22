@@ -1,74 +1,76 @@
-// Learning Ladder (Mastery Engine v1) — a topic is a climb, not a checkbox.
+// Learning Ladder (Mastery Engine v1) — a topic is a multi-day climb, not a
+// one-day checkbox.
 //
-// Real-student insight (Chanchal, 22 Jul): "SI doesn't finish today; tomorrow
-// CI, then medium, then hard." The unit of learning is the student's POSITION
-// inside a topic's journey, not the topic. So the planner stops saying "Learn
-// Simple Interest" (a false one-day finish) and says "Level Up Simple Interest ·
-// Level 2/5 — Easy," keeping the student on the topic until the rung clears.
+// Real-student insight (Chanchal, 22 Jul): a topic takes 3–4 days, not a day.
+// So the planner keeps the student on the SAME topic, climbing 5 simple stages,
+// until it's exam-ready — instead of "Learn X" then moving on as if it's done.
 //
-// FIVE simple stages (founder, 22 Jul): Concept → Easy → Medium → Hard → Exam
-// Ready. They map 1:1 onto the 5 coverage states the student ALREADY sets, so
-// v1 needs NO new schema. Phase 2 stores a real per-topic level and this mapping
-// becomes only the seed.
+// Founder decision (22 Jul): keep it SIMPLE and TRUST the student — they know
+// their own level, and if a student lies no system can help them anyway. So the
+// stage is student-owned: it advances when they mark the topic done well (a
+// green tap they already make). No hidden measurement, no noisy % slider.
 //
-// The difficulty ladder is a QUANT idea. It applies to DILR loosely (set-worded)
-// and NOT to VARC — reading/inference/timing isn't easy-medium-hard — so VARC
-// has no ladder and keeps its own plain phrasing.
+// The five stages are section-appropriate — QA/DILR climb difficulty, VARC
+// climbs a reading skill (difficulty isn't how RC is learned):
+//   QA   : Learn concept → Easy → Medium → Hard → Exam ready
+//   DILR : Learn the set type → Easy sets → Medium sets → Hard sets → Exam ready
+//   VARC : Read & understand → Untimed practice → Inference & tone → Timed → Exam ready
+//
+// Named LadderStage (not Stage) — routine-engine already owns a `Stage` type for
+// the onboarding prep-stage; these are different axes.
 
 import type { Section } from './routine-engine';
-import type { CoverageStatus } from './topic-selector';
+import type { CoverageStatus, ConfidenceSignal } from './topic-selector';
 
-export type LadderLevel = 1 | 2 | 3 | 4 | 5;
+export type LadderStage = 1 | 2 | 3 | 4 | 5;
 
-// Which sections climb a difficulty ladder. VARC does not.
-export function sectionHasLadder(section: Section): boolean {
-  return section === 'QA' || section === 'DILR';
+const LADDER: Record<Section, readonly string[]> = {
+  QA:   ['Learn concept', 'Easy', 'Medium', 'Hard', 'Exam ready'],
+  DILR: ['Learn the set type', 'Easy sets', 'Medium sets', 'Hard sets', 'Exam ready'],
+  VARC: ['Read & understand', 'Untimed practice', 'Inference & tone', 'Timed practice', 'Exam ready'],
+};
+
+export function stageName(section: Section, stage: LadderStage): string {
+  return LADDER[section][stage - 1] ?? 'Practice';
+}
+export function nextStageName(section: Section, stage: LadderStage): string | null {
+  return stage >= 5 ? null : (LADDER[section][stage] ?? null);
 }
 
-// Clean 1:1 map: the 5 coverage states → the 5 rungs.
-export function levelFromStatus(status: CoverageStatus | null | undefined): LadderLevel {
+// Seed the ladder for a topic that has an old coverage status but no explicit
+// stage yet — a clean 1:1 with the 5 statuses, so nobody restarts at zero.
+export function seedStage(status: CoverageStatus | null | undefined): LadderStage {
   switch (status) {
     case 'exam_ready': return 5;
     case 'revising': return 4;
     case 'practicing': return 3;
     case 'learning': return 2;
-    default: return 1; // not_started / null
+    default: return 1;
   }
 }
 
-// Rung names. QA uses plain difficulty; DILR is set-worded. Index 0 is a
-// placeholder so the array is 1-indexed. VARC is intentionally absent
-// (sectionHasLadder gates it out before these are called).
-const RUNGS: Partial<Record<Section, string[]>> = {
-  QA:   ['', 'Concept', 'Easy', 'Medium', 'Hard', 'Exam Ready'],
-  DILR: ['', 'Concept', 'Easy sets', 'Moderate sets', 'Hard sets', 'Exam Ready'],
-};
-
-export function rungName(section: Section, level: LadderLevel): string {
-  return RUNGS[section]?.[level] || 'Practice';
+// Student-owned advancement (trust the student): a green "done well" tap climbs
+// one rung; anything less holds the rung (repeat it tomorrow, no punishment).
+// Exam-ready (5) is the top — a green there keeps them sharp, doesn't overflow.
+export function advanceStage(current: LadderStage, confidence: ConfidenceSignal): LadderStage {
+  if (confidence === 'green') return Math.min(5, current + 1) as LadderStage;
+  return current;
 }
 
-export function nextRungName(section: Section, level: LadderLevel): string | null {
-  return level >= 5 ? null : (RUNGS[section]?.[level + 1] || null);
+// The difficulty word for QA/DILR question/set copy.
+export function difficultyWord(stage: LadderStage): string {
+  return ['easy', 'easy', 'medium', 'hard', 'exam-level'][stage - 1] ?? 'practice';
 }
 
-// The difficulty word for the question copy.
-export function difficultyWord(level: LadderLevel): string {
-  if (level <= 2) return 'easy';
-  if (level === 3) return 'medium';
-  if (level === 4) return 'hard';
-  return 'exam-level';
+// Volume multiplier (QUESTIONS only) vs a medium (=1.0) baseline: easy rungs are
+// fast so ask MORE (~30), hard/exam are slow so ask FEWER (~12). Sets and
+// passages keep their small counts and climb via the stage name, not volume.
+export function volumeMultiplier(stage: LadderStage): number {
+  return [1.3, 1.8, 1.0, 0.65, 0.85][stage - 1] ?? 1;
 }
 
-// Volume multiplier vs a medium (=1.0) baseline: concept and easy rungs are fast
-// so ask MORE (up to ~30 easy), hard/exam are slow so ask FEWER (~12). Applied
-// to both count and cap so easy days honestly reach ~30 while staying time-honest.
-export function volumeMultiplier(level: LadderLevel): number {
-  return [0, 1.3, 1.8, 1.0, 0.65, 0.85][level] ?? 1.0;
-}
-
-// Success criterion shown with the mission — the accuracy at which a rung is
-// "cleared". Concept (level 1) has none; it's about understanding, not scoring.
-export function accuracyTarget(level: LadderLevel): number {
-  return [0, 0, 85, 78, 70, 75][level] || 0;
+// Success criterion shown with the mission. Stage 1 is about understanding, not
+// scoring, so it has none.
+export function accuracyTarget(stage: LadderStage): number {
+  return [0, 85, 78, 70, 75][stage - 1] ?? 0;
 }

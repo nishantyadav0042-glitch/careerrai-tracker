@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
+import { advanceStage, seedStage, type LadderStage } from '@/lib/learning-ladder';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
@@ -69,13 +70,20 @@ export async function POST(request: NextRequest) {
     if (confidence && completedTask?.topic) {
       const { data: coverageRow } = await admin
         .from('topic_coverage')
-        .select('status')
+        .select('status, ladder_stage')
         .eq('student_id', user.id)
         .eq('topic', completedTask.topic)
         .maybeSingle();
-      const newStatus = applyConfidenceSignal((coverageRow?.status as CoverageStatus | undefined) ?? null, confidence as ConfidenceSignal);
+      const prevStatus = (coverageRow?.status as CoverageStatus | undefined) ?? null;
+      const newStatus = applyConfidenceSignal(prevStatus, confidence as ConfidenceSignal);
+      // Learning Ladder (Mastery v1): a green "done well" tap climbs one rung —
+      // student-owned and trusted; anything less holds the rung (repeat it, no
+      // punishment). Seed from the old status for topics that predate the ladder
+      // so nobody restarts at Stage 1.
+      const prevStage = (coverageRow?.ladder_stage as number | null | undefined) ?? seedStage(prevStatus);
+      const newStage = advanceStage(Math.min(5, Math.max(1, prevStage)) as LadderStage, confidence as ConfidenceSignal);
       await admin.from('topic_coverage').upsert(
-        { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
+        { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, ladder_stage: newStage, updated_at: new Date().toISOString() },
         { onConflict: 'student_id,section,topic' }
       );
     }

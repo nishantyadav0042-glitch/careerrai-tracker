@@ -4,8 +4,8 @@
 // TypeScript so it can be read, argued with, and changed like content, not
 // like a black box.
 
-import type { TopicChoice, CoverageStatus } from './topic-selector';
-import { levelFromStatus, sectionHasLadder, rungName, nextRungName, difficultyWord, volumeMultiplier, accuracyTarget, type LadderLevel } from './learning-ladder';
+import type { TopicChoice } from './topic-selector';
+import { stageName, nextStageName, difficultyWord, volumeMultiplier, accuracyTarget, type LadderStage } from './learning-ladder';
 
 export type Section = 'VARC' | 'DILR' | 'QA';
 export type Phase = 'foundation' | 'intensive' | 'revision';
@@ -238,11 +238,11 @@ function unitCap(unit: StudyUnit, phase: Phase): number {
 // fewer (~12). Applied to both count and cap so easy days honestly reach the
 // founder's ~30 while staying time-honest. Only touches questions — sets and
 // passages carry their difficulty in the rung name, not the count.
-function taskVolume(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1, level?: LadderLevel): { count: number; unit: StudyUnit } {
+function taskVolume(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1, stage?: LadderStage): { count: number; unit: StudyUnit } {
   const unit = unitFor(section, topic);
   // Foundation reserves a third of the slot for the concept before practice.
   const practiceMin = phase === 'foundation' ? Math.round(minutes * 0.67) : minutes;
-  const mult = level != null && unit === 'question' ? volumeMultiplier(level) : 1;
+  const mult = stage != null && unit === 'question' ? volumeMultiplier(stage) : 1;
   const raw = Math.round((practiceMin / minutesPerUnit(unit, section, phase)) * volumeFactor * mult);
   const cap = Math.round(unitCap(unit, phase) * mult);
   const floor = unit === 'question' ? 3 : 1;
@@ -254,22 +254,24 @@ function taskVolume(section: Section, topic: string, minutes: number, phase: Pha
 // keeps the student on the topic and shows the next rung (anticipation).
 // Without a level (mock/revision blocks with no topic state) it falls back to
 // the plain phase phrasing.
-function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1, level?: LadderLevel): string {
-  const { count: n, unit } = taskVolume(section, topic, minutes, phase, volumeFactor, level);
+function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1, stage?: LadderStage): string {
+  const { count: n, unit } = taskVolume(section, topic, minutes, phase, volumeFactor, stage);
   const s = n === 1 ? '' : 's';
-  if (level != null) {
-    const name = rungName(section, level);
-    const next = nextRungName(section, level);
+  if (stage != null) {
+    const name = stageName(section, stage);
+    const next = nextStageName(section, stage);
     const tail = next ? ` · next: ${next}` : ' · keep sharp';
-    const acc = accuracyTarget(level);
+    const acc = accuracyTarget(stage);
     const accBit = acc > 0 ? `, aim ${acc}%` : '';
-    // Concept rung — understand first, then a few to anchor it (no accuracy bar).
-    if (level === 1) {
-      if (unit === 'set') return `Level Up: ${topic} · L1/5 Concept — learn it, then ${n} set${s}${tail}`;
-      return `Level Up: ${topic} · L1/5 Concept — learn it, then ${n} easy question${s}${tail}`;
+    // Stage 1 — understand / read first, then anchor it (no accuracy bar yet).
+    if (stage === 1) {
+      if (unit === 'passage') return `Level Up: ${topic} · Stage 1/5 ${name} — read + understand ${n} passage${s}${tail}`;
+      if (unit === 'set') return `Level Up: ${topic} · Stage 1/5 ${name} — learn it, then ${n} set${s}${tail}`;
+      return `Level Up: ${topic} · Stage 1/5 ${name} — learn it, then ${n} easy question${s}${tail}`;
     }
-    if (unit === 'set') return `Level Up: ${topic} · L${level}/5 ${name} — ${n} set${s}${accBit}${tail}`;
-    return `Level Up: ${topic} · L${level}/5 ${name} — ${n} ${difficultyWord(level)} question${s}${accBit}${tail}`;
+    if (unit === 'passage') return `Level Up: ${topic} · Stage ${stage}/5 ${name} — ${n} RC passage${s}${accBit}${tail}`;
+    if (unit === 'set') return `Level Up: ${topic} · Stage ${stage}/5 ${name} — ${n} ${difficultyWord(stage)} set${s}${accBit}${tail}`;
+    return `Level Up: ${topic} · Stage ${stage}/5 ${name} — ${n} ${difficultyWord(stage)} question${s}${accBit}${tail}`;
   }
   if (unit === 'passage') return phase === 'foundation' ? `Read + solve ${n} RC passage${s}` : `${n} RC passage${s}, timed`;
   if (unit === 'set') return phase === 'foundation' ? `Learn ${topic}, then ${n} set${s}` : `Solve ${n} ${topic} set${s}`;
@@ -296,10 +298,11 @@ export function generateRoutine(
   // Adaptation Engine (LIS L9): multiplies task volume by this student's
   // learned pace. 1.0 until there's enough behaviour to adapt.
   volumeFactor = 1,
-  // Learning Ladder (Mastery v1): the coverage status of each chosen topic, so
-  // the task becomes "Level Up X · Ln/6" instead of "Learn X". Absent → plain
+  // Learning Ladder (Mastery v1): each chosen topic's current stage (1–5), so
+  // the task becomes "Level Up X · Stage n/5 — <rung>" and the student climbs
+  // the topic across days instead of "finishing" it in one. Absent → plain
   // phrasing (unchanged behaviour).
-  topicStatus?: Partial<Record<Section, CoverageStatus | null>>
+  topicStage?: Partial<Record<Section, LadderStage>>
 ): GeneratedRoutine {
   const phase = getPhase(now, profile.attemptYear, profile.currentStage, profile.isRepeater);
   const weekend = isWeekend(now);
@@ -337,16 +340,16 @@ export function generateRoutine(
 
   const weakChoice = topicChoices[weak];
   const priorityMinutes = Math.round(totalMinutes * weakShare);
-  // Ladder only for sections that climb a difficulty ladder (QA/DILR); VARC
-  // keeps its own plain phrasing.
-  const weakLevel = sectionHasLadder(weak) ? levelFromStatus(topicStatus?.[weak]) : undefined;
+  // Every section climbs a ladder now (QA/DILR by difficulty, VARC by reading
+  // skill); a topic with no recorded stage yet starts at Stage 1.
+  const weakStage: LadderStage = topicStage?.[weak] ?? 1;
 
   tasks.push({
     id: `${weak.toLowerCase()}-priority`,
     section: weak,
     topic: weakChoice.topic,
     label: `${weak} — ${weakChoice.topic}`,
-    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phase, volumeFactor, weakLevel),
+    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phase, volumeFactor, weakStage),
     estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
@@ -360,7 +363,7 @@ export function generateRoutine(
       section,
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
-      target: targetPhrase(section, choice.topic, minutes, phase, volumeFactor, sectionHasLadder(section) ? levelFromStatus(topicStatus?.[section]) : undefined),
+      target: targetPhrase(section, choice.topic, minutes, phase, volumeFactor, topicStage?.[section] ?? 1),
       estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });
