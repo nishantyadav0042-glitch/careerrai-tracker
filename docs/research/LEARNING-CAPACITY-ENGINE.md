@@ -13,6 +13,69 @@
 
 ---
 
+## −1. North star — a Performance Coach, not a planner (founder, 23 July)
+
+The deepest reframe: fixing the planner is *product* thinking; questioning
+whether the planner is even the right thing is *founder* thinking. The real
+question isn't "what should the student study today?" but **"why do CAT students
+fail despite the best coaching?"** — and the answer is almost never *"syllabus
+wasn't completed."* It's that their **preparation system collapses.**
+
+**The six ways CAT aspirants actually fail — all behaviour, not allocation:**
+1. **Overplanning** — 12h day 1, 8h day 4, nothing day 10, guilt day 20, restart day 30. *Current engines encourage this.*
+2. **Wrong sequencing** — studying what coaching ordered, not highest-ROI.
+3. **Learning illusion** — 80 questions solved, mock unchanged (solving ≠ learning).
+4. **Revision collapse** — "I'll revise later"; later never comes.
+5. **Mock avoidance** — fear of a bad score keeps them from the #1 signal.
+6. **Mental fatigue** — the engine thinks "8 hours," the brain thinks "exhausted."
+
+None are question-allocation problems. So the engine is solving the **wrong
+layer** — Planning (~20% of the value) instead of **Performance Management.**
+
+**The five-engine architecture we're missing:**
+```
+Performance Engine   (why isn't this student reaching 99? — constraints)
+   → Planning Engine     (what's the highest-value work today)
+   → Execution Engine    (sessions, energy, completion)
+   → Review Engine       (mocks, mistakes, what actually moved the needle)
+   → Adaptation Engine    (learn the student, re-plan)
+```
+Today we have only Planning.
+
+**Onboarding should discover constraints, not collect fields** — time,
+knowledge, consistency, confidence, speed, revision, mock-anxiety, energy-pattern.
+Then planning becomes *constraint optimisation*, not syllabus optimisation.
+
+**The engine must negotiate, not dictate.** When 3 hours can't hit 45 days, a
+great mentor never hands over a 7-hour plan — they say *"this goal doesn't fit
+your life; let's decide what we're willing to change."* Deterministic planners go
+input→output; coaches go input→reality→trade-offs→**student decision**→plan.
+
+**Optimise the week, not the day.** One bad day is noise; three bad weeks is
+failure. A missed Monday triggers *redistribution*, never a guilt-inducing
+catch-up doom-loop.
+
+**Plan sessions, not hours.** Nobody thinks "6 hours"; they think morning / lunch
+/ night session. Optimise session *quality* and match task-type to energy.
+
+**The optimisation target is Learning Velocity** — *how much closer to the target
+percentile did the student move today* — not questions solved, hours studied, or
+syllabus completed. A 2-hour mock analysis can beat 6 hours of new topics; the
+current engine miscounts that as "less syllabus," which is strategically wrong.
+
+**Product vision, one sentence:**
+> CareerRai is not an AI that tells students what to study. It is an AI
+> Performance Coach that continuously discovers each student's real constraints,
+> negotiates realistic trade-offs, protects consistency, and reallocates effort
+> to maximise **percentile — not syllabus completion.**
+
+**The moat question to mine for every feature:** *"If an IIM graduate personally
+mentored 10,000 aspirants one by one, what decisions would they make that no
+static planner could?"* Each such decision is a candidate for the engine. The
+moat is encoded coaching judgment, not a smarter timetable.
+
+---
+
 ## 0. The core thesis — we are optimising the wrong objective
 
 Today the engine computes:

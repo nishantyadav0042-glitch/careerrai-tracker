@@ -195,12 +195,19 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   // ~75% (vs ~8% for installed-app subscriptions). We ask for push ONLY inside
   // the installed app, right after the first Career Insight (StandaloneNotifAsk)
   // — so the subscription is born in its permanent home and never has to
-  // survive the browser→WebAPK transition. Flow now: date → commit → thanks →
-  // install (the finale that leads into the installed app, where we ask).
-  const [step, setStep] = useState<Step>(hasDateStep ? 'date' : 'commit');
+  // survive the browser→WebAPK transition.
+  //
+  // ONE DATE (founder, 23 July): the finish date is decided ONCE, in onboarding,
+  // where the capacity contradiction is highlighted (the red reality-check on the
+  // hours screen). This ceremony NO LONGER re-opens the date — a second date
+  // decision here is exactly what silently turned a student's onboarding pick
+  // into a different date (Pranav's "6 weeks" → 23 Aug). We start at 'commit',
+  // which DISPLAYS the onboarding date as a commitment, never re-decides it.
+  // Flow now: commit → thanks → install (the finale into the installed app).
+  const [step, setStep] = useState<Step>('commit');
 
-  // Retained only for the (now-unused) notifications screen's hand-off target,
-  // kept so the enum stays exhaustive without a dead 'notifications' entry path.
+  // Retained only for the (now-unused) notifications/date screens' hand-off
+  // targets, kept so the enum stays exhaustive without a dead entry path.
   const afterNotifications: Step = hasDateStep ? 'date' : 'commit';
 
   // Chosen finish date carried into the commitment copy.
