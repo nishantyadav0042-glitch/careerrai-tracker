@@ -339,6 +339,18 @@ export default async function DailyTrackerPage() {
   return (
     <div className="bg-stone-50 px-1 pb-4">
       <div className="mx-auto flex max-w-md flex-col gap-1.5">
+        {/* New Quant Mastery plan — gated to opted-in test accounts
+            (profiles.qa_model_enabled). Everyone else never sees this. */}
+        {profile?.qa_model_enabled && (
+          <Link href="/student/qa"
+            className="flex items-center justify-between gap-3 rounded-2xl bg-stone-900 px-4 py-3 text-white shadow-sm transition-colors hover:bg-stone-800">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-orange-300">New · Quant Mastery</p>
+              <p className="text-sm font-bold leading-snug">Open your topic-by-topic Quant plan →</p>
+            </div>
+            <span className="shrink-0 text-2xl" aria-hidden>🧗</span>
+          </Link>
+        )}
         {/* Greeting + streak card */}
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="min-w-0">
