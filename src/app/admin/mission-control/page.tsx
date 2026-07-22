@@ -152,6 +152,16 @@ export default async function MissionControlPage() {
           <p className="mt-2 text-[11px] text-stone-400">Owner: shared — Learning OS drives it up, Notification OS keeps it reachable, Sales acts on the top bands.</p>
         </div>
 
+        {/* Learning Intelligence health — the LIS running live across the roster. */}
+        <Link href="/admin/lis-health" className="mt-5 flex items-center gap-3 rounded-2xl border border-stone-900 bg-stone-900 p-4 text-white hover:bg-stone-800">
+          <span className="text-2xl">🧠</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Learning Intelligence — health</p>
+            <p className="text-[12px] text-stone-300">Velocity distribution, today&apos;s decision per student, adaptation drift, leading bottlenecks — the engine, live.</p>
+          </div>
+          <span className="shrink-0 text-[11px] font-semibold text-stone-300">open →</span>
+        </Link>
+
         {/* Leading indicators — subscription-age cohorts. Watch the young ones. */}
         <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-4">
           <div className="mb-1 flex items-center justify-between">
