@@ -58,19 +58,19 @@ export function waMessages(v: WaVars): WaMessage[] {
       key: 'notifications_on',
       label: 'Turn on reminders',
       suggestedFor: 'notifications_off',
-      text: `Hi ${firstName}, Nishant from CareerRai. You have the app but notifications are off — so we can't send your daily study plan or today's topics. Open the app and allow notifications (or phone Settings > Notifications > CareerRai > On). Koi problem aa rahi ho to bata do.`,
+      text: `Hi ${firstName}, Nishant from CareerRai. You have the app but notifications are off — so we can't send your daily study plan or today's topics. Open the app and allow notifications (or phone Settings > Notifications > CareerRai > On). Koi problem aa rahi ho to bata do. App: ${site}`,
     },
     {
       key: 'push_recovery',
       label: 'Reminders stopped (push died)',
       suggestedFor: 'push_died',
-      text: `Hi ${firstName}, Nishant from CareerRai. Your phone stopped receiving our daily reminders — nothing you did wrong. Fix is simple: open the CareerRai app once, it reconnects automatically. Koi dikkat ho to bata do.`,
+      text: `Hi ${firstName}, Nishant from CareerRai. Your phone stopped receiving our daily reminders — nothing you did wrong. Fix is simple: open the CareerRai app once, it reconnects automatically. Koi dikkat ho to bata do. App: ${site}`,
     },
     {
       key: 'keep_going',
       label: 'Keep going',
       suggestedFor: 'engaged',
-      text: `Hi ${firstName}, Nishant from CareerRai. You are fully set up. One habit from here: log your prep daily, takes 30 seconds. That is what keeps you on track for ${dreamCollege}. Any feedback, tell me directly.`,
+      text: `Hi ${firstName}, Nishant from CareerRai. You are fully set up. One habit from here: log your prep daily, takes 30 seconds. That is what keeps you on track for ${dreamCollege}. Any feedback, tell me directly. App: ${site}`,
     },
   ];
 }
