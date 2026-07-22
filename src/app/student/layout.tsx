@@ -34,7 +34,11 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // the proxy would send straight back here → an infinite redirect loop.
   if (profile?.role === 'admin') redirect('/admin');
   if (profile?.role === 'buddy') redirect('/buddy/home');
-  if (profile && profile.role !== 'student') redirect('/login');
+  // Any other non-student role (e.g. 'sales') → the authoritative router at
+  // '/', NEVER '/login': a logged-in user sent to /login is bounced straight
+  // back here by the proxy, which is the infinite-redirect loop. '/' does a DB
+  // role lookup and lands them on their real home.
+  if (profile && profile.role !== 'student') redirect('/');
 
   // Login → Blueprint Builder, nothing in between. Its own intro screen is
   // the one hero the founder wants; the old FirstLoginTour was a second,

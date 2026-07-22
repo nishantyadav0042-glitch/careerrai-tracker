@@ -74,6 +74,17 @@ export async function proxy(request: NextRequest) {
     user = null;
   }
 
+  // Any redirect issued AFTER getUser() must carry the cookies Supabase may
+  // have refreshed onto `response` during the call — a bare NextResponse.
+  // redirect() drops them, so the browser keeps a stale (soon-invalid) token
+  // and the next request re-refreshes, which can strand a session in a
+  // redirect loop or silently log the user out. Copy them onto every redirect.
+  const redirectWithSession = (url: URL) => {
+    const redirect = NextResponse.redirect(url);
+    for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+    return redirect;
+  };
+
   const isProtected =
     pathname.startsWith('/student') ||
     pathname.startsWith('/buddy') ||
@@ -82,19 +93,25 @@ export async function proxy(request: NextRequest) {
   if (isProtected && !user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
-    return NextResponse.redirect(loginUrl);
+    return redirectWithSession(loginUrl);
   }
 
-  // Already logged in? Skip the login page and route to the right home.
+  // Already logged in? Skip the login page and route to the right home. EVERY
+  // role must have a terminal destination here: a role this map doesn't know
+  // (e.g. 'sales') used to fall through to /student/tracker, whose layout then
+  // bounced it back to /login → an infinite ERR_TOO_MANY_REDIRECTS loop (this
+  // is exactly how the sales login broke). Unknown/absent cookie → '/', which
+  // does an authoritative DB role lookup and routes correctly, never back here.
   if (pathname === '/login' && user) {
     const homeUrl = request.nextUrl.clone();
-    // Route to the right home based on role cookie; layout will correct if stale.
     const roleCookie = request.cookies.get('user_role')?.value;
     homeUrl.pathname =
       roleCookie === 'buddy' ? '/buddy/home' :
       roleCookie === 'admin' ? '/admin' :
-      '/student/tracker';
-    return NextResponse.redirect(homeUrl);
+      roleCookie === 'sales' ? '/sales' :
+      roleCookie === 'student' ? '/student/tracker' :
+      '/';
+    return redirectWithSession(homeUrl);
   }
 
   return response;
