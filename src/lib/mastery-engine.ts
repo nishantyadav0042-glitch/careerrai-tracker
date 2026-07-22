@@ -170,11 +170,23 @@ export function createMasteryEngine<T extends MasteryTopicSpec>(graph: SectionGr
   function sessionsForBudget(state: MasteryStudentState, spec: T, minutesAvailable: number): TopicSessionPlan {
     const progress = progressFor(state, spec.topic);
     const stage = progress.stage;
+    if (stage === 'exam_ready') {
+      return { topic: spec.topic, stage, sessionsToday: 0, minutesUsed: 0, sessionsRemainingAtStage: 0 };
+    }
     const perSession = SESSION_MINUTES[stage];
-    const prescribed = stage === 'exam_ready' ? 0 : spec.sessions[stage];
+    const prescribed = spec.sessions[stage];
     const remainingAtStage = Math.max(0, prescribed - progress.sessionsDoneAtStage);
-    const sessionsToday = Math.max(0, Math.min(remainingAtStage, Math.floor(minutesAvailable / perSession)));
-    return { topic: spec.topic, stage, sessionsToday, minutesUsed: sessionsToday * perSession, sessionsRemainingAtStage: remainingAtStage - sessionsToday };
+    // A topic that made it onto today's plan is ALWAYS actionable — never a
+    // "0 sessions (0 min)" dead card. Two guards:
+    //  • at least 1 session even when the day's minute budget is tight (a small
+    //    secondary slice could otherwise floor to 0); we trust the student to
+    //    fit a short session.
+    //  • at least 1 session even when all prescribed sessions are already done
+    //    (remainingAtStage === 0, reachable by tapping "Need more" up to the
+    //    cap): that one session is the "Got it" that clears the stage.
+    const capacity = Math.max(1, Math.floor(minutesAvailable / perSession));
+    const sessionsToday = Math.min(Math.max(1, remainingAtStage), capacity);
+    return { topic: spec.topic, stage, sessionsToday, minutesUsed: sessionsToday * perSession, sessionsRemainingAtStage: Math.max(0, remainingAtStage - sessionsToday) };
   }
 
   // B3/C4: advance only when prescribed sessions done AND the "got it" tap.

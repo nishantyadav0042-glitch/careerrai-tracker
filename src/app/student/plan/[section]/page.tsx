@@ -8,6 +8,10 @@ import { cn } from '@/lib/utils';
 // from the route (/student/plan/qa, /student/plan/dilr); everything else is the
 // same UI. Gated server-side by the section's <section>_model_enabled flag.
 
+const STAGE_LABEL: Record<string, string> = {
+  concept: 'Concept', easy: 'Easy', medium: 'Medium', hard: 'Hard', exam_ready: 'Exam Ready',
+};
+
 interface Slot {
   topic: string; cluster: string; stageLabel: string; stageNumber: number; stageTotal: number;
   sessionsToday: number; minutes: number; sessionsRemainingAtStage: number; target: string; why: string;
@@ -29,6 +33,14 @@ export default function MasteryPlanPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [needMore, setNeedMore] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<'priority' | 'secondary' | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Auto-dismiss the confirmation toast.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const load = useCallback(async () => {
     try {
@@ -47,8 +59,21 @@ export default function MasteryPlanPage() {
     setBusy(key);
     try {
       const res = await fetch(`/api/mastery/${section}/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error ?? 'Something went wrong'); return; }
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(j.error ?? 'Something went wrong'); return; }
       navigator.vibrate?.(30);
+      // Confirm the tap did something — the same topic climbs stages in place,
+      // so without this "Got it" reads as if nothing happened.
+      const topic = String(body.topic ?? '');
+      if (body.action === 'study') {
+        if (j.stageCleared && j.newStage === 'exam_ready') setToast(`🎉 ${topic} is Exam Ready!`);
+        else if (j.stageCleared) setToast(`✓ ${topic} cleared to ${STAGE_LABEL[j.newStage as string] ?? 'the next stage'}`);
+        else setToast(`✓ Logged — ${topic} is moving forward`);
+      } else if (body.action === 'revision') {
+        setToast(body.wentCold ? `Noted — ${topic} back in the revision cycle` : `✓ ${topic} still fresh`);
+      } else if (body.action === 'swap') {
+        setToast(`✓ Swapped in ${topic}`);
+      }
       setNeedMore(null); setSwapFor(null);
       await load();
     } finally { setBusy(null); }
@@ -105,6 +130,14 @@ export default function MasteryPlanPage() {
               ))}
             </div>
             <button onClick={() => setSwapFor(null)} className="mt-3 w-full py-2 text-xs font-medium text-zinc-500">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex justify-center px-4" aria-live="polite">
+          <div className="rounded-full border border-zinc-700 bg-zinc-900/95 px-4 py-2.5 text-sm font-semibold text-white shadow-lg backdrop-blur">
+            {toast}
           </div>
         </div>
       )}
