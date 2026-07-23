@@ -61,6 +61,15 @@ export function LockedBuddyHub({
       {/* 2 — THE BUY. On the page, above the fold. One tap → Razorpay. */}
       <BuddyBuyButtons fullName={fullName} />
 
+      {/* Zero-commission trust strip (founder) — reframes the price as fair:
+          it's going to a real mentor, not a platform cut. */}
+      <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-center">
+        <span className="text-base">🤝</span>
+        <p className="text-[12px] font-semibold leading-snug text-emerald-800">
+          Zero commission — every rupee goes to your IIM mentor, not a middleman.
+        </p>
+      </div>
+
       {/* 3 — the value in three lines, not a feature list */}
       <div className="space-y-2">
         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3.5">
