@@ -201,17 +201,23 @@ export function createMasteryEngine<T extends MasteryTopicSpec>(graph: SectionGr
     return { topic: spec.topic, stage, sessionsToday, minutesUsed: sessionsToday * perSession, sessionsRemainingAtStage: Math.max(0, remainingAtStage - sessionsToday) };
   }
 
-  // B3/C4: advance only when prescribed sessions done AND the "got it" tap.
+  // B3/C4: ONE "Got it" clears the current stage — we trust the student. Tapping
+  // "Got it" means "I'm confident at this level", so it advances a stage on a
+  // single tap (Concept→Easy→…→Exam Ready = 4 taps to master), each a visible
+  // jump. The per-stage session counts are the RECOMMENDED study effort shown on
+  // the card, not a tap-gate — requiring N taps to clear one stage read as a
+  // broken button. "Need more" (gotIt=false) keeps the student on the stage and
+  // records a practice session, which still feeds struggle signals + revision.
   function advanceIfReady(state: MasteryStudentState, spec: T, sessionsJustDone: number, gotIt: boolean): AdvanceResult {
     const progress = progressFor(state, spec.topic);
     const stage = progress.stage;
-    const prescribed = stage === 'exam_ready' ? 0 : spec.sessions[stage];
-    const doneNow = progress.sessionsDoneAtStage + sessionsJustDone;
-    if (stage !== 'exam_ready' && doneNow >= prescribed && gotIt) {
+    if (stage !== 'exam_ready' && gotIt) {
       const newStage = stageOrder[stageOrder.indexOf(stage) + 1] ?? 'exam_ready';
       state.progressByTopic.set(spec.topic, { ...progress, stage: newStage, sessionsDoneAtStage: 0, lastTouchedDaysAgo: 0 });
       return { newStage, stageCleared: true };
     }
+    const prescribed = stage === 'exam_ready' ? 0 : spec.sessions[stage];
+    const doneNow = progress.sessionsDoneAtStage + Math.max(0, sessionsJustDone);
     state.progressByTopic.set(spec.topic, { ...progress, sessionsDoneAtStage: Math.min(doneNow, prescribed), lastTouchedDaysAgo: 0 });
     return { newStage: stage, stageCleared: false };
   }
