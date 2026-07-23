@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
-import { Sparkles } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 
@@ -156,47 +155,51 @@ export function UnlockBuddyButton({
               </div>
             ) : (
               <>
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl">🎯</div>
-                <h2 className="text-center text-lg font-bold text-stone-900">Stop second-guessing your prep</h2>
-                <p className="mt-1 text-center text-sm text-stone-600">
-                  A <span className="font-semibold text-stone-800">real IIM senior</span> reviews your preparation,
-                  analyses every mock, and tells you exactly what to do next.
+                <p className="text-center text-[11px] font-bold uppercase tracking-widest text-orange-600">Only 4 months to CAT</p>
+                <h2 className="mt-1.5 text-center text-xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+                  The hard part now isn&apos;t studying.<br />It&apos;s not knowing if you&apos;re wasting these months.
+                </h2>
+                <p className="mt-2 text-center text-sm text-stone-600">
+                  A <span className="font-semibold text-stone-800">real IIM senior</span> tells you exactly what to fix — every week, till exam day.
                 </p>
 
-                <ul className="mt-4 space-y-2 text-sm text-stone-700">
-                  <li className="flex gap-2"><span>✅</span> Know exactly what to study next</li>
-                  <li className="flex gap-2"><span>✅</span> Understand why your mock score changed</li>
-                  <li className="flex gap-2"><span>✅</span> Fix mistakes before they become habits</li>
-                </ul>
+                {/* The choice: one payment till CAT (hero) vs month-to-month */}
+                <div className="mt-5 space-y-2.5">
+                  <button
+                    onClick={() => pay('tillcat')}
+                    disabled={busy !== null}
+                    className="w-full rounded-2xl border-2 border-stone-900 bg-stone-900 px-4 py-3.5 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold">Till CAT</span>
+                      <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Best value</span>
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-2xl font-extrabold">₹2,999</span>
+                      <span className="text-xs text-stone-500 line-through">₹3,996</span>
+                      <span className="text-[11px] font-semibold text-emerald-400">save ₹997</span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-stone-300">Your buddy all the way to exam day · about ₹25/day</p>
+                    <span className="mt-2 inline-block text-sm font-bold text-orange-300">
+                      {busy === 'tillcat' ? 'Starting…' : 'Get my buddy till CAT →'}
+                    </span>
+                  </button>
 
-                <div className="mt-5 space-y-2">
-                  {(Object.keys(PLANS) as PlanId[]).map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => pay(id)}
-                      disabled={busy !== null}
-                      className="w-full flex items-center justify-between rounded-xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-900 disabled:opacity-50"
-                    >
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 text-sm font-semibold text-stone-900">
-                          {PLANS[id].label}
-                          {PLANS[id].recommended && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-orange-600">
-                              <Sparkles className="w-3 h-3" /> Best
-                            </span>
-                          )}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-stone-500">{PLANS[id].tagline}</span>
-                      </span>
-                      <span className="shrink-0 pl-3 text-sm font-bold text-orange-600">
-                        {busy === id ? 'Starting…' : PLANS[id].display}
-                      </span>
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => pay('monthly')}
+                    disabled={busy !== null}
+                    className="w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-stone-900">Just this month</span>
+                      <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : '₹999'}</span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
+                  </button>
                 </div>
 
                 <p className="mt-3 text-center text-[11px] text-stone-400">
-                  1:1 mentorship from a real IIM mentor — live weekly sessions &amp; daily guidance. No auto-debit, ever.
+                  1:1 mentor, real IIM · live weekly sessions &amp; daily guidance · no auto-debit, ever.
                 </p>
 
                 {message && <p className="mt-3 text-center text-xs text-stone-600">{message}</p>}

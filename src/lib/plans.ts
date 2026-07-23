@@ -8,7 +8,14 @@
 // renewal-date math on a successful payment. Key order = display order (journey
 // plans first, monthly last).
 export const PLANS = {
-  halfyear:  { id: 'halfyear',  label: '6 Months', amountPaise: 449900, months: 6, display: '₹4,499', tagline: 'The whole journey to CAT', recommended: true,  journey: true  },
+  // 'Till CAT' is the hero (founder, 24 Jul): with ~4 months to the exam, the
+  // buyer's mental unit is "till CAT", not "months" or "a year". One payment,
+  // buddy all the way to exam day — kills the monthly churn decision at the
+  // exact moment the runway is short. months:4 ≈ late-July → late-Nov (CAT).
+  // Revisit `months` as the season progresses. quarterly/halfyear stay in the
+  // config (existing subs + admin read PLANS[plan]) but are no longer offered.
+  tillcat:   { id: 'tillcat',   label: 'Till CAT',  amountPaise: 299900, months: 4, display: '₹2,999', tagline: 'Your buddy till exam day', recommended: true,  journey: true  },
+  halfyear:  { id: 'halfyear',  label: '6 Months', amountPaise: 449900, months: 6, display: '₹4,499', tagline: 'The whole journey to CAT', recommended: false, journey: true  },
   quarterly: { id: 'quarterly', label: '3 Months', amountPaise: 249900, months: 3, display: '₹2,499', tagline: 'One season of prep',       recommended: false, journey: true  },
   monthly:   { id: 'monthly',   label: '1 Month',  amountPaise:  99900, months: 1, display: '₹999',   tagline: 'Month to month',            recommended: false, journey: false },
 } as const;
@@ -16,7 +23,7 @@ export const PLANS = {
 export type PlanId = keyof typeof PLANS;
 
 export function isPlanId(value: string): value is PlanId {
-  return value === 'monthly' || value === 'quarterly' || value === 'halfyear';
+  return value === 'monthly' || value === 'quarterly' || value === 'halfyear' || value === 'tillcat';
 }
 
 // Bug audit (14 July): `date.setMonth(date.getMonth() + n)` overflows into

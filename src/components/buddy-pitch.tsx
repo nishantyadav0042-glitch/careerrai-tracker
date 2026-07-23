@@ -163,12 +163,12 @@ export function BuddyPitch({ data, recommendedBuddies = [] }: {
       <div className="shrink-0 rounded-2xl bg-stone-900 p-3 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] text-stone-400">All this support</p>
-            <p className="text-xl font-extrabold leading-none">₹999<span className="text-xs font-semibold text-stone-400">/month</span></p>
-            <p className="mt-0.5 text-[9px] text-stone-500">Cancel anytime · no auto-debit</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-orange-400">Only 4 months to CAT</p>
+            <p className="text-xl font-extrabold leading-none">₹2,999<span className="text-xs font-semibold text-stone-400"> till CAT</span></p>
+            <p className="mt-0.5 text-[9px] text-stone-500">≈ ₹25/day · or ₹999/month · no auto-debit</p>
           </div>
           <div className="text-right text-[9px] leading-tight text-stone-300">
-            30 daily check-ins · 4 strategy calls<br />unlimited chat · mock review · personal plan
+            Buddy till exam day · 4 strategy calls<br />unlimited chat · mock review · personal plan
           </div>
         </div>
         <div className="mt-2">
