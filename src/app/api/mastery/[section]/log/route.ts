@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { loadMasteryState, saveTopicProgress, saveSwap } from '@/lib/mastery-state';
+import { loadMasteryState, saveTopicProgress, saveSwap, syncCoverageFromMastery, creditMasteryStudyDay } from '@/lib/mastery-state';
 import { sectionConfig } from '@/lib/mastery-sections';
-import type { ErrorType } from '@/lib/mastery-engine';
+import { SESSION_MINUTES, REVISION_SESSION_MINUTES, type ErrorType } from '@/lib/mastery-engine';
 
 // POST /api/mastery/[section]/log — the Section-D write-back + swap, for any
 // section. { action:'study'|'revision'|'swap', ... }
@@ -36,8 +36,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const sessionsDone = Math.max(0, Math.min(20, Number(body.sessionsDone) || 0));
     const gotIt = body.gotIt === true;
     const errorType: ErrorType | undefined = body.errorType === 'concept' || body.errorType === 'calculation' ? body.errorType : undefined;
+    const stageBefore = e.progressFor(state, spec.topic).stage;
     const result = e.applyStudySession(state, spec, { sessionsDone, gotIt, errorType });
-    await saveTopicProgress(admin, user.id, cfg.key, e.progressFor(state, spec.topic));
+    const after = e.progressFor(state, spec.topic);
+    await saveTopicProgress(admin, user.id, cfg.key, after);
+    // Sync bridge: mirror the new stage into topic_coverage (so Home/pace/
+    // Analysis/Buddy/routine all see it) and credit the day's log + streak
+    // (so a Mastery-only day still counts). Minutes = sessions studied × the
+    // stage's session length; at least one session's worth on any "Got it".
+    await syncCoverageFromMastery(admin, user.id, cfg.key, spec.topic, after.stage);
+    await creditMasteryStudyDay(admin, user.id, cfg.key, Math.max(1, sessionsDone) * SESSION_MINUTES[stageBefore]);
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -51,6 +59,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     e.applyRevisionSession(state, spec, body.wentCold === true);
     await saveTopicProgress(admin, user.id, cfg.key, e.progressFor(state, spec.topic));
+    // Revision is study too — keep coverage at exam_ready and credit the day.
+    await syncCoverageFromMastery(admin, user.id, cfg.key, spec.topic, e.progressFor(state, spec.topic).stage);
+    await creditMasteryStudyDay(admin, user.id, cfg.key, REVISION_SESSION_MINUTES);
     return NextResponse.json({ ok: true });
   }
 
