@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
+import { track } from '@/lib/journey';
 
 // The "Unlock your buddy" CTA. Opening it fires the buddy_cta_click engagement
 // event (→ sales-ready) AND offers in-app Razorpay checkout for the ₹999 buddy
@@ -60,12 +61,19 @@ export function UnlockBuddyButton({
 
   function openSheet() {
     logCtaClick();
+    // Also log to student_events so the buddy funnel (open → plan tap) lives in
+    // one analytics table, queryable per student.
+    track('buddy_unlock_open', {});
     setOpen(true);
   }
 
   async function pay(planId: PlanId) {
     setBusy(planId);
     setMessage(null);
+    // Record the EXACT plan tapped BEFORE calling checkout — so intent is
+    // captured even when payments are off (403) or the student abandons the
+    // Razorpay window. This is the "who tapped ₹999 / ₹2,499 / ₹4,499" signal.
+    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
