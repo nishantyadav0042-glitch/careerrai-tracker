@@ -12,27 +12,24 @@ import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-c
 import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
 import ScreenSocialProof from '@/app/student/onboarding/screens/screen-social-proof';
-import ScreenRepeaterBuddyPitch from '@/app/student/onboarding/screens/screen-repeater-buddy-pitch';
 import ScreenLoginBuild from './screens/screen-login-build';
 import type { CoverageSectionId } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
 
-// Screen order as stable KEYS, not raw index — so the repeater-only pitch
-// screen (inserted after quick-facts, the commitment/hours-pledge screen)
-// can never shift another screen's identity out from under it. login-build
-// is deliberately excluded (it's the default/final screen, reached once
-// stepIdx >= stepKeys.length).
+// Screen order as stable KEYS, not raw index. login-build is deliberately
+// excluded (it's the default/final screen, reached once stepIdx >= stepKeys.length).
+//
+// The repeater ₹999 buddy PITCH screen deliberately does NOT live here
+// (founder, 23 Jul): a sales pitch mid pre-auth signup adds friction to the
+// core funnel before an account even exists. It lives only in-app, right
+// after the commitment (finish-date) screen in onboarding-modal.tsx. This
+// pre-auth funnel still asks the two repeater QUESTIONS below (last year's
+// percentile, had-a-buddy) — that data alone is real sales value (feeds the
+// Expedify call brief), no extra screen required.
 const BASE_STEP_KEYS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'instant-insight', 'mentor', 'social-proof'];
 
-// Repeater-only (founder, 23 Jul, for sales): right after the commitment
-// (quick-facts, where hours + "Repeating" are picked) — "don't worry, IIM
-// buddy at ₹999" + a thank-you — before the rest of the funnel continues.
-// Pure function (no closures) so it can size the initial step count before
-// any component state exists.
-function stepKeysFor(d: Record<string, unknown>): string[] {
-  const keys = [...BASE_STEP_KEYS];
-  if (d.is_repeater === true) keys.splice(keys.indexOf('quick-facts') + 1, 0, 'repeater-pitch');
-  return keys;
+function stepKeysFor(): string[] {
+  return BASE_STEP_KEYS;
 }
 
 // Founder-directed rebuild: every onboarding question now happens BEFORE
@@ -45,8 +42,10 @@ function stepKeysFor(d: Record<string, unknown>): string[] {
 // v4: removed the standalone reassurance screen (redundant with reality-check).
 // v5: Instant Insight screen inserted after topic-coverage (founder: WOW value
 //     before signup — the diagnosis IS the pitch for daily insights + install).
-// v6: repeater-only buddy pitch inserted after quick-facts (repeaters only).
-const DRAFT_KEY = 'cr_preauth_draft_v6';
+// v6: repeater-only buddy pitch inserted after quick-facts — REVERTED in v7,
+//     see note above stepKeysFor.
+// v7: repeater buddy pitch removed from this funnel (stays in-app only).
+const DRAFT_KEY = 'cr_preauth_draft_v7';
 // A draft older than this is an abandoned lead, not a session to resume —
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -82,12 +81,12 @@ function loadDraft(): { stepIdx: number; data: Record<string, unknown> } | null 
 export default function StartPage() {
   const draft = loadDraft();
   const initialData = draft?.data ?? {};
-  const [stepIdx, setStepIdx] = useState(() => Math.min(draft?.stepIdx ?? 0, stepKeysFor(initialData).length - 1));
+  const [stepIdx, setStepIdx] = useState(() => Math.min(draft?.stepIdx ?? 0, stepKeysFor().length - 1));
   const [data, setData] = useState<Record<string, unknown>>(initialData);
 
   // Recomputed live every render — reflects is_repeater the moment quick-facts
   // sets it, exactly like the post-login onboarding modal's key-based screens.
-  const stepKeys = stepKeysFor(data);
+  const stepKeys = stepKeysFor();
   const TOTAL_SCREENS = stepKeys.length; // excludes the final login/build screen from the progress bar
   const currentKey = stepIdx < stepKeys.length ? stepKeys[stepIdx] : 'login-build';
 
@@ -132,17 +131,6 @@ export default function StartPage() {
       break;
     case 'quick-facts':
       content = <ScreenQuickFacts onNext={advance} ambitionDate={data.ambition_date as string | undefined} {...shared} />;
-      break;
-    // Repeater-only — see stepKeysFor above for when this is inserted.
-    case 'repeater-pitch':
-      content = (
-        <ScreenRepeaterBuddyPitch
-          onNext={advance}
-          {...shared}
-          lastYearPercentile={(data.last_year_percentile as number | undefined) ?? null}
-          hadBuddyLastYear={(data.had_buddy_last_year as boolean | undefined) ?? null}
-        />
-      );
       break;
     case 'pain-points':
       content = <ScreenPainPoints onNext={advance} {...shared} />;
