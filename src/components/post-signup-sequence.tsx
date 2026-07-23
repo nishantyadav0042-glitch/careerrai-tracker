@@ -97,7 +97,7 @@ function HoldToCommit({ onComplete }: { onComplete: () => void }) {
 // on"). Five stations, always on screen: what's done gets a tick, the current
 // one pulses, and the unfinished ones PULL — the student can see exactly how
 // close the finish line is, and the finish line is reminders ON in the app.
-const JOURNEY = ['Your date', 'Commitment', 'Install', 'Open app', 'Reminders on'] as const;
+const JOURNEY = ['Install', 'Open app', 'Commit', 'Ready'] as const;
 
 function JourneyRail({ current }: { current: number }) {
   return (
@@ -169,6 +169,7 @@ interface DateOption { hours: number; date: Date; label: string; note: string }
 export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const [today] = useState(() => new Date());
   const [visible, setVisible] = useState(true);
+  const [isApp, setIsApp] = useState(false); // standalone read is client-only — starts false to match SSR
   const [busy, setBusy] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushState, setPushState] = useState<EnablePushResult | null>(null);
@@ -201,10 +202,29 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   // where the capacity contradiction is highlighted (the red reality-check on the
   // hours screen). This ceremony NO LONGER re-opens the date — a second date
   // decision here is exactly what silently turned a student's onboarding pick
-  // into a different date (Pranav's "6 weeks" → 23 Aug). We start at 'commit',
-  // which DISPLAYS the onboarding date as a commitment, never re-decides it.
-  // Flow now: commit → thanks → install (the finale into the installed app).
-  const [step, setStep] = useState<Step>('commit');
+  // into a different date (Pranav's "6 weeks" → 23 Aug). 'commit' DISPLAYS the
+  // onboarding date as a commitment, never re-decides it.
+  //
+  // Install-FIRST (founder, 23 July): a browser-tab lead who never installs is
+  // functionally dead to us — push dies at ~75% in-browser vs ~8% installed.
+  // Install now runs BEFORE commitment, not as the finale: while the student
+  // does the commit ritual, the app has a chance to already be ready in the
+  // background, so the close of the ceremony can genuinely say "open your plan
+  // in the app" instead of ending in a browser tab. Skippable throughout — a
+  // hard, unskippable gate would trade real signups for an unverifiable iOS
+  // manual step (no page-level signal ever confirms an iOS Add-to-Home-Screen
+  // completed), and we already saw that exact dead-end fail tonight.
+  // Flow: installFirst → openApp → commit → thanks → share.
+  const [step, setStep] = useState<Step>('installFirst');
+
+  // Already running standalone (e.g. the ceremony re-mounted after an iOS
+  // install round-trip) — nothing to install, skip straight to commitment.
+  useEffect(() => {
+    const standalone = isStandalone();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- display-mode read is client-only
+    setIsApp(standalone);
+    if (standalone) setStep('commit');
+  }, []);
 
   // Retained only for the (now-unused) notifications/date screens' hand-off
   // targets, kept so the enum stays exhaustive without a dead entry path.
@@ -256,16 +276,15 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
     setStep('commit');
   };
 
-  // Install is now the headline act, straight after the commitment (founder,
-  // 20 July: "your first step — install your app; we'll remind you what to
-  // study and when"). The ceremony is marked done BEFORE the install screen
-  // shows, so the iOS install navigation to /app can never re-trigger it.
-  const goInstallFirst = async () => {
+  // Closes the ceremony after the commit ritual. Marked done here (not at the
+  // start) so a student who closes the tab mid-install still gets the
+  // commitment ritual on their next visit — install itself stays skippable
+  // throughout and never blocks reaching this point.
+  const finishCommitment = async () => {
     setBusy(true);
     await persist({ done: true });
     setBusy(false);
-    if (isStandalone()) { setStep('share'); return; } // already in the app — nothing to install
-    setStep('installFirst');
+    setStep('share');
   };
 
   const afterShare = () => {
@@ -340,14 +359,14 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'installFirst' && (
           <div className="space-y-6 text-center">
-            <JourneyRail current={2} />
+            <JourneyRail current={0} />
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                {chosenLabel ? `${chosenLabel} is locked. Now install your app.` : 'Your next step: install your app.'}
+                First, let&apos;s get your app ready.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                We will remind you <b>what to study</b> and <b>when to study</b> — and send your <b>daily insight every evening</b> (your pattern, your gap, one advice, like the one you just saw). All of it reaches you only through the installed app. ~3 MB, once.
+                We remind you <b>what to study</b> and <b>when</b>, and send a <b>daily insight every evening</b> — all of it reaches you only through the installed app. ~3 MB, once.
               </p>
             </div>
             <div className="space-y-2 pt-2">
@@ -365,19 +384,19 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'openApp' && (
           <div className="space-y-5 text-center">
-            <JourneyRail current={3} />
+            <JourneyRail current={1} />
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
                 App downloaded? Open CareerRai in the app now.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                One station left after this: the app will ask to <b>switch on reminders</b> the moment it opens — say yes, and your setup is complete. Didn&apos;t get the install popup? The 10-second route:
+                Didn&apos;t get the install popup? The 10-second route:
               </p>
             </div>
             <InstallLiveGuide />
             <button
               type="button"
-              onClick={() => setStep('share')}
+              onClick={() => setStep('commit')}
               className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
             >
               Done — continue →
@@ -422,7 +441,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'commit' && (
           <div className="space-y-5 text-center">
-            <JourneyRail current={1} />
+            <JourneyRail current={2} />
             <div>
               <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Commit to your goal</h1>
               <div className="mx-auto mt-4 max-w-xs rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-left">
@@ -437,21 +456,22 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
 
         {step === 'thanks' && (
           <div className="space-y-6 text-center">
-            <JourneyRail current={2} />
+            <JourneyRail current={3} />
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-3xl shadow-lg shadow-violet-200">🙏</div>
             <div>
               <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>That hold meant something.</h1>
               <p className="mt-2 text-sm text-stone-500">
-                {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}We don&apos;t take it lightly — from here, we work for your date. <b>Two minutes of setup left</b>: app on your phone, open it, reminders on. Then we take over the remembering.
+                {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}
+                {isApp ? 'Your app is ready — see your plan now.' : 'Thanks for trusting us. Now see your study plan in the app.'}
               </p>
             </div>
             <button
               type="button"
               disabled={busy}
-              onClick={goInstallFirst}
+              onClick={finishCommitment}
               className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
             >
-              Continue →
+              See my plan →
             </button>
           </div>
         )}
