@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, X } from 'lucide-react';
 import { InstallButton } from '@/components/install/install-button';
 
 // Today's insight, ON the home screen (founder, 21 July: "add this insight in
@@ -10,6 +10,11 @@ import { InstallButton } from '@/components/install/install-button';
 // becomes the install hook: "this reaches you daily in the app", feeding the
 // chain insight → install → open app → notifications (which the installed
 // app's first-run queue already asks first).
+//
+// Dismissible (founder, 23 July: "it should be a popup until the student cuts
+// it, not a permanent thing on screen"): an ✕ removes today's insight and it
+// stays gone for the rest of the day (keyed by date in localStorage). A fresh
+// insight the next day shows again.
 interface Props {
   title: string;
   text: string;
@@ -21,19 +26,44 @@ function isStandalone(): boolean {
     || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
 }
 
+function dismissKey(): string {
+  return `cr_insight_dismissed_${new Date().toISOString().slice(0, 10)}`;
+}
+
 export function DailyInsightCard({ title, text, kind }: Props) {
   const [inBrowser, setInBrowser] = useState(false);
-  /* eslint-disable react-hooks/set-state-in-effect -- display-mode detection must run client-side */
+  // Start hidden until we've checked today's dismissal client-side, so a
+  // cut card never flashes back on reload.
+  const [hidden, setHidden] = useState(true);
+  /* eslint-disable react-hooks/set-state-in-effect -- display-mode + dismissal are client-only */
   useEffect(() => {
     setInBrowser(!isStandalone());
+    let dismissed = false;
+    try { dismissed = !!localStorage.getItem(dismissKey()); } catch { /* ignore */ }
+    setHidden(dismissed);
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  const dismiss = () => {
+    try { localStorage.setItem(dismissKey(), '1'); } catch { /* ignore */ }
+    setHidden(true);
+  };
+
+  if (hidden) return null;
 
   const warm = kind === 'recovery' || kind === 'consistency' || kind === 'progress';
 
   return (
-    <div className={`rounded-2xl border p-3.5 shadow-sm ${warm ? 'border-emerald-200 bg-emerald-50/60' : 'border-orange-200 bg-orange-50/60'}`}>
-      <div className="flex items-start gap-2.5">
+    <div className={`relative rounded-2xl border p-3.5 shadow-sm ${warm ? 'border-emerald-200 bg-emerald-50/60' : 'border-orange-200 bg-orange-50/60'}`}>
+      <button
+        type="button"
+        onClick={dismiss}
+        aria-label="Dismiss today's insight"
+        className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full text-stone-400 transition-colors hover:bg-white/70 hover:text-stone-600"
+      >
+        <X className="h-4 w-4" />
+      </button>
+      <div className="flex items-start gap-2.5 pr-6">
         <span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg ${warm ? 'bg-emerald-600' : 'bg-orange-500'}`}>
           <Lightbulb className="h-4 w-4 text-white" />
         </span>
