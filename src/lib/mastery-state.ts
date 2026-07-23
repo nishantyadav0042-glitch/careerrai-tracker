@@ -4,10 +4,19 @@
 // first time so progress-to-date is preserved, and persists mutations.
 
 import type { MasteryStudentState, StudentTopicProgress, Stage, MasteryTopicSpec } from './mastery-engine';
+import { getLogDateString, VALID_SECTIONS } from './streak-utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const DAY = 86_400_000;
+
+// Mastery stage -> legacy topic_coverage status. Chosen so it round-trips
+// stably with statusToStage above: seeding a coverage status into a stage and
+// mirroring that stage back yields the SAME status (no phantom up/downgrade).
+//   learning  <-> easy/concept · practicing <-> medium · revising <-> hard
+const STAGE_TO_STATUS: Record<Stage, string> = {
+  concept: 'learning', easy: 'learning', medium: 'practicing', hard: 'revising', exam_ready: 'exam_ready',
+};
 
 // Existing coverage status → new ladder stage (1:1) so nobody restarts at zero.
 export function statusToStage(status: string | null | undefined): Stage {
@@ -108,4 +117,51 @@ export async function saveSwap(admin: any, studentId: string, section: string, s
     { onConflict: 'student_id,section,plan_date' }
   );
   if (error) throw new Error(`saveSwap(${section}/${slot}): ${error.message}`);
+}
+
+// ── Mastery -> legacy sync bridge ─────────────────────────────────────────
+// The Mastery plan is the source of truth for a Mastery-enabled student, but
+// the rest of the app (Home, pace, Analysis matrix, Buddy, analytics, the daily
+// routine) reads topic_coverage / daily_reports / streak_data. Without these
+// two writes, Mastery progress is invisible everywhere else and a Mastery-only
+// day never logs or keeps a streak. Called from the study/revision log path.
+
+// Mirror a topic's Mastery stage into topic_coverage so every legacy surface
+// shows the same progress. Idempotent upsert; never downgrades a topic (the
+// stage only climbs, and the mapping round-trips with the seed).
+export async function syncCoverageFromMastery(admin: any, studentId: string, section: string, topic: string, stage: Stage): Promise<void> {
+  const { error } = await admin.from('topic_coverage').upsert(
+    { student_id: studentId, section, topic, status: STAGE_TO_STATUS[stage], updated_at: new Date().toISOString() },
+    { onConflict: 'student_id,section,topic' }
+  );
+  if (error) console.error('[mastery-state] coverage sync failed', { section, topic, error: error.message });
+}
+
+// Credit a Mastery study/revision session to the SAME daily-log + streak system
+// the routine card and manual log use (upsert_log_and_streak), so a student who
+// works only inside the Mastery plan still "logged today" and keeps their
+// streak. Merges with any existing daily_report — max hours, union of sections,
+// preserves mock/notes — so it never shrinks a log the student already made.
+export async function creditMasteryStudyDay(admin: any, studentId: string, sectionKey: string, minutes: number): Promise<void> {
+  const today = getLogDateString();
+  const { data: existing } = await admin
+    .from('daily_reports')
+    .select('study_duration, topics_covered, mock_taken, notes')
+    .eq('student_id', studentId).eq('report_date', today).maybeSingle();
+
+  const sectionTag = (VALID_SECTIONS as readonly string[]).includes(sectionKey) ? [sectionKey] : [];
+  const mergedHours = Math.max(1, Math.round(minutes / 60), existing?.study_duration ?? 0);
+  const mergedSections = [...new Set([...(existing?.topics_covered ?? []), ...sectionTag])];
+
+  const { error } = await admin.rpc('upsert_log_and_streak', {
+    p_student_id: studentId,
+    p_report_date: today,
+    p_study_duration: mergedHours,
+    p_topics_covered: mergedSections,
+    p_mood_emoji: '💪',
+    p_mock_taken: !!existing?.mock_taken,
+    p_notes: existing?.notes ?? null,
+    p_emotional_chips: [],
+  });
+  if (error) console.error('[mastery-state] study-day credit failed', { error: error.message });
 }
