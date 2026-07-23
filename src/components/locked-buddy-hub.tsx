@@ -1,24 +1,26 @@
 import { SampleDebrief } from '@/components/sample-debrief';
-import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
+import { BuddyBuyButtons } from '@/components/unlock-buddy-sheet';
 import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { Testimonials } from '@/components/testimonials';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import type { SocialProof } from '@/lib/social-proof';
-import { ListChecks, LineChart, Wrench, RefreshCw, ShieldCheck, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 // The buddy paywall — a full-page SALES ASSET on /student/buddy and /student/chat
-// for free users.
+// for free users, rebuilt as a DIRECT conversion screen (founder, 24 Jul: the
+// old version was a long generic scroll ending in a button that opened another
+// sheet — too many taps, too boring for the app's most revenue-critical page).
 //
-// Positioning: the competitor isn't TIME/Rodha — it's YouTube + Telegram +
-// overthinking. Students aren't short on effort; they're terrified of preparing
-// the WRONG way on their one shot a year. INTERNALLY the engine is "direction /
-// course-correction"; EXTERNALLY we never say that — students buy results, not
-// "direction" (Apple sells "it just works", not "beautiful HCI").
+// New shape: a tight, Apple-style hook that pairs a REAL fear (wasting your one
+// shot) with a CREDIBLE promise (an IIM senior fixing your direction weekly),
+// the honest 4-months urgency, and the PRICE CHOICE rendered right on the page
+// — one tap straight to Razorpay, no intermediate sheet. Proof lives below for
+// the skeptical; the already-decided can buy in the first screen.
 //
-// The ladder, top to bottom: FEAR → COST → PROMISE → MECHANISM. Problem FIRST,
-// buddy SECOND — the student must feel "I might be preparing wrong" before the
-// mentor is introduced, so the buddy reads as the obvious answer, not another
-// mentorship upsell.
+// Positioning: the competitor isn't TIME/coaching — it's YouTube + overthinking.
+// Students aren't short on effort; they're terrified of preparing the WRONG way
+// on their one shot a year. We never say "direction" out loud — students buy
+// results, not "course-correction".
 export function LockedBuddyHub({
   variant, fullName, recommendedBuddies = [], proof,
 }: {
@@ -27,74 +29,60 @@ export function LockedBuddyHub({
   recommendedBuddies?: RecommendedBuddyResult[];
   proof?: SocialProof;
 }) {
-  // Real, live proof — only shown when the count is genuinely meaningful
-  // (never a fabricated floor). mappedTotal is our strongest honest number.
   const proofLine = proof && proof.mappedTotal >= 25
     ? `${proof.mappedTotal} aspirants have mapped their full CAT syllabus here`
     : proof && proof.startedTotal >= 25
       ? `${proof.startedTotal} aspirants are preparing with CareerRai`
       : null;
-  // FEAR + COST — the hook. No mention of the solution yet.
+
+  // HERO — fear then cost, one credible promise. No solution named yet.
   const fear = variant === 'chat'
     ? 'Not sure what to do next?'
-    : 'Are you sure you’re preparing the right way?';
+    : 'The hardest part now isn’t studying.';
   const cost = variant === 'chat'
-    ? 'Guessing your next move can cost you weeks before your one shot.'
-    : 'One wrong strategy can cost you an entire CAT attempt.';
-
-  // PROMISE — emotionally stronger than "get the right strategy". Cards are
-  // outcomes the student feels, never features.
-  const outcomes = [
-    { icon: ListChecks, title: 'Know exactly what to study next' },
-    { icon: LineChart, title: 'Understand why your mock score changed' },
-    { icon: Wrench, title: 'Fix mistakes before they become habits' },
-    { icon: RefreshCw, title: 'A preparation plan that evolves every week' },
-    { icon: ShieldCheck, title: 'Stop second-guessing every decision' },
-  ];
+    ? 'Guessing your next move costs you weeks you don’t have.'
+    : 'It’s not knowing if you’re wasting your one shot.';
 
   return (
     <>
-    <div className="mx-auto max-w-md space-y-5 px-1 pt-4 pb-28">
-      {/* 1 — FEAR + COST. Problem only. */}
+    <div className="mx-auto max-w-md space-y-6 px-1 pt-5 pb-28">
+      {/* 1 — the hook: urgency → fear → cost → credible promise */}
       <div className="text-center">
-        <h1 className="text-[23px] font-bold leading-snug text-stone-900">{fear}</h1>
-        <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed text-red-600">{cost}</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">Only 4 months to CAT</p>
+        <h1 className="mt-2.5 text-[26px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+          {fear}
+        </h1>
+        <p className="mt-2 text-[17px] font-semibold leading-snug text-red-600">{cost}</p>
+        <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-stone-600">
+          A verified IIM senior reviews your prep every week and tells you exactly what to fix — so these last months actually count.
+        </p>
       </div>
 
-      {/* 2 — PROMISE. The relief, as outcomes. */}
-      <div>
-        <p className="mb-2 text-center text-[13px] font-semibold text-stone-900">
-          Never spend another week wondering what to do next.
-        </p>
-        <div className="space-y-1.5">
-          {outcomes.map((p) => (
-            <div key={p.title} className="flex items-center gap-2.5 rounded-xl border border-stone-200 bg-white px-3 py-2">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-50">
-                <p.icon className="h-3.5 w-3.5 text-purple-600" />
-              </div>
-              <p className="text-[13px] font-semibold text-stone-900">{p.title}</p>
-            </div>
-          ))}
+      {/* 2 — THE BUY. On the page, above the fold. One tap → Razorpay. */}
+      <BuddyBuyButtons fullName={fullName} />
+
+      {/* 3 — the value in three lines, not a feature list */}
+      <div className="space-y-2">
+        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3.5">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Right now, on your own</p>
+          <p className="mt-1 text-sm italic leading-relaxed text-stone-500">
+            &ldquo;Should I give another mock? Should I revise Algebra? Am I even improving?&rdquo;
+          </p>
+        </div>
+        <div className="rounded-2xl border-2 border-purple-200 bg-purple-50 p-3.5">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-purple-600">With your buddy</p>
+          <p className="mt-1 text-sm font-semibold text-purple-900">
+            You know exactly what to do today. And tomorrow. All the way to CAT.
+          </p>
         </div>
       </div>
 
-      {/* 3 — MECHANISM. Only now introduce the buddy — as the how, not the pitch. */}
-      <div className="rounded-2xl border border-purple-100 bg-purple-50/60 p-4 text-center">
-        <p className="text-sm leading-relaxed text-stone-700">
-          Here’s how: your <span className="font-semibold text-stone-900">IIM buddy</span> reviews your
-          preparation, analyses every mock, and tells you <span className="font-semibold text-stone-900">exactly what to do next</span>.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
-          <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 font-semibold text-teal-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" /> Verified IIM alumni mentors
-          </span>
-          <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-medium text-stone-600">
-            Every buddy cleared CAT · 95%ile+
-          </span>
-        </div>
-      </div>
+      {/* 4 — the honest "enough time" reframe (the game-change belief, grounded) */}
+      <p className="px-3 text-center text-[15px] font-semibold leading-snug text-stone-800">
+        You don&apos;t need more time.<br />You need the right direction for the time you have.
+      </p>
 
-      {/* Real, live social proof — LOUD (founder), updates itself, never fabricated */}
+      {/* Real, live social proof — never fabricated */}
       {proofLine && (
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-center">
           <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-green-800">
@@ -104,23 +92,21 @@ export function LockedBuddyHub({
         </div>
       )}
 
-      {/* The mentor — one best match, others one tap away */}
+      {/* The real mentor — one best match, others one tap away */}
       {recommendedBuddies.length > 0 && (
         <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
       )}
 
-      {/* Proof of the product — a real mock review */}
+      {/* Product proof — a real mock review */}
       <div>
-        <p className="mb-2 text-center text-xs font-medium text-stone-400">
-          See a real mock review 👇
-        </p>
+        <p className="mb-2 text-center text-xs font-medium text-stone-400">See a real mock review 👇</p>
         <SampleDebrief />
       </div>
 
       {/* Real testimonials — renders only when a genuine quote exists */}
       <Testimonials max={3} />
 
-      {/* Group vs 1:1 contrast — the wedge */}
+      {/* Coaching batch vs 1:1 — the wedge */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
           <p className="font-semibold text-stone-500">Coaching batch</p>
@@ -140,31 +126,14 @@ export function LockedBuddyHub({
         </div>
       </div>
 
-      {/* Price + guarantee */}
-      <div className="rounded-2xl bg-stone-900 px-4 py-4 text-center">
-        <p className="text-sm text-stone-300">Your IIM buddy, from</p>
-        <p className="mt-0.5">
-          <span className="text-3xl font-bold text-white">₹999</span>
-          <span className="text-sm text-stone-400">/month</span>
-        </p>
-        <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-stone-400">
-          <ShieldCheck className="h-3.5 w-3.5 text-orange-400" />
-          No auto-debit — you&apos;re in control of every renewal.
-        </p>
-      </div>
-
-      {/* The positioning sentence, stated plainly */}
       <p className="px-2 text-center text-xs leading-relaxed text-stone-400">
-        CareerRai doesn’t help you study more — it helps you avoid studying the wrong things.
+        CareerRai doesn&apos;t help you study more — it helps you avoid studying the wrong things.
       </p>
-
     </div>
 
-    {/* Constant CTA — always visible, just above the bottom nav */}
+    {/* Sticky buy — always one tap from purchase, just above the bottom nav */}
     <div className="fixed inset-x-0 bottom-16 z-20 mx-auto max-w-md px-3">
-      <UnlockBuddyButton variant="primary" size="lg" className="w-full shadow-xl shadow-stone-900/20" fullName={fullName}>
-        Get my 1:1 IIM mentor →
-      </UnlockBuddyButton>
+      <BuddyBuyButtons fullName={fullName} sticky />
     </div>
     </>
   );
