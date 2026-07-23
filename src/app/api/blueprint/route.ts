@@ -154,13 +154,13 @@ export async function GET() {
   const thisWeek: { label: string; href: string }[] = [];
   for (const t of dueForRevision) {
     if (thisWeek.length >= 1) break; // first slot: most-overdue revision, if any
-    thisWeek.push({ label: `Revise ${t.topic}`, href: '/student/analysis' });
+    thisWeek.push({ label: `Revise ${t.topic}`, href: '/student/plan/topics?status=revision' });
   }
   thisWeek.push({ label: 'Take your next mock', href: '/student/tracker' });
-  if (sectionToFinish) thisWeek.push({ label: `Finish ${sectionToFinish}`, href: '/student/analysis' });
+  if (sectionToFinish) thisWeek.push({ label: `Finish ${sectionToFinish}`, href: '/student/plan/topics?status=remaining' });
   let extraRevisionIdx = 1;
   while (thisWeek.length < 3 && dueForRevision[extraRevisionIdx]) {
-    thisWeek.push({ label: `Revise ${dueForRevision[extraRevisionIdx].topic}`, href: '/student/analysis' });
+    thisWeek.push({ label: `Revise ${dueForRevision[extraRevisionIdx].topic}`, href: '/student/plan/topics?status=revision' });
     extraRevisionIdx++;
   }
 
