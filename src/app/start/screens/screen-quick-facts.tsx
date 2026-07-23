@@ -41,12 +41,29 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading,
   const [repeater, setRepeater] = useState<boolean | null>(null);
   const [situation, setSituation] = useState<Situation | null>(null);
   const [alert, setAlert] = useState<Feasibility | null>(null);
+  // Repeater-only (founder, 23 Jul): asked of every repeater, right here —
+  // this IS the commitment screen (hours pledge). Feeds the buddy-pitch
+  // screen that follows, for repeaters only.
+  const [lastYearPercentile, setLastYearPercentile] = useState<string>('');
+  const [hadBuddyLastYear, setHadBuddyLastYear] = useState<boolean | null>(null);
 
-  const canContinue = hours != null && coaching != null && repeater != null && situation != null;
+  const parsedLastYearPercentile = parseFloat(lastYearPercentile);
+  const lastYearPercentileValid =
+    lastYearPercentile.trim() !== '' &&
+    !isNaN(parsedLastYearPercentile) &&
+    parsedLastYearPercentile >= 0 &&
+    parsedLastYearPercentile <= 99.99;
+  const repeaterQuestionsValid = repeater !== true || (lastYearPercentileValid && hadBuddyLastYear !== null);
+
+  const canContinue = hours != null && coaching != null && repeater != null && situation != null && repeaterQuestionsValid;
   // Identity Engine: 'working' is the persona that most reshapes the plan
   // (scarce time → highest-ROI, lighter weekdays). College / full-time both
   // read as not-working-professional for now.
-  const payload = { hours_available: hours, coaching_enrolled: coaching, is_repeater: repeater, is_working_professional: situation === 'working' };
+  const payload = {
+    hours_available: hours, coaching_enrolled: coaching, is_repeater: repeater, is_working_professional: situation === 'working',
+    last_year_percentile: repeater ? parsedLastYearPercentile : null,
+    had_buddy_last_year: repeater ? hadBuddyLastYear : null,
+  };
 
   // The capacity reality-check: does their finish date fit the hours they can
   // give? If not, STOP and show it boldly — they decide, we never silently hand
@@ -142,6 +159,37 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading,
           <Chip active={repeater === true} label="Repeating" onClick={() => setRepeater(true)} />
         </div>
       </div>
+
+      {repeater === true && (
+        <div className="space-y-4 rounded-2xl border border-stone-300 bg-stone-50 p-4">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-stone-800">What was your percentile last year?</p>
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={99.99}
+                step={0.01}
+                placeholder="e.g. 82.5"
+                value={lastYearPercentile}
+                onChange={(e) => setLastYearPercentile(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-stone-300 text-stone-900 text-base font-medium focus:outline-none focus:ring-2 focus:ring-stone-400 appearance-none"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm font-medium">%ile</span>
+            </div>
+            {lastYearPercentile.trim() !== '' && !lastYearPercentileValid && (
+              <p className="text-xs text-red-600 mt-1">Enter a percentile between 0 and 99.99.</p>
+            )}
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-stone-800">Did you have a buddy or guide last year — someone who has actually cracked CAT?</p>
+            <div className="flex gap-2">
+              <Chip active={hadBuddyLastYear === true} label="Yes, I did" onClick={() => setHadBuddyLastYear(true)} />
+              <Chip active={hadBuddyLastYear === false} label="No, I was alone" onClick={() => setHadBuddyLastYear(false)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <p className="mb-2 text-sm font-semibold text-stone-800">Right now you&apos;re a…</p>

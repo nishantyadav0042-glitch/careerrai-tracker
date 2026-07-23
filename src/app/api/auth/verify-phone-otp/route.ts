@@ -23,6 +23,8 @@ interface OnboardingPayload {
   hours_available?: unknown;
   coaching_enrolled?: unknown;
   is_repeater?: unknown;
+  last_year_percentile?: unknown;
+  had_buddy_last_year?: unknown;
   is_working_professional?: unknown;
   pain_points?: unknown;
   wants_mentor?: unknown;
@@ -211,6 +213,12 @@ export async function POST(request: NextRequest) {
       }
       if (typeof onboarding.coaching_enrolled === 'boolean') profileUpdate.coaching_enrolled = onboarding.coaching_enrolled;
       if (typeof onboarding.is_repeater === 'boolean') profileUpdate.is_repeater = onboarding.is_repeater;
+      // Repeater-only sales signal (founder, 23 Jul): last year's real
+      // percentile + whether they had genuine expert support last time.
+      if (typeof onboarding.last_year_percentile === 'number' && onboarding.last_year_percentile >= 0 && onboarding.last_year_percentile <= 99.99) {
+        profileUpdate.last_year_percentile = onboarding.last_year_percentile;
+      }
+      if (typeof onboarding.had_buddy_last_year === 'boolean') profileUpdate.had_buddy_last_year = onboarding.had_buddy_last_year;
       // Identity Engine (LIS L1): capture whether they're working — the persona
       // that most changes the plan shape (was never asked, so a working student
       // like Pranav got a full-time-aspirant plan).
