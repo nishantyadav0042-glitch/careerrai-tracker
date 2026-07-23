@@ -112,21 +112,23 @@ export function LoggingModal({
   // Must answer the three core questions; the "what did you study" evidence can
   // come from a mock, a ticked plan topic, an off-plan section chip — or none
   // at all when hours is 0 (an honest "didn't study today" log).
+  // ONLY hours + "what did you do" gate the log. energy and the mock question
+  // are OPTIONAL (defaulted on submit) — they were hard-blocking students at
+  // "Still needed: energy level" and killing the core daily-log habit
+  // (23 Jul: 11 opened the log, only 3 got through). Logging must be near-
+  // frictionless; the nice-to-haves never stop a student recording their day.
   const isValid =
-    hours !== null && energy !== null && mockTaken !== null &&
+    hours !== null &&
     (mockTaken === true || taskChoice.size > 0 || offSections.length > 0 || hours === 0);
 
   // Says exactly what's missing — replaces the silently-grey button that made
   // students give up without knowing why (the 19-20 July zero-log incident).
   const missingHint = (): string | null => {
-    const missing: string[] = [];
-    if (hours === null) missing.push('hours studied');
-    if (mockTaken === null) missing.push('the mock question');
-    if (energy === null) missing.push('energy level');
-    if (missing.length === 0 && !(mockTaken === true || taskChoice.size > 0 || offSections.length > 0 || hours === 0)) {
+    if (hours === null) return 'Still needed: hours studied.';
+    if (!(mockTaken === true || taskChoice.size > 0 || offSections.length > 0 || hours === 0)) {
       return 'Mark how far you got on a plan topic — or tap a section under "Studied something else?"';
     }
-    return missing.length > 0 ? `Still needed: ${missing.join(', ')}.` : null;
+    return null;
   };
 
   const handleSubmit = async () => {
@@ -162,7 +164,7 @@ export function LoggingModal({
       const result = await onSubmit({
         hours,
         sections: finalSections,
-        energy,
+        energy: energy ?? '💪', // optional now — default to the neutral middle so a null never blocks the log
         notes: notes.trim() || undefined,
         emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
         plan_fit: planFit ?? undefined,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeIndianPhone } from '@/lib/phone';
+import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
 
 // Inbound Expedify webhook — the RETURN pipe. Their workflow POSTs here after
 // every call attempt / reschedule / CRM contact update, and everything lands in
@@ -56,7 +56,9 @@ export async function POST(request: NextRequest) {
   // Match to a student when possible (never required — unknown numbers still audit).
   let studentId: string | null = null;
   if (phone) {
-    const { data } = await admin.from('profiles').select('id, call_feedback').eq('phone', phone).maybeSingle();
+    // Match across every stored phone format (+91… / 91… / bare 10-digit) so a
+    // drifted number never causes a missed match.
+    const { data } = await admin.from('profiles').select('id, call_feedback').in('phone', phoneVariants(phone)).limit(1).maybeSingle();
     studentId = data?.id ?? null;
 
     if (studentId) {
