@@ -128,14 +128,23 @@ export default async function DailyTrackerPage() {
   // daily-hours requirement to hit their date. Auto catch-up / roll-over.
   const targetIso = (profile?.syllabus_target_date as string | null) ?? null;
   const paceRemainingHours = remainingSyllabusHours(topicMemory);
+  // Progress % is counted BY NUMBER OF TOPICS (founder decision, 23 Jul), the
+  // same definition My CAT Plan uses (studiedOnceCount = practicing/revising/
+  // exam_ready over all 46), so the Home ring and Blueprint can never show
+  // different percentages. The hours model still drives the pace/finish-date
+  // (requiredPerDay, ahead/behind) below — only the displayed % is by count.
+  const completedByTopics = totalTopics > 0 ? Math.round(((totalTopics - remainingTopics) / totalTopics) * 100) : 0;
   const pace = targetIso
-    ? computeRequiredPace({
-        remainingHours: paceRemainingHours,
-        mockHours: remainingMockHours(paceRemainingHours),
-        today: now,
-        targetDate: new Date(targetIso + 'T00:00:00'),
-        committedPerDay: (profile?.study_target_hours as number | null) ?? null,
-      })
+    ? {
+        ...computeRequiredPace({
+          remainingHours: paceRemainingHours,
+          mockHours: remainingMockHours(paceRemainingHours),
+          today: now,
+          targetDate: new Date(targetIso + 'T00:00:00'),
+          committedPerDay: (profile?.study_target_hours as number | null) ?? null,
+        }),
+        completedPct: completedByTopics,
+      }
     : null;
   const targetLabel = targetIso
     ? new Date(targetIso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
