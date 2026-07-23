@@ -348,7 +348,6 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
       <div>
         {intro && <p className="mb-1 text-sm font-semibold text-stone-900">{intro}</p>}
         <p className="text-base font-bold text-stone-900">{step.title}</p>
-        <p className="text-xs text-stone-500">Overclaiming wastes revision. Underclaiming wastes weeks.</p>
       </div>
 
       {/* Honesty celebration — one live slot */}
@@ -465,9 +464,6 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         </div>
       </div>
 
-      {step.lesson && (
-        <p className="text-[11px] text-stone-600 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 leading-relaxed">{step.lesson}</p>
-      )}
 
       {/* Full-map finale — Rai's whole evolution line, Lv1 → Lv9. */}
       {stepComplete && stepIdx === steps.length - 1 && (

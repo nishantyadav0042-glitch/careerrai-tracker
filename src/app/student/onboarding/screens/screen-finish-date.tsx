@@ -98,9 +98,6 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
         <p className="text-base font-bold text-stone-900">
           {ambition ? `You chose ${fmt(ambition)} to finish your CAT syllabus. Lock it with the real math.` : 'When do you want to finish your syllabus?'}
         </p>
-        <p className="text-xs text-stone-500 mt-0.5">
-          Based on the {coverageTotal ? `${coverageTotal} ` : ''}topics you just mapped — the hours decide the date. Choose what you can actually commit.
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -196,10 +193,6 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
           )}
         </div>
       </div>
-
-      <p className="text-[11px] text-stone-400 leading-relaxed">
-        ≈ estimates from your own coverage map. Your daily routine is sized to this commitment, and you can renegotiate the date later — the plan never lies to you about it.
-      </p>
 
       {canGoBack && (
         <button onClick={onBack} disabled={isLoading} className="w-full py-3 border border-stone-300 rounded-xl text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors">

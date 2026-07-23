@@ -83,10 +83,6 @@ export default function ScreenAboutYou({ onNext, onBack, canGoBack, isLoading }:
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-stone-600 leading-relaxed">
-        A little about you so we can personalise your experience.
-      </p>
-
       <div className="space-y-4">
         <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">Personal</p>
 

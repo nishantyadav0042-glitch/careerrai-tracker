@@ -76,10 +76,6 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-stone-600 leading-relaxed">
-        Honest context = accurate tracking. The app uses this to calibrate, not to judge.
-      </p>
-
       <div>
         <label className="block text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">
           Is this your first attempt?

@@ -19,7 +19,6 @@ export default function ScreenNeedCheck({ onNext, isLoading }: Props) {
         <h1 className="text-2xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           Do you feel you need a proper study plan and a tracking system?
         </h1>
-        <p className="mt-2 text-sm text-stone-500">Honest answer. It changes how we build.</p>
       </div>
 
       <div className="space-y-2.5">

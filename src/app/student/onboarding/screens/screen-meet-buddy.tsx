@@ -58,7 +58,6 @@ export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }
     <div className="space-y-6">
       <div>
         <p className="text-sm text-orange-600 font-semibold uppercase tracking-wider">Not coaching. 1-on-1.</p>
-        <p className="text-xs text-stone-500 mt-1">One IIM senior, matched to you — not a batch.</p>
       </div>
 
       {buddy ? (
@@ -82,12 +81,8 @@ export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }
           )}
         </div>
       ) : (
-        <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl p-6 border border-orange-100 text-center space-y-2">
+        <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl p-6 border border-orange-100 text-center">
           <p className="text-sm font-semibold text-stone-900">You&apos;ll be matched with your buddy right after this.</p>
-          <p className="text-xs text-stone-600 leading-relaxed">
-            An IIM senior who scored in the top percentiles on CAT — reviews your progress every week, decodes your mocks,
-            and gives you guidance built around your actual CAT Plan. Not a generic batch coach.
-          </p>
         </div>
       )}
 

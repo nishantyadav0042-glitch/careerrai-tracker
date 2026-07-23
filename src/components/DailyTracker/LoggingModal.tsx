@@ -195,7 +195,6 @@ export function LoggingModal({
         <div className="sticky top-0 bg-zinc-950 border-b border-zinc-800 px-6 py-5 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-white">Log Today</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Day ends at 3 AM — late nights count</p>
           </div>
           <button
             onClick={onClose}
@@ -230,21 +229,13 @@ export function LoggingModal({
                 </button>
               ))}
             </div>
-            {hours === 0 && (
-              <p className="text-xs text-amber-400/90 mt-2">
-                An honest 0-hour day still counts — your streak and your record stay truthful.
-              </p>
-            )}
           </div>
 
           {/* Mock test — explicit, unmissable Yes/No (drives the debrief redirect) */}
           <div className="rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
-            <label className="block text-sm font-bold text-white mb-1">
+            <label className="block text-sm font-bold text-white mb-3">
               Did you take a mock test today?
             </label>
-            <p className="text-xs text-zinc-400 mb-3">
-              Your mock scores drive your analysis and your buddy&apos;s plan — log every single one.
-            </p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -271,11 +262,6 @@ export function LoggingModal({
                 Yes, I gave a mock
               </button>
             </div>
-            {mockTaken === true && (
-              <p className="text-xs text-teal-400 mt-2 font-medium">
-                ✓ Next you&apos;ll log your mock scores — VARC / DILR / QA + percentile.
-              </p>
-            )}
           </div>
 
           {/* Today's plan — mark how far you got on each topic. This IS the
@@ -350,7 +336,6 @@ export function LoggingModal({
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-zinc-600 mt-1.5">We use this to tune tomorrow&apos;s load — no wrong answer.</p>
             </div>
           )}
 
@@ -379,7 +364,6 @@ export function LoggingModal({
                 );
               })}
             </div>
-            <p className="text-[11px] text-zinc-600 mt-1.5">Coaching class, own material — it all counts.</p>
           </div>
 
           {/* Energy */}
@@ -434,7 +418,6 @@ export function LoggingModal({
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isSubmitting ? 'Logging…' : mockTaken ? 'Log & Debrief →' : 'Log Today'}
           </button>
-          <p className="text-[11px] text-zinc-600 text-center mt-2">15 seconds. The app answers back.</p>
         </div>
       </div>
     </div>
