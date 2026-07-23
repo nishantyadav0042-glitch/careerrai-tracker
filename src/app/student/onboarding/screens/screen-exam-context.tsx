@@ -10,6 +10,8 @@ interface Props {
     exam_target: string;
     attempt_year: number;
     target_percentile: number;
+    last_year_percentile: number | null;
+    had_buddy_last_year: boolean | null;
   }) => void;
   onBack: () => void;
   canGoBack: boolean;
@@ -28,6 +30,12 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
   const [examTarget, setExamTarget] = useState<string | null>(null);
   const [attemptYear, setAttemptYear] = useState<number | null>(null);
   const [targetPercentile, setTargetPercentile] = useState<string>('');
+  // Repeater-only (founder, 23 Jul): asked of EVERY repeater — last year's
+  // real percentile, and whether they had a real buddy/mentor last year who
+  // has themselves cracked CAT. Feeds the repeater-only buddy pitch right
+  // after the commitment screen.
+  const [lastYearPercentile, setLastYearPercentile] = useState<string>('');
+  const [hadBuddyLastYear, setHadBuddyLastYear] = useState<boolean | null>(null);
 
   const parsedPercentile = parseFloat(targetPercentile);
   const percentileValid =
@@ -36,12 +44,22 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
     parsedPercentile >= 50 &&
     parsedPercentile <= 99.99;
 
+  const parsedLastYearPercentile = parseFloat(lastYearPercentile);
+  const lastYearPercentileValid =
+    lastYearPercentile.trim() !== '' &&
+    !isNaN(parsedLastYearPercentile) &&
+    parsedLastYearPercentile >= 0 &&
+    parsedLastYearPercentile <= 99.99;
+
+  const repeaterQuestionsValid = isRepeater !== true || (lastYearPercentileValid && hadBuddyLastYear !== null);
+
   const isValid =
     isRepeater !== null &&
     category !== null &&
     examTarget !== null &&
     attemptYear !== null &&
-    percentileValid;
+    percentileValid &&
+    repeaterQuestionsValid;
 
   const handleNext = () => {
     if (!isValid) return;
@@ -51,6 +69,8 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
       exam_target: examTarget!,
       attempt_year: attemptYear!,
       target_percentile: parsedPercentile,
+      last_year_percentile: isRepeater ? parsedLastYearPercentile : null,
+      had_buddy_last_year: isRepeater ? hadBuddyLastYear : null,
     });
   };
 
@@ -87,6 +107,60 @@ export default function ScreenExamContext({ onNext, onBack, canGoBack, isLoading
           ))}
         </div>
       </div>
+
+      {/* Repeater-only follow-up (founder, 23 Jul): asked of every repeater —
+          the real percentile they scored, and whether they had genuine
+          expert support. Sets up the buddy-pitch screen right after this. */}
+      {isRepeater === true && (
+        <div className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
+          <div>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
+              What was your percentile last year?
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={99.99}
+                step={0.01}
+                placeholder="e.g. 82.5"
+                value={lastYearPercentile}
+                onChange={(e) => setLastYearPercentile(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-stone-200 text-stone-900 text-lg font-medium focus:outline-none focus:ring-2 focus:ring-orange-400 appearance-none"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm font-medium">%ile</span>
+            </div>
+            {lastYearPercentile.trim() !== '' && !lastYearPercentileValid && (
+              <p className="text-xs text-red-600 mt-1">Enter a percentile between 0 and 99.99.</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">
+              Did you have a buddy or guide last year — someone who has actually cracked CAT?
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Yes, I did', value: true },
+                { label: 'No, I was alone', value: false },
+              ].map(({ label, value }) => (
+                <button
+                  key={label}
+                  onClick={() => setHadBuddyLastYear(value)}
+                  className={cn(
+                    'py-3 px-3 rounded-xl border-2 text-sm font-medium transition-all active:scale-95',
+                    hadBuddyLastYear === value
+                      ? 'border-orange-500 bg-orange-50 text-orange-700'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="block text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">
