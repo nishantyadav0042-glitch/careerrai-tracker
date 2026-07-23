@@ -54,7 +54,7 @@ export function LockedBuddyHub({
         </h1>
         <p className="mt-2 text-[17px] font-semibold leading-snug text-red-600">{cost}</p>
         <p className="mx-auto mt-3 max-w-xs text-[15px] font-semibold leading-snug text-stone-800">
-          Only IIM buddies. <span className="text-orange-600">100%.</span> No exceptions.
+          Only <span className="text-orange-600">IIM buddies</span> to guide you.
         </p>
       </div>
 
