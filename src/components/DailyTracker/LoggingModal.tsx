@@ -5,7 +5,6 @@ import { X, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 import { setLogModalOpen } from '@/lib/first-run-events';
-import { EmotionalChips } from './EmotionalChips';
 
 // Today's plan tasks, pulled into the log so "what did you cover" IS the plan —
 // one place to fill, and ticking a topic here completes it in the plan too.
@@ -60,8 +59,6 @@ export function LoggingModal({
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
   const [energy, setEnergy] = useState<string | null>(null);
   const [planFit, setPlanFit] = useState<string | null>(null);
-  const [emotionalChips, setEmotionalChips] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [blockedHint, setBlockedHint] = useState<string | null>(null);
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
@@ -165,8 +162,6 @@ export function LoggingModal({
         hours,
         sections: finalSections,
         energy: energy ?? '💪', // optional now — default to the neutral middle so a null never blocks the log
-        notes: notes.trim() || undefined,
-        emotional_chips: emotionalChips.length > 0 ? emotionalChips : undefined,
         plan_fit: planFit ?? undefined,
         completedTasks,
       });
@@ -178,8 +173,6 @@ export function LoggingModal({
       setMockTaken(null);
       setEnergy(null);
       setPlanFit(null);
-      setEmotionalChips([]);
-      setNotes('');
       if (!result.mockSelected) onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to log. Try again.';
@@ -413,24 +406,6 @@ export function LoggingModal({
             </div>
           </div>
 
-          {/* Emotional chips */}
-          <EmotionalChips selected={emotionalChips} onChange={setEmotionalChips} />
-
-          {/* Notes */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">
-              Notes <span className="normal-case font-normal text-zinc-600">(optional)</span>
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any wins, blockers, or thoughts..."
-              maxLength={200}
-              rows={2}
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 resize-none"
-            />
-            <p className="text-xs text-zinc-600 mt-1 text-right">{notes.length}/200</p>
-          </div>
 
           {error && (
             <div className="p-3 bg-rose-950 border border-rose-700 rounded-xl text-sm text-rose-300">
