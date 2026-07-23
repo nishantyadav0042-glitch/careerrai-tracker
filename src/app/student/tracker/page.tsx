@@ -6,7 +6,7 @@ import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
 import { StreakRestoreButton } from '@/components/streak-restore-button';
-import { FirstInsight } from '@/components/first-insight';
+import { InsightCloud } from '@/components/insight-cloud';
 import { DailyInsightCard } from '@/components/home/daily-insight-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
@@ -326,19 +326,6 @@ export default async function DailyTrackerPage() {
   const tieOrder: Record<string, number> = { DILR: 0, QA: 1, VARC: 2 };
   const weakestSec = [...bySection].sort((a, b) => b.gap - a.gap || tieOrder[a.name] - tieOrder[b.name])[0];
   const insightFresh = bySection.every((s) => s.studied === 0 && s.total - s.untouchedN === 0);
-  // "Start here": highest-weightage topics in the weakest section — untouched
-  // first; if everything is at least opened, the high-weightage ones still in
-  // 'learning' ("finish what you started") so this list is never empty-handed.
-  const byWeight = (a: { topic: string }, b: { topic: string }) =>
-    (TOPIC_METADATA[b.topic]?.weightage ?? 0) - (TOPIC_METADATA[a.topic]?.weightage ?? 0);
-  const weakestEntries = topicMemory.filter((t) => TOPIC_METADATA[t.topic]?.section === weakestSec.name);
-  const focusUntouched = weakestEntries.filter((t) => t.status === 'not_started').sort(byWeight);
-  const focusInProgress = weakestEntries.filter((t) => t.status === 'learning').sort(byWeight);
-  const focusTopics = insightFresh
-    ? ['Percentages (QA)', 'Reading Comprehension (VARC)', 'Arrangements (DILR)'].slice(0, 2)
-    : [...focusUntouched, ...focusInProgress].slice(0, 2).map((t) => t.topic);
-  const focusMode: 'start' | 'finish' = focusUntouched.length > 0 || insightFresh ? 'start' : 'finish';
-
   // Today's insight ON the home screen (founder: in-app, not just push) —
   // same rule engine as the 5 PM notification, topicMemory reused from this
   // page's own computation. Null (fewer than 2 logged days) renders nothing.
@@ -470,18 +457,11 @@ export default async function DailyTrackerPage() {
           streak was restored under the new rules; new students just live with
           shields from day one). */}
       <MomentumShieldIntro streak={momentum.streak} shields={momentum.shields} enabled={(logs ?? []).length > 0} />
-      {/* Day-1 insight — VALUE first, before the notification ask, tour, and
-          buddy pitch (all gated on it via first-run-events). */}
+      {/* First-run insight — now the LAST beat (founder, 23 Jul): a tiny
+          corner cloud with a 4-5 word insight for ~4.5s, AFTER notifications
+          and the tour. Replaces the old full-screen Day-1 insight. */}
       {tourReady && (
-        <FirstInsight
-          weakest={weakestSec.name}
-          remaining={weakestSec.remaining}
-          sectionTotal={weakestSec.total}
-          sections={bySection.map(({ name, studied, total }) => ({ name, studied, total }))}
-          focusTopics={focusTopics}
-          focusMode={focusMode}
-          fresh={insightFresh}
-        />
+        <InsightCloud weakest={weakestSec.name} fresh={insightFresh} />
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { BellRing } from 'lucide-react';
-import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
+import { setNotifAskVisible as setAskVisible, NOTIF_ASK_SETTLED_EVENT } from '@/lib/first-run-events';
 import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 
 // Founder order (21 July): the notification ask is JOB #1 in the installed
@@ -52,12 +52,12 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     /* eslint-disable react-hooks/set-state-in-effect -- capability detection must run client-side after mount */
     if (pushEnabled && !serverSubDead) { setAskVisible(false); setShow(false); return; }
 
-    // Show whenever notifications aren't on yet — FIRST, before the tour.
+    // Show whenever notifications aren't on yet — this is JOB #1 in the app,
+    // the very FIRST thing (founder, 23 Jul: notifications → tour → insight).
     // Deliberately NO "skip" memory — the founder wants this on every open
     // until it's done. Every early-return marks the ask as settled (it isn't
-    // going to cover the screen), so the tour and buddy pitch can proceed.
+    // going to cover the screen), so the tour can proceed.
     const evaluate = () => {
-      if (insightVisible()) return; // Day-1 insight holds the stage — retry on its done event
       if (!isStandalone()) { setAskVisible(false); return; }
       if (isIOS()) { setAskVisible(false); return; } // web push is a no-op in the iOS wrapper — don't prompt
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { setAskVisible(false); return; }
@@ -71,10 +71,8 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
     // re-ask there so "Later" only hides it until the next time they open the app.
     const onVisible = () => { if (document.visibilityState === 'visible') evaluate(); };
     document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener(INSIGHT_DONE_EVENT, evaluate);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener(INSIGHT_DONE_EVENT, evaluate);
     };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [pushEnabled, serverSubDead]);

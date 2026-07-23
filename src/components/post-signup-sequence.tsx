@@ -413,7 +413,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
               <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>That hold meant something.</h1>
               <p className="mt-2 text-sm text-stone-500">
                 {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}
-                {isApp ? 'Your app is ready — see your plan now.' : 'Thanks for trusting us. Now see your study plan in the app.'}
+                {isApp ? 'You&apos;re all set — open your plan now.' : 'Thanks for trusting us. Now open your CareerRai app to begin.'}
               </p>
             </div>
             <button
@@ -422,7 +422,7 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
               onClick={finishCommitment}
               className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
             >
-              See my plan →
+              {isApp ? 'Open my plan →' : 'Open your app now →'}
             </button>
           </div>
         )}
