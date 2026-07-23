@@ -1,14 +1,17 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { X, Loader2, Plus, Minus, Camera, Sparkles } from 'lucide-react';
+import { X, Loader2, Camera, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Simplified (founder, 23 Jul): error classification (5-bucket tagging) was
+// too much effort for a student to fill in after a mock — nobody would. Down
+// to what a student will actually do: overall percentile, one percentile per
+// section, one observation.
 export interface MockDebriefData {
-  varc: { attempted: number; correct: number; time_min: number; percentile: number | null };
-  dilr: { attempted: number; correct: number; time_min: number; percentile: number | null };
-  qa: { attempted: number; correct: number; time_min: number; percentile: number | null };
-  error_buckets: { conceptual: number; silly: number; time: number; panic: number; selection: number };
+  varc: { percentile: number | null };
+  dilr: { percentile: number | null };
+  qa: { percentile: number | null };
   strategy_note: string;
   overall_percentile: number | null;
 }
@@ -21,122 +24,16 @@ interface MockDebriefModalProps {
   logDate: string;
 }
 
-const ERROR_BUCKETS = [
-  { key: 'conceptual' as const, emoji: '🧠', label: 'Knowledge gap', desc: 'Concept or formula not known' },
-  { key: 'silly' as const, emoji: '⚠️', label: 'Execution error', desc: 'Concept clear; error in working steps' },
-  { key: 'time' as const, emoji: '⏱️', label: 'Time misallocation', desc: 'Insufficient time allocated to question' },
-  { key: 'panic' as const, emoji: '↩️', label: 'Misread / framing error', desc: 'Question or data misinterpreted' },
-  { key: 'selection' as const, emoji: '✗', label: 'Selection error', desc: 'Question should not have been attempted' },
-];
-
 const SECTIONS = [
-  { key: 'varc' as const, label: 'VARC', color: 'teal' },
-  { key: 'dilr' as const, label: 'DILR', color: 'orange' },
-  { key: 'qa' as const, label: 'QA', color: 'indigo' },
+  { key: 'varc' as const, label: 'VARC' },
+  { key: 'dilr' as const, label: 'DILR' },
+  { key: 'qa' as const, label: 'QA' },
 ];
 
 type SectionKey = 'varc' | 'dilr' | 'qa';
-type SectionData = { attempted: number; correct: number; time_min: number; percentile: number | null };
+type SectionData = { percentile: number | null };
 
-function SectionAccordion({
-  sectionKey,
-  label,
-  color,
-  data,
-  onChange,
-}: {
-  sectionKey: SectionKey;
-  label: string;
-  color: string;
-  data: SectionData;
-  onChange: (key: SectionKey, field: keyof SectionData, val: number | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const accuracy = data.attempted > 0 ? Math.round((data.correct / data.attempted) * 100) : null;
-
-  const colorMap: Record<string, string> = {
-    teal: 'bg-teal-500',
-    orange: 'bg-orange-500',
-    indigo: 'bg-indigo-500',
-  };
-
-  return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3.5"
-      >
-        <div className="flex items-center gap-3">
-          <div className={cn('w-2.5 h-2.5 rounded-full', colorMap[color])} />
-          <span className="font-semibold text-white text-sm">{label}</span>
-          {data.percentile !== null && (
-            <span className="text-xs text-zinc-400">{data.percentile}%ile</span>
-          )}
-          {accuracy !== null && (
-            <span className="text-xs text-zinc-500">{data.correct}/{data.attempted} ({accuracy}%)</span>
-          )}
-        </div>
-        <span className="text-zinc-500 text-xs">{open ? '▲' : '▼'}</span>
-      </button>
-
-      {open && (
-        <div className="border-t border-zinc-800 px-4 py-4 grid grid-cols-2 gap-3">
-          {(
-            [
-              { field: 'attempted' as const, label: 'Attempted' },
-              { field: 'correct' as const, label: 'Correct' },
-              { field: 'time_min' as const, label: 'Time (min)' },
-              { field: 'percentile' as const, label: 'Percentile' },
-            ] as const
-          ).map(({ field, label: fLabel }) => (
-            <div key={field}>
-              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold block mb-1">
-                {fLabel}
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={data[field] ?? ''}
-                onChange={(e) =>
-                  onChange(sectionKey, field, e.target.value === '' ? null : Number(e.target.value))
-                }
-                min={0}
-                max={field === 'percentile' ? 100 : undefined}
-                placeholder="—"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Counter({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(0, value - 1))}
-        className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-700 active:scale-90 transition-all"
-      >
-        <Minus className="w-3.5 h-3.5" />
-      </button>
-      <span className="w-8 text-center font-bold text-white text-lg font-mono">{value}</span>
-      <button
-        type="button"
-        onClick={() => onChange(value + 1)}
-        className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-700 active:scale-90 transition-all"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  );
-}
-
-const defaultSection = (): SectionData => ({ attempted: 0, correct: 0, time_min: 0, percentile: null });
+const defaultSection = (): SectionData => ({ percentile: null });
 
 interface ParsedSection {
   attempted: number | null;
@@ -186,14 +83,6 @@ export function MockDebriefModal({
     qa: defaultSection(),
   });
 
-  const [buckets, setBuckets] = useState({
-    conceptual: 0,
-    silly: 0,
-    time: 0,
-    panic: 0,
-    selection: 0,
-  });
-
   const [overallPercentile, setOverallPercentile] = useState<number | null>(null);
   const [strategyNote, setStrategyNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -227,12 +116,7 @@ export function MockDebriefModal({
         for (const key of ['varc', 'dilr', 'qa'] as const) {
           const s = sc[key];
           if (!s) continue;
-          fresh[key] = {
-            attempted: s.attempted ?? 0,
-            correct: s.correct ?? 0,
-            time_min: s.time_min ?? 0,
-            percentile: s.percentile ?? null,
-          };
+          fresh[key] = { percentile: s.percentile ?? null };
         }
         return fresh;
       });
@@ -248,14 +132,9 @@ export function MockDebriefModal({
     }
   };
 
-  const handleSectionChange = (key: SectionKey, field: keyof SectionData, val: number | null) => {
-    setSections((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], [field]: val === null ? (field === 'percentile' ? null : 0) : val },
-    }));
+  const handleSectionPercentile = (key: SectionKey, val: number | null) => {
+    setSections((prev) => ({ ...prev, [key]: { percentile: val } }));
   };
-
-  const totalErrors = Object.values(buckets).reduce((a, b) => a + b, 0);
 
   const handleSubmit = async () => {
     try {
@@ -264,7 +143,6 @@ export function MockDebriefModal({
         varc: sections.varc,
         dilr: sections.dilr,
         qa: sections.qa,
-        error_buckets: buckets,
         strategy_note: strategyNote.trim(),
         overall_percentile: overallPercentile,
       });
@@ -342,9 +220,6 @@ export function MockDebriefModal({
                 </>
               )}
             </button>
-            <p className="text-[11px] text-zinc-600 text-center mt-1.5">
-              Works with SIMCAT, AIMCAT, CL & more — AI fills the numbers for you
-            </p>
             {scanResult && (
               <p className="text-xs text-teal-400 text-center mt-1">{scanResult}</p>
             )}
@@ -372,66 +247,39 @@ export function MockDebriefModal({
             />
           </div>
 
-          {/* Per-section stats */}
+          {/* Section-wise percentile */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Section breakdown <span className="normal-case font-normal text-zinc-600">(tap to expand)</span>
+              Section-wise percentile
             </label>
-            <div className="space-y-2">
-              {SECTIONS.map(({ key, label, color }) => (
-                <SectionAccordion
-                  key={key}
-                  sectionKey={key}
-                  label={label}
-                  color={color}
-                  data={sections[key]}
-                  onChange={handleSectionChange}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Error buckets */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">
-                Error classification
-              </label>
-              {totalErrors > 0 && (
-                <span className="text-xs text-zinc-500">{totalErrors} errors tagged</span>
-              )}
-            </div>
-            <div className="space-y-2">
-              {ERROR_BUCKETS.map(({ key, emoji, label, desc }) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between bg-zinc-900 rounded-2xl px-4 py-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-xl shrink-0">{emoji}</span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{label}</p>
-                      <p className="text-xs text-zinc-500 truncate">{desc}</p>
-                    </div>
-                  </div>
-                  <Counter
-                    value={buckets[key]}
-                    onChange={(v) => setBuckets((prev) => ({ ...prev, [key]: v }))}
+            <div className="grid grid-cols-3 gap-2">
+              {SECTIONS.map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500 mb-1">{label}</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={sections[key].percentile ?? ''}
+                    onChange={(e) => handleSectionPercentile(key, e.target.value === '' ? null : Number(e.target.value))}
+                    min={0}
+                    max={100}
+                    placeholder="—"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
                   />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Strategy note */}
+          {/* Important observation */}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">
-              Corrective action
+              Important observation
             </label>
             <textarea
               value={strategyNote}
               onChange={(e) => setStrategyNote(e.target.value)}
-              placeholder="One specific change for the next mock..."
+              placeholder="Anything important you noticed..."
               maxLength={300}
               rows={3}
               className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 resize-none"

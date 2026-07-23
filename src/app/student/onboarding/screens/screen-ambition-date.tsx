@@ -52,9 +52,6 @@ export default function ScreenAmbitionDate({ onNext, onBack, canGoBack, isLoadin
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           When do you want to finish your syllabus?
         </h1>
-        <p className="mt-1.5 text-sm text-stone-500">
-          You own this date. Once your topics are mapped, we&apos;ll show exactly what it costs per day — and you can adjust.
-        </p>
       </div>
 
       <div className="space-y-2">

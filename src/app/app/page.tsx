@@ -1,27 +1,33 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { Share, SquarePlus, Plus, MoreVertical, MessageCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronLeft, MessageCircle } from 'lucide-react';
 import { supportWhatsappUrl } from '@/lib/whatsapp';
+import { InstallLiveGuide } from '@/components/install/install-live-guide';
 
 // The installed-PWA entry point. Two jobs, decided by display mode:
 //  • Standalone (opened from Home Screen): exchange the one-time hand-off token
 //    for a real session, so the installed app lands logged in.
-//  • Browser: a clean, STATIC "Add to Home Screen" guide — two plain steps, no
-//    animation. We don't consume the token here — leaving it in the URL means
-//    Add-to-Home-Screen saves it, so the first launch auto-logs-in.
+//  • Browser: the "Add to Home Screen" guide — the same live, red-ring visual
+//    walkthrough used in the post-signup sequence (InstallLiveGuide), for one
+//    consistent guide everywhere. We don't consume the token here — leaving
+//    it in the URL means Add-to-Home-Screen saves it, so the first launch
+//    auto-logs-in.
+//
+// Dead-end fix (founder, 23 Jul): a student landing here in a plain browser
+// tab — nothing installed yet, or just re-visiting — had NO way to go back or
+// move on; the only escape was an optional WhatsApp link. Real bug: OS
+// install prompts don't always fire, and a student shouldn't be trapped on a
+// guide screen. Added a Back and a "Continue without installing" path — the
+// app still works in a browser tab, install is strongly encouraged, never mandatory.
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return window.matchMedia?.('(display-mode: standalone)').matches
     || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
 }
-function isIOS(): boolean {
-  return typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
 
 export default function AppEntry() {
   const [state, setState] = useState<'checking' | 'exchanging' | 'guide'>('checking');
-  const [ios, setIos] = useState(false);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- entry routing runs client-side */
@@ -41,7 +47,6 @@ export default function AppEntry() {
         .catch(() => window.location.replace('/student/tracker'));
       return;
     }
-    setIos(isIOS());
     setState('guide');
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
@@ -56,53 +61,46 @@ export default function AppEntry() {
   }
 
   const wa = supportWhatsappUrl('Hi, I need help installing the CareerRai app.');
+  const goToApp = () => {
+    // Same fallback destination used everywhere else on this page — a student
+    // choosing to continue in the browser is not blocked from using the app.
+    window.location.assign('/student/tracker');
+  };
+  const goBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else goToApp();
+  };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-white px-6 pb-6 pt-10">
+    <div className="flex min-h-[100dvh] flex-col bg-white px-6 pb-6 pt-4">
+      <button type="button" onClick={goBack} className="flex items-center gap-0.5 self-start py-2 text-sm font-medium text-stone-500 hover:text-stone-700">
+        <ChevronLeft className="h-4 w-4" /> Back
+      </button>
+
       <div className="mx-auto flex w-full max-w-xs flex-1 flex-col items-center text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-900 text-3xl shadow-lg shadow-stone-900/15">📲</div>
         <h1 className="mt-4 text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Add CareerRai to your Home&nbsp;Screen</h1>
         <p className="mt-2 text-sm text-stone-500">2 quick taps — then it opens like a real app, and you&apos;re signed in.</p>
 
-        <div className="mt-6 w-full space-y-3 text-left">
-          {ios ? (
-            <>
-              <Step n={1} icon={<Share className="h-5 w-5 text-blue-600" />}>
-                Tap the <b>Share</b> icon <span className="text-stone-400">(top or bottom of Safari)</span>
-              </Step>
-              <Step n={2} icon={<SquarePlus className="h-5 w-5 text-stone-700" />}>
-                Tap <b>&ldquo;Add to Home Screen&rdquo;</b>, then <b>Add</b>
-              </Step>
-            </>
-          ) : (
-            <>
-              <Step n={1} icon={<MoreVertical className="h-5 w-5 text-stone-700" />}>
-                Tap the <b>menu</b> <span className="text-stone-400">(⋮ top-right)</span>
-              </Step>
-              <Step n={2} icon={<Plus className="h-5 w-5 text-stone-700" />}>
-                Tap <b>Install app</b> or <b>Add to Home screen</b>
-              </Step>
-            </>
-          )}
+        <div className="mt-6 w-full">
+          <InstallLiveGuide />
         </div>
+
+        <button
+          type="button"
+          onClick={goToApp}
+          className="mt-6 w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
+        >
+          I&apos;ll do this later — continue to CareerRai →
+        </button>
       </div>
 
       {wa && (
         <a href={wa} target="_blank" rel="noopener noreferrer"
-          className="mx-auto mt-6 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 active:scale-[0.98]">
+          className="mx-auto mt-3 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-700 active:scale-[0.98]">
           <MessageCircle className="h-[18px] w-[18px]" /> Facing issues? WhatsApp us
         </a>
       )}
-    </div>
-  );
-}
-
-function Step({ n, icon, children }: { n: number; icon: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-3.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-900 text-sm font-bold text-white">{n}</span>
-      <p className="flex-1 text-sm leading-snug text-stone-800">{children}</p>
-      <span className="shrink-0">{icon}</span>
     </div>
   );
 }

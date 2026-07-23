@@ -33,7 +33,6 @@ export default function ScreenPathChoice({ onNext, isLoading }: Props) {
         <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Two ways this year can go.
         </h1>
-        <p className="mt-2 text-sm text-stone-500">Same effort. Very different outcome.</p>
       </div>
 
       <div className="space-y-3">

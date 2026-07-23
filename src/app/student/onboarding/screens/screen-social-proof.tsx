@@ -21,9 +21,6 @@ export default function ScreenSocialProof({ onNext, isLoading }: Props) {
         <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Students text us this. Unprompted.
         </h1>
-        <p className="mt-2 text-sm text-stone-500">
-          We never ask for feedback. They just need us to know. 💬
-        </p>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-stone-100 shadow-sm">

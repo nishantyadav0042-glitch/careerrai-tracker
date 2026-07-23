@@ -31,8 +31,7 @@ export default function ScreenDreamColleges({ onNext, onBack, canGoBack, isLoadi
     <div className="space-y-5">
       <div>
         <p className="text-sm text-stone-600 leading-relaxed">
-          Pick up to <strong>3 colleges</strong> you genuinely want. Not what seems realistic — what you actually want.
-          This becomes the north star that drives every daily nudge.
+          Pick up to <strong>3 colleges</strong> you genuinely want.
         </p>
       </div>
 
@@ -68,8 +67,7 @@ export default function ScreenDreamColleges({ onNext, onBack, canGoBack, isLoadi
       {selected.length > 0 && (
         <div className="rounded-xl bg-orange-50 border border-orange-200 px-4 py-3">
           <p className="text-xs text-orange-800">
-            <strong>#{1}: {selected[0]}</strong>
-            {' '}— every insight in this app will point toward this.
+            <strong>#1: {selected[0]}</strong>
           </p>
         </div>
       )}

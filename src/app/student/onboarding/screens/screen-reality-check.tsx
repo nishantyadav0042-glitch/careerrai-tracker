@@ -40,7 +40,6 @@ export default function ScreenRealityCheck({ onNext, isLoading }: Props) {
         <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Before we map your syllabus — a gut check.
         </h1>
-        <p className="mt-2 text-sm text-stone-500">Answer honestly. Nobody&apos;s watching.</p>
       </div>
 
       <div className="space-y-3">
