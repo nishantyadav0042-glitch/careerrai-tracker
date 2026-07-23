@@ -350,13 +350,7 @@ export default function WelcomePage() {
             href="/start"
             className="flex w-full items-center justify-center rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white shadow-lg shadow-stone-900/15 transition-transform active:scale-[0.98]"
           >
-            Start your journey →
-          </Link>
-          <Link
-            href="/login"
-            className="flex w-full items-center justify-center rounded-2xl border border-stone-300 bg-white py-3.5 text-sm font-semibold text-stone-800 transition-transform active:scale-[0.98]"
-          >
-            Already a student or buddy? Log in
+            Let&apos;s build your CAT tracking system →
           </Link>
           <InstallButton variant="text" />
           <p className="text-center text-[11px] text-stone-400">Free to start · no credit card</p>
