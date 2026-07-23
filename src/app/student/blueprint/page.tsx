@@ -134,19 +134,19 @@ export default function MyCatPlanPage() {
             student's first line should be what they're DOING, not a zero. */}
         <div className="bg-white rounded-2xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
           {studiedOnceCount === 0 && learningCount > 0 && (
-            <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} started — finish these first`} cta="Continue" />
+            <PlanRow href="/student/plan/topics?status=learning" icon="📖" label={`${learningCount} started — finish these first`} cta="Continue" />
           )}
-          <PlanRow href="/student/analysis" icon="✅" label={`${studiedOnceCount}/${totalTopics} finished`} cta="View" />
+          <PlanRow href="/student/plan/topics?status=finished" icon="✅" label={`${studiedOnceCount}/${totalTopics} finished`} cta="View" />
           {studiedOnceCount > 0 && learningCount > 0 && (
-            <PlanRow href="/student/analysis" icon="📖" label={`${learningCount} started, not finished`} cta="Continue" />
+            <PlanRow href="/student/plan/topics?status=learning" icon="📖" label={`${learningCount} started, not finished`} cta="Continue" />
           )}
           {/* Revision only appears once something is ACTUALLY due — a brand-new
               student who hasn't studied anything should never see a "0 due for
               revision" line implying they're behind on revision they never started. */}
           {dueForRevisionCount > 0 && (
-            <PlanRow href="/student/analysis" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
+            <PlanRow href="/student/plan/topics?status=revision" icon="🔄" label={`${dueForRevisionCount} due for revision`} cta="View" />
           )}
-          <PlanRow href="/student/analysis" icon="⚪" label={`${notStartedCount} not started`} cta="Start" />
+          <PlanRow href="/student/plan/topics?status=not_started" icon="⚪" label={`${notStartedCount} not started`} cta="Start" />
           {/* Same logic for mocks — no "0 mocks completed" noise before the first one. */}
           {mocksCompleted > 0 && (
             <PlanRow

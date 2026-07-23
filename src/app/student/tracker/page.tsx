@@ -22,7 +22,7 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
-import { Flame, CalendarCheck, ChevronRight } from 'lucide-react';
+import { Flame, CalendarCheck } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 
@@ -376,8 +376,9 @@ export default async function DailyTrackerPage() {
             </h1>
             <p className="text-[13px] text-stone-500">Discipline today, success tomorrow.</p>
           </div>
-          <Link href="/student/journey"
-            className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-stone-200/70 bg-white px-3 py-2 shadow-sm transition-colors hover:border-stone-300">
+          {/* Streak is a status display, not a link — tapping it used to open
+              the Analysis page, which made no sense (founder, 24 Jul). */}
+          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-stone-200/70 bg-white px-3 py-2 shadow-sm">
             <Flame className={currentStreak > 0 ? 'h-5 w-5 text-orange-500' : 'h-5 w-5 text-stone-300'} />
             <div className="leading-none">
               <div className="text-lg font-extrabold text-stone-900 tabular-nums">{currentStreak}</div>
@@ -386,8 +387,7 @@ export default async function DailyTrackerPage() {
             <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600">
               <Shield className="h-3 w-3" />{momentum.shields}
             </span>
-            <ChevronRight className="h-4 w-4 text-stone-300" />
-          </Link>
+          </div>
         </div>
 
         {/* Streak restore (founder, 23 Jul): shields no longer auto-cover a
