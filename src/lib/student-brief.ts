@@ -11,6 +11,8 @@ export interface OnboardingForm {
   hours_available?: unknown;
   coaching_enrolled?: unknown;
   is_repeater?: unknown;
+  last_year_percentile?: unknown;
+  had_buddy_last_year?: unknown;
   pain_points?: unknown;
   wants_mentor?: unknown;
   topic_matrix?: unknown;
@@ -26,6 +28,8 @@ export interface StudentBrief {
   coaching: boolean | null;
   wantsMentor: boolean | null;
   targetDate: string | null;
+  lastYearPercentile: number | null;
+  hadBuddyLastYear: boolean | null;
   painPoints: string[];
   strongestSection: string | null;
   weakestSection: string | null;
@@ -62,6 +66,8 @@ export function buildStudentBrief(
     ? (o!.pain_points as unknown[]).filter((p): p is string => typeof p === 'string').map(humanize)
     : [];
   const attempt = isRepeater == null ? null : isRepeater ? 'repeater' : 'first attempt';
+  const lastYearPercentile = typeof o?.last_year_percentile === 'number' ? o!.last_year_percentile : null;
+  const hadBuddyLastYear = typeof o?.had_buddy_last_year === 'boolean' ? o!.had_buddy_last_year : null;
 
   // Per-section coverage from the 53-topic self-assessment.
   const matrix = Array.isArray(o?.topic_matrix)
@@ -89,6 +95,12 @@ export function buildStudentBrief(
   if (hoursPerDay != null) bits.push(`Can study ~${hoursPerDay}h/day.`);
   if (targetDate) bits.push(`Wants to finish the syllabus by ${targetDate}.`);
   if (wantsMentor != null) bits.push(wantsMentor ? 'Said YES to wanting an IIM mentor — high buying intent.' : 'Did not ask for a mentor.');
+  if (isRepeater && lastYearPercentile != null) bits.push(`Scored ${lastYearPercentile}%ile last attempt.`);
+  if (isRepeater && hadBuddyLastYear != null) {
+    bits.push(hadBuddyLastYear
+      ? 'Had a mentor/guide last attempt — knows the value of one, so lead with what CareerRai\'s IIM buddy adds on top.'
+      : 'Had NO mentor or guide last attempt — went in alone. Strong opening: the ₹999 IIM buddy is exactly what was missing.');
+  }
   if (strongestSection && weakestSection && strongestSection !== weakestSection) {
     bits.push(`Self-rated prep — strongest: ${strongestSection} (${coverage[strongestSection].coveredPct}% covered); weakest: ${weakestSection} (${coverage[weakestSection].coveredPct}% covered, ${coverage[weakestSection].notStarted}/${coverage[weakestSection].total} topics not started).`);
   } else if (Object.keys(coverage).length) {
@@ -102,7 +114,7 @@ export function buildStudentBrief(
 
   return {
     attempt, targetPercentile, dreamColleges, hoursPerDay, coaching, wantsMentor,
-    targetDate, painPoints, strongestSection, weakestSection, coverage,
+    targetDate, lastYearPercentile, hadBuddyLastYear, painPoints, strongestSection, weakestSection, coverage,
     deviceLabel: device?.label ?? null,
     summary: bits.join(' '),
   };
