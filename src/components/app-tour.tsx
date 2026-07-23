@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, notifAskVisible, insightVisible, TOUR_KEY } from '@/lib/first-run-events';
+import { NOTIF_ASK_SETTLED_EVENT, notifAskVisible, TOUR_KEY } from '@/lib/first-run-events';
 
 // Spotlight coach-mark tour (founder: "we never gave a quick app tour").
 // Dims the screen and cuts a spotlight over one real element at a time, with a
@@ -14,8 +14,8 @@ import { NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, notifAskVisible, insightVi
 // true (parent has cleared onboarding + post-signup) AND the app is actually
 // installed — running in standalone display mode, never a browser tab. That's
 // the settled home screen, which is exactly where a "quick tour" belongs.
-// On finish it fires TOUR_DONE_EVENT so the "switch on notifications" ask can
-// come up straight after — the founder's sequence is install → tour → reminders.
+// On finish it fires TOUR_DONE_EVENT — the founder's in-app sequence is
+// notifications → tour → tiny insight cloud, so the cloud listens for this.
 interface TourStep { sel: string; title: string; body: string }
 
 const STEPS: TourStep[] = [
@@ -67,16 +67,14 @@ export function AppTour({ enabled = false }: { enabled?: boolean }) {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tryStart = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { if (!notifAskVisible() && !insightVisible()) setIdx(0); }, 900);
+      timer = setTimeout(() => { if (!notifAskVisible()) setIdx(0); }, 900);
     };
     tryStart();
     // Notification ask just settled (enabled → page reloads; "Later" → event).
     window.addEventListener(NOTIF_ASK_SETTLED_EVENT, tryStart);
-    window.addEventListener(INSIGHT_DONE_EVENT, tryStart);
     return () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, tryStart);
-      window.removeEventListener(INSIGHT_DONE_EVENT, tryStart);
     };
   }, [enabled]);
 
