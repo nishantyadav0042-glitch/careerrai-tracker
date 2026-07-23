@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeIndianPhone } from '@/lib/phone';
+import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
 
 // Inbound webhook for Expedify's post-call workflow: after every AI call,
 // Expedify POSTs the outcome here and it lands on the student's profile —
@@ -32,7 +32,9 @@ export async function POST(request: NextRequest) {
   const { data, error } = await admin
     .from('profiles')
     .update({ call_feedback: feedback })
-    .eq('phone', phone)
+    // Match across stored phone formats (+91… / 91… / bare) so a drifted number
+    // never causes a missed match.
+    .in('phone', phoneVariants(phone))
     .select('id');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: 'no student with that phone' }, { status: 404 });
