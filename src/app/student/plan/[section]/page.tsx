@@ -159,8 +159,7 @@ function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwa
       <p className="mt-1 text-lg font-bold text-white">{slot.topic}</p>
       <span className="mt-1.5 inline-block rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-bold text-orange-300">▲ Stage {slot.stageNumber}/{slot.stageTotal} · {slot.stageLabel}</span>
       <p className="mt-2 text-[13px] text-zinc-400">
-        <b className="text-zinc-200">{slot.sessionsToday} session{slot.sessionsToday === 1 ? '' : 's'} ({slot.minutes} min)</b>
-        {slot.sessionsRemainingAtStage === 0 ? ' · you finish this stage today' : ` · ${slot.sessionsRemainingAtStage} more after today`}
+        <b className="text-zinc-200">~{slot.minutes} min</b> · tap &ldquo;Got it&rdquo; when you&rsquo;re confident to move up
       </p>
       <p className="mt-1.5 text-[11px] italic text-zinc-600">{slot.why}</p>
       {!asking ? (
