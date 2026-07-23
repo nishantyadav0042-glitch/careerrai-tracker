@@ -6,7 +6,6 @@ import { InstallLiveGuide } from '@/components/install/install-live-guide';
 import { cn } from '@/lib/utils';
 import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
-import { SITE_URL } from '@/lib/site';
 
 // Press-and-hold-to-commit (Cal-AI style): the ring fills over ~2.5s while
 // held; release early and it resets with a nudge to hold again; complete it
@@ -137,7 +136,7 @@ interface Props {
   hoursLeft: number;
 }
 
-type Step = 'date' | 'commit' | 'thanks' | 'notifications' | 'installFirst' | 'openApp' | 'share';
+type Step = 'date' | 'commit' | 'thanks' | 'notifications' | 'installFirst' | 'openApp';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -279,15 +278,13 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   // Closes the ceremony after the commit ritual. Marked done here (not at the
   // start) so a student who closes the tab mid-install still gets the
   // commitment ritual on their next visit — install itself stays skippable
-  // throughout and never blocks reaching this point.
+  // throughout and never blocks reaching this point. Closing reveals the
+  // study plan (this overlay sits on top of /student/tracker) — the final
+  // "open your study plan in the app" beat.
   const finishCommitment = async () => {
     setBusy(true);
     await persist({ done: true });
     setBusy(false);
-    setStep('share');
-  };
-
-  const afterShare = () => {
     setVisible(false);
   };
 
@@ -305,57 +302,11 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
     if (result === 'granted') setTimeout(() => setStep(afterNotifications), 900);
   };
 
-  // Native share sheet (lands straight in WhatsApp on a phone); wa.me
-  // fallback for browsers without navigator.share. Copy a CAT aspirant would
-  // actually forward — their own milestone, not an ad.
-  const shareText = `I just locked my CAT syllabus date and got a day-by-day study plan 🎯 Daily plan + honest tracking + a real IIM buddy. It's free — build yours: ${typeof window !== 'undefined' ? window.location.origin : SITE_URL}`;
-  const doShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({ text: shareText });
-        afterShare();
-        return;
-      }
-    } catch {
-      // Sheet dismissed — stay on the step so they can retry or skip.
-      return;
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener');
-    afterShare();
-  };
-
   if (!visible) return null;
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-white">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-10">
-
-        {step === 'share' && (
-          <div className="space-y-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-3xl shadow-lg shadow-emerald-200">🤝</div>
-            <div>
-              <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Your friends are still guessing what to study.</h1>
-              <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                You have a plan now. Someone in your CAT group is still lost in random YouTube playlists — send them this.
-              </p>
-            </div>
-            <div className="mx-auto max-w-xs rounded-2xl border border-stone-200 bg-stone-50 p-3 text-left">
-              <p className="text-xs leading-relaxed text-stone-600">&ldquo;{shareText}&rdquo;</p>
-            </div>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={doShare}
-                className="w-full rounded-2xl bg-emerald-600 py-4 text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-[0.98]"
-              >
-                Share with your CAT friends →
-              </button>
-              <button type="button" onClick={afterShare} className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600">
-                Skip
-              </button>
-            </div>
-          </div>
-        )}
 
         {step === 'installFirst' && (
           <div className="space-y-6 text-center">
