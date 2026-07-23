@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { DailyTrackerApp } from '@/components/DailyTracker/DailyTrackerApp';
 import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
+import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { FirstInsight } from '@/components/first-insight';
 import { DailyInsightCard } from '@/components/home/daily-insight-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
@@ -402,24 +403,17 @@ export default async function DailyTrackerPage() {
           </Link>
         </div>
 
-        {/* Momentum Shield status — only speaks when something happened. A
-            shield covered a miss → gratitude, not guilt. Shields gone and the
-            streak slipping → one honest line with the fix (log today). */}
-        {!initialLogging.hasLoggedToday && momentum.shieldsUsed > 0 && momentum.decayed === 0 && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
-            <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <p>
-              You missed {momentum.missedDays === 1 ? 'a day' : `${momentum.missedDays} days`} — {momentum.shieldsUsed === 1 ? 'a Momentum Shield' : `${momentum.shieldsUsed} Momentum Shields`} covered it.
-              Your <b>{momentum.streak}-day streak is safe</b>. {momentum.shields} shield{momentum.shields === 1 ? '' : 's'} left — log today.
-            </p>
-          </div>
+        {/* Streak restore (founder, 23 Jul): shields no longer auto-cover a
+            miss. A broken streak shows a Restore button the student taps
+            themselves (Snapchat-style); out of shields → one honest line. */}
+        {momentum.broken && momentum.canRestore && (
+          <StreakRestoreButton streak={momentum.restorable} shields={momentum.shields} />
         )}
-        {!initialLogging.hasLoggedToday && momentum.decayed > 0 && momentum.streak > 0 && (
+        {momentum.broken && !momentum.canRestore && (
           <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
             <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <p>
-              Shields are used up, so your streak is slipping — down {momentum.decayed} to <b>{momentum.streak} days</b>.
-              It never resets to zero. Log today and it climbs again.
+              Your streak broke and you&apos;re out of shields. No stress — log today and start a fresh one. Earn a shield back every 21 days.
             </p>
           </div>
         )}

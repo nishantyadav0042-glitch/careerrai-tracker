@@ -106,35 +106,35 @@ export function daysSinceLastLog(lastLogDate: string | null | undefined, now: Da
 // mid-miss is exactly what the RPC will persist at their next log (+1 for
 // that log). Today never counts as a miss — it's still loggable.
 export interface MomentumState {
-  streak: number;        // the streak the student holds right now
-  shields: number;       // shields remaining after covering pending misses
+  streak: number;        // the live streak shown now — 0 if broken & not restored
+  shields: number;       // restore tokens the student holds (0–3)
   missedDays: number;    // full days missed since last log (excluding today)
-  shieldsUsed: number;   // of those, days covered by shields
-  decayed: number;       // of those, days that ate into the streak
+  shieldsUsed: number;   // legacy (auto-shield era) — always 0 now
+  decayed: number;       // legacy — always 0 now
+  broken: boolean;       // missed ≥1 full day and hasn't restored → streak paused
+  canRestore: boolean;   // broken AND holds a shield to spend
+  restorable: number;    // the streak value they'd get back by restoring
 }
 
+// Manual-restore model (founder, 23 Jul): shields NO LONGER auto-cover misses.
+// Miss a day → the streak visibly breaks; the student taps "Restore" to spend a
+// shield and bring it back themselves (Snapchat-style). Today is still loggable,
+// so a same-day view is never "broken".
 export function momentumStreak(
   currentStreak: number | null | undefined,
   shields: number | null | undefined,
   lastLogDate: string | null | undefined,
   now: Date = new Date()
 ): MomentumState {
-  const s = currentStreak ?? 0;
+  const s = Math.max(0, currentStreak ?? 0);
   const h = shields ?? 3;
   const since = daysSinceLastLog(lastLogDate, now);
-  if (s <= 0 || since == null) {
-    return { streak: Math.max(0, s), shields: h, missedDays: 0, shieldsUsed: 0, decayed: 0 };
+  // No streak yet, or logged today/yesterday → active, nothing to restore.
+  if (s <= 0 || since == null || since <= 1) {
+    return { streak: s, shields: h, missedDays: 0, shieldsUsed: 0, decayed: 0, broken: false, canRestore: false, restorable: s };
   }
-  const missed = Math.max(0, since - 1);
-  const used = Math.min(h, missed);
-  const decay = missed - used;
-  return {
-    streak: Math.max(0, s - decay),
-    shields: h - used,
-    missedDays: missed,
-    shieldsUsed: used,
-    decayed: Math.min(decay, s),
-  };
+  // Missed at least one full day and hasn't restored → broken.
+  return { streak: 0, shields: h, missedDays: since - 1, shieldsUsed: 0, decayed: 0, broken: true, canRestore: h >= 1, restorable: s };
 }
 
 /**
