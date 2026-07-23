@@ -276,15 +276,13 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   };
 
   // Closes the ceremony after the commit ritual. Marked done here (not at the
-  // start) so a student who closes the tab mid-install still gets the
-  // commitment ritual on their next visit — install itself stays skippable
-  // throughout and never blocks reaching this point. Closing reveals the
-  // study plan (this overlay sits on top of /student/tracker) — the final
-  // "open your study plan in the app" beat.
-  const finishCommitment = async () => {
-    setBusy(true);
-    await persist({ done: true });
-    setBusy(false);
+  // `done` is persisted the moment they finish the hold-to-commit (see the
+  // commit step below), NOT here — so a student who then goes and opens the
+  // installed app (instead of tapping anything on this last screen) still
+  // never re-runs onboarding. This just dismisses the overlay: the isApp
+  // "open my plan" case reveals the tracker underneath; the browser
+  // "continue anyway" fallback does the same for anyone who skipped install.
+  const finishCommitment = () => {
     setVisible(false);
   };
 
@@ -401,29 +399,56 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
                 </p>
               </div>
             </div>
-            <HoldToCommit onComplete={() => setStep('thanks')} />
+            <HoldToCommit onComplete={() => { void persist({ done: true }); setStep('thanks'); }} />
           </div>
         )}
 
         {step === 'thanks' && (
           <div className="space-y-6 text-center">
             <JourneyRail current={3} />
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-3xl shadow-lg shadow-violet-200">🙏</div>
-            <div>
-              <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>That hold meant something.</h1>
-              <p className="mt-2 text-sm text-stone-500">
-                {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}
-                {isApp ? 'You&apos;re all set — open your plan now.' : 'Thanks for trusting us. Now open your CareerRai app to begin.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={finishCommitment}
-              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98] disabled:opacity-60"
-            >
-              {isApp ? 'Open my plan →' : 'Open your app now →'}
-            </button>
+            {isApp ? (
+              <>
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-3xl shadow-lg shadow-violet-200">🙏</div>
+                <div>
+                  <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>That hold meant something.</h1>
+                  <p className="mt-2 text-sm text-stone-500">
+                    {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}You&apos;re all set — open your plan now.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={finishCommitment}
+                  className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+                >
+                  Open my plan →
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Browser: the onboarding ENDS here by pointing them into the
+                    installed app — deliberately NOT dropping them into the
+                    browser plan. A web page can't launch a PWA, so this is the
+                    "open your app" instruction + the home-screen icon. */}
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[18px] bg-gradient-to-br from-orange-500 to-amber-500 text-3xl shadow-lg shadow-orange-200">📲</div>
+                <div>
+                  <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>You&apos;re all set. Open your app.</h1>
+                  <p className="mt-2 text-sm text-stone-500">
+                    {chosenLabel ? <>You committed to <b>{chosenLabel}</b>. </> : null}Now tap the <b>CareerRai</b> icon on your home screen — that&apos;s where your plan lives from today.
+                  </p>
+                </div>
+                <div className="mx-auto flex flex-col items-center gap-1.5">
+                  <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 text-lg font-black text-white shadow-lg">CR</span>
+                  <span className="text-[11px] font-medium text-stone-500">CareerRai</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={finishCommitment}
+                  className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
+                >
+                  Didn&apos;t install yet? Continue in browser →
+                </button>
+              </>
+            )}
           </div>
         )}
 
