@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/logo';
 import { LogoutButton } from '@/components/logout-button';
-import { Home, PhoneCall, Users, TrendingUp, IndianRupee, Wrench } from 'lucide-react';
+import { Home, PhoneCall, Users, TrendingUp, IndianRupee, Wrench, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // The one admin navigation (founder, 14 July): the panel had grown into a
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 //   Leads    — the CRM (every signup, categorized, exportable)
 //   Students — active students, buddies, matching
 //   Growth   — funnel analytics
+//   Analytics— real student behaviour from tracked events (opens, funnels, DNA)
 //   Money    — payments · coupons · scholarships
 //   System   — broadcast, allowlist, imports, health tools
 const ITEMS: { href: string; label: string; icon: typeof Home; match: string[] }[] = [
@@ -21,6 +22,7 @@ const ITEMS: { href: string; label: string; icon: typeof Home; match: string[] }
   { href: '/admin/leads', label: 'Leads', icon: PhoneCall, match: ['/admin/leads', '/admin/cat-leads'] },
   { href: '/admin/students', label: 'Students', icon: Users, match: ['/admin/students'] },
   { href: '/admin/growth', label: 'Growth', icon: TrendingUp, match: ['/admin/growth'] },
+  { href: '/admin/analytics', label: 'Analytics', icon: Activity, match: ['/admin/analytics'] },
   { href: '/admin/payments', label: 'Money', icon: IndianRupee, match: ['/admin/payments', '/admin/coupons', '/admin/scholarships'] },
   { href: '/admin/system', label: 'System', icon: Wrench, match: ['/admin/system', '/admin/notification-health', '/admin/perf', '/admin/sales-queue', '/admin/brain'] },
 ];
