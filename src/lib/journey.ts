@@ -99,12 +99,42 @@ function context() {
   };
 }
 
+// Days since this device first opened CareerRai (cohort/retention axis).
+function daysSinceInstall(): number {
+  try {
+    const m = document.cookie.match(/(?:^|; )cr_first_seen=([^;]+)/);
+    let first: number;
+    if (m) {
+      first = Number(m[1]);
+    } else {
+      first = Date.now();
+      document.cookie = `cr_first_seen=${first}; path=/; max-age=${60 * 60 * 24 * 400}; samesite=lax`;
+    }
+    return Math.max(0, Math.floor((Date.now() - first) / 86_400_000));
+  } catch {
+    return 0;
+  }
+}
+
+// Per-flush enrichment merged into every event server-side (see the ingest).
+// Cheap, device/session-level context that would be wasteful to repeat inline.
+function envCtx() {
+  const nav = navigator as Navigator & { connection?: { effectiveType?: string } };
+  return {
+    vw: typeof window !== 'undefined' ? window.innerWidth : null,
+    vh: typeof window !== 'undefined' ? window.innerHeight : null,
+    net: nav.connection?.effectiveType ?? null,
+    dayN: daysSinceInstall(),
+    appv: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
+  };
+}
+
 function flush(useBeacon = false): void {
   if (typeof window === 'undefined' || queue.length === 0) return;
   const batch = queue;
   queue = [];
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-  const payload = JSON.stringify({ ...context(), events: batch });
+  const payload = JSON.stringify({ ...context(), ctx: envCtx(), events: batch });
   try {
     if (useBeacon && navigator.sendBeacon) {
       navigator.sendBeacon('/api/events/track', new Blob([payload], { type: 'application/json' }));
@@ -121,16 +151,25 @@ function flush(useBeacon = false): void {
   }
 }
 
+// Monotonic within a page load — lets the event stream be replayed in exact
+// order even when timestamps collide (autocapture fires many events per ms).
+let seq = 0;
+
 /** Record one journey event. Fire-and-forget; batched ~1s, flushed on hide. */
 export function track(event: string, props: Record<string, unknown> = {}): void {
   try {
     if (typeof window === 'undefined') return;
-    queue.push({ event, props, path: window.location?.pathname ?? '', ts: Date.now() });
+    queue.push({ event, props: { ...props, seq: seq++ }, path: window.location?.pathname ?? '', ts: Date.now() });
     if (queue.length >= 12) { flush(); return; }
     if (!flushTimer) flushTimer = setTimeout(() => flush(), 1000);
   } catch {
     /* best effort */
   }
+}
+
+/** Force an immediate beacon flush — used when a screen is about to unload. */
+export function flushEvents(): void {
+  flush(true);
 }
 
 let listenersBound = false;

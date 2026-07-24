@@ -16,9 +16,9 @@ import { clientIp } from '@/lib/request-ip';
 //   • push_context records WHERE push was granted (app vs browser) — the core
 //     diagnosis for undelivered notifications.
 
-const MAX_EVENTS = 40;          // per request
+const MAX_EVENTS = 60;          // per request (autocapture batches are larger)
 const MAX_EVENT_LEN = 60;
-const MAX_PROPS_BYTES = 2000;
+const MAX_PROPS_BYTES = 2500;
 const KNOWN_MODES = new Set(['standalone', 'twa', 'browser', 'unknown']);
 
 interface InEvent { event?: unknown; props?: unknown; path?: unknown; ts?: unknown }
@@ -26,7 +26,7 @@ interface InEvent { event?: unknown; props?: unknown; path?: unknown; ts?: unkno
 export async function POST(request: NextRequest) {
   let body: {
     anon?: unknown; sessionId?: unknown; displayMode?: unknown;
-    browser?: unknown; platform?: unknown; events?: unknown;
+    browser?: unknown; platform?: unknown; ctx?: unknown; events?: unknown;
   };
   try {
     body = await request.json();
@@ -42,6 +42,10 @@ export async function POST(request: NextRequest) {
   const displayMode = typeof body.displayMode === 'string' && KNOWN_MODES.has(body.displayMode) ? body.displayMode : 'unknown';
   const browser = typeof body.browser === 'string' ? body.browser.slice(0, 32) : null;
   const platform = typeof body.platform === 'string' ? body.platform.slice(0, 16) : null;
+  // Per-flush device/session enrichment (viewport, network, day-since-install,
+  // app version) — merged into every event's props so it's queryable per event.
+  const ctx = body.ctx && typeof body.ctx === 'object' && !Array.isArray(body.ctx)
+    ? (body.ctx as Record<string, unknown>) : {};
 
   // Resolve the authenticated user (if any) server-side — never trust the client.
   let userId: string | null = null;
@@ -68,18 +72,22 @@ export async function POST(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('ip', ip)
       .gte('created_at', since);
-    if ((count ?? 0) >= 5000) return NextResponse.json({ ok: true });
+    // Autocapture is higher-volume, and shared IPs (college/hostel wifi)
+    // aggregate many students — keep the abuse valve, but well above real use.
+    if ((count ?? 0) >= 50000) return NextResponse.json({ ok: true });
   }
 
   const rows = events
     .map((e) => {
       const name = typeof e.event === 'string' ? e.event.slice(0, MAX_EVENT_LEN) : '';
       if (!name) return null;
-      let props: Record<string, unknown> = {};
+      // Event props win over shared ctx on any key collision.
+      let props: Record<string, unknown> = { ...ctx };
       if (e.props && typeof e.props === 'object') {
         try {
-          const s = JSON.stringify(e.props);
-          if (s.length <= MAX_PROPS_BYTES) props = e.props as Record<string, unknown>;
+          const merged = { ...ctx, ...(e.props as Record<string, unknown>) };
+          const s = JSON.stringify(merged);
+          if (s.length <= MAX_PROPS_BYTES) props = merged;
         } catch { /* drop unserialisable props */ }
       }
       const created = typeof e.ts === 'number' && e.ts > 0 && e.ts <= Date.now() + 60_000
