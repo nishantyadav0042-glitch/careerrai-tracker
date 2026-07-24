@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
@@ -76,10 +76,15 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   const [mockNote, setMockNote] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [blockedHint, setBlockedHint] = useState<string | null>(null);
+  // When this open began, and whether it ended in a save. Used to measure
+  // abandonment — half the students who open this never finish it, and until
+  // now nothing recorded what they had filled in when they walked away.
+  const openedAt = useRef<number>(0);
+  const savedRef = useRef(false);
 
   useEffect(() => {
     setLogModalOpen(isOpen);
-    if (isOpen) track('log_open');
+    if (isOpen) { openedAt.current = Date.now(); savedRef.current = false; track('log_open'); }
     return () => setLogModalOpen(false);
   }, [isOpen]);
 
@@ -179,12 +184,32 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
       setHours(null);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
+      savedRef.current = true;
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to log. Try again.';
       track('log_error', { message: msg });
       setError(msg);
     }
+  };
+
+  // Closing without saving. Records how far they actually got, so the
+  // drop-off has a reason attached instead of being a silent exit.
+  const handleClose = () => {
+    if (!savedRef.current) {
+      track('log_dismissed', {
+        secondsOpen: openedAt.current ? Math.round((Date.now() - openedAt.current) / 1000) : null,
+        planTasksOffered: planTasks.length,
+        tasksMarked: taskChoice.size,
+        offSections: offSections.length,
+        planFitSet: planFit !== null,
+        hoursSet: hours !== null,
+        mockAnswered: mockTaken !== null,
+        wasSubmittable: isValid,
+        touchedAnything: taskChoice.size > 0 || offSections.length > 0 || planFit !== null || hours !== null || mockTaken !== null,
+      });
+    }
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -196,7 +221,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
       <div className={cn('w-full max-w-md bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-800', 'max-h-[92vh] overflow-y-auto flex flex-col')}>
         <div className="sticky top-0 bg-zinc-950 border-b border-zinc-800 px-6 py-5 flex items-center justify-between">
           <h2 className="text-xl font-bold text-white">Log Today</h2>
-          <button onClick={onClose} disabled={isSubmitting} className="text-zinc-500 hover:text-zinc-300 transition disabled:opacity-50">
+          <button onClick={handleClose} disabled={isSubmitting} className="text-zinc-500 hover:text-zinc-300 transition disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -342,8 +367,14 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         </div>
 
         <div className="sticky bottom-0 bg-zinc-950 border-t border-zinc-800 px-6 py-4">
-          {blockedHint && !isValid && (
-            <p className="mb-2 rounded-xl border border-amber-700/40 bg-amber-950/40 px-3 py-2 text-xs text-amber-300">{blockedHint}</p>
+          {/* Say what's needed BEFORE they tap, not after. The button renders
+              grey until the log is valid, which reads as disabled — students
+              had to tap a dead-looking button to find out what was missing. */}
+          {!isValid && (
+            <p className={cn('mb-2 rounded-xl px-3 py-2 text-xs',
+              blockedHint ? 'border border-amber-700/40 bg-amber-950/40 text-amber-300' : 'text-zinc-500')}>
+              {blockedHint ?? missingHint()}
+            </p>
           )}
           <button onClick={handleSubmit} disabled={isSubmitting}
             className={cn('w-full py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2',
