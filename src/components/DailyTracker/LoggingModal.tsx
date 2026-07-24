@@ -67,7 +67,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   const [planFit, setPlanFit] = useState<string | null>(null);
   const [blockerReason, setBlockerReason] = useState<string | null>(null);
   const [hours, setHours] = useState<number | null>(null);
-  const [confidence, setConfidence] = useState<number | null>(null);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
   // Inline mock percentiles (only when mockTaken === true)
   const [mockOverall, setMockOverall] = useState<string>('');
@@ -167,7 +166,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         energy: '💪', // defaulted — no longer asked
         plan_fit: planFit ?? undefined,
         blocker_reason: planFit === 'couldnt_finish' && blockerReason ? blockerReason : undefined,
-        confidence: confidence ?? undefined,
         completedTasks,
         mock,
       });
@@ -179,7 +177,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
       setPlanFit(null);
       setBlockerReason(null);
       setHours(null);
-      setConfidence(null);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
       onClose();
@@ -337,20 +334,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
               </div>
             )}
-          </div>
-
-          {/* 6 — Confidence (the one longitudinal signal) */}
-          <div>
-            {label('How confident about CAT right now?')}
-            <div className="grid grid-cols-5 gap-2">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button key={n} type="button" onClick={() => setConfidence((prev) => (prev === n ? null : n))}
-                  className={cn('py-3 rounded-xl font-bold text-sm transition-all active:scale-95', confidence === n ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
-                  {n}
-                </button>
-              ))}
-            </div>
-            <div className="mt-1 flex justify-between px-1 text-[10px] text-zinc-600"><span>Not at all</span><span>Very</span></div>
           </div>
 
           {error && (
