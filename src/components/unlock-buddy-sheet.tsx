@@ -40,6 +40,15 @@ function logCtaClick() {
   }).catch(() => {});
 }
 
+// The installed/standalone app — which is exactly what the iOS WKWebView and
+// Android TWA store builds run in. Used to suppress the in-app card checkout
+// there for app-store compliance (see pay()).
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(display-mode: standalone)').matches
+    || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
+}
+
 // The single payment path — order → Razorpay → reassure/refresh, with the
 // payments-off (403) fallback to the call flow. Shared so there's ONE place
 // that talks to Razorpay, never two copies drifting apart.
@@ -50,11 +59,24 @@ function useBuddyCheckout() {
   const [callMe, setCallMe] = useState(false);
 
   async function pay(planId: PlanId, fullName?: string) {
+    // Record the EXACT plan tapped BEFORE anything else — intent is captured
+    // even in the standalone-app path, a 403 (payments off), or an abandon.
+    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
+
+    // App-store compliance (audit, 24 Jul): inside the installed/standalone app
+    // — the iOS WKWebView and Android TWA store builds — never open an in-app
+    // web card checkout. Apple 3.1.1 / Google Play Billing reject a Razorpay
+    // sheet that unlocks in-app features; the person-to-person mentorship is
+    // sold via the "our team will call you" flow instead. A normal browser tab
+    // (careerrai.in on the web) keeps the direct in-app checkout below.
+    if (isStandalone()) {
+      logCtaClick();
+      setCallMe(true);
+      return;
+    }
+
     setBusy(planId);
     setMessage(null);
-    // Record the EXACT plan tapped BEFORE checkout — intent is captured even
-    // when payments are off (403) or the student abandons the Razorpay window.
-    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',

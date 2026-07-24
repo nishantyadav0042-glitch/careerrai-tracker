@@ -16,6 +16,7 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
+import { OnboardingGate } from './onboarding/onboarding-gate';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -114,16 +115,19 @@ export default async function StudentLayout({ children }: { children: React.Reac
         {children}
       </div>
       <StudentBottomNav chatUnread={chatUnread} />
-      {/* ONE onboarding system (founder): /start is the single funnel — it asks
-          the target date once and marks onboarding_completed on success, and the
-          post-signup sequence reconciles that date a second time. The old
-          in-app OnboardingModal used to auto-fire here whenever
-          onboarding_completed was false, re-asking every question (the third
-          date ask). It's gone from this gate now; the modal component still
-          powers profile editing, just not a second onboarding. */}
-      {showPostSignup && postSignupProps ? (
+      {/* Onboarding gate (restored, audit 24 Jul). /start is the primary funnel
+          and marks onboarding_completed=true, so a /start student NEVER reaches
+          this branch — no "third date ask" regression. It fires ONLY for a
+          student who arrives un-onboarded (signed up via /login, or an
+          admin/allowlist-provisioned account): previously they landed on a bare
+          tracker with no plan and nothing to fix it. The modal sets
+          onboarding_completed on completion, so it can't trap anyone. It also
+          revives the repeater ₹999 pitch, which lives inside this modal. */}
+      {showOnboarding ? (
+        <OnboardingGate />
+      ) : showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
-      ) : (!pushEnabled || !profile?.push_subscription) && !showOnboarding ? (
+      ) : (!pushEnabled || !profile?.push_subscription) ? (
         // Permission architecture (22 July): the notification permission is
         // requested ONLY inside the installed app, right after the first Career
         // Insight — StandaloneNotifAsk renders solely in standalone mode and
