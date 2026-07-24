@@ -44,6 +44,14 @@ const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' 
   refund_requested: { text: 'Refund requested', color: 'stone' },
 };
 
+// The installed/standalone app — the iOS WKWebView and Android TWA store
+// builds. In-app card checkout is suppressed there for app-store compliance.
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(display-mode: standalone)').matches
+    || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
+}
+
 export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }: MembershipCardProps) {
   const router = useRouter();
   const [busy, setBusy] = useState<PlanId | null>(null);
@@ -53,6 +61,15 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
   async function upgrade(planId: PlanId) {
     setBusy(planId);
     setMessage(null);
+    // App-store compliance (audit, 24 Jul): never open an in-app web card
+    // checkout inside the installed/standalone app — Apple 3.1.1 / Google Play
+    // Billing reject it. Route to the human path, matching the buddy sheet. A
+    // normal browser tab keeps the direct checkout below.
+    if (isStandalone()) {
+      setBusy(null);
+      setMessage('To set up your 1:1 mentor, our team will reach out to you shortly.');
+      return;
+    }
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
