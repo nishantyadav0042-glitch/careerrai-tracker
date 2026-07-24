@@ -35,6 +35,8 @@ export function SettingsSection() {
         <div className="flex flex-col gap-2">
           <a href="/privacy" className="text-sm text-stone-600 underline underline-offset-2 hover:text-stone-900">Privacy Policy</a>
           <a href="/terms" className="text-sm text-stone-600 underline underline-offset-2 hover:text-stone-900">Terms of Service</a>
+          <a href="/refunds" className="text-sm text-stone-600 underline underline-offset-2 hover:text-stone-900">Refund &amp; Cancellation Policy</a>
+          <a href="/contact" className="text-sm text-stone-600 underline underline-offset-2 hover:text-stone-900">Contact us</a>
         </div>
       </div>
 

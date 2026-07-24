@@ -354,6 +354,20 @@ export default function WelcomePage() {
           </Link>
           <InstallButton variant="text" />
           <p className="text-center text-[11px] text-stone-400">Free to start · no credit card</p>
+          {/* Public policy links. A payment provider or store reviewer lands
+              here first, and previously had no route to pricing or policies —
+              the paywall itself sits behind login. */}
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-1 text-[11px] text-stone-400">
+            <Link href="/pricing" className="hover:text-stone-600 hover:underline">Pricing</Link>
+            <span aria-hidden>·</span>
+            <Link href="/refunds" className="hover:text-stone-600 hover:underline">Refunds</Link>
+            <span aria-hidden>·</span>
+            <Link href="/terms" className="hover:text-stone-600 hover:underline">Terms</Link>
+            <span aria-hidden>·</span>
+            <Link href="/privacy" className="hover:text-stone-600 hover:underline">Privacy</Link>
+            <span aria-hidden>·</span>
+            <Link href="/contact" className="hover:text-stone-600 hover:underline">Contact</Link>
+          </div>
         </div>
       </div>
 

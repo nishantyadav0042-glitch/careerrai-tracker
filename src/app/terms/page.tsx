@@ -45,7 +45,7 @@ export default function TermsPage() {
             <li>The Buddy plan is a paid, one-to-one mentorship service. Prices are shown in the app before you pay.</li>
             <li>Payments are processed securely by <strong>Razorpay</strong>. We do not store your card or bank details.</li>
             <li>Plans are prepaid for the chosen duration and do <strong>not</strong> auto-renew — you choose whether to renew.</li>
-            <li>Refunds, where offered, follow the refund window shown in the app at purchase.</li>
+            <li>Refunds follow our <Link href="/refunds" className="text-orange-600 hover:underline">Refund &amp; Cancellation Policy</Link>: a full refund in your first month if you&apos;ve logged at least 20 study days.</li>
           </ul>
         </section>
 
