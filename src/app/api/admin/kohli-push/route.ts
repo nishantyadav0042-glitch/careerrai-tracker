@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
-import { getServerConfig } from '@/lib/server-config';
+import { isRequestAdmin } from '@/lib/require-admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -11,12 +11,14 @@ export const maxDuration = 300;
 // production infrastructure so both Google's and Apple's push services are hit
 // exactly the way the daily crons hit them. Idempotent — a student who already
 // has a kohli_18 row is never sent twice, so re-invoking to sweep stragglers
-// is safe. Auth: one-time key held in server_config (KOHLI_PUSH_KEY); rotate
-// or delete the row to disable this endpoint.
+// is safe.
+//
+// Auth (hardened 24 Jul audit): requires a signed-in ADMIN session. The old
+// `?key=<secret>` URL auth leaked the secret via access logs/Referer and let a
+// key-holder push to any user id; the bulk response also enumerated every
+// student's name (PII). Both removed.
 export async function GET(request: NextRequest) {
-  const key = request.nextUrl.searchParams.get('key');
-  const expected = await getServerConfig('KOHLI_PUSH_KEY');
-  if (!expected || !key || key !== expected) {
+  if (!(await isRequestAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id, full_name')
+    .select('id')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true)
@@ -64,7 +66,8 @@ export async function GET(request: NextRequest) {
     'Kohli is Kohli because he shows up every day. Roughly 18 weeks to CAT — give your prep that consistency. Start with today’s log.';
   const url = '/student/tracker';
 
-  const results: { name: string | null; outcome: string }[] = [];
+  // Aggregate counts only — no per-student names in the response (PII).
+  const outcomes: Record<string, number> = {};
   let pushed = 0;
   for (const s of students ?? []) {
     const { count } = await admin
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', s.id)
       .eq('type', 'kohli_18');
     if ((count ?? 0) > 0) {
-      results.push({ name: s.full_name, outcome: 'already_sent' });
+      outcomes.already_sent = (outcomes.already_sent ?? 0) + 1;
       continue;
     }
     const { data: row } = await admin
@@ -90,11 +93,12 @@ export async function GET(request: NextRequest) {
     if (res.ok && row?.id) {
       await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
       pushed++;
-      results.push({ name: s.full_name, outcome: 'pushed' });
+      outcomes.pushed = (outcomes.pushed ?? 0) + 1;
     } else {
-      results.push({ name: s.full_name, outcome: res.reason ?? 'failed' });
+      const reason = res.reason ?? 'failed';
+      outcomes[reason] = (outcomes[reason] ?? 0) + 1;
     }
   }
 
-  return NextResponse.json({ eligible: (students ?? []).length, pushed, results });
+  return NextResponse.json({ eligible: (students ?? []).length, pushed, outcomes });
 }

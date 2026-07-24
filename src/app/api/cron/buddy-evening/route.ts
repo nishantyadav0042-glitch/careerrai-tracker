@@ -84,3 +84,8 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, sent });
 }
+
+// Vercel Cron invokes endpoints via GET; every other cron route aliases POST
+// as GET. Without this, the scheduled GET hit returned 405 and this evening
+// nudge silently never fired (audit, 24 Jul).
+export { POST as GET };

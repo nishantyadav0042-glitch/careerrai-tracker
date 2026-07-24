@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     preloadEntriesOnStart: true,
-    // Tree-shake these icon/component libraries — only bundle what's imported.
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-slot'],
+    // Tree-shake this icon library — only bundle what's imported.
+    optimizePackageImports: ['lucide-react'],
   },
   compress: true,
   images: {
