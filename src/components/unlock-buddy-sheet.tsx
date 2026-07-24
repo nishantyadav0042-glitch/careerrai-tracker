@@ -136,6 +136,8 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
       <>
         <button
           type="button"
+          data-analytics="buy_tillcat_sticky"
+          data-section="paywall"
           onClick={() => pay('tillcat', fullName)}
           disabled={busy !== null}
           className="w-full rounded-2xl bg-stone-900 px-4 py-4 text-center text-white shadow-xl shadow-stone-900/25 transition-transform active:scale-[0.99] disabled:opacity-60"
@@ -154,6 +156,8 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
       {/* Hero — one payment, buddy till exam day */}
       <button
         type="button"
+        data-analytics="buy_tillcat"
+        data-section="paywall"
         onClick={() => pay('tillcat', fullName)}
         disabled={busy !== null}
         className="w-full rounded-2xl bg-stone-900 px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-60"
@@ -176,6 +180,8 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
       {/* Low-commitment option */}
       <button
         type="button"
+        data-analytics="buy_monthly"
+        data-section="paywall"
         onClick={() => pay('monthly', fullName)}
         disabled={busy !== null}
         className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-60"
