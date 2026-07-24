@@ -22,7 +22,7 @@ const ITEMS: { href: string; label: string; icon: typeof Home; match: string[] }
   { href: '/admin/students', label: 'Students', icon: Users, match: ['/admin/students'] },
   { href: '/admin/growth', label: 'Growth', icon: TrendingUp, match: ['/admin/growth'] },
   { href: '/admin/payments', label: 'Money', icon: IndianRupee, match: ['/admin/payments', '/admin/coupons', '/admin/scholarships'] },
-  { href: '/admin/system', label: 'System', icon: Wrench, match: ['/admin/system', '/admin/notification-health', '/admin/perf', '/admin/sales-queue'] },
+  { href: '/admin/system', label: 'System', icon: Wrench, match: ['/admin/system', '/admin/notification-health', '/admin/perf', '/admin/sales-queue', '/admin/brain'] },
 ];
 
 export function AdminNav() {
