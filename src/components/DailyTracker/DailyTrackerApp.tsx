@@ -199,15 +199,24 @@ export function DailyTrackerApp({
     if (result?.milestone) setLastNudge(result.milestone);
     else if (result?.daily_nudge) setLastNudge(result.daily_nudge);
     const mockSelected = data.sections.includes('Mock');
-    if (mockSelected) {
-      // Use the SERVER's authoritative report_date (bug audit, 14 July) — a
-      // client-recomputed local setHours(3) could disagree with the server's
-      // IST-correct date and file the debrief under the wrong day, leaving
-      // it permanently stuck "pending" (never matched by the pending-debrief
-      // join, which reads server report_date).
-      setCurrentLogDate(result?.report_date ?? getLogDateString());
-      setIsLogOpen(false);
-      setIsDebriefOpen(true);
+    // Single-sheet log (24 Jul): the mock percentiles are captured INLINE on the
+    // log and arrive as data.mock — save the debrief right here, no second
+    // screen. Use the SERVER's authoritative report_date (bug audit, 14 July) so
+    // the debrief is filed under the same IST day as the log (a client-side
+    // recompute could disagree and strand it "pending").
+    if (mockSelected && data.mock) {
+      const reportDate = result?.report_date ?? getLogDateString();
+      try {
+        const response = await fetch('/api/logging/mock-debrief', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data.mock, log_date: reportDate }),
+        });
+        if (response.ok) {
+          const json = (await response.json()) as { insight?: string | null };
+          if (json.insight) setDebriefInsight(json.insight);
+        }
+      } catch { /* best-effort — the log itself already saved */ }
       queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
     }
     return { mockSelected };
