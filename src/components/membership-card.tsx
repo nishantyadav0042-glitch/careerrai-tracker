@@ -144,8 +144,8 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       )}
       {isPaused && (
         <p className="text-sm text-stone-600 mb-4">
-          Your streak, dream tracking, mock history, debriefs, and buddy access are <strong>paused — not gone</strong>.
-          Reactivate to continue exactly where you left off.
+          Your 1:1 mentorship has <strong>ended</strong> — your streak, mocks, debriefs and everything else
+          stay exactly as they are, free to use. Reactivate whenever you want your mentor back.
         </p>
       )}
       {status === 'refund_requested' && (

@@ -17,11 +17,29 @@ const FLAG = 'cr_store_build';
 // scoped to one tab, so it can never leak back into the wrapper.
 const ESCAPED = 'cr_payment_tab';
 
+/** Server-set cookie (see proxy.ts) — survives the logged-out login redirect. */
+function hasStoreCookie(): boolean {
+  try { return /(?:^|;\s*)cr_store=(?:twa|ios)(?:;|$)/.test(document.cookie); }
+  catch { return false; }
+}
+
+/**
+ * Chrome sets `android-app://<package>` as the referrer for the launch
+ * navigation of a TWA. Definitive proof we're inside the Play wrapper, and it
+ * needs no param, cookie or storage to survive.
+ */
+function launchedFromAndroidApp(): boolean {
+  try { return document.referrer.startsWith('android-app://'); }
+  catch { return false; }
+}
+
 /** Call once on app load: if launched from a store wrapper, remember it. */
 export function markStoreBuildFromUrl(): void {
   try {
     const src = new URLSearchParams(window.location.search).get('source');
-    if (src === 'twa' || src === 'ios') localStorage.setItem(FLAG, '1');
+    if (src === 'twa' || src === 'ios' || hasStoreCookie() || launchedFromAndroidApp()) {
+      localStorage.setItem(FLAG, '1');
+    }
   } catch { /* storage blocked — treat as non-store, safe default */ }
 }
 
@@ -41,8 +59,16 @@ export function markPaymentTab(): void {
  */
 export function isStoreBuild(): boolean {
   try {
+    // The tab we escaped INTO is a real browser, whatever else says otherwise.
+    // Checked first so payment always runs inline here.
     if (sessionStorage.getItem(ESCAPED) === '1') return false;
-    if (localStorage.getItem(FLAG) !== '1') return false;
+
+    // Definitive: this navigation came from the Android wrapper itself.
+    if (launchedFromAndroidApp()) return true;
+
+    const flagged = localStorage.getItem(FLAG) === '1' || hasStoreCookie();
+    if (!flagged) return false;
+
     const standalone = !!window.matchMedia?.('(display-mode: standalone)').matches
       || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
     return standalone;

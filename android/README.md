@@ -2,7 +2,7 @@
 
 This turns the existing web app into a real, installable **Google Play Store**
 app using a **Trusted Web Activity (TWA)**. It is still the same website under the
-hood (`careerrai-daily.vercel.app`) — no separate codebase, content updates ship
+hood (`careerrai.in`) — no separate codebase, content updates ship
 with your normal web deploy. The Play Store build simply targets a **current
 Android SDK**, which is what removes the *"built for an older version of Android —
 Unsafe app blocked"* Play Protect warning that browser-minted WebAPKs were hitting.
@@ -22,14 +22,14 @@ recommended route** if a non-developer owns the Play account.
 - **Package name:** `com.careerrai.app` (used in `twa-manifest.json` and
   `/public/.well-known/assetlinks.json`). **Can never change after the first
   Play Store upload.**
-- **Domain:** `careerrai-daily.vercel.app`. `assetlinks.json` MUST be served from
+- **Domain:** `careerrai.in`. `assetlinks.json` MUST be served from
   this exact domain (it already is, from `public/.well-known/`). If you move to a
   custom domain later, the TWA `host` and assetlinks move with it.
 
 ---
 
 ## Path A — PWABuilder (no tools, ~20 min)
-1. Go to **https://www.pwabuilder.com** → enter `https://careerrai-daily.vercel.app` → **Start**.
+1. Go to **https://www.pwabuilder.com** → enter `https://careerrai.in` → **Start**.
 2. Open the **Android** package options → **Store package**. Set:
    - Package ID: `com.careerrai.app`
    - App name: `CareerRai`
@@ -48,7 +48,7 @@ Prereqs: Node 18+, JDK 17, Android SDK (Bubblewrap can install the JDK/SDK for y
 npm i -g @bubblewrap/cli
 cd android
 # Uses the committed twa-manifest.json in this folder:
-bubblewrap build            # first run: `bubblewrap init --manifest https://careerrai-daily.vercel.app/manifest.json` then copy over our twa-manifest.json values
+bubblewrap build            # first run: `bubblewrap init --manifest https://careerrai.in/manifest.json` then copy over our twa-manifest.json values
 ```
 - On first build Bubblewrap creates `android.keystore` — **back it up + save the
   passwords**. Output: `app-release-bundle.aab` (upload) + `app-release-signed.apk`
@@ -80,7 +80,7 @@ bubblewrap build            # first run: `bubblewrap init --manifest https://car
    `REPLACE_WITH_APP_SIGNING_SHA256_FINGERPRINT_FROM_PLAY_CONSOLE`.
 2. Deploy the web app (normal `git push` to `main`).
 3. Verify it's live and valid:
-   - Open `https://careerrai-daily.vercel.app/.well-known/assetlinks.json` — must
+   - Open `https://careerrai.in/.well-known/assetlinks.json` — must
      return the JSON (not 404). If it 404s on Vercel, tell the dev to add a
      rewrite for `/.well-known/assetlinks.json`; usually the `public/` file works.
    - Test with Google's validator:
@@ -98,7 +98,7 @@ So Chrome stops offering the flaky WebAPK and points users to the Play app:
        "url": "https://play.google.com/store/apps/details?id=com.careerrai.app" }
    ]
    ```
-2. Update the in-app install button (`src/components/install-app-button.tsx`) to
+2. Update the in-app install button (`src/components/install/install-button.tsx`) to
    link Android users straight to the Play Store listing instead of the WebAPK
    prompt. (Ask the dev — it's a small change once the listing URL exists.)
 

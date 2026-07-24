@@ -128,7 +128,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
       )}
 
       <p className="mt-3 text-center text-[11px] text-stone-400">
-        One buddy the whole journey — switch anytime. 21-day full refund.
+        One buddy the whole journey — switch anytime. Full refund in your first month if you&apos;ve logged 20+ study days.
       </p>
     </div>
   );

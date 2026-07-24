@@ -33,7 +33,9 @@ export default function PrivacyPolicyPage() {
             <li><strong>Study data</strong> — daily study logs, hours, topics covered, mock scores, streaks, plans, and notes you create in the app.</li>
             <li><strong>Mentorship data</strong> — messages and session details exchanged with your assigned buddy.</li>
             <li><strong>Payment data</strong> — when you buy a plan, payment is processed by Razorpay. We receive a transaction reference and status; we do <strong>not</strong> store your full card or bank details.</li>
-            <li><strong>Usage &amp; device data</strong> — app opens, screens viewed, feature interactions, device type, and whether you use the installed app or a browser, collected to improve the product and support you.</li>
+            <li><strong>Usage &amp; device data</strong> — app opens, screens viewed, feature interactions, device type, IP address, and whether you use the installed app or a browser, collected to improve the product and support you.</li>
+            <li><strong>Voice recordings</strong> — if you choose to send your mentor a voice note, we record it with your microphone and store the audio file. Recording only ever starts when you tap record; we never listen in the background.</li>
+            <li><strong>Photos you upload</strong> — if you upload a mock scorecard screenshot, we store that image and read the scores from it.</li>
           </ul>
         </section>
 
@@ -45,6 +47,7 @@ export default function PrivacyPolicyPage() {
             <li>To send you study reminders and notifications you have opted into.</li>
             <li>To process payments and manage your subscription.</li>
             <li>To understand engagement and fix problems so the app works better.</li>
+            <li>To read scores from mock scorecards you upload, and to help your mentor draft replies faster — both use Google Gemini.</li>
           </ul>
         </section>
 
@@ -54,8 +57,16 @@ export default function PrivacyPolicyPage() {
           <ul className="list-disc pl-5">
             <li><strong>Supabase</strong> — secure database and authentication hosting.</li>
             <li><strong>Razorpay</strong> — payment processing.</li>
-            <li><strong>Google</strong> — app distribution and, where you opt in, notification delivery and Meet-based sessions.</li>
-            <li><strong>Meta</strong> — aggregate advertising and analytics measurement.</li>
+            <li>
+              <strong>Google</strong> — app distribution, and where you opt in, notification delivery and Meet-based
+              sessions. We also use <strong>Google Gemini</strong> to read the scorecard images you upload and to help
+              draft mentor replies, which means those images and message contents are sent to Google for processing.
+            </li>
+            <li>
+              <strong>Meta</strong> — advertising and analytics measurement. When you buy a plan we send Meta a record of
+              that purchase, including your IP address and a scrambled (hashed) form of your phone and email so they can
+              match the sale to an ad. Meta cannot read the original phone or email from the scrambled version.
+            </li>
             <li>Your assigned <strong>mentor (buddy)</strong>, who sees the study data needed to guide you.</li>
           </ul>
         </section>
