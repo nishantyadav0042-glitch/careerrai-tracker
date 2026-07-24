@@ -6,11 +6,13 @@ import { authorizedCron } from '@/lib/cron-auth';
 // the student from 'active' to 'paused' (data fully preserved) so the membership
 // card re-shows the plan buttons and they can reactivate manually. Runs daily.
 //
-// Access is revoked WITH billing (is_premium -> false): every feature gate reads
-// is_premium, so leaving it true kept full paid access for free after a lapsed
-// term. Data (streak, mocks, debriefs, buddy history) is untouched — only the
-// paywall closes; reactivating re-grants premium through the normal payment path
-// (and re-queues the buddy, since grant only fires on a false->true flip).
+// Access is revoked WITH billing (is_premium -> false). What that actually
+// gates is the MENTOR — the buddy panel and mentor chat. The tracker, plan,
+// analysis, reports and exams stay free and fully usable; what students pay for
+// is time with a real person, not access to software. Data (streak, mocks,
+// debriefs, buddy history) is untouched; reactivating re-grants premium through
+// the normal payment path (and re-queues the buddy, since grant only fires on a
+// false->true flip).
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -55,8 +57,8 @@ export async function POST(request: NextRequest) {
     lapsed.map((p) => ({
       user_id: p.id,
       type: 'membership',
-      title: 'Your journey is paused — not gone',
-      body: 'Your streak, mocks, debriefs, and buddy are saved. Reactivate anytime to continue exactly where you left off.',
+      title: 'Your mentorship has ended',
+      body: 'Your streak, mocks and debriefs stay yours — keep using them free. Reactivate whenever you want your IIM mentor back.',
       data: {},
       read: false,
       channel: 'in_app',

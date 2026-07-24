@@ -86,8 +86,8 @@ export function RefundCard({ daysLogged, required, eligible, existingRequest }: 
         <span className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Refund guarantee</span>
       </div>
       <p className="text-sm text-stone-700 mb-3">
-        If CareerRai hasn&apos;t helped in your first month, you get a full refund — no questions asked.
-        You need to have logged at least {required} days.
+        If CareerRai hasn&apos;t helped in your first month, you can request a full refund —
+        you need at least {required} days logged. We review every request within 2–3 days.
       </p>
 
       {/* Progress bar */}

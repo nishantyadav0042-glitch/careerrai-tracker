@@ -8,6 +8,7 @@ import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
+import { catUrgencyLabel } from '@/lib/cat-countdown';
 
 // Buddy checkout. Two entry points share ONE payment path (useBuddyCheckout):
 //  • BuddyBuyButtons — the price choice rendered DIRECTLY on the sales page,
@@ -34,6 +35,10 @@ function useBuddyCheckout() {
   const [busy, setBusy] = useState<PlanId | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [callMe, setCallMe] = useState(false);
+  // Set when the store-build escape couldn't open a tab. Rendered as a real
+  // tappable link — a plain "go to careerrai.in yourself" sentence is a dead
+  // end, and reads as broken functionality to anyone reviewing the app.
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
 
   async function pay(planId: PlanId, fullName?: string) {
     // Intent captured first, in every path.
@@ -43,13 +48,22 @@ function useBuddyCheckout() {
     // and browser-installed PWA fall straight through to inline Razorpay below.
     logCtaClick();
     if (isStoreBuild()) {
-      const opened = await escapeToBrowserForPayment('/student/buddy');
-      track('pay_escape_browser', { plan: planId, opened });
-      if (!opened) setMessage('To finish, open careerrai.in in your browser and tap Get my buddy.');
+      setBusy(planId);
+      try {
+        const opened = await escapeToBrowserForPayment('/student/buddy');
+        track('pay_escape_browser', { plan: planId, opened });
+        if (!opened) {
+          setMessage('We couldn’t open your browser automatically. Tap below to finish there:');
+          setManualUrl('https://careerrai.in/student/buddy');
+        }
+      } finally {
+        setBusy(null);
+      }
       return;
     }
     setBusy(planId);
     setMessage(null);
+    setManualUrl(null);
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
@@ -120,7 +134,22 @@ function useBuddyCheckout() {
     }
   }
 
-  return { pay, busy, message, callMe, setCallMe };
+  return { pay, busy, message, callMe, setCallMe, manualUrl };
+}
+
+// Shown only when the browser hand-off failed: a real link they can tap, so
+// the flow always has a way forward.
+function ManualPayLink({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-900"
+    >
+      Open careerrai.in to pay →
+    </a>
+  );
 }
 
 function CallMeModal({ onClose }: { onClose: () => void }) {
@@ -142,7 +171,7 @@ function CallMeModal({ onClose }: { onClose: () => void }) {
 
 // The price choice, rendered inline on the sales page. One tap → Razorpay.
 export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: string; sticky?: boolean }) {
-  const { pay, busy, message, callMe, setCallMe } = useBuddyCheckout();
+  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
 
   if (sticky) {
     return (
@@ -160,6 +189,7 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
           </span>
         </button>
         {message && <p className="mt-2 text-center text-xs font-medium text-stone-700">{message}</p>}
+        {manualUrl && <ManualPayLink url={manualUrl} />}
         {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
       </>
     );
@@ -207,15 +237,19 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
         <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
       </button>
 
-      <p className="mt-2.5 text-center text-[11px] text-stone-400">Verified IIM alumni · no auto-debit, ever</p>
+      <p className="mt-2.5 text-center text-[11px] text-stone-400">
+        Verified IIM alumni · no auto-debit, ever · full refund in your first month if you&apos;ve logged 20+ study days
+      </p>
       {message && <p className="mt-2 text-center text-xs text-stone-600">{message}</p>}
+      {manualUrl && <ManualPayLink url={manualUrl} />}
       {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
     </div>
   );
 }
 
-// Legacy button → sheet flow (still used by buddy-pitch). Opens the loud
-// two-option sheet; taps pay through the same shared checkout path.
+// Legacy button → sheet flow, still used by the recommended-buddies and daily
+// nudge surfaces. Opens the loud two-option sheet; taps pay through the same
+// shared checkout path.
 export function UnlockBuddyButton({
   children = 'Get my 1:1 mentor',
   variant = 'primary',
@@ -230,7 +264,7 @@ export function UnlockBuddyButton({
   fullName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { pay, busy, message, callMe, setCallMe } = useBuddyCheckout();
+  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
 
   function openSheet() {
     logCtaClick();
@@ -254,7 +288,7 @@ export function UnlockBuddyButton({
           onClick={() => setOpen(false)}
         >
           <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-center text-[11px] font-bold uppercase tracking-widest text-orange-600">Only 4 months to CAT</p>
+            <p className="text-center text-[11px] font-bold uppercase tracking-widest text-orange-600">{catUrgencyLabel()}</p>
             <h2 className="mt-1.5 text-center text-xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
               The hard part now isn&apos;t studying.<br />It&apos;s not knowing if you&apos;re wasting these months.
             </h2>
@@ -298,9 +332,11 @@ export function UnlockBuddyButton({
 
             <p className="mt-3 text-center text-[11px] text-stone-400">
               1:1 mentor, real IIM · live weekly sessions &amp; daily guidance · no auto-debit, ever.
+              Full refund in your first month if you&apos;ve logged 20+ study days.
             </p>
 
             {message && <p className="mt-3 text-center text-xs text-stone-600">{message}</p>}
+            {manualUrl && <ManualPayLink url={manualUrl} />}
 
             <button type="button" onClick={() => setOpen(false)} className="mt-2 w-full text-center text-xs text-stone-400 hover:text-stone-600">
               Not now

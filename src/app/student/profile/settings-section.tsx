@@ -28,6 +28,16 @@ export function SettingsSection() {
         <LogoutButton />
       </div>
 
+      {/* Play's User Data policy requires the privacy policy to be reachable
+          from INSIDE the app, not only from the store listing. */}
+      <div className="border-t border-stone-200 pt-5">
+        <h2 className="text-lg font-semibold text-stone-900 mb-3">Legal</h2>
+        <div className="flex flex-col gap-2">
+          <a href="/privacy" className="text-sm text-stone-600 underline underline-offset-2 hover:text-stone-900">Privacy Policy</a>
+          <a href="/terms" className="text-sm text-stone-600 underline underline-offset-2 hover:text-stone-900">Terms of Service</a>
+        </div>
+      </div>
+
       {/* Store-required account deletion (Google Play + Apple 5.1.1(v)). */}
       <div className="border-t border-stone-200 pt-5">
         <h2 className="text-lg font-semibold text-stone-900 mb-2">Danger zone</h2>

@@ -74,6 +74,26 @@ export async function proxy(request: NextRequest) {
     user = null;
   }
 
+  // Store-wrapper marker, set server-side so it CANNOT be lost.
+  //
+  // The Play/iOS wrappers launch on `?source=twa|ios`, but a fresh install is
+  // logged out, so that first request 302s to /login and the param dies with
+  // it — the client-side detector never even mounts. That left the very first
+  // session (exactly the one a store reviewer runs) falling through to an
+  // in-app card sheet. A cookie set here survives the redirect.
+  //
+  // Deliberately NOT httpOnly: the checkout components read it in the browser.
+  // It marks which build you launched, not who you are — nothing to protect.
+  const source = searchParams.get('source');
+  if (source === 'twa' || source === 'ios') {
+    response.cookies.set('cr_store', source, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 3650,
+      sameSite: 'lax',
+      secure: true,
+    });
+  }
+
   // Any redirect issued AFTER getUser() must carry the cookies Supabase may
   // have refreshed onto `response` during the call — a bare NextResponse.
   // redirect() drops them, so the browser keeps a stale (soon-invalid) token

@@ -5,6 +5,7 @@ import { Testimonials } from '@/components/testimonials';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import type { SocialProof } from '@/lib/social-proof';
 import { Check } from 'lucide-react';
+import { catUrgencyLabel } from '@/lib/cat-countdown';
 
 // The buddy paywall — a full-page SALES ASSET on /student/buddy and /student/chat
 // for free users, rebuilt as a DIRECT conversion screen (founder, 24 Jul: the
@@ -48,7 +49,7 @@ export function LockedBuddyHub({
     <div className="mx-auto max-w-md space-y-6 px-1 pt-5 pb-28">
       {/* 1 — the hook: urgency → fear → cost → credible promise */}
       <div className="text-center">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">Only 4 months to CAT</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">{catUrgencyLabel()}</p>
         <h1 className="mt-2.5 text-[26px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           {fear}
         </h1>
@@ -106,9 +107,9 @@ export function LockedBuddyHub({
         <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
       )}
 
-      {/* Product proof — a real mock review */}
+      {/* Product proof — an example mock review, clearly labelled as one */}
       <div>
-        <p className="mb-2 text-center text-xs font-medium text-stone-400">See a real mock review 👇</p>
+        <p className="mb-2 text-center text-xs font-medium text-stone-400">See how a buddy decodes a mock (example) 👇</p>
         <SampleDebrief />
       </div>
 

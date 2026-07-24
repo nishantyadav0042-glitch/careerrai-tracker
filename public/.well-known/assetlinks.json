@@ -5,7 +5,7 @@
       "namespace": "android_app",
       "package_name": "com.careerrai.app",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_APP_SIGNING_SHA256_FINGERPRINT_FROM_PLAY_CONSOLE"
+        "30:7D:08:E8:F0:F8:CE:C3:C9:22:7D:B6:F4:E7:A9:3F:5C:90:43:AD:BD:33:53:98:22:9E:26:98:28:00:49:2B"
       ]
     }
   }
