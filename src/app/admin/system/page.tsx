@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminBroadcast } from '../admin-broadcast';
 import { AdminDataImport } from '../admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from '../admin-allowlist';
-import { BellRing, BarChart2, PhoneCall, ArrowRight } from 'lucide-react';
+import { BellRing, BarChart2, PhoneCall, ArrowRight, Brain } from 'lucide-react';
 
 // SYSTEM — the toolbox (reorg, 14 July): everything operational that isn't
 // day-to-day lead work. Health dashboards link out; broadcast, allowlist,
@@ -26,6 +26,7 @@ export default async function AdminSystemPage() {
   const buddies = (people ?? []).filter((p) => p.role === 'buddy');
 
   const tools = [
+    { href: '/admin/brain', icon: Brain, label: 'Brain approvals', sub: 'Recommended messages waiting for your go-ahead' },
     { href: '/admin/notification-health', icon: BellRing, label: 'Notification health', sub: 'Delivery rates, per-device status' },
     { href: '/admin/perf', icon: BarChart2, label: 'Speed', sub: 'Page load + API timings' },
     { href: '/admin/sales-queue', icon: PhoneCall, label: 'Sales queue', sub: 'Call follow-up worklist' },

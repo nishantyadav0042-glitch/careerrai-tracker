@@ -3,15 +3,17 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { computeStudentDna, type DnaProfileInput, type StudentDna } from '@/lib/student-dna';
 import { computeNextBestAction, detectMilestones, type PrevDna, type ActionPerformance, type Action } from '@/lib/product-brain';
-import { sendPushToUser } from '@/lib/push';
 
 export const maxDuration = 300;
 
 const METRICS = ['activation', 'consistency', 'momentum', 'purchase_intent', 'churn_risk'] as const;
 
-// Only these two channels are ever auto-sent. 'human' (winback/reactivation)
-// stays a human touch — surfaced to the founder/buddy via the action queue,
-// never auto-messaged. 'suppress' (hold) sends nothing by definition.
+// Manual-approval gate (founder, 24 Jul): "recommend first, build a track
+// record, automate later." Push/in_app candidates are NEVER auto-sent — they
+// queue as pending_approval with the exact copy that WOULD go out, and only
+// actually send once a human taps Approve in /admin/brain (see
+// /api/admin/dna/pending). 'human' actions (winback/reactivation) were always
+// founder/buddy-only. 'suppress' (hold) sends nothing by definition.
 function copyForAction(action: Action, firstName: string, dna: StudentDna): { title: string; body: string; url: string } | null {
   const s = (dna.signals ?? {}) as Record<string, number>;
   switch (action.id) {
@@ -31,8 +33,8 @@ function copyForAction(action: Action, firstName: string, dna: StudentDna): { ti
 //    "what brought them back" attribution on recovery)
 //  • record a change-history row (with drivers) for every metric that moved
 //  • when the Brain's recommendation CHANGES and its channel is push/in_app,
-//    actually SEND it (a real notification, not just an admin insight) and
-//    link it to the decision so its real delivery/click lifecycle can be read
+//    QUEUE it for manual approval (never auto-send) — the exact copy is
+//    computed and stored now so approval later doesn't need stale DNA
 //  • blend in the EMPIRICAL track record (reconcile-decisions cron) so a
 //    rule's confidence can be pulled down by real outcomes, never invented up
 // Deterministic loop is fine at this scale (a few hundred students); at 100k+
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
   let milestonesEmitted = 0;
   let decisionsLogged = 0;
   let historyRows = 0;
-  let notificationsSent = 0;
+  let queuedForApproval = 0;
 
   for (const s of students) {
     try {
@@ -141,31 +143,22 @@ export async function POST(request: NextRequest) {
         milestonesEmitted += milestones.length;
       }
 
-      // Decision audit — log only when the Brain's recommendation CHANGES, and
-      // for the two auto-messageable channels, actually SEND it for real.
+      // Decision audit — log only when the Brain's recommendation CHANGES. For
+      // the two auto-messageable channels, QUEUE the exact copy rather than
+      // sending it — a human approves in /admin/brain before it ever reaches
+      // a student (see /api/admin/dna/pending/[id]).
       if (nba.top && lastActionMap.get(s.id) !== nba.top.id) {
-        let notificationId: string | null = null;
         const copy = (nba.top.channel === 'push' || nba.top.channel === 'in_app')
           ? copyForAction(nba.top, ((s.full_name as string) ?? 'there').split(' ')[0], dna)
           : null;
-        if (copy) {
-          const { data: row } = await admin.from('notifications').insert({
-            user_id: s.id, type: `brain_${nba.top.id}`, title: copy.title, body: copy.body,
-            data: { url: copy.url }, read: false, channel: 'in_app',
-            reason: nba.top.why, expected_action: nba.top.id,
-          }).select('id').single();
-          notificationId = (row?.id as string) ?? null;
-          if (notificationId) {
-            const res = await sendPushToUser(s.id, { title: copy.title, body: copy.body, url: copy.url, notifId: notificationId });
-            if (res.ok) await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', notificationId);
-            notificationsSent++;
-          }
-        }
 
         await admin.from('decision_log').insert({
           student_id: s.id, action_id: nba.top.id, label: nba.top.label, channel: nba.top.channel,
-          impact: nba.top.impact, why: nba.top.why, ranked: nba.ranked, notification_id: notificationId,
+          impact: nba.top.impact, why: nba.top.why, ranked: nba.ranked,
+          send_status: copy ? 'pending_approval' : 'n_a',
+          pending_notification: copy,
         });
+        if (copy) queuedForApproval++;
         lastActionMap.set(s.id, nba.top.id);
         decisionsLogged++;
       }
@@ -176,7 +169,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ computed, milestonesEmitted, decisionsLogged, historyRows, notificationsSent });
+  return NextResponse.json({ computed, milestonesEmitted, decisionsLogged, historyRows, queuedForApproval });
 }
 
 export { POST as GET };

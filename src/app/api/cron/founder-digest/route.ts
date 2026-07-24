@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { sendAdminAlert } from '@/lib/email';
+import { SITE_URL } from '@/lib/site';
 
 export const maxDuration = 60;
 
@@ -17,15 +18,23 @@ export async function GET(request: NextRequest) {
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
   const prevSince = new Date(Date.now() - 48 * 3_600_000).toISOString();
 
-  const [{ data: milestones }, { data: resolvedToday }, { data: pushToday }, { data: pushPrev }, { data: exits }] = await Promise.all([
+  const [{ data: milestones }, { data: resolvedToday }, { data: pushToday }, { data: pushPrev }, { data: exits }, { count: pendingApprovals }] = await Promise.all([
     admin.from('student_milestones').select('milestone, meta').gte('created_at', since),
     admin.from('decision_log').select('action_id, business_impact').gte('outcome_at', since).not('outcome', 'is', null),
     admin.from('notifications').select('pushed_at, clicked_at').gte('pushed_at', since),
     admin.from('notifications').select('pushed_at, clicked_at').gte('pushed_at', prevSince).lt('pushed_at', since),
     admin.from('student_events').select('props').eq('event', 'screen_exit').gte('created_at', since).limit(2000),
+    // Manual-approval queue — the Brain never sends on its own; this is the
+    // count waiting on a human tap right now.
+    admin.from('decision_log').select('id', { count: 'exact', head: true }).eq('send_status', 'pending_approval'),
   ]);
 
   const lines: string[] = [];
+
+  // ── Approval queue (the Brain never sends on its own) ──
+  if ((pendingApprovals ?? 0) > 0) {
+    lines.push(`${pendingApprovals} Brain-recommended message${pendingApprovals === 1 ? ' is' : 's are'} waiting for your approval — nothing sends until you tap yes.`);
+  }
 
   // ── Milestones ──
   const mCount = (name: string) => (milestones ?? []).filter((m) => m.milestone === name).length;
@@ -117,6 +126,7 @@ export async function GET(request: NextRequest) {
       <ul style="color:#292524;line-height:1.8;padding-left:20px">
         ${lines.map((l) => `<li>${l}</li>`).join('')}
       </ul>
+      ${(pendingApprovals ?? 0) > 0 ? `<a href="${SITE_URL}/admin/brain" style="display:inline-block;margin-top:8px;padding:10px 20px;background:#1c1917;color:white;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Review approvals →</a>` : ''}
     </div>
   `;
   await sendAdminAlert('CareerRai Daily Intelligence', html);
