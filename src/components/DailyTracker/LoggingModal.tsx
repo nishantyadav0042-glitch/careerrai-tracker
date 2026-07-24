@@ -5,9 +5,9 @@ import { X, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 import { setLogModalOpen } from '@/lib/first-run-events';
+import type { MockDebriefData } from './MockDebriefModal';
 
-// Today's plan tasks, pulled into the log so "what did you cover" IS the plan —
-// one place to fill, and ticking a topic here completes it in the plan too.
+// Today's plan tasks, pulled into the log so "what did you cover" IS the plan.
 interface PlanTask { id: string; section: string; topic: string | null; label: string; target: string | null; }
 
 interface LoggingModalProps {
@@ -20,62 +20,70 @@ interface LoggingModalProps {
 export interface LoggingData {
   hours: number;
   sections: string[];
-  energy: string;
-  notes?: string;
-  emotional_chips?: string[];
-  plan_fit?: string; // Review Engine: 'too_much' | 'right' | 'too_little'
+  energy: string; // kept for the log RPC contract; defaulted, not asked
+  plan_fit?: string;        // 'easy' | 'right' | 'too_much' | 'couldnt_finish'
+  blocker_reason?: string;  // only when plan_fit = 'couldnt_finish'
+  confidence?: number;      // 1-5, one tap
   // Plan tasks to complete, with how far they got: 'green' = fully done,
-  // 'blue' = half done (advances coverage less). Absent confidence = uncover
-  // a previously-done task.
+  // 'blue' = half done. Absent = uncover a previously-done task.
   completedTasks?: { id: string; confidence?: 'green' | 'blue' }[];
+  // Mock debrief captured INLINE on this same sheet (null when no mock today).
+  mock?: MockDebriefData | null;
 }
 
+// Founder redesign (24 Jul): one sheet, all taps, completion-first. A student
+// should never enter data unless it changes tomorrow's plan — so no energy, no
+// mood, no notes. Order: what got done → what happened off-plan → how the plan
+// felt (+ why, if unfinished) → hours (optional) → mock (folded in, no second
+// screen) → one confidence tap.
 const HOURS_OPTIONS = [0, 2, 4, 6, 8, 10];
-// 'Mock' is an explicit Yes/No question; we still fold 'Mock' into `sections`
-// on submit so the server (mock_taken = sections.includes('Mock')) and the
-// debrief flow are unchanged. The study sections themselves are derived from
-// the plan topics the student ticks — PLUS the off-plan chips below.
-//
-// Off-plan escape hatch (20 July zero-log fix): a day-1 student — or anyone
-// who studied their coaching's material instead of today's app plan — had NO
-// honest way to submit: the button silently stayed grey unless they ticked a
-// plan topic or claimed a mock. These chips restore the pre-15-July free
-// selection as a fallback path, without weakening the plan integration for
-// students who did follow the plan.
-const OFF_PLAN_SECTIONS = ['VARC', 'DILR', 'QA', 'Revision'];
-const ENERGY_OPTIONS = [
-  { emoji: '🙏', label: 'Drained', value: '🙏' },
-  { emoji: '💪', label: 'Solid', value: '💪' },
-  { emoji: '🔥', label: 'Sharp', value: '🔥' },
+const OFF_PLAN_SECTIONS = ['QA', 'VARC', 'DILR', 'Revision', 'Other'];
+
+const PLAN_FIT = [
+  { value: 'easy', label: 'Easy', hint: '😌' },
+  { value: 'right', label: 'Right', hint: '👍' },
+  { value: 'too_much', label: 'Too much', hint: '😮‍💨' },
+  { value: 'couldnt_finish', label: "Couldn't finish", hint: '🚧' },
+];
+const BLOCKER_REASONS = [
+  { value: 'college', label: 'College' },
+  { value: 'office', label: 'Office' },
+  { value: 'travel', label: 'Travel' },
+  { value: 'health', label: 'Health' },
+  { value: 'family', label: 'Family' },
+  { value: 'procrastination', label: 'Procrastination' },
+  { value: 'mock_ran_long', label: 'Mock ran long' },
+  { value: 'plan_too_heavy', label: 'Plan too heavy' },
+  { value: 'other', label: 'Other' },
 ];
 
-export function LoggingModal({
-  isOpen,
-  onClose,
-  onSubmit,
-  isSubmitting = false,
-}: LoggingModalProps) {
-  const [hours, setHours] = useState<number | null>(null);
-  const [mockTaken, setMockTaken] = useState<boolean | null>(null);
-  const [energy, setEnergy] = useState<string | null>(null);
-  const [planFit, setPlanFit] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [blockedHint, setBlockedHint] = useState<string | null>(null);
+type TaskState = 'half' | 'full';
+
+export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }: LoggingModalProps) {
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
-  const [taskChoice, setTaskChoice] = useState<Map<string, 'half' | 'full'>>(new Map());
+  const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
   const [offSections, setOffSections] = useState<string[]>([]);
+  const [planFit, setPlanFit] = useState<string | null>(null);
+  const [blockerReason, setBlockerReason] = useState<string | null>(null);
+  const [hours, setHours] = useState<number | null>(null);
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [mockTaken, setMockTaken] = useState<boolean | null>(null);
+  // Inline mock percentiles (only when mockTaken === true)
+  const [mockOverall, setMockOverall] = useState<string>('');
+  const [mockVarc, setMockVarc] = useState<string>('');
+  const [mockDilr, setMockDilr] = useState<string>('');
+  const [mockQa, setMockQa] = useState<string>('');
+  const [mockNote, setMockNote] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [blockedHint, setBlockedHint] = useState<string | null>(null);
 
-  // Telemetry (20 July): the zero-log incident was invisible because the modal
-  // emitted nothing — we couldn't tell "never opened" from "opened and gave up".
   useEffect(() => {
     setLogModalOpen(isOpen);
     if (isOpen) track('log_open');
     return () => setLogModalOpen(false);
   }, [isOpen]);
 
-  // Pull today's plan when the log opens — its topics become the "what did you
-  // cover" list, pre-ticked with anything already marked done.
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
@@ -92,41 +100,26 @@ export function LoggingModal({
         setPlanTasks(rawTasks.map((t) => ({ id: String(t.id), section: t.section, topic: t.topic ?? null, label: String(t.label ?? ''), target: t.target ?? null })));
         const done = new Set<string>(rawTasks.filter((t) => doneIds.has(String(t.id))).map((t) => String(t.id)));
         setInitialDoneIds(done);
-        // Already-done topics default to "fully done".
         setTaskChoice(new Map([...done].map((id) => [id, 'full' as const])));
-      } catch { /* best effort — plan just won't prefill */ }
+      } catch { /* best effort */ }
     })();
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  // Tap Half/Full to set how far you got; tap the same one again to clear it.
-  const setChoice = (id: string, choice: 'half' | 'full') => setTaskChoice((prev) => {
+  // Three-state tap: Not done (clear) / Half / Done.
+  const setChoice = (id: string, choice: TaskState | null) => setTaskChoice((prev) => {
     const n = new Map(prev);
-    if (n.get(id) === choice) n.delete(id); else n.set(id, choice);
+    if (choice === null) n.delete(id); else n.set(id, choice);
     return n;
   });
 
-  // Must answer the three core questions; the "what did you study" evidence can
-  // come from a mock, a ticked plan topic, an off-plan section chip — or none
-  // at all when hours is 0 (an honest "didn't study today" log).
-  // ONLY hours + "what did you do" gate the log. energy and the mock question
-  // are OPTIONAL (defaulted on submit) — they were hard-blocking students at
-  // "Still needed: energy level" and killing the core daily-log habit
-  // (23 Jul: 11 opened the log, only 3 got through). Logging must be near-
-  // frictionless; the nice-to-haves never stop a student recording their day.
-  const isValid =
-    hours !== null &&
-    (mockTaken === true || taskChoice.size > 0 || offSections.length > 0 || hours === 0);
+  // Completion-first: the log is valid the moment there's a real signal of the
+  // day — a plan topic marked, something studied off-plan, a mock, or an honest
+  // rest day (0 hours). Hours are optional; completion is the source of truth.
+  const isValid = taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0;
 
-  // Says exactly what's missing — replaces the silently-grey button that made
-  // students give up without knowing why (the 19-20 July zero-log incident).
-  const missingHint = (): string | null => {
-    if (hours === null) return 'Still needed: hours studied.';
-    if (!(mockTaken === true || taskChoice.size > 0 || offSections.length > 0 || hours === 0)) {
-      return 'Mark how far you got on a plan topic — or tap a section under "Studied something else?"';
-    }
-    return null;
-  };
+  const missingHint = (): string =>
+    'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
 
   const handleSubmit = async () => {
     if (!isValid) {
@@ -136,21 +129,16 @@ export function LoggingModal({
       return;
     }
     setBlockedHint(null);
-    // Haptic confirmation on submit — feels native on mobile
     navigator.vibrate?.(50);
     try {
       setError(null);
-      // Sections are DERIVED from the plan topics the student ticked, merged
-      // with any off-plan chips (plus the mock answer folded in).
       const coveredTasks = planTasks.filter((t) => taskChoice.has(t.id));
       const derived = [...new Set([
         ...coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)),
-        ...offSections,
+        ...offSections.filter((s) => s !== 'Other'), // 'Other' isn't a plan section — kept only as a signal
       ])];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
-      // Send only tasks whose state CHANGED (complete-task toggles): newly
-      // covered → complete with confidence (full=green, half=blue); a
-      // previously-done task now cleared → uncover (no confidence).
+
       const completedTasks: { id: string; confidence?: 'green' | 'blue' }[] = [];
       for (const t of planTasks) {
         const choice = taskChoice.get(t.id);
@@ -158,22 +146,43 @@ export function LoggingModal({
         if (choice && !wasDone) completedTasks.push({ id: t.id, confidence: choice === 'full' ? 'green' : 'blue' });
         else if (!choice && wasDone) completedTasks.push({ id: t.id });
       }
-      const result = await onSubmit({
-        hours,
+
+      const num = (s: string): number | null => {
+        const n = parseFloat(s);
+        return s.trim() !== '' && !isNaN(n) ? n : null;
+      };
+      const mock: MockDebriefData | null = mockTaken
+        ? {
+            overall_percentile: num(mockOverall),
+            varc: { percentile: num(mockVarc) },
+            dilr: { percentile: num(mockDilr) },
+            qa: { percentile: num(mockQa) },
+            strategy_note: mockNote.trim(),
+          }
+        : null;
+
+      await onSubmit({
+        hours: hours ?? 0,
         sections: finalSections,
-        energy: energy ?? '💪', // optional now — default to the neutral middle so a null never blocks the log
+        energy: '💪', // defaulted — no longer asked
         plan_fit: planFit ?? undefined,
+        blocker_reason: planFit === 'couldnt_finish' && blockerReason ? blockerReason : undefined,
+        confidence: confidence ?? undefined,
         completedTasks,
+        mock,
       });
-      // Reset form
-      setHours(null);
+
+      // Reset
       setTaskChoice(new Map());
       setInitialDoneIds(new Set());
       setOffSections([]);
-      setMockTaken(null);
-      setEnergy(null);
       setPlanFit(null);
-      if (!result.mockSelected) onClose();
+      setBlockerReason(null);
+      setHours(null);
+      setConfidence(null);
+      setMockTaken(null);
+      setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
+      onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to log. Try again.';
       track('log_error', { message: msg });
@@ -183,118 +192,47 @@ export function LoggingModal({
 
   if (!isOpen) return null;
 
+  const label = (s: string) => <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">{s}</label>;
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-end sm:items-center sm:justify-center">
-      <div
-        className={cn(
-          'w-full max-w-md bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-800',
-          'max-h-[92vh] overflow-y-auto flex flex-col'
-        )}
-      >
-        {/* Header */}
+      <div className={cn('w-full max-w-md bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-800', 'max-h-[92vh] overflow-y-auto flex flex-col')}>
         <div className="sticky top-0 bg-zinc-950 border-b border-zinc-800 px-6 py-5 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">Log Today</h2>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="text-zinc-500 hover:text-zinc-300 transition disabled:opacity-50"
-          >
+          <h2 className="text-xl font-bold text-white">Log Today</h2>
+          <button onClick={onClose} disabled={isSubmitting} className="text-zinc-500 hover:text-zinc-300 transition disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 px-6 py-5 space-y-7">
 
-          {/* Hours */}
+          {/* 1 — Today's plan (the source of truth) */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Hours studied
-            </label>
-            <div className="grid grid-cols-6 gap-1.5">
-              {HOURS_OPTIONS.map((h) => (
-                <button
-                  key={h}
-                  onClick={() => setHours(h)}
-                  className={cn(
-                    'py-3 rounded-xl font-bold text-sm transition-all active:scale-95',
-                    hours === h
-                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
-                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                  )}
-                >
-                  {h === 10 ? '10+' : `${h}`}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Mock test — explicit, unmissable Yes/No (drives the debrief redirect) */}
-          <div className="rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
-            <label className="block text-sm font-bold text-white mb-3">
-              Did you take a mock test today?
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMockTaken(false)}
-                className={cn(
-                  'py-3 rounded-xl font-semibold text-sm transition-all active:scale-95',
-                  mockTaken === false
-                    ? 'bg-zinc-700 text-white ring-2 ring-zinc-500'
-                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                )}
-              >
-                No, not today
-              </button>
-              <button
-                type="button"
-                onClick={() => setMockTaken(true)}
-                className={cn(
-                  'py-3 rounded-xl font-semibold text-sm transition-all active:scale-95',
-                  mockTaken === true
-                    ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
-                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                )}
-              >
-                Yes, I gave a mock
-              </button>
-            </div>
-          </div>
-
-          {/* Today's plan — mark how far you got on each topic. This IS the
-              study plan; your choice marks the task done + advances coverage
-              everywhere. */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Today&apos;s plan — how far did you get?
-            </label>
+            {label("Today's plan")}
             {planTasks.length === 0 ? (
-              <p className="text-xs text-zinc-500">No plan topics for today — just pick what you studied below{mockTaken ? ', or a mock alone is enough' : ''}.</p>
+              <p className="text-xs text-zinc-500">No plan topics today — pick what you studied below.</p>
             ) : (
               <div className="space-y-2">
                 {planTasks.map((t) => {
-                  const choice = taskChoice.get(t.id);
+                  const choice = taskChoice.get(t.id) ?? null;
                   return (
                     <div key={t.id} className="rounded-xl bg-zinc-800 px-3 py-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{t.target || t.label}</span>
                         <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-zinc-400">{t.section}</span>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setChoice(t.id, 'half')}
-                          className={cn('rounded-lg py-1.5 text-xs font-bold transition-colors', choice === 'half' ? 'bg-amber-500 text-white' : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600')}
-                        >
-                          Half done
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <button onClick={() => setChoice(t.id, null)}
+                          className={cn('rounded-lg py-1.5 text-xs font-bold transition-colors', choice === null ? 'bg-zinc-600 text-white' : 'bg-zinc-700/50 text-zinc-400 hover:bg-zinc-700')}>
+                          Not done
                         </button>
-                        <button
-                          onClick={() => setChoice(t.id, 'full')}
-                          className={cn('flex items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-bold transition-colors', choice === 'full' ? 'bg-emerald-500 text-white' : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600')}
-                        >
-                          {choice === 'full' && <Check className="h-3 w-3" strokeWidth={3} />} Fully done
+                        <button onClick={() => setChoice(t.id, 'half')}
+                          className={cn('rounded-lg py-1.5 text-xs font-bold transition-colors', choice === 'half' ? 'bg-amber-500 text-white' : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600')}>
+                          Half
+                        </button>
+                        <button onClick={() => setChoice(t.id, 'full')}
+                          className={cn('flex items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-bold transition-colors', choice === 'full' ? 'bg-emerald-500 text-white' : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600')}>
+                          {choice === 'full' && <Check className="h-3 w-3" strokeWidth={3} />} Done
                         </button>
                       </div>
                     </div>
@@ -304,61 +242,16 @@ export function LoggingModal({
             )}
           </div>
 
-          {/* Plan-fit — the Review Engine signal the Adaptation Engine learns
-              from: was today's volume right for this student? One tap, optional,
-              only when there was a plan and they actually studied. This is how
-              we catch "too many questions" (the Pranav calibration) from
-              behaviour instead of waiting for a WhatsApp complaint. */}
-          {planTasks.length > 0 && hours !== null && hours > 0 && (
-            <div>
-              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-                How did today&apos;s plan feel? <span className="normal-case font-normal text-zinc-600">(optional)</span>
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: 'too_much', label: 'Too much', hint: '😮‍💨' },
-                  { value: 'right', label: 'Just right', hint: '👍' },
-                  { value: 'too_little', label: 'Too little', hint: '💪' },
-                ].map((o) => (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => setPlanFit((prev) => (prev === o.value ? null : o.value))}
-                    className={cn(
-                      'flex flex-col items-center gap-1 py-3 rounded-2xl transition-all active:scale-95',
-                      planFit === o.value
-                        ? 'bg-zinc-700 ring-2 ring-orange-500 ring-offset-2 ring-offset-zinc-950'
-                        : 'bg-zinc-800 hover:bg-zinc-700'
-                    )}
-                  >
-                    <span className="text-xl">{o.hint}</span>
-                    <span className="text-xs font-semibold text-zinc-300">{o.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Off-plan sections — the honest path for study that wasn't on
-              today's app plan (coaching class, own material, day-1 students).
-              Without this the submit button was unreachable for them. */}
+          {/* 2 — Anything off today's plan? (prevents coverage drift) */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Studied something else?
-            </label>
-            <div className="grid grid-cols-4 gap-2">
+            {label("Anything off today’s plan?")}
+            <div className="grid grid-cols-5 gap-2">
               {OFF_PLAN_SECTIONS.map((s) => {
                 const on = offSections.includes(s);
                 return (
-                  <button
-                    key={s}
-                    type="button"
+                  <button key={s} type="button"
                     onClick={() => setOffSections((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))}
-                    className={cn(
-                      'py-2.5 rounded-xl font-semibold text-xs transition-all active:scale-95',
-                      on ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                    )}
-                  >
+                    className={cn('py-2.5 rounded-xl font-semibold text-xs transition-all active:scale-95', on ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
                     {s}
                   </button>
                 );
@@ -366,57 +259,114 @@ export function LoggingModal({
             </div>
           </div>
 
-          {/* Energy */}
+          {/* 3 — How did today's plan feel? (+ why, if unfinished) */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">
-              Energy level
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {ENERGY_OPTIONS.map((e) => (
-                <button
-                  key={e.value}
-                  onClick={() => setEnergy(e.value)}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 py-4 rounded-2xl transition-all active:scale-95',
-                    energy === e.value
-                      ? 'bg-zinc-700 ring-2 ring-orange-500 ring-offset-2 ring-offset-zinc-950'
-                      : 'bg-zinc-800 hover:bg-zinc-700'
-                  )}
-                >
-                  <span className="text-3xl">{e.emoji}</span>
-                  <span className="text-xs font-semibold text-zinc-300">{e.label}</span>
+            {label("Today’s plan felt")}
+            <div className="grid grid-cols-4 gap-2">
+              {PLAN_FIT.map((o) => (
+                <button key={o.value} type="button"
+                  onClick={() => { setPlanFit((prev) => (prev === o.value ? null : o.value)); if (o.value !== 'couldnt_finish') setBlockerReason(null); }}
+                  className={cn('flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all active:scale-95', planFit === o.value ? 'bg-zinc-700 ring-2 ring-orange-500' : 'bg-zinc-800 hover:bg-zinc-700')}>
+                  <span className="text-lg">{o.hint}</span>
+                  <span className="text-[10px] font-semibold text-zinc-300 text-center leading-tight">{o.label}</span>
+                </button>
+              ))}
+            </div>
+            {planFit === 'couldnt_finish' && (
+              <div className="mt-3">
+                <p className="mb-2 text-[11px] font-medium text-zinc-500">What got in the way?</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {BLOCKER_REASONS.map((r) => (
+                    <button key={r.value} type="button"
+                      onClick={() => setBlockerReason((prev) => (prev === r.value ? null : r.value))}
+                      className={cn('rounded-full px-3 py-1.5 text-xs font-semibold transition-all active:scale-95', blockerReason === r.value ? 'bg-orange-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 4 — Hours (optional) */}
+          <div>
+            {label('Hours studied · optional')}
+            <div className="grid grid-cols-6 gap-1.5">
+              {HOURS_OPTIONS.map((h) => (
+                <button key={h} onClick={() => setHours((prev) => (prev === h ? null : h))}
+                  className={cn('py-3 rounded-xl font-bold text-sm transition-all active:scale-95', hours === h ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                  {h === 10 ? '10+' : `${h}`}
                 </button>
               ))}
             </div>
           </div>
 
+          {/* 5 — Mock (folded in, no second screen) */}
+          <div className="rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
+            <label className="block text-sm font-bold text-white mb-3">Did you take a mock today?</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setMockTaken(false)}
+                className={cn('py-3 rounded-xl font-semibold text-sm transition-all active:scale-95', mockTaken === false ? 'bg-zinc-700 text-white ring-2 ring-zinc-500' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                No
+              </button>
+              <button type="button" onClick={() => setMockTaken(true)}
+                className={cn('py-3 rounded-xl font-semibold text-sm transition-all active:scale-95', mockTaken === true ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                Yes, I gave a mock
+              </button>
+            </div>
+            {mockTaken === true && (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Overall percentile</p>
+                  <input type="number" inputMode="numeric" min={0} max={100} value={mockOverall}
+                    onChange={(e) => setMockOverall(e.target.value)} placeholder="e.g. 87"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-lg font-bold text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {([['VARC', mockVarc, setMockVarc], ['DILR', mockDilr, setMockDilr], ['QA', mockQa, setMockQa]] as const).map(([lab, val, set]) => (
+                    <div key={lab}>
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lab}</p>
+                      <input type="number" inputMode="numeric" min={0} max={100} value={val}
+                        onChange={(e) => set(e.target.value)} placeholder="—"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
+                    </div>
+                  ))}
+                </div>
+                <input type="text" value={mockNote} onChange={(e) => setMockNote(e.target.value)} maxLength={200}
+                  placeholder="One thing you noticed (optional)"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
+              </div>
+            )}
+          </div>
+
+          {/* 6 — Confidence (the one longitudinal signal) */}
+          <div>
+            {label('How confident about CAT right now?')}
+            <div className="grid grid-cols-5 gap-2">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} type="button" onClick={() => setConfidence((prev) => (prev === n ? null : n))}
+                  className={cn('py-3 rounded-xl font-bold text-sm transition-all active:scale-95', confidence === n ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div className="mt-1 flex justify-between px-1 text-[10px] text-zinc-600"><span>Not at all</span><span>Very</span></div>
+          </div>
 
           {error && (
-            <div className="p-3 bg-rose-950 border border-rose-700 rounded-xl text-sm text-rose-300">
-              {error}
-            </div>
+            <div className="p-3 bg-rose-950 border border-rose-700 rounded-xl text-sm text-rose-300">{error}</div>
           )}
         </div>
 
-        {/* Footer — the button stays TAPPABLE even when the form is incomplete:
-            tapping it explains what's missing instead of sitting silently grey
-            (the silent grey button is how the 19-20 July cohort got stuck). */}
         <div className="sticky bottom-0 bg-zinc-950 border-t border-zinc-800 px-6 py-4">
           {blockedHint && !isValid && (
             <p className="mb-2 rounded-xl border border-amber-700/40 bg-amber-950/40 px-3 py-2 text-xs text-amber-300">{blockedHint}</p>
           )}
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className={cn(
-              'w-full py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2',
-              isValid && !isSubmitting
-                ? 'bg-orange-500 text-white hover:bg-orange-400 active:scale-[0.98] shadow-lg shadow-orange-500/20'
-                : 'bg-zinc-800 text-zinc-400'
-            )}
-          >
+          <button onClick={handleSubmit} disabled={isSubmitting}
+            className={cn('w-full py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2',
+              isValid && !isSubmitting ? 'bg-orange-500 text-white hover:bg-orange-400 active:scale-[0.98] shadow-lg shadow-orange-500/20' : 'bg-zinc-800 text-zinc-400')}>
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Logging…' : mockTaken ? 'Log & Debrief →' : 'Log Today'}
+            {isSubmitting ? 'Logging…' : mockTaken ? 'Log today + mock' : 'Log today'}
           </button>
         </div>
       </div>

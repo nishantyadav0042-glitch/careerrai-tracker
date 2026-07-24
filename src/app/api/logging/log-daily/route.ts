@@ -19,11 +19,16 @@ interface LoggingRequest {
   energy: string;
   notes?: string;
   emotional_chips?: string[];
-  plan_fit?: string; // Review Engine: 'too_much' | 'right' | 'too_little'
+  plan_fit?: string; // Review Engine: 'easy' | 'right' | 'too_much' | 'couldnt_finish' (legacy 'too_little')
+  blocker_reason?: string; // why the plan wasn't finished (only when plan_fit='couldnt_finish')
+  confidence?: number; // single-tap 1-5 "how confident about CAT right now"
   log_date?: string; // optional backdate — must be today or yesterday (IST)
 }
 
-const VALID_PLAN_FIT = ['too_much', 'right', 'too_little'] as const;
+// New single-sheet log adds 'easy' + 'couldnt_finish'; 'too_little' kept for
+// backward compatibility with any client still sending the old value.
+const VALID_PLAN_FIT = ['easy', 'right', 'too_much', 'couldnt_finish', 'too_little'] as const;
+const VALID_BLOCKER_REASON = ['college', 'office', 'travel', 'health', 'family', 'procrastination', 'mock_ran_long', 'plan_too_heavy', 'other'] as const;
 
 export async function POST(request: NextRequest) {
   try {
@@ -114,13 +119,24 @@ export async function POST(request: NextRequest) {
     });
     if (rpcError) throw rpcError;
 
-    // Review Engine signal — persisted on the row the RPC just wrote (kept out
-    // of the RPC so its transaction contract is untouched). Best-effort: a
-    // failed capture must never fail the log.
+    // Review Engine signals (plan_fit, why-not-finished, confidence) — persisted
+    // on the row the RPC just wrote (kept out of the RPC so its transaction
+    // contract is untouched). All best-effort: a failed capture must never fail
+    // the log. These are the fields the new single-sheet log actually acts on.
+    const reviewUpdate: Record<string, unknown> = {};
     if (typeof body.plan_fit === 'string' && (VALID_PLAN_FIT as readonly string[]).includes(body.plan_fit)) {
-      void admin.from('daily_reports').update({ plan_fit: body.plan_fit })
+      reviewUpdate.plan_fit = body.plan_fit;
+    }
+    if (typeof body.blocker_reason === 'string' && (VALID_BLOCKER_REASON as readonly string[]).includes(body.blocker_reason)) {
+      reviewUpdate.blocker_reason = body.blocker_reason;
+    }
+    if (typeof body.confidence === 'number' && Number.isInteger(body.confidence) && body.confidence >= 1 && body.confidence <= 5) {
+      reviewUpdate.confidence = body.confidence;
+    }
+    if (Object.keys(reviewUpdate).length > 0) {
+      void admin.from('daily_reports').update(reviewUpdate)
         .eq('student_id', user.id).eq('report_date', dateStr)
-        .then(({ error }: { error: unknown }) => { if (error) console.error('[log] plan_fit update failed', error); });
+        .then(({ error }: { error: unknown }) => { if (error) console.error('[log] review-signal update failed', error); });
     }
 
     const streakUpdated = rpcResult;
