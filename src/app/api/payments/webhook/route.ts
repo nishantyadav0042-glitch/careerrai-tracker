@@ -69,6 +69,13 @@ export async function POST(request: NextRequest) {
           // activate_payment re-running; these are no-ops the second time).
           await grantPremiumAndQueueBuddy(admin, row.student_id);
 
+          // ROI attribution (founder, 24 Jul): "why did this student actually
+          // buy?" — last-touch, computed from what really happened, not
+          // guessed. Also resolves any pending 'convert_now' Brain decision
+          // immediately (more precise than waiting for the reconcile cron —
+          // we KNOW the exact purchase moment right here).
+          void attributePurchaseAndResolveDecision(admin, row.student_id, orderId).catch((e) => console.error('[rzp-webhook] attribution failed', e));
+
           await logSecurityEvent(admin, {
             type: 'payment_activated', severity: 'info', userId: row.student_id,
             metadata: { plan: row.plan, orderId, paymentId, coupon: row.coupon_code ?? null },
@@ -116,4 +123,35 @@ export async function POST(request: NextRequest) {
     console.error('[rzp-webhook]', e);
     return NextResponse.json({ error: 'error' }, { status: 500 });
   }
+}
+
+// Ranked by how directly each event indicates buying intent — the most recent
+// one in the 14 days before purchase is the last touch. Real event names only
+// (autocapture's `tap` carries `el`, so a buy-tap is matched by its data-analytics
+// name rather than invented as a separate event type).
+const TOUCH_RANK = ['buddy_plan_click', 'buddy_unlock_open', 'buddy_cta_click', 'push_click', 'daily_log', 'screen_view'];
+
+async function attributePurchaseAndResolveDecision(
+  admin: ReturnType<typeof createAdminClient>,
+  studentId: string,
+  orderId: string
+): Promise<void> {
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const { data: events } = await admin
+    .from('student_events').select('event, created_at, props')
+    .eq('user_id', studentId).gte('created_at', since)
+    .in('event', TOUCH_RANK).order('created_at', { ascending: false }).limit(1);
+
+  const lastTouch = events?.[0]?.event ?? 'organic';
+  await admin.from('student_events').insert({
+    user_id: studentId, event: 'purchase_attributed',
+    props: { last_touch: lastTouch, order_id: orderId },
+    path: null,
+  });
+
+  // Resolve any pending Brain 'convert_now' decision for this student RIGHT
+  // NOW — we know the exact outcome, no need to wait for the reconcile cron.
+  await admin.from('decision_log')
+    .update({ outcome: 'purchased', business_impact: 'positive', executed: true, outcome_at: new Date().toISOString() })
+    .eq('student_id', studentId).eq('action_id', 'convert_now').is('outcome', null);
 }

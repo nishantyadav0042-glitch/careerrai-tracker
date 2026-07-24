@@ -18,7 +18,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ stu
     admin.from('student_dna').select('*').eq('student_id', studentId).maybeSingle(),
     admin.from('student_dna_history').select('metric, prev_value, new_value, drivers, created_at').eq('student_id', studentId).order('created_at', { ascending: false }).limit(50),
     admin.from('student_milestones').select('milestone, meta, created_at').eq('student_id', studentId).order('created_at', { ascending: false }).limit(50),
-    admin.from('decision_log').select('action_id, label, channel, impact, why, executed, outcome, outcome_at, created_at').eq('student_id', studentId).order('created_at', { ascending: false }).limit(50),
+    // `ranked` = every alternative the Brain considered and did NOT choose —
+    // the opportunity-cost record ("we chose convert_now over winback_human;
+    // was that actually right?").
+    admin.from('decision_log').select('action_id, label, channel, impact, why, ranked, executed, outcome, business_impact, outcome_at, created_at').eq('student_id', studentId).order('created_at', { ascending: false }).limit(50),
   ]);
 
   if (!profile) return NextResponse.json({ error: 'Not found' }, { status: 404 });
