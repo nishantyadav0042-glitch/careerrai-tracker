@@ -7,6 +7,7 @@ import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
+import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 
 // Buddy checkout. Two entry points share ONE payment path (useBuddyCheckout):
 //  • BuddyBuyButtons — the price choice rendered DIRECTLY on the sales page,
@@ -16,22 +17,6 @@ import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
 // buddy server-side; here we just reassure and refresh. If payments are flagged
 // off (create-order 403) it degrades to the call flow.
 
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-function loadRazorpay(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof window !== 'undefined' && window.Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
 
 function logCtaClick() {
   fetch('/api/engagement', {
@@ -56,9 +41,10 @@ function useBuddyCheckout() {
     // Store builds ONLY (Apple/Play): finish payment in the REAL browser for the
     // live 1:1 mentorship service — an in-app card sheet would be rejected. Web
     // and browser-installed PWA fall straight through to inline Razorpay below.
+    logCtaClick();
     if (isStoreBuild()) {
-      logCtaClick();
       const opened = await escapeToBrowserForPayment('/student/buddy');
+      track('pay_escape_browser', { plan: planId, opened });
       if (!opened) setMessage('To finish, open careerrai.in in your browser and tap Get my buddy.');
       return;
     }
@@ -70,19 +56,30 @@ function useBuddyCheckout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planId }),
       });
-      if (res.status === 403) { setCallMe(true); return; } // payments off → call flow
+      if (res.status === 403) { track('pay_blocked_flag_off', { plan: planId }); setCallMe(true); return; }
 
       const data = await res.json();
-      if (!res.ok) { setMessage(data.error ?? 'Checkout could not start. Please try again.'); return; }
+      if (!res.ok) {
+        track('pay_order_failed', { plan: planId, status: res.status, error: data.error ?? null });
+        setMessage(data.error ?? 'Checkout could not start. Please try again.');
+        return;
+      }
 
       if (data.free) {
+        track('pay_free_unlock', { plan: planId });
         setMessage('Done! Setting up your 1:1 mentor — refreshing…');
         setTimeout(() => router.refresh(), 1500);
         return;
       }
 
+      track('pay_order_created', { plan: planId, orderId: data.orderId, amount: data.amount });
+
       const ok = await loadRazorpay();
-      if (!ok || !window.Razorpay) { setMessage('The payment window failed to load. Please try again.'); return; }
+      if (!ok || !window.Razorpay) {
+        track('pay_script_failed', { plan: planId, orderId: data.orderId });
+        setMessage('The payment window failed to load. Please check your connection and try again.');
+        return;
+      }
 
       const rzp = new window.Razorpay({
         key: data.keyId,
@@ -93,14 +90,30 @@ function useBuddyCheckout() {
         description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
         prefill: fullName ? { name: fullName } : undefined,
         theme: { color: '#E8652D' },
+        modal: {
+          // Razorpay keeps the sheet open on a failed attempt so they can retry
+          // with another method; only a real close lands here.
+          ondismiss: () => {
+            track('pay_dismissed', { plan: planId, orderId: data.orderId });
+            setMessage('Payment cancelled. Your spot is still open — tap again when you’re ready.');
+          },
+        },
         handler: () => {
+          track('pay_success_callback', { plan: planId, orderId: data.orderId });
           trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `1:1 CAT mentorship (${PLANS[planId].label})` }, data.orderId);
           setMessage('Payment received — confirming your buddy… 🎉');
           setTimeout(() => router.refresh(), 4000);
         },
       });
+      rzp.on('payment.failed', (payload: unknown) => {
+        const err = (payload as { error?: { reason?: string; step?: string } } | null)?.error;
+        track('pay_failed', { plan: planId, orderId: data.orderId, reason: err?.reason ?? null, step: err?.step ?? null });
+        setMessage(failureMessage(payload));
+      });
       rzp.open();
+      track('pay_checkout_opened', { plan: planId, orderId: data.orderId });
     } catch {
+      track('pay_exception', { plan: planId });
       setMessage('Something went wrong. Please try again.');
     } finally {
       setBusy(null);
@@ -146,6 +159,7 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
             {busy === 'tillcat' ? 'Starting…' : 'Get my buddy till CAT · ₹2,999 →'}
           </span>
         </button>
+        {message && <p className="mt-2 text-center text-xs font-medium text-stone-700">{message}</p>}
         {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
       </>
     );

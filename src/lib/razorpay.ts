@@ -33,6 +33,31 @@ export async function createRazorpayOrder(
   return res.json() as Promise<RazorpayOrder>;
 }
 
+export interface RazorpayPayment {
+  id: string;
+  status: string;
+  amount: number;
+}
+
+/**
+ * Every payment attempt Razorpay has recorded against an order — the source of
+ * truth we reconcile against when a webhook never arrived (see the
+ * reconcile-payments cron).
+ */
+export async function fetchOrderPayments(orderId: string): Promise<RazorpayPayment[]> {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) throw new Error('Razorpay not configured');
+
+  const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(orderId)}/payments`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  if (!res.ok) throw new Error(`Razorpay order payments failed: ${res.status}`);
+  const body = (await res.json()) as { items?: RazorpayPayment[] };
+  return body.items ?? [];
+}
+
 /**
  * Verifies a Razorpay webhook. NEVER trust client-side payment confirmation —
  * subscription state only changes from a signature-verified webhook.

@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect } from 'react';
+import { markPaymentTab } from '@/lib/store-build';
 
 // Browser-side session hand-off landing (24 Jul). The store wrapper sends a
 // buyer here in the REAL browser (`/go?k=<token>&dest=/student/buddy`) so they
@@ -10,6 +11,9 @@ import { Suspense, useEffect } from 'react';
 // the internal `dest`. Public route — the token IS the credential.
 function GoInner() {
   useEffect(() => {
+    // This tab IS the real browser we escaped into — checkout must run inline
+    // here, never bounce out again (see isStoreBuild).
+    markPaymentTab();
     const params = new URLSearchParams(window.location.search);
     const token = params.get('k');
     const destRaw = params.get('dest');

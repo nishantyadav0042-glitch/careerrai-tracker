@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
-import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
-import { grantPremiumAndQueueBuddy, revokePremium } from '@/lib/premium';
+import { revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
-import { sendMetaCapiEvent } from '@/lib/meta-capi';
+import { activatePaidOrder } from '@/lib/activate-payment';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
 // Client-side "payment success" callbacks are never trusted.
@@ -43,55 +42,11 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         if (row && row.status !== 'paid') {
-          const months = isPlanId(row.plan) ? PLANS[row.plan].months : 1;
-          const renews = addMonthsClamped(new Date(), months);
-
-          // Single atomic DB transaction: marks payment paid, activates
-          // subscription, and burns the coupon. If any step fails the webhook
-          // returns 500 and Razorpay retries — the guard above re-checks status
-          // so only the truly-failed ops run on retry.
-          const { error: activateErr } = await admin.rpc('activate_payment', {
-            p_payment_id:          row.id,
-            p_student_id:          row.student_id,
-            p_plan:                row.plan,
-            p_renews_at:           renews.toISOString(),
-            p_razorpay_payment_id: paymentId ?? null,
-            p_coupon_code:         row.coupon_code ?? null,
-          });
-
-          if (activateErr) {
-            console.error('[rzp-webhook] activate_payment failed:', activateErr.message);
-            return NextResponse.json({ error: 'db error' }, { status: 500 });
-          }
-
-          // Freemium upgrade: flip is_premium, queue a buddy, confirm in-app.
-          // Idempotent — safe on Razorpay retries (the status guard above stops
-          // activate_payment re-running; these are no-ops the second time).
-          await grantPremiumAndQueueBuddy(admin, row.student_id);
-
-          // ROI attribution (founder, 24 Jul): "why did this student actually
-          // buy?" — last-touch, computed from what really happened, not
-          // guessed. Also resolves any pending 'convert_now' Brain decision
-          // immediately (more precise than waiting for the reconcile cron —
-          // we KNOW the exact purchase moment right here).
-          void attributePurchaseAndResolveDecision(admin, row.student_id, orderId).catch((e) => console.error('[rzp-webhook] attribution failed', e));
-
-          await logSecurityEvent(admin, {
-            type: 'payment_activated', severity: 'info', userId: row.student_id,
-            metadata: { plan: row.plan, orderId, paymentId, coupon: row.coupon_code ?? null },
-          });
-
-          // Server-side Purchase (Meta Conversions API), deduped with the browser
-          // Pixel via eventId = orderId. Hashed email/phone improve ad matching.
-          const { data: prof } = await admin.from('profiles').select('email, phone').eq('id', row.student_id).maybeSingle();
-          await sendMetaCapiEvent({
-            eventName: 'Purchase',
-            eventId: orderId,
-            value: (row.amount ?? 0) / 100,
-            currency: 'INR',
-            email: prof?.email,
-            phone: prof?.phone,
-          });
+          // Marks paid, activates the subscription, burns the coupon, grants
+          // premium + queues the buddy. On failure we return 500 so Razorpay
+          // retries — the status guard above means only the failed ops re-run.
+          const ok = await activatePaidOrder(admin, row, orderId, paymentId ?? null, 'webhook');
+          if (!ok) return NextResponse.json({ error: 'db error' }, { status: 500 });
         }
       }
     }
@@ -123,35 +78,4 @@ export async function POST(request: NextRequest) {
     console.error('[rzp-webhook]', e);
     return NextResponse.json({ error: 'error' }, { status: 500 });
   }
-}
-
-// Ranked by how directly each event indicates buying intent — the most recent
-// one in the 14 days before purchase is the last touch. Real event names only
-// (autocapture's `tap` carries `el`, so a buy-tap is matched by its data-analytics
-// name rather than invented as a separate event type).
-const TOUCH_RANK = ['buddy_plan_click', 'buddy_unlock_open', 'buddy_cta_click', 'push_click', 'daily_log', 'screen_view'];
-
-async function attributePurchaseAndResolveDecision(
-  admin: ReturnType<typeof createAdminClient>,
-  studentId: string,
-  orderId: string
-): Promise<void> {
-  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const { data: events } = await admin
-    .from('student_events').select('event, created_at, props')
-    .eq('user_id', studentId).gte('created_at', since)
-    .in('event', TOUCH_RANK).order('created_at', { ascending: false }).limit(1);
-
-  const lastTouch = events?.[0]?.event ?? 'organic';
-  await admin.from('student_events').insert({
-    user_id: studentId, event: 'purchase_attributed',
-    props: { last_touch: lastTouch, order_id: orderId },
-    path: null,
-  });
-
-  // Resolve any pending Brain 'convert_now' decision for this student RIGHT
-  // NOW — we know the exact outcome, no need to wait for the reconcile cron.
-  await admin.from('decision_log')
-    .update({ outcome: 'purchased', business_impact: 'positive', executed: true, outcome_at: new Date().toISOString() })
-    .eq('student_id', studentId).eq('action_id', 'convert_now').is('outcome', null);
 }

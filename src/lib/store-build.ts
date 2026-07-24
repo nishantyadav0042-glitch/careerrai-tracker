@@ -13,6 +13,9 @@
 // launch with ?source=twa|ios, so isStoreBuild() is false for them today.
 
 const FLAG = 'cr_store_build';
+// Per-TAB marker, set by /go on the tab we escaped INTO. sessionStorage is
+// scoped to one tab, so it can never leak back into the wrapper.
+const ESCAPED = 'cr_payment_tab';
 
 /** Call once on app load: if launched from a store wrapper, remember it. */
 export function markStoreBuildFromUrl(): void {
@@ -22,13 +25,23 @@ export function markStoreBuildFromUrl(): void {
   } catch { /* storage blocked — treat as non-store, safe default */ }
 }
 
+/** Mark THIS tab as the real-browser payment tab (called by /go). */
+export function markPaymentTab(): void {
+  try { sessionStorage.setItem(ESCAPED, '1'); } catch { /* storage blocked */ }
+}
+
 /**
  * True only inside the actual store wrapper: the persisted flag AND currently
- * running standalone. The browser tab we send the user to for payment is NOT
- * standalone, so it can never re-trigger the escape — no loop.
+ * running standalone AND not the tab we already escaped into.
+ *
+ * That last condition is load-bearing on Android. A TWA *is* a Chrome Custom
+ * Tab, so the tab we open for payment can still match `(display-mode:
+ * standalone)`. Without a per-tab marker, checkout in the escape tab would
+ * escape again — an endless chain of tabs where paying is impossible.
  */
 export function isStoreBuild(): boolean {
   try {
+    if (sessionStorage.getItem(ESCAPED) === '1') return false;
     if (localStorage.getItem(FLAG) !== '1') return false;
     const standalone = !!window.matchMedia?.('(display-mode: standalone)').matches
       || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
@@ -59,10 +72,18 @@ export async function escapeToBrowserForPayment(dest = '/student/buddy'): Promis
       const q = url?.split('?')[1];
       if (q) token = new URLSearchParams(q).get('k');
     }
-  } catch { /* fall through — /go without a token just sends them to login */ }
+  } catch { /* handled below */ }
+
+  // Without a token /go can't sign them in, and they'd land on a login screen
+  // in a strange tab with no idea why. Better to close it and let the caller
+  // tell them what to do.
+  if (!token) {
+    try { win.close(); } catch { /* already gone */ }
+    return false;
+  }
 
   const target = new URL('/go', window.location.origin);
-  if (token) target.searchParams.set('k', token);
+  target.searchParams.set('k', token);
   target.searchParams.set('dest', dest);
   win.location.href = target.toString();
   return true;

@@ -8,6 +8,8 @@ import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
 import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
+import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
+import { track } from '@/lib/journey';
 
 type SubStatus = 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested';
 
@@ -18,23 +20,6 @@ interface MembershipCardProps {
   fullName: string;
   // Founder scholarship attached to this account, with per-plan adjusted prices.
   scholarship?: { label: string; pricing: Record<PlanId, string> } | null;
-}
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-function loadRazorpay(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof window !== 'undefined' && window.Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
 }
 
 const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' | 'stone' | 'amber' }> = {
@@ -97,14 +82,27 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
         prefill: { name: fullName },
         theme: { color: '#E8652D' },
+        modal: {
+          ondismiss: () => {
+            track('pay_dismissed', { plan: planId, orderId: data.orderId, surface: 'membership' });
+            setMessage('Payment cancelled — nothing was charged. Tap again whenever you’re ready.');
+          },
+        },
         handler: () => {
           // Confirmation is server-side via webhook; just reassure + refresh.
+          track('pay_success_callback', { plan: planId, orderId: data.orderId, surface: 'membership' });
           trackMeta('Purchase', { value: (data.amount ?? 0) / 100, currency: data.currency ?? 'INR', content_name: `1:1 CAT mentorship (${PLANS[planId].label})` }, data.orderId);
           setMessage('Payment received — setting up your 1:1 mentor…');
           setTimeout(() => router.refresh(), 4000);
         },
       });
+      rzp.on('payment.failed', (payload: unknown) => {
+        const err = (payload as { error?: { reason?: string; step?: string } } | null)?.error;
+        track('pay_failed', { plan: planId, orderId: data.orderId, surface: 'membership', reason: err?.reason ?? null, step: err?.step ?? null });
+        setMessage(failureMessage(payload));
+      });
       rzp.open();
+      track('pay_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership' });
     } catch {
       setMessage('Something went wrong with the payment. Nothing was charged — please try again.');
     } finally {
