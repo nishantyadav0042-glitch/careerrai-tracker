@@ -25,6 +25,22 @@ export interface DailyInsight {
   text: string;
 }
 
+// ONE LINE MEANS ONE LINE (founder, 25 July: the card was eating half the home
+// screen). Every insight below is written short; this is the backstop that
+// keeps it that way if anyone edits one carelessly. Roughly two lines of wrap
+// on a small phone — past that it stops being a glance and becomes reading.
+const MAX_INSIGHT_CHARS = 105;
+
+function oneLine(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length <= MAX_INSIGHT_CHARS) return flat;
+  // Trim at the last sentence boundary that fits; fall back to a word cut.
+  const clipped = flat.slice(0, MAX_INSIGHT_CHARS);
+  const lastStop = Math.max(clipped.lastIndexOf('. '), clipped.lastIndexOf('! '));
+  if (lastStop > 40) return clipped.slice(0, lastStop + 1);
+  return clipped.slice(0, clipped.lastIndexOf(' ')).trimEnd() + '…';
+}
+
 export async function computeDailyInsight(
   admin: any,
   studentId: string,
@@ -79,7 +95,7 @@ export async function computeDailyInsight(
       return {
         kind: 'recovery',
         title: '🔥 You beat a hard topic',
-        text: `You turned ${topic} from struggled to solid — proof you improve when you stay with difficult topics. ${stillRed ? `Same move works for ${stillRed} next.` : 'Remember this next time a topic fights back.'}`,
+        text: oneLine(`${topic}: struggled → solid.${stillRed ? ` ${stillRed} next.` : ''}`),
       };
     }
   }
@@ -89,13 +105,13 @@ export async function computeDailyInsight(
     .filter((s) => served[s] >= 3 && (doneBySec[s] ?? 0) / served[s] < 0.34)
     .sort((a, b) => (doneBySec[a] ?? 0) / served[a] - (doneBySec[b] ?? 0) / served[b])[0];
   if (avoided) {
-    const strongest = Object.keys(served)
-      .filter((s) => s !== avoided && served[s] >= 2)
-      .sort((a, b) => (doneBySec[b] ?? 0) / served[b] - (doneBySec[a] ?? 0) / served[a])[0];
+    // The old copy also named the section they favoured instead. Naming the
+    // avoided one and the next step is the whole message; the comparison was
+    // just words.
     return {
       kind: 'avoidance',
       title: `📊 A pattern in your week`,
-      text: `This week you consistently chose ${strongest ?? 'other sections'} over ${avoided} — ${doneBySec[avoided] ?? 0} of ${served[avoided]} ${avoided} tasks done. One advice from CareerRai: don't add more ${strongest ?? 'strong-section'} tomorrow. Give ${avoided} 20 focused minutes first — one small win breaks the pattern.`,
+      text: oneLine(`Only ${doneBySec[avoided] ?? 0} of ${served[avoided]} ${avoided} tasks done. Give ${avoided} 20 minutes first tomorrow.`),
     };
   }
 
@@ -109,7 +125,7 @@ export async function computeDailyInsight(
     return {
       kind: 'high_weightage',
       title: '🎯 Where the marks are',
-      text: `${names.join(' and ')} carr${names.length === 1 ? 'ies' : 'y'} some of the highest marks in ${sec} — and ${names.length === 1 ? "it's" : "they're"} still untouched. Starting there this week moves your score more than anything else on your list.`,
+      text: oneLine(`${names.join(' and ')} — top marks in ${sec}, still untouched. Start there.`),
     };
   }
 
@@ -121,7 +137,7 @@ export async function computeDailyInsight(
     return {
       kind: 'revision',
       title: '🔁 One topic is fading',
-      text: `${fading.topic} was last practised ${fading.lastTouchedDaysAgo ?? 'several'} days ago — memory fades fastest right after learning. 20 minutes of revision today locks in what you already earned.`,
+      text: oneLine(`${fading.topic} untouched for ${fading.lastTouchedDaysAgo ?? 'several'} days. 20 minutes today locks it in.`),
     };
   }
 
@@ -135,7 +151,7 @@ export async function computeDailyInsight(
     return {
       kind: 'consistency',
       title: '🔥 Your consistency is showing',
-      text: `${last5} of the last 5 days logged — that rhythm is what separates finishers from starters. Tomorrow only needs to match today.`,
+      text: oneLine(`${last5} of the last 5 days logged. Tomorrow just needs to match today.`),
     };
   }
 
@@ -145,6 +161,6 @@ export async function computeDailyInsight(
   return {
     kind: 'progress',
     title: '📈 Your map is filling in',
-    text: `${finished} topics finished, ${remaining} to go. Every log makes tomorrow's plan sharper — keep feeding it.`,
+    text: oneLine(`${finished} topics done, ${remaining} to go. Keep feeding the plan.`),
   };
 }
