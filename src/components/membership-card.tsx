@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
+import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
 
 type SubStatus = 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested';
 
@@ -51,11 +52,15 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
   const [coupon, setCoupon] = useState('');
 
   async function upgrade(planId: PlanId) {
+    // Store builds ONLY (Apple/Play): pay in the real browser (see
+    // store-build.ts). Web + browser-PWA keep the inline Razorpay below.
+    if (isStoreBuild()) {
+      const opened = await escapeToBrowserForPayment('/student/profile');
+      if (!opened) setMessage('To finish, open careerrai.in in your browser to complete payment.');
+      return;
+    }
     setBusy(planId);
     setMessage(null);
-    // NOTE (24 Jul): in-app Razorpay runs everywhere for now — not in the
-    // stores yet, so gating only loses revenue. Store-build-only gating must be
-    // re-added before submission (keyed off the store wrapper, not display-mode).
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
