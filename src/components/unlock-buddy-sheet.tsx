@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
+import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
 
 // Buddy checkout. Two entry points share ONE payment path (useBuddyCheckout):
 //  • BuddyBuyButtons — the price choice rendered DIRECTLY on the sales page,
@@ -50,15 +51,19 @@ function useBuddyCheckout() {
   const [callMe, setCallMe] = useState(false);
 
   async function pay(planId: PlanId, fullName?: string) {
+    // Intent captured first, in every path.
+    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
+    // Store builds ONLY (Apple/Play): finish payment in the REAL browser for the
+    // live 1:1 mentorship service — an in-app card sheet would be rejected. Web
+    // and browser-installed PWA fall straight through to inline Razorpay below.
+    if (isStoreBuild()) {
+      logCtaClick();
+      const opened = await escapeToBrowserForPayment('/student/buddy');
+      if (!opened) setMessage('To finish, open careerrai.in in your browser and tap Get my buddy.');
+      return;
+    }
     setBusy(planId);
     setMessage(null);
-    // Record the EXACT plan tapped BEFORE checkout — intent is captured even
-    // when payments are off (403) or the student abandons the Razorpay window.
-    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
-    // NOTE (24 Jul): in-app Razorpay runs everywhere for now — the app is not
-    // in the stores yet, so blocking it only loses live revenue. Store-build-
-    // only gating (App Store / Play Billing) must be re-added BEFORE the store
-    // submission, keyed off the store wrapper (?source=twa), not display-mode.
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',

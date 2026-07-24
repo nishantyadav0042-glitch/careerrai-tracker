@@ -17,6 +17,7 @@ import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
 import { OnboardingGate } from './onboarding/onboarding-gate';
+import { StoreBuildDetector } from '@/components/store-build-detector';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -104,6 +105,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           re-upload whatever stale one the browser still returns. */}
       <PushHealer serverPushDead={!!profile?.push_died_at || !profile?.push_subscription} />
       <InstallPing />
+      <StoreBuildDetector />
       <div className="max-w-2xl mx-auto px-3 pt-2 pb-16">
         <div className="flex items-center justify-between mb-2">
           <Logo />
