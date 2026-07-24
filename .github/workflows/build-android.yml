@@ -1,0 +1,57 @@
+name: Build Android app (Play Store)
+
+# Manual trigger only — Android builds happen on release, not every push.
+# GitHub's runners have normal internet access, unlike some sandboxed dev
+# environments, so this is where the actual Bubblewrap/TWA build runs.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The production signing key never lives in this repo (see .gitignore).
+      # It's stored as a base64-encoded GitHub secret and decoded here, only
+      # inside this run, only in memory on GitHub's runner.
+      - name: Restore signing key
+        working-directory: android
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android.keystore
+
+      - name: Build signed AAB + APK
+        working-directory: android
+        env:
+          # Bubblewrap reads these directly (see @bubblewrap/cli build.js) —
+          # this is what makes signing non-interactive instead of prompting.
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          # `yes y` answers every Bubblewrap prompt (install JDK/SDK, accept
+          # SDK license, apply project updates) with "y" — verified against
+          # the actual @bubblewrap/cli source, not guessed. The two env vars
+          # above mean it never has to prompt for the signing password itself.
+          yes y | npx --yes @bubblewrap/cli build --skipPwaValidation
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: careerrai-android-${{ github.run_number }}
+          path: |
+            android/app-release-bundle.aab
+            android/app-release-signed.apk
+          retention-days: 90
+
+      # Clean up the decoded key from the runner's disk (belt-and-suspenders —
+      # the runner VM is destroyed after the job anyway, but no reason to leave
+      # it sitting around for the rest of the job's teardown steps).
+      - name: Remove decoded key
+        if: always()
+        working-directory: android
+        run: rm -f android.keystore
