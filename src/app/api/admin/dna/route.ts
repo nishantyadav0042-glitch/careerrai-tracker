@@ -10,13 +10,14 @@ export async function GET() {
 
   const { data: rows } = await admin
     .from('student_dna')
-    .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, computed_at, profiles!inner(full_name, phone, is_premium)');
+    .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, next_best_action, computed_at, profiles!inner(full_name, phone, is_premium)');
 
   type Prof = { full_name: string | null; phone: string | null; is_premium: boolean | null };
+  type Nba = { top?: { id: string; label: string; channel: string; impact: number; why: string }; ranked?: unknown };
   const dna = (rows ?? []) as unknown as Array<{
     student_id: string; activation: number; consistency: number; momentum: number;
     purchase_intent: number | null; churn_risk: number; journey_stage: string; signals: unknown;
-    profiles: Prof | Prof[] | null;
+    next_best_action: Nba | null; profiles: Prof | Prof[] | null;
   }>;
   const named = dna.map((r) => {
     const prof = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
@@ -27,15 +28,27 @@ export async function GET() {
       activation: r.activation, consistency: r.consistency, momentum: r.momentum,
       purchase_intent: r.purchase_intent, churn_risk: r.churn_risk,
       stage: r.journey_stage, signals: r.signals,
+      nextAction: r.next_best_action?.top ?? null,
     };
   });
 
   const byStage: Record<string, number> = {};
   for (const r of named) byStage[String(r.stage)] = (byStage[String(r.stage)] ?? 0) + 1;
 
+  // What is the Brain telling us to do, in aggregate, right now.
+  const byAction: Record<string, number> = {};
+  for (const r of named) byAction[r.nextAction?.id ?? 'none'] = (byAction[r.nextAction?.id ?? 'none'] ?? 0) + 1;
+
   return NextResponse.json({
     total: named.length,
     byStage,
+    byAction,
+    // THE ACTION QUEUE: every student ranked by the impact of their single
+    // highest-value next action — work this list top-down.
+    actionQueue: named
+      .filter((r) => r.nextAction && r.nextAction.channel !== 'suppress')
+      .sort((a, b) => (b.nextAction?.impact ?? 0) - (a.nextAction?.impact ?? 0))
+      .slice(0, 30),
     // ACT NOW: high intent, not yet premium → the founder should push these to a buddy today.
     hotLeads: named.filter((r) => r.purchase_intent != null && (r.purchase_intent as number) >= 40)
       .sort((a, b) => (b.purchase_intent as number) - (a.purchase_intent as number)).slice(0, 25),
