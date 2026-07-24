@@ -1,4 +1,4 @@
-import type { StudentDna } from '@/lib/student-dna';
+import type { StudentDna, Factor, Confidence } from '@/lib/student-dna';
 
 // The Product Brain.
 //
@@ -9,6 +9,11 @@ import type { StudentDna } from '@/lib/student-dna';
 // (`hold`) that simply out-scores a low-value push for a happy user — so the
 // founder's "→ do not send a notification" emerges from the math, never a
 // hardcoded rule. Adding a new action = adding a candidate, not editing a branch.
+//
+// EXPLAINABLE BY CONSTRUCTION (founder, 24 Jul): every candidate quotes the
+// SAME factors that drove the underlying DNA score it's reacting to — the "why"
+// is never a separate free-text guess, it's a pointer into student-dna.ts's own
+// explanation for that metric, so it can never drift from the number.
 
 export type Channel = 'in_app' | 'push' | 'ai' | 'human' | 'suppress';
 
@@ -16,8 +21,11 @@ export interface Action {
   id: string;
   label: string;
   channel: Channel;
-  impact: number;   // 0-100 expected value for THIS student, right now
-  why: string;      // plain-language justification from the student's own signals
+  impact: number;          // 0-100 expected value for THIS student, right now
+  confidence: Confidence;
+  why: string;              // plain-language justification
+  factors: Factor[];        // the exact contributing factors (from the DNA explanation)
+  expectedImpact: string;   // business-impact statement if this action is taken
 }
 
 export interface NextBestAction {
@@ -40,8 +48,7 @@ interface Candidate {
   label: string;
   channel: Channel;
   applies: (d: StudentDna) => boolean;
-  impact: (d: StudentDna) => number;
-  why: (d: StudentDna) => string;
+  build: (d: StudentDna) => Omit<Action, 'id' | 'label' | 'channel'>;
 }
 
 const CANDIDATES: Candidate[] = [
@@ -50,58 +57,97 @@ const CANDIDATES: Candidate[] = [
     label: 'Convert now — high buying intent',
     channel: 'in_app',
     applies: (d) => d.purchase_intent != null && d.purchase_intent >= 40,
-    impact: (d) => d.purchase_intent ?? 0,
-    why: (d) => `Purchase intent ${d.purchase_intent}: they keep hitting the paywall/buddy. Surface a testimonial + the offer now; a human nudge can close it.`,
+    build: (d) => {
+      const e = d.explanations.purchase_intent;
+      return {
+        impact: d.purchase_intent ?? 0, confidence: e.confidence,
+        why: `Purchase intent ${d.purchase_intent}: ${e.summary}`,
+        factors: e.positives, expectedImpact: e.impactHint,
+      };
+    },
   },
   {
     id: 'winback_human',
     label: 'Win back — personal outreach',
     channel: 'human',
     applies: (d) => d.churn_risk >= 70 && d.consistency > 0,
-    impact: (d) => d.churn_risk,
-    why: (d) => `Churn risk ${d.churn_risk} after real engagement (${sig(d).daysSinceActivity}d quiet). A human/mentor check-in beats another push.`,
+    build: (d) => {
+      const e = d.explanations.churn_risk;
+      return {
+        impact: d.churn_risk, confidence: e.confidence,
+        why: `Churn risk ${d.churn_risk} after real engagement: ${e.summary}`,
+        factors: e.positives, expectedImpact: e.impactHint,
+      };
+    },
   },
   {
     id: 'activate_first_value',
     label: 'Activation nudge — never reached value',
     channel: 'in_app',
     applies: (d) => d.activation < 75 && d.journey_stage !== 'dormant',
-    impact: (d) => 60 + (75 - d.activation) / 2,
-    why: (d) => `Activation ${d.activation}: still missing install / notifications / first log. Biggest activation leak — guide the exact missing step.`,
+    build: (d) => {
+      const e = d.explanations.activation;
+      return {
+        impact: clamp(60 + (75 - d.activation) / 2), confidence: e.confidence,
+        why: `Activation ${d.activation}: ${e.summary}`,
+        factors: e.negatives, expectedImpact: e.impactHint,
+      };
+    },
   },
   {
     id: 'reengage_dormant',
     label: 'Reactivation — dormant',
     channel: 'human',
     applies: (d) => d.journey_stage === 'dormant',
-    impact: () => 40,
-    why: (d) => `Dormant ${sig(d).daysSinceActivity}d. One well-timed, DIFFERENT message — never the same reminder that already failed.`,
+    build: (d) => {
+      const e = d.explanations.churn_risk;
+      return {
+        impact: 40, confidence: e.confidence,
+        why: `Dormant ${sig(d).daysSinceActivity}d. One well-timed, DIFFERENT message — never the same reminder that already failed.`,
+        factors: e.positives, expectedImpact: 'Reactivation odds drop fast after 14+ quiet days — this is close to the last realistic window',
+      };
+    },
   },
   {
     id: 'celebrate',
     label: 'Positive reinforcement',
     channel: 'push',
     applies: (d) => d.momentum >= 70 || sig(d).currentStreak >= 3,
-    impact: (d) => 30 + d.momentum / 5,
-    why: (d) => `Rising momentum (${d.momentum}) / ${sig(d).currentStreak}-day streak — reinforce the habit while it's forming.`,
+    build: (d) => {
+      const e = d.explanations.momentum;
+      return {
+        impact: clamp(30 + d.momentum / 5), confidence: e.confidence,
+        why: `Momentum ${d.momentum}: ${e.summary}`,
+        factors: e.positives, expectedImpact: e.impactHint,
+      };
+    },
   },
   {
     id: 'hold',
     label: 'Hold — do not message',
     channel: 'suppress',
     applies: () => true, // the always-available "do nothing" baseline
-    impact: (d) => (d.journey_stage === 'habitual' || d.journey_stage === 'premium' ? 38 : 12),
-    why: (d) =>
-      d.journey_stage === 'habitual' || d.journey_stage === 'premium'
-        ? `Doing well on their own — over-messaging a consistent user only causes fatigue. Stay quiet; let them come back naturally.`
-        : `No high-value action right now — don't spend a message. Re-evaluate on their next event.`,
+    build: (d) => {
+      const habitualOrPremium = d.journey_stage === 'habitual' || d.journey_stage === 'premium';
+      return {
+        impact: habitualOrPremium ? 38 : 12,
+        confidence: 'medium',
+        why: habitualOrPremium
+          ? `Doing well on their own (${d.journey_stage}, consistency ${d.consistency}) — over-messaging a consistent user only causes fatigue.`
+          : 'No high-value action right now — don\'t spend a message. Re-evaluate on their next event.',
+        factors: [{ label: `Journey stage: ${d.journey_stage}`, weight: 0, evidence: `consistency ${d.consistency}, churn risk ${d.churn_risk}` }],
+        expectedImpact: habitualOrPremium ? 'Silence here protects long-term notification responsiveness' : 'Neutral — nothing to gain by messaging now',
+      };
+    },
   },
 ];
+
+const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
 export function computeNextBestAction(d: StudentDna): NextBestAction {
   const ranked = CANDIDATES
     .filter((c) => c.applies(d))
-    .map((c) => ({ id: c.id, label: c.label, channel: c.channel, impact: Math.round(c.impact(d)), why: c.why(d) }))
+    .map((c) => ({ id: c.id, label: c.label, channel: c.channel, ...c.build(d) }))
     .sort((a, b) => b.impact - a.impact);
   return { top: ranked[0], ranked: ranked.slice(0, 4) };
 }
