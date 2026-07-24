@@ -8,9 +8,15 @@ export async function GET() {
   if (!(await isRequestAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const admin = createAdminClient();
 
-  const { data: rows } = await admin
-    .from('student_dna')
-    .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, next_best_action, computed_at, profiles!inner(full_name, phone, is_premium)');
+  const isoNDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+  const [{ data: rows }, { data: recentHistory }] = await Promise.all([
+    admin.from('student_dna')
+      .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, next_best_action, computed_at, profiles!inner(full_name, phone, is_premium)'),
+    // Cohort explainability: "why did churn move this week?" — aggregate the
+    // drivers behind every recent metric CHANGE across the whole population,
+    // not just one student. Same primitive (student_dna_history), zoomed out.
+    admin.from('student_dna_history').select('metric, prev_value, new_value, drivers').gte('created_at', isoNDaysAgo(7)),
+  ]);
 
   type Prof = { full_name: string | null; phone: string | null; is_premium: boolean | null };
   type Nba = { top?: { id: string; label: string; channel: string; impact: number; why: string }; ranked?: unknown };
@@ -39,10 +45,34 @@ export async function GET() {
   const byAction: Record<string, number> = {};
   for (const r of named) byAction[r.nextAction?.id ?? 'none'] = (byAction[r.nextAction?.id ?? 'none'] ?? 0) + 1;
 
+  // COHORT EXPLAINABILITY: "why did churn move this week?" — for each metric,
+  // separate the population's recent moves into net-up vs net-down, then rank
+  // the drivers that showed up most often behind those moves. Same primitive
+  // as one student's explanation, aggregated across everyone.
+  type HistRow = { metric: string; prev_value: number | null; new_value: number | null; drivers: { label: string; weight: number }[] };
+  const hist = (recentHistory ?? []) as HistRow[];
+  const cohortExplain: Record<string, unknown> = {};
+  for (const metric of ['activation', 'consistency', 'momentum', 'purchase_intent', 'churn_risk']) {
+    const moves = hist.filter((h) => h.metric === metric && h.prev_value != null && h.new_value != null);
+    if (moves.length === 0) continue;
+    const netDelta = moves.reduce((s, m) => s + ((m.new_value as number) - (m.prev_value as number)), 0);
+    const driverCounts = new Map<string, number>();
+    for (const m of moves) for (const d of m.drivers ?? []) driverCounts.set(d.label, (driverCounts.get(d.label) ?? 0) + 1);
+    const topDrivers = [...driverCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, count]) => ({ label, count }));
+    cohortExplain[metric] = {
+      direction: netDelta > 0 ? 'up' : netDelta < 0 ? 'down' : 'flat',
+      studentsAffected: moves.length,
+      confidence: moves.length >= 20 ? 'high' : moves.length >= 5 ? 'medium' : 'low',
+      topDrivers,
+    };
+  }
+
   return NextResponse.json({
     total: named.length,
     byStage,
     byAction,
+    cohortExplain, // "why did X move this week", across the whole population
+    window: 'last 7 days',
     // THE ACTION QUEUE: every student ranked by the impact of their single
     // highest-value next action — work this list top-down.
     actionQueue: named
