@@ -5,23 +5,38 @@ import { sendExpedifyLead } from '@/lib/expedify';
 import { buildStudentBrief } from '@/lib/student-brief';
 import { deviceCallGuidance, type SignupDevice } from '@/lib/device-detect';
 
-// 10:00 IST daily — sends the overnight signups (call-hours guard marked them
-// 'queued') to Expedify so the AI calls at a human hour, never at 1 AM.
+// Daily flush — every queued student signed up earlier and has now had time to
+// self-activate. We send to Expedify ONLY the leads still un-activated (not
+// installed, or notifications off) — a call to someone who already installed
+// AND switched on notifications is wasted (founder, 24 Jul). Activated students
+// are marked 'skipped_activated' and never called.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const admin = createAdminClient();
 
   const { data: queued } = await admin
     .from('profiles')
-    .select('id, full_name, phone, email, signup_source, signup_device, signup_browser, syllabus_target_date, dream_colleges, target_percentile, hours_available, coaching_enrolled, is_repeater, pain_points, wants_mentor')
+    .select('id, full_name, phone, email, signup_source, signup_device, signup_browser, app_installed, notif_prefs, syllabus_target_date, dream_colleges, target_percentile, hours_available, coaching_enrolled, is_repeater, pain_points, wants_mentor')
     .eq('role', 'student')
     .eq('is_test_account', false)
     .eq('expedify_status', 'queued');
   if (!queued?.length) return NextResponse.json({ sent: 0 });
 
   let sent = 0;
+  let skipped = 0;
   for (const s of queued) {
     if (!s.phone) continue;
+
+    // Activated already? (installed the app AND turned notifications on) — no
+    // call needed. Mark and skip so it's never picked up again.
+    const prefs = (s.notif_prefs ?? {}) as { push?: boolean };
+    if (s.app_installed === true && prefs.push === true) {
+      await admin.from('profiles').update({ expedify_status: 'skipped_activated' })
+        .eq('id', s.id).eq('expedify_status', 'queued');
+      skipped++;
+      continue;
+    }
+
     try {
       // Atomically claim this row before doing anything else (bug audit,
       // 14 July): if two flush runs somehow overlap, or sendExpedifyLead's
@@ -73,7 +88,7 @@ export async function POST(request: NextRequest) {
       console.error('[expedify-flush] lead failed:', s.id, err);
     }
   }
-  return NextResponse.json({ sent, queued: queued.length });
+  return NextResponse.json({ sent, skipped, queued: queued.length });
 }
 
 export { POST as GET };

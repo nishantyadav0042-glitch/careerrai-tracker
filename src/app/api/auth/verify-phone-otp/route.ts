@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { sendExpedifyLead } from '@/lib/expedify';
-import { buildStudentBrief } from '@/lib/student-brief';
-import { parseSignupDevice, deviceCallGuidance } from '@/lib/device-detect';
+import { parseSignupDevice } from '@/lib/device-detect';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
@@ -297,40 +295,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Expedify AI hand-off: a BRAND-NEW student just signed up — fire their
-    // contact to Expedify so its agent calls within a minute (peak intent).
-    // after() runs post-response so it never slows the signup; env-gated + never
-    // throws. Only new students (not returning logins, buddies, or admins).
+    // Expedify hand-off (founder, 24 Jul): do NOT call at signup. A brand-new
+    // student hasn't had a chance to install the app or switch on notifications
+    // yet, so an immediate call is premature — and a call to someone who DOES
+    // activate is wasted spend. Queue every new student instead; the
+    // expedify-flush cron later sends ONLY the leads that are still un-activated
+    // (no install / notifications off) and skips anyone who self-activated. (A
+    // separate sales-focused call flow will be planned later.)
     if ((isStub || !existing) && role === 'student') {
-      const leadName = entry?.full_name ?? selfName ?? 'there';
       const newUserId = data.user.id;
-      // CALL-HOURS GUARD (founder-final): day leads are HOT — hand off
-      // immediately (Expedify's workflow adds the ~5-min pre-dial wait so the
-      // student finishes the post-signup ceremony first). Night leads
-      // (9 PM–8:30 AM IST) are queued; the 8:45 AM cron sends them into the
-      // morning window (8:30–9:15, before lectures). Retry ladder (60s redial,
-      // 3-call lifetime cap) and callback scheduling live in Expedify's
-      // workflow per the launch pack.
-      const istParts = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).split(':');
-      const istMinutes = Number(istParts[0]) * 60 + Number(istParts[1]);
-      if (istMinutes >= 510 && istMinutes < 1260) { // 08:30–21:00 IST
-        const brief = buildStudentBrief(leadName, onboarding, {
-          label: signupDevice.label,
-          guidance: deviceCallGuidance(signupDevice),
-        });
-        after(() => sendExpedifyLead({
-          studentId: newUserId,
-          name: leadName,
-          phone: e164,
-          email: entry?.email ?? null,
-          source: signupSource,
-          brief,
-        }));
-      } else {
-        after(async () => {
-          await admin.from('profiles').update({ expedify_status: 'queued' }).eq('id', newUserId);
-        });
-      }
+      after(async () => {
+        await admin.from('profiles').update({ expedify_status: 'queued' }).eq('id', newUserId);
+      });
     }
 
     // Admin phone: guarantee the DB role is 'admin' so /admin (which re-checks
