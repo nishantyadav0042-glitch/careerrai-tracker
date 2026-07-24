@@ -1,21 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { Video, Star, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
-import type { MockDebriefData } from './MockDebriefModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { getLogDateString } from '@/lib/streak-utils';
 import { track } from '@/lib/journey';
 import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
-const PendingDebriefCard = dynamic(() => import('./PendingDebriefCard').then((m) => m.PendingDebriefCard), { ssr: false });
-const MockDebriefModal = dynamic(() => import('./MockDebriefModal').then((m) => m.MockDebriefModal), { ssr: false });
 const FeedbackAnimation = dynamic(() => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation), { ssr: false });
 
 function SessionStrip({ session }: { session: TodaySession }) {
@@ -74,8 +70,6 @@ interface DailyTrackerAppProps {
 export function DailyTrackerApp({
   studentId = '',
   todaySession = null,
-  hasBuddy = false,
-  initialPendingDebrief = null,
   initialLogging = null,
   hasLoggedYesterday = true,
   yesterdayStr = '',
@@ -83,52 +77,14 @@ export function DailyTrackerApp({
   firstLogNudge = false,
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
-  const [isDebriefOpen, setIsDebriefOpen] = useState(false);
-  const [currentLogDate, setCurrentLogDate] = useState('');
   const [logDateOverride, setLogDateOverride] = useState<string | null>(null);
   const [lastNudge, setLastNudge] = useState<string | null>(null);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // A mock logged in the last 48h with no debrief = the loud #1 card.
-  const { data: pendingDebrief } = useQuery({
-    queryKey: ['pending-debrief', studentId],
-    enabled: !!studentId,
-    initialData: initialPendingDebrief ?? undefined,
-    staleTime: 60 * 1000,
-    queryFn: async () => {
-      const supabase = createClient();
-      const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
-      const { data: mockReport } = await supabase
-        .from('daily_reports')
-        .select('report_date, updated_at')
-        .eq('student_id', studentId)
-        .eq('mock_taken', true)
-        .gte('report_date', twoDaysAgo)
-        .order('report_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!mockReport) return null;
-      const { data: debrief } = await supabase
-        .from('mock_debriefs')
-        .select('id')
-        .eq('student_id', studentId)
-        .eq('log_date', mockReport.report_date)
-        .maybeSingle();
-      return debrief ? null : mockReport;
-    },
-  });
-
-  // Force the mock debrief until it's filled — closeable, reopens next visit.
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (pendingDebrief && !isDebriefOpen) {
-      setCurrentLogDate(pendingDebrief.report_date);
-      setIsDebriefOpen(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingDebrief]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  // Mock details are captured INLINE in the daily log now (single sheet), so the
+  // separate "pending debrief" card + forced modal are gone (founder, 24 Jul) —
+  // that screen was redundant and duplicated data the log already collected.
 
   const {
     currentStreak,
@@ -222,32 +178,8 @@ export function DailyTrackerApp({
     return { mockSelected };
   };
 
-  const handleDebriefSubmit = async (data: MockDebriefData) => {
-    const response = await fetch('/api/logging/mock-debrief', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, log_date: currentLogDate }),
-    });
-    if (!response.ok) throw new Error('Failed to save debrief');
-    const json = (await response.json()) as { insight?: string | null };
-    if (json.insight) setDebriefInsight(json.insight);
-    queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
-  };
-
   return (
     <div className="space-y-4">
-      {/* Pending mock debrief — the loud #1 card until it's done */}
-      {pendingDebrief && !isDebriefOpen && (
-        <PendingDebriefCard
-          loggedAt={pendingDebrief.updated_at}
-          hasBuddy={hasBuddy}
-          onStart={() => {
-            setCurrentLogDate(pendingDebrief.report_date);
-            setIsDebriefOpen(true);
-          }}
-        />
-      )}
-
       {debriefInsight && (
         <div className="flex items-start gap-2 bg-stone-100 border border-stone-300 rounded-2xl px-4 py-3">
           <span className="text-xs font-bold text-stone-900 shrink-0 mt-0.5">📊</span>
@@ -301,7 +233,6 @@ export function DailyTrackerApp({
       </Card>
 
       <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />
-      <MockDebriefModal isOpen={isDebriefOpen} onClose={() => setIsDebriefOpen(false)} onSubmit={handleDebriefSubmit} logDate={currentLogDate} />
       <FeedbackAnimation isVisible={showFeedback} onComplete={() => setShowFeedback(false)} streakIncrement={currentStreak} bonus={feedbackData?.bonus} noticed={lastNudge} />
     </div>
   );
