@@ -144,10 +144,34 @@ const CANDIDATES: Candidate[] = [
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
-export function computeNextBestAction(d: StudentDna): NextBestAction {
+// Closed-loop learning (founder, 24 Jul): "last 200 times I recommended X, N
+// purchased, M ignored — my confidence just changed." This is that mechanic.
+// ActionPerformance is computed by the reconcile-decisions cron from REAL
+// resolved outcomes (decision_log.business_impact), never invented — a rule
+// with too few resolved outcomes (n < MIN_TRACK_RECORD) is left untouched, so
+// a new/rare action's rule-based confidence isn't drowned out by noise.
+export interface ActionPerformance { n: number; successRate: number }
+const MIN_TRACK_RECORD = 20;
+
+function applyTrackRecord(a: Action, perf?: ActionPerformance): Action {
+  if (!perf || perf.n < MIN_TRACK_RECORD) return a;
+  const pct = Math.round(perf.successRate * 100);
+  const empirical: Confidence = perf.successRate >= 0.5 ? 'high' : perf.successRate >= 0.25 ? 'medium' : 'low';
+  // The track record can only ever LOWER confidence below what the rule
+  // claimed, never inflate it — a rule still has to justify itself on its own
+  // logic; empirical evidence is a brake, not an amplifier.
+  const rank: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
+  const confidence = rank[empirical] < rank[a.confidence] ? empirical : a.confidence;
+  return {
+    ...a, confidence,
+    why: `${a.why} Track record: this recommendation worked ${pct}% of the time over the last ${perf.n} tries.`,
+  };
+}
+
+export function computeNextBestAction(d: StudentDna, performance?: Record<string, ActionPerformance>): NextBestAction {
   const ranked = CANDIDATES
     .filter((c) => c.applies(d))
-    .map((c) => ({ id: c.id, label: c.label, channel: c.channel, ...c.build(d) }))
+    .map((c) => applyTrackRecord({ id: c.id, label: c.label, channel: c.channel, ...c.build(d) }, performance?.[c.id]))
     .sort((a, b) => b.impact - a.impact);
   return { top: ranked[0], ranked: ranked.slice(0, 4) };
 }

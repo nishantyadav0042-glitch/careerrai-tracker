@@ -9,13 +9,16 @@ export async function GET() {
   const admin = createAdminClient();
 
   const isoNDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
-  const [{ data: rows }, { data: recentHistory }] = await Promise.all([
+  const [{ data: rows }, { data: recentHistory }, { data: resolved }] = await Promise.all([
     admin.from('student_dna')
       .select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals, next_best_action, computed_at, profiles!inner(full_name, phone, is_premium)'),
     // Cohort explainability: "why did churn move this week?" — aggregate the
     // drivers behind every recent metric CHANGE across the whole population,
     // not just one student. Same primitive (student_dna_history), zoomed out.
     admin.from('student_dna_history').select('metric, prev_value, new_value, drivers').gte('created_at', isoNDaysAgo(7)),
+    // Closed-loop track record: every RESOLVED Brain decision, ever — "last N
+    // times we recommended X, how many actually worked?"
+    admin.from('decision_log').select('action_id, outcome, business_impact').not('outcome', 'is', null),
   ]);
 
   type Prof = { full_name: string | null; phone: string | null; is_premium: boolean | null };
@@ -67,10 +70,29 @@ export async function GET() {
     };
   }
 
+  // ACTION PERFORMANCE (closed-loop): "last N times we recommended X, how many
+  // actually worked?" — computed ONLY from resolved outcomes (reconcile-
+  // decisions cron). This is what lets the Brain's confidence change over time.
+  const perfCounts = new Map<string, { n: number; positive: number; outcomes: Record<string, number> }>();
+  for (const r of resolved ?? []) {
+    const key = r.action_id as string;
+    const cur = perfCounts.get(key) ?? { n: 0, positive: 0, outcomes: {} };
+    cur.n++;
+    if (r.business_impact === 'positive') cur.positive++;
+    const o = (r.outcome as string) ?? 'unknown';
+    cur.outcomes[o] = (cur.outcomes[o] ?? 0) + 1;
+    perfCounts.set(key, cur);
+  }
+  const actionPerformance: Record<string, unknown> = {};
+  for (const [key, v] of perfCounts) {
+    actionPerformance[key] = { n: v.n, successRate: Math.round((v.positive / v.n) * 100), outcomes: v.outcomes };
+  }
+
   return NextResponse.json({
     total: named.length,
     byStage,
     byAction,
+    actionPerformance, // the Brain's real track record, per action, from resolved outcomes only
     cohortExplain, // "why did X move this week", across the whole population
     window: 'last 7 days',
     // THE ACTION QUEUE: every student ranked by the impact of their single

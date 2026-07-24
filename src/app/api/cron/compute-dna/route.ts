@@ -2,18 +2,39 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { computeStudentDna, type DnaProfileInput, type StudentDna } from '@/lib/student-dna';
-import { computeNextBestAction, detectMilestones, type PrevDna } from '@/lib/product-brain';
+import { computeNextBestAction, detectMilestones, type PrevDna, type ActionPerformance, type Action } from '@/lib/product-brain';
+import { sendPushToUser } from '@/lib/push';
 
 export const maxDuration = 300;
 
 const METRICS = ['activation', 'consistency', 'momentum', 'purchase_intent', 'churn_risk'] as const;
 
+// Only these two channels are ever auto-sent. 'human' (winback/reactivation)
+// stays a human touch — surfaced to the founder/buddy via the action queue,
+// never auto-messaged. 'suppress' (hold) sends nothing by definition.
+function copyForAction(action: Action, firstName: string, dna: StudentDna): { title: string; body: string; url: string } | null {
+  const s = (dna.signals ?? {}) as Record<string, number>;
+  switch (action.id) {
+    case 'convert_now':
+      return { title: `${firstName}, your buddy is ready when you are`, body: 'You\'ve been checking it out — want to lock it in today?', url: '/student/buddy' };
+    case 'activate_first_value':
+      return { title: `${firstName}, one thing left to set up`, body: dna.explanations.activation.summary, url: '/student/tracker' };
+    case 'celebrate':
+      return { title: `${s.currentStreak >= 3 ? `${s.currentStreak}-day streak 🔥` : 'You\'re on a roll'}`, body: 'Keep this going — tomorrow\'s plan is already building on it.', url: '/student/tracker' };
+    default:
+      return null; // 'winback_human', 'reengage_dormant' (human), 'hold' (suppress)
+  }
+}
+
 // Recompute every student's DNA + Next-Best-Action, and:
-//  • emit semantic milestone events on state transitions
+//  • emit semantic milestone events on state transitions (with a real
+//    "what brought them back" attribution on recovery)
 //  • record a change-history row (with drivers) for every metric that moved
-//  • log a decision-audit row whenever the Brain's top action for a student
-//    CHANGES (deduped against the last 14 days — never one row per tick, or
-//    the audit log would be unreadable within a week)
+//  • when the Brain's recommendation CHANGES and its channel is push/in_app,
+//    actually SEND it (a real notification, not just an admin insight) and
+//    link it to the decision so its real delivery/click lifecycle can be read
+//  • blend in the EMPIRICAL track record (reconcile-decisions cron) so a
+//    rule's confidence can be pulled down by real outcomes, never invented up
 // Deterministic loop is fine at this scale (a few hundred students); at 100k+
 // this moves to a batched / warehouse job — the table shapes don't change.
 export async function POST(request: NextRequest) {
@@ -21,14 +42,17 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const isoNDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
-  const [{ data: students }, { data: prevRows }, { data: recentDecisions }] = await Promise.all([
+  const [{ data: students }, { data: prevRows }, { data: recentDecisions }, { data: resolvedDecisions }] = await Promise.all([
     admin.from('profiles')
-      .select('id, created_at, onboarding_completed, app_installed, notif_prefs, is_premium, last_seen_at')
+      .select('id, full_name, created_at, onboarding_completed, app_installed, notif_prefs, is_premium, last_seen_at')
       .eq('role', 'student').not('is_test_account', 'is', true),
     admin.from('student_dna').select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage, signals'),
     // Last logged decision per student, bounded to 14 days so this stays cheap
     // as the audit log grows. Ordered desc so the first hit per student is latest.
     admin.from('decision_log').select('student_id, action_id, created_at').gte('created_at', isoNDaysAgo(14)).order('created_at', { ascending: false }),
+    // Every RESOLVED decision ever (small table until real scale) — the raw
+    // material for the empirical track record per action.
+    admin.from('decision_log').select('action_id, business_impact').not('business_impact', 'is', null),
   ]);
   if (!students?.length) return NextResponse.json({ computed: 0 });
 
@@ -38,17 +62,45 @@ export async function POST(request: NextRequest) {
     if (!lastActionMap.has(d.student_id as string)) lastActionMap.set(d.student_id as string, d.action_id as string);
   }
 
+  // Empirical performance per action_id — computed fresh every run from real
+  // reconciled outcomes only. Never fabricated; unresolved decisions don't count.
+  const performance: Record<string, ActionPerformance> = {};
+  const byAction = new Map<string, { n: number; positive: number }>();
+  for (const r of resolvedDecisions ?? []) {
+    const key = r.action_id as string;
+    const cur = byAction.get(key) ?? { n: 0, positive: 0 };
+    cur.n++;
+    if (r.business_impact === 'positive') cur.positive++;
+    byAction.set(key, cur);
+  }
+  for (const [key, v] of byAction) performance[key] = { n: v.n, successRate: v.positive / v.n };
+
   let computed = 0;
   let milestonesEmitted = 0;
   let decisionsLogged = 0;
   let historyRows = 0;
+  let notificationsSent = 0;
 
   for (const s of students) {
     try {
       const dna: StudentDna = await computeStudentDna(admin, s as DnaProfileInput);
-      const nba = computeNextBestAction(dna);
+      const nba = computeNextBestAction(dna, performance);
       const prev = (prevMap.get(s.id) as unknown as (PrevDna & Record<(typeof METRICS)[number], number | null>) | undefined) ?? null;
       const milestones = detectMilestones(prev, dna);
+
+      // Attribute a recovery to whatever actually happened right before it —
+      // real data (the most recent event before this computation), never guessed.
+      if (milestones.some((m) => m.milestone === 'student_recovered_from_churn')) {
+        const { data: lastEvents } = await admin
+          .from('student_events').select('event, created_at')
+          .eq('user_id', s.id).order('created_at', { ascending: false }).limit(5);
+        const notable = (lastEvents ?? []).find((e) => ['push_click', 'buddy_cta_click', 'buddy_unlock_open'].includes(e.event as string));
+        for (const m of milestones) {
+          if (m.milestone === 'student_recovered_from_churn') {
+            m.meta.recovered_via = notable ? notable.event : (lastEvents?.length ? 'organic_return' : 'unknown');
+          }
+        }
+      }
 
       await admin.from('student_dna').upsert({
         student_id: s.id,
@@ -89,11 +141,30 @@ export async function POST(request: NextRequest) {
         milestonesEmitted += milestones.length;
       }
 
-      // Decision audit — log only when the Brain's recommendation CHANGES.
+      // Decision audit — log only when the Brain's recommendation CHANGES, and
+      // for the two auto-messageable channels, actually SEND it for real.
       if (nba.top && lastActionMap.get(s.id) !== nba.top.id) {
+        let notificationId: string | null = null;
+        const copy = (nba.top.channel === 'push' || nba.top.channel === 'in_app')
+          ? copyForAction(nba.top, ((s.full_name as string) ?? 'there').split(' ')[0], dna)
+          : null;
+        if (copy) {
+          const { data: row } = await admin.from('notifications').insert({
+            user_id: s.id, type: `brain_${nba.top.id}`, title: copy.title, body: copy.body,
+            data: { url: copy.url }, read: false, channel: 'in_app',
+            reason: nba.top.why, expected_action: nba.top.id,
+          }).select('id').single();
+          notificationId = (row?.id as string) ?? null;
+          if (notificationId) {
+            const res = await sendPushToUser(s.id, { title: copy.title, body: copy.body, url: copy.url, notifId: notificationId });
+            if (res.ok) await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', notificationId);
+            notificationsSent++;
+          }
+        }
+
         await admin.from('decision_log').insert({
           student_id: s.id, action_id: nba.top.id, label: nba.top.label, channel: nba.top.channel,
-          impact: nba.top.impact, why: nba.top.why, ranked: nba.ranked,
+          impact: nba.top.impact, why: nba.top.why, ranked: nba.ranked, notification_id: notificationId,
         });
         lastActionMap.set(s.id, nba.top.id);
         decisionsLogged++;
@@ -105,7 +176,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ computed, milestonesEmitted, decisionsLogged, historyRows });
+  return NextResponse.json({ computed, milestonesEmitted, decisionsLogged, historyRows, notificationsSent });
 }
 
 export { POST as GET };
