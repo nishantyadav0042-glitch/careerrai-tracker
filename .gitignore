@@ -45,3 +45,10 @@ next-env.d.ts
 
 test-results/
 playwright-report/
+
+# Android signing key — NEVER commit. Losing this after the first Play Store
+# upload means the app can never be updated again under the same identity.
+# Store the real copy in a password manager + as a GitHub Actions secret.
+android/*.keystore
+android/*.jks
+android_keystore_password.txt
