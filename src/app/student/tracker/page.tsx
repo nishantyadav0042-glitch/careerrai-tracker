@@ -9,6 +9,7 @@ import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { DailyInsightCard } from '@/components/home/daily-insight-card';
 import { CoachingMirror } from '@/components/coaching-mirror';
+import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
 import { NextActionCard } from '@/components/next-action-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
@@ -238,11 +239,12 @@ export default async function DailyTrackerPage() {
   // Topics still untouched (not started) — the third "where you stand" number.
   const untouchedTopics = Math.max(0, totalTopics - startedOnceCount - learningCount);
 
-  // Rotating home: plan leads during the day, the log leads in the evening
-  // (6 PM–2 AM IST) — when the student's job shifts from "what to study" to
-  // "did I log it".
+  // Rotating home, four times a day (see lib/day-slot.ts). The student's
+  // question changes with the clock — "what's today" at 7am, "did I log it" at
+  // midnight — and a fixed layout answers the wrong one most of the time.
   const istHour = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }));
-  const eveningLogFirst = istHour >= 18 || istHour < 2;
+  const slot = daySlot(istHour);
+  const blockOrder = homeOrder(istHour);
 
   const nextSession = sessions?.[0] ?? null;
    
@@ -376,7 +378,8 @@ export default async function DailyTrackerPage() {
             <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-stone-900">
               Hello, {firstName}! <span aria-hidden>👋</span>
             </h1>
-            <p className="text-[13px] text-stone-500">Discipline today, success tomorrow.</p>
+            {/* Moves with the slot, so the page reads like it knows the hour. */}
+            <p className="text-[13px] text-stone-500">{slotGreeting(slot)}</p>
           </div>
           {/* Streak is a status display, not a link — tapping it used to open
               the Analysis page, which made no sense (founder, 24 Jul). */}
@@ -407,22 +410,21 @@ export default async function DailyTrackerPage() {
           </div>
         )}
 
-        {/* Today's insight — the pattern, the advice, every open. In a
-            browser tab it doubles as the install hook. */}
-        {/* First, above everything. The insight explains what happened; this
-            says what to do next, which is the only reason to open the app at
-            9pm after a bad day. */}
-        <NextActionCard />
-        {dailyInsight && <DailyInsightCard title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
-        {/* Coaching progress when there's a plan, the upload entry when there
-            isn't. Shown to EVERY student: a self-study aspirant with their own
-            timetable has exactly the same need, and the scanner was previously
-            reachable only from Profile > Settings and a first-2-days popup —
-            which for most students meant nowhere at all. */}
-        <CoachingMirror />
-
-        {/* In the evening, the log jumps to the top. */}
-        {eveningLogFirst && logBlock}
+        {/* The rotating block. Same four cards every day; the order is decided
+            by the hour (lib/day-slot.ts) so the top of Home answers whatever
+            the student is actually asking right now:
+              action   — what to do next
+              log      — record what happened
+              insight  — yesterday's pattern (and the install hook in a browser)
+              coaching — their coaching's daily share, or the upload entry */}
+        {blockOrder.map((b: HomeBlock) => {
+          if (b === 'action') return <NextActionCard key="action" />;
+          if (b === 'log') return <div key="log">{logBlock}</div>;
+          if (b === 'coaching') return <CoachingMirror key="coaching" />;
+          return dailyInsight
+            ? <DailyInsightCard key="insight" title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />
+            : null;
+        })}
 
         {/* Progress card — % done, pace, weekly trend, reschedule. */}
         {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
@@ -460,7 +462,6 @@ export default async function DailyTrackerPage() {
         {planBlock}
 
         {/* During the day, the log sits under the plan. */}
-        {!eveningLogFirst && logBlock}
       </div>
       {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
           Gated: installed app only, after onboarding + reminders are settled. */}
