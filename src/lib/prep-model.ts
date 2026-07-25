@@ -33,6 +33,25 @@ export const SECTIONS: Section[] = ['VARC', 'DILR', 'QA'];
 // built from widely-known CAT prep conventions — they are not measured, and
 // they are not a promise about a score. Students forgive an estimate that
 // admits it is one; they do not forgive fake precision.
+//
+// Two concepts, kept deliberately distinct so neither can impersonate the
+// other:
+//
+//   PLANNING ESTIMATE (this file, today) — a prior. What we assume a topic
+//     costs before we know anything about this student. Estimating task time
+//     is something humans are systematically bad at (the planning fallacy:
+//     Kahneman & Tversky; Buehler et al. 1994), so this number's job is to be
+//     CONSISTENT everywhere, not to be right.
+//
+//   BEHAVIORAL ESTIMATE (future, from topic_evidence + daily_reports) — what
+//     students LIKE THIS ONE actually took to clear each rung, once enough of
+//     them have logged real work. When that exists, the planning estimate does
+//     not disappear — it becomes one input (the prior the observed median
+//     updates), never again the whole answer.
+//
+// Anything that surfaces a behavioral figure must label which kind it is
+// showing. The two must never be averaged into a single unlabeled number —
+// that would be the two-hours-models bug reborn with better data.
 export const HOURS_ARE_ESTIMATES =
   'Estimated from the CareerRai planning model — not measured data, and not a score prediction.';
 
