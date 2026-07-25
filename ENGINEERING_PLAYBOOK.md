@@ -85,6 +85,17 @@ never the gates in §3.
       ICSE 2009) — inconsistent evolution of duplicated logic is a leading
       fault source — and our own Incidents #4, #5 and #9, all of which were
       this exact failure wearing different clothes.
+- [ ] No composite scores: fundamentally different constructs (coverage,
+      evidence, revision freshness, mock validation, …) may be COMPARED but
+      never summed into one student-facing number. We shipped and same-day
+      removed exactly that blend (ADR-006) — the next one is rejected in
+      review.
+- [ ] Major architecture decisions get an entry in `docs/DECISIONS.md`
+      (failure → internal evidence → external evidence → decision →
+      alternatives rejected → success metric → **reversibility class**).
+      Type 2 (cheap to undo) decisions ship same-day and are measured;
+      Type 1 (expensive to undo — schema, taxonomy, stored history) get
+      design review BEFORE code, proportional to the cost of being wrong.
 - [ ] Observability wired (§6) — the change is measurable and its failures visible.
 - [ ] Tested to the matrix in §5 for what it touches.
 - [ ] Rollback is understood (§7); risky behaviour is behind a flag.

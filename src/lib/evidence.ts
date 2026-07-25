@@ -277,23 +277,26 @@ export function mergeStatus(declared: CoverageStatus, derived: CoverageStatus): 
 // six times as much as Set Theory (5h) — a topic count would let a student
 // "finish" the syllabus by clearing the cheapest half of it.
 
+// ── RULE: never aggregate different constructs into one score ───────────────
+//
+// The first version of this interface carried `index` — a weighted blend of
+// the four meters (50% evidence, 20% revision, 20% mock, 10% coverage). It
+// was removed within a day of shipping, because a blend of four constructs is
+// the single lying ring reborn under a better name: the weights are arbitrary
+// (why 50/20/20/10?), the number answers no question a student can act on,
+// and the moment it exists it becomes the thing people quote — the metric
+// standing in for the construct (surrogation), which is the exact failure the
+// split was built to end. Coverage-vs-evidence GAPS may be compared (that
+// comparison IS the insight); they may not be summed. The headline number is
+// Evidence, because it is the only meter built from observed work.
 export interface PreparationIndex {
   coveragePct: number;
   evidencePct: number;
   revisionPct: number;
   mockPct: number;
-  /** The blend. NOT a percentile, NOT a prediction. */
-  index: number;
-  /** Plain-language audit of how index was reached. */
-  basis: string;
   topicsWithEvidence: number;
   topicsTotal: number;
 }
-
-// Stated here so the number is always explainable. Evidence dominates because
-// it is the only component that reflects work we can actually see; declared
-// coverage is kept at a token weight precisely because it is an opinion.
-export const INDEX_WEIGHTS = { evidence: 0.50, revision: 0.20, mock: 0.20, coverage: 0.10 };
 
 export interface PreparationInput {
   /** Declared statuses, topic → status. */
@@ -343,24 +346,13 @@ export function preparationIndex(input: PreparationInput): PreparationIndex {
   const revisionPct = asPct(revisionH);
   const mockPct = asPct(mockH);
 
-  const index = Math.round(
-    evidencePct * INDEX_WEIGHTS.evidence +
-    revisionPct * INDEX_WEIGHTS.revision +
-    mockPct * INDEX_WEIGHTS.mock +
-    coveragePct * INDEX_WEIGHTS.coverage,
-  );
-
   return {
-    coveragePct, evidencePct, revisionPct, mockPct, index,
-    basis: `${Math.round(INDEX_WEIGHTS.evidence * 100)}% evidence, `
-      + `${Math.round(INDEX_WEIGHTS.revision * 100)}% revision freshness, `
-      + `${Math.round(INDEX_WEIGHTS.mock * 100)}% exam-condition testing, `
-      + `${Math.round(INDEX_WEIGHTS.coverage * 100)}% self-declared coverage — weighted by topic hours.`,
+    coveragePct, evidencePct, revisionPct, mockPct,
     topicsWithEvidence: withEvidence,
     topicsTotal: Object.keys(TOPIC_METADATA).length,
   };
 }
 
-/** What the index is, in one line a student can read. Never a prediction. */
+/** What the meters are, in one line a student can read. Never a prediction. */
 export const INDEX_MEANING =
-  'Your Preparation Index measures the evidence you have built, not your CAT score. We do not predict percentiles.';
+  'These four numbers measure the evidence you have built, not your CAT score. We do not predict percentiles.';

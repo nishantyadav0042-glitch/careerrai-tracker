@@ -4,29 +4,32 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { track } from '@/lib/journey';
 
-// Four numbers instead of one.
+// Four numbers, and deliberately NOT a fifth.
 //
 // The old ring said "78% complete" and meant "you ticked 78% of the boxes".
 // Students read it as "you know 78% of CAT". Those are different claims and
 // only one of them was true, so the ring is split into the four things it was
 // conflating — each of which means exactly one thing and can be checked:
 //
-//   Coverage    what you say you've covered   (an opinion, weighted lowest)
-//   Evidence    rungs actually earned          (the real signal)
+//   Coverage    what you say you've covered   (an opinion)
+//   Evidence    rungs actually earned          (the real signal — the headline)
 //   Revision    how much is still fresh
 //   Tested      how much has met exam conditions
 //
-// The index below them is a blend of those four, with the weights printed
-// underneath. It is NOT a percentile and NOT a prediction — we don't have the
-// data to forecast a CAT result, and pretending otherwise is the fastest way
-// to lose a student who later finds out.
+// The first version blended these into a single "Preparation Index /100".
+// Removed within a day: a weighted blend of four different constructs is the
+// lying ring reborn — arbitrary weights, quotable as if it meant readiness,
+// the metric standing in for the construct all over again. The rule is now in
+// evidence.ts: constructs may be COMPARED (the coverage-vs-evidence gap below
+// is the whole insight) but never summed. Nothing here is a percentile or a
+// prediction.
 
 interface Check { id: string; label: string; done: boolean; detail: string }
 interface Nearest { topic: string; section: string; passed: number; total: number; checks: Check[] }
 
 interface Prep {
   coveragePct: number; evidencePct: number; revisionPct: number; mockPct: number;
-  index: number; basis: string; meaning: string; estimateNote: string;
+  meaning: string; estimateNote: string;
   topicsWithEvidence: number; topicsTotal: number;
   nearest: Nearest[];
 }
@@ -58,9 +61,11 @@ export function PreparationCard() {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold text-stone-900">Preparation Index</h2>
+        <h2 className="text-sm font-bold text-stone-900">Your preparation</h2>
+        {/* The headline is Evidence — the one meter built from observed work —
+            not a blend. A composite score was here once; see the note above. */}
         <span className="text-[22px] font-bold tabular-nums text-stone-900">
-          {prep.index}<span className="text-[13px] font-semibold text-stone-400">/100</span>
+          {prep.evidencePct}<span className="text-[13px] font-semibold text-stone-400">% evidence</span>
         </span>
       </div>
 
@@ -108,7 +113,6 @@ export function PreparationCard() {
 
       {open && (
         <div className="mt-2 space-y-3 border-t border-stone-100 pt-3">
-          <p className="text-[11px] leading-relaxed text-stone-500">{prep.basis}</p>
           <p className="text-[11px] leading-relaxed text-stone-500">{prep.meaning}</p>
           <p className="text-[11px] leading-relaxed text-stone-400">{prep.estimateNote}</p>
           <p className="text-[11px] text-stone-500">
