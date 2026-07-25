@@ -26,7 +26,6 @@ export function CoachingMirror() {
   const [busy, setBusy] = useState<string | null>(null);
   const [upload, setUpload] = useState(false);
   const [hasPlan, setHasPlan] = useState<boolean | null>(null);
-  const [blockCount, setBlockCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -37,7 +36,6 @@ export function CoachingMirror() {
       // Is there a saved plan at all? Drives the upload entry point below.
       const tt = await fetch('/api/timetable').then((r) => r.json()).catch(() => null);
       setHasPlan(!!tt?.timetable);
-      setBlockCount((tt?.timetable?.blocks ?? []).length);
     } catch {
       setRows([]);
     }
@@ -112,18 +110,16 @@ export function CoachingMirror() {
             <Target className="h-4 w-4 text-white" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-stone-900">Following your timetable</p>
+            <p className="text-sm font-bold text-stone-900">Timetable matched with your coaching</p>
             <p className="text-[12px] text-stone-500">
-              {blockCount > 0
-                ? `${blockCount} ${blockCount === 1 ? 'class' : 'classes'} a week · tap update when it changes`
-                : 'Tap update when your coaching sends a new one'}
+              New week? Upload your new weekly timetable.
             </p>
           </div>
           <button
             type="button" onClick={() => setUpload(true)}
             className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-bold text-stone-700"
           >
-            <Upload className="h-3 w-3" /> Update
+            <Upload className="h-3 w-3" /> Upload
           </button>
         </div>
         {upload && (
@@ -139,14 +135,14 @@ export function CoachingMirror() {
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900">
           <Target className="h-4 w-4 text-white" />
         </span>
-        <h2 className="text-sm font-bold text-stone-900">Tonight, on your coaching plan</h2>
+        <h2 className="text-sm font-bold text-stone-900">Matched with your coaching</h2>
         {/* Coaching sends a new sheet every week. Hiding the uploader after the
             first success meant the second week had nowhere to go. */}
         <button
           type="button" onClick={() => setUpload(true)}
           className="ml-auto flex shrink-0 items-center gap-1 text-[11px] font-semibold text-orange-600 hover:underline"
         >
-          <Upload className="h-3 w-3" /> Update
+          <Upload className="h-3 w-3" /> Upload
         </button>
       </div>
 
