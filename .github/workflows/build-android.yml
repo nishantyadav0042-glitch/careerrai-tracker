@@ -33,6 +33,12 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
+          # The GitHub runner exports ANDROID_SDK_ROOT for its own pre-installed
+          # SDK while Bubblewrap installs a second SDK and sets ANDROID_HOME —
+          # the Android Gradle plugin hard-fails when both are set and differ
+          # (run #3's exact error). Unset the runner's variables so
+          # Bubblewrap's SDK is the only one Gradle sees.
+          unset ANDROID_SDK_ROOT ANDROID_HOME
           # `yes y` answers every Bubblewrap prompt (install JDK/SDK, accept
           # SDK license, apply project updates) with "y" — verified against
           # the actual @bubblewrap/cli source, not guessed. The two env vars
