@@ -93,8 +93,12 @@ export function WeeklyCoverageReview({ onDone }: { onDone: () => void }) {
           {rows.map((r) => {
             const current = picked.get(r.topic) ?? r.status;
             // Forward-only: the API rejects downgrades, so we don't offer them
-            // and then silently drop the tap.
-            const options = STATUS_ORDER.slice(STATUS_ORDER.indexOf(r.status));
+            // and then silently drop the tap. 'exam_ready' is excluded for the
+            // same reason — it is earned from evidence, not chosen from a chip
+            // row, and offering it here was how ten topics acquired it.
+            const options = STATUS_ORDER
+              .slice(STATUS_ORDER.indexOf(r.status))
+              .filter((s) => s !== 'exam_ready');
             return (
               <div key={r.topic}>
                 <div className="mb-1.5 flex items-baseline justify-between gap-2">

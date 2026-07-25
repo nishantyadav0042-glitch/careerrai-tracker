@@ -7,6 +7,7 @@ import { QA_GRAPH, qaEngine } from './qa-mastery-engine';
 import { DILR_GRAPH, dilrEngine } from './dilr-mastery-engine';
 import { VARC_GRAPH, varcEngine } from './varc-mastery-engine';
 import type { SectionGraph, MasteryTopicSpec, createMasteryEngine } from './mastery-engine';
+import { isSectionReconciled, driftMessage, type Section } from './prep-model';
 
 type AnyEngine = ReturnType<typeof createMasteryEngine<MasteryTopicSpec>>;
 
@@ -44,6 +45,27 @@ const SECTIONS: Record<string, SectionConfig> = {
 
 export function sectionConfig(param: string | undefined | null): SectionConfig | null {
   return param ? (SECTIONS[param.toLowerCase()] ?? null) : null;
+}
+
+/**
+ * Is this section's plan model in sync with the hours we quote the student?
+ *
+ * The graphs below imply their own hour totals through their session counts,
+ * and those totals disagree with the canonical syllabus model (QA 238h implied
+ * vs 199h canonical). While a section is dormant that's an internal
+ * inconsistency; the moment it serves a plan it becomes a student seeing two
+ * different answers to "how much work is left". So a drifted section is
+ * treated as switched off, whatever the flag says.
+ *
+ * All three fail this today. That is the intended state — it makes the
+ * reconciliation a precondition of launch instead of something a student finds.
+ */
+export function isSectionReady(cfg: SectionConfig): boolean {
+  return isSectionReconciled(cfg.key as Section, cfg.graph);
+}
+
+export function sectionNotReadyReason(cfg: SectionConfig): string {
+  return driftMessage(cfg.key as Section, cfg.graph);
 }
 
 // ── Cross-section time weighting ─────────────────────────────────────────

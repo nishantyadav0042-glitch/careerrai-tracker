@@ -91,6 +91,14 @@ export async function POST(request: NextRequest) {
       const existing = byTopic.get(topic);
       if (!meta && !existing) { rejected++; continue; }
 
+      // Exam Ready is EARNED, never claimed. /api/coverage has always refused
+      // to accept it from a UI; this route was validating only "is it a real
+      // status" and "is it forward", so the one screen we made mandatory was
+      // also the one place the rule leaked. Ten topics across six students had
+      // self-declared Exam Ready through here with every section engine still
+      // switched off — there was no other path they could have come from.
+      if (status === 'exam_ready') { rejected++; continue; }
+
       const from = existing?.status ?? 'not_started';
       // Forward-only. See isForwardMove — a silent downgrade would rewrite the
       // student's history and skew every projection built on it.
