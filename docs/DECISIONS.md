@@ -154,3 +154,35 @@ retro-fitted after it has aged into folklore.
 - **Success metric:** any behavioural count derived outside the view that
   disagrees with the view is a bug by definition; dashboards cite the view.
 - **Reversibility:** **Type 2** (drop view).
+
+## ADR-008 · Curriculum selection by collective filtering — anonymous, no counts, safety-only gate
+
+- **Date:** 25 Jul 2026 · **Status:** phase 1 shipped (voting pool seeded)
+- **Decision driver:** founder direction after the pipeline research: "Students
+  create. Students vote. The system ranks." Manual curation of educational
+  quality dies at scale AND misallocates founder time at 244 students; the
+  bigger risk today is no community at all.
+- **Decision:** exactly two contribution types (tip ≤150 chars; question as a
+  photo). One automated pre-publication gate — SAFETY only (explicit content,
+  hate, spam, contact info, non-CAT; fail-closed to manual review when AI is
+  unavailable). Educational quality is decided by votes phrased as curriculum
+  judgements ("Should every CareerRai student solve this?"). 72h voting
+  window; one submission per student per day; one tip + one question shown
+  per student per day, picked stable-per-day-per-student rather than
+  leader-first (rich-get-richer defence, verified spreading across all 10
+  slots in test). No vote counts shown to students (herding). Everything
+  anonymous under random display names — the goal is helping students, not
+  making one student a star.
+- **External evidence:** wisdom-of-crowds requires independent judgements —
+  visible tallies break independence (herding studies); voters here are
+  topic-qualified students, a stronger signal than general crowds. Safety
+  gate retained per the platform-abuse record of open study communities.
+- **Alternatives rejected:** founder-verified quality (bottleneck +
+  paternalism at odds with the identity); public credit/reputation (SO
+  toxicity + the star-making the founder explicitly rejected); showing
+  leaders first (rich-get-richer).
+- **Success metric:** votes/day, % of DAU voting, submissions/week passing
+  safety; phase 2 (featured daily rotation) unlocks when the seeded pool has
+  enough votes to rank top 10 questions + top 10 tips credibly.
+- **Reversibility:** **Type 2** throughout (cards and pool can be withdrawn
+  in one commit; votes table is additive).

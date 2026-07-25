@@ -35,7 +35,7 @@ export async function GET() {
   if ('error' in ctx) return ctx.error;
   const { admin } = ctx;
 
-  const [{ data: pending }, { data: bank }, { data: attemptsToday }] = await Promise.all([
+  const [{ data: pending }, { data: bank }, { data: attemptsToday }, { data: votingRows }, { data: votes }] = await Promise.all([
     admin.from('student_submissions')
       .select('id, student_id, kind, topic, payload, created_at, profiles:student_id(full_name)')
       .eq('status', 'pending').order('created_at'),
@@ -44,12 +44,34 @@ export async function GET() {
       .neq('status', 'rejected').order('live_date', { ascending: false, nullsFirst: true }).limit(60),
     admin.from('challenge_attempts').select('challenge_id, is_correct, daily_challenges:challenge_id(live_date)')
       .gte('created_at', new Date(Date.now() - 2 * 86_400_000).toISOString()),
+    admin.from('student_submissions')
+      .select('id, kind, topic, payload, display_name, image_path, voting_ends_at')
+      .eq('status', 'voting').order('created_at'),
+    admin.from('submission_votes').select('submission_id, helpful'),
   ]);
+
+  // The ranking the community is producing — admin-only; students never see
+  // tallies. This is what decides which items graduate to featured.
+  const tally = new Map<string, { yes: number; no: number }>();
+  for (const v of votes ?? []) {
+    const t = tally.get(v.submission_id as string) ?? { yes: 0, no: 0 };
+    if (v.helpful) t.yes += 1; else t.no += 1;
+    tally.set(v.submission_id as string, t);
+  }
+  const pipeline = (votingRows ?? []).map((r) => ({
+    id: r.id, kind: r.kind, topic: r.topic,
+    text: (r.payload as { text?: string } | null)?.text ?? null,
+    hasImage: !!r.image_path,
+    displayName: r.display_name,
+    votingEndsAt: r.voting_ends_at,
+    ...(tally.get(r.id as string) ?? { yes: 0, no: 0 }),
+  })).sort((a, b) => (b.yes - b.no) - (a.yes - a.no));
 
   return NextResponse.json({
     activeDate: activeChallengeDate(),
     pending: pending ?? [],
     bank: bank ?? [],
+    pipeline,
     recentAttempts: (attemptsToday ?? []).length,
   });
 }

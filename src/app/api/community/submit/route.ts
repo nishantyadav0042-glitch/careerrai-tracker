@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { TOPIC_METADATA } from '@/lib/topics-constants';
-import { MAX_SUBMISSIONS_PER_DAY } from '@/lib/challenge';
+import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
+import { checkTipSafety, checkImageSafety } from '@/lib/community-safety';
+import { randomDisplayName, VOTING_WINDOW_HOURS, MAX_SUBMISSIONS_PER_DAY } from '@/lib/community-pipeline';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-// POST /api/community/submit — "Help the next student."
+// POST /api/community/submit — exactly two contribution types (founder, 25 Jul):
 //
-// Four buckets, and every one of them becomes CURRICULUM, not content:
-//   tip      → shown inside the study plan, at that topic
-//   mistake  → shown before practising that topic ("watch out for…")
-//   shortcut → shown after the concept, where it's usable
-//   question → enters the Daily Proof bank
-// The contributor's reward is curriculum impact — their words in front of
-// every student who studies that topic after them.
+//   tip      — plain text ≤150 chars, section + topic mandatory
+//   question — a PHOTO, section mandatory, topic optional
 //
-// NOTHING submitted here reaches another student directly. Every item lands
-// in a verification queue (status 'pending') and is published only after a
-// human approves it — because the researched failure of every CAT Telegram
-// group is unverified advice at scale, and the filter IS our differentiator.
+// Flow: automated SAFETY gate (the only pre-publication check) → the voting
+// pool for 72h, under a random display name → ranked by student votes → the
+// best become featured curriculum. Educational quality is never moderated;
+// the community decides it. One submission per student per day — the limit
+// creates the quality.
+
+const SECTIONS: string[] = KNOWLEDGE_GRAPH.map((s) => s.id);
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -27,67 +28,99 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const { kind, topic, tip, question, options, correct_index: correctIndex, explanation } = body as {
-    kind?: unknown; topic?: unknown; tip?: unknown; question?: unknown;
-    options?: unknown; correct_index?: unknown; explanation?: unknown;
+  const { kind, section, topic, tip, image, image_mime: imageMime } = body as {
+    kind?: unknown; section?: unknown; topic?: unknown; tip?: unknown;
+    image?: unknown; image_mime?: unknown;
   };
 
-  const KINDS = ['question', 'tip', 'mistake', 'shortcut'] as const;
-  if (typeof kind !== 'string' || !(KINDS as readonly string[]).includes(kind)) {
-    return NextResponse.json({ error: 'kind must be question, tip, mistake or shortcut' }, { status: 400 });
+  if (kind !== 'tip' && kind !== 'question') {
+    return NextResponse.json({ error: 'kind must be tip or question' }, { status: 400 });
   }
-  // Topic must be canonical — community content binds to the same taxonomy as
-  // everything else, or tips can never surface on the right plan page.
-  if (typeof topic !== 'string' || !TOPIC_METADATA[topic]) {
-    return NextResponse.json({ error: 'Pick the topic this belongs to' }, { status: 400 });
+  if (typeof section !== 'string' || !SECTIONS.includes(section)) {
+    return NextResponse.json({ error: 'Pick a section' }, { status: 400 });
   }
-
-  let payload: Record<string, unknown>;
-  if (kind !== 'question') {
-    const text = typeof tip === 'string' ? tip.trim() : '';
-    if (text.length < 20 || text.length > 600) {
-      return NextResponse.json({ error: 'Keep it between 20 and 600 characters' }, { status: 400 });
-    }
-    payload = { text };
-  } else {
-    const q = typeof question === 'string' ? question.trim() : '';
-    const opts = Array.isArray(options)
-      ? options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0).map((o) => o.trim())
-      : [];
-    const ci = Math.floor(Number(correctIndex));
-    const expl = typeof explanation === 'string' ? explanation.trim() : '';
-    if (q.length < 20 || q.length > 2000) return NextResponse.json({ error: 'Question should be 20–2000 characters' }, { status: 400 });
-    if (opts.length < 2 || opts.length > 6) return NextResponse.json({ error: 'Give 2–6 options' }, { status: 400 });
-    if (!Number.isFinite(ci) || ci < 0 || ci >= opts.length) return NextResponse.json({ error: 'Mark which option is correct' }, { status: 400 });
-    if (expl.length < 10 || expl.length > 2000) return NextResponse.json({ error: 'Explain the answer — that is what makes it worth sharing' }, { status: 400 });
-    payload = { question: q, options: opts, correct_index: ci, explanation: expl };
+  // Topic: mandatory for tips (a tip must land somewhere in the curriculum),
+  // optional for questions (the photo speaks for itself; friction stays low).
+  const topicOk = typeof topic === 'string' && !!TOPIC_METADATA[topic] && TOPIC_METADATA[topic].section === section;
+  if (kind === 'tip' && !topicOk) {
+    return NextResponse.json({ error: 'Pick the topic your tip is about' }, { status: 400 });
   }
 
   const admin = createAdminClient();
 
-  // Rate limit: quality over volume, and a spam wall for the review queue.
+  // One a day. Blocked/rejected attempts count too — retry-spam is spam.
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
   const { count } = await admin
     .from('student_submissions').select('id', { count: 'exact', head: true })
     .eq('student_id', user.id).gte('created_at', dayAgo);
   if ((count ?? 0) >= MAX_SUBMISSIONS_PER_DAY) {
-    return NextResponse.json({ error: `Max ${MAX_SUBMISSIONS_PER_DAY} shares a day — quality over quantity` }, { status: 429 });
+    return NextResponse.json({ error: 'One share a day — make it your best one.' }, { status: 429 });
   }
 
-  const { error } = await admin.from('student_submissions').insert({
-    student_id: user.id, kind, topic, payload,
-  });
-  if (error) {
-    console.error('[community] submit failed', error.message);
-    return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 });
+  const votingEnds = new Date(Date.now() + VOTING_WINDOW_HOURS * 3600_000).toISOString();
+  const displayName = randomDisplayName();
+
+  if (kind === 'tip') {
+    const text = typeof tip === 'string' ? tip.trim() : '';
+    if (text.length < 15 || text.length > 150) {
+      return NextResponse.json({ error: 'Tips are 15–150 characters — one sharp idea' }, { status: 400 });
+    }
+
+    const safety = await checkTipSafety(text);
+    if (safety.verdict === 'blocked') {
+      // Generic message on purpose — echoing what tripped the filter teaches
+      // how to evade it.
+      return NextResponse.json({ error: 'This can’t be shared. Keep it about CAT prep, with no links or contact details.' }, { status: 400 });
+    }
+
+    const { error } = await admin.from('student_submissions').insert({
+      student_id: user.id, kind: 'tip', topic: topic as string,
+      payload: { text, section },
+      display_name: displayName,
+      status: safety.verdict === 'ok' ? 'voting' : 'pending',
+      voting_ends_at: votingEnds,
+    });
+    if (error) return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 });
+  } else {
+    if (typeof image !== 'string' || typeof imageMime !== 'string' || !IMAGE_MIMES.includes(imageMime)) {
+      return NextResponse.json({ error: 'Attach a photo of the question (JPG/PNG)' }, { status: 400 });
+    }
+    const bytes = Buffer.from(image, 'base64');
+    if (bytes.length < 1024 || bytes.length > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: 'Photo must be under 4 MB' }, { status: 400 });
+    }
+
+    const safety = await checkImageSafety(image, imageMime);
+    if (safety.verdict === 'blocked') {
+      return NextResponse.json({ error: 'This image can’t be shared. Upload a clear photo of a CAT practice question.' }, { status: 400 });
+    }
+
+    // The image touches storage ONLY after the gate. A 'manual' verdict still
+    // uploads (a human must be able to see it to review it) but the row stays
+    // 'pending', which no student-facing query reads.
+    const ext = imageMime === 'image/png' ? 'png' : imageMime === 'image/webp' ? 'webp' : 'jpg';
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await admin.storage
+      .from('community-questions')
+      .upload(path, bytes, { contentType: imageMime, cacheControl: '86400' });
+    if (upErr) {
+      console.error('[community] image upload failed', upErr.message);
+      return NextResponse.json({ error: 'Could not save the photo. Please try again.' }, { status: 500 });
+    }
+
+    const { error } = await admin.from('student_submissions').insert({
+      student_id: user.id, kind: 'question', topic: topicOk ? (topic as string) : null,
+      payload: { section },
+      image_path: path,
+      display_name: displayName,
+      status: safety.verdict === 'ok' ? 'voting' : 'pending',
+      voting_ends_at: votingEnds,
+    });
+    if (error) return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 });
   }
 
   return NextResponse.json({
     ok: true,
-    // The reward is curriculum impact, not a post: what they wrote becomes
-    // part of how the topic is taught to everyone after them.
-    message: kind === 'question'
-      ? `Sent for review. If approved, it joins the Daily Proof bank — every CareerRai student will face your question.`
-      : `Sent for review. If approved, it becomes part of the ${topic} curriculum — shown to every student who studies it after you.`,
+    message: 'Sent! Students will now vote on it. If they find it genuinely helpful, it becomes a featured pick for the whole community.',
   });
 }

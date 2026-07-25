@@ -40,13 +40,9 @@ export async function GET() {
       .in('topic', challenges.map((c) => c.topic as string)),
   ]);
 
-  // Contributor names for student-sourced questions — the credit is the point.
-  const contributorIds = challenges.map((c) => c.contributor_id as string | null).filter(Boolean) as string[];
-  const names = new Map<string, string>();
-  if (contributorIds.length > 0) {
-    const { data: profs } = await admin.from('profiles').select('id, full_name').in('id', contributorIds);
-    for (const p of profs ?? []) if (p.full_name) names.set(p.id as string, p.full_name as string);
-  }
+  // Anonymous by rule (founder, 25 Jul): student-sourced questions say "a
+  // CareerRai student", never a real name. The goal is helping students, not
+  // making one student a star.
 
   const mine = new Map((myAttempts ?? []).map((a) => [a.challenge_id as string, a]));
   const coverageByTopic = new Map((coverage ?? []).map((c) => [c.topic as string, (c.status as string) ?? 'not_started']));
@@ -69,7 +65,7 @@ export async function GET() {
       question: c.question as string,
       options: (c.options as string[]) ?? [],
       difficulty: c.difficulty as string,
-      contributorName: c.contributor_id ? (names.get(c.contributor_id as string) ?? null) : null,
+      contributorName: c.contributor_id ? 'a CareerRai student' : null,
       attempt: my ? {
         choice: Number(my.choice),
         isCorrect: my.is_correct === true,

@@ -167,7 +167,7 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
             </p>
             {challenge.contributorName && (
               <p className="mt-0.5 text-[11px] text-stone-500">
-                Shared by <span className="font-semibold text-stone-700">{challenge.contributorName}</span> — a CareerRai student
+                Shared by <span className="font-semibold text-stone-700">{challenge.contributorName}</span>
               </p>
             )}
           </div>
