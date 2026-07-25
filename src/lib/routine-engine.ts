@@ -6,7 +6,9 @@
 
 import type { TopicChoice } from './topic-selector';
 
-export type Section = 'VARC' | 'DILR' | 'QA';
+// One Section union for the whole app — prep-model owns it.
+import type { Section } from '@/lib/prep-model';
+export type { Section };
 export type Phase = 'foundation' | 'intensive' | 'revision';
 
 // Self-reported prep stage — see getPhase() below for how this can advance

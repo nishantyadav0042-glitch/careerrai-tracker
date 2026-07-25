@@ -20,6 +20,31 @@ export const FEATURE_BAR = 0.85;
 export const ARCHIVE_BAR = 0.65;
 export const MAX_SUBMISSIONS_PER_DAY = 1; // BeReal rule: the limit creates quality
 
+// Upload constraints — ONE declaration for the client picker and the server
+// gate. When these lived on both sides separately, raising one limit and not
+// the other meant either silent client rejections or long uploads that 400.
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+
+/**
+ * The one graduation rule. Two admin surfaces used to rank the same voting
+ * pool by two different rules (net votes vs the helpful%% bars) — a 3-yes/0-no
+ * item topped one screen while the other said "needs 2 more votes".
+ */
+export function gradeSubmission(yes: number, no: number): {
+  total: number; helpfulPct: number | null;
+  verdict: 'feature' | 'archive' | 'drop' | 'pending';
+} {
+  const total = yes + no;
+  if (total < MIN_VOTES_TO_JUDGE) return { total, helpfulPct: null, verdict: 'pending' };
+  const helpfulPct = Math.round((yes / total) * 100);
+  return {
+    total, helpfulPct,
+    verdict: helpfulPct >= FEATURE_BAR * 100 ? 'feature'
+      : helpfulPct >= ARCHIVE_BAR * 100 ? 'archive' : 'drop',
+  };
+}
+
 // The vote is phrased as HELPING, not judging (founder, 25 Jul): the student
 // isn't a reviewer choosing curriculum — they're making the next aspirant's
 // prep slightly easier. Same two buttons, different heart.

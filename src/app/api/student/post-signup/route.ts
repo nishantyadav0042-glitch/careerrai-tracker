@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { serverError } from '@/lib/api-error';
 
 // Persists the post-login sequence: the date the student (re)confirms in the
@@ -55,10 +55,16 @@ export async function POST(request: NextRequest) {
       .select('topic, status')
       .eq('student_id', user.id);
     const remaining = remainingSyllabusHours(coverage ?? []);
-    const daysLeft = Math.max(1, Math.ceil((new Date((update.syllabus_target_date as string) + 'T00:00:00').getTime() - Date.now()) / 86_400_000));
     if (remaining > 0) {
-      // Same formula as the ring and today's plan: syllabus + mock budget.
-      const h = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
+      // Through computeRequiredPace — the ONE pace implementation. The 1..12
+      // clamp is plan-sizing policy, stated here where the clamped value is
+      // persisted so the clamp is visible next to the write it shapes.
+      const pace = computeRequiredPace({
+        remainingHours: remaining, today: new Date(),
+        targetDate: new Date((update.syllabus_target_date as string) + 'T00:00:00'),
+        committedPerDay: null, mockHours: remainingMockHours(remaining),
+      });
+      const h = Math.min(12, Math.max(1, pace.requiredPerDay));
       update.study_target_hours = h;                 // numeric — keeps the half-hour (e.g. 6.5)
       update.hours_available = Math.round(h);         // smallint columns — whole hours only
       update.weekend_hours_available = Math.round(h);

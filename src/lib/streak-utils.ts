@@ -32,7 +32,6 @@ export function getLogDateString(now: Date = new Date()): string {
 
 // ── Shared constants (import from here — never hardcode elsewhere) ───────────
 export const MS_PER_DAY = 86_400_000;
-export const CAT_EXAM_DATE = new Date(2026, 10, 29); // Nov 29 2026
 
 export const VALID_SECTIONS = ['VARC', 'DILR', 'QA', 'Mock', 'Revision'] as const;
 export const VALID_ENERGY = ['🙏', '💪', '🔥'] as const;

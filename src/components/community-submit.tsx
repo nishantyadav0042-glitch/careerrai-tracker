@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { X, HeartHandshake, Camera } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
+import { MAX_IMAGE_BYTES, IMAGE_MIMES } from '@/lib/community-pipeline';
 
 // "Help the next student" — exactly two things, minimum friction:
 //   💡 a Tip — one sharp idea in plain text (≤150 chars), section + topic
@@ -30,7 +31,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
 
   function onFile(file: File | undefined) {
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) { setError('Photo must be under 4 MB'); return; }
+    if (file.size > MAX_IMAGE_BYTES) { setError('Photo must be under 4 MB'); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const url = String(reader.result);
@@ -144,7 +145,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
               <div className="mt-3">
                 <input
                   ref={fileInput}
-                  type="file" accept="image/jpeg,image/png,image/webp" capture="environment"
+                  type="file" accept={IMAGE_MIMES.join(',')} capture="environment"
                   className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ''; }}
                 />
                 {image ? (

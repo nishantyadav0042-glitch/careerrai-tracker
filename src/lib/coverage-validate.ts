@@ -1,11 +1,14 @@
 import { KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
+import { STATUS_ORDER } from '@/lib/coverage-status';
 
 // Shared with /api/coverage (the authenticated, logged-in-student path) so
 // the pre-auth signup path (verify-phone-otp persisting a matrix built
 // before the account existed) can never diverge from what a real coverage
 // write accepts.
 export const VALID_SECTIONS = KNOWLEDGE_GRAPH.map((s) => s.id);
-export const VALID_STATUSES = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'] as const;
+// Derived from the canonical ladder — a rung added there is valid here
+// automatically, and a rung added only here is impossible.
+export const VALID_STATUSES = STATUS_ORDER;
 export const TOPICS_BY_SECTION: Record<string, string[]> = Object.fromEntries(
   KNOWLEDGE_GRAPH.map((s) => [s.id, s.groups.flatMap((g) => g.units)])
 );
