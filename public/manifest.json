@@ -5,11 +5,16 @@
   "name": "CareerRai - CAT Prep Tracker",
   "short_name": "CareerRai",
   "description": "Track your daily CAT exam prep with an IIM buddy who keeps you accountable.",
-  "start_url": "/student/home?source=pwa",
+  "start_url": "/app?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "launch_handler": { "client_mode": "navigate-existing" },
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "background_color": "#ffffff",
   "theme_color": "#ff6b35",
   "orientation": "portrait-primary",
@@ -33,7 +38,10 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "screenshots": [
     {
       "src": "/screenshots/welcome.png",

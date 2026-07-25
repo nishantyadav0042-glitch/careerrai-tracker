@@ -151,6 +151,41 @@
 
 ---
 
+## Incident #8 — PWA start_url redirected, installs silently failed
+
+- **Date:** 25 July 2026 · **Area:** Growth OS (install) · **Severity:** live,
+  student-reported
+- **Impact:** A student messaged at 07:30 IST: "App open nhi ho rhi." He had
+  accepted the install prompt at 07:24 and accepted it AGAIN at 07:35 — Chrome
+  does not re-prompt for an installed PWA, so the install never completed.
+  Every event he produced stayed `display_mode: browser`; he never once reached
+  standalone. Across all students: **74 accepted the install prompt, 66 reached
+  standalone, 8 never did** (~11%). All 8 were Chrome on Android.
+- **Root cause:** `manifest.json` had `start_url: /student/home?source=pwa`.
+  `/student/home` is a server redirect to `/student/tracker`, and the student
+  layout redirects to `/login` when unauthenticated — so an unauthenticated
+  fetch of start_url returned **307 → /login**, never 200. Chrome validates
+  start_url during install; a redirect chain there makes the install unreliable.
+  It also cost every real launch an extra redirect hop, and `?source=pwa` was
+  destroyed by the redirect exactly as `?source=twa` had been (Incident: TWA
+  store-build marker, same week — same bug class, second occurrence).
+- **Detection gap:** every automated check we run asks "does this route work
+  when logged in". Nothing asked "what does an anonymous fetch of start_url
+  return", which is precisely the request Chrome makes.
+- **Fix:** `start_url` now points at `/app?source=pwa`, a client-rendered entry
+  page that returns **200 unauthenticated** and routes onward in the browser.
+  Verified: `/app?source=pwa` → 200, old value → 307 → /login.
+- **Lessons:** A URL that a browser or an OS fetches on our behalf must be
+  tested **the way that agent fetches it** — unauthenticated, no cookies. And
+  the second time a redirect ate a `?source=` marker should have been the first
+  time we generalised the lesson.
+- **Prevention (encoded):** the release sweep now includes an anonymous fetch of
+  every URL an external agent resolves — `manifest.json` start_url, the service
+  worker, icons, and `.well-known/assetlinks.json` — asserting 200, not 3xx.
+- **Owner:** Nishant
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a
