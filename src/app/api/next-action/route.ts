@@ -57,6 +57,18 @@ export async function GET(request: NextRequest) {
     ? { varc: pct(mock.varc), dilr: pct(mock.dilr), qa: pct(mock.qa) }
     : null;
 
+  // What this student has actually acted on before — the learning input.
+  const { data: hist } = await admin
+    .from('study_action_log').select('kind, outcome')
+    .eq('student_id', user.id).not('outcome', 'is', null).limit(500);
+  const history: Record<string, { shown: number; followed: number }> = {};
+  for (const h of hist ?? []) {
+    const k = h.kind as string;
+    history[k] ??= { shown: 0, followed: 0 };
+    history[k].shown += 1;
+    if (h.outcome === 'followed') history[k].followed += 1;
+  }
+
   const doneBy = new Map<string, number>((prog ?? []).map((r) => [r.target_key as string, Number(r.done) || 0]));
   const targets = sanitizeTargets(tt?.targets)
     .map((t) => computeTargetProgress(t, doneBy.get(targetKey(t)) ?? 0, (tt?.confirmed_at as string | null) ?? null));
@@ -68,7 +80,48 @@ export async function GET(request: NextRequest) {
     daysSincePractice,
     targets,
     followingCoaching: prof?.plan_source === 'coaching',
+    history,
   });
 
-  return NextResponse.json({ minutes, actions });
+  // Record what we recommended so it can be reconciled later, and hand the row
+  // ids back so the card can report a real outcome the moment the student acts.
+  // Once per student per day per kind — the card refetches when they change the
+  // time selector, and counting those as separate recommendations would poison
+  // the follow-rate with duplicates they only ever saw once.
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  const { data: today } = await admin
+    .from('study_action_log').select('id, kind, outcome')
+    .eq('student_id', user.id).gte('shown_at', dayStart.toISOString());
+
+  const idByKind = new Map<string, number>();
+  const resolvedKinds = new Set<string>();
+  for (const r of today ?? []) {
+    idByKind.set(r.kind as string, r.id as number);
+    if (r.outcome) resolvedKinds.add(r.kind as string);
+  }
+
+  const fresh = actions
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => !idByKind.has(a.kind))
+    .map(({ a, i }) => ({
+      student_id: user.id, kind: a.kind, topic: a.topic, section: a.section,
+      minutes: a.minutes, rank: i,
+    }));
+
+  if (fresh.length > 0) {
+    const { data: inserted, error } = await admin
+      .from('study_action_log').insert(fresh).select('id, kind');
+    if (error) console.error('[next-action] log failed', error.message);
+    for (const r of inserted ?? []) idByKind.set(r.kind as string, r.id as number);
+  }
+
+  const withIds = actions.map((a) => ({
+    ...a,
+    id: idByKind.get(a.kind) ?? null,
+    // Already answered today — the card must not ask again.
+    resolved: resolvedKinds.has(a.kind),
+  }));
+
+  return NextResponse.json({ minutes, actions: withIds });
+
 }

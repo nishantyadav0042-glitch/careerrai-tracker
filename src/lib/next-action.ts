@@ -27,6 +27,8 @@ export interface StudyAction {
   title: string;
   /** The evidence. Always a real number from this student's own data. */
   why: string;
+  /** The same evidence in a glance — six words, one number. */
+  whyShort: string;
   minutes: number;
   section: string | null;
   topic: string | null;
@@ -45,6 +47,13 @@ export interface ActionContext {
   targets: TargetProgress[];
   /** Whether the student chose to follow their coaching's order. */
   followingCoaching: boolean;
+  /**
+   * What this student has actually DONE with each kind of advice so far:
+   * kind -> { shown, followed }. This is the learning loop — month 1 ranks by
+   * fixed heuristics, month 6 knows this student never acts on revision
+   * prompts and always acts on weak-section ones, and ranks accordingly.
+   */
+  history?: Record<string, { shown: number; followed: number }>;
 }
 
 const SECTION_OF: Record<string, string> = {};
@@ -88,6 +97,7 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
         kind: 'coaching_due',
         title: `${n} ${due.label.replace(/^\d+[-\d\s+]*/, '').trim() || 'from your coaching'} — today's share`,
         why: `Your coaching's date is ${due.daysLeft} days out. ${n}/day from here keeps it reachable.`,
+        whyShort: `${due.daysLeft} days to your coaching date`,
         minutes: Math.min(ctx.minutes, Math.max(15, n * per)),
         section: due.section,
         topic: null,
@@ -115,6 +125,7 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
             kind: 'weak_section',
             title: `${pick} — one focused block`,
             why: `${weakest[0]} sat at ${weakest[1]} percentile against ${best[1]} in ${best[0]}. That gap is the biggest single lever you have.`,
+            whyShort: `${weakest[0]} is your weakest section`,
             minutes: Math.min(ctx.minutes, 45),
             section: weakest[0],
             topic: pick,
@@ -135,6 +146,7 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
       kind: 'high_weightage',
       title: `Start ${untouched}`,
       why: `It's one of the heaviest scoring topics in ${SECTION_OF[untouched] ?? 'the paper'} and you haven't opened it yet.`,
+      whyShort: 'High marks, not started',
       minutes: Math.min(ctx.minutes, 40),
       section: SECTION_OF[untouched] ?? null,
       topic: untouched,
@@ -153,6 +165,7 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
       kind: 'revision',
       title: `Revise ${fading[0]}`,
       why: `You had this one working and haven't touched it in ${fading[1]} days. Re-earning it is far cheaper than learning it again.`,
+      whyShort: `Untouched ${fading[1]} days`,
       minutes: Math.min(ctx.minutes, 25),
       section: SECTION_OF[fading[0]] ?? null,
       topic: fading[0],
@@ -166,18 +179,40 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
       kind: 'finish_started',
       title: `Finish ${started.topic}`,
       why: `It's still half-open, and a half-learnt topic scores nothing on the day.`,
+      whyShort: 'Half done',
       minutes: Math.min(ctx.minutes, 40),
       section: SECTION_OF[started.topic] ?? null,
       topic: started.topic,
     });
   }
 
+  // ── The learning step ────────────────────────────────────────────────
+  // Re-rank by what this student has actually acted on. A kind they have
+  // ignored repeatedly gets pushed down; one they reliably act on rises. We
+  // only trust the signal after enough shows to be more than noise, and we
+  // never drop a kind entirely — a student's habits change, and an engine that
+  // permanently silences an option can never discover that.
+  const MIN_SHOWS = 4;
+  const scored = out.map((a, i) => {
+    const h = ctx.history?.[a.kind];
+    let adjust = 0;
+    if (h && h.shown >= MIN_SHOWS) {
+      const rate = h.followed / h.shown;
+      // Centred on 0.5 so an average kind is unmoved. Bounded to +/- 1.5
+      // positions so evidence nudges the order, never overturns strategy.
+      adjust = Math.max(-1.5, Math.min(1.5, (rate - 0.5) * 3));
+    }
+    return { a, rank: i - adjust };
+  });
+  scored.sort((x, y) => x.rank - y.rank);
+  const out2 = scored.map((s2) => s2.a);
+
   // One topic, one slot. The weak-section rule and the high-weightage rule can
   // legitimately land on the same topic, and telling a student to "focus on
   // Reading Comprehension" and then "start Reading Comprehension" reads as a
   // system that isn't paying attention.
   const seen = new Set<string>();
-  const deduped = out.filter((a) => {
+  const deduped = out2.filter((a) => {
     if (!a.topic) return true;
     if (seen.has(a.topic)) return false;
     seen.add(a.topic);
