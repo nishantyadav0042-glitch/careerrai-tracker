@@ -86,7 +86,7 @@ export function CommunityVoteCard() {
 
         {voted ? (
           <p className="mt-2.5 text-[12px] font-semibold text-emerald-700">
-            Counted. You just helped pick tomorrow&apos;s curriculum.
+            Counted. That helps the next student.
           </p>
         ) : (
           <>
@@ -119,7 +119,7 @@ export function CommunityVoteCard() {
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900">
           <Users className="h-4 w-4 text-white" />
         </span>
-        <h2 className="text-sm font-bold text-stone-900">You decide the curriculum</h2>
+        <h2 className="text-sm font-bold text-stone-900">Students helping students</h2>
       </div>
       <div className="mt-3 space-y-2.5">
         {block(tip, '💡 Student tip')}
