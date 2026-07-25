@@ -8,6 +8,7 @@ import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
 import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { DailyInsightCard } from '@/components/home/daily-insight-card';
+import { CoachingMirror } from '@/components/coaching-mirror';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
@@ -408,6 +409,10 @@ export default async function DailyTrackerPage() {
         {/* Today's insight — the pattern, the advice, every open. In a
             browser tab it doubles as the install hook. */}
         {dailyInsight && <DailyInsightCard title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
+        {/* Coaching students only: are they keeping up with their coaching's
+            own quota. Renders nothing when there are no countable targets, so
+            self-study students never see an empty shell. */}
+        {profile?.coaching_enrolled === true && <CoachingMirror />}
 
         {/* In the evening, the log jumps to the top. */}
         {eveningLogFirst && logBlock}
