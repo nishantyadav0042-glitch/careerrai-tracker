@@ -18,24 +18,29 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
-  const { id } = (await request.json().catch(() => ({}))) as { id?: unknown };
-  const rowId = Number(id);
-  if (!Number.isInteger(rowId) || rowId <= 0) {
-    return NextResponse.json({ error: 'id required' }, { status: 400 });
+  const { kind } = (await request.json().catch(() => ({}))) as { kind?: unknown };
+  if (typeof kind !== 'string' || !kind || kind.length > 40) {
+    return NextResponse.json({ error: 'kind required' }, { status: 400 });
   }
 
   const admin = createAdminClient();
-  // Scoped to this student AND to a still-open row, so an ack can neither touch
+  // Keyed on (student, kind, today) rather than a row id, so the GET no longer
+  // has to insert-and-return before it can answer — that read-write round trip
+  // sat in the critical path of the home screen's first card.
+  //
+  // Scoped to this student AND to still-open rows, so an ack can neither touch
   // someone else's log nor overwrite a verdict already reached.
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
   const { data, error } = await admin
     .from('study_action_log')
     .update({ outcome: 'followed', outcome_at: new Date().toISOString() })
-    .eq('id', rowId).eq('student_id', user.id).is('outcome', null)
-    .select('id').maybeSingle();
+    .eq('student_id', user.id).eq('kind', kind)
+    .gte('shown_at', dayStart.toISOString()).is('outcome', null)
+    .select('id');
 
   if (error) {
     console.error('[next-action/ack] failed', error.message);
     return NextResponse.json({ error: 'Could not save' }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, updated: !!data });
+  return NextResponse.json({ ok: true, updated: (data ?? []).length });
 }
