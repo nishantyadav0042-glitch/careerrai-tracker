@@ -119,6 +119,14 @@ export default async function AdminTodayPage() {
         <span className="font-mono text-2xl">→</span>
       </Link>
 
+      <Link href="/admin/challenges" className="mb-2 flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Daily Challenge</div>
+          <div className="mt-0.5 text-sm font-semibold text-stone-800">Review student submissions · question bank · schedule</div>
+        </div>
+        <span className="font-mono text-xl text-stone-400">→</span>
+      </Link>
+
       <Link href="/admin/sales-performance" className="mb-3 flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Sales performance</div>
