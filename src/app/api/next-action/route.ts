@@ -57,6 +57,17 @@ export async function GET(request: NextRequest) {
     ? { varc: pct(mock.varc), dilr: pct(mock.dilr), qa: pct(mock.qa) }
     : null;
 
+  // Anything the student has already marked DONE today. A completed action must
+  // not keep sitting at the top of Home for the rest of the day — that's the
+  // difference between a plan and a nag.
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  const { data: todayLog } = await admin
+    .from('study_action_log').select('kind, outcome')
+    .eq('student_id', user.id).gte('shown_at', dayStart.toISOString());
+  const doneToday = new Set(
+    (todayLog ?? []).filter((r) => r.outcome === 'followed').map((r) => r.kind as string),
+  );
+
   // What this student has actually acted on before — the learning input.
   const { data: hist } = await admin
     .from('study_action_log').select('kind, outcome')
@@ -73,7 +84,7 @@ export async function GET(request: NextRequest) {
   const targets = sanitizeTargets(tt?.targets)
     .map((t) => computeTargetProgress(t, doneBy.get(targetKey(t)) ?? 0, (tt?.confirmed_at as string | null) ?? null));
 
-  const actions = nextBestActions({
+  const allActions = nextBestActions({
     minutes,
     coverage,
     mock: mockPercentiles,
@@ -82,6 +93,12 @@ export async function GET(request: NextRequest) {
     followingCoaching: prof?.plan_source === 'coaching',
     history,
   });
+
+  // Drop what's finished. If everything is finished we say so, rather than
+  // silently rendering nothing — a student who did the work deserves to see it
+  // acknowledged.
+  const actions = allActions.filter((a) => !doneToday.has(a.kind));
+  const finishedCount = allActions.length - actions.length;
 
   // Where "Start now" goes. Decided HERE, because only the server knows which
   // section plans are switched on for this account.
@@ -113,21 +130,17 @@ export async function GET(request: NextRequest) {
   //
   // De-duplication is handled by the ack/reconcile side keying on
   // (student, kind, day), so a repeat insert can't inflate the follow-rate.
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-  admin.from('study_action_log').select('kind').eq('student_id', user.id)
-    .gte('shown_at', dayStart.toISOString())
-    .then(({ data: today }) => {
-      const already = new Set((today ?? []).map((r) => r.kind as string));
-      const fresh = withHref
-        .filter((a) => !already.has(a.kind))
-        .map((a) => ({
-          student_id: user.id, kind: a.kind, topic: a.topic,
-          section: a.section, minutes: a.minutes, rank: a.rank,
-        }));
-      if (fresh.length === 0) return;
-      admin.from('study_action_log').insert(fresh)
-        .then(({ error }) => { if (error) console.error('[next-action] log failed', error.message); });
-    });
+  const loggedKinds = new Set((todayLog ?? []).map((r) => r.kind as string));
+  const fresh = withHref
+    .filter((a) => !loggedKinds.has(a.kind))
+    .map((a) => ({
+      student_id: user.id, kind: a.kind, topic: a.topic,
+      section: a.section, minutes: a.minutes, rank: a.rank,
+    }));
+  if (fresh.length > 0) {
+    admin.from('study_action_log').insert(fresh)
+      .then(({ error }) => { if (error) console.error('[next-action] log failed', error.message); });
+  }
 
-  return NextResponse.json({ minutes, actions: withHref });
+  return NextResponse.json({ minutes, actions: withHref, finishedToday: finishedCount });
 }
