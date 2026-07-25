@@ -92,7 +92,9 @@ never the gates in §3.
       review.
 - [ ] **The community wall rule:** no community feature ships unless it
       measurably improves someone's Study Plan, Evidence, Revision, or Topic
-      Learning. Conversation is not a goal; curriculum is. A contribution that
+      Learning — and unless its EVENT, KPI and success threshold are defined
+      BEFORE building. If you can't name the number that would kill it, don't
+      build it. (Daily Pick's: open rate <25% after week one = kill.) Conversation is not a goal; curriculum is. A contribution that
       has no exact home in the learning system (a feed, a lounge, a
       leaderboard) is rejected — everything a student shares must land where
       the next student needs it (tip/mistake/shortcut → at the topic;

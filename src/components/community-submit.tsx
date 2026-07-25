@@ -55,7 +55,10 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok) { setError(json.error ?? 'Could not send.'); setBusy(false); return; }
+      if (!res.ok) {
+        track('community_share_blocked', { kind, section, status: res.status });
+        setError(json.error ?? 'Could not send.'); setBusy(false); return;
+      }
       track('community_submitted', { kind, section });
       setSent(json.message as string);
     } catch { setError('Could not send. Please try again.'); }

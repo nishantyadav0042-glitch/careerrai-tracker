@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Share2 } from 'lucide-react';
+import { shareChallenge } from '@/lib/share-challenge';
 import { track } from '@/lib/journey';
 
 // The Curriculum Selection card — one tip and one question a day, judged.
@@ -23,6 +24,15 @@ export function CommunityVoteCard() {
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [sharedId, setSharedId] = useState<string | null>(null);
+
+  async function share(item: VoteItem) {
+    const result = await shareChallenge(
+      { section: item.section, topic: item.topic, text: item.text, options: item.options, imageUrl: item.imageUrl },
+      'daily_pick',
+    );
+    if (result === 'copied') setSharedId(item.id);
+  }
 
   const load = useCallback(async () => {
     try {
@@ -112,6 +122,18 @@ export function CommunityVoteCard() {
               <ThumbsDown className="h-3 w-3" /> No
             </button>
           </div>
+        )}
+
+        {/* The viral loop, minimum form: forward the QUESTION to the study
+            group — solvable right in WhatsApp, CareerRai as one quiet line. */}
+        {item.kind === 'question' && (
+          <button
+            type="button" onClick={() => void share(item)}
+            className="mt-1.5 flex items-center gap-1 text-[10.5px] font-semibold text-stone-400 active:text-stone-600"
+          >
+            <Share2 className="h-3 w-3" />
+            {sharedId === item.id ? 'Copied — paste it in your group' : 'Challenge your friends — see how many can solve it'}
+          </button>
         )}
       </div>
     );

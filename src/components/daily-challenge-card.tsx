@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Swords, Check, X, Users, HeartHandshake } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
+import { shareChallenge } from '@/lib/share-challenge';
 import { CommunitySubmit } from '@/components/community-submit';
 import type { ChallengeView } from '@/lib/challenge';
 
@@ -130,6 +131,7 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
       : null,
   );
   const [busy, setBusy] = useState(false);
+  const [shareResult, setShareResult] = useState<string | null>(null);
   const [startedAt] = useState(() => Date.now());
 
   async function submit(choice: number) {
@@ -234,6 +236,18 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
               Your answer just counted toward its evidence.
             </p>
 
+            {/* Post-solve is the peak moment to forward it — they just felt
+                something (nailed it or got burned) and the group should too. */}
+            <button
+              type="button"
+              onClick={() => void shareChallenge(
+                { section: challenge.section, topic: challenge.topic, text: challenge.question, options: challenge.options },
+                'daily_proof',
+              ).then((r) => setShareResult(r))}
+              className="w-full rounded-xl border border-stone-300 py-2.5 text-[13px] font-bold text-stone-700 active:scale-[0.99]"
+            >
+              {shareResult === 'copied' ? 'Copied — paste it in your group' : '📤 Challenge your friends — who else can solve it?'}
+            </button>
             <button
               type="button" onClick={() => onClose(true)}
               className="w-full rounded-xl bg-stone-900 py-3 text-[14px] font-bold text-white"

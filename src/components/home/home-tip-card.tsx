@@ -95,7 +95,7 @@ export function HomeTipCard() {
           href="/student/community"
           className={`flex items-center gap-1 text-[11px] font-bold text-indigo-600 ${tip ? 'mt-1.5 pl-6' : ''}`}
         >
-          📷 Help us pick the best questions <ChevronRight className="h-3 w-3" />
+          📷 Today&apos;s questions <ChevronRight className="h-3 w-3" />
         </Link>
       )}
     </div>

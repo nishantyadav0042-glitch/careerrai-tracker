@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HeartHandshake } from 'lucide-react';
+import { track } from '@/lib/journey';
 import { CommunityVoteCard } from '@/components/community-vote-card';
 import { CommunitySubmit } from '@/components/community-submit';
 
@@ -14,17 +15,23 @@ import { CommunitySubmit } from '@/components/community-submit';
 export default function CommunityPage() {
   const [share, setShare] = useState(false);
 
+  // THE metric for this feature (founder, 25 Jul): open rate, vote-completion
+  // and day-over-day return are all derived from this one event. Below 25%
+  // weekly open rate, the feature gets killed, not polished.
+  useEffect(() => { track('daily_pick_open', {}); }, []);
+
   return (
     <div className="mx-auto max-w-md space-y-3 pb-4">
       {/* Header sized like a caption — the questions below need the space.
-          The line that matters: WE don't pick these, students do. */}
+          Framing is helping, not curating: one small thing from a fellow
+          aspirant, every day. */}
       <div>
         <h1 className="text-lg font-bold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Daily Pick
         </h1>
         <p className="mt-0.5 text-[10.5px] leading-snug text-stone-400">
-          We don&apos;t decide the daily tip &amp; question — <span className="font-semibold text-stone-500">you do</span>.
-          By the students, for the students.
+          One small thing from a fellow CAT aspirant, every day.
+          <span className="font-semibold text-stone-500"> By the students, for the students.</span>
         </p>
       </div>
 
