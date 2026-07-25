@@ -12,6 +12,7 @@ import { isPremium } from '@/lib/access';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { selectBuddyBanner } from '@/lib/buddy-banner';
 import { buildWeekPlan } from '@/lib/study-forecast';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -202,6 +203,20 @@ export async function GET() {
   // payload so any stale client bundle that still reads the field keeps
   // working. If a narrated summary ever returns to the UI, fetch it from a
   // separate non-blocking endpoint — never on this page's critical path.
+  // The pace the ring reports — recomputed here so the 7-day plan is capped by
+  // the same number the student sees on Home, not by their declared capacity.
+  // Same helper the ring uses, fed the same per-topic coverage rows.
+  const syllabusLeft = remainingSyllabusHours(coverage ?? []);
+  const weekPace = profile.syllabus_target_date
+    ? computeRequiredPace({
+        remainingHours: syllabusLeft,
+        today,
+        targetDate: new Date(`${profile.syllabus_target_date as string}T00:00:00`),
+        committedPerDay: (profile.study_target_hours as number | null) ?? null,
+        mockHours: remainingMockHours(syllabusLeft),
+      })
+    : null;
+
   const narrative = fallbackNarrative(phase.label, weeksRemaining, weak, weakTopic, blocker);
   const source: 'ai' | 'fallback' = 'fallback';
 
@@ -230,7 +245,17 @@ export async function GET() {
     studiedOnceCount,
     learningCount,
     notStartedCount,
-    weekPlan: buildWeekPlan(coverage ?? [], (profile.study_target_hours as number | null) ?? null, today),
+    // Pass the SAME requiredPerDay the pace ring shows, so the 7-day schedule
+    // and the ring can't disagree about what a day looks like. Before this the
+    // schedule filled the student's whole declared capacity (12h/day for some)
+    // while the ring on the same screen said 4.5h/day was enough.
+    weekPlan: buildWeekPlan(
+      coverage ?? [],
+      (profile.study_target_hours as number | null) ?? null,
+      today,
+      7,
+      weekPace?.requiredPerDay ?? null,
+    ),
     dueForRevisionCount: dueForRevision.length,
     mocksCompleted: prepMemory.mockTrend.count,
     finishProjection,
