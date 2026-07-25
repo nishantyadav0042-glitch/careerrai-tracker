@@ -26,6 +26,7 @@ export function CoachingMirror() {
   const [busy, setBusy] = useState<string | null>(null);
   const [upload, setUpload] = useState(false);
   const [hasPlan, setHasPlan] = useState<boolean | null>(null);
+  const [blockCount, setBlockCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -36,6 +37,7 @@ export function CoachingMirror() {
       // Is there a saved plan at all? Drives the upload entry point below.
       const tt = await fetch('/api/timetable').then((r) => r.json()).catch(() => null);
       setHasPlan(!!tt?.timetable);
+      setBlockCount((tt?.timetable?.blocks ?? []).length);
     } catch {
       setRows([]);
     }
@@ -95,8 +97,41 @@ export function CoachingMirror() {
     );
   }
 
-  // Nothing countable in the plan — render nothing rather than an empty shell.
-  if (!rows || rows.length === 0) return null;
+  // Still loading — say nothing rather than flash an empty card.
+  if (rows === null || hasPlan === null) return null;
+
+  // A plan IS saved, it just has no countable targets in it (a pure class
+  // timetable, which is the common case). This used to `return null`, which
+  // took the whole card away — including the only "New plan" button in the
+  // app. Uploading once therefore removed the ability to ever upload again.
+  if (rows.length === 0) {
+    return (
+      <>
+        <div className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-stone-900">
+            <Target className="h-4 w-4 text-white" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-stone-900">Your plan is saved</p>
+            <p className="text-[12px] text-stone-500">
+              {blockCount > 0
+                ? `${blockCount} ${blockCount === 1 ? 'class' : 'classes'} — your topics follow it`
+                : 'Your topics follow it'}
+            </p>
+          </div>
+          <button
+            type="button" onClick={() => setUpload(true)}
+            className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-bold text-stone-700"
+          >
+            <Upload className="h-3 w-3" /> New plan
+          </button>
+        </div>
+        {upload && (
+          <TimetableUpload onClose={(r) => { setUpload(false); if (r === 'saved') void load(); }} />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4">
