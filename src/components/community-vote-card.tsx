@@ -5,18 +5,30 @@ import { ThumbsUp, ThumbsDown, Share2 } from 'lucide-react';
 import { shareChallenge } from '@/lib/share-challenge';
 import { track } from '@/lib/journey';
 
-// The Curriculum Selection card — one tip and one question a day, judged.
-//
-// The student isn't scrolling a feed or liking posts: they're deciding, with
-// everyone else, what tomorrow's curriculum should include. No vote counts
-// shown (first votes herd later ones), no names (a random first name only),
-// no comments, nothing to scroll. Vote → thank you → gone until tomorrow.
+// The Daily Pick judging surface. Compact fonts, but never flat (founder,
+// 26 Jul: "conceptually right, visually dead — nowhere the essence of the
+// thumbs"). What gives it life:
+//   · every block wears its section's colour (tip amber, QA indigo, DILR
+//     emerald, VARC rose) — four blocks, four moods, no grey wall
+//   · the ownership question is BACK as its own line ("Would this help
+//     another CAT aspirant? Your vote decides.") — the vote must feel like a
+//     decision, not a reaction
+//   · a progress line up top and a small celebration when all four are done
+// Still no counts, no names, no comments, no feed.
 
 interface VoteItem {
   id: string; kind: string; section: string | null; topic: string | null;
   text: string | null; options: string[] | null; imageUrl: string | null;
   displayName: string; prompt: string;
 }
+
+// Section identities — colour is what separates "alive" from "grey wall".
+const TONE: Record<string, { chip: string; border: string; yes: string }> = {
+  tip:  { chip: 'bg-amber-100 text-amber-700',   border: 'border-l-amber-400',   yes: 'bg-amber-600' },
+  QA:   { chip: 'bg-indigo-100 text-indigo-700', border: 'border-l-indigo-400',  yes: 'bg-indigo-600' },
+  DILR: { chip: 'bg-emerald-100 text-emerald-700', border: 'border-l-emerald-400', yes: 'bg-emerald-600' },
+  VARC: { chip: 'bg-rose-100 text-rose-700',     border: 'border-l-rose-400',    yes: 'bg-rose-600' },
+};
 
 export function CommunityVoteCard() {
   const [tip, setTip] = useState<VoteItem | null>(null);
@@ -63,24 +75,25 @@ export function CommunityVoteCard() {
     setBusy(null);
   }
 
-  // Nothing in the pool → no card. Empty community surfaces advertise
-  // emptiness, which is worse than absence.
   if (!loaded || (!tip && questions.length === 0)) return null;
 
-  // Reddit-density typography (founder, 25 Jul): 13px body, 11-12px meta,
-  // tight paddings — small but readable, so three section questions fit
-  // without a scroll marathon.
-  const block = (item: VoteItem | null, label: string) => {
+  const all = [tip, ...questions].filter(Boolean) as VoteItem[];
+  const done = all.filter((i) => votedIds.has(i.id)).length;
+  const allDone = done === all.length && all.length > 0;
+
+  const block = (item: VoteItem | null, kindLabel: string, toneKey: string) => {
     if (!item) return null;
     const voted = votedIds.has(item.id);
+    const tone = TONE[toneKey] ?? TONE.tip;
     return (
-      <div className="rounded-xl border border-stone-200 bg-white p-2.5">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-stone-400">
-          {label}{item.section ? ` · ${item.section}` : ''}{item.topic ? ` · ${item.topic}` : ''}
-        </p>
+      <div key={item.id} className={`rounded-xl border border-l-4 border-stone-200 bg-white p-3 ${tone.border}`}>
+        {/* WHAT this is, on top, in its section's colour. */}
+        <span className={`inline-block rounded-full px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider ${tone.chip}`}>
+          {kindLabel}{item.topic ? ` · ${item.topic}` : ''}
+        </span>
 
         {item.text && (
-          <p className="mt-1 whitespace-pre-line text-[13px] leading-snug text-stone-900">
+          <p className="mt-1.5 whitespace-pre-line text-[13px] leading-snug text-stone-900">
             {item.text}
           </p>
         )}
@@ -93,46 +106,46 @@ export function CommunityVoteCard() {
         )}
         {item.imageUrl && (
           /* eslint-disable-next-line @next/next/no-img-element -- storage URL, dimensions unknown */
-          <img src={item.imageUrl} alt="Community question" className="mt-1 max-h-60 w-full rounded-lg border border-stone-100 object-contain" />
+          <img src={item.imageUrl} alt="Community question" className="mt-1.5 max-h-60 w-full rounded-lg border border-stone-100 object-contain" />
         )}
+        <p className="mt-1 text-[10px] text-stone-400">— {item.displayName}, CareerRai student</p>
 
         {voted ? (
-          <p className="mt-1.5 text-[11px] font-semibold text-emerald-700">
-            Counted 🙌 — that helps the next student.
+          <p className="mt-2 text-[11.5px] font-bold text-emerald-700">
+            🙌 Counted — you&apos;re deciding what students see next.
           </p>
         ) : (
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <p className="min-w-0 flex-1 text-[10.5px] leading-snug text-stone-500">
-              {item.prompt} <span className="text-stone-300">· {item.displayName}</span>
+          <>
+            {/* The ownership line — the WHY of the thumbs. */}
+            <p className="mt-2 text-[11.5px] font-bold text-stone-800">
+              {item.prompt} <span className="font-semibold text-stone-400">Your vote decides.</span>
             </p>
-            <button
-              type="button" disabled={busy === item.id}
-              onClick={() => void vote(item, true)}
-              aria-label="Yes"
-              className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-bold text-white active:scale-[0.96] disabled:opacity-50"
-            >
-              <ThumbsUp className="h-3 w-3" /> Yes
-            </button>
-            <button
-              type="button" disabled={busy === item.id}
-              onClick={() => void vote(item, false)}
-              aria-label="No"
-              className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-bold text-stone-500 active:scale-[0.96] disabled:opacity-50"
-            >
-              <ThumbsDown className="h-3 w-3" /> No
-            </button>
-          </div>
+            <div className="mt-1.5 flex gap-1.5">
+              <button
+                type="button" disabled={busy === item.id}
+                onClick={() => void vote(item, true)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold text-white active:scale-[0.97] disabled:opacity-50 ${tone.yes}`}
+              >
+                <ThumbsUp className="h-3.5 w-3.5" /> Yes, helpful
+              </button>
+              <button
+                type="button" disabled={busy === item.id}
+                onClick={() => void vote(item, false)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-500 active:scale-[0.97] disabled:opacity-50"
+              >
+                <ThumbsDown className="h-3.5 w-3.5" /> Not really
+              </button>
+            </div>
+          </>
         )}
 
-        {/* The viral loop, minimum form: forward the QUESTION to the study
-            group — solvable right in WhatsApp, CareerRai as one quiet line. */}
         {item.kind === 'question' && (
           <button
             type="button" onClick={() => void share(item)}
-            className="mt-1.5 flex items-center gap-1 text-[10.5px] font-semibold text-stone-400 active:text-stone-600"
+            className="mt-2 flex items-center gap-1 text-[10.5px] font-bold text-indigo-500 active:text-indigo-700"
           >
             <Share2 className="h-3 w-3" />
-            {sharedId === item.id ? 'Copied — paste it in your group' : 'Challenge your friends — see how many can solve it'}
+            {sharedId === item.id ? 'Copied — paste it in your group ✅' : 'Challenge your friends — see how many can solve it'}
           </button>
         )}
       </div>
@@ -141,10 +154,22 @@ export function CommunityVoteCard() {
 
   return (
     <div className="space-y-2">
-      {block(tip, '💡 Tip')}
-      {/* One per section, every day — QA, DILR and VARC all get judged.
-          Long formats (RC sets, DI grids) arrive as student photos. */}
-      {questions.map((q) => block(q, '📷 Question'))}
+      {/* Progress up top — four small decisions, and it shows you're moving. */}
+      {!allDone && (
+        <p className="text-[10.5px] font-bold text-stone-400">
+          {done}/{all.length} judged today
+        </p>
+      )}
+      {allDone && (
+        <div className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3.5 py-3 text-white">
+          <p className="text-[13px] font-extrabold">All judged for today 🎉</p>
+          <p className="mt-0.5 text-[11px] text-white/80">
+            Your votes shape tomorrow&apos;s picks. New tip &amp; questions at 8 AM.
+          </p>
+        </div>
+      )}
+      {block(tip, '💡 Student Tip', 'tip')}
+      {questions.map((q) => block(q, '📷 Student Question', q.section ?? 'QA'))}
     </div>
   );
 }
