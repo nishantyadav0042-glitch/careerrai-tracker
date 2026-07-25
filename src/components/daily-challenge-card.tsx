@@ -7,7 +7,7 @@ import { track } from '@/lib/journey';
 import { CommunitySubmit } from '@/components/community-submit';
 import type { ChallengeView } from '@/lib/challenge';
 
-// Today's Challenge — one question per section, same for every student, live
+// Today's Proof — one question per section, same for every student, live
 // from 8am. What makes ours different from every other daily question in CAT
 // prep: answering writes real evidence into your topic record. Their question
 // evaporates; ours compounds.
@@ -54,13 +54,16 @@ export function DailyChallengeCard() {
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600">
             <Swords className="h-4 w-4 text-white" />
           </span>
-          <h2 className="text-sm font-bold text-stone-900">Today&apos;s Challenge</h2>
+          {/* "Proof", not "Challenge" — every prep app has a Daily Quiz; the
+              name must say what makes ours different: this is measurement.
+              You are not playing, you are adding a row to your evidence. */}
+          <h2 className="text-sm font-bold text-stone-900">Today&apos;s Proof</h2>
           <span className="ml-auto text-[11px] font-bold text-stone-400">{done}/{challenges.length}</span>
         </div>
 
         {allDone ? (
           <p className="mt-2 text-[13px] text-stone-600">
-            Done for today — new questions tomorrow at 8&nbsp;AM.
+            Proof logged for today — tomorrow&apos;s at 8&nbsp;AM.
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -98,7 +101,7 @@ export function DailyChallengeCard() {
           className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-stone-100 pt-2.5 text-[12px] font-semibold text-stone-500"
         >
           <HeartHandshake className="h-3.5 w-3.5" />
-          Help a friend — share a question or tip
+          Help the next student
         </button>
       </div>
 

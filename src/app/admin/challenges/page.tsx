@@ -104,7 +104,7 @@ export default function AdminChallengesPage() {
                 <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">
                   {p.kind} · {p.topic ?? 'no topic'} · from {p.profiles?.full_name ?? 'unknown'}
                 </p>
-                {p.kind === 'tip' ? (
+                {p.kind !== 'question' ? (
                   <p className="mt-1.5 text-[13px] leading-relaxed text-stone-800">{p.payload.text}</p>
                 ) : (
                   <>

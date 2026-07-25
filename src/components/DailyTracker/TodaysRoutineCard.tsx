@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
+import { TopicInsights } from '@/components/topic-insights';
 
 // For the swap-topic picker (student ask: "change today's topic from
 // Geometry to Number System") — same-section alternatives only.
@@ -403,6 +404,12 @@ export function TodaysRoutineCard() {
                         <p className="text-base font-bold mt-1.5 text-stone-900">{taskTitle(task)}</p>
                         {!done && task.reason && (
                           <p className="mt-0.5 text-[11px] leading-snug text-stone-500">{task.reason}</p>
+                        )}
+                        {/* Verified student contributions for THIS topic —
+                            curriculum injection, shown exactly where the work
+                            is about to happen and nowhere else. */}
+                        {!done && task.topic && (
+                          <div className="mt-2"><TopicInsights topic={task.topic} /></div>
                         )}
                       </div>
                       {/* Swap today's topic — same section, student's choice. */}

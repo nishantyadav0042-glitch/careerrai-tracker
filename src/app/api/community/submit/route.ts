@@ -6,8 +6,15 @@ import { MAX_SUBMISSIONS_PER_DAY } from '@/lib/challenge';
 
 export const maxDuration = 30;
 
-// POST /api/community/submit — "Help your friend": share a tricky question or
-// a tip. For the students, by the students — with a truth filter.
+// POST /api/community/submit — "Help the next student."
+//
+// Four buckets, and every one of them becomes CURRICULUM, not content:
+//   tip      → shown inside the study plan, at that topic
+//   mistake  → shown before practising that topic ("watch out for…")
+//   shortcut → shown after the concept, where it's usable
+//   question → enters the Daily Proof bank
+// The contributor's reward is curriculum impact — their words in front of
+// every student who studies that topic after them.
 //
 // NOTHING submitted here reaches another student directly. Every item lands
 // in a verification queue (status 'pending') and is published only after a
@@ -25,8 +32,9 @@ export async function POST(request: NextRequest) {
     options?: unknown; correct_index?: unknown; explanation?: unknown;
   };
 
-  if (kind !== 'question' && kind !== 'tip') {
-    return NextResponse.json({ error: 'kind must be question or tip' }, { status: 400 });
+  const KINDS = ['question', 'tip', 'mistake', 'shortcut'] as const;
+  if (typeof kind !== 'string' || !(KINDS as readonly string[]).includes(kind)) {
+    return NextResponse.json({ error: 'kind must be question, tip, mistake or shortcut' }, { status: 400 });
   }
   // Topic must be canonical — community content binds to the same taxonomy as
   // everything else, or tips can never surface on the right plan page.
@@ -35,10 +43,10 @@ export async function POST(request: NextRequest) {
   }
 
   let payload: Record<string, unknown>;
-  if (kind === 'tip') {
+  if (kind !== 'question') {
     const text = typeof tip === 'string' ? tip.trim() : '';
     if (text.length < 20 || text.length > 600) {
-      return NextResponse.json({ error: 'Tip should be 20–600 characters' }, { status: 400 });
+      return NextResponse.json({ error: 'Keep it between 20 and 600 characters' }, { status: 400 });
     }
     payload = { text };
   } else {
@@ -76,6 +84,10 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    message: 'Sent for review. If approved, it goes out to the whole community with your name on it.',
+    // The reward is curriculum impact, not a post: what they wrote becomes
+    // part of how the topic is taught to everyone after them.
+    message: kind === 'question'
+      ? `Sent for review. If approved, it joins the Daily Proof bank — every CareerRai student will face your question.`
+      : `Sent for review. If approved, it becomes part of the ${topic} curriculum — shown to every student who studies it after you.`,
   });
 }
