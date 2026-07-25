@@ -136,10 +136,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 });
   }
 
-  admin.from('student_events').insert({
-    user_id: user.id, event: 'coverage_reviewed',
-    props: { applied, rejected }, path: null,
-  }).then(({ error }) => { if (error) console.error('[coverage-review] event log failed', error.message); });
+  // No server-side event here: the client fires 'coverage_reviewed' through
+  // journey.ts (with full session context). This route used to insert a
+  // second, context-less row for the same action — every count of this event
+  // was 2x.
 
-  return NextResponse.json({ ok: true, applied, reviewedAt: nowIso });
+  return NextResponse.json({ ok: true, applied, rejected, reviewedAt: nowIso });
 }

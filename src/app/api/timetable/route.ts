@@ -142,13 +142,9 @@ export async function POST(request: NextRequest) {
       .eq('student_id', user.id)
       .in('topic', taught);
   }
-
-  admin.from('student_events').insert({
-    user_id: user.id, event: 'timetable_confirmed',
-    props: { blocks: blocks.length, targets: targets.length, alignedTopics: aligned, kind, planSource, targetMoved: !!(followCoaching && syllabusEndDate) },
-    path: null,
-  }).then(({ error: e }) => { if (e) console.error('[timetable] event log failed', e.message); });
-
+  // No server-side event: the client fires 'timetable_saved' via journey.ts
+  // for this same action — the extra context-less 'timetable_confirmed' row
+  // made every timetable count ambiguous (two names, two rows, one action).
   return NextResponse.json({
     ok: true, blocks: blocks.length, targets: targets.length, alignedTopics: aligned,
     planSource, syllabusEndDate: followCoaching ? syllabusEndDate : null,

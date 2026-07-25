@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ThumbsUp, ThumbsDown, Share2 } from 'lucide-react';
 import { shareChallenge } from '@/lib/share-challenge';
+import { ReportItem } from '@/components/report-item';
 import { track } from '@/lib/journey';
 
 // The Daily Pick judging surface. Compact fonts, but never flat (founder,
@@ -108,7 +109,11 @@ export function CommunityVoteCard() {
           /* eslint-disable-next-line @next/next/no-img-element -- storage URL, dimensions unknown */
           <img src={item.imageUrl} alt="Community question" className="mt-1.5 max-h-60 w-full rounded-lg border border-stone-100 object-contain" />
         )}
-        <p className="mt-1 text-[10px] text-stone-400">— {item.displayName}, CareerRai student</p>
+        <div className="mt-1 flex items-center">
+          <p className="text-[10px] text-stone-400">— {item.displayName}, CareerRai student</p>
+          {/* Play UGC compliance: every shared item is reportable in-app. */}
+          <ReportItem submissionId={item.id} />
+        </div>
 
         {voted ? (
           <p className="mt-2 text-[11.5px] font-bold text-emerald-700">

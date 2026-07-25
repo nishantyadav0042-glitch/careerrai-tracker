@@ -244,7 +244,11 @@ function taskVolume(section: Section, topic: string, minutes: number, phase: Pha
 }
 
 // The instruction, in the topic's natural unit and the phase's verb.
-function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1): string {
+// EXPORTED as the one task-instruction builder: swap-topic and the tracker
+// card used to hand-roll a flat minutes/3 "questions" formula here, telling
+// students to "Solve 15 Reading Comprehension questions" where this engine
+// says "3 RC passages, timed".
+export function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1): string {
   const { count: n, unit } = taskVolume(section, topic, minutes, phase, volumeFactor);
   const s = n === 1 ? '' : 's';
   if (unit === 'passage') return phase === 'foundation' ? `Read + solve ${n} RC passage${s}` : `${n} RC passage${s}, timed`;

@@ -156,7 +156,39 @@ function flush(useBeacon = false): void {
 let seq = 0;
 
 /** Record one journey event. Fire-and-forget; batched ~1s, flushed on hide. */
-export function track(event: string, props: Record<string, unknown> = {}): void {
+// ── THE event-name registry ─────────────────────────────────────────────────
+// Every trackable event, as a closed union. Before this existed, track() took
+// any string: 58 free-form names had accumulated, including double-counted
+// and synonym pairs ('coverage_reviewed' fired client AND server; 
+// 'timetable_saved' vs 'timetable_confirmed'). A typo now fails the build
+// instead of silently minting a new metric. Add new events HERE first.
+export type EventName =
+  | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
+  | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
+  | 'first_log_prompt'
+  | 'install_click' | 'install_already' | 'install_dismissed' | 'install_escape'
+  | 'install_guide_shown' | 'install_prompt_result' | 'install_prompt_shown'
+  | 'install_prompt_unavailable' | 'install_unsupported'
+  | 'meta_escape_click' | 'meta_escape_dismissed' | 'meta_escape_shown'
+  | 'pay_blocked_flag_off' | 'pay_checkout_opened' | 'pay_dismissed'
+  | 'pay_escape_browser' | 'pay_exception' | 'pay_failed' | 'pay_free_unlock'
+  | 'pay_order_created' | 'pay_order_failed' | 'pay_script_failed'
+  | 'pay_success_callback'
+  | 'push_enabled' | 'shield_intro_shown'
+  | 'buddy_plan_click' | 'buddy_unlock_open'
+  | 'coverage_review_shown' | 'coverage_reviewed'
+  | 'timetable_upload_start' | 'timetable_saved' | 'timetable_parse_failed'
+  | 'timetable_dismissed'
+  | 'next_action_started' | 'next_action_done' | 'next_action_expanded'
+  | 'prep_index_expanded' | 'evidence_logged'
+  | 'evidence_announce_shown' | 'evidence_announce_dismissed'
+  | 'challenge_opened' | 'challenge_answered' | 'challenge_shared'
+  | 'coaching_progress_logged'
+  | 'daily_pick_open' | 'community_voted' | 'community_submitted'
+  | 'community_share_opened' | 'community_share_blocked'
+  | 'content_reported';
+
+export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {
     if (typeof window === 'undefined') return;
     queue.push({ event, props: { ...props, seq: seq++ }, path: window.location?.pathname ?? '', ts: Date.now() });
