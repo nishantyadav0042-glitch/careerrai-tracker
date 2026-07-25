@@ -126,7 +126,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
               <label className="mt-3 block">
                 <textarea
                   value={tip} onChange={(e) => setTip(e.target.value.slice(0, 150))} rows={3}
-                  placeholder="One sharp idea. e.g. Always mark fixed positions first."
+                  placeholder="One idea, simple words. e.g. Always mark the fixed positions first."
                   className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
                 />
                 <span className="mt-0.5 block text-right text-[10px] text-stone-400">{tip.length}/150</span>

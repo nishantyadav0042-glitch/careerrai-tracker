@@ -11,7 +11,7 @@ import { CoachingMirror } from '@/components/coaching-mirror';
 import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
 import { NextActionCard } from '@/components/next-action-card';
 import { DailyChallengeCard } from '@/components/daily-challenge-card';
-import { DailyPickTeaser } from '@/components/home/daily-pick-teaser';
+import { HomeTipCard } from '@/components/home/home-tip-card';
 import { InsightBubble } from '@/components/home/insight-bubble';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
@@ -431,10 +431,11 @@ export default async function DailyTrackerPage() {
           );
           if (b === 'log') return <div key="log">{logBlock}</div>;
           if (b === 'coaching') return <CoachingMirror key="coaching" />;
-          /* The insight's old slot now points at Daily Pick — the community
-             stays OFF Home (founder, 25 Jul); the insight itself floats by as
-             a 7-second cloud below. */
-          return <DailyPickTeaser key="insight" />;
+          /* The insight's old slot carries the community's ONE Home surface:
+             today's tip (glanceable, votable in a tap) plus the line that
+             sends question-filtering to the Daily Pick tab. The insight
+             itself floats by as a 7-second cloud below. */
+          return <HomeTipCard key="insight" />;
         })}
 
         {/* The daily insight, as a passing 7-second cloud. */}
