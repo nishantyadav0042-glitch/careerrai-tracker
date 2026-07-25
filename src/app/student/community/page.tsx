@@ -22,16 +22,15 @@ export default function CommunityPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-3 pb-4">
-      {/* Header sized like a caption — the questions below need the space.
-          Framing is helping, not curating: one small thing from a fellow
-          aspirant, every day. */}
-      <div>
-        <h1 className="text-lg font-bold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          Daily Pick
+      {/* Compact hero — small type, warm colour. The page must feel like a
+          place students MADE, not a grey admin list (founder, 26 Jul). */}
+      <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-white">
+        <h1 className="text-[17px] font-extrabold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
+          Daily Pick 🤝
         </h1>
-        <p className="mt-0.5 text-[10.5px] leading-snug text-stone-400">
+        <p className="mt-0.5 text-[11px] leading-snug text-white/80">
           One small thing from a fellow CAT aspirant, every day.
-          <span className="font-semibold text-stone-500"> By the students, for the students.</span>
+          <span className="font-bold text-white"> You decide what helps — by the students, for the students.</span>
         </p>
       </div>
 
@@ -39,7 +38,7 @@ export default function CommunityPage() {
 
       <button
         type="button" onClick={() => setShare(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 bg-white py-2.5 text-[12px] font-bold text-stone-600 active:scale-[0.99]"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3 text-[13px] font-extrabold text-white shadow-sm active:scale-[0.99]"
       >
         <HeartHandshake className="h-4 w-4" />
         Help the next student — share a tip or question
