@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Zap, ArrowRight, Check } from 'lucide-react';
+import { Zap, ArrowRight, Check, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
 import type { StudyAction } from '@/lib/next-action';
@@ -24,7 +24,8 @@ export function NextActionCard() {
   const router = useRouter();
   const [minutes, setMinutes] = useState(60);
   const [actions, setActions] = useState<Action[] | null>(null);
-  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [finishedToday, setFinishedToday] = useState(0);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
@@ -40,6 +41,7 @@ export function NextActionCard() {
       const res = await fetch(`/api/next-action?minutes=${mins}`, { signal: ctrl.signal });
       const json = await res.json();
       setActions((json.actions as Action[]) ?? []);
+      setFinishedToday(Number(json.finishedToday) || 0);
     } catch {
       setActions([]);
     } finally {
@@ -51,22 +53,47 @@ export function NextActionCard() {
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch */
   useEffect(() => { void load(60); }, [load]);
 
-  async function start(a: Action) {
+  // Start only opens the work. It deliberately does NOT mark the action done —
+  // opening a topic is not finishing it, and treating the two as the same thing
+  // is what left this card with no way to ever be closed.
+  function start(a: Action) {
     track('next_action_started', { kind: a.kind, topic: a.topic, minutes: a.minutes });
-    // Mark it followed on the way out. They asked for the work and we're
-    // handing it to them — waiting 36 hours for a cron to infer the same thing
-    // throws away the cleanest signal we'll ever get.
-    void fetch('/api/next-action/ack', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: a.kind }),
-    }).catch(() => {});
-    setDone(true);
-    // The server picked this, checking which section plans are actually
-    // switched on for this account.
+    // The server picked the destination, checking which section plans are
+    // actually switched on for this account.
     router.push(a.href);
   }
 
-  if (!loading && (!actions || actions.length === 0)) return null;
+  // Done is the close. It records the outcome (the cleanest signal the learning
+  // loop will ever get) and takes the action off Home for the rest of the day,
+  // surfacing the next one instead.
+  async function markDone(a: Action) {
+    setBusy(true);
+    track('next_action_done', { kind: a.kind, topic: a.topic });
+    try {
+      await fetch('/api/next-action/ack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: a.kind }),
+      });
+      await load(minutes);
+    } catch { /* leave the card as it was */ }
+    setBusy(false);
+  }
+
+  // Everything suggested today is finished. Say so once, briefly — a student
+  // who did the work should see it land, not just watch the card vanish.
+  if (!loading && actions && actions.length === 0) {
+    if (finishedToday > 0) {
+      return (
+        <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-600 p-4 text-white">
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          <p className="text-[14px] font-bold">
+            Done for today — {finishedToday} {finishedToday === 1 ? 'block' : 'blocks'} logged.
+          </p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const primary = actions?.[0];
   const rest = actions?.slice(1) ?? [];
@@ -93,13 +120,22 @@ export function NextActionCard() {
             {primary.minutes} min · {primary.whyShort}
           </p>
 
-          {/* The whole point: one tap from knowing to doing. */}
-          <button
-            type="button" onClick={() => void start(primary)}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-orange-500 py-3 text-[14px] font-bold text-white active:scale-[0.99]"
-          >
-            {done ? (<><Check className="h-4 w-4" /> Opening…</>) : (<>Start now <ArrowRight className="h-4 w-4" /></>)}
-          </button>
+          {/* Two separate things: open the work, or close it out. */}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button" onClick={() => start(primary)} disabled={busy}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-500 py-3 text-[14px] font-bold text-white active:scale-[0.99] disabled:opacity-60"
+            >
+              Start now <ArrowRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button" onClick={() => void markDone(primary)} disabled={busy}
+              aria-label="Mark this done"
+              className="flex items-center justify-center gap-1 rounded-xl bg-white/10 px-3.5 py-3 text-[13px] font-bold text-white active:scale-[0.98] disabled:opacity-60"
+            >
+              <Check className="h-4 w-4" /> Done
+            </button>
+          </div>
 
           {expanded && (
             <>
