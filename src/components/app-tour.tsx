@@ -22,6 +22,7 @@ const STEPS: TourStep[] = [
   { sel: '[data-tour="plan"]',  title: 'Your plan for today', body: 'Built around the highest-scoring CAT topics for exactly where you are. Each task tells you why it’s there.' },
   { sel: '[data-tour="swap"]',  title: 'Not feeling a topic?', body: 'Tap ⇄ Swap to change it — your plan, your call. It comes back tomorrow, never lost.' },
   { sel: '[data-tour="log"]',   title: 'Log it in seconds',     body: 'Done studying? Log it. This one habit keeps your whole plan on track.' },
+  { sel: '[data-tour="daily-pick"]', title: 'Daily Pick 🤝', body: 'A tip and questions from fellow aspirants, every day. Your vote decides what gets featured — and you can share yours too. By the students, for the students.' },
   { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'Your 1:1 IIM buddy reviews your prep and tells you what to fix — right here.' },
 ];
 const KEY = TOUR_KEY;
