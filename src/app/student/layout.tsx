@@ -19,6 +19,7 @@ import { PushHealer } from '@/components/push-healer';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
+import { EvidenceAnnounce } from '@/components/evidence-announce';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
 
@@ -184,6 +185,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
       {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
       {showCoverageReview && <CoverageReviewGate />}
       {showTimetablePrompt && <TimetablePrompt />}
+      {/* One-time evidence announcement (founder, 25 Jul). Established
+          students only: a day-1 student is already meeting the log for the
+          first time, and the timetable ask owns the early-days slot. All
+          three prompts share claimDailyModal, so at most one fires per day
+          regardless. */}
+      {noBlockingModal && !showCoverageReview && !showTimetablePrompt && accountAgeDays > 2 && <EvidenceAnnounce />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );
