@@ -1,0 +1,41 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+
+// The student telling us directly what happened.
+//
+// The reconcile cron infers an outcome from coverage timestamps 36 hours later,
+// which is coarse and late. A student tapping "Done" is a clean, immediate
+// label — far better training data for the ranking loop than an inference, and
+// it arrives while the recommendation is still relevant.
+//
+// Only 'followed' is accepted here. "Not yet" deliberately writes nothing: a
+// student who hasn't got to it at 9pm may well do it at 11, and recording that
+// as a rejection would teach the engine the wrong lesson. The cron still has
+// the final say on anything the student never answers.
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+
+  const { id } = (await request.json().catch(() => ({}))) as { id?: unknown };
+  const rowId = Number(id);
+  if (!Number.isInteger(rowId) || rowId <= 0) {
+    return NextResponse.json({ error: 'id required' }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  // Scoped to this student AND to a still-open row, so an ack can neither touch
+  // someone else's log nor overwrite a verdict already reached.
+  const { data, error } = await admin
+    .from('study_action_log')
+    .update({ outcome: 'followed', outcome_at: new Date().toISOString() })
+    .eq('id', rowId).eq('student_id', user.id).is('outcome', null)
+    .select('id').maybeSingle();
+
+  if (error) {
+    console.error('[next-action/ack] failed', error.message);
+    return NextResponse.json({ error: 'Could not save' }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, updated: !!data });
+}

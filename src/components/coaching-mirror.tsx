@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Target, Plus } from 'lucide-react';
+import { Target, Plus, Upload } from 'lucide-react';
+import { TimetableUpload } from '@/components/timetable-upload';
 import { track } from '@/lib/journey';
 import { statusLabel, type TargetProgress, type NextAction } from '@/lib/coaching-progress';
 
@@ -23,6 +24,8 @@ export function CoachingMirror() {
   const [rows, setRows] = useState<TargetProgress[] | null>(null);
   const [action, setAction] = useState<NextAction | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [upload, setUpload] = useState(false);
+  const [hasPlan, setHasPlan] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -30,6 +33,9 @@ export function CoachingMirror() {
       const json = await res.json();
       setRows((json.targets as TargetProgress[]) ?? []);
       setAction((json.action as NextAction | null) ?? null);
+      // Is there a saved plan at all? Drives the upload entry point below.
+      const tt = await fetch('/api/timetable').then((r) => r.json()).catch(() => null);
+      setHasPlan(!!tt?.timetable);
     } catch {
       setRows([]);
     }
@@ -55,8 +61,41 @@ export function CoachingMirror() {
     setBusy(null);
   }
 
-  // Nothing uploaded, or nothing countable in it — render nothing rather than
-  // an empty shell.
+  // No plan uploaded yet — THIS is the entry point. The scanner previously
+  // lived only in Profile > Settings and behind a first-2-days popup, which
+  // meant that for most students it was reachable from nowhere at all. It
+  // reuses this card's slot rather than adding a fourth thing to the home
+  // screen, which is already crowded with surfaces telling students what to do.
+  if (hasPlan === false) {
+    return (
+      <>
+        <div className="rounded-2xl border border-stone-200 bg-white p-4">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange-500">
+              <Upload className="h-4 w-4 text-white" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-stone-900">Have a study plan or timetable?</p>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-stone-600">
+                Upload a photo or PDF — coaching schedule, targets, or your own plan.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button" onClick={() => setUpload(true)}
+            className="mt-3 w-full rounded-xl bg-stone-900 py-2.5 text-[13px] font-semibold text-white"
+          >
+            Upload my plan
+          </button>
+        </div>
+        {upload && (
+          <TimetableUpload onClose={(r) => { setUpload(false); if (r === 'saved') void load(); }} />
+        )}
+      </>
+    );
+  }
+
+  // Nothing countable in the plan — render nothing rather than an empty shell.
   if (!rows || rows.length === 0) return null;
 
   return (

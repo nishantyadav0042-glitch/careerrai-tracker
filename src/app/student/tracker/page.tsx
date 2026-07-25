@@ -414,10 +414,12 @@ export default async function DailyTrackerPage() {
             9pm after a bad day. */}
         <NextActionCard />
         {dailyInsight && <DailyInsightCard title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
-        {/* Coaching students only: are they keeping up with their coaching's
-            own quota. Renders nothing when there are no countable targets, so
-            self-study students never see an empty shell. */}
-        {profile?.coaching_enrolled === true && <CoachingMirror />}
+        {/* Coaching progress when there's a plan, the upload entry when there
+            isn't. Shown to EVERY student: a self-study aspirant with their own
+            timetable has exactly the same need, and the scanner was previously
+            reachable only from Profile > Settings and a first-2-days popup —
+            which for most students meant nowhere at all. */}
+        <CoachingMirror />
 
         {/* In the evening, the log jumps to the top. */}
         {eveningLogFirst && logBlock}
