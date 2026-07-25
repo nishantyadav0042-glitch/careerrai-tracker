@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CalendarDays, ChevronRight } from 'lucide-react';
+import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import type { PaceResult } from '@/lib/study-pace';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
@@ -67,6 +68,13 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   const [date, setDate] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
+  // Their own finish date has already gone. Three students were sitting in this
+  // state with daysLeft floored at 1, so the ring demanded an impossible number
+  // of hours a day. We do NOT quietly move their date — that's their
+  // commitment. We tell them it's passed and hand them the control.
+  const expired = isTargetExpired(targetIso);
+  const cycles = selectableCatCycles(new Date(), 2);
+
   const tone = TONE[pace.status];
   const R = 30, C = 2 * Math.PI * R;
   const offset = C * (1 - pace.completedPct / 100);
@@ -108,6 +116,30 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
       : pace.aheadPerDay > 0
         ? `${pace.requiredPerDay}h needed · ${pace.aheadPerDay}h ahead`
         : `${pace.requiredPerDay}h a day, steady`;
+
+  if (expired && !editing) {
+    return (
+      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+        <p className="text-[15px] font-bold text-stone-900">Your finish date has passed</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+          You set <span className="font-semibold">{fmt(targetIso)}</span>. Pick a new one and your plan and daily
+          hours recalculate from today — nothing you&apos;ve logged is lost.
+        </p>
+        <button
+          type="button" onClick={() => { setEditing(true); setErr(null); }}
+          className="mt-3 w-full rounded-xl bg-stone-900 py-3 text-[14px] font-bold text-white active:scale-[0.99]"
+        >
+          Pick a new date
+        </button>
+        {cycles.length > 1 && (
+          <p className="mt-2 text-center text-[11px] text-stone-500">
+            Writing {cycles[1].label} instead? Choose a date up to{' '}
+            {cycles[1].syllabusCutoff.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-stone-200/70 bg-white p-3 shadow-sm">

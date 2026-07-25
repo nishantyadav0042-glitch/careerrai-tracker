@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { selectableCatCycles } from '@/lib/cat-cycle';
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => void;
@@ -27,15 +28,31 @@ export default function ScreenTargetDate({ onNext, onBack, canGoBack, isLoading 
   const [customDate, setCustomDate] = useState('');
 
   const today = new Date();
-  let cutoffYear = today.getFullYear();
-  if (today > new Date(cutoffYear, 10, 10)) cutoffYear += 1;
-  const cutoff = new Date(cutoffYear, 10, 10);
-  const clamp = (d: Date) => (d > cutoff ? cutoff : d);
-  const options: { date: Date; speed: string }[] = [
-    { date: clamp(addWeeks(today, 6)), speed: 'Fast' },
-    { date: clamp(addWeeks(today, 10)), speed: 'Balanced' },
-    { date: clamp(addWeeks(today, 14)), speed: 'Steady' },
-  ];
+
+  // Which CAT are they sitting? This screen used to assume "the next November"
+  // and clamp every option to 10 Nov of the CURRENT year — so a student here to
+  // prepare for CAT 2027 was silently handed a 2026 deadline and a countdown to
+  // an exam they aren't taking. Ask first, then price the dates against THEIR
+  // exam. A cycle disappears from the list once its own syllabus window closes.
+  const cycles = selectableCatCycles(today, 2);
+  const [cycleYear, setCycleYear] = useState<number>(cycles[0]?.year ?? today.getFullYear());
+  const cycle = cycles.find((c) => c.year === cycleYear) ?? cycles[0];
+
+  const clamp = (d: Date) => (cycle && d > cycle.syllabusCutoff ? cycle.syllabusCutoff : d);
+  // For a cycle more than a year out, 6/10/14 weeks is meaningless — those
+  // students need month-scale options, not "finish in six weeks".
+  const farOut = cycle ? cycle.syllabusCutoff.getTime() - today.getTime() > 400 * 86_400_000 : false;
+  const options: { date: Date; speed: string }[] = farOut
+    ? [
+        { date: clamp(addWeeks(today, 20)), speed: 'Fast' },
+        { date: clamp(addWeeks(today, 32)), speed: 'Balanced' },
+        { date: clamp(addWeeks(today, 44)), speed: 'Steady' },
+      ]
+    : [
+        { date: clamp(addWeeks(today, 6)), speed: 'Fast' },
+        { date: clamp(addWeeks(today, 10)), speed: 'Balanced' },
+        { date: clamp(addWeeks(today, 14)), speed: 'Steady' },
+      ];
 
   return (
     <div className="space-y-5 pt-1">
@@ -48,13 +65,39 @@ export default function ScreenTargetDate({ onNext, onBack, canGoBack, isLoading 
         </p>
       </div>
 
+      {cycles.length > 1 && (
+        <div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-stone-500">
+            Which CAT are you writing?
+          </label>
+          <div className="flex gap-2">
+            {cycles.map((c) => (
+              <button
+                key={c.year} type="button" onClick={() => { setCycleYear(c.year); setCustom(false); setCustomDate(''); }}
+                className={cn(
+                  'flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all active:scale-95',
+                  cycleYear === c.year
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300',
+                )}
+              >
+                {c.label}
+                <span className="mt-0.5 block text-[10px] font-medium text-stone-500">
+                  {c.examDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         {options.map(({ date, speed }) => (
           <button
             key={speed}
             type="button"
             disabled={isLoading}
-            onClick={() => onNext({ ambition_date: toIsoDate(date) })}
+            onClick={() => onNext({ ambition_date: toIsoDate(date), attempt_year: cycleYear })}
             className="w-full rounded-2xl border-2 border-stone-200 bg-white p-4 text-left transition-all hover:border-stone-900 active:scale-[0.98]"
           >
             <div className="flex items-baseline justify-between gap-2">
@@ -74,7 +117,7 @@ export default function ScreenTargetDate({ onNext, onBack, canGoBack, isLoading 
                 type="date"
                 value={customDate}
                 min={toIsoDate(addWeeks(today, 1))}
-                max={toIsoDate(cutoff)}
+                max={cycle ? toIsoDate(cycle.syllabusCutoff) : undefined}
                 onChange={(e) => setCustomDate(e.target.value)}
                 className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900"
               />
@@ -82,7 +125,7 @@ export default function ScreenTargetDate({ onNext, onBack, canGoBack, isLoading 
                 <button
                   type="button"
                   disabled={isLoading}
-                  onClick={() => onNext({ ambition_date: customDate })}
+                  onClick={() => onNext({ ambition_date: customDate, attempt_year: cycleYear })}
                   className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
                 >
                   {fmt(new Date(customDate + 'T00:00:00'))} — this is my date →
