@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Pencil } from 'lucide-react';
 import { TimetableUpload } from '@/components/timetable-upload';
+import { CoachingMirror } from '@/components/coaching-mirror';
 import { DAY_LABELS, formatTime, type TimetableBlock } from '@/lib/timetable';
 
 // The PERMANENT way to reach the coaching-timetable scanner.
@@ -41,6 +42,10 @@ export function TimetableCard() {
 
   return (
     <div>
+      {/* Progress against the coaching's own quota, above the upload card —
+          it's the reason to come back, the upload is just how it got here. */}
+      <div className="mb-4"><CoachingMirror /></div>
+
       <h2 className="mb-2 text-lg font-semibold text-stone-900">Coaching timetable</h2>
 
       <div className="rounded-xl border border-stone-200 bg-white p-4">
