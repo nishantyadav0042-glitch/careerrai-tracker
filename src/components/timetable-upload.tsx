@@ -183,13 +183,13 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               </button>
             </div>
 
-            <h2 className="mt-4 text-xl font-bold text-stone-900">Going to a coaching class?</h2>
+            <h2 className="mt-4 text-xl font-bold text-stone-900">Add your class timetable</h2>
             <p className="mt-1.5 text-[15px] leading-relaxed text-stone-600">
-              Upload your coaching timetable and CareerRai will follow it — your plan will push the same topics your
-              class is teaching, instead of pulling you somewhere else.
+              Take a photo of it. Then when your class teaches Percentages, your plan here says Percentages too —
+              instead of sending you somewhere else.
             </p>
             <p className="mt-2 text-[13px] text-stone-500">
-              A photo of the printed sheet is fine — pick several if it doesn&apos;t fit in one shot.
+              A phone photo is fine. Pick more than one if it doesn&apos;t fit in a single shot.
             </p>
 
             {error && (
@@ -213,12 +213,12 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
             >
               {stage === 'reading'
                 ? (<><Loader2 className="h-4 w-4 animate-spin" /> {progress ?? 'Reading your plan…'}</>)
-                : (<><Upload className="h-4 w-4" /> Upload photos or PDF</>)}
+                : (<><Upload className="h-4 w-4" /> Choose photos</>)}
             </button>
 
             <button type="button" onClick={() => dismiss('declined')}
               className="mt-2 w-full py-2.5 text-center text-sm font-medium text-stone-500">
-              I don&apos;t go to coaching
+              I don&apos;t have one
             </button>
           </>
         )}
@@ -312,7 +312,7 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
 
         {(stage === 'choose' || stage === 'saving') && (
           <>
-            <h2 className="text-xl font-bold text-stone-900">How should we plan your prep?</h2>
+            <h2 className="text-xl font-bold text-stone-900">Follow this timetable?</h2>
             <p className="mt-1.5 text-[15px] leading-relaxed text-stone-600">
               {blocks.length > 0
                 ? <>You&apos;ve got {blocks.length} {blocks.length === 1 ? 'class' : 'classes'} a week. </>
@@ -328,7 +328,7 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               type="button" disabled={stage === 'saving'} onClick={() => save(true)}
               className="mt-5 w-full rounded-2xl border-2 border-orange-500 bg-orange-50 p-4 text-left disabled:opacity-60"
             >
-              <p className="text-sm font-bold text-stone-900">Follow my coaching</p>
+              <p className="text-sm font-bold text-stone-900">Yes, match my class</p>
               <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
                 We&apos;ll push the same topics your class is teaching, so what you study here backs up what you just
                 learnt there.
@@ -346,10 +346,9 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               type="button" disabled={stage === 'saving'} onClick={() => save(false)}
               className="mt-2.5 w-full rounded-2xl border border-stone-200 bg-white p-4 text-left disabled:opacity-60"
             >
-              <p className="text-sm font-bold text-stone-900">Build my own plan</p>
+              <p className="text-sm font-bold text-stone-900">No, plan it for me</p>
               <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
-                We&apos;ll pick your topics by what scores most for you. Your class times are still saved, so we
-                won&apos;t clash with them.
+                We&apos;ll choose your topics by what scores most for you. Your class times stay saved either way.
               </p>
             </button>
 

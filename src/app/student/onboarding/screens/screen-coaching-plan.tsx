@@ -35,11 +35,10 @@ export default function ScreenCoachingPlan({ onNext, isLoading }: Props) {
     <div className="space-y-5 pt-1">
       <div>
         <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          Does your coaching give you a plan?
+          Does your coaching give you a timetable?
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-stone-600">
-          If they do, upload it and we&apos;ll build your prep around it — so this app backs up your class instead of
-          pulling you the other way.
+          Add a photo of it and your daily plan will follow your class — same topics, same order.
         </p>
       </div>
 
@@ -52,7 +51,7 @@ export default function ScreenCoachingPlan({ onNext, isLoading }: Props) {
             <p className="text-sm font-bold text-stone-900">Timetable saved</p>
           </div>
           <p className="mt-2 text-[13px] leading-relaxed text-stone-600">
-            Your plan will follow it from day one. You can change or replace it anytime from Profile → Settings.
+            Your daily plan will follow it from day one. You can update it any time from your home screen.
           </p>
         </div>
       ) : (
@@ -79,7 +78,7 @@ export default function ScreenCoachingPlan({ onNext, isLoading }: Props) {
             type="button" disabled={isLoading} onClick={() => onNext({ coaching_plan_answer: 'none' })}
             className="w-full py-3 text-center text-sm font-medium text-stone-500 disabled:opacity-60"
           >
-            No, they don&apos;t give me one
+            They don&apos;t give me one
           </button>
         </>
       )}

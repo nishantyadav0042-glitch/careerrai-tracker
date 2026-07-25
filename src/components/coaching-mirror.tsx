@@ -77,9 +77,9 @@ export function CoachingMirror() {
               <Upload className="h-4 w-4 text-white" />
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-stone-900">Have a study plan or timetable?</p>
+              <p className="text-sm font-bold text-stone-900">Have a class timetable?</p>
               <p className="mt-0.5 text-[13px] leading-relaxed text-stone-600">
-                Upload a photo or PDF — coaching schedule, targets, or your own plan.
+                Take a photo of it. Your daily plan here will follow the same topics as your class.
               </p>
             </div>
           </div>
@@ -87,7 +87,7 @@ export function CoachingMirror() {
             type="button" onClick={() => setUpload(true)}
             className="mt-3 w-full rounded-xl bg-stone-900 py-2.5 text-[13px] font-semibold text-white"
           >
-            Upload my plan
+            Add my timetable
           </button>
         </div>
         {upload && (
@@ -112,18 +112,18 @@ export function CoachingMirror() {
             <Target className="h-4 w-4 text-white" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-stone-900">Your plan is saved</p>
+            <p className="text-sm font-bold text-stone-900">Following your timetable</p>
             <p className="text-[12px] text-stone-500">
               {blockCount > 0
-                ? `${blockCount} ${blockCount === 1 ? 'class' : 'classes'} — your topics follow it`
-                : 'Your topics follow it'}
+                ? `${blockCount} ${blockCount === 1 ? 'class' : 'classes'} a week · tap update when it changes`
+                : 'Tap update when your coaching sends a new one'}
             </p>
           </div>
           <button
             type="button" onClick={() => setUpload(true)}
             className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-bold text-stone-700"
           >
-            <Upload className="h-3 w-3" /> New plan
+            <Upload className="h-3 w-3" /> Update
           </button>
         </div>
         {upload && (
@@ -146,7 +146,7 @@ export function CoachingMirror() {
           type="button" onClick={() => setUpload(true)}
           className="ml-auto flex shrink-0 items-center gap-1 text-[11px] font-semibold text-orange-600 hover:underline"
         >
-          <Upload className="h-3 w-3" /> New plan
+          <Upload className="h-3 w-3" /> Update
         </button>
       </div>
 

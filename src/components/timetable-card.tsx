@@ -46,7 +46,7 @@ export function TimetableCard() {
           it's the reason to come back, the upload is just how it got here. */}
       <div className="mb-4"><CoachingMirror /></div>
 
-      <h2 className="mb-2 text-lg font-semibold text-stone-900">Coaching timetable</h2>
+      <h2 className="mb-2 text-lg font-semibold text-stone-900">Class timetable</h2>
 
       <div className="rounded-xl border border-stone-200 bg-white p-4">
         {loading ? (
@@ -88,15 +88,14 @@ export function TimetableCard() {
                 <CalendarClock className="h-5 w-5 text-white" />
               </span>
               <p className="text-sm leading-relaxed text-stone-700">
-                Going to a coaching class? Upload your timetable and your plan will push the same topics your class is
-                teaching, instead of pulling you somewhere else.
+                Take a photo of your class timetable and your daily plan will follow the same topics.
               </p>
             </div>
             <button
               type="button" onClick={() => setOpen(true)}
               className="mt-4 w-full rounded-xl bg-stone-900 py-3 text-sm font-semibold text-white"
             >
-              Upload my timetable
+              Add my timetable
             </button>
           </>
         )}
