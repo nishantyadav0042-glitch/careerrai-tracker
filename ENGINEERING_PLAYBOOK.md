@@ -74,6 +74,17 @@ never the gates in §3.
 - [ ] Obeys the relevant OS Constitution's non-negotiables (no violation shipped).
 - [ ] `npx tsc --noEmit` clean · `eslint` clean · `npm run build` succeeds.
 - [ ] One source of truth; no duplicated logic or hidden business rule introduced.
+      **The gate is absolute: a change that redefines an existing business
+      concept instead of importing it is rejected regardless of its other
+      merits.** Redefining includes re-declaring an enum or ladder
+      (`coverage-status.ts`), re-deriving a pace/hours figure
+      (`study-pace.ts` / `prep-model.ts`), re-implementing a date rule
+      (`routine-engine.ts` catExamDate, `streak-utils.ts` study day), or
+      inventing a new "done"/"ready" state outside the evidence ladder
+      (`evidence.ts`). Empirical basis: clone research (Juergens et al.,
+      ICSE 2009) — inconsistent evolution of duplicated logic is a leading
+      fault source — and our own Incidents #4, #5 and #9, all of which were
+      this exact failure wearing different clothes.
 - [ ] Observability wired (§6) — the change is measurable and its failures visible.
 - [ ] Tested to the matrix in §5 for what it touches.
 - [ ] Rollback is understood (§7); risky behaviour is behind a flag.

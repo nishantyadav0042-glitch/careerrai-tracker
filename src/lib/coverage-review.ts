@@ -38,32 +38,11 @@ export function isReviewDue(
   return days === null || days >= REVIEW_INTERVAL_DAYS;
 }
 
-export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+// The ladder (type, order, labels, guards) is defined ONCE in
+// coverage-status.ts. This module re-exports it for its existing consumers
+// and keeps only the review-cadence logic that is genuinely its own.
+export {
+  STATUS_ORDER, STATUS_LABEL, isCoverageStatus, isForwardMove,
+  type CoverageStatus,
+} from './coverage-status';
 
-export const STATUS_ORDER: CoverageStatus[] = [
-  'not_started', 'learning', 'practicing', 'revising', 'exam_ready',
-];
-
-export const STATUS_LABEL: Record<CoverageStatus, string> = {
-  not_started: 'Not started',
-  learning: 'Learning',
-  practicing: 'Practising',
-  revising: 'Revising',
-  exam_ready: 'Exam ready',
-};
-
-export function isCoverageStatus(v: unknown): v is CoverageStatus {
-  return typeof v === 'string' && (STATUS_ORDER as string[]).includes(v);
-}
-
-/**
- * A status may only move FORWARD in a weekly review, or stay put.
- *
- * Downgrades are excluded on purpose: a mis-tap that silently knocks a topic
- * from 'exam_ready' back to 'not_started' would rewrite the student's history
- * and wreck the pace projection, and they'd never notice it happened. Genuine
- * regressions belong in the full matrix editor, where the change is deliberate.
- */
-export function isForwardMove(from: CoverageStatus, to: CoverageStatus): boolean {
-  return STATUS_ORDER.indexOf(to) >= STATUS_ORDER.indexOf(from);
-}

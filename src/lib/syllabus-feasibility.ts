@@ -1,5 +1,6 @@
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { remainingMockHours } from '@/lib/study-pace';
+import { resolveCatExamDate } from '@/lib/routine-engine';
 
 // Onboarding capacity reality-check (founder, 22 July): a student must never be
 // handed a plan that silently demands more hours than they said they have. When
@@ -23,13 +24,10 @@ function fullSyllabusHours(): number {
   return Object.values(TOPIC_METADATA).reduce((sum, m) => sum + m.estimatedHours, 0);
 }
 
-// Approx CAT date — last Sunday of November — for the "even a realistic pace
-// overshoots the exam" warning.
-function catApprox(now: Date): Date {
-  const year = now.getMonth() > 10 ? now.getFullYear() + 1 : now.getFullYear();
-  const nov30 = new Date(year, 10, 30);
-  return new Date(year, 10, 30 - nov30.getDay());
-}
+// The CAT date comes from routine-engine's catExamDate — the ONE
+// implementation of "last Sunday of November". This file used to carry its
+// own copy (`catApprox`), which happened to agree; the day the real one
+// changed, this one silently wouldn't have.
 
 export function computeFeasibility(ambitionDateIso: string | null | undefined, hoursPerDay: number | null | undefined, now: Date = new Date()): Feasibility | null {
   if (!ambitionDateIso || !hoursPerDay || hoursPerDay <= 0) return null;
@@ -54,6 +52,6 @@ export function computeFeasibility(ambitionDateIso: string | null | undefined, h
     feasible,
     realisticDateIso: realistic.toISOString().slice(0, 10),
     realisticDateLabel: realistic.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }),
-    afterExam: realistic > catApprox(now),
+    afterExam: realistic > resolveCatExamDate(now),
   };
 }

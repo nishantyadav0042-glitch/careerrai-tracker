@@ -16,8 +16,12 @@
 // buffer). Same formula, both directions, always honest.
 
 import { TOPIC_METADATA } from './topics-constants';
+import type { CoverageStatus } from './coverage-status';
 
-export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+// The ladder itself lives in coverage-status.ts — one declaration for the
+// whole app. Re-exported here because half the codebase already imports the
+// type from this module.
+export type { CoverageStatus };
 
 // Fraction of a topic's total estimatedHours that is STILL AHEAD at each
 // declared status. not_started = all of it; exam_ready = light maintenance

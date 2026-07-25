@@ -12,6 +12,7 @@
 // CoverageStatus 'unknown' below) — this is additive, not a breaking change.
 
 import { TOPIC_METADATA, qaCluster } from './topics-constants';
+import { STATUS_ORDER, type CoverageStatus } from './coverage-status';
 
 // Student-controlled states (declared in the Blueprint Builder):
 //   not_started (⚪ Haven't Started) · learning (🟡 Learning Concepts) ·
@@ -21,7 +22,7 @@ import { TOPIC_METADATA, qaCluster } from './topics-constants';
 //   below), mock evidence, and revision discipline.
 // "Revision DUE" is DERIVED (practicing/revising/exam_ready + past the
 // topic's revision cadence), never stored — see prep-memory's revisionOverdue.
-export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+export type { CoverageStatus };
 
 export interface TopicCandidateInput {
   topic: string;
@@ -191,18 +192,27 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
 
 export type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
 
-const STATUS_ORDER: CoverageStatus[] = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'];
 const PRACTICING_RANK = STATUS_ORDER.indexOf('practicing');
+const REVISING_RANK = STATUS_ORDER.indexOf('revising');
 
-// Confidence-aware planning — this is where "CareerRai upgrades topics
-// automatically" lives: the student declares up to 'revising' in the
-// Blueprint; 'exam_ready' is EARNED here, from a green tap on a topic
-// already at 'revising'. Signals feed the same Coverage grid the Topic
-// Selector reads for tomorrow's plan.
-//   green   — advance one level, up to and including 'exam_ready'
+// Confidence-aware planning — a tap is honest signal about EFFORT and FEEL,
+// so it may move a topic through the working stages. It is NOT evidence of
+// ability, so it can never finish one.
+//
+// This function used to let a green tap promote 'revising' → 'exam_ready'
+// ("earned from a green tap"). That was a second, competing definition of
+// earned: the evidence ladder demands volume AND accuracy at every
+// difficulty; this path demanded a feeling, four times. Self-assessment
+// correlates with measured ability at only r ≈ 0.29 (Mabe & West 1982;
+// Zell & Krizan 2014), and the weakest students overrate themselves the most
+// (Kruger & Dunning 1999) — so a tap-earned "Exam ready" would be MOST wrong
+// for exactly the students who most need it to be true. There is now one
+// definition: all six checks in evidence.ts, and nothing else.
+//   green   — advance one level, capped at 'revising'; the last step is
+//             evidence-only (see coverage-status.EXAM_READY_SOURCE)
 //   blue    — real progress, not full confidence yet: advance one level but
 //             capped at 'practicing' — never pushes a topic into 'revising'
-//             or 'exam_ready' off a "getting there" tap, only green does that
+//             or 'exam_ready' off a "getting there" tap
 //   yellow  — acknowledges the attempt; only moves an untouched topic to
 //             'learning', never advances or regresses one already in progress
 //   red     — a real regression signal: struggling on a topic at
@@ -211,7 +221,9 @@ const PRACTICING_RANK = STATUS_ORDER.indexOf('practicing');
 //             'not_started', since the attempt itself is still real signal
 export function applyConfidenceSignal(current: CoverageStatus | null, confidence: ConfidenceSignal): CoverageStatus {
   const rank = STATUS_ORDER.indexOf(current ?? 'not_started');
-  if (confidence === 'green') return STATUS_ORDER[Math.min(rank + 1, STATUS_ORDER.length - 1)];
+  // 'revising' is the ceiling a tap can reach; a topic already ABOVE it (an
+  // evidence-earned exam_ready) is never pulled back down by more green taps.
+  if (confidence === 'green') return STATUS_ORDER[rank >= REVISING_RANK ? rank : rank + 1];
   if (confidence === 'blue') return STATUS_ORDER[rank >= PRACTICING_RANK ? rank : rank + 1];
   if (confidence === 'red') return 'learning';
   return rank === 0 ? 'learning' : STATUS_ORDER[rank];

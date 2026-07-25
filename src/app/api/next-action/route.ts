@@ -65,7 +65,15 @@ export async function GET(request: NextRequest) {
   // Anything the student has already marked DONE today. A completed action must
   // not keep sitting at the top of Home for the rest of the day — that's the
   // difference between a plan and a nag.
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  //
+  // "Today" is the IST study day with its 3am rollover (getLogDateString), the
+  // same day every log and streak uses. This used to be UTC midnight — which
+  // falls at 5:30am IST, INSIDE the morning dead zone but after the 3am
+  // boundary, so a student acting between 3:00 and 5:30am IST (the tail of our
+  // single busiest usage block, 22:00–04:00) had their "done today" filter and
+  // their log date disagree, and a finished action could reappear on the card.
+  // One day boundary, defined once, or the same student lives in two days.
+  const dayStart = new Date(`${getLogDateString()}T03:00:00+05:30`);
   const { data: todayLog } = await admin
     .from('study_action_log').select('kind, outcome')
     .eq('student_id', user.id).gte('shown_at', dayStart.toISOString());

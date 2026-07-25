@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CalendarDays, ChevronRight } from 'lucide-react';
 import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
+import { remainingMockHours } from '@/lib/study-pace';
 import type { PaceResult } from '@/lib/study-pace';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
@@ -83,12 +84,18 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
 
   // Reschedule negotiation (founder, 23 July): moving the date must TELL the
   // student what it costs before they commit — "this date needs Xh/day, OK?"
-  // Remaining work = the steady per-day requirement × days left (self-consistent
-  // with the pace engine, no extra fetch). We never silently invent hours.
+  //
+  // Priced through the SAME engine as the ring: pace.remainingHours is the
+  // engine's own syllabus figure, and the mock budget is added by the same
+  // shared function every other surface uses. The old line here reconstructed
+  // remaining work as requiredPerDay × daysLeft — re-deriving from a
+  // half-hour-rounded number (compounding its rounding error by up to
+  // daysLeft/4 hours) and silently folding mock hours into "syllabus", so
+  // this warning could contradict the ring two centimetres above it.
   const committedPerDay = pace.committedPerDay ?? pace.requiredPerDay;
   const daysToNew = date ? Math.max(1, Math.ceil((new Date(date + 'T00:00:00').getTime() - new Date(todayIso + 'T00:00:00').getTime()) / 86_400_000)) : null;
-  const remainingHours = pace.requiredPerDay * pace.daysLeft;
-  const requiredForNew = daysToNew ? Math.round((remainingHours / daysToNew) * 2) / 2 : null;
+  const remainingWithMocks = pace.remainingHours + remainingMockHours(pace.remainingHours);
+  const requiredForNew = daysToNew ? Math.round((remainingWithMocks / daysToNew) * 2) / 2 : null;
   const tooDemanding = requiredForNew != null && requiredForNew > committedPerDay + 0.5;
 
   async function saveDate() {

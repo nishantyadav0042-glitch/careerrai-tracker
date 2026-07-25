@@ -22,7 +22,7 @@ import {
   type HistoryInput,
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -227,13 +227,25 @@ export async function computeTodaysPlan(
     const currentStage = profile.current_stage as Stage | null;
 
     // Same pace math as the Home ring / tracker so the plan size matches.
+    // Through computeRequiredPace — the ONE required-pace implementation —
+    // not a re-derivation. This block used to inline the same formula, which
+    // is precisely how the Home-says-4.5h / plan-says-12h incident happened:
+    // five sites each doing their own division drift one rounding rule at a
+    // time. The 1..12h clamp is plan-sizing policy (a plan larger than 12h
+    // cannot be scheduled), so it stays here; the pace itself does not.
     const targetIso = profile.syllabus_target_date as string | null;
     let paceHours: number | null = null;
     if (targetIso) {
-      const daysLeft = Math.max(1, Math.ceil((new Date(targetIso + 'T00:00:00').getTime() - now.getTime()) / 86_400_000));
       const remaining = remainingSyllabusHours(coverageRows ?? []);
       if (remaining > 0) {
-        paceHours = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
+        const pace = computeRequiredPace({
+          remainingHours: remaining,
+          today: now,
+          targetDate: new Date(targetIso + 'T00:00:00'),
+          committedPerDay: null,
+          mockHours: remainingMockHours(remaining),
+        });
+        paceHours = Math.min(12, Math.max(1, pace.requiredPerDay));
       }
     }
 
