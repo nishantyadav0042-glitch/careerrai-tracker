@@ -27,5 +27,17 @@
     "path": "./android.keystore",
     "alias": "careerrai"
   },
-  "_comment": "Bubblewrap sets a CURRENT compile/target SDK automatically — that is what fixes the 'built for an older version of Android' Play Protect block. enableNotifications:true delegates web-push into the TWA (this app depends on push). packageId, host, and the signing key must never change after the first Play Store upload."
+  "_comment": "Bubblewrap sets a CURRENT compile/target SDK automatically — that is what fixes the 'built for an older version of Android' Play Protect block. enableNotifications:true delegates web-push into the TWA (this app depends on push). packageId, host, and the signing key must never change after the first Play Store upload.",
+  "splashScreenFadeOutDuration": 300,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
 }
