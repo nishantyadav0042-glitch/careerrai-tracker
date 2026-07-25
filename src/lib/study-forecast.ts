@@ -38,6 +38,11 @@ export function buildWeekPlan(
   committedDaily: number | null,
   today: Date,
   days = 7,
+  /**
+   * Hours per day the student ACTUALLY needs to finish on time (the pace
+   * ring's requiredPerDay). Optional so existing callers keep working.
+   */
+  requiredDaily?: number | null,
 ): DayPlan[] {
   const statusByTopic = new Map<string, string>();
   for (const r of rows) if (r.status) statusByTopic.set(r.topic, r.status);
@@ -62,7 +67,23 @@ export function buildWeekPlan(
     .filter((t) => t.remaining > 0.5 && t.status !== 'exam_ready')
     .sort((a, b) => b.score - a.score);
 
-  const cap = committedDaily && committedDaily > 0 ? committedDaily : 4;
+  // Capacity for a day's schedule.
+  //
+  // This used to be committedDaily alone, which meant a student who said they
+  // could manage 12h/day got 12h of topics scheduled every day — even when the
+  // pace ring, on the same screen, said 4.5h/day would finish the syllabus on
+  // time. Two numbers for "per day", 2.7x apart, both presented as the plan.
+  //
+  // Schedule what's NEEDED, never more than they have available:
+  //   required < committed  -> required   (don't invent 7 extra hours of work)
+  //   required > committed  -> committed  (can't schedule time they don't have;
+  //                                        the ring already tells them they're
+  //                                        behind, the plan shouldn't lie about it)
+  const committed = committedDaily && committedDaily > 0 ? committedDaily : 4;
+  const need = requiredDaily != null && requiredDaily > 0 ? requiredDaily : null;
+  // A floor of 1h: a nearly-finished student should still get a real block
+  // rather than a 15-minute stub.
+  const cap = need != null ? Math.max(1, Math.min(committed, need)) : committed;
   const plan: DayPlan[] = [];
   let idx = 0;
   let leftOnCurrent = queue.length ? queue[0].remaining : 0;
