@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sanitizeTargets } from '@/lib/timetable';
-import { computeTargetProgress, targetKey, overallHeadline } from '@/lib/coaching-progress';
+import { computeTargetProgress, targetKey, nextAction } from '@/lib/coaching-progress';
 
 // GET  — every coaching target with real progress against it.
 // POST — record work done, in the coaching's own units ({ key, delta } or
@@ -30,7 +30,9 @@ export async function GET() {
   const startedAt = (tt?.confirmed_at as string | null) ?? null;
 
   const rows = targets.map((t) => computeTargetProgress(t, doneBy.get(targetKey(t)) ?? 0, startedAt));
-  return NextResponse.json({ targets: rows, headline: overallHeadline(rows) });
+  // Recovery-first: the one action worth taking tonight, never a running
+  // tally of how far behind they are.
+  return NextResponse.json({ targets: rows, action: nextAction(rows, startedAt) });
 }
 
 export async function POST(request: NextRequest) {

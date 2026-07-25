@@ -123,20 +123,86 @@ export function statusLabel(s: TargetStatus): string {
   switch (s) {
     case 'ahead': return 'Ahead';
     case 'on_track': return 'On track';
-    case 'behind': return 'Behind';
+    case 'behind': return 'Needs a push';
     case 'done': return 'Done';
     case 'overdue': return 'Date passed';
     default: return '';
   }
 }
 
-/** One honest headline for the whole set, or null when we can't say. */
-export function overallHeadline(rows: TargetProgress[]): string | null {
-  const graded = rows.filter((r) => r.status === 'ahead' || r.status === 'on_track' || r.status === 'behind');
-  if (graded.length === 0) return null;
-  const behind = graded.filter((r) => r.status === 'behind');
-  if (behind.length === 0) return `On track on all ${graded.length}.`;
-  const worst = behind.sort((a, b) => (b.expectedByNow! - b.done) - (a.expectedByNow! - a.done))[0];
-  const gap = worst.expectedByNow! - worst.done;
-  return `Behind on ${behind.length} of ${graded.length} — ${worst.label} is ${gap} short.`;
+// ── What to say ────────────────────────────────────────────────────────────
+//
+// The first version led with the deficit: "Behind on 1 of 3 — 200 LRDI sets is
+// 17 short." It was true and it was useless. A student already knows they're
+// behind; 17 becomes 23 becomes 31 and they stop opening the app. A number
+// that only ever grows is a countdown to quitting.
+//
+// So we never lead with the gap. We lead with the smallest real action that
+// keeps them on the plan, and we only mention the shortfall when it changes
+// what they should do tonight.
+
+export interface NextAction {
+  /** The one line to show. Always an action or a reassurance, never a scold. */
+  headline: string;
+  /** Which target it refers to, when it refers to one. */
+  key: string | null;
+  /** True when the plan is no longer reachable at their demonstrated pace. */
+  needsReplan: boolean;
+}
+
+/**
+ * Their actual rate so far, per day, since they started. This is the only
+ * honest basis for "can you still make this" — required/day means nothing
+ * without knowing what they've been managing.
+ */
+export function demonstratedPerDay(done: number, startedAt: string | null, now: Date = new Date()): number | null {
+  if (!startedAt) return null;
+  const start = Date.parse(startedAt);
+  if (Number.isNaN(start)) return null;
+  const days = (now.getTime() - start) / 86_400_000;
+  if (days < 1) return null;
+  return done / days;
+}
+
+/**
+ * The daily ask, framed as a decision they can act on tonight.
+ *
+ * When the required rate is far beyond anything they have actually sustained,
+ * we say so and suggest trimming — because repeating "3/day" at someone who
+ * has never managed more than 1/day is a lie dressed as encouragement, and
+ * pretending an unreachable target is reachable is how trust dies.
+ */
+export function nextAction(rows: TargetProgress[], startedAt: string | null, now: Date = new Date()): NextAction | null {
+  const live = rows.filter((r) => r.status !== 'done' && r.status !== 'overdue' && r.requiredPerDay != null);
+  if (live.length === 0) {
+    const anyDone = rows.some((r) => r.status === 'done');
+    return anyDone ? { headline: 'Every target your coaching set is done.', key: null, needsReplan: false } : null;
+  }
+
+  // The most urgent one is the one needing the most work per day from here.
+  const focus = [...live].sort((a, b) => (b.requiredPerDay ?? 0) - (a.requiredPerDay ?? 0))[0];
+  const need = focus.requiredPerDay!;
+  const pace = demonstratedPerDay(focus.done, startedAt, now);
+
+  // Not reachable at the rate they have actually held. Say it plainly and give
+  // them the lever — this is where we stop mirroring coaching and start
+  // correcting it.
+  if (pace != null && pace > 0 && need > pace * 2) {
+    const reachable = Math.max(0, Math.round(focus.done + pace * (focus.daysLeft ?? 0)));
+    return {
+      headline: `At your pace you'll reach about ${reachable} of ${focus.count}. Either trim the target or find one more a day — both are fine, guessing isn't.`,
+      key: focus.key,
+      needsReplan: true,
+    };
+  }
+
+  const unit = focus.section ? `${focus.section} ` : '';
+  if (focus.status === 'ahead') {
+    return { headline: `You're ahead. ${need}/day on ${unit}keeps it that way.`, key: focus.key, needsReplan: false };
+  }
+  return {
+    headline: `${need} ${unit}${need === 1 ? 'a day' : 'a day'} from here and you finish on time.`,
+    key: focus.key,
+    needsReplan: false,
+  };
 }

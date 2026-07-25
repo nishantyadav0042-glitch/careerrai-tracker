@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Target, Plus } from 'lucide-react';
 import { track } from '@/lib/journey';
-import { statusLabel, type TargetProgress } from '@/lib/coaching-progress';
+import { statusLabel, type TargetProgress, type NextAction } from '@/lib/coaching-progress';
 
 // "Your coaching expects you here. You are actually here."
 //
@@ -21,7 +21,7 @@ const TONE: Record<string, string> = {
 
 export function CoachingMirror() {
   const [rows, setRows] = useState<TargetProgress[] | null>(null);
-  const [headline, setHeadline] = useState<string | null>(null);
+  const [action, setAction] = useState<NextAction | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -29,7 +29,7 @@ export function CoachingMirror() {
       const res = await fetch('/api/timetable/progress');
       const json = await res.json();
       setRows((json.targets as TargetProgress[]) ?? []);
-      setHeadline((json.headline as string | null) ?? null);
+      setAction((json.action as NextAction | null) ?? null);
     } catch {
       setRows([]);
     }
@@ -65,10 +65,17 @@ export function CoachingMirror() {
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900">
           <Target className="h-4 w-4 text-white" />
         </span>
-        <h2 className="text-sm font-bold text-stone-900">Your coaching targets</h2>
+        <h2 className="text-sm font-bold text-stone-900">Tonight, on your coaching plan</h2>
       </div>
 
-      {headline && <p className="mt-2 text-[13px] font-medium text-stone-700">{headline}</p>}
+      {/* The action, never the deficit. "Behind by 17" grows every day and
+          reads as a countdown to quitting; "3 a day and you finish on time"
+          is the same fact framed as something they can actually do. */}
+      {action && (
+        <p className={`mt-2 text-[13px] font-semibold ${action.needsReplan ? 'text-amber-700' : 'text-stone-800'}`}>
+          {action.headline}
+        </p>
+      )}
 
       <div className="mt-3 space-y-3">
         {rows.map((r) => (
@@ -85,18 +92,18 @@ export function CoachingMirror() {
             {r.count != null ? (
               <>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-stone-100">
-                  <div
-                    className={r.status === 'behind' ? 'h-full bg-rose-400' : 'h-full bg-stone-800'}
-                    style={{ width: `${r.pctDone ?? 0}%` }}
-                  />
+                  {/* No red. A progress bar that turns hostile when a student
+                      slips is how a tracker becomes something they avoid. */}
+                  <div className="h-full bg-stone-800" style={{ width: `${r.pctDone ?? 0}%` }} />
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-stone-500">
                   <span className="tabular-nums">
                     {r.done} of {r.count}
-                    {/* Only stated when we genuinely know the start point. */}
-                    {r.expectedByNow != null && <> · {r.expectedByNow} due by now</>}
+                    {/* The daily ask, not the shortfall. We deliberately do NOT
+                        show "expected by now" — a running deficit is the number
+                        that makes students stop opening the app. */}
                     {r.requiredPerDay != null && r.status !== 'done' && (
-                      <> · {r.requiredPerDay}/day for {r.daysLeft} days</>
+                      <> · {r.requiredPerDay}/day left</>
                     )}
                   </span>
                   <span className="flex shrink-0 gap-1">

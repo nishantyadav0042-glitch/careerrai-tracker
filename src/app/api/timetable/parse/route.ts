@@ -35,7 +35,7 @@ Extract whatever is actually there. An empty list is correct when that thing isn
   "is_timetable": boolean,
   "syllabus_end_date": "YYYY-MM-DD" or null,
   "blocks": [
-    { "day": 0, "start": "18:00", "end": "20:00", "section": "QA", "topic": "Time Speed Distance", "label": "Arithmetic - TSD" }
+    { "day": 0, "date": null, "dayIndex": null, "start": "18:00", "end": "20:00", "section": "QA", "topic": "Time Speed Distance", "label": "Arithmetic - TSD" }
   ],
   "targets": [
     { "kind": "sectional", "label": "15-20 Quant sectionals by end September", "count": 20, "section": "QA", "deadline": "2026-09-30" },
@@ -45,8 +45,18 @@ Extract whatever is actually there. An empty list is correct when that thing isn
 
 RULES — follow exactly:
 - "is_timetable": false if this image is clearly not a class schedule. Then return an empty blocks array.
-- "day": integer, 0=Monday, 1=Tuesday ... 6=Sunday.
-- "start"/"end": 24-hour "HH:MM", zero padded. Infer am/pm sensibly — coaching classes run roughly 06:00-22:00, so "6-8" on an evening batch means 18:00-20:00. If a class has no end time, add 2 hours.
+CLASS ROWS — sheets come in three shapes. Use whichever the sheet actually is, and set the other two anchors to null:
+  A. RECURRING WEEKLY ("Mon 6-8pm Arithmetic") -> "day": 0=Monday ... 6=Sunday.
+  B. DATED CALENDAR ("26 Sep 23 | Tuesday | 10 PM-12 AM | Quant | Geometry Basics 1")
+     -> "date": "YYYY-MM-DD". Use the printed date. A two-digit year like "23" means 2023.
+        Also set "day" when the weekday is printed. NEVER drop the date — a dated
+        syllabus is a sequence, and collapsing it to weekdays destroys the order.
+  C. RELATIVE DAY PLAN ("Day 1 ... Day 5", each with hourly slots)
+     -> "dayIndex": 1, 2, 3 ... Do NOT invent a weekday or a date for these.
+At least one of day / date / dayIndex MUST be set, or omit the row.
+- "start"/"end": 24-hour "HH:MM", zero padded. Infer am/pm sensibly from the batch: an evening batch's "6-8" means 18:00-20:00, a morning slot's "9 AM - 10 AM" means 09:00-10:00. Late batches really do run "10 PM - 12 AM" (22:00 to 00:00) — record that as given.
+- For entries with NO usable time ("Whole Day", "Practice Session", "Rest"), set both "start" and "end" to null. Do not invent hours.
+- SKIP rows that are holidays, blank days or breaks with no study content (e.g. a row that only says "Sunday", "Dussehra", "LUNCH BREAK"). A colour-filled empty row is a day off, not a class.
 - "section": exactly one of "QA", "VARC", "DILR", or null if unclear.
     QA = Quantitative Aptitude / Maths / Arithmetic / Algebra / Geometry / Number System.
     VARC = Verbal / English / Reading Comprehension / Grammar / Vocabulary.

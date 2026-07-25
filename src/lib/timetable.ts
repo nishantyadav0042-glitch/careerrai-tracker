@@ -38,11 +38,22 @@ export interface CoachingTarget {
 export type TimetableSection = 'VARC' | 'DILR' | 'QA';
 
 export interface TimetableBlock {
-  /** 0 = Monday … 6 = Sunday */
-  day: number;
-  /** 24h 'HH:MM' */
-  start: string;
-  end: string;
+  /**
+   * Real coaching sheets come in three shapes and all three must survive:
+   *   A. recurring weekly  -> day 0-6            ("Mon 6-8pm")
+   *   B. dated calendar    -> date 'YYYY-MM-DD'  ("26 Sep 23 ... Geometry Basics 1")
+   *   C. relative plan     -> dayIndex 1..N      ("Day 1 ... Day 5")
+   * At least ONE must be present. Forcing everything into day-of-week
+   * collapsed a five-week dated syllabus into five identical Tuesdays, and
+   * dropped every row of a Day 1-5 plan outright.
+   */
+  day: number | null;
+  date: string | null;
+  dayIndex: number | null;
+  /** null on all-day entries ("Whole Day", "Practice Session"). */
+  start: string | null;
+  end: string | null;
+  allDay: boolean;
   section: TimetableSection | null;
   /** Always one of OUR topics, or null. Never a name the model made up. */
   topic: string | null;
@@ -66,17 +77,39 @@ export function sanitizeBlocks(raw: unknown): TimetableBlock[] {
   if (!Array.isArray(raw)) return [];
   const out: TimetableBlock[] = [];
 
-  for (const item of raw.slice(0, 60)) {
+  for (const item of raw.slice(0, 200)) {
     if (!item || typeof item !== 'object') continue;
     const b = item as Record<string, unknown>;
 
-    const day = Number(b.day);
-    if (!Number.isInteger(day) || day < 0 || day > 6) continue;
+    // Position in time — any ONE of the three anchors is enough.
+    const dayNum = Number(b.day);
+    const day = Number.isInteger(dayNum) && dayNum >= 0 && dayNum <= 6 ? dayNum : null;
 
-    const start = typeof b.start === 'string' ? b.start.trim() : '';
-    const end = typeof b.end === 'string' ? b.end.trim() : '';
-    if (!TIME_RE.test(start) || !TIME_RE.test(end)) continue;
-    if (end <= start) continue; // string compare is safe on zero-padded HH:MM
+    const dateRaw = typeof b.date === 'string' ? b.date.trim() : '';
+    const date = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(dateRaw) ? dateRaw : null;
+
+    const idxNum = Number(b.dayIndex);
+    const dayIndex = Number.isInteger(idxNum) && idxNum >= 1 && idxNum <= 400 ? idxNum : null;
+
+    if (day === null && date === null && dayIndex === null) continue;
+
+    // Times are optional: "Whole Day" and "Practice Session" are real rows.
+    const startRaw = typeof b.start === 'string' ? b.start.trim() : '';
+    const endRaw = typeof b.end === 'string' ? b.end.trim() : '';
+    const hasStart = TIME_RE.test(startRaw);
+    const hasEnd = TIME_RE.test(endRaw);
+    // A window is only kept when BOTH ends are valid and ordered. Coaching
+    // sheets legitimately run past midnight ("10 PM - 12 AM"), so an end that
+    // is not after the start is treated as all-day rather than discarded —
+    // dropping it would lose a real class.
+    // "10 PM - 12 AM" is the standard late batch, and every row of a real
+    // dated sheet looked like that — treating end <= start as unusable turned
+    // the entire timetable into "All day". An end at or before the start just
+    // means it crosses midnight, which is a real window, not a broken one.
+    const timed = hasStart && hasEnd;
+    const start = timed ? startRaw : null;
+    const end = timed ? endRaw : null;
+    const allDay = !timed;
 
     const section = typeof b.section === 'string' && SECTIONS.has(b.section)
       ? (b.section as TimetableSection) : null;
@@ -88,10 +121,16 @@ export function sanitizeBlocks(raw: unknown): TimetableBlock[] {
     const label = (typeof b.label === 'string' ? b.label : '').trim().slice(0, 120)
       || topic || section || 'Class';
 
-    out.push({ day, start, end, section, topic, label });
+    out.push({ day, date, dayIndex, start, end, allDay, section, topic, label });
   }
 
-  return out.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+  // Chronological where we can be: real dates first, then Day N, then weekday.
+  return out.sort((a, b) => {
+    if (a.date && b.date) return a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? '');
+    if (a.dayIndex != null && b.dayIndex != null) return a.dayIndex - b.dayIndex || (a.start ?? '').localeCompare(b.start ?? '');
+    if (a.day != null && b.day != null) return a.day - b.day || (a.start ?? '').localeCompare(b.start ?? '');
+    return 0;
+  });
 }
 
 /** Distinct real topics the coaching covers — what we align the plan to. */
@@ -99,11 +138,13 @@ export function topicsTaught(blocks: TimetableBlock[]): string[] {
   return [...new Set(blocks.map((b) => b.topic).filter((t): t is string => !!t))];
 }
 
-/** Today's classes, for "you have class at 6" style awareness. */
+/** Today's classes — matched by real date first, then weekday. */
 export function blocksForDay(blocks: TimetableBlock[], date: Date = new Date()): TimetableBlock[] {
-  const jsDay = date.getDay();          // 0 = Sunday
-  const ourDay = (jsDay + 6) % 7;       // 0 = Monday
-  return blocks.filter((b) => b.day === ourDay);
+  const iso = date.toISOString().slice(0, 10);
+  const dated = blocks.filter((b) => b.date === iso);
+  if (dated.length > 0) return dated;
+  const ourDay = (date.getDay() + 6) % 7; // JS 0=Sun -> ours 0=Mon
+  return blocks.filter((b) => b.date === null && b.day === ourDay);
 }
 
 const TARGET_KINDS = new Set<string>([
@@ -169,4 +210,26 @@ export function formatTime(hhmm: string): string {
   const suffix = h >= 12 ? 'pm' : 'am';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2, '0')}${suffix}`;
+}
+
+/** "26 Sep", "Day 3", "Tue" — whichever anchor this row actually has. */
+export function whenLabel(b: TimetableBlock): string {
+  if (b.date) {
+    const d = new Date(`${b.date}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? b.date
+      : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  }
+  if (b.dayIndex != null) return `Day ${b.dayIndex}`;
+  if (b.day != null) return DAY_LABELS[b.day];
+  return '';
+}
+
+/** "6pm–8pm", or "All day" when the sheet gave no usable window. */
+export function timeLabel(b: TimetableBlock): string {
+  if (b.allDay || !b.start || !b.end) return 'All day';
+  // Crossing midnight is normal for late batches; mark it so "10pm–12am"
+  // never reads as a twenty-two-hour class.
+  const overnight = b.end <= b.start;
+  return `${formatTime(b.start)}–${formatTime(b.end)}${overnight ? ' +1' : ''}`;
 }
