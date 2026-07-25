@@ -50,6 +50,7 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
   const [targets, setTargets] = useState<CoachingTarget[]>([]);
   const [syllabusEndDate, setSyllabusEndDate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const dismiss = (reason: CloseReason) => {
@@ -57,35 +58,85 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
     onClose(reason);
   };
 
-  async function handleFile(file: File) {
+  async function parseOne(file: File): Promise<{ blocks: TimetableBlock[]; targets: CoachingTarget[]; end: string | null } | null> {
+    const payload = file.type === 'application/pdf'
+      ? { file: await fileToBase64(file), mediaType: 'application/pdf' }
+      : await imageToBase64Jpeg(file).then((r) => ({ file: r.data, mediaType: r.mediaType }));
+
+    const res = await fetch('/api/timetable/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      track('timetable_parse_failed', { status: res.status });
+      return null;
+    }
+    return {
+      blocks: (json.blocks as TimetableBlock[]) ?? [],
+      targets: (json.targets as CoachingTarget[]) ?? [],
+      end: (json.syllabusEndDate as string | null) ?? null,
+    };
+  }
+
+  // A weekly sheet rarely fits in one photo — students shoot it in halves, or
+  // send several days as separate images. Each is parsed on its own and the
+  // results merged, so "two photos of one timetable" is one plan, not two.
+  async function handleFiles(files: File[]) {
     setError(null);
     setStage('reading');
-    track('timetable_upload_start', { type: file.type, kb: Math.round(file.size / 1024) });
-    try {
-      const payload = file.type === 'application/pdf'
-        ? { file: await fileToBase64(file), mediaType: 'application/pdf' }
-        : await imageToBase64Jpeg(file).then((r) => ({ file: r.data, mediaType: r.mediaType }));
+    track('timetable_upload_start', { count: files.length, kb: Math.round(files.reduce((n, f) => n + f.size, 0) / 1024) });
 
-      const res = await fetch('/api/timetable/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        track('timetable_parse_failed', { status: res.status });
-        setError(json.error ?? 'Could not read that. Try a clearer photo.');
-        setStage('ask');
-        return;
+    const allBlocks: TimetableBlock[] = [];
+    const allTargets: CoachingTarget[] = [];
+    let endDate: string | null = null;
+    let failures = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      setProgress(files.length > 1 ? `Reading ${i + 1} of ${files.length}…` : null);
+      try {
+        const r = await parseOne(files[i]);
+        if (!r) { failures++; continue; }
+        allBlocks.push(...r.blocks);
+        allTargets.push(...r.targets);
+        endDate ??= r.end;
+      } catch {
+        failures++;
       }
-      setBlocks(json.blocks as TimetableBlock[]);
-      setTargets((json.targets as CoachingTarget[]) ?? []);
-      setSyllabusEndDate((json.syllabusEndDate as string | null) ?? null);
-      setStage('review');
-    } catch {
-      setError('Could not read that file. Try a photo instead.');
-      setStage('ask');
     }
+    setProgress(null);
+
+    if (allBlocks.length === 0 && allTargets.length === 0) {
+      setError(files.length > 1
+        ? "Couldn't read any of those. Try clearer photos."
+        : "Couldn't read that. Try a clearer photo.");
+      setStage('ask');
+      return;
+    }
+
+    // Merge. The same class photographed twice must not become two classes.
+    const seenBlock = new Set<string>();
+    const mergedBlocks = allBlocks.filter((b) => {
+      const k = `${b.date ?? b.dayIndex ?? b.day}|${b.start ?? 'all'}|${b.label.toLowerCase()}`;
+      if (seenBlock.has(k)) return false;
+      seenBlock.add(k);
+      return true;
+    });
+    // One target per kind+section, keeping the LARGEST count — a sheet that
+    // repeats "100-150 topic tests" across two photos states one target.
+    const byKey = new Map<string, CoachingTarget>();
+    for (const t of allTargets) {
+      const k = `${t.kind}:${t.section ?? 'any'}`;
+      const prev = byKey.get(k);
+      if (!prev || (t.count ?? 0) > (prev.count ?? 0)) byKey.set(k, t);
+    }
+
+    setBlocks(mergedBlocks);
+    setTargets([...byKey.values()]);
+    setSyllabusEndDate(endDate);
+    if (failures > 0) setError(`${failures} of ${files.length} couldn't be read — check the list below.`);
+    setStage('review');
   }
 
   async function save(followCoaching: boolean) {
@@ -137,15 +188,21 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               Upload your coaching timetable and CareerRai will follow it — your plan will push the same topics your
               class is teaching, instead of pulling you somewhere else.
             </p>
-            <p className="mt-2 text-[13px] text-stone-500">A photo of the printed sheet is fine. You do this once.</p>
+            <p className="mt-2 text-[13px] text-stone-500">
+              A photo of the printed sheet is fine — pick several if it doesn&apos;t fit in one shot.
+            </p>
 
             {error && (
               <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{error}</p>
             )}
 
             <input
-              ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ''; }}
+              ref={inputRef} type="file" accept="image/*,application/pdf" multiple className="hidden"
+              onChange={(e) => {
+                const fs = Array.from(e.target.files ?? []).slice(0, 8);
+                if (fs.length) void handleFiles(fs);
+                e.target.value = '';
+              }}
             />
 
             <button
@@ -155,8 +212,8 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white disabled:opacity-60"
             >
               {stage === 'reading'
-                ? (<><Loader2 className="h-4 w-4 animate-spin" /> Reading your timetable…</>)
-                : (<><Upload className="h-4 w-4" /> Upload photo or PDF</>)}
+                ? (<><Loader2 className="h-4 w-4 animate-spin" /> {progress ?? 'Reading your plan…'}</>)
+                : (<><Upload className="h-4 w-4" /> Upload photos or PDF</>)}
             </button>
 
             <button type="button" onClick={() => dismiss('declined')}

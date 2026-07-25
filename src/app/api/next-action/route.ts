@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     admin.from('mock_debriefs').select('varc, dilr, qa, taken_on')
       .eq('student_id', user.id).order('taken_on', { ascending: false }).limit(1).maybeSingle(),
     admin.from('student_timetables').select('targets, confirmed_at').eq('student_id', user.id).maybeSingle(),
-    admin.from('profiles').select('plan_source').eq('id', user.id).maybeSingle(),
+    admin.from('profiles').select('plan_source, qa_model_enabled, dilr_model_enabled, varc_model_enabled').eq('id', user.id).maybeSingle(),
     admin.from('coaching_target_progress').select('target_key, done').eq('student_id', user.id),
   ]);
 
@@ -83,45 +83,51 @@ export async function GET(request: NextRequest) {
     history,
   });
 
-  // Record what we recommended so it can be reconciled later, and hand the row
-  // ids back so the card can report a real outcome the moment the student acts.
-  // Once per student per day per kind — the card refetches when they change the
-  // time selector, and counting those as separate recommendations would poison
-  // the follow-rate with duplicates they only ever saw once.
+  // Where "Start now" goes. Decided HERE, because only the server knows which
+  // section plans are switched on for this account.
+  //
+  // The first version always sent them to /student/plan/<section>, which is
+  // gated behind <section>_model_enabled. For any student without that flag the
+  // CTA landed on "This plan isn't switched on for your account yet" — a dead
+  // end produced by the one button whose entire job was to remove friction.
+  const enabled: Record<string, boolean> = {
+    qa: prof?.qa_model_enabled === true,
+    dilr: prof?.dilr_model_enabled === true,
+    varc: prof?.varc_model_enabled === true,
+  };
+  const hrefFor = (section: string | null, kind: string): string => {
+    if (kind === 'coaching_due') return '/student/profile';
+    const sec = (section ?? '').toLowerCase();
+    // Only route into a section plan we KNOW is on. Otherwise the coverage
+    // matrix, which every student can always open.
+    if (enabled[sec]) return `/student/plan/${sec}`;
+    return '/student/plan/topics';
+  };
+
+  const withHref = actions.map((a, i) => ({ ...a, href: hrefFor(a.section, a.kind), rank: i }));
+
+  // Log what we recommended, fire-and-forget. Deliberately NOT awaited and no
+  // read-before-write: this used to add three round trips to the critical path
+  // of a card that sits at the top of the home screen, and a slow log is not a
+  // reason to make a student stare at "Working it out...".
+  //
+  // De-duplication is handled by the ack/reconcile side keying on
+  // (student, kind, day), so a repeat insert can't inflate the follow-rate.
   const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-  const { data: today } = await admin
-    .from('study_action_log').select('id, kind, outcome')
-    .eq('student_id', user.id).gte('shown_at', dayStart.toISOString());
+  admin.from('study_action_log').select('kind').eq('student_id', user.id)
+    .gte('shown_at', dayStart.toISOString())
+    .then(({ data: today }) => {
+      const already = new Set((today ?? []).map((r) => r.kind as string));
+      const fresh = withHref
+        .filter((a) => !already.has(a.kind))
+        .map((a) => ({
+          student_id: user.id, kind: a.kind, topic: a.topic,
+          section: a.section, minutes: a.minutes, rank: a.rank,
+        }));
+      if (fresh.length === 0) return;
+      admin.from('study_action_log').insert(fresh)
+        .then(({ error }) => { if (error) console.error('[next-action] log failed', error.message); });
+    });
 
-  const idByKind = new Map<string, number>();
-  const resolvedKinds = new Set<string>();
-  for (const r of today ?? []) {
-    idByKind.set(r.kind as string, r.id as number);
-    if (r.outcome) resolvedKinds.add(r.kind as string);
-  }
-
-  const fresh = actions
-    .map((a, i) => ({ a, i }))
-    .filter(({ a }) => !idByKind.has(a.kind))
-    .map(({ a, i }) => ({
-      student_id: user.id, kind: a.kind, topic: a.topic, section: a.section,
-      minutes: a.minutes, rank: i,
-    }));
-
-  if (fresh.length > 0) {
-    const { data: inserted, error } = await admin
-      .from('study_action_log').insert(fresh).select('id, kind');
-    if (error) console.error('[next-action] log failed', error.message);
-    for (const r of inserted ?? []) idByKind.set(r.kind as string, r.id as number);
-  }
-
-  const withIds = actions.map((a) => ({
-    ...a,
-    id: idByKind.get(a.kind) ?? null,
-    // Already answered today — the card must not ask again.
-    resolved: resolvedKinds.has(a.kind),
-  }));
-
-  return NextResponse.json({ minutes, actions: withIds });
-
+  return NextResponse.json({ minutes, actions: withHref });
 }

@@ -105,6 +105,14 @@ export function CoachingMirror() {
           <Target className="h-4 w-4 text-white" />
         </span>
         <h2 className="text-sm font-bold text-stone-900">Tonight, on your coaching plan</h2>
+        {/* Coaching sends a new sheet every week. Hiding the uploader after the
+            first success meant the second week had nowhere to go. */}
+        <button
+          type="button" onClick={() => setUpload(true)}
+          className="ml-auto flex shrink-0 items-center gap-1 text-[11px] font-semibold text-orange-600 hover:underline"
+        >
+          <Upload className="h-3 w-3" /> New plan
+        </button>
       </div>
 
       {/* The action, never the deficit. "Behind by 17" grows every day and

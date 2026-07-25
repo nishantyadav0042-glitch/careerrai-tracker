@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
 import type { StudyAction } from '@/lib/next-action';
 
-type Action = StudyAction & { id: number | null; resolved?: boolean };
+type Action = StudyAction & { href: string };
 
 // The first thing on the home screen, and the reason to open the app at all.
 //
@@ -30,41 +30,40 @@ export function NextActionCard() {
 
   const load = useCallback(async (mins: number) => {
     setLoading(true);
+    // Hard timeout. Without one, a slow query left this card sitting on
+    // "Working it out..." forever at the very top of the home screen — the
+    // worst possible place for a spinner that never resolves. On any failure
+    // we render NOTHING rather than a permanent promise.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch(`/api/next-action?minutes=${mins}`);
+      const res = await fetch(`/api/next-action?minutes=${mins}`, { signal: ctrl.signal });
       const json = await res.json();
       setActions((json.actions as Action[]) ?? []);
     } catch {
       setActions([]);
+    } finally {
+      clearTimeout(timer);
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch */
   useEffect(() => { void load(60); }, [load]);
-
-  // One destination, chosen for them. Making a student pick where to go is
-  // the confusion this card exists to remove.
-  function destinationFor(a: Action): string {
-    if (a.kind === 'coaching_due') return '/student/profile';
-    const sec = (a.section ?? '').toLowerCase();
-    if (sec === 'qa' || sec === 'varc' || sec === 'dilr') return `/student/plan/${sec}`;
-    return '/student/plan/topics';
-  }
 
   async function start(a: Action) {
     track('next_action_started', { kind: a.kind, topic: a.topic, minutes: a.minutes });
     // Mark it followed on the way out. They asked for the work and we're
     // handing it to them — waiting 36 hours for a cron to infer the same thing
     // throws away the cleanest signal we'll ever get.
-    if (a.id) {
-      void fetch('/api/next-action/ack', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: a.id }),
-      }).catch(() => {});
-    }
+    void fetch('/api/next-action/ack', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: a.kind }),
+    }).catch(() => {});
     setDone(true);
-    router.push(destinationFor(a));
+    // The server picked this, checking which section plans are actually
+    // switched on for this account.
+    router.push(a.href);
   }
 
   if (!loading && (!actions || actions.length === 0)) return null;
