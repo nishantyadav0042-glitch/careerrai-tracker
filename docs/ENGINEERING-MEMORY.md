@@ -186,6 +186,43 @@
 
 ---
 
+## Incident #9 — exam_ready was self-declarable through the mandatory weekly review
+
+- **Date detected:** 25 Jul 2026 · **Severity:** SEV-3 (data integrity, 10 rows / 6 students)
+- **What happened:** "exam_ready cannot be self-declared" was enforced in
+  `validateCoverageEntry` — but `topic_coverage.status` had ten write paths,
+  and the weekly coverage review (the one screen we had just made *mandatory*)
+  validated only "is it a real status" and "is it a forward move". Students
+  could tap Exam Ready from a chip row. Ten topics across six students
+  acquired it in the eight days the review was live, with every section
+  engine switched off — no legitimate path existed.
+- **Second door found in the same audit:** `applyConfidenceSignal` promoted
+  one rank per green tap **up to and including exam_ready**, and the Home
+  card's Done button sends green automatically — four Done taps would have
+  finished a topic with zero accuracy recorded.
+- **Root cause:** an invariant that N writers must each remember is an
+  invariant that fails at writer N+1. Same failure class as Incidents #4
+  (streak) and #5 (dashboard): a business rule with more than one
+  implementation.
+- **Fix:** rule enforced three layers deep — (1) the weekly review rejects
+  `exam_ready` server-side and no longer renders the chip; (2) green taps cap
+  at `revising` (`topic-selector.ts`); (3) a database trigger
+  (`guard_exam_ready`, migration `20260725_exam_ready_guard`) refuses
+  `exam_ready` for any (student, topic) with zero `topic_evidence` rows — the
+  layer no forgotten writer can skip. Both directions live-tested in
+  production: write without evidence → rejected; with evidence → accepted,
+  then rolled back. The 10 leaked rows were reset to `revising`.
+- **Lessons:** enforce integrity invariants **in the database**, where every
+  writer must pass, and keep app-level checks as the friendly error message —
+  not the wall. The status ladder itself is now declared once
+  (`coverage-status.ts`) so a new writer can't quietly diverge.
+- **Prevention (encoded):** the trigger; the shared ladder module; the
+  Playbook §3 gate ("a change that redefines an existing business concept
+  instead of importing it is rejected").
+- **Owner:** engineering
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a

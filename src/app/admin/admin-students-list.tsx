@@ -86,7 +86,12 @@ function matchFacts(s: StudentStat['student']): string[] {
     const weakest = sections.reduce((a, b) => (b.val < a.val ? b : a));
     facts.push(`Weakest: ${weakest.name} (${weakest.val})`);
   }
-  if (s.hours_available != null) facts.push(`${s.hours_available}h/day`);
+  // study_target_hours is canonical — hours_available is the signup-time
+  // answer and goes stale the moment a student edits their goal. 42 of 234
+  // students had drifted when this was checked, so admin was quoting a
+  // different daily-hours number than the app was planning with.
+  const dailyHours = s.study_target_hours ?? s.hours_available;
+  if (dailyHours != null) facts.push(`${dailyHours}h/day`);
   return facts;
 }
 
