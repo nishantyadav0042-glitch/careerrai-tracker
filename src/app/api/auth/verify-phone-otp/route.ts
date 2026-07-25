@@ -16,6 +16,7 @@ import { isValidPushEndpoint } from '@/lib/push-validate';
 // an account existed, handed over here in one shot on first signup only.
 interface OnboardingPayload {
   ambition_date?: unknown;
+  attempt_year?: unknown;
   dream_colleges?: unknown;
   target_percentile?: unknown;
   hours_available?: unknown;
@@ -199,6 +200,16 @@ export async function POST(request: NextRequest) {
     if ((isStub || !existing) && role === 'student' && onboarding) {
       const profileUpdate: Record<string, unknown> = {};
       if (typeof onboarding.ambition_date === 'string') profileUpdate.syllabus_target_date = onboarding.ambition_date;
+      // Which CAT they picked in the funnel. Bounded to this year..+3 so a
+      // tampered payload can't set a countdown to an arbitrary date, and so a
+      // 2027 aspirant stops being silently filed under this year's exam.
+      if (typeof onboarding.attempt_year === 'number') {
+        const thisYear = new Date().getFullYear();
+        if (Number.isInteger(onboarding.attempt_year)
+            && onboarding.attempt_year >= thisYear && onboarding.attempt_year <= thisYear + 3) {
+          profileUpdate.attempt_year = onboarding.attempt_year;
+        }
+      }
       if (Array.isArray(onboarding.dream_colleges)) {
         profileUpdate.dream_colleges = onboarding.dream_colleges.filter((c): c is string => typeof c === 'string').slice(0, 3);
       }
