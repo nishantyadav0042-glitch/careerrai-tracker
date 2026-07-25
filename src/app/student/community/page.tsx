@@ -16,13 +16,15 @@ export default function CommunityPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-3 pb-4">
+      {/* Header sized like a caption — the questions below need the space.
+          The line that matters: WE don't pick these, students do. */}
       <div>
-        <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+        <h1 className="text-lg font-bold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Daily Pick
         </h1>
-        <p className="mt-0.5 text-[13px] text-stone-500">
-          By the students, for the students. One tip, one question a day —
-          your vote decides what gets featured.
+        <p className="mt-0.5 text-[10.5px] leading-snug text-stone-400">
+          We don&apos;t decide the daily tip &amp; question — <span className="font-semibold text-stone-500">you do</span>.
+          By the students, for the students.
         </p>
       </div>
 
@@ -30,13 +32,13 @@ export default function CommunityPage() {
 
       <button
         type="button" onClick={() => setShare(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-stone-300 bg-white py-3.5 text-[13px] font-bold text-stone-600 active:scale-[0.99]"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 bg-white py-2.5 text-[12px] font-bold text-stone-600 active:scale-[0.99]"
       >
         <HeartHandshake className="h-4 w-4" />
         Help the next student — share a tip or question
       </button>
-      <p className="text-center text-[11px] text-stone-400">
-        Shared anonymously · checked for safety · students vote on what gets featured
+      <p className="text-center text-[10px] text-stone-400">
+        Shared anonymously · checked for safety · your votes pick what gets featured
       </p>
 
       {share && <CommunitySubmit onClose={() => setShare(false)} />}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ThumbsUp, ThumbsDown, Users } from 'lucide-react';
+import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { track } from '@/lib/journey';
 
 // The Curriculum Selection card — one tip and one question a day, judged.
@@ -57,22 +57,25 @@ export function CommunityVoteCard() {
   // emptiness, which is worse than absence.
   if (!loaded || (!tip && questions.length === 0)) return null;
 
+  // Reddit-density typography (founder, 25 Jul): 13px body, 11-12px meta,
+  // tight paddings — small but readable, so three section questions fit
+  // without a scroll marathon.
   const block = (item: VoteItem | null, label: string) => {
     if (!item) return null;
     const voted = votedIds.has(item.id);
     return (
-      <div className="rounded-xl border border-stone-200 p-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+      <div className="rounded-xl border border-stone-200 bg-white p-2.5">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-stone-400">
           {label}{item.section ? ` · ${item.section}` : ''}{item.topic ? ` · ${item.topic}` : ''}
         </p>
 
         {item.text && (
-          <p className="mt-1.5 text-[14px] font-medium leading-relaxed text-stone-900">
-            &ldquo;{item.text}&rdquo;
+          <p className="mt-1 whitespace-pre-line text-[13px] leading-snug text-stone-900">
+            {item.text}
           </p>
         )}
         {item.options && item.options.length > 0 && (
-          <ol className="mt-1.5 space-y-0.5 text-[12px] text-stone-600">
+          <ol className="mt-1 space-y-px text-[11.5px] leading-snug text-stone-600">
             {item.options.map((o, i) => (
               <li key={i}>{String.fromCharCode(65 + i)}. {o}</li>
             ))}
@@ -80,53 +83,46 @@ export function CommunityVoteCard() {
         )}
         {item.imageUrl && (
           /* eslint-disable-next-line @next/next/no-img-element -- storage URL, dimensions unknown */
-          <img src={item.imageUrl} alt="Community question" className="mt-1.5 max-h-72 w-full rounded-lg border border-stone-100 object-contain" />
+          <img src={item.imageUrl} alt="Community question" className="mt-1 max-h-60 w-full rounded-lg border border-stone-100 object-contain" />
         )}
-        <p className="mt-1 text-[11px] text-stone-400">— {item.displayName}, CareerRai student</p>
 
         {voted ? (
-          <p className="mt-2.5 text-[12px] font-semibold text-emerald-700">
-            Counted. That helps the next student.
+          <p className="mt-1.5 text-[11px] font-semibold text-emerald-700">
+            Counted 🙌 — that helps the next student.
           </p>
         ) : (
-          <>
-            <p className="mt-2.5 text-[12px] font-semibold text-stone-700">{item.prompt}</p>
-            <div className="mt-1.5 flex gap-2">
-              <button
-                type="button" disabled={busy === item.id}
-                onClick={() => void vote(item, true)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-stone-900 py-2 text-[12px] font-bold text-white active:scale-[0.98] disabled:opacity-50"
-              >
-                <ThumbsUp className="h-3.5 w-3.5" /> Yes
-              </button>
-              <button
-                type="button" disabled={busy === item.id}
-                onClick={() => void vote(item, false)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-600 active:scale-[0.98] disabled:opacity-50"
-              >
-                <ThumbsDown className="h-3.5 w-3.5" /> No
-              </button>
-            </div>
-          </>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <p className="min-w-0 flex-1 text-[10.5px] leading-snug text-stone-500">
+              {item.prompt} <span className="text-stone-300">· {item.displayName}</span>
+            </p>
+            <button
+              type="button" disabled={busy === item.id}
+              onClick={() => void vote(item, true)}
+              aria-label="Yes"
+              className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-bold text-white active:scale-[0.96] disabled:opacity-50"
+            >
+              <ThumbsUp className="h-3 w-3" /> Yes
+            </button>
+            <button
+              type="button" disabled={busy === item.id}
+              onClick={() => void vote(item, false)}
+              aria-label="No"
+              className="flex shrink-0 items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-bold text-stone-500 active:scale-[0.96] disabled:opacity-50"
+            >
+              <ThumbsDown className="h-3 w-3" /> No
+            </button>
+          </div>
         )}
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-      <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900">
-          <Users className="h-4 w-4 text-white" />
-        </span>
-        <h2 className="text-sm font-bold text-stone-900">Students helping students</h2>
-      </div>
-      <div className="mt-3 space-y-2.5">
-        {block(tip, '💡 Student tip')}
-        {/* One per section, every day — QA, DILR and VARC all get judged.
-            Long formats (RC sets, DI grids) arrive as student photos. */}
-        {questions.map((q) => block(q, `📷 ${q.section ?? ''} question`))}
-      </div>
+    <div className="space-y-2">
+      {block(tip, '💡 Tip')}
+      {/* One per section, every day — QA, DILR and VARC all get judged.
+          Long formats (RC sets, DI grids) arrive as student photos. */}
+      {questions.map((q) => block(q, '📷 Question'))}
     </div>
   );
 }
