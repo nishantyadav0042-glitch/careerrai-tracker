@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { nextBestActions } from '@/lib/next-action';
 import { sanitizeTargets } from '@/lib/timetable';
 import { computeTargetProgress, targetKey } from '@/lib/coaching-progress';
+import { getLogDateString } from '@/lib/streak-utils';
 
 export const maxDuration = 60;
 
@@ -22,13 +23,17 @@ export async function GET(request: NextRequest) {
   const minutes = Number.isFinite(raw) ? Math.max(10, Math.min(300, Math.floor(raw))) : 60;
 
   const admin = createAdminClient();
-  const [{ data: cov }, { data: mock }, { data: tt }, { data: prof }, { data: prog }] = await Promise.all([
+  const [{ data: cov }, { data: mock }, { data: tt }, { data: prof }, { data: prog }, { data: routine }] = await Promise.all([
     admin.from('topic_coverage').select('topic, status, is_priority, updated_at').eq('student_id', user.id),
     admin.from('mock_debriefs').select('varc, dilr, qa, taken_on')
       .eq('student_id', user.id).order('taken_on', { ascending: false }).limit(1).maybeSingle(),
     admin.from('student_timetables').select('targets, confirmed_at').eq('student_id', user.id).maybeSingle(),
     admin.from('profiles').select('plan_source, qa_model_enabled, dilr_model_enabled, varc_model_enabled').eq('id', user.id).maybeSingle(),
     admin.from('coaching_target_progress').select('target_key, done').eq('student_id', user.id),
+    // Today's routine, so "Done" on the card can tick the REAL plan task
+    // instead of writing a second, parallel record of the same fact.
+    admin.from('daily_routines').select('tasks').eq('student_id', user.id)
+      .eq('routine_date', getLogDateString()).maybeSingle(),
   ]);
 
   const coverage = (cov ?? []).map((c) => ({
@@ -121,7 +126,24 @@ export async function GET(request: NextRequest) {
     return '/student/plan/topics';
   };
 
-  const withHref = actions.map((a, i) => ({ ...a, href: hrefFor(a.section, a.kind), rank: i }));
+  // Match each action to today's actual plan task. When one exists, "Done" on
+  // the card completes THAT task — which advances coverage, ticks it in the
+  // daily log so the student never enters it twice, and counts toward the
+  // streak through the same path the log itself uses.
+  const routineTasks = (routine?.tasks ?? []) as { id?: unknown; topic?: unknown }[];
+  const taskIdForTopic = new Map<string, string>();
+  for (const t of routineTasks) {
+    if (typeof t?.topic === 'string' && t.topic && t.id != null) {
+      if (!taskIdForTopic.has(t.topic)) taskIdForTopic.set(t.topic, String(t.id));
+    }
+  }
+
+  const withHref = actions.map((a, i) => ({
+    ...a,
+    href: hrefFor(a.section, a.kind),
+    rank: i,
+    taskId: a.topic ? (taskIdForTopic.get(a.topic) ?? null) : null,
+  }));
 
   // Log what we recommended, fire-and-forget. Deliberately NOT awaited and no
   // read-before-write: this used to add three round trips to the critical path

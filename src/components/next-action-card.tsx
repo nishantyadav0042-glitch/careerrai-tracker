@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
 import type { StudyAction } from '@/lib/next-action';
 
-type Action = StudyAction & { href: string };
+type Action = StudyAction & { href: string; taskId: string | null };
 
 // The first thing on the home screen, and the reason to open the app at all.
 //
@@ -63,18 +63,37 @@ export function NextActionCard() {
     router.push(a.href);
   }
 
-  // Done is the close. It records the outcome (the cleanest signal the learning
-  // loop will ever get) and takes the action off Home for the rest of the day,
-  // surfacing the next one instead.
+  // Done is the close, and it is the SAME "done" the daily log means.
+  //
+  // Tapping it completes the real plan task for this topic, which advances
+  // coverage, shows the topic already ticked when they open the log, and feeds
+  // the streak through the exact path the log itself uses. Previously this only
+  // wrote an internal ack, so a student marked the same work done twice — once
+  // here, once in the log — and the card's Done counted for nothing.
   async function markDone(a: Action) {
     setBusy(true);
-    track('next_action_done', { kind: a.kind, topic: a.topic });
+    track('next_action_done', { kind: a.kind, topic: a.topic, hadTask: !!a.taskId });
     try {
+      if (a.taskId) {
+        await fetch('/api/routine/complete-task', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          // green = finished it. The same signal the log's "Done" sends.
+          // close_day: this block counts as studying today. The manual log
+          // already treats one marked topic as a valid day; the card should
+          // not be held to a stricter bar than the log it writes through.
+          body: JSON.stringify({ task_id: a.taskId, confidence: 'green', close_day: true }),
+        });
+      }
+      // Always ack too — this is what the ranking loop learns from, and it's
+      // the only record for actions with no matching plan task (a coaching
+      // target, say).
       await fetch('/api/next-action/ack', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: a.kind }),
       });
       await load(minutes);
+      // The streak, ring and plan all read from what we just wrote.
+      router.refresh();
     } catch { /* leave the card as it was */ }
     setBusy(false);
   }

@@ -22,7 +22,12 @@ export async function POST(request: NextRequest) {
   // daily_report itself (with the student's real hours/mood), so this route
   // must NOT re-write it via the RPC (which would overwrite mood etc.). It
   // still records the completion + advances coverage.
-  const { task_id: taskId, is_emergency: isEmergency, confidence, skip_day_close: skipDayClose } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string; skip_day_close?: boolean };
+  // close_day: the Home "Do this next" card sends this. Finishing a real
+  // 45-minute block IS studying today, and the manual log already accepts a
+  // single marked topic as a valid day — so requiring the WHOLE routine before
+  // the streak moves held the card to a stricter bar than the log it feeds.
+  // Same RPC, same merge rules; only the trigger differs.
+  const { task_id: taskId, is_emergency: isEmergency, confidence, skip_day_close: skipDayClose, close_day: closeDay } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string; skip_day_close?: boolean; close_day?: boolean };
   if (!taskId || typeof taskId !== 'string') return NextResponse.json({ error: 'task_id required' }, { status: 400 });
   if (confidence !== undefined && !VALID_CONFIDENCE.includes(confidence as ConfidenceSignal)) {
     return NextResponse.json({ error: 'confidence must be green, blue, yellow, or red' }, { status: 400 });
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
   const emergencyMinimumDone = emergencyDay && completedIds.has(tasks[0].id);
 
   let dayClosed = false;
-  if ((fullyDone || emergencyMinimumDone) && completions && completions.length > 0 && !skipDayClose) {
+  if ((fullyDone || emergencyMinimumDone || closeDay === true) && completions && completions.length > 0 && !skipDayClose) {
     const completedTasks = tasks.filter((t) => completedIds.has(t.id));
     const routineMinutes = completedTasks.reduce((s, t) => s + t.estMinutes, 0);
     const routineSections = [...new Set(completedTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))]
@@ -118,7 +123,8 @@ export async function POST(request: NextRequest) {
     const mergedHours = Math.max(1, Math.round(routineMinutes / 60), existingLog?.study_duration ?? 0);
     const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...routineSections])];
     const mergedMockTaken = routineMockTaken || !!existingLog?.mock_taken;
-    const mergedNotes = existingLog?.notes ?? (emergencyMinimumDone && !fullyDone ? 'Less time today — did the essentials.' : null);
+    const mergedNotes = existingLog?.notes
+      ?? (emergencyMinimumDone && !fullyDone ? 'Less time today — did the essentials.' : null);
 
     const { error: rpcError } = await admin.rpc('upsert_log_and_streak', {
       p_student_id: user.id,
