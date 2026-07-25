@@ -19,6 +19,8 @@ import { PushHealer } from '@/components/push-healer';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
+import { CoverageReviewGate } from '@/components/coverage-review-gate';
+import { isReviewDue } from '@/lib/coverage-review';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -95,14 +97,26 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // daily logs never happen, so nothing competes with it until the app is on the
   // phone. Once app_installed is true, the buddy nudge takes the slot again.
   const appInstalled = profile?.app_installed === true;
-  const showInstallJourney = noBlockingModal && !appInstalled;
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+  const nowMs = Date.now();
+
+  // The weekly coverage review — mandatory for EVERY student, coaching or not.
+  // Blueprint, pace ring, revision queue, daily insight and the coaching mirror
+  // all read topic_coverage; a matrix filled once at onboarding and never
+  // revisited makes every one of them confidently wrong. Because it's required,
+  // it outranks the optional nudges below and they stand down while it's up.
+  const showCoverageReview = isReviewDue(
+    profile?.coverage_reviewed_at as string | null,
+    profile?.onboarding_completed === true,
+    new Date(nowMs),
+  ) && noBlockingModal;
+
+  const showInstallJourney = noBlockingModal && !showCoverageReview && !appInstalled;
 
   // Coaching timetable, offered in the first 2 days only. A timetable shapes
   // the plan from the start; asking a month in is just another popup. Skipped
   // entirely once one is saved, so it can never re-ask a student who already
   // uploaded (the client-side decline flag only covers one device).
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
-  const nowMs = Date.now();
   const accountAgeDays = profile?.created_at
     ? (nowMs - Date.parse(profile.created_at as string)) / 86_400_000
     : 99;
@@ -111,7 +125,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // them the option"). coaching_enrolled === false means they answered No in
   // the /start funnel; null means never asked, so we still offer it.
   let showTimetablePrompt = false;
-  if (noBlockingModal && appInstalled && accountAgeDays <= 2 && profile?.coaching_enrolled !== false) {
+  if (noBlockingModal && !showCoverageReview && appInstalled && accountAgeDays <= 2 && profile?.coaching_enrolled !== false) {
     const { data: tt } = await admin
       .from('student_timetables').select('student_id').eq('student_id', user.id).maybeSingle();
     showTimetablePrompt = !tt;
@@ -120,7 +134,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // Buddy nudge stands down while the timetable ask is live — one auto-modal a
   // day is the rule, and in the first 2 days the timetable is the better use of
   // that single slot.
-  const showBuddyNudge = noBlockingModal && appInstalled && !showTimetablePrompt
+  const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled && !showTimetablePrompt
     && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (
@@ -168,6 +182,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
       ) : null}
       {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
+      {showCoverageReview && <CoverageReviewGate />}
       {showTimetablePrompt && <TimetablePrompt />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
