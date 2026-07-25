@@ -21,7 +21,7 @@ export default function CommunityPage() {
   useEffect(() => { track('daily_pick_open', {}); }, []);
 
   return (
-    <div className="mx-auto max-w-md space-y-3 pb-4">
+    <div className="mx-auto max-w-md space-y-3 pb-32">
       {/* Compact hero — small type, warm colour. The page must feel like a
           place students MADE, not a grey admin list (founder, 26 Jul). */}
       <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-white">
@@ -36,23 +36,25 @@ export default function CommunityPage() {
 
       <CommunityVoteCard />
 
-      {/* The ask is concrete, not abstract (founder, 26 Jul): a tough
-          question you solved, just a photo — not "help the next student". */}
-      <button
-        type="button" onClick={() => setShare(true)}
-        className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-left shadow-sm active:scale-[0.99]"
-      >
-        <span className="flex items-center gap-2 text-[13.5px] font-extrabold text-white">
-          <HeartHandshake className="h-4 w-4 shrink-0" />
-          Solved a tough question today? Share it — just a photo 📷
-        </span>
-        <span className="mt-0.5 block pl-6 text-[11px] font-medium text-white/85">
-          Or a tip that worked. Be part of <span className="font-bold text-white">by the students, for the students</span>.
-        </span>
-      </button>
-      <p className="text-center text-[10px] text-stone-400">
-        Shared anonymously · checked for safety · your votes pick what gets featured
-      </p>
+      {/* Share CTA is PINNED above the bottom nav (founder, 26 Jul: "scroll
+          or not, it should be visible") — never buried under three questions.
+          The page gets pb-32 so the last block scrolls clear of it. */}
+      <div className="fixed inset-x-0 bottom-14 z-20 bg-gradient-to-t from-stone-50 via-stone-50/95 to-transparent px-3 pb-2 pt-4">
+        <div className="mx-auto max-w-md">
+          <button
+            type="button" onClick={() => setShare(true)}
+            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-left shadow-lg active:scale-[0.99]"
+          >
+            <span className="flex items-center gap-2 text-[13px] font-extrabold text-white">
+              <HeartHandshake className="h-4 w-4 shrink-0" />
+              Solved a tough question today? Share it — just a photo 📷
+            </span>
+            <span className="mt-0.5 block pl-6 text-[10.5px] font-medium text-white/85">
+              Or a tip that worked. Be part of <span className="font-bold text-white">by the students, for the students</span>.
+            </span>
+          </button>
+        </div>
+      </div>
 
       {share && <CommunitySubmit onClose={() => setShare(false)} />}
     </div>
