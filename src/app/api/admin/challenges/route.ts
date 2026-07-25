@@ -112,9 +112,10 @@ export async function POST(request: NextRequest) {
     }
     await admin.from('student_submissions').update({
       status: 'approved', reviewed_by: userId, reviewed_at: now,
-      // Tips are published the moment they're approved; questions publish when
-      // their bank entry is scheduled live.
-      published_at: sub.kind === 'tip' ? now : null,
+      // Tips, mistakes and shortcuts publish the moment they're approved —
+      // straight into their topic's curriculum. Questions publish when their
+      // bank entry is scheduled live.
+      published_at: sub.kind !== 'question' ? now : null,
     }).eq('id', sid);
     return NextResponse.json({ ok: true });
   }

@@ -5,17 +5,33 @@ import { X, HeartHandshake } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 
-// "Help a friend" — for the students, by the students.
+// "Help the next student" — for the students, by the students.
 //
-// A tip or a tricky question, tagged to a real topic. Everything lands in the
-// founder's verification queue; nothing reaches other students unreviewed.
-// The submission promise is explicit about both halves: it will be checked,
-// and if it's good, it ships WITH YOUR NAME. Credit is the reward.
+// Four buckets, chosen because each one has an exact HOME in the curriculum:
+// a tip lands inside the study plan at its topic, a mistake shows before
+// practice, a shortcut after the concept, a question enters the Daily Proof
+// bank. The contributor isn't making a post — they're improving how the topic
+// is taught to everyone after them, and the promise says exactly that.
+// Everything passes human verification first; nothing reaches students raw.
 
 const TOPICS = Object.keys(TOPIC_METADATA).sort();
 
+const KINDS = [
+  { id: 'tip',      emoji: '💡', label: 'A tip',            hint: 'Something that made this topic click for you' },
+  { id: 'mistake',  emoji: '❌', label: 'A common mistake', hint: 'The trap you fell into, so the next student doesn\u2019t' },
+  { id: 'shortcut', emoji: '⚡', label: 'A shortcut',       hint: 'A faster way you found or were taught' },
+  { id: 'question', emoji: '🎯', label: 'A great question', hint: 'A question that taught you something' },
+] as const;
+type Kind = (typeof KINDS)[number]['id'];
+
+const TEXT_PLACEHOLDER: Record<string, string> = {
+  tip: 'e.g. For percentages, convert everything to fractions first — 37.5% is just 3/8…',
+  mistake: 'e.g. In seating puzzles I always forgot the ones facing SOUTH reverse left and right…',
+  shortcut: 'e.g. Successive discounts of a% and b% = a + b − ab/100 in one step…',
+};
+
 export function CommunitySubmit({ onClose }: { onClose: () => void }) {
-  const [kind, setKind] = useState<'tip' | 'question'>('tip');
+  const [kind, setKind] = useState<Kind>('tip');
   const [topic, setTopic] = useState('');
   const [tip, setTip] = useState('');
   const [question, setQuestion] = useState('');
@@ -29,9 +45,9 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   async function submit() {
     setBusy(true); setError(null);
     try {
-      const body = kind === 'tip'
-        ? { kind, topic, tip }
-        : { kind, topic, question, options: options.filter((o) => o.trim()), correct_index: correct, explanation };
+      const body = kind === 'question'
+        ? { kind, topic, question, options: options.filter((o) => o.trim()), correct_index: correct, explanation }
+        : { kind, topic, tip };
       const res = await fetch('/api/community/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -66,22 +82,23 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            <p className="mt-3 text-[16px] font-bold text-stone-900">Help a friend</p>
+            <p className="mt-3 text-[16px] font-bold text-stone-900">Help the next student</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-              Share a tip that worked for you, or a question that taught you something.
-              We check everything before it goes out — and if it&apos;s approved, the whole
-              community sees it <span className="font-semibold">with your name on it</span>.
+              What you learned the hard way, the next student gets for free. We verify
+              everything — approved contributions become
+              <span className="font-semibold"> part of how the topic is taught</span> on CareerRai.
             </p>
 
-            <div className="mt-3 flex gap-1.5">
-              {(['tip', 'question'] as const).map((k) => (
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
+              {KINDS.map((k) => (
                 <button
-                  key={k} type="button" onClick={() => setKind(k)}
-                  className={`flex-1 rounded-lg py-2 text-[12px] font-bold capitalize ${
-                    kind === k ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
+                  key={k.id} type="button" onClick={() => setKind(k.id)}
+                  className={`rounded-xl px-2 py-2.5 text-left ${
+                    kind === k.id ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700'
                   }`}
                 >
-                  {k === 'tip' ? 'A tip' : 'A question'}
+                  <span className="block text-[13px] font-bold">{k.emoji} {k.label}</span>
+                  <span className={`mt-0.5 block text-[10px] leading-snug ${kind === k.id ? 'text-white/60' : 'text-stone-500'}`}>{k.hint}</span>
                 </button>
               ))}
             </div>
@@ -97,12 +114,14 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
               </select>
             </label>
 
-            {kind === 'tip' ? (
+            {kind !== 'question' ? (
               <label className="mt-3 block">
-                <span className="text-[11px] font-semibold text-stone-500">Your tip</span>
+                <span className="text-[11px] font-semibold text-stone-500">
+                  {kind === 'tip' ? 'Your tip' : kind === 'mistake' ? 'The mistake to avoid' : 'Your shortcut'}
+                </span>
                 <textarea
                   value={tip} onChange={(e) => setTip(e.target.value)} rows={4}
-                  placeholder="e.g. For percentages, convert everything to fractions first — 37.5% is just 3/8…"
+                  placeholder={TEXT_PLACEHOLDER[kind]}
                   className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
                 />
               </label>

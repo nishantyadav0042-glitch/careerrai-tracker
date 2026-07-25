@@ -90,6 +90,13 @@ never the gates in §3.
       never summed into one student-facing number. We shipped and same-day
       removed exactly that blend (ADR-006) — the next one is rejected in
       review.
+- [ ] **The community wall rule:** no community feature ships unless it
+      measurably improves someone's Study Plan, Evidence, Revision, or Topic
+      Learning. Conversation is not a goal; curriculum is. A contribution that
+      has no exact home in the learning system (a feed, a lounge, a
+      leaderboard) is rejected — everything a student shares must land where
+      the next student needs it (tip/mistake/shortcut → at the topic;
+      question → the Daily Proof bank).
 - [ ] Major architecture decisions get an entry in `docs/DECISIONS.md`
       (failure → internal evidence → external evidence → decision →
       alternatives rejected → success metric → **reversibility class**).
