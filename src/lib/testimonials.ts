@@ -27,6 +27,17 @@ export const TESTIMONIALS: Testimonial[] = [
     context: 'CAT aspirant',
     when: 'this week',
   },
+  {
+    // Instagram DM to the founder, 25 Jul 2026, in reply to an open "koi
+    // feedback ho to please share". Founder directed adding it with the
+    // student's name and handle WITHHELD — so no name appears, only the
+    // channel. Words verbatim (Hinglish kept — translating it would be
+    // editing it).
+    quote: 'Bahut achi hai bhaiya bahut achi 🧿🙌',
+    name: 'A CAT aspirant',
+    context: 'via Instagram, name withheld',
+    when: 'this week',
+  },
 ];
 
 // Live-rendered WhatsApp chats — REAL conversations only, transcribed verbatim

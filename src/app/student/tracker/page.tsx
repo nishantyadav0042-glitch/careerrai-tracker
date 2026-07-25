@@ -11,6 +11,7 @@ import { DailyInsightCard } from '@/components/home/daily-insight-card';
 import { CoachingMirror } from '@/components/coaching-mirror';
 import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
 import { NextActionCard } from '@/components/next-action-card';
+import { DailyChallengeCard } from '@/components/daily-challenge-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
@@ -418,7 +419,15 @@ export default async function DailyTrackerPage() {
               insight  — yesterday's pattern (and the install hook in a browser)
               coaching — their coaching's daily share, or the upload entry */}
         {blockOrder.map((b: HomeBlock) => {
-          if (b === 'action') return <NextActionCard key="action" />;
+          if (b === 'action') return (
+            /* The challenge rides directly under the action card in every
+               slot: both answer "what can I do right now", and the challenge
+               is the 2-minute version for a student who can't start a block. */
+            <div key="action" className="space-y-3">
+              <NextActionCard />
+              <DailyChallengeCard />
+            </div>
+          );
           if (b === 'log') return <div key="log">{logBlock}</div>;
           if (b === 'coaching') return <CoachingMirror key="coaching" />;
           return dailyInsight
