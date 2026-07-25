@@ -19,7 +19,7 @@ interface VoteItem {
 
 export function CommunityVoteCard() {
   const [tip, setTip] = useState<VoteItem | null>(null);
-  const [question, setQuestion] = useState<VoteItem | null>(null);
+  const [questions, setQuestions] = useState<VoteItem[]>([]);
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -30,7 +30,7 @@ export function CommunityVoteCard() {
       if (!res.ok) return;
       const json = await res.json();
       setTip(json.tip ?? null);
-      setQuestion(json.question ?? null);
+      setQuestions((json.questions as VoteItem[]) ?? []);
     } catch { /* render nothing */ }
     setLoaded(true);
   }, []);
@@ -55,7 +55,7 @@ export function CommunityVoteCard() {
 
   // Nothing in the pool → no card. Empty community surfaces advertise
   // emptiness, which is worse than absence.
-  if (!loaded || (!tip && !question)) return null;
+  if (!loaded || (!tip && questions.length === 0)) return null;
 
   const block = (item: VoteItem | null, label: string) => {
     if (!item) return null;
@@ -123,7 +123,9 @@ export function CommunityVoteCard() {
       </div>
       <div className="mt-3 space-y-2.5">
         {block(tip, '💡 Student tip')}
-        {block(question, '📷 Student question')}
+        {/* One per section, every day — QA, DILR and VARC all get judged.
+            Long formats (RC sets, DI grids) arrive as student photos. */}
+        {questions.map((q) => block(q, `📷 ${q.section ?? ''} question`))}
       </div>
     </div>
   );

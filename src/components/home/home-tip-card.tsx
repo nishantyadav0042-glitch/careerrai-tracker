@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { ThumbsUp, ThumbsDown, ChevronRight } from 'lucide-react';
 import { track } from '@/lib/journey';
 
-// Home's ONE community surface (founder, 25 Jul): today's student tip, right
-// here, votable in one tap — and a single line inviting students to go filter
-// questions on the Daily Pick tab. Questions never render on Home; the tip
-// does, because a one-line tip is glanceable and a question is work.
+// Home's ONE community surface, sized like a whisper (founder, 25 Jul: "only
+// tip in homepage, very small and cute banner"). Two short lines, inline
+// thumbs, and a tiny pointer to the Daily Pick tab where questions from all
+// three sections are judged. Questions never render here.
 
 interface VoteItem {
   id: string; text: string | null; topic: string | null;
@@ -17,7 +17,7 @@ interface VoteItem {
 
 export function HomeTipCard() {
   const [tip, setTip] = useState<VoteItem | null>(null);
-  const [hasQuestion, setHasQuestion] = useState(false);
+  const [hasQuestions, setHasQuestions] = useState(false);
   const [voted, setVoted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -28,7 +28,7 @@ export function HomeTipCard() {
       if (res.ok) {
         const json = await res.json();
         setTip(json.tip ?? null);
-        setHasQuestion(json.question != null);
+        setHasQuestions(((json.questions as unknown[]) ?? []).length > 0);
       }
     } catch { /* render nothing */ }
     setLoaded(true);
@@ -53,53 +53,49 @@ export function HomeTipCard() {
     setBusy(false);
   }
 
-  if (!loaded || (!tip && !hasQuestion)) return null;
+  if (!loaded || (!tip && !hasQuestions)) return null;
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4">
+    <div className="rounded-xl border border-amber-200/70 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2.5">
       {tip && (
-        <>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
-            💡 Today&apos;s student tip{tip.topic ? ` · ${tip.topic}` : ''}
-          </p>
-          <p className="mt-1.5 text-[14px] font-medium leading-relaxed text-stone-900">
-            &ldquo;{tip.text}&rdquo;
-          </p>
-          <p className="mt-1 text-[11px] text-stone-400">— {tip.displayName}, CareerRai student</p>
-
-          {voted ? (
-            <p className="mt-2 text-[12px] font-semibold text-emerald-700">
-              Counted. That helps the next student.
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 text-[14px]">💡</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-medium leading-snug text-stone-800">
+              &ldquo;{tip.text}&rdquo;
             </p>
+            <p className="mt-0.5 text-[10px] text-stone-400">
+              — {tip.displayName} · student tip{tip.topic ? ` · ${tip.topic}` : ''}
+            </p>
+          </div>
+          {voted ? (
+            <span className="mt-0.5 shrink-0 text-[10px] font-bold text-emerald-700">Counted 🙌</span>
           ) : (
-            <div className="mt-2.5 flex items-center gap-2">
-              <p className="min-w-0 flex-1 text-[12px] font-semibold text-stone-600">{tip.prompt}</p>
+            <span className="flex shrink-0 gap-1">
               <button
                 type="button" disabled={busy} onClick={() => void vote(true)}
-                aria-label="Yes, helpful"
-                className="grid h-9 w-12 shrink-0 place-items-center rounded-lg bg-stone-900 text-white active:scale-[0.96] disabled:opacity-50"
+                aria-label="Helpful"
+                className="grid h-7 w-8 place-items-center rounded-lg bg-white/80 text-stone-700 shadow-sm active:scale-95 disabled:opacity-50"
               >
-                <ThumbsUp className="h-4 w-4" />
+                <ThumbsUp className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button" disabled={busy} onClick={() => void vote(false)}
-                aria-label="No, not helpful"
-                className="grid h-9 w-12 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-500 active:scale-[0.96] disabled:opacity-50"
+                aria-label="Not helpful"
+                className="grid h-7 w-8 place-items-center rounded-lg bg-white/50 text-stone-400 active:scale-95 disabled:opacity-50"
               >
-                <ThumbsDown className="h-4 w-4" />
+                <ThumbsDown className="h-3.5 w-3.5" />
               </button>
-            </div>
+            </span>
           )}
-        </>
+        </div>
       )}
-
-      {/* Questions live on the Daily Pick tab only — Home just points there. */}
-      {hasQuestion && (
+      {hasQuestions && (
         <Link
           href="/student/community"
-          className={`flex items-center gap-1.5 text-[12px] font-bold text-indigo-600 ${tip ? 'mt-3 border-t border-stone-100 pt-2.5' : ''}`}
+          className={`flex items-center gap-1 text-[11px] font-bold text-indigo-600 ${tip ? 'mt-1.5 pl-6' : ''}`}
         >
-          📷 Help us pick the best questions <ChevronRight className="h-3.5 w-3.5" />
+          📷 Help us pick the best questions <ChevronRight className="h-3 w-3" />
         </Link>
       )}
     </div>
