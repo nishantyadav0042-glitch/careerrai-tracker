@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { CalendarClock, Loader2, Upload, X, Check, Trash2 } from 'lucide-react';
 import { track } from '@/lib/journey';
-import { DAY_LABELS, formatTime, type TimetableBlock } from '@/lib/timetable';
+import { DAY_LABELS, formatTime, type TimetableBlock, type TimetableKind, type CoachingTarget } from '@/lib/timetable';
 
 // "Upload your coaching timetable" — offered in a student's first days.
 //
@@ -37,13 +37,18 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-type Stage = 'ask' | 'reading' | 'review' | 'saving';
+type Stage = 'ask' | 'reading' | 'review' | 'choose' | 'saving';
 
 export type CloseReason = 'saved' | 'declined' | 'closed';
 
-export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) => void }) {
+export function TimetableUpload({ onClose, kind = 'weekly' }: {
+  onClose: (reason: CloseReason) => void;
+  kind?: TimetableKind;
+}) {
   const [stage, setStage] = useState<Stage>('ask');
   const [blocks, setBlocks] = useState<TimetableBlock[]>([]);
+  const [targets, setTargets] = useState<CoachingTarget[]>([]);
+  const [syllabusEndDate, setSyllabusEndDate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +79,8 @@ export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) =>
         return;
       }
       setBlocks(json.blocks as TimetableBlock[]);
+      setTargets((json.targets as CoachingTarget[]) ?? []);
+      setSyllabusEndDate((json.syllabusEndDate as string | null) ?? null);
       setStage('review');
     } catch {
       setError('Could not read that file. Try a photo instead.');
@@ -81,26 +88,29 @@ export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) =>
     }
   }
 
-  async function save() {
+  async function save(followCoaching: boolean) {
     setStage('saving');
     setError(null);
     try {
       const res = await fetch('/api/timetable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blocks }),
+        body: JSON.stringify({ blocks, targets, kind, syllabusEndDate, followCoaching }),
       });
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? 'Could not save. Please try again.');
-        setStage('review');
+        setStage('choose');
         return;
       }
-      track('timetable_saved', { blocks: blocks.length, alignedTopics: json.alignedTopics ?? 0 });
+      track('timetable_saved', {
+        blocks: blocks.length, targets: targets.length,
+        alignedTopics: json.alignedTopics ?? 0, planSource: json.planSource, kind,
+      });
       onClose('saved');
     } catch {
       setError('Could not save. Please try again.');
-      setStage('review');
+      setStage('choose');
     }
   }
 
@@ -156,13 +166,45 @@ export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) =>
           </>
         )}
 
-        {(stage === 'review' || stage === 'saving') && (
+        {stage === 'review' && (
           <>
             <h2 className="text-xl font-bold text-stone-900">Is this right?</h2>
             <p className="mt-1 text-sm text-stone-600">
-              Found {blocks.length} {blocks.length === 1 ? 'class' : 'classes'}
+              {blocks.length > 0 && <>{blocks.length} {blocks.length === 1 ? 'class' : 'classes'}</>}
+              {blocks.length > 0 && targets.length > 0 && ' · '}
+              {targets.length > 0 && <>{targets.length} {targets.length === 1 ? 'target' : 'targets'}</>}
               {mapped > 0 && <> · {mapped} matched to CareerRai topics</>}. Remove anything wrong.
             </p>
+
+            {targets.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                  What your coaching expects
+                </p>
+                <div className="space-y-1.5">
+                  {targets.map((t, i) => (
+                    <div key={`t-${i}`} className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5">
+                      {t.count != null && (
+                        <span className="w-10 shrink-0 text-sm font-bold tabular-nums text-orange-700">{t.count}</span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-sm text-stone-800">{t.label}</span>
+                      {t.section && (
+                        <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[10px] font-bold text-stone-600">
+                          {t.section}
+                        </span>
+                      )}
+                      <button
+                        type="button" aria-label="Remove this target"
+                        onClick={() => setTargets((p) => p.filter((_, j) => j !== i))}
+                        className="shrink-0 text-stone-400 hover:text-rose-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 space-y-1.5">
               {blocks.map((b, i) => (
@@ -190,7 +232,7 @@ export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) =>
               ))}
             </div>
 
-            {blocks.length === 0 && (
+            {blocks.length === 0 && targets.length === 0 && (
               <p className="mt-4 rounded-xl bg-stone-50 px-3 py-3 text-center text-sm text-stone-500">
                 Nothing left — upload a different photo, or skip for now.
               </p>
@@ -201,16 +243,70 @@ export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) =>
             )}
 
             <button
-              type="button" onClick={save} disabled={blocks.length === 0 || stage === 'saving'}
+              type="button" onClick={() => setStage('choose')} disabled={blocks.length === 0 && targets.length === 0}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-4 text-sm font-bold text-white disabled:bg-stone-200 disabled:text-stone-400"
             >
-              {stage === 'saving'
-                ? (<><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>)
-                : (<><Check className="h-4 w-4" /> Looks right — follow this</>)}
+              <Check className="h-4 w-4" /> Looks right
             </button>
-            <button type="button" onClick={() => { setStage('ask'); setBlocks([]); }}
+            <button type="button" onClick={() => { setStage('ask'); setBlocks([]); setTargets([]); }}
               className="mt-2 w-full py-2.5 text-center text-sm font-medium text-stone-500">
               Upload a different photo
+            </button>
+          </>
+        )}
+
+        {(stage === 'choose' || stage === 'saving') && (
+          <>
+            <h2 className="text-xl font-bold text-stone-900">How should we plan your prep?</h2>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-stone-600">
+              {blocks.length > 0
+                ? <>You&apos;ve got {blocks.length} {blocks.length === 1 ? 'class' : 'classes'} a week. </>
+                : <>We&apos;ve got your coaching&apos;s targets. </>}
+              Do you want us to follow your coaching, or build your own order?
+            </p>
+
+            {error && (
+              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>
+            )}
+
+            <button
+              type="button" disabled={stage === 'saving'} onClick={() => save(true)}
+              className="mt-5 w-full rounded-2xl border-2 border-orange-500 bg-orange-50 p-4 text-left disabled:opacity-60"
+            >
+              <p className="text-sm font-bold text-stone-900">Follow my coaching</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+                We&apos;ll push the same topics your class is teaching, so what you study here backs up what you just
+                learnt there.
+                {syllabusEndDate && (
+                  <> We&apos;ll also aim to finish the syllabus by{' '}
+                    <span className="font-semibold text-stone-800">
+                      {new Date(`${syllabusEndDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>, the date on your sheet.
+                  </>
+                )}
+              </p>
+            </button>
+
+            <button
+              type="button" disabled={stage === 'saving'} onClick={() => save(false)}
+              className="mt-2.5 w-full rounded-2xl border border-stone-200 bg-white p-4 text-left disabled:opacity-60"
+            >
+              <p className="text-sm font-bold text-stone-900">Build my own plan</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+                We&apos;ll pick your topics by what scores most for you. Your class times are still saved, so we
+                won&apos;t clash with them.
+              </p>
+            </button>
+
+            {stage === 'saving' && (
+              <p className="mt-4 flex items-center justify-center gap-2 text-sm text-stone-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Setting up your plan…
+              </p>
+            )}
+
+            <button type="button" disabled={stage === 'saving'} onClick={() => setStage('review')}
+              className="mt-2 w-full py-2.5 text-center text-sm font-medium text-stone-500 disabled:opacity-60">
+              Back
             </button>
           </>
         )}

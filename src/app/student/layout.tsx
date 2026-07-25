@@ -106,8 +106,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const accountAgeDays = profile?.created_at
     ? (nowMs - Date.parse(profile.created_at as string)) / 86_400_000
     : 99;
+  // Coaching students only. A self-study student has no coaching timetable to
+  // upload, so asking them is pure noise (founder: "who says no, don't give
+  // them the option"). coaching_enrolled === false means they answered No in
+  // the /start funnel; null means never asked, so we still offer it.
   let showTimetablePrompt = false;
-  if (noBlockingModal && appInstalled && accountAgeDays <= 2) {
+  if (noBlockingModal && appInstalled && accountAgeDays <= 2 && profile?.coaching_enrolled !== false) {
     const { data: tt } = await admin
       .from('student_timetables').select('student_id').eq('student_id', user.id).maybeSingle();
     showTimetablePrompt = !tt;

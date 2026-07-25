@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sanitizeBlocks, topicsTaught, type TimetableBlock } from '@/lib/timetable';
+import { sanitizeBlocks, topicsTaught, sanitizeSyllabusEndDate, sanitizeTargets, isTimetableKind, type TimetableBlock } from '@/lib/timetable';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 
 // GET  — the student's saved timetable (or null).
@@ -19,14 +19,22 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data } = await admin
-    .from('student_timetables')
-    .select('blocks, confirmed_at, updated_at')
-    .eq('student_id', user.id)
-    .maybeSingle();
+  const [{ data }, { data: prof }] = await Promise.all([
+    admin.from('student_timetables')
+      .select('blocks, targets, kind, syllabus_end_date, confirmed_at').eq('student_id', user.id).maybeSingle(),
+    admin.from('profiles').select('plan_source, coaching_enrolled').eq('id', user.id).maybeSingle(),
+  ]);
 
   return NextResponse.json({
-    timetable: data ? { blocks: sanitizeBlocks(data.blocks), confirmedAt: data.confirmed_at } : null,
+    timetable: data ? {
+      blocks: sanitizeBlocks(data.blocks),
+      targets: sanitizeTargets(data.targets),
+      kind: data.kind ?? 'weekly',
+      syllabusEndDate: data.syllabus_end_date ?? null,
+      confirmedAt: data.confirmed_at,
+    } : null,
+    planSource: prof?.plan_source ?? 'careerrai',
+    coachingEnrolled: prof?.coaching_enrolled ?? null,
   });
 }
 
@@ -35,20 +43,36 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
-  const body = (await request.json().catch(() => ({}))) as { blocks?: unknown; source?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    blocks?: unknown; targets?: unknown; source?: string; kind?: unknown;
+    syllabusEndDate?: unknown; followCoaching?: unknown;
+  };
   // Re-sanitize on the way in. The client already validated, but a client is
   // never the authority on what reaches the database.
   const blocks: TimetableBlock[] = sanitizeBlocks(body.blocks);
-  if (blocks.length === 0) {
-    return NextResponse.json({ error: 'No valid classes to save.' }, { status: 400 });
+  const targets = sanitizeTargets(body.targets);
+  // A targets-only upload is completely valid — most coachings hand out a
+  // production quota rather than a class timetable.
+  if (blocks.length === 0 && targets.length === 0) {
+    return NextResponse.json({ error: 'Nothing to save.' }, { status: 400 });
   }
 
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();
 
+  const kind = isTimetableKind(body.kind) ? body.kind : 'weekly';
+  // Re-sanitized server-side: this date can move the student's whole target,
+  // so a client is never trusted to supply it unchecked.
+  const syllabusEndDate = sanitizeSyllabusEndDate(body.syllabusEndDate);
+  // Default true — a student uploading a timetable is telling us to use it.
+  const followCoaching = body.followCoaching !== false;
+
   const { error } = await admin.from('student_timetables').upsert({
     student_id: user.id,
     blocks,
+    targets,
+    kind,
+    syllabus_end_date: syllabusEndDate,
     source: typeof body.source === 'string' ? body.source.slice(0, 20) : 'photo',
     confirmed_at: nowIso,
     updated_at: nowIso,
@@ -66,7 +90,19 @@ export async function POST(request: NextRequest) {
   const taught = topicsTaught(blocks);
   let aligned = 0;
 
-  if (taught.length > 0) {
+  // The student's explicit choice. Following coaching prioritises their topics;
+  // choosing our own plan stores the timetable (so class times are still known)
+  // but leaves topic selection entirely to our engine.
+  const planSource = followCoaching ? 'coaching' : 'careerrai';
+  const profileUpdate: Record<string, unknown> = { plan_source: planSource };
+
+  // Only a date actually PRINTED on the document may move the target, and only
+  // when the student chose to follow coaching. Otherwise our own projection
+  // stands — an invented completion date would corrupt the pace ring.
+  if (followCoaching && syllabusEndDate) profileUpdate.syllabus_target_date = syllabusEndDate;
+  await admin.from('profiles').update(profileUpdate).eq('id', user.id);
+
+  if (followCoaching && taught.length > 0) {
     const { data: existing } = await admin
       .from('topic_coverage')
       .select('topic')
@@ -96,13 +132,25 @@ export async function POST(request: NextRequest) {
         .in('topic', [...have]);
     }
     aligned = taught.length;
+  } else if (!followCoaching && taught.length > 0) {
+    // Switching back to our own plan: clear the priority flags a previous
+    // coaching alignment set, so a stale coaching bias can't keep steering the
+    // planner after the student opted out. Status is untouched — only the
+    // priority hint is withdrawn.
+    await admin.from('topic_coverage')
+      .update({ is_priority: false })
+      .eq('student_id', user.id)
+      .in('topic', taught);
   }
 
   admin.from('student_events').insert({
     user_id: user.id, event: 'timetable_confirmed',
-    props: { blocks: blocks.length, alignedTopics: aligned },
+    props: { blocks: blocks.length, targets: targets.length, alignedTopics: aligned, kind, planSource, targetMoved: !!(followCoaching && syllabusEndDate) },
     path: null,
   }).then(({ error: e }) => { if (e) console.error('[timetable] event log failed', e.message); });
 
-  return NextResponse.json({ ok: true, blocks: blocks.length, alignedTopics: aligned });
+  return NextResponse.json({
+    ok: true, blocks: blocks.length, targets: targets.length, alignedTopics: aligned,
+    planSource, syllabusEndDate: followCoaching ? syllabusEndDate : null,
+  });
 }

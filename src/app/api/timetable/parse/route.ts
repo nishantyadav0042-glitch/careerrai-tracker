@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { callGemini, extractJson, type GeminiPart } from '@/lib/gemini';
-import { ALLOWED_TOPICS, sanitizeBlocks } from '@/lib/timetable';
+import { ALLOWED_TOPICS, sanitizeBlocks, sanitizeSyllabusEndDate, sanitizeTargets } from '@/lib/timetable';
 
 export const maxDuration = 60;
 
@@ -22,14 +22,24 @@ const ALLOWED_MEDIA_TYPES = [
 ] as const;
 type AllowedMediaType = (typeof ALLOWED_MEDIA_TYPES)[number];
 
-const EXTRACT_PROMPT = `You are reading a photo or PDF of a COACHING CLASS TIMETABLE for a CAT exam student (Indian MBA entrance coaching, e.g. TIME, IMS, CL, Endeavor).
+const EXTRACT_PROMPT = `You are reading a photo, screenshot or PDF of something a CAT coaching institute gave a student (Rodha, TIME, IMS, CL, Endeavor, Cracku, Unacademy...).
 
-Extract every scheduled class you can see. Return STRICT JSON only:
+It may be ANY of these, and often it is not a timetable at all:
+ (a) a weekly class timetable with days and times,
+ (b) a TARGET / strategy message listing how much to complete ("15-20 Quant sectionals by end September", "200 LRDI sets", "100+ topic tests"),
+ (c) both.
+
+Extract whatever is actually there. An empty list is correct when that thing isn't present — do NOT invent class times for a target message, and do NOT invent targets for a plain timetable. Return STRICT JSON only:
 
 {
   "is_timetable": boolean,
+  "syllabus_end_date": "YYYY-MM-DD" or null,
   "blocks": [
     { "day": 0, "start": "18:00", "end": "20:00", "section": "QA", "topic": "Time Speed Distance", "label": "Arithmetic - TSD" }
+  ],
+  "targets": [
+    { "kind": "sectional", "label": "15-20 Quant sectionals by end September", "count": 20, "section": "QA", "deadline": "2026-09-30" },
+    { "kind": "sets", "label": "200 LRDI sets", "count": 200, "section": "DILR", "deadline": null }
   ]
 }
 
@@ -47,6 +57,15 @@ RULES — follow exactly:
 - "label": the raw text as printed on the timetable, so nothing is lost.
 - Ignore breaks, lunch, holidays, test/mock slots that name no topic — unless they are actual scheduled classes.
 - If the same class repeats on several days, output one block per day.
+TARGETS — how much work the coaching expects completed:
+- "kind": one of "sectional", "topic_test", "mock", "questions", "sets", "revision", "classes", "other".
+- "count": the number to complete, as an integer. For a RANGE like "15-20", use the HIGHER number (20). For "100-150+", use 150. If no number is given (e.g. "complete Arithmetic revision"), use null. NEVER guess a number.
+- "section": "QA", "VARC", "DILR", or null.
+- "label": the target in the coaching's own words, kept short.
+- "deadline": "YYYY-MM-DD" only if a real date or month-end is stated ("by end September" -> that month's last day of the CURRENT year). Otherwise null.
+- Ignore motivational lines, greetings and general advice. Only extract things with a countable or completable deliverable.
+
+- "syllabus_end_date": ONLY if the document literally prints a date on which the syllabus/course finishes (e.g. "Course ends 30 Nov 2026", "Syllabus completion: 15/10/2026"). Return it as "YYYY-MM-DD". If no such date is printed anywhere, return null. NEVER estimate, infer, or calculate this date — a wrong date here damages the student's whole study plan. When unsure, return null.
 
 ALLOWED TOPICS (the ONLY permitted values for "topic"):
 ${ALLOWED_TOPICS.join('\n')}`;
@@ -54,6 +73,8 @@ ${ALLOWED_TOPICS.join('\n')}`;
 interface ParseResult {
   is_timetable?: boolean;
   blocks?: unknown;
+  targets?: unknown;
+  syllabus_end_date?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -118,19 +139,27 @@ export async function POST(request: NextRequest) {
   // Everything the model returned passes through the sanitizer before it is
   // shown to the student — invented topics are dropped here, not stored.
   const blocks = sanitizeBlocks(parsed.blocks);
-  if (blocks.length === 0) {
+  const targets = sanitizeTargets(parsed.targets);
+  // Either shape is a successful read. Requiring class times used to reject
+  // every target-style message outright — which is what most coachings
+  // actually send.
+  if (blocks.length === 0 && targets.length === 0) {
     return NextResponse.json(
-      { error: "Couldn't read any classes from that. Try a clearer photo, or add your classes by hand." },
+      { error: "Couldn't read any classes or targets from that. Try a clearer photo." },
       { status: 422 },
     );
   }
 
   admin.from('student_events').insert({
     user_id: user.id, event: 'timetable_parsed',
-    props: { blocks: blocks.length, mediaType, mapped: blocks.filter((b) => b.topic).length },
+    props: { blocks: blocks.length, targets: targets.length, mediaType, mapped: blocks.filter((b) => b.topic).length },
     path: null,
   }).then(({ error }) => { if (error) console.error('[timetable] event log failed', error.message); });
 
   // Nothing is saved yet. The student confirms first.
-  return NextResponse.json({ blocks });
+  return NextResponse.json({
+    blocks,
+    targets,
+    syllabusEndDate: sanitizeSyllabusEndDate(parsed.syllabus_end_date),
+  });
 }

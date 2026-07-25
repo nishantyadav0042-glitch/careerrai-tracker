@@ -11,6 +11,7 @@ import ScreenRealityCheck from './screens/screen-reality-check';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenRepeaterBuddyPitch from './screens/screen-repeater-buddy-pitch';
+import ScreenCoachingPlan from './screens/screen-coaching-plan';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenSocialProof from './screens/screen-social-proof';
 import ScreenPathChoice from './screens/screen-path-choice';
@@ -90,6 +91,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  // From the /start funnel, stored on profiles — not an onboarding answer.
+  const [coachingEnrolled, setCoachingEnrolled] = useState<boolean | null>(null);
   const [studyTargetHours, setStudyTargetHours] = useState<number>(2);
   const [weekendHours, setWeekendHours] = useState<number>(4);
   const [onboardingData, setOnboardingData] = useState<Record<string, unknown>>({});
@@ -99,6 +102,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
+      const { data: prof } = await supabase
+        .from('profiles').select('coaching_enrolled').eq('id', user.id).maybeSingle();
+      setCoachingEnrolled((prof?.coaching_enrolled as boolean | null) ?? null);
       const draft = loadOnboardingDraft(user.id);
       if (draft) {
         setCurrentScreen(draft.currentScreen);
@@ -188,6 +194,14 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         ambitionDate: (onboardingData.ambition_date as string | undefined) ?? null,
       },
     },
+    // Coaching-only (founder: "who says no, don't give them the option").
+    // Placed right after the finish-date commitment, because that's the moment
+    // the plan's ORDER is being decided — a coaching student who is already
+    // following an imposed syllabus needs to say so before we build around a
+    // different order. Self-study students never see this screen at all.
+    ...(coachingEnrolled === true
+      ? [{ key: 'coaching-plan', component: ScreenCoachingPlan, sectionId: 'time' } satisfies Screen]
+      : []),
     // Repeater-only (founder, 23 Jul): right after the commitment, before
     // Meet-Buddy — "don't worry, IIM buddy at ₹999" + a thank-you, using the
     // last-year percentile + buddy-history answers from exam-context.

@@ -13,7 +13,7 @@ export const getStudentProfile = cache(async (userId: string) => {
   const { data } = await admin
     .from('profiles')
     .select(
-      'role, is_premium, onboarding_completed, notif_prefs, post_signup_done, syllabus_target_date, study_target_hours, is_repeater, is_working_professional, full_name, buddy_id, password_set, created_at, attempt_year, app_installed, push_died_at, push_subscription, qa_model_enabled, dilr_model_enabled, varc_model_enabled'
+      'role, is_premium, onboarding_completed, notif_prefs, post_signup_done, syllabus_target_date, study_target_hours, is_repeater, is_working_professional, full_name, buddy_id, password_set, created_at, attempt_year, app_installed, push_died_at, push_subscription, qa_model_enabled, dilr_model_enabled, varc_model_enabled, coaching_enrolled, plan_source'
     )
     .eq('id', userId)
     .single();
