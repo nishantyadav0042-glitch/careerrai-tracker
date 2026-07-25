@@ -18,6 +18,7 @@ import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
+import { TimetablePrompt } from '@/components/timetable-prompt';
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthUser();
@@ -95,7 +96,28 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // phone. Once app_installed is true, the buddy nudge takes the slot again.
   const appInstalled = profile?.app_installed === true;
   const showInstallJourney = noBlockingModal && !appInstalled;
-  const showBuddyNudge = noBlockingModal && appInstalled && !profile?.buddy_id && profile?.is_premium !== true;
+
+  // Coaching timetable, offered in the first 2 days only. A timetable shapes
+  // the plan from the start; asking a month in is just another popup. Skipped
+  // entirely once one is saved, so it can never re-ask a student who already
+  // uploaded (the client-side decline flag only covers one device).
+  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+  const nowMs = Date.now();
+  const accountAgeDays = profile?.created_at
+    ? (nowMs - Date.parse(profile.created_at as string)) / 86_400_000
+    : 99;
+  let showTimetablePrompt = false;
+  if (noBlockingModal && appInstalled && accountAgeDays <= 2) {
+    const { data: tt } = await admin
+      .from('student_timetables').select('student_id').eq('student_id', user.id).maybeSingle();
+    showTimetablePrompt = !tt;
+  }
+
+  // Buddy nudge stands down while the timetable ask is live — one auto-modal a
+  // day is the rule, and in the first 2 days the timetable is the better use of
+  // that single slot.
+  const showBuddyNudge = noBlockingModal && appInstalled && !showTimetablePrompt
+    && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -142,6 +164,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <StandaloneNotifAsk pushEnabled={pushEnabled} serverSubDead={!profile?.push_subscription} />
       ) : null}
       {showInstallJourney && <InstallJourney appInstalled={appInstalled} planReady={!showOnboarding} />}
+      {showTimetablePrompt && <TimetablePrompt />}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );
