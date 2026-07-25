@@ -9,6 +9,7 @@ import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { DailyInsightCard } from '@/components/home/daily-insight-card';
 import { CoachingMirror } from '@/components/coaching-mirror';
+import { NextActionCard } from '@/components/next-action-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
@@ -408,6 +409,10 @@ export default async function DailyTrackerPage() {
 
         {/* Today's insight — the pattern, the advice, every open. In a
             browser tab it doubles as the install hook. */}
+        {/* First, above everything. The insight explains what happened; this
+            says what to do next, which is the only reason to open the app at
+            9pm after a bad day. */}
+        <NextActionCard />
         {dailyInsight && <DailyInsightCard title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
         {/* Coaching students only: are they keeping up with their coaching's
             own quota. Renders nothing when there are no countable targets, so
