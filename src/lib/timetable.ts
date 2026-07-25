@@ -1,4 +1,5 @@
 import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS } from '@/lib/topics-constants';
+import { resolveTopic, resolveActivity } from '@/lib/coaching-vocab';
 
 // Coaching timetable: shared types + the ONLY place that decides what counts as
 // a valid extracted block.
@@ -114,12 +115,18 @@ export function sanitizeBlocks(raw: unknown): TimetableBlock[] {
     const section = typeof b.section === 'string' && SECTIONS.has(b.section)
       ? (b.section as TimetableSection) : null;
 
-    // The critical guard: a topic the model invented is thrown away, not stored.
-    const topicRaw = typeof b.topic === 'string' ? b.topic.trim() : '';
-    const topic = ALLOWED_SET.has(topicRaw) ? topicRaw : null;
+    const labelRaw = (typeof b.label === 'string' ? b.label : '').trim().slice(0, 120);
 
-    const label = (typeof b.label === 'string' ? b.label : '').trim().slice(0, 120)
-      || topic || section || 'Class';
+    // The critical guard: a topic the model invented is thrown away. But before
+    // giving up we run the raw text through our own alias table — "TSD",
+    // "Arithmetic : Percentages", "Venn Diagrams" are ours, the model just
+    // didn't spell them our way. Deterministic lookup, never a fuzzy guess.
+    const topicRaw = typeof b.topic === 'string' ? b.topic.trim() : '';
+    const topic = ALLOWED_SET.has(topicRaw)
+      ? topicRaw
+      : (resolveTopic(topicRaw) ?? resolveTopic(labelRaw));
+
+    const label = labelRaw || topic || section || 'Class';
 
     out.push({ day, date, dayIndex, start, end, allDay, section, topic, label });
   }
@@ -187,8 +194,13 @@ export function sanitizeTargets(raw: unknown, now: Date = new Date()): CoachingT
     const label = (typeof t.label === 'string' ? t.label : '').trim().slice(0, 120);
     if (!label) continue;
 
+    // Coaching vocabulary is wildly inconsistent — FLM / AIMCAT / SimCAT are
+    // all one thing, as are Sheet / Exercise / HW / Assignment. When the model
+    // doesn't commit to a kind, the alias table reads it off the label.
     const kindRaw = typeof t.kind === 'string' ? t.kind : '';
-    const kind = (TARGET_KINDS.has(kindRaw) ? kindRaw : 'other') as TargetKind;
+    const kind = (TARGET_KINDS.has(kindRaw) && kindRaw !== 'other'
+      ? kindRaw
+      : (resolveActivity(label) ?? (TARGET_KINDS.has(kindRaw) ? kindRaw : 'other'))) as TargetKind;
 
     const n = Number(t.count);
     const count = Number.isInteger(n) && n > 0 && n <= 5000 ? n : null;

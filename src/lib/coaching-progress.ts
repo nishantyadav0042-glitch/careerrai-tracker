@@ -140,6 +140,11 @@ export function statusLabel(s: TargetStatus): string {
 // So we never lead with the gap. We lead with the smallest real action that
 // keeps them on the plan, and we only mention the shortfall when it changes
 // what they should do tonight.
+//
+// And we stay on the coaching's side. The institute sets the target and does
+// the teaching; we do the arithmetic they don't have time to do per student.
+// Never "your coaching asked too much" — the copy points at the next action or
+// at a conversation with their faculty, never at a fight with the plan.
 
 export interface NextAction {
   /** The one line to show. Always an action or a reassurance, never a scold. */
@@ -189,8 +194,13 @@ export function nextAction(rows: TargetProgress[], startedAt: string | null, now
   // correcting it.
   if (pace != null && pace > 0 && need > pace * 2) {
     const reachable = Math.max(0, Math.round(focus.done + pace * (focus.daysLeft ?? 0)));
+    // We do NOT tell the student their coaching is wrong, and we do not tell
+    // them to abandon its plan. Coaching sets the target; our job is to show
+    // the honest arithmetic and hand it to the person who decides — them, and
+    // their faculty. Saying "trim the target" put us in an argument with the
+    // institute we are meant to be syncing with.
     return {
-      headline: `At your pace you'll reach about ${reachable} of ${focus.count}. Either trim the target or find one more a day — both are fine, guessing isn't.`,
+      headline: `At today's pace that's about ${reachable} of ${focus.count} by the date. Worth raising with your faculty, or carving out one more a day.`,
       key: focus.key,
       needsReplan: true,
     };
