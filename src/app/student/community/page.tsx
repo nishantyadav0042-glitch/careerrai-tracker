@@ -36,12 +36,19 @@ export default function CommunityPage() {
 
       <CommunityVoteCard />
 
+      {/* The ask is concrete, not abstract (founder, 26 Jul): a tough
+          question you solved, just a photo — not "help the next student". */}
       <button
         type="button" onClick={() => setShare(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3 text-[13px] font-extrabold text-white shadow-sm active:scale-[0.99]"
+        className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-left shadow-sm active:scale-[0.99]"
       >
-        <HeartHandshake className="h-4 w-4" />
-        Help the next student — share a tip or question
+        <span className="flex items-center gap-2 text-[13.5px] font-extrabold text-white">
+          <HeartHandshake className="h-4 w-4 shrink-0" />
+          Solved a tough question today? Share it — just a photo 📷
+        </span>
+        <span className="mt-0.5 block pl-6 text-[11px] font-medium text-white/85">
+          Or a tip that worked. Be part of <span className="font-bold text-white">by the students, for the students</span>.
+        </span>
       </button>
       <p className="text-center text-[10px] text-stone-400">
         Shared anonymously · checked for safety · your votes pick what gets featured
