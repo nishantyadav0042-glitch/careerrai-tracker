@@ -76,7 +76,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
               <Link
                 key={item.href}
                 href={item.href}
-                data-tour={item.href === '/student/buddy' ? 'buddy' : undefined}
+                data-tour={item.href === '/student/buddy' ? 'buddy' : item.href === '/student/community' ? 'daily-pick' : undefined}
                 className={cn(
                   'flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-colors min-w-[56px]',
                   isActive ? 'text-stone-900' : 'text-stone-400'
