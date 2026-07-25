@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, TrendingUp, MessageCircle, MoreHorizontal, User, Settings, Users, IndianRupee, X, Compass } from 'lucide-react';
+import { Home, TrendingUp, MessageCircle, MoreHorizontal, User, Settings, Users, IndianRupee, X, Compass, Lightbulb } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
@@ -139,9 +139,13 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
 // duplicated the home screen, so it moved into More; its middle slot goes to
 // My Buddy — mocks are the backbone of CAT, and the Buddy is the backbone of
 // mocks, so the mentor gets primary billing.
+// Daily Pick earned the third slot (founder, 25 Jul): the community's
+// tip/question of the day is the card that changes daily — the reason to
+// open the app when nothing else is due.
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
   { href: '/student/buddy', icon: Users, label: 'My Buddy' },
+  { href: '/student/community', icon: Lightbulb, label: 'Daily Pick' },
 ];
 
 // Mocks folded into Analysis (one "how am I doing" panel with two tabs),

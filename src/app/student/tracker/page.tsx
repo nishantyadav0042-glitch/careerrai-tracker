@@ -7,12 +7,12 @@ import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
 import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
-import { DailyInsightCard } from '@/components/home/daily-insight-card';
 import { CoachingMirror } from '@/components/coaching-mirror';
 import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
 import { NextActionCard } from '@/components/next-action-card';
 import { DailyChallengeCard } from '@/components/daily-challenge-card';
-import { CommunityVoteCard } from '@/components/community-vote-card';
+import { HomeTipCard } from '@/components/home/home-tip-card';
+import { InsightBubble } from '@/components/home/insight-bubble';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
@@ -427,17 +427,19 @@ export default async function DailyTrackerPage() {
             <div key="action" className="space-y-3">
               <NextActionCard />
               <DailyChallengeCard />
-              {/* Founder's home order: Plan -> Proof -> community picks.
-                  Two blocks inside one card, never a feed. */}
-              <CommunityVoteCard />
             </div>
           );
           if (b === 'log') return <div key="log">{logBlock}</div>;
           if (b === 'coaching') return <CoachingMirror key="coaching" />;
-          return dailyInsight
-            ? <DailyInsightCard key="insight" title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />
-            : null;
+          /* The insight's old slot carries the community's ONE Home surface:
+             today's tip (glanceable, votable in a tap) plus the line that
+             sends question-filtering to the Daily Pick tab. The insight
+             itself floats by as a 7-second cloud below. */
+          return <HomeTipCard key="insight" />;
         })}
+
+        {/* The daily insight, as a passing 7-second cloud. */}
+        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
 
         {/* Progress card — % done, pace, weekly trend, reschedule. */}
         {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}

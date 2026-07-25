@@ -10,14 +10,22 @@
 // students, not making one student a star.
 
 export const VOTING_WINDOW_HOURS = 72;
+
+// Graduation bars (founder, 25 Jul). Judged only past MIN_VOTES_TO_JUDGE —
+// below that a percentage is noise. ≥85% helpful → featured pool; 65–85% →
+// archive (kept, not surfaced); <65% → dropped. Phase 2 automates this;
+// today the founder dashboard shows each item against these bars.
+export const MIN_VOTES_TO_JUDGE = 5;
+export const FEATURE_BAR = 0.85;
+export const ARCHIVE_BAR = 0.65;
 export const MAX_SUBMISSIONS_PER_DAY = 1; // BeReal rule: the limit creates quality
 
-// The vote is phrased as a curriculum decision, not a like. Students are
-// reviewers choosing what future aspirants see — psychologically different
-// from social voting, and the entire point.
+// The vote is phrased as HELPING, not judging (founder, 25 Jul): the student
+// isn't a reviewer choosing curriculum — they're making the next aspirant's
+// prep slightly easier. Same two buttons, different heart.
 export const VOTE_PROMPT: Record<string, string> = {
-  question: 'Should every CareerRai student solve this?',
-  tip: 'Should this tip be shown to future students?',
+  question: 'Would this help another CAT aspirant?',
+  tip: 'Would this help another CAT aspirant?',
 };
 
 // Anonymous display names. Assigned at submission, stored with the row, never

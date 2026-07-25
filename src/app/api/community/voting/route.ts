@@ -32,10 +32,16 @@ export async function GET() {
   const eligible = (pool ?? []).filter((p) => p.student_id !== user.id && !voted.has(p.id as string));
 
   const day = getLogDateString();
-  const pick = (kind: string) => {
-    const items = eligible.filter((p) => p.kind === kind);
+  const pickBy = (kind: string, section?: string) => {
+    const items = eligible.filter((p) => {
+      if (p.kind !== kind) return false;
+      if (!section) return true;
+      return ((p.payload ?? {}) as { section?: string }).section === section;
+    });
     if (items.length === 0) return null;
-    const item = items[dailyPickIndex(user.id, day, items.length)];
+    // Salt the hash with the section so a student doesn't get the same index
+    // position across all three sections every day.
+    const item = items[dailyPickIndex(`${user.id}:${section ?? ''}`, day, items.length)];
     const payload = (item.payload ?? {}) as { text?: string; section?: string; options?: string[] };
     return {
       id: item.id as string,
@@ -52,5 +58,11 @@ export async function GET() {
     };
   };
 
-  return NextResponse.json({ tip: pick('tip'), question: pick('question') });
+  // One question per section (founder, 25 Jul: all three sections in Daily
+  // Pick — long formats arrive as photos). Each is its own stable daily pick.
+  const questions = ['QA', 'DILR', 'VARC']
+    .map((sec) => pickBy('question', sec))
+    .filter((q) => q != null);
+
+  return NextResponse.json({ tip: pickBy('tip'), questions });
 }
