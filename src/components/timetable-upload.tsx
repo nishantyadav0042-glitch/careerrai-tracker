@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { CalendarClock, Loader2, Upload, X, Check, Trash2 } from 'lucide-react';
 import { track } from '@/lib/journey';
-import { DAY_LABELS, formatTime, type TimetableBlock, type TimetableKind, type CoachingTarget } from '@/lib/timetable';
+import { whenLabel, timeLabel, type TimetableBlock, type TimetableKind, type CoachingTarget } from '@/lib/timetable';
 
 // "Upload your coaching timetable" — offered in a student's first days.
 //
@@ -208,11 +208,9 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
 
             <div className="mt-4 space-y-1.5">
               {blocks.map((b, i) => (
-                <div key={`${b.day}-${b.start}-${i}`} className="flex items-center gap-3 rounded-xl bg-stone-50 px-3 py-2.5">
-                  <span className="w-9 shrink-0 text-xs font-bold text-stone-500">{DAY_LABELS[b.day]}</span>
-                  <span className="w-24 shrink-0 text-xs tabular-nums text-stone-600">
-                    {formatTime(b.start)}–{formatTime(b.end)}
-                  </span>
+                <div key={`${b.date ?? b.dayIndex ?? b.day}-${b.start ?? "all"}-${i}`} className="flex items-center gap-3 rounded-xl bg-stone-50 px-3 py-2.5">
+                  <span className="w-12 shrink-0 text-xs font-bold text-stone-500">{whenLabel(b)}</span>
+                  <span className="w-24 shrink-0 text-xs tabular-nums text-stone-600">{timeLabel(b)}</span>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-900">
                     {b.topic ?? b.label}
                   </span>

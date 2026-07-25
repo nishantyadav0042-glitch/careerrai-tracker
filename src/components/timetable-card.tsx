@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Pencil } from 'lucide-react';
 import { TimetableUpload } from '@/components/timetable-upload';
 import { CoachingMirror } from '@/components/coaching-mirror';
-import { DAY_LABELS, formatTime, type TimetableBlock } from '@/lib/timetable';
+import { whenLabel, timeLabel, type TimetableBlock } from '@/lib/timetable';
 
 // The PERMANENT way to reach the coaching-timetable scanner.
 //
@@ -70,9 +70,9 @@ export function TimetableCard() {
             </div>
             <div className="space-y-1">
               {blocks.slice(0, 6).map((b, i) => (
-                <div key={`${b.day}-${b.start}-${i}`} className="flex items-center gap-2 text-xs text-stone-600">
-                  <span className="w-8 shrink-0 font-bold text-stone-500">{DAY_LABELS[b.day]}</span>
-                  <span className="w-20 shrink-0 tabular-nums">{formatTime(b.start)}–{formatTime(b.end)}</span>
+                <div key={`${b.date ?? b.dayIndex ?? b.day}-${b.start ?? "all"}-${i}`} className="flex items-center gap-2 text-xs text-stone-600">
+                  <span className="w-12 shrink-0 font-bold text-stone-500">{whenLabel(b)}</span>
+                  <span className="w-24 shrink-0 tabular-nums">{timeLabel(b)}</span>
                   <span className="min-w-0 truncate font-medium text-stone-800">{b.topic ?? b.label}</span>
                 </div>
               ))}
