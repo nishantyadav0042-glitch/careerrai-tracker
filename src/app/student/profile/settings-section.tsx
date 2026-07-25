@@ -3,6 +3,7 @@
 import { Video } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
 import { DeleteAccountButton } from '@/components/delete-account-button';
+import { TimetableCard } from '@/components/timetable-card';
 
 // Formerly its own page (/student/settings) — now the "Settings" tab
 // inside the merged Profile panel. Sign-out lived on both the old Settings
@@ -22,6 +23,11 @@ export function SettingsSection() {
           </p>
         </div>
       </div>
+
+      {/* Permanent home for the coaching-timetable scanner. The first-run popup
+          can be missed or crowded out by the once-a-day modal rule; this is
+          always here, including for students who join a batch months later. */}
+      <TimetableCard />
 
       <div>
         <h2 className="text-lg font-semibold text-stone-900 mb-3">Account</h2>

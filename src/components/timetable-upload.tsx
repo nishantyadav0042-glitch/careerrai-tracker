@@ -39,15 +39,17 @@ function fileToBase64(file: File): Promise<string> {
 
 type Stage = 'ask' | 'reading' | 'review' | 'saving';
 
-export function TimetableUpload({ onClose }: { onClose: () => void }) {
+export type CloseReason = 'saved' | 'declined' | 'closed';
+
+export function TimetableUpload({ onClose }: { onClose: (reason: CloseReason) => void }) {
   const [stage, setStage] = useState<Stage>('ask');
   const [blocks, setBlocks] = useState<TimetableBlock[]>([]);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const dismiss = (how: string) => {
-    track('timetable_dismissed', { stage, how });
-    onClose();
+  const dismiss = (reason: CloseReason) => {
+    track('timetable_dismissed', { stage, reason });
+    onClose(reason);
   };
 
   async function handleFile(file: File) {
@@ -95,7 +97,7 @@ export function TimetableUpload({ onClose }: { onClose: () => void }) {
         return;
       }
       track('timetable_saved', { blocks: blocks.length, alignedTopics: json.alignedTopics ?? 0 });
-      onClose();
+      onClose('saved');
     } catch {
       setError('Could not save. Please try again.');
       setStage('review');
@@ -114,7 +116,7 @@ export function TimetableUpload({ onClose }: { onClose: () => void }) {
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-500">
                 <CalendarClock className="h-6 w-6 text-white" />
               </span>
-              <button type="button" onClick={() => dismiss('x')} aria-label="Close"
+              <button type="button" onClick={() => dismiss('closed')} aria-label="Close"
                 className="grid h-8 w-8 place-items-center rounded-full text-stone-400 hover:bg-stone-100">
                 <X className="h-4 w-4" />
               </button>
@@ -147,7 +149,7 @@ export function TimetableUpload({ onClose }: { onClose: () => void }) {
                 : (<><Upload className="h-4 w-4" /> Upload photo or PDF</>)}
             </button>
 
-            <button type="button" onClick={() => dismiss('later')}
+            <button type="button" onClick={() => dismiss('declined')}
               className="mt-2 w-full py-2.5 text-center text-sm font-medium text-stone-500">
               I don&apos;t go to coaching
             </button>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { TimetableUpload } from '@/components/timetable-upload';
+import { TimetableUpload, type CloseReason } from '@/components/timetable-upload';
 import { claimDailyModal } from '@/lib/daily-modal';
 import {
   TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT,
@@ -53,10 +53,14 @@ export function TimetablePrompt() {
 
   return (
     <TimetableUpload
-      onClose={() => {
-        // Saved or declined, we don't ask again on this device. The server-side
-        // gate independently stops it once a timetable exists.
-        try { localStorage.setItem(DECLINED_KEY, '1'); } catch { /* ignore */ }
+      onClose={(reason: CloseReason) => {
+        // Only an explicit "I don't go to coaching" silences this for good.
+        // Tapping X used to set the same flag, which meant one stray dismissal
+        // killed the feature forever — with no other way to reach it.
+        // A saved timetable needs no flag: the server-side gate stops asking.
+        if (reason === 'declined') {
+          try { localStorage.setItem(DECLINED_KEY, '1'); } catch { /* ignore */ }
+        }
         setShow(false);
       }}
     />
