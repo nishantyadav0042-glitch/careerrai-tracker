@@ -17,12 +17,18 @@ export function TimetableCard() {
   const [blocks, setBlocks] = useState<TimetableBlock[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  // Self-study students never see this card at all — there is no coaching
+  // timetable for them to upload.
+  const [hidden, setHidden] = useState(false);
+  const [planSource, setPlanSource] = useState<string>('careerrai');
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/timetable');
       const json = await res.json();
       setBlocks(json.timetable?.blocks ?? null);
+      setPlanSource(json.planSource ?? 'careerrai');
+      if (json.coachingEnrolled === false && !json.timetable) setHidden(true);
     } catch { /* leave as null — the upload path still works */ }
     setLoading(false);
   }, []);
@@ -30,6 +36,8 @@ export function TimetableCard() {
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch of
      the saved timetable; there is no server-rendered value to seed this from */
   useEffect(() => { void load(); }, [load]);
+
+  if (hidden) return null;
 
   return (
     <div>
@@ -42,8 +50,11 @@ export function TimetableCard() {
           <>
             <div className="mb-3 flex items-start justify-between gap-3">
               <p className="text-sm text-stone-700">
-                Your plan is following <span className="font-semibold">{blocks.length}</span>{' '}
-                {blocks.length === 1 ? 'class' : 'classes'} a week.
+                {planSource === 'coaching'
+                  ? <>Your plan is following <span className="font-semibold">{blocks.length}</span>{' '}
+                      {blocks.length === 1 ? 'class' : 'classes'} a week.</>
+                  : <>Saved — <span className="font-semibold">{blocks.length}</span>{' '}
+                      {blocks.length === 1 ? 'class' : 'classes'} a week. You chose your own topic order.</>}
               </p>
               <button
                 type="button" onClick={() => setOpen(true)}
