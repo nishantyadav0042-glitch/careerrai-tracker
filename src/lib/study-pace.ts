@@ -53,13 +53,11 @@ export function remainingSyllabusHours(rows: TopicStatusRow[]): number {
   return Math.round(hours);
 }
 
-// Total syllabus hours if starting from zero — the denominator for a
-// "% complete" arc that reflects real work, not raw topic counts.
-export function totalSyllabusHours(): number {
-  let hours = 0;
-  for (const meta of Object.values(TOPIC_METADATA)) hours += meta.estimatedHours;
-  return Math.round(hours);
-}
+// Total syllabus hours — computed ONCE, in prep-model (the file whose whole
+// job is to be the only hours model). This module used to carry a second
+// summation; identical today only because every estimate is an integer.
+import { totalSyllabusHours } from './prep-model';
+export { totalSyllabusHours };
 
 // ── The mock budget ─────────────────────────────────────────────────────────
 // A full CAT mock is NOT 2 hours: 2h exam + ~1.5–2h honest analysis ≈ 4h.

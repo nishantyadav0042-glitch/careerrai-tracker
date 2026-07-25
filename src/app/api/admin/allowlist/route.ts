@@ -1,17 +1,7 @@
+import { requireAdminCtx as requireAdmin } from '@/lib/require-admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-  return { admin, userId: user.id };
-}
 
 export async function POST(request: NextRequest) {
   const ctx = await requireAdmin();

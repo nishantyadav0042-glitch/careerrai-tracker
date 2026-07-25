@@ -1,10 +1,11 @@
+import { weakestFromCoverage } from '@/lib/section-weakness';
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
@@ -131,11 +132,19 @@ export async function GET() {
   const targetIso = profile.syllabus_target_date as string | null;
   let paceHours: number | null = null;
   if (targetIso) {
-    const daysLeft = Math.max(1, Math.ceil((new Date(targetIso + 'T00:00:00').getTime() - Date.now()) / 86_400_000));
     const remaining = remainingSyllabusHours(coverageRows ?? []);
-    // Syllabus + the mock budget (a full mock ≈ 4h incl. analysis) — the daily
-    // plan itself contains mock/sectional tasks, so the pace must fund them.
-    if (remaining > 0) paceHours = Math.min(12, Math.max(1, Math.round(((remaining + remainingMockHours(remaining)) / daysLeft) * 2) / 2));
+    if (remaining > 0) {
+      // Through computeRequiredPace — the ONE pace implementation (this block
+      // used to inline the same formula; five inline copies of this division
+      // are how Home said 4.5h while the plan said 12h). The 1..12 clamp is
+      // plan-sizing policy: a plan larger than 12h cannot be scheduled.
+      const pace = computeRequiredPace({
+        remainingHours: remaining, today: new Date(),
+        targetDate: new Date(targetIso + 'T00:00:00'), committedPerDay: null,
+        mockHours: remainingMockHours(remaining),
+      });
+      paceHours = Math.min(12, Math.max(1, pace.requiredPerDay));
+    }
   }
 
   // Capacity Engine (LIS L3): believe behaviour over the claimed number. The
@@ -390,19 +399,9 @@ export async function GET() {
 // topics and DILR's 4 compare fairly. Ties break DILR → QA → VARC (DILR is
 // the most commonly feared CAT section — a deterministic, stated default,
 // not a guess about this student). Null when nothing is declared at all.
-function computeWeakestFromCoverage(rows: { section: string; status: string }[]): Section | null {
-  if (rows.length === 0) return null;
-  const tieOrder: Section[] = ['DILR', 'QA', 'VARC'];
-  let best: { s: Section; score: number } | null = null;
-  for (const s of tieOrder) {
-    const sectionRows = rows.filter((r) => r.section === s);
-    if (sectionRows.length === 0) continue;
-    const gap = sectionRows.reduce((sum, r) => sum + (r.status === 'not_started' ? 2 : r.status === 'learning' ? 1 : 0), 0);
-    const score = gap / sectionRows.length;
-    if (best == null || score > best.score) best = { s, score };
-  }
-  return best?.s ?? null;
-}
+// The rule itself lives in section-weakness.ts — one implementation for the
+// route, the cron companion, and anything else that asks the question.
+const computeWeakestFromCoverage = weakestFromCoverage;
 
 function computeWeakestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
   const scores = [

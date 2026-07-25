@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
 import { checkTipSafety, checkImageSafety } from '@/lib/community-safety';
-import { randomDisplayName, VOTING_WINDOW_HOURS, MAX_SUBMISSIONS_PER_DAY } from '@/lib/community-pipeline';
+import { randomDisplayName, VOTING_WINDOW_HOURS, MAX_SUBMISSIONS_PER_DAY, MAX_IMAGE_BYTES, IMAGE_MIMES } from '@/lib/community-pipeline';
 
 export const maxDuration = 60;
 
@@ -19,8 +19,6 @@ export const maxDuration = 60;
 // creates the quality.
 
 const SECTIONS: string[] = KNOWLEDGE_GRAPH.map((s) => s.id);
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getLogDateString } from '@/lib/streak-utils';
 
 // The student telling us directly what happened.
 //
@@ -30,7 +31,11 @@ export async function POST(request: NextRequest) {
   //
   // Scoped to this student AND to still-open rows, so an ack can neither touch
   // someone else's log nor overwrite a verdict already reached.
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  // Same IST-3am study-day boundary as the GET that showed the action
+  // (next-action/route.ts). This was UTC midnight — 5:30am IST — so between
+  // 3:00 and 5:30am a student's ack targeted rows the GET had already
+  // excluded. One day definition, or the write and the read disagree.
+  const dayStart = new Date(`${getLogDateString()}T03:00:00+05:30`);
   const { data, error } = await admin
     .from('study_action_log')
     .update({ outcome: 'followed', outcome_at: new Date().toISOString() })

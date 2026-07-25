@@ -1,7 +1,6 @@
+import { requireAdminCtx as requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { MIN_VOTES_TO_JUDGE, FEATURE_BAR, ARCHIVE_BAR } from '@/lib/community-pipeline';
+import { MIN_VOTES_TO_JUDGE, FEATURE_BAR, ARCHIVE_BAR, gradeSubmission } from '@/lib/community-pipeline';
 
 export const maxDuration = 60;
 
@@ -11,15 +10,6 @@ export const maxDuration = 60;
 // votes, retention in week one) the API says so instead of inventing a
 // number.
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-  return { admin };
-}
 
 export async function GET() {
   const ctx = await requireAdmin();
@@ -60,8 +50,7 @@ export async function GET() {
   }
   const items = (subs ?? []).map((s) => {
     const t = tally.get(s.id as string) ?? { yes: 0, no: 0 };
-    const total = t.yes + t.no;
-    const helpfulPct = total >= MIN_VOTES_TO_JUDGE ? Math.round((t.yes / total) * 100) : null;
+    const { total, helpfulPct, verdict } = gradeSubmission(t.yes, t.no);
     return {
       id: s.id, kind: s.kind, topic: s.topic, status: s.status,
       text: (s.payload as { text?: string } | null)?.text?.slice(0, 90) ?? '(photo)',
@@ -69,9 +58,7 @@ export async function GET() {
       yes: t.yes, no: t.no, totalVotes: total,
       helpfulPct,
       daysInPipeline: Math.floor((Date.now() - Date.parse(s.created_at as string)) / 86_400_000),
-      verdict: helpfulPct == null ? `needs ${MIN_VOTES_TO_JUDGE - total} more votes`
-        : helpfulPct >= FEATURE_BAR * 100 ? 'feature'
-        : helpfulPct >= ARCHIVE_BAR * 100 ? 'archive' : 'drop',
+      verdict: verdict === 'pending' ? `needs ${MIN_VOTES_TO_JUDGE - total} more votes` : verdict,
     };
   }).sort((a, b) => (b.helpfulPct ?? -1) - (a.helpfulPct ?? -1) || b.totalVotes - a.totalVotes);
 

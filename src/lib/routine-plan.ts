@@ -26,6 +26,7 @@ import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from 
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
+import { weakestFromCoverage } from '@/lib/section-weakness';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
@@ -128,6 +129,13 @@ function buildTopicChoices(
   );
   const postponed = new Set(history.postponedTopics);
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
+  // Revision season — MUST match today/route.ts exactly (this module exists so
+  // the notification names the same plan the student opens). The mirror had
+  // silently dropped this third argument, so from 1 September the cron copy
+  // would have named different topics than the real plan. Found in the
+  // 26 Jul architecture audit before it ever fired.
+  const seasonYear = profile.attemptYear ?? new Date().getFullYear();
+  const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
   const result = {} as Record<Section, TopicChoice>;
 
@@ -142,24 +150,11 @@ function buildTopicChoices(
       focusBonus: focusUnits.has(topic),
       postponedBonus: postponed.has(topic),
     }));
-    result[section] = chooseTopicForSection(candidates, revisionMultiplier);
+    result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason);
   }
   return result;
 }
 
-function weakestFromCoverage(rows: { section: string; status: string }[]): Section | null {
-  if (rows.length === 0) return null;
-  const tieOrder: Section[] = ['DILR', 'QA', 'VARC'];
-  let best: { s: Section; score: number } | null = null;
-  for (const s of tieOrder) {
-    const sectionRows = rows.filter((r) => r.section === s);
-    if (sectionRows.length === 0) continue;
-    const gap = sectionRows.reduce((sum, r) => sum + (r.status === 'not_started' ? 2 : r.status === 'learning' ? 1 : 0), 0);
-    const score = gap / sectionRows.length;
-    if (best == null || score > best.score) best = { s, score };
-  }
-  return best?.s ?? null;
-}
 
 function weakestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
   const scores = [

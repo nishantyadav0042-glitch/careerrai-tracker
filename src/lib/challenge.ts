@@ -21,7 +21,6 @@ export function activeChallengeDate(now: Date = new Date()): string {
  *  percentage is noise wearing a suit (the no-invented-numbers rule). */
 export const SPLIT_MIN_ATTEMPTS = 20;
 
-export const MAX_SUBMISSIONS_PER_DAY = 3;
 
 export interface ChallengeView {
   id: string;

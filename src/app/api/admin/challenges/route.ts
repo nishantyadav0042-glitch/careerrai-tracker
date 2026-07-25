@@ -1,8 +1,8 @@
+import { requireAdminCtx as requireAdmin } from '@/lib/require-admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { activeChallengeDate } from '@/lib/challenge';
+import { gradeSubmission } from '@/lib/community-pipeline';
 
 export const maxDuration = 30;
 
@@ -20,15 +20,6 @@ export const maxDuration = 30;
 // Verification is deliberately human — AI may format and flag, but whether a
 // shortcut is mathematically sound is judged by a person (gemini.ts rule).
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-  return { admin, userId: user.id };
-}
 
 export async function GET() {
   const ctx = await requireAdmin();
@@ -58,14 +49,21 @@ export async function GET() {
     if (v.helpful) t.yes += 1; else t.no += 1;
     tally.set(v.submission_id as string, t);
   }
-  const pipeline = (votingRows ?? []).map((r) => ({
-    id: r.id, kind: r.kind, topic: r.topic,
-    text: (r.payload as { text?: string } | null)?.text ?? null,
-    hasImage: !!r.image_path,
-    displayName: r.display_name,
-    votingEndsAt: r.voting_ends_at,
-    ...(tally.get(r.id as string) ?? { yes: 0, no: 0 }),
-  })).sort((a, b) => (b.yes - b.no) - (a.yes - a.no));
+  // Ranked by the SAME graduation rule the founder dashboard uses
+  // (gradeSubmission) — this screen previously sorted by net votes, so the
+  // two admin surfaces disagreed about the same queue.
+  const pipeline = (votingRows ?? []).map((r) => {
+    const t = tally.get(r.id as string) ?? { yes: 0, no: 0 };
+    const g = gradeSubmission(t.yes, t.no);
+    return {
+      id: r.id, kind: r.kind, topic: r.topic,
+      text: (r.payload as { text?: string } | null)?.text ?? null,
+      hasImage: !!r.image_path,
+      displayName: r.display_name,
+      votingEndsAt: r.voting_ends_at,
+      yes: t.yes, no: t.no, helpfulPct: g.helpfulPct, verdict: g.verdict,
+    };
+  }).sort((a, b) => (b.helpfulPct ?? -1) - (a.helpfulPct ?? -1) || b.yes - a.yes);
 
   return NextResponse.json({
     activeDate: activeChallengeDate(),

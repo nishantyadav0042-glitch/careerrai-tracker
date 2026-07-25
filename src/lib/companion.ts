@@ -286,21 +286,8 @@ export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): S
   }
 }
 
-// Same rule the routine engine's weakest-derivation uses (see
-// /api/routine/today computeWeakestFromCoverage): most ground left to
-// cover, untouched topics weighted double, ratio-based across sections,
-// ties break DILR → QA → VARC. Duplicated here as a small pure function
-// because cron code must not import from a route module.
-export function weakestFromCoverage(rows: { section: string; status: string }[]): 'VARC' | 'DILR' | 'QA' | null {
-  if (rows.length === 0) return null;
-  const tieOrder: ('VARC' | 'DILR' | 'QA')[] = ['DILR', 'QA', 'VARC'];
-  let best: { s: 'VARC' | 'DILR' | 'QA'; score: number } | null = null;
-  for (const s of tieOrder) {
-    const sectionRows = rows.filter((r) => r.section === s);
-    if (sectionRows.length === 0) continue;
-    const gap = sectionRows.reduce((sum, r) => sum + (r.status === 'not_started' ? 2 : r.status === 'learning' ? 1 : 0), 0);
-    const score = gap / sectionRows.length;
-    if (best == null || score > best.score) best = { s, score };
-  }
-  return best?.s ?? null;
-}
+// The weakest-section rule lives in section-weakness.ts now — this module
+// used to carry its own copy "because cron code must not import from a route
+// module", which was the right constraint and the wrong fix. Re-exported so
+// existing callers keep working.
+export { weakestFromCoverage } from '@/lib/section-weakness';

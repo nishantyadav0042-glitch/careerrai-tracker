@@ -19,6 +19,7 @@
 import { TOPIC_METADATA } from './topics-constants';
 import { REMAINING_FRACTION, type CoverageStatus } from './study-pace';
 import { topicHours, totalSyllabusHours, type Section } from './prep-model';
+import { STATUS_ORDER } from './coverage-status';
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'timed';
 export const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'timed'];
@@ -241,7 +242,9 @@ export function deriveStatus(checks: EvidenceCheck[]): CoverageStatus {
   return 'not_started';
 }
 
-const STATUS_RANK: CoverageStatus[] = ['not_started', 'learning', 'practicing', 'revising', 'exam_ready'];
+// The ladder itself is owned by coverage-status.ts — ranking against a
+// local copy is how a sixth rung would silently break mergeStatus.
+const STATUS_RANK: CoverageStatus[] = STATUS_ORDER;
 
 /**
  * What to write back to topic_coverage after new evidence lands.
