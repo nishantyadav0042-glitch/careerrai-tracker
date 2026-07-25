@@ -16,6 +16,11 @@ interface Pending {
   payload: { text?: string; question?: string; options?: string[]; correct_index?: number; explanation?: string };
   profiles?: { full_name?: string | null } | null;
 }
+interface PipelineRow {
+  id: string; kind: string; topic: string | null; text: string | null;
+  hasImage: boolean; displayName: string | null; votingEndsAt: string | null;
+  yes: number; no: number;
+}
 interface BankRow {
   id: string; live_date: string | null; section: string; topic: string;
   question: string; difficulty: string; source: string; status: string;
@@ -27,6 +32,7 @@ const TOPICS_FOR = (sec: string) =>
 
 export default function AdminChallengesPage() {
   const [pending, setPending] = useState<Pending[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [bank, setBank] = useState<BankRow[]>([]);
   const [activeDate, setActiveDate] = useState('');
   const [recentAttempts, setRecentAttempts] = useState(0);
@@ -47,6 +53,7 @@ export default function AdminChallengesPage() {
     if (!res.ok) return;
     const json = await res.json();
     setPending(json.pending ?? []);
+    setPipeline(json.pipeline ?? []);
     setBank(json.bank ?? []);
     setActiveDate(json.activeDate ?? '');
     setRecentAttempts(json.recentAttempts ?? 0);
@@ -137,6 +144,33 @@ export default function AdminChallengesPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* ── The voting pipeline (Curriculum Selection) ── */}
+        <section className="rounded-2xl border border-stone-200 bg-white p-4">
+          <h2 className="text-sm font-bold text-stone-900">Community voting pipeline · {pipeline.length} items</h2>
+          <p className="mt-1 text-[11px] text-stone-500">
+            Ranked by net votes. Students never see these numbers — you use them to
+            decide what graduates to featured.
+          </p>
+          <div className="mt-2 space-y-1.5">
+            {pipeline.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 rounded-xl border border-stone-100 px-2.5 py-2">
+                <span className="shrink-0 text-[14px]">{r.kind === 'tip' ? '💡' : '📷'}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] text-stone-800">
+                    {r.text ?? (r.hasImage ? '(photo question)' : '—')}
+                  </p>
+                  <p className="text-[10px] text-stone-400">
+                    {r.topic ?? 'no topic'} · as “{r.displayName ?? '?'}”
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">👍 {r.yes}</span>
+                <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-bold text-stone-500">👎 {r.no}</span>
+              </div>
+            ))}
+            {pipeline.length === 0 && <p className="text-xs text-stone-400">Pipeline is empty.</p>}
           </div>
         </section>
 

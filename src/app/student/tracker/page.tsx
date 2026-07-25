@@ -12,6 +12,7 @@ import { CoachingMirror } from '@/components/coaching-mirror';
 import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
 import { NextActionCard } from '@/components/next-action-card';
 import { DailyChallengeCard } from '@/components/daily-challenge-card';
+import { CommunityVoteCard } from '@/components/community-vote-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
@@ -426,6 +427,9 @@ export default async function DailyTrackerPage() {
             <div key="action" className="space-y-3">
               <NextActionCard />
               <DailyChallengeCard />
+              {/* Founder's home order: Plan -> Proof -> community picks.
+                  Two blocks inside one card, never a feed. */}
+              <CommunityVoteCard />
             </div>
           );
           if (b === 'log') return <div key="log">{logBlock}</div>;

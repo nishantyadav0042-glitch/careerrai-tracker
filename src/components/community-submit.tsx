@@ -1,60 +1,62 @@
 'use client';
 
 import { useState } from 'react';
-import { X, HeartHandshake } from 'lucide-react';
+import { X, HeartHandshake, Camera } from 'lucide-react';
 import { track } from '@/lib/journey';
-import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
 
-// "Help the next student" — for the students, by the students.
-//
-// Four buckets, chosen because each one has an exact HOME in the curriculum:
-// a tip lands inside the study plan at its topic, a mistake shows before
-// practice, a shortcut after the concept, a question enters the Daily Proof
-// bank. The contributor isn't making a post — they're improving how the topic
-// is taught to everyone after them, and the promise says exactly that.
-// Everything passes human verification first; nothing reaches students raw.
+// "Help the next student" — exactly two things, minimum friction:
+//   💡 a Tip — one sharp idea in plain text (≤150 chars), section + topic
+//   📷 a Question — a photo, section only (the image IS the content)
+// No formatting, no links, no titles, no explanations. It goes to the voting
+// pool under a random name — anonymous by design, because the goal is helping
+// students, not making anyone a star. Students collectively decide what
+// becomes featured curriculum.
 
-const TOPICS = Object.keys(TOPIC_METADATA).sort();
-
-const KINDS = [
-  { id: 'tip',      emoji: '💡', label: 'A tip',            hint: 'Something that made this topic click for you' },
-  { id: 'mistake',  emoji: '❌', label: 'A common mistake', hint: 'The trap you fell into, so the next student doesn\u2019t' },
-  { id: 'shortcut', emoji: '⚡', label: 'A shortcut',       hint: 'A faster way you found or were taught' },
-  { id: 'question', emoji: '🎯', label: 'A great question', hint: 'A question that taught you something' },
-] as const;
-type Kind = (typeof KINDS)[number]['id'];
-
-const TEXT_PLACEHOLDER: Record<string, string> = {
-  tip: 'e.g. For percentages, convert everything to fractions first — 37.5% is just 3/8…',
-  mistake: 'e.g. In seating puzzles I always forgot the ones facing SOUTH reverse left and right…',
-  shortcut: 'e.g. Successive discounts of a% and b% = a + b − ab/100 in one step…',
-};
+const SECTIONS = KNOWLEDGE_GRAPH.map((s) => s.id);
+const TOPICS_FOR = (sec: string) =>
+  Object.entries(TOPIC_METADATA).filter(([, m]) => m.section === sec).map(([t]) => t).sort();
 
 export function CommunitySubmit({ onClose }: { onClose: () => void }) {
-  const [kind, setKind] = useState<Kind>('tip');
+  const [kind, setKind] = useState<'tip' | 'question'>('tip');
+  const [section, setSection] = useState('');
   const [topic, setTopic] = useState('');
   const [tip, setTip] = useState('');
-  const [question, setQuestion] = useState('');
-  const [options, setOptions] = useState(['', '', '', '']);
-  const [correct, setCorrect] = useState<number | null>(null);
-  const [explanation, setExplanation] = useState('');
+  const [image, setImage] = useState<{ data: string; mime: string; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
 
+  function onFile(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { setError('Photo must be under 4 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      const b64 = url.split(',')[1] ?? '';
+      setImage({ data: b64, mime: file.type, preview: url });
+      setError(null);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const ready = kind === 'tip'
+    ? section && topic && tip.trim().length >= 15
+    : section && image != null;
+
   async function submit() {
     setBusy(true); setError(null);
     try {
-      const body = kind === 'question'
-        ? { kind, topic, question, options: options.filter((o) => o.trim()), correct_index: correct, explanation }
-        : { kind, topic, tip };
+      const body = kind === 'tip'
+        ? { kind, section, topic, tip: tip.trim() }
+        : { kind, section, topic: topic || undefined, image: image!.data, image_mime: image!.mime };
       const res = await fetch('/api/community/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? 'Could not send.'); setBusy(false); return; }
-      track('community_submitted', { kind, topic });
+      track('community_submitted', { kind, section });
       setSent(json.message as string);
     } catch { setError('Could not send. Please try again.'); }
     setBusy(false);
@@ -84,95 +86,80 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
           <>
             <p className="mt-3 text-[16px] font-bold text-stone-900">Help the next student</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-              What you learned the hard way, the next student gets for free. We verify
-              everything — approved contributions become
-              <span className="font-semibold"> part of how the topic is taught</span> on CareerRai.
+              Shared anonymously. Students vote — the best become tomorrow&apos;s featured
+              pick for every CAT aspirant on CareerRai.
             </p>
 
-            <div className="mt-3 grid grid-cols-2 gap-1.5">
-              {KINDS.map((k) => (
-                <button
-                  key={k.id} type="button" onClick={() => setKind(k.id)}
-                  className={`rounded-xl px-2 py-2.5 text-left ${
-                    kind === k.id ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700'
-                  }`}
-                >
-                  <span className="block text-[13px] font-bold">{k.emoji} {k.label}</span>
-                  <span className={`mt-0.5 block text-[10px] leading-snug ${kind === k.id ? 'text-white/60' : 'text-stone-500'}`}>{k.hint}</span>
-                </button>
-              ))}
+            <div className="mt-3 flex gap-1.5">
+              <button
+                type="button" onClick={() => setKind('tip')}
+                className={`flex-1 rounded-xl py-2.5 text-[13px] font-bold ${kind === 'tip' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}
+              >
+                💡 A tip
+              </button>
+              <button
+                type="button" onClick={() => setKind('question')}
+                className={`flex-1 rounded-xl py-2.5 text-[13px] font-bold ${kind === 'question' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}
+              >
+                📷 A question
+              </button>
             </div>
 
-            <label className="mt-3 block">
-              <span className="text-[11px] font-semibold text-stone-500">Which topic is this about?</span>
+            <div className="mt-3 flex gap-2">
               <select
-                value={topic} onChange={(e) => setTopic(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900"
+                value={section} onChange={(e) => { setSection(e.target.value); setTopic(''); }}
+                className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900"
               >
-                <option value="">Pick a topic…</option>
-                {TOPICS.map((t) => <option key={t} value={t}>{t}</option>)}
+                <option value="">Section…</option>
+                {SECTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-            </label>
+              <select
+                value={topic} onChange={(e) => setTopic(e.target.value)} disabled={!section}
+                className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900 disabled:opacity-50"
+              >
+                <option value="">{kind === 'tip' ? 'Topic…' : 'Topic (optional)…'}</option>
+                {section && TOPICS_FOR(section).map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
 
-            {kind !== 'question' ? (
+            {kind === 'tip' ? (
               <label className="mt-3 block">
-                <span className="text-[11px] font-semibold text-stone-500">
-                  {kind === 'tip' ? 'Your tip' : kind === 'mistake' ? 'The mistake to avoid' : 'Your shortcut'}
-                </span>
                 <textarea
-                  value={tip} onChange={(e) => setTip(e.target.value)} rows={4}
-                  placeholder={TEXT_PLACEHOLDER[kind]}
-                  className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
+                  value={tip} onChange={(e) => setTip(e.target.value.slice(0, 150))} rows={3}
+                  placeholder="One sharp idea. e.g. Always mark fixed positions first."
+                  className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
                 />
+                <span className="mt-0.5 block text-right text-[10px] text-stone-400">{tip.length}/150</span>
               </label>
             ) : (
-              <>
-                <label className="mt-3 block">
-                  <span className="text-[11px] font-semibold text-stone-500">The question</span>
-                  <textarea
-                    value={question} onChange={(e) => setQuestion(e.target.value)} rows={3}
-                    className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
-                  />
-                </label>
-                <div className="mt-3 space-y-2">
-                  <span className="text-[11px] font-semibold text-stone-500">Options — tap the correct one</span>
-                  {options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <button
-                        type="button" onClick={() => setCorrect(i)}
-                        aria-label={`Mark option ${i + 1} correct`}
-                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[12px] font-bold ${
-                          correct === i ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-500'
-                        }`}
-                      >
-                        {String.fromCharCode(65 + i)}
-                      </button>
-                      <input
-                        value={opt}
-                        onChange={(e) => setOptions((prev) => prev.map((o, j) => (j === i ? e.target.value : o)))}
-                        className="w-full rounded-xl border border-stone-200 px-3 py-2 text-[14px] text-stone-900"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <label className="mt-3 block">
-                  <span className="text-[11px] font-semibold text-stone-500">Why is that the answer? (this is what helps)</span>
-                  <textarea
-                    value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={3}
-                    className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
-                  />
-                </label>
-              </>
+              <label className="mt-3 block cursor-pointer">
+                <input
+                  type="file" accept="image/jpeg,image/png,image/webp" capture="environment"
+                  className="hidden" onChange={(e) => onFile(e.target.files?.[0])}
+                />
+                {image ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */
+                  <img src={image.preview} alt="Your question" className="max-h-64 w-full rounded-xl border border-stone-200 object-contain" />
+                ) : (
+                  <span className="flex h-32 w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-stone-300 text-stone-500">
+                    <Camera className="h-6 w-6" />
+                    <span className="text-[13px] font-semibold">Take a photo of the question</span>
+                  </span>
+                )}
+              </label>
             )}
 
             {error && <p className="mt-2 text-[12px] text-rose-600">{error}</p>}
 
             <button
-              type="button" disabled={busy || !topic} onClick={() => void submit()}
-              className="mt-4 w-full rounded-xl bg-orange-500 py-3 text-[14px] font-bold text-white disabled:opacity-50"
+              type="button" disabled={busy || !ready} onClick={() => void submit()}
+              className="mt-3 w-full rounded-xl bg-orange-500 py-3 text-[14px] font-bold text-white disabled:opacity-50"
             >
-              {busy ? 'Sending…' : 'Send for review'}
+              {busy ? 'Checking & sending…' : 'Send to the community'}
             </button>
+            <p className="mt-1.5 text-center text-[10px] text-stone-400">
+              One share a day · checked automatically before anyone sees it
+            </p>
           </>
         )}
       </div>

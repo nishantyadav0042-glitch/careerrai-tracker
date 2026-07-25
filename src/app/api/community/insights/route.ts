@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data } = await admin
     .from('student_submissions')
-    .select('topic, kind, payload, student_id, published_at, profiles:student_id(full_name)')
+    .select('topic, kind, payload, display_name, published_at')
     .in('topic', topics)
     .eq('status', 'approved').in('kind', ['tip', 'mistake', 'shortcut'])
     .not('published_at', 'is', null)
@@ -39,10 +39,8 @@ export async function GET(request: NextRequest) {
     if (byTopic[t].length >= 2) continue;
     const text = (row.payload as { text?: string })?.text;
     if (!text) continue;
-    const prof = row.profiles as { full_name?: string | null } | null;
-    // First name only — enough for "a real student said this", no more.
-    const name = prof?.full_name ? prof.full_name.split(' ')[0] : null;
-    byTopic[t].push({ kind: row.kind as string, text, name });
+    // Anonymous by rule: the stored random display name, never a real one.
+    byTopic[t].push({ kind: row.kind as string, text, name: (row.display_name as string | null) ?? null });
   }
 
   return NextResponse.json({ insights: byTopic });
