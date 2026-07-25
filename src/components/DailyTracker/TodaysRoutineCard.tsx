@@ -72,11 +72,13 @@ interface RoutineResponse {
 // days, just four buttons competing with the actual task below them.
 type TimeBudget = 30 | 'planned';
 
-// Fallback for routines generated before targets existed.
+// Fallback for routines generated before targets existed: the plain label,
+// never an invented count — the old minutes/3 formula here claimed "15
+// Reading Comprehension questions" for a topic the engine measures in
+// passages. The server supplies task.target for every routine generated
+// since targets shipped; only pre-target legacy rows hit the fallback.
 function taskTitle(task: RoutineTask): string {
-  if (task.target) return task.target;
-  if (task.topic) return `Solve ${Math.max(5, Math.round(task.estMinutes / 3))} ${task.topic} questions`;
-  return task.label;
+  return task.target ?? task.label;
 }
 
 // 30-second module-level cache for GET /api/routine/today — the single

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ThumbsUp, ThumbsDown, ChevronRight } from 'lucide-react';
 import { track } from '@/lib/journey';
+import { ReportItem } from '@/components/report-item';
 
 // Home's ONE community surface. Compact — but never flat (founder, 26 Jul:
 // "conceptually right, visually not appealing... nowhere have you mentioned
@@ -70,7 +71,11 @@ export function HomeTipCard() {
           <p className="mt-1 text-[13.5px] font-semibold leading-snug text-stone-900">
             &ldquo;{tip.text}&rdquo;
           </p>
-          <p className="mt-0.5 text-[10.5px] text-stone-400">— {tip.displayName}, CareerRai student</p>
+          <div className="mt-0.5 flex items-center gap-2">
+            <p className="text-[10.5px] text-stone-400">— {tip.displayName}, CareerRai student</p>
+            {/* Play UGC compliance: reportable wherever it's shown. */}
+            <ReportItem submissionId={tip.id} />
+          </div>
 
           {voted ? (
             <p className="mt-2 text-[11.5px] font-bold text-emerald-700">
