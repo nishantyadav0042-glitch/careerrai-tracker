@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { PreparationCard } from '@/components/preparation-card';
 
 // The topic lists behind the "My CAT Plan" doors (founder, 24 Jul: the doors
 // used to dump you on the Analysis page with zero info — each should open
@@ -73,6 +74,10 @@ function TopicsInner() {
             </p>
           </div>
         </div>
+
+        {/* The honest four before the topic list, so a student reads what the
+            statuses below are actually worth before reading the statuses. */}
+        <PreparationCard />
 
         {isLoading ? (
           <div className="py-10 text-center text-sm text-stone-500">Loading your topics…</div>

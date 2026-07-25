@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Zap, ArrowRight, Check, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
+import { EvidenceCapture } from '@/components/evidence-capture';
 import type { StudyAction } from '@/lib/next-action';
 
 type Action = StudyAction & { href: string; taskId: string | null };
@@ -28,6 +29,9 @@ export function NextActionCard() {
   const [finishedToday, setFinishedToday] = useState(0);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  // Set after a topic block is closed. The evidence ask rides on the Done tap
+  // the student was already making, rather than becoming a separate chore.
+  const [capture, setCapture] = useState<string | null>(null);
 
   const load = useCallback(async (mins: number) => {
     setLoading(true);
@@ -94,6 +98,9 @@ export function NextActionCard() {
       await load(minutes);
       // The streak, ring and plan all read from what we just wrote.
       router.refresh();
+      // Now — and only now, with the block already banked — ask the two
+      // numbers that make it evidence. Skipping costs the student nothing.
+      if (a.topic) setCapture(a.topic);
     } catch { /* leave the card as it was */ }
     setBusy(false);
   }
@@ -103,12 +110,15 @@ export function NextActionCard() {
   if (!loading && actions && actions.length === 0) {
     if (finishedToday > 0) {
       return (
-        <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-600 p-4 text-white">
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
-          <p className="text-[14px] font-bold">
-            Done for today — {finishedToday} {finishedToday === 1 ? 'block' : 'blocks'} logged.
-          </p>
-        </div>
+        <>
+          <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-600 p-4 text-white">
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
+            <p className="text-[14px] font-bold">
+              Done for today — {finishedToday} {finishedToday === 1 ? 'block' : 'blocks'} logged.
+            </p>
+          </div>
+          {capture && <EvidenceCapture topic={capture} onClose={() => { setCapture(null); router.refresh(); }} />}
+        </>
       );
     }
     return null;
@@ -118,6 +128,7 @@ export function NextActionCard() {
   const rest = actions?.slice(1) ?? [];
 
   return (
+    <>
     <div className="w-full rounded-2xl bg-stone-900 p-4 text-left text-white">
       <div
         role="button" tabIndex={0}
@@ -192,5 +203,7 @@ export function NextActionCard() {
         </>
       )}
     </div>
+    {capture && <EvidenceCapture topic={capture} onClose={() => { setCapture(null); router.refresh(); }} />}
+    </>
   );
 }

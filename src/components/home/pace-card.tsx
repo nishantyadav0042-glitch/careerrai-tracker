@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CalendarDays, ChevronRight } from 'lucide-react';
 import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
+import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
 import type { PaceResult } from '@/lib/study-pace';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
@@ -153,7 +154,11 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-lg font-extrabold leading-none text-stone-900">{pace.completedPct}<span className="text-[11px] font-bold">%</span></span>
-            <span className="text-[8px] font-semibold uppercase tracking-wide text-stone-400">Progress</span>
+            {/* "Covered", not "Progress". This ring is built from statuses the
+                student declared — it measures what they say they have been
+                through, which is not the same claim as knowing it. The
+                Preparation Index is where earned evidence is shown. */}
+            <span className="text-[8px] font-semibold uppercase tracking-wide text-stone-400">Covered</span>
           </div>
         </div>
 
@@ -180,6 +185,9 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
 
       {editing && (
         <div className="mt-3 space-y-2.5 border-t border-stone-100 pt-3">
+          {/* Founder principle: never fake precision. Students forgive an
+              estimate that says it is one. */}
+          <p className="text-[11px] leading-relaxed text-stone-400">{HOURS_ARE_ESTIMATES}</p>
           <div className="flex flex-wrap items-center gap-2">
             <input type="date" value={date} min={todayIso} onChange={(e) => setDate(e.target.value)}
               className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-sm text-stone-900" />

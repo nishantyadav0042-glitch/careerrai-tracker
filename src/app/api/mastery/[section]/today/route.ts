@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadMasteryState } from '@/lib/mastery-state';
-import { sectionConfig, sectionBudgetShare } from '@/lib/mastery-sections';
+import { sectionConfig, sectionBudgetShare, isSectionReady, sectionNotReadyReason } from '@/lib/mastery-sections';
 import { stageLabel, REVISION_SESSION_MINUTES, type MasteryTopicSpec } from '@/lib/mastery-engine';
 
 // GET /api/mastery/[section]/today — the mastery plan for one section. Gated by
@@ -24,6 +24,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ section
     .eq('id', user.id).single();
   const profile = data as Record<string, unknown> | null;
   if (!profile || profile[cfg.enabledCol] !== true) {
+    return NextResponse.json({ enabled: false }, { status: 404 });
+  }
+
+  // The flag says on; the model must also agree with the hours we already
+  // quote this student. Serving a plan built on a different hour total is how
+  // a student ends up holding two contradictory answers at once.
+  if (!isSectionReady(cfg)) {
+    console.error('[mastery] blocked —', sectionNotReadyReason(cfg));
     return NextResponse.json({ enabled: false }, { status: 404 });
   }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadMasteryState, saveTopicProgress, saveSwap, syncCoverageFromMastery, creditMasteryStudyDay } from '@/lib/mastery-state';
-import { sectionConfig } from '@/lib/mastery-sections';
+import { sectionConfig, isSectionReady, sectionNotReadyReason } from '@/lib/mastery-sections';
 import { SESSION_MINUTES, REVISION_SESSION_MINUTES, type ErrorType } from '@/lib/mastery-engine';
 
 // POST /api/mastery/[section]/log — the Section-D write-back + swap, for any
@@ -22,6 +22,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .eq('id', user.id).single();
   const profile = data as Record<string, unknown> | null;
   if (!profile || profile[cfg.enabledCol] !== true) {
+    return NextResponse.json({ error: 'Section not enabled' }, { status: 404 });
+  }
+  // Same guard as the read side: never write mastery progress from a plan
+  // whose hour total contradicts the syllabus model the student is shown.
+  if (!isSectionReady(cfg)) {
+    console.error('[mastery] blocked —', sectionNotReadyReason(cfg));
     return NextResponse.json({ error: 'Section not enabled' }, { status: 404 });
   }
 
