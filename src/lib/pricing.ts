@@ -29,7 +29,14 @@ export function priceWithScholarship(basePaise: number, s: ActiveScholarship): n
 
 // Pure: what a coupon charges for a given list price. Never below zero.
 export function priceWithCoupon(basePaise: number, c: ActiveCoupon): number {
-  if (c.discount_type === 'percent') return Math.round(basePaise * (100 - c.discount_value) / 100);
+  // Both branches clamp at zero. The flat branch always did; the percent branch
+  // did not, so a coupon row with discount_value > 100 produced a NEGATIVE
+  // price and handed it to order creation. Not reachable through the admin
+  // route today (it enforces 1–100), but nothing at the database or function
+  // level enforced it, and this function is what money is computed from.
+  if (c.discount_type === 'percent') {
+    return Math.max(0, Math.round(basePaise * (100 - c.discount_value) / 100));
+  }
   return Math.max(0, basePaise - c.discount_value);
 }
 

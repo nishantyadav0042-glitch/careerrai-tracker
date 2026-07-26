@@ -1,0 +1,49 @@
+name: CI
+
+# The quality gate. Runs on every push and every pull request.
+#
+# Before this existed, the only thing standing between a change and a silent
+# production regression in streak maths, the 3am study-day boundary, coverage
+# derivation or checkout pricing was one person reading the diff. That does not
+# survive a second engineer, so these three checks now run automatically and
+# the branch is not mergeable until they pass.
+#
+# Deliberately fast (under two minutes) and deliberately offline: no database,
+# no secrets, no network. A gate people wait on is a gate people disable.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push supersedes the run in flight for the same branch.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · lint · unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
