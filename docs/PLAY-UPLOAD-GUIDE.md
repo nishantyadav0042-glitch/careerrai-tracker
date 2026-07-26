@@ -35,11 +35,14 @@ Google reviewer will take; if it fails, tell me before Step 1.
 
 ## Step 1 — Get the app file (you)
 
-The signed build is already produced by GitHub Actions — run **#4**,
-the green one:
+The signed build is already produced by GitHub Actions — use the **latest
+green run**, currently run **#5** (built from `main` @ 7210cce):
 GitHub → careerrai-tracker → Actions → "Build Android app (Play Store)" →
-run #4 → **Artifacts** → download **`careerrai-android-4`** (3 MB zip,
-valid until 23 Oct 2026).
+run #5 → **Artifacts** → download **`careerrai-android-5`** (3 MB zip,
+valid until 24 Oct 2026).
+
+*(The "Node.js 20 is deprecated" warning on that run is GitHub's own
+notice about its runner images, not about our app. Ignore it.)*
 Inside: `app-release-bundle.aab` ← this is the file for Play.
 (The `.apk` is for direct phone testing only; Play wants the `.aab`.)
 
