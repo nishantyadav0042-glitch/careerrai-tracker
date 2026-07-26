@@ -58,7 +58,7 @@ export function matchReason(student: MatchStudent, buddy: MatchBuddy): string | 
   // match for a repeater student — more grounded than the generic
   // self-checked "Repeaters" box, and it's what she actually lived.
   if (student.is_repeater && isRepeaterBuddy && improvement != null && improvement >= 3) {
-    return `Improved ${buddy.first_attempt_percentile}→${buddy.cat_percentile}%ile on the second attempt — been where you are`;
+    return `Improved ${Number(buddy.first_attempt_percentile)}→${Number(buddy.cat_percentile)}%ile on the second attempt — been where you are`;
   }
 
   const types = buddy.student_types_helped ?? [];
@@ -73,7 +73,7 @@ export function matchReason(student: MatchStudent, buddy: MatchBuddy): string | 
   // Fallback: a dramatic comeback is a compelling, always-true signal even
   // for a student who isn't a repeater themselves.
   if (improvement != null && improvement >= 5) {
-    return `Improved ${buddy.first_attempt_percentile}→${buddy.cat_percentile}%ile on the second attempt`;
+    return `Improved ${Number(buddy.first_attempt_percentile)}→${Number(buddy.cat_percentile)}%ile on the second attempt`;
   }
   return null;
 }
