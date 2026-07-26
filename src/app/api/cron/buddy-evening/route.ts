@@ -56,8 +56,27 @@ export async function POST(request: NextRequest) {
     if (!top) continue;
 
     const firstName = (top.full_name || 'Your buddy').split(' ')[0];
-    const cred = [top.iim_converted, top.cat_percentile ? `CAT ${top.cat_percentile}%ile` : null]
-      .filter(Boolean).join(', ');
+    // A mentor who climbed is a better hook than one who was always at the
+    // top — a student sitting at 72 can picture themselves in "72 → 98" in a
+    // way they cannot in "98". Same journey line the showcase card and
+    // matchReason already use, so the push never tells a different story from
+    // the page it opens.
+    //
+    // Only when the jump is REAL. One mentor has first_attempt and final both
+    // at 98.6 (he cracked it first time and the setup form recorded both), and
+    // "98.6 → 98.6%ile" reads as a typo, not a comeback. Number() because both
+    // columns are numeric(x,2) and would otherwise print "98.60".
+    const first = top.first_attempt_percentile != null ? Number(top.first_attempt_percentile) : null;
+    const final = top.cat_percentile != null ? Number(top.cat_percentile) : null;
+    const percentile = final == null ? null
+      : first != null && final > first ? `CAT ${first} → ${final}%ile`
+      : `CAT ${final}%ile`;
+    // One mentor converted six institutes and lists all of them. The full list
+    // pushes the body past 150 characters, so the "tap to see how" gets
+    // truncated away on the lock screen — the best-known name carries it, and
+    // the profile still shows every conversion.
+    const school = top.iim_converted?.split(',')[0]?.trim() || null;
+    const cred = [school, percentile].filter(Boolean).join(', ');
     const title = 'Are you studying the right things?';
     const body = cred
       ? `${firstName} (${cred}) tells you exactly what to study, skip & fix — tap to see how.`
