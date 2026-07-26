@@ -26,6 +26,25 @@ export const MAX_SUBMISSIONS_PER_DAY = 1; // BeReal rule: the limit creates qual
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
+// ── The shelf must never be empty ───────────────────────────────────────────
+//
+// Every submission carries a 72h voting window, so a pool left alone DECAYS:
+// seed 28 items, wait two weeks, and Daily Pick renders nothing. A student who
+// installs that day opens the tab, sees an empty screen and concludes "nobody
+// uses this app" — the single worst first impression a peer-learning surface
+// can make, and it happens exactly when we can least afford it.
+//
+// So the pipeline recycles instead of expiring:
+//   voting (72h) → graded → 'featured' if it earned it (PERMANENT, no expiry)
+//                          → 'archived' if it didn't
+//   and if the active shelf ever falls below the minimum, the best archived
+//   items come back with a fresh window rather than showing a blank page.
+//
+// Consequence: the shelf grows with every good contribution and can only be
+// empty if literally nothing has ever been good — never because time passed.
+export const MIN_ACTIVE_QUESTIONS = 10;
+export const MIN_ACTIVE_TIPS = 10;
+
 /**
  * The one graduation rule. Two admin surfaces used to rank the same voting
  * pool by two different rules (net votes vs the helpful%% bars) — a 3-yes/0-no

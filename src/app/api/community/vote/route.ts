@@ -23,7 +23,14 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: sub } = await admin.from('student_submissions')
     .select('id, status, voting_ends_at, student_id').eq('id', sid).maybeSingle();
-  if (!sub || sub.status !== 'voting' || (sub.voting_ends_at && sub.voting_ends_at < new Date().toISOString())) {
+  // 'featured' items are permanent shelf stock with no expiry — they keep
+  // collecting votes, which is how a good item stays good (and how one that
+  // stops helping eventually drops back out).
+  const open = sub && (
+    sub.status === 'featured' ||
+    (sub.status === 'voting' && (!sub.voting_ends_at || sub.voting_ends_at >= new Date().toISOString()))
+  );
+  if (!open) {
     return NextResponse.json({ error: 'Voting is closed for this one' }, { status: 400 });
   }
   // No self-votes — the one gaming vector this simple design has.
