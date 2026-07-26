@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { studyDayString } from '@/lib/study-day';
 import { Lightbulb, X } from 'lucide-react';
 import { InstallButton } from '@/components/install/install-button';
 
@@ -27,7 +28,7 @@ function isStandalone(): boolean {
 }
 
 function dismissKey(): string {
-  return `cr_insight_dismissed_${new Date().toISOString().slice(0, 10)}`;
+  return `cr_insight_dismissed_${studyDayString()}`;
 }
 
 export function DailyInsightCard({ title, text, kind }: Props) {

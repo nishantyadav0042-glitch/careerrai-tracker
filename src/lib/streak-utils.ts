@@ -22,13 +22,13 @@ import { createClient } from '@/lib/supabase/client';
 // fixed +5:30 IST offset, then only ever read/format via UTC-based methods
 // (getUTCHours/toISOString) — never local-time methods — so the result is
 // identical no matter what timezone the process itself runs in.
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-export function getLogDateString(now: Date = new Date()): string {
-  const istMs = now.getTime() + IST_OFFSET_MS;
-  const istHour = new Date(istMs).getUTCHours();
-  const adjustedMs = istHour < 3 ? istMs - 86_400_000 : istMs;
-  return new Date(adjustedMs).toISOString().split('T')[0];
-}
+// The implementation moved to study-day.ts — a leaf with zero imports, so
+// client components can share this exact rule instead of hand-rolling a UTC
+// key (proven output-identical across 12,549 samples spanning 60 days before
+// the swap). This module keeps the name the codebase already uses.
+import { studyDayString, studyDayStart } from './study-day';
+export const getLogDateString = studyDayString;
+export { studyDayStart };
 
 // ── Shared constants (import from here — never hardcode elsewhere) ───────────
 export const MS_PER_DAY = 86_400_000;

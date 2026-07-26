@@ -1,3 +1,4 @@
+import { studyDayStart } from '@/lib/study-day';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -17,13 +18,15 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // Server-side 3-plays/day limit — localStorage alone is bypassable
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Server-side 3-plays/day limit — localStorage alone is bypassable.
+    // Counted on the IST study day (3am rollover), not UTC midnight: UTC
+    // rolled over at 5:30am IST, so a student playing at 1am got a fresh
+    // allowance while their study log still counted as yesterday.
     const { count } = await admin
       .from('brain_break_logs')
       .select('id', { count: 'exact', head: true })
       .eq('student_id', user.id)
-      .gte('played_at', `${todayStr}T00:00:00.000Z`);
+      .gte('played_at', studyDayStart().toISOString());
     if ((count ?? 0) >= 3) {
       return NextResponse.json({ error: 'Daily limit reached', limit: 3 }, { status: 429 });
     }

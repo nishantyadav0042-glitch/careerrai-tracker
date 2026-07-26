@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { studyDayString } from '@/lib/study-day';
 import { Lightbulb } from 'lucide-react';
 
 // The daily insight as a passing cloud (founder, 25 Jul): it drifts in when
@@ -10,7 +11,7 @@ import { Lightbulb } from 'lucide-react';
 const VISIBLE_MS = 7000;
 
 function seenKey(): string {
-  return `cr_insight_cloud_day_${new Date().toISOString().slice(0, 10)}`;
+  return `cr_insight_cloud_day_${studyDayString()}`;
 }
 
 export function InsightBubble({ title, text }: { title: string; text: string }) {

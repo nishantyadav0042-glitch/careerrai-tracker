@@ -1,5 +1,6 @@
 'use client';
 
+import { STATUS_LABEL } from '@/lib/coverage-status';
 import { Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
@@ -20,13 +21,19 @@ interface BlueprintData { topicMemory: TopicMem[] }
 
 const SECTION_ORDER = ['QA', 'DILR', 'VARC'] as const;
 
-const STATUS_PILL: Record<Status, { label: string; cls: string }> = {
-  not_started: { label: 'Not started', cls: 'bg-stone-100 text-stone-500' },
-  learning:    { label: 'Learning',    cls: 'bg-amber-100 text-amber-700' },
-  practicing:  { label: 'Practicing',  cls: 'bg-amber-100 text-amber-700' },
-  revising:    { label: 'Revising',    cls: 'bg-amber-100 text-amber-700' },
-  exam_ready:  { label: 'Exam ready',  cls: 'bg-emerald-100 text-emerald-700' },
+// Colours are local presentation; the LABEL TEXT comes from the canonical
+// ladder (coverage-status.STATUS_LABEL) so this page can never say
+// "Practicing" while the weekly review says "Practising" for the same status.
+const STATUS_CLS: Record<Status, string> = {
+  not_started: 'bg-stone-100 text-stone-500',
+  learning:    'bg-amber-100 text-amber-700',
+  practicing:  'bg-amber-100 text-amber-700',
+  revising:    'bg-amber-100 text-amber-700',
+  exam_ready:  'bg-emerald-100 text-emerald-700',
 };
+const STATUS_PILL: Record<Status, { label: string; cls: string }> = Object.fromEntries(
+  (Object.keys(STATUS_CLS) as Status[]).map((k) => [k, { label: STATUS_LABEL[k], cls: STATUS_CLS[k] }]),
+) as Record<Status, { label: string; cls: string }>;
 
 const VIEWS = {
   finished:    { title: 'Finished',              sub: 'studied through at least once', match: (t: TopicMem) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready' },
