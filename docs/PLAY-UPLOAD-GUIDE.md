@@ -26,11 +26,20 @@ prevents the rejection.*
 
 ---
 
+## Step 0 — 30-second check (you, before anything else)
+
+On any browser open `careerrai.in/login` → "Build my free study plan" →
+"Log in with password instead" → `9000000001` / `CareerRai#Play2026`.
+It must land on the tracker with sample data. This is the exact path the
+Google reviewer will take; if it fails, tell me before Step 1.
+
 ## Step 1 — Get the app file (you)
 
-The signed build is produced by GitHub Actions (already triggered):
+The signed build is already produced by GitHub Actions — run **#4**,
+the green one:
 GitHub → careerrai-tracker → Actions → "Build Android app (Play Store)" →
-latest run → **Artifacts** → download `careerrai-android-…`.
+run #4 → **Artifacts** → download **`careerrai-android-4`** (3 MB zip,
+valid until 23 Oct 2026).
 Inside: `app-release-bundle.aab` ← this is the file for Play.
 (The `.apk` is for direct phone testing only; Play wants the `.aab`.)
 
@@ -107,11 +116,31 @@ do it, log it. By the students, for the students.
 
 **Ads:** No, the app does not contain ads.
 
-**App access:** "All or some functionality is restricted" → provide a
-demo login → give the reviewer the test account: phone `8233454449` +
-note "OTP login — request access and we will supply a code", OR create a
-password-login demo account for review (tell me and I'll set one up —
-recommended).
+**App access:** "All or some functionality is restricted" → **Add new
+instructions** → give the reviewer this account (already created, already
+seeded with a realistic mid-preparation state):
+
+| Field | Value |
+|---|---|
+| Username | `9000000001` |
+| Password | `CareerRai#Play2026` |
+
+Instructions box (paste exactly):
+```
+Open the app. On the login screen tap "Build my free study plan",
+then tap "Log in with password instead".
+Mobile number: 9000000001
+Password: CareerRai#Play2026
+This is a demo student account with sample study data.
+SMS OTP is the normal login for real users; this password account is
+provided so review does not depend on receiving an Indian SMS.
+```
+
+*Why a mobile number and not an email:* the password form on our login
+screen is a numeric mobile-number field, so an email address cannot be
+typed into it. The account is reachable by number; the number is a
+reserved demo number, flagged as a test account so it never enters our
+own metrics.
 
 **Content rating questionnaire:** Category: Education/Reference.
 - Violence/sexual/drugs/gambling: **No** to all.
@@ -163,7 +192,8 @@ for reviewers). Do not resubmit blindly — one message to me first.
 - [ ] Friend: copy App signing SHA-256 → send to you → to me
 - [ ] Me: assetlinks live → confirm
 - [ ] You: install tester build → NO address bar
-- [ ] Me (optional): reviewer demo account + feature graphic
+- [x] Me: reviewer demo account (`9000000001` / `CareerRai#Play2026`)
+- [ ] You: prepare feature graphic 1024×500 (ask me if you want one made)
 - [ ] Friend: listing + content forms (answers above)
 - [ ] Friend: submit
 - [ ] Friend: add you as Admin user on the app
