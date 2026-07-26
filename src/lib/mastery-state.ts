@@ -3,6 +3,7 @@
 // section-scoped), SEEDING once from the student's existing topic_coverage the
 // first time so progress-to-date is preserved, and persists mutations.
 
+import { studyDayString } from '@/lib/study-day';
 import type { MasteryStudentState, StudentTopicProgress, Stage, MasteryTopicSpec } from './mastery-engine';
 import { getLogDateString, VALID_SECTIONS } from './streak-utils';
 
@@ -82,7 +83,7 @@ export async function loadMasteryState(
     for (const r of rows) progressByTopic.set(r.topic, rowToProgress(r));
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = studyDayString();  // study day, not UTC — must match the write below
   const { data: swap } = await admin.from('qa_daily_plan')
     .select('swapped_priority, swapped_secondary')
     .eq('student_id', studentId).eq('section', section).eq('plan_date', today).maybeSingle();
@@ -110,7 +111,7 @@ export async function saveTopicProgress(admin: any, studentId: string, section: 
 }
 
 export async function saveSwap(admin: any, studentId: string, section: string, slot: 'priority' | 'secondary', topic: string | null): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = studyDayString();  // study day, not UTC — must match the write below
   const col = slot === 'priority' ? 'swapped_priority' : 'swapped_secondary';
   const { error } = await admin.from('qa_daily_plan').upsert(
     { student_id: studentId, section, plan_date: today, [col]: topic },
