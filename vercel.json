@@ -143,6 +143,10 @@
     {
       "path": "/api/cron/metric-snapshot",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/community-recycle",
+      "schedule": "0 2 * * *"
     }
   ]
 }

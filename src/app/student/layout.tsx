@@ -20,6 +20,7 @@ import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
 import { EvidenceAnnounce } from '@/components/evidence-announce';
+import { CrashReporter } from '@/components/crash-reporter';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
 
@@ -144,6 +145,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
           gone (410/404) — or we've never held one despite the client possibly
           having permission. Either way the healer must mint a FRESH sub, not
           re-upload whatever stale one the browser still returns. */}
+      {/* Crash capture + install-source stamp. A JS error in a TWA is
+          invisible to Play Console and Crashlytics; this is the only way we
+          hear about a broken screen before a 1-star review does. */}
+      <CrashReporter />
       <PushHealer serverPushDead={!!profile?.push_died_at || !profile?.push_subscription} />
       <InstallPing />
       <StoreBuildDetector />
