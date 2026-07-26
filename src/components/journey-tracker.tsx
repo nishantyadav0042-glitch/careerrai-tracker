@@ -27,6 +27,23 @@ export function JourneyTracker() {
     const browserOnlyPush = notif === 'granted' && mode !== 'standalone' && mode !== 'twa';
     track('app_open', { notif_permission: notif, browser_only_push: browserOnlyPush, referrer: document.referrer || null });
 
+    // Broadcast-channel attribution. A WhatsApp/Instagram Channel never tells
+    // us who follows it, so the only way to measure one is the traffic it
+    // sends back: every link posted there carries ?src=wa (see lib/channels.ts)
+    // and lands here. This is what turns "we posted something" into "that post
+    // pulled 40 students into the app".
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const src = params.get('src');
+      if (src) {
+        track('channel_referred', {
+          src,
+          campaign: params.get('c'),
+          screen: window.location.pathname,
+        });
+      }
+    } catch { /* attribution must never break the app */ }
+
     // Close out the final screen's dwell + scroll when the app is backgrounded.
     const onHide = () => {
       if (document.visibilityState === 'hidden' && prev.current) {
