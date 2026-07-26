@@ -233,9 +233,17 @@ export function topicEvidence(topic: string, input: TopicEvidenceInput): TopicEv
  * what six ticks look like, not what a student typed. Nothing that writes to
  * topic_coverage may set it any other way.
  */
+/** Every rung that must be present AND done before exam_ready is reachable. */
+const REQUIRED_CHECKS: EvidenceCheck['id'][] = ['concept', 'easy', 'medium', 'hard', 'revision', 'tested'];
+
 export function deriveStatus(checks: EvidenceCheck[]): CoverageStatus {
   const has = (id: EvidenceCheck['id']) => checks.find((c) => c.id === id)?.done === true;
-  if (checks.every((c) => c.done)) return 'exam_ready';
+  // Named rungs, not `checks.every(...)`. A bare `every` is vacuously true on a
+  // short array, so deriveStatus([{concept, done:true}]) used to return
+  // exam_ready — safe only because the one caller below always passes all six.
+  // That is a landmine under the module's strongest claim, so the claim now
+  // names what it requires. Output is unchanged for the real caller (unit-tested).
+  if (REQUIRED_CHECKS.every(has)) return 'exam_ready';
   if (has('hard')) return 'revising';
   if (has('easy') || has('medium')) return 'practicing';
   if (has('concept')) return 'learning';

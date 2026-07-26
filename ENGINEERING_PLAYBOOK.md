@@ -72,7 +72,17 @@ never the gates in §3.
 ## 3. Definition of Done (a change is not "done" until all pass)
 
 - [ ] Obeys the relevant OS Constitution's non-negotiables (no violation shipped).
-- [ ] `npx tsc --noEmit` clean · `eslint` clean · `npm run build` succeeds.
+- [ ] `npm run verify` passes — typecheck, lint and the unit suite in one
+      command — and `npm run build` succeeds. CI (`.github/workflows/ci.yml`)
+      runs the same three checks on every push and pull request; a red branch
+      is not mergeable. **This gate exists because knowledge held only in
+      comments and in one person's head does not survive a second engineer:
+      a comment cannot fail a build.**
+- [ ] **Invariant modules carry tests.** Any change to `study-day.ts`,
+      `streak-utils.ts`, `evidence.ts`, `prep-model.ts`, `buddy-match.ts` or
+      `pricing.ts` ships with the test that would have caught it going wrong.
+      These six hold the product's temporal, evidential and money rules; every
+      documented incident in `docs/ENGINEERING-MEMORY.md` lives in one of them.
 - [ ] One source of truth; no duplicated logic or hidden business rule introduced.
       **The gate is absolute: a change that redefines an existing business
       concept instead of importing it is rejected regardless of its other

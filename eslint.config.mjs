@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build/tooling scripts that never ship to a user. They are plain Node
+    // CommonJS and are linted by their own runtime failing, not by the app's
+    // TypeScript rules.
+    "docs/store/render.js",
+    "scripts/**",
   ]),
 ]);
 
