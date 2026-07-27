@@ -127,6 +127,10 @@
     {
       "path": "/api/cron/community-recycle",
       "schedule": "0 2 * * *"
+    },
+    {
+      "schedule": "45 21 * * *",
+      "path": "/api/cron/integrity-check"
     }
   ]
 }
