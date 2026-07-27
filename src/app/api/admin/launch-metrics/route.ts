@@ -25,8 +25,14 @@ export async function GET() {
     { data: subs24 }, { data: notifs24 }, { data: shelf },
   ] = await Promise.all([
     admin.from('student_events').select('user_id, event').gte('created_at', since24),
-    // OTP success = a verified login for every send attempt in the window.
-    admin.from('otp_send_events').select('phone, created_at').gte('created_at', since24),
+    // OTP sends. This queried `created_at` — a column that does not exist on
+    // this table; it is `sent_at`. PostgREST rejected the filter, the route
+    // swallowed it, and the whole "Login door (OTP)" panel rendered confident
+    // zeros. It also counted distinct `phone`, which is NULL in all 423 rows:
+    // the phone path records the send inside the claim_otp_send_slot RPC and
+    // the email path writes `email`, so `phone` has never held a value.
+    // Distinct RECIPIENT now spans both columns.
+    admin.from('otp_send_events').select('phone, email, sent_at').gte('sent_at', since24),
     admin.from('client_errors').select('student_id, fingerprint, message, path, install_source, created_at')
       .gte('created_at', since24),
     admin.from('profiles').select('install_source, created_at, is_test_account'),
@@ -65,12 +71,19 @@ export async function GET() {
 
   // ── OTP: sends vs students who actually got in ──
   const otpSends = (otp24 ?? []).length;
-  const loggedIn24 = new Set((ev24 ?? []).filter((e) => e.event === 'app_open').map((e) => e.user_id as string)).size;
+  // Was a second, byte-identical copy of the DAU computation above, presented
+  // under a different label — "Students who got in" and "Active today" were
+  // always the same number by construction, so the OTP funnel could never
+  // show a gap no matter how badly login was failing. One definition, one
+  // value, used twice; if they must differ, they need different sources.
+  const loggedIn24 = dauSet.size;
   const newStudents24 = (sources ?? []).filter((p) => !p.is_test_account && (p.created_at as string) >= since24).length;
   // Honest framing: distinct phones sent vs new accounts created. Not a true
   // per-attempt success rate (we don't log verify failures yet) — labelled as
   // such in the UI.
-  const otpPhones = new Set((otp24 ?? []).map((o) => o.phone as string)).size;
+  const otpPhones = new Set(
+    (otp24 ?? []).map((o) => (o.phone as string | null) ?? (o.email as string | null)).filter(Boolean)
+  ).size;
 
   // ── Install source split (the Play vs web question) ──
   const real = (sources ?? []).filter((p) => !p.is_test_account);

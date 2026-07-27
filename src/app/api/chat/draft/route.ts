@@ -19,12 +19,23 @@ export async function POST(request: NextRequest) {
     // Verify buddy role and ownership
     const { data: student } = await admin
       .from('profiles')
-      .select('buddy_id, full_name, current_streak, last_log_date')
+      .select('buddy_id, full_name')
       .eq('id', studentId)
       .single();
     if (!student || student.buddy_id !== user.id) {
       return NextResponse.json({ error: 'Not your student' }, { status: 403 });
     }
+
+    // Streak lives in streak_data, NOT on profiles. profiles.current_streak and
+    // profiles.last_log_date are 0/NULL for all 249 students — nothing has ever
+    // written them — so reading them here made every AI mentor draft open with
+    // "Streak: 0 days" for a student who might be twelve days deep. Every other
+    // streak reader in the codebase already used streak_data; these two did not.
+    const { data: sd } = await admin
+      .from('streak_data')
+      .select('current_streak, last_log_date')
+      .eq('student_id', studentId)
+      .maybeSingle();
 
     // Shared free-tier Gemini key — cap per buddy so one can't drain the quota.
     if (await overAiHourlyLimit(admin, user.id, 'chat_draft', 60)) {
@@ -78,7 +89,7 @@ export async function POST(request: NextRequest) {
       : '0';
 
     const factsSnapshot = [
-      `Streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
+      `Streak: ${liveStreak(sd?.current_streak, sd?.last_log_date)} days`,
       `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
       latestDebrief ? `Latest mock: ${latestDebrief.overall_percentile ?? '?'}%ile (${latestDebrief.taken_on})` : 'No recent mock',
     ].join(' | ');
