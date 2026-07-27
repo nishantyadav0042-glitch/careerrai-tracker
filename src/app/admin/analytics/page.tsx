@@ -89,7 +89,14 @@ export default async function AdminAnalyticsPage() {
 
   for (const d of days) { openers.set(d, new Set()); loggers.set(d, new Set()); }
 
+  // ONE definition of "opened the app", shared with /admin/launch: an app_open
+  // event. This counted ANY event, so the two dashboards disagreed — by one
+  // student on 2 of the last 8 days, which is small but is exactly the drift
+  // that makes people stop trusting both numbers. A student who fires a tap or
+  // a screen_view without an app_open is a telemetry gap to fix at the source,
+  // not a second definition of active.
   for (const e of rows) {
+    if (e.event !== 'app_open') continue;
     const d = istDay(e.created_at);
     if (!openers.has(d)) continue;
     openers.get(d)!.add(e.user_id!);
