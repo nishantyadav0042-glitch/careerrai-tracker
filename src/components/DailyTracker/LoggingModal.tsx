@@ -29,6 +29,8 @@ export interface LoggingData {
   completedTasks?: { id: string; confidence?: 'green' | 'blue' }[];
   // Mock debrief captured INLINE on this same sheet (null when no mock today).
   mock?: MockDebriefData | null;
+  // How the day actually went — the first question on the sheet.
+  day_outcome?: DayOutcome;
 }
 
 // Founder redesign (24 Jul): one sheet, all taps, completion-first. A student
@@ -59,7 +61,31 @@ const BLOCKER_REASONS = [
 
 type TaskState = 'half' | 'full';
 
+// ── The day's shape, asked FIRST ────────────────────────────────────────────
+//
+// Before this, a student who hadn't studied had to scroll past the plan, past
+// the off-plan picker, past the mock question, and tap "0" in the hours row —
+// because hours === 0 was the only thing that made the form valid for them.
+// The honest path was the hidden one. That is how a log ends up filled only by
+// students who studied, and a dataset that says everybody is doing fine.
+//
+// Four states because real days have four states. 'partial' matters as much as
+// the rest: "I sat down and didn't finish" is the most common honest day, and
+// the one a two-option form silently pushes into a lie.
+export type DayOutcome = 'studied' | 'partial' | 'not_studied' | 'skipped';
+
+const OUTCOMES: { id: DayOutcome; label: string; sub: string; emoji: string; tone: string }[] = [
+  { id: 'studied',     label: 'Studied',        sub: 'Finished what I planned', emoji: '✅', tone: 'emerald' },
+  { id: 'partial',     label: 'Studied a bit',  sub: "Sat down, didn't finish", emoji: '📚', tone: 'amber' },
+  { id: 'not_studied', label: "Didn't study",   sub: 'Today got away from me',  emoji: '⭕', tone: 'zinc' },
+  { id: 'skipped',     label: 'Rest / away',    sub: 'Planned break, travel, ill', emoji: '⏭', tone: 'zinc' },
+];
+
+/** The two answers that need nothing else — one tap and the day is recorded. */
+const NO_DETAIL_NEEDED: DayOutcome[] = ['not_studied', 'skipped'];
+
 export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }: LoggingModalProps) {
+  const [outcome, setOutcome] = useState<DayOutcome | null>(null);
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
@@ -120,10 +146,17 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   // Completion-first: the log is valid the moment there's a real signal of the
   // day — a plan topic marked, something studied off-plan, a mock, or an honest
   // rest day (0 hours). Hours are optional; completion is the source of truth.
-  const isValid = taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0;
+  // "Didn't study" and "Rest / away" are complete answers on their own — a day
+  // with nothing in it has nothing further to describe, and making someone
+  // justify a bad day is how you stop hearing about bad days.
+  const outcomeIsTerminal = outcome != null && NO_DETAIL_NEEDED.includes(outcome);
+  const isValid = outcomeIsTerminal
+    || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0;
 
   const missingHint = (): string =>
-    'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
+    outcome == null
+      ? 'Start by tapping how today went.'
+      : 'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
 
   const handleSubmit = async () => {
     if (!isValid) {
@@ -173,9 +206,11 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         blocker_reason: planFit === 'couldnt_finish' && blockerReason ? blockerReason : undefined,
         completedTasks,
         mock,
+        day_outcome: outcome ?? undefined,
       });
 
       // Reset
+      setOutcome(null);
       setTaskChoice(new Map());
       setInitialDoneIds(new Set());
       setOffSections([]);
@@ -227,6 +262,48 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         </div>
 
         <div className="flex-1 px-6 py-5 space-y-7">
+
+          {/* 0 — How did today go? Asked first, answerable in one tap. */}
+          <div>
+            {label('How did today go?')}
+            <div className="grid grid-cols-2 gap-2">
+              {OUTCOMES.map((o) => {
+                const on = outcome === o.id;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => { setOutcome(o.id); setBlockedHint(null); }}
+                    className={cn(
+                      'rounded-xl px-3 py-3 text-left transition-all active:scale-95',
+                      on && o.tone === 'emerald' && 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25',
+                      on && o.tone === 'amber' && 'bg-amber-500 text-white shadow-lg shadow-amber-500/25',
+                      on && o.tone === 'zinc' && 'bg-zinc-500 text-white',
+                      !on && 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
+                    )}
+                  >
+                    <span className="block text-sm font-bold">{o.emoji} {o.label}</span>
+                    <span className={cn('mt-0.5 block text-[11px] leading-snug', on ? 'text-white/80' : 'text-zinc-500')}>
+                      {o.sub}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {outcomeIsTerminal && (
+              <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+                That&apos;s all we need — tap save. An honest empty day is worth more to your
+                plan than a blank one, and your streak survives it.
+              </p>
+            )}
+          </div>
+
+          {/* Everything below is only relevant if something actually happened.
+              A student who tapped "Didn't study" is done — asking them to
+              scroll through a plan they didn't touch is how you teach someone
+              to stop opening the log at all. */}
+          {!outcomeIsTerminal && (
+          <>
 
           {/* 1 — Today's plan (the source of truth) */}
           <div>
@@ -360,6 +437,9 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
               </div>
             )}
           </div>
+
+          </>
+          )}
 
           {error && (
             <div className="p-3 bg-rose-950 border border-rose-700 rounded-xl text-sm text-rose-300">{error}</div>
