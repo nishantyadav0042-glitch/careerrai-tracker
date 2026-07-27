@@ -57,7 +57,10 @@ export async function POST(request: NextRequest) {
     // Resolve sender/recipient and authorize the pair
     const { data: student } = await admin
       .from('profiles')
-      .select('id, full_name, buddy_id, current_streak, last_log_date')
+      // NOT current_streak/last_log_date — those columns exist on profiles but
+      // nothing has ever written them (0 of 249 students). The streak lives in
+      // streak_data, fetched below.
+      .select('id, full_name, buddy_id')
       .eq('id', studentId)
       .single();
     if (!student) {
@@ -155,13 +158,22 @@ export async function POST(request: NextRequest) {
         if (e) console.error('Voice note notification failed:', e.message);
       });
 
+    // Streak from its owning table. Reading it off profiles meant this nudge
+    // could never fire: profiles.current_streak is 0 for every student.
+    const { data: sd } = await admin
+      .from('streak_data')
+      .select('current_streak, last_log_date')
+      .eq('student_id', studentId)
+      .maybeSingle();
+    const streak = liveStreak(sd?.current_streak, sd?.last_log_date);
+
     return NextResponse.json({
       success: true,
       feedbackId: row.id,
       // little human nudge for the buddy UI
       streakNudge:
-        feedbackType === 'buddy_feedback' && liveStreak(student.current_streak, student.last_log_date) >= 7
-          ? `Nice — ${student.full_name.split(' ')[0]} is on a ${liveStreak(student.current_streak, student.last_log_date)}-day streak, this is a great moment.`
+        feedbackType === 'buddy_feedback' && streak >= 7
+          ? `Nice — ${student.full_name.split(' ')[0]} is on a ${streak}-day streak, this is a great moment.`
           : null,
     });
   } catch (error) {
