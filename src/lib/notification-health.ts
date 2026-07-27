@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { studyDayStart } from '@/lib/study-day';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -109,7 +110,8 @@ export interface SurvivalPoint { ageDays: number; cohort: number; alive: number;
 export interface ReliabilityMetrics {
   survival: SurvivalPoint[];               // 7/14/28-day subscription survival
   today: { pushed: number; received: number; clicked: number };  // the delivery pipeline today
-  sameDayDeaths7d: number;                 // subscriptions that died the same day they were born, last 7d
+  sameDayDeaths7d: number;                 // subscriptions that died the same IST day they were BORN (not the day the account signed up), last 7d
+  deathsWithoutBirth: number;              // integrity: push_died_at set with push_subscribed_at NULL — a death with no birth
 }
 
 // The reliability numbers the platform is judged on: does a subscription still
@@ -119,7 +121,12 @@ export interface ReliabilityMetrics {
 export async function getReliabilityMetrics(admin?: any): Promise<ReliabilityMetrics> {
   const db = admin ?? createAdminClient();
   const now = Date.now();
-  const dayStart = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
+  // The STUDY day (3am IST), not IST midnight. Every other surface in the
+  // product rolls over at 3am; this one rolled at midnight, so between 00:00
+  // and 03:00 IST it reported "0 sent today" while the product still
+  // considered it yesterday — a card that reads zero for three hours a night
+  // for no reason.
+  const dayStart = studyDayStart().toISOString();
 
   const [{ data: subs }, { data: pushedToday }, { data: deaths }] = await Promise.all([
     db.from('profiles')
@@ -127,7 +134,8 @@ export async function getReliabilityMetrics(admin?: any): Promise<ReliabilityMet
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
       .not('push_subscribed_at', 'is', null),
     db.from('notifications').select('pushed_at, received_at, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', dayStart),
-    db.from('profiles').select('created_at, push_died_at')
+    // push_subscribed_at, NOT created_at — see the comparison below.
+    db.from('profiles').select('created_at, push_subscribed_at, push_died_at')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true)
       .not('push_died_at', 'is', null).gte('push_died_at', new Date(now - 7 * 86_400_000).toISOString()),
   ]);
@@ -147,9 +155,27 @@ export async function getReliabilityMetrics(admin?: any): Promise<ReliabilityMet
     clicked: (pushedToday ?? []).filter((r: any) => r.clicked_at != null).length,
   };
 
+  // "Died the same day it was born" means the SUBSCRIPTION, not the account.
+  // This compared push_died_at to created_at — the day the student signed up —
+  // which is a different question entirely, and it reported 4 where the real
+  // answer is 1. That inflated number is what drives the red "the
+  // permission-timing fix may be regressing" banner on mission control, so a
+  // metric measuring the wrong thing was raising a false alarm about a fix
+  // that is not actually regressing.
+  //
+  // Also in IST, not UTC: a subscription born 03:00 IST and dying 06:00 IST is
+  // one study day but two UTC days, so the old comparison silently missed
+  // every same-day death in the 00:00–05:30 IST window.
+  //
+  // A death with no birth is not a same-day death: 4 profiles carry
+  // push_died_at with push_subscribed_at NULL, and those are excluded here and
+  // reported separately as an integrity violation.
+  const istDay = (t: string) =>
+    new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const sameDayDeaths7d = (deaths ?? []).filter(
-    (r: any) => new Date(r.push_died_at).toISOString().slice(0, 10) === new Date(r.created_at).toISOString().slice(0, 10)
+    (r: any) => r.push_subscribed_at != null && istDay(r.push_died_at) === istDay(r.push_subscribed_at)
   ).length;
+  const deathsWithoutBirth = (deaths ?? []).filter((r: any) => r.push_subscribed_at == null).length;
 
-  return { survival, today, sameDayDeaths7d };
+  return { survival, today, sameDayDeaths7d, deathsWithoutBirth };
 }
