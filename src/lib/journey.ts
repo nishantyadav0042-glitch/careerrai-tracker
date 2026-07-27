@@ -188,7 +188,8 @@ export type EventName =
   | 'community_share_opened' | 'community_share_blocked'
   | 'content_reported'
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
-  | 'channel_referred';
+  | 'channel_referred'
+  | 'checkin_shown' | 'checkin_answered' | 'checkin_completed';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {

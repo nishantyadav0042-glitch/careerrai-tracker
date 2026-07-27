@@ -15,6 +15,7 @@ import { HomeTipCard } from '@/components/home/home-tip-card';
 import { InsightBubble } from '@/components/home/insight-bubble';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
+import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
@@ -339,8 +340,17 @@ export default async function DailyTrackerPage() {
     ? await computeDailyInsight(admin, user.id, archetype, { topicMemory }).catch(() => null)
     : null;
 
+  // The daily check-in. YESTERDAY ONLY, never older — a student returning
+  // after two weeks answers one question, not fourteen. Skipped entirely for
+  // anyone who joined today or yesterday: they have no yesterday with us to
+  // report on, and a check-in about a day before they existed is nonsense.
+  const showCheckIn = !hasLoggedYesterday && daysSinceJoin >= 2 && tourReady;
+
   return (
     <div className="bg-stone-50 px-1 pb-4">
+      {showCheckIn && (
+        <CheckInGate yesterdayStr={yesterdayStr} yesterdayLabel={yesterdayLabel} />
+      )}
       <div className="mx-auto flex max-w-md flex-col gap-1.5">
         {/* New Mastery plans — gated per section to opted-in test accounts
             (profiles.<section>_model_enabled). Everyone else never sees these. */}
