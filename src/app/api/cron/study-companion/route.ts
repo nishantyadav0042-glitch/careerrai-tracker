@@ -233,7 +233,13 @@ export async function POST(request: NextRequest) {
       type: companionType(slot),
       title: copy.title,
       body: copy.body,
-      url: '/student/tracker',
+      // A nudge whose job is "fill your log" must OPEN the log, not the home
+      // screen. companion_log delivered 93 pushes and was tapped zero times
+      // while it landed on Home and asked the student to go find it.
+      // Everything whose expected action is a log now deep-links into the sheet.
+      url: copy.expectedAction === 'log_today' || slot === 'log' || slot === 'close'
+        ? '/student/tracker?log=1'
+        : '/student/tracker',
       reason,
       expectedAction: copy.expectedAction,
       prefs,

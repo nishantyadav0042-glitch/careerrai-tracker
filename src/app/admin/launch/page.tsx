@@ -24,7 +24,10 @@ interface Metrics {
     sharedTips24: number; sharedQuestions24: number;
     shelfQuestions: number; shelfTips: number; shelfMinQuestions: number; shelfMinTips: number;
   };
-  push: { sent24: number; opened24: number; openRate: number | null };
+  push: {
+    sent24: number; delivered24: number; opened24: number;
+    deliveryRate: number | null; openRate: number | null;
+  };
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -140,13 +143,18 @@ export default function LaunchDashboard() {
         {/* ── Push ── */}
         <section className="rounded-2xl border border-stone-200 bg-white p-4">
           <h2 className="text-sm font-bold text-stone-900">Notifications</h2>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {tile('Pushes sent', String(m.push.sent24))}
-            {tile('Opened', String(m.push.opened24))}
-            {tile('Open rate', n(m.push.openRate, '%'))}
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {tile('Sent', String(m.push.sent24))}
+            {tile('Reached the phone', n(m.push.deliveryRate, '%'), `${m.push.delivered24} of ${m.push.sent24}`,
+              m.push.deliveryRate != null && m.push.deliveryRate < 50)}
+            {tile('Tapped', String(m.push.opened24), 'of those delivered')}
+            {tile('Tap rate', n(m.push.openRate, '%'), 'of delivered',
+              m.push.openRate != null && m.push.openRate < 3)}
           </div>
           <p className="mt-2 text-[11px] text-stone-400">
-            Counts only sends that stamp pushed_at — several paths still do not, so treat as a floor, not a total.
+            Three separate stages. Sent is what we handed to Google; delivered is what the device
+            actually beaconed back; tapped is the only real engagement signal web push gives us.
+            Sends that never stamp pushed_at are missing from all three, so treat these as a floor.
           </p>
         </section>
 
