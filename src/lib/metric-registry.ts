@@ -50,11 +50,15 @@ export interface MetricDef {
 export const METRICS: MetricDef[] = [
   {
     id: 'dau',
-    means: 'Distinct real students who opened the app in the last 24h',
+    means: "Distinct real students who fired an app_open. NOT 'any event' — /admin/analytics used that and the two dashboards disagreed on 2 of 8 days.",
     source: 'student_events',
     requires: ['user_id', 'event', 'created_at'],
     owner: 'api/admin/launch-metrics',
-    surfaces: ['/admin/launch · Active today', '/admin/launch · Students who got in'],
+    surfaces: [
+      '/admin/launch · Active today',
+      '/admin/launch · Students who got in',
+      '/admin/analytics · opened vs logged',
+    ],
   },
   {
     id: 'push_sent',
@@ -66,9 +70,9 @@ export const METRICS: MetricDef[] = [
   },
   {
     id: 'push_delivered',
-    means: 'Pushes the device beaconed back as arrived. The honest denominator.',
+    means: 'Pushes that reached the device: received_at OR clicked_at. A tap proves delivery — 22 of 43 taps had no received_at, so received_at alone both under-counts delivery and makes the tap rate incoherent (numerator not a subset of denominator).',
     source: 'notifications',
-    requires: ['received_at'],
+    requires: ['received_at', 'clicked_at'],
     owner: 'api/admin/launch-metrics',
     surfaces: ['/admin/launch · Reached the phone'],
   },

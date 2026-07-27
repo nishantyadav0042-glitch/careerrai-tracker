@@ -69,12 +69,45 @@ describe('the push funnel is defined as three separate stages', () => {
     expect(ids).toContain('push_tapped');
   });
 
-  it('sources each stage from its own column', () => {
-    const cols = METRICS
-      .filter((m) => m.id.startsWith('push_'))
-      .flatMap((m) => m.requires);
-    expect(new Set(cols).size).toBe(cols.length); // no stage reuses another's column
-    expect(cols).not.toContain('read_at');        // the dead one, permanently
+  it('never depends on read_at, the permanently dead column', () => {
+    const cols = METRICS.filter((m) => m.id.startsWith('push_')).flatMap((m) => m.requires);
+    expect(cols).not.toContain('read_at');
+  });
+
+  it('keeps tapped a strict subset of delivered', () => {
+    // The failure an independent pass caught: delivered was defined as
+    // received_at alone while tapped was clicked_at, and 22 of 43 taps had no
+    // received_at. The tap rate divided a numerator by a denominator that
+    // excluded half of it. Delivered must therefore accept clicked_at too.
+    const delivered = METRICS.find((m) => m.id === 'push_delivered')!;
+    const tapped = METRICS.find((m) => m.id === 'push_tapped')!;
+    for (const col of tapped.requires) {
+      expect(
+        delivered.requires,
+        `push_delivered must count ${col} as delivery, or push_tapped is not a subset of it`,
+      ).toContain(col);
+    }
+  });
+});
+
+describe('the registry knows every surface, not just the one it was written for', () => {
+  // The reason this test exists: the first version of this registry declared
+  // dau with a single surface on /admin/launch while /admin/analytics computed
+  // the same concept from a DIFFERENT definition. Every registry test passed,
+  // because they only ever checked the registry against itself. A safeguard
+  // that cannot detect the thing it was built to detect is worse than none —
+  // it converts an unknown risk into a false sense of safety.
+  it('lists every surface that displays a metric, across all dashboards', () => {
+    const dau = METRICS.find((m) => m.id === 'dau')!;
+    expect(dau.surfaces.some((s) => s.includes('/admin/launch'))).toBe(true);
+    expect(dau.surfaces.some((s) => s.includes('/admin/analytics'))).toBe(true);
+  });
+
+  it('spells out the definition precisely enough to catch a rival one', () => {
+    // "Distinct students who opened the app" is ambiguous enough that two
+    // engineers implemented it two ways. The meaning must name the event.
+    const dau = METRICS.find((m) => m.id === 'dau')!;
+    expect(dau.means).toMatch(/app_open/);
   });
 });
 

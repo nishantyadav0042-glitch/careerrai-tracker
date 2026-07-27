@@ -111,7 +111,15 @@ export async function GET() {
   // never reach the device (Doze, battery optimisation, dead subscriptions),
   // and that loss is invisible if you only count sends.
   const pushed = (notifs24 ?? []).filter((n) => n.pushed_at != null).length;
-  const pushDelivered = (notifs24 ?? []).filter((n) => n.received_at != null).length;
+  // A TAP PROVES DELIVERY. 22 of 43 lifetime taps have clicked_at with no
+  // received_at: the notificationclick beacon fired but the push-arrival
+  // beacon did not (device offline when it landed, beacon dropped, or the
+  // notification predates the v6 service worker). Counting only received_at
+  // both under-reports delivery and produces an incoherent ratio — a tap rate
+  // whose numerator is not a subset of its denominator.
+  const delivered = (n: { received_at?: unknown; clicked_at?: unknown }) =>
+    n.received_at != null || n.clicked_at != null;
+  const pushDelivered = (notifs24 ?? []).filter(delivered).length;
   const pushOpened = (notifs24 ?? []).filter((n) => n.clicked_at != null).length;
 
   // ── Retention: students seen in the last 7 days who were also seen today ──
