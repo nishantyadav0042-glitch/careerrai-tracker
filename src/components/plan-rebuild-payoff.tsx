@@ -48,12 +48,25 @@ async function fetchTodayPlan(): Promise<TodayPlan | null> {
   }
 }
 
-// The stages narrate what the request is actually doing, in order. Each label
-// must stay true to the work: read the day, recompute the plan, name the reason.
+// The stages narrate what the request ACTUALLY does, in order.
+//
+// CORRECTED 29 Jul. These first read "Rebuilding your study plan…" and
+// "Ordering today by what needs you most…", which overclaimed. Verified against
+// api/routine/today: today's routine is generated ONCE and stored in
+// daily_routines, and is only regenerated when nothing is ticked yet AND the
+// student's pace target moved by >0.5h. A check-in about yesterday triggers
+// neither, so today's TASK LIST does not change from it.
+//
+// What the check-in genuinely does change, every request: the because-line,
+// whySummary, mission and roadmap (all recomputed fresh), plus the Capacity and
+// Adaptation inputs — which size the NEXT routine generated. So the honest claim
+// is "counted, and it sets your pace from here", not "today has been rebuilt".
+// If the same-day regeneration lands (see docs note in the founder thread),
+// these labels can go back to naming a rebuild.
 const STAGES: { until: number; label: string }[] = [
   { until: 30,  label: 'Reading what you did…' },
-  { until: 62,  label: 'Rebuilding your study plan…' },
-  { until: 88,  label: 'Ordering today by what needs you most…' },
+  { until: 62,  label: 'Counting it into your plan…' },
+  { until: 88,  label: 'Setting your pace from here…' },
   { until: 100, label: 'Ready.' },
 ];
 
@@ -128,7 +141,7 @@ export function PlanRebuildPayoff({ onDone, streak, source, forLabel, noticed }:
             ✓ Got your progress{forLabel ? ` · ${forLabel}` : ''}
           </p>
           <h2 className="mt-2 text-xl font-bold leading-snug text-stone-900">
-            Updating your study plan
+            Working it into your plan
           </h2>
 
           <div className="mt-5 flex items-baseline gap-2">
@@ -163,8 +176,13 @@ export function PlanRebuildPayoff({ onDone, streak, source, forLabel, noticed }:
         <h2 className="mt-1.5 text-xl font-bold leading-snug text-stone-900">
           This is today&apos;s study.
         </h2>
+        {/* "Built from your progress" would be a claim about how these blocks
+            were CHOSEN, which is not true while today's routine is frozen at
+            first generation. "Counted" is true: it feeds the pace and the next
+            plan. The because-line below is the only place a causal claim is
+            made, and plan-reason.ts proves that one before rendering it. */}
         <p className="mt-1 text-[13px] text-stone-500">
-          {forLabel ? `Built from your ${forLabel} progress.` : 'Built from the progress you just added.'}
+          {forLabel ? `Your ${forLabel} check-in is counted.` : 'Your progress is counted.'}
           {typeof streak === 'number' && streak > 1 ? ` 🔥 ${streak}-day run.` : ''}
         </p>
 
