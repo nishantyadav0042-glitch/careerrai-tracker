@@ -7,6 +7,7 @@ import {
   COMPANION_SLOTS, companionType, companionTip, weakestFromCoverage,
   morningCopy, factCopy, openCopy, progressCopy, logCopy, closeCopy,
   kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
+  missedCheckInKickoffCopy,
   planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
@@ -59,6 +60,13 @@ export async function POST(request: NextRequest) {
   if (!students?.length) return NextResponse.json({ slot, sent: 0 });
 
   const ids = students.map((s) => s.id);
+  // IST calendar dates, same derivation as `today`, so day comparisons never
+  // drift across the UTC boundary.
+  const istDateMinus = (n: number) =>
+    new Date(now.getTime() - n * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const yesterday = istDateMinus(1);
+  const yesterdayLabel = new Date(yesterday + 'T12:00:00+05:30')
+    .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
   const reportsWindowStart = new Date(now.getTime() - 21 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const needsCoverage = slot === 'morning' || slot === 'open' || slot === 'fact' || slot === 'close' || slot === 'kickoff' || slot === 'wind';
 
@@ -140,7 +148,30 @@ export async function POST(request: NextRequest) {
     let reason = '';
     let budget: number = BUDGET_ACTIVE;
 
-    if (stateKind === 'activation') {
+    // ── The morning check-in, state-triggered ────────────────────────────────
+    // Fires only because yesterday has NO entry — the clock just picks 08:00.
+    // Scoped deliberately to a FRESH slip: someone who logged within the last
+    // three days and missed exactly yesterday. A student quiet for a week is a
+    // different product (the reactivation ladder owns them), and asking them
+    // "how did yesterday go?" would be tone-deaf.
+    //
+    // daily_reports presence is the signal, NOT streak_data.last_log_date: a
+    // "didn't study" check-in writes a report but deliberately does not extend
+    // the streak (Incident #6), and this must count as answered.
+    const checkedInYesterday = days.has(yesterday);
+    const loggedInPriorDays = days.has(istDateMinus(2)) || days.has(istDateMinus(3));
+    const wantsMorningCheckIn =
+      slot === 'kickoff' &&
+      !checkedInYesterday &&
+      !loggedToday &&                  // already engaged today — no nudge needed
+      stateKind !== 'activation' &&    // never logged: no yesterday worth asking about
+      loggedInPriorDays;
+
+    if (wantsMorningCheckIn) {
+      budget = stateKind === 'reactivation' ? BUDGET_RECOVERY : BUDGET_ACTIVE;
+      copy = missedCheckInKickoffCopy(yesterdayLabel, weakest);
+      reason = `Companion 08:00 — ${yesterday} has no check-in · state-triggered`;
+    } else if (stateKind === 'activation') {
       budget = BUDGET_SETUP;
       copy = activationSlotCopy(slot, { firstName, daysToExam, rotate: daysSinceJoin, weakest, dreamCollege });
       reason = `Activation cadence · ${slot} · never logged · ${daysToExam}d to CAT`;

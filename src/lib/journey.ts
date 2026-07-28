@@ -189,7 +189,11 @@ export type EventName =
   | 'content_reported'
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
   | 'channel_referred'
-  | 'checkin_shown' | 'checkin_answered' | 'checkin_completed';
+  | 'checkin_shown' | 'checkin_answered' | 'checkin_completed'
+  // The payoff stage of the loop: the rebuilt timetable handed back after the
+  // check-in. payoff_shown vs completed measures how often a check-in actually
+  // produced a plan to show; payoff_start is the student accepting it.
+  | 'checkin_payoff_shown' | 'checkin_payoff_start';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {

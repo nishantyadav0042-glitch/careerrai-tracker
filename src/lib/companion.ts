@@ -185,6 +185,31 @@ export function kickoffCopy(streak: number, weakest: string, dreamCollege: strin
     : { title: 'A fresh day toward your goal', body: `Your plan's ready — a few minutes on ${weakest} while you're sharp moves you toward ${dreamCollege}.`, expectedAction: 'open_plan' };
 }
 
+// 08:00 — STATE-TRIGGERED, not clock-triggered. Yesterday has no check-in, so
+// today's plan is genuinely unfinished until the student answers one question.
+// Notification OS §2.6: "a cron is a clock, not a reason." The clock only picks
+// the moment; the missing check-in is the reason, and it is the only thing this
+// slot has to say that is both specific and true.
+//
+// Our own outcome data is why this exists: state-triggered notifications
+// outperform clock-triggered ones by 4-6x here (inactive_recovery 6.9% vs
+// companion_kickoff 1.2%), and the generic kickoff produced 2 logs from 621
+// sends. Same slot, same budget — a reason instead of a greeting.
+//
+// The claim must stay true: /api/routine/today really does recompute from this
+// answer, and plan-reason.ts names what changed. If that ever stops being true,
+// this copy has to change with it.
+//
+// No shame, ever. The student is not late and has not failed; one answer is
+// simply outstanding. Never "you missed", "don't break", "you forgot".
+export function missedCheckInKickoffCopy(yesterdayLabel: string, weakest: string): SlotCopy {
+  return {
+    title: "Today's plan is waiting on one answer",
+    body: `How did ${yesterdayLabel} go? Fifteen seconds, and today rebuilds around it — ${weakest} is queued either way.`,
+    expectedAction: 'log_today',
+  };
+}
+
 // 11:00 — the "study smart" strategy gift (section-agnostic craft).
 export function sparkCopy(dayOfYear: number): SlotCopy {
   // Alternate days: real exam craft vs a witty hook — variety beats blindness.
