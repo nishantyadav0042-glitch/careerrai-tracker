@@ -204,6 +204,53 @@ All in the browser: **appstoreconnect.apple.com → My Apps → CareerRai**.
 
 ---
 
+## Part 4a — If the app launches to a blank screen (the 29 Jul blocker)
+
+Symptom: app opens, white/blank screen, a crossed-out WiFi icon, and Xcode's
+Network monitor reads **0.0 KB / No Active Connections** — while Safari in the
+*same* Simulator loads `careerrai.in` fine.
+
+Zero bytes means the web view never made a request. Networking is not the
+problem; something inside the app is refusing to start the load. Two causes,
+both found by one search sweep. Press **⌘ + Shift + F** and search each term:
+
+1. **`limitsNavigationsToAppBoundDomains`** — if this is `true`, WebKit only
+   allows navigation to the domains listed in the Info.plist key
+   `WKAppBoundDomains`, and blocks everything else. Two traps:
+   - Those entries **must be lowercase**. `CareerRai.in` does not match
+     `careerrai.in` — with capitals the allow-list is effectively empty, which
+     is exactly the console error *"attempting to navigate away from an
+     app-bound domain"*.
+   - Deleting the `WKAppBoundDomains` key while this flag stays `true` makes it
+     **worse**, not better: an empty list blocks every navigation.
+
+   **Set the flag to `false`** (or delete the line). Do not try to fix the
+   domain list instead — checkout (Razorpay) and Google sign-in navigate off
+   `careerrai.in`, app-bound domains cap you at 10 domains, and any domain you
+   forget becomes a blank screen in production.
+
+2. **`NWPathMonitor` / `Reachability` / `offline`** — the wrapper template ships
+   its own connectivity check and an offline placeholder view. If that check
+   reports "no network", the app shows the offline screen and never asks the web
+   view to load anything — which is precisely 0 bytes transferred. If a gate
+   like this exists, bypass it and load unconditionally; the web view surfaces
+   real network errors on its own.
+
+Then, before re-running — **Info.plist and entitlement changes do not apply to
+an already-installed build**:
+
+3. Xcode: **Product → Clean Build Folder** (**⇧ ⌘ K**).
+4. Simulator: long-press the CareerRai icon → **Remove App**. (Stubborn cases:
+   Simulator menu → **Device → Erase All Content and Settings**.)
+5. **⌘ R** again.
+
+Keep `Settings.swift`'s start URL a plain, valid absolute URL while you test —
+a string with a stray space or a broken quote makes `URL(string:)` return nil,
+which also loads nothing and looks identical. Restore
+`?source=ios` (Part 2) only once you have the app loading.
+
+---
+
 ## If something goes wrong
 
 | Symptom | Fix |
@@ -214,3 +261,5 @@ All in the browser: **appstoreconnect.apple.com → My Apps → CareerRai**.
 | Connect asks encryption question | Answer "standard encryption / exempt", or add the Info.plist key from Part 3 |
 | iPad tabs still demand screenshots | The old 1.0 (1) build is still attached — remove it, attach 1.0 (2) |
 | Simulator shows the install banner | The start URL edit didn't save or lacks `?source=ios` — recheck Part 2 |
+| Blank screen / crossed-out WiFi, 0.0 KB transferred | See Part 4a — app-bound domains, or the template's own offline gate |
+| Info.plist edit seems to have no effect | Remove the app from the Simulator and ⇧⌘K — a reinstall is required |
