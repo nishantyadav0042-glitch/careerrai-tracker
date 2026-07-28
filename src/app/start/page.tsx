@@ -11,7 +11,6 @@ import ScreenRealityCheck from '@/app/student/onboarding/screens/screen-reality-
 import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
 import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
-import ScreenSocialProof from '@/app/student/onboarding/screens/screen-social-proof';
 import ScreenLoginBuild from './screens/screen-login-build';
 import type { CoverageSectionId } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
@@ -26,7 +25,7 @@ import { trackFunnel } from '@/lib/funnel';
 // pre-auth funnel still asks the two repeater QUESTIONS below (last year's
 // percentile, had-a-buddy) — that data alone is real sales value (feeds the
 // Expedify call brief), no extra screen required.
-const BASE_STEP_KEYS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'instant-insight', 'mentor', 'social-proof'];
+const BASE_STEP_KEYS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'instant-insight', 'mentor'];
 
 function stepKeysFor(): string[] {
   return BASE_STEP_KEYS;
@@ -166,9 +165,6 @@ export default function StartPage() {
       break;
     case 'mentor':
       content = <ScreenMentor onNext={advance} {...shared} />;
-      break;
-    case 'social-proof':
-      content = <ScreenSocialProof onNext={advance} {...shared} />;
       break;
     default:
       content = <ScreenLoginBuild isLoading={false} onboarding={data} />;

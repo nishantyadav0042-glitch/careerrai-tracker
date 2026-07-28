@@ -13,7 +13,6 @@ import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenRepeaterBuddyPitch from './screens/screen-repeater-buddy-pitch';
 import ScreenCoachingPlan from './screens/screen-coaching-plan';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
-import ScreenSocialProof from './screens/screen-social-proof';
 import ScreenPathChoice from './screens/screen-path-choice';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
@@ -217,8 +216,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         } satisfies Screen]
       : []),
     { key: 'meet-buddy', component: ScreenMeetBuddy, sectionId: null },
-    // Real, unprompted testimonial screenshot (Cal AI-style proof).
-    { key: 'social-proof', component: ScreenSocialProof, sectionId: null },
     // Loss-aversion beat (founder): the two futures, right before the plan
     // builds — fear landing at the emotional crescendo.
     { key: 'path-choice', component: ScreenPathChoice, sectionId: null },
@@ -271,7 +268,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 'finish-date': return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
       case 'repeater-buddy-pitch': return 'One more thing, before we go on.';
       case 'meet-buddy': return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
-      case 'social-proof': return 'A message we didn’t expect.';
       case 'path-choice': return 'Two ways this year can go.';
       case 'build-animation': return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       default: return null;

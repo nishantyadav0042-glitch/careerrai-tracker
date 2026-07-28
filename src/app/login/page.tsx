@@ -1,7 +1,7 @@
 'use client';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft, KeyRound } from 'lucide-react';
 import Image from 'next/image';
 import { InstallButton } from '@/components/install/install-button';
 import { cn } from '@/lib/utils';
@@ -32,9 +32,14 @@ function LoginForm() {
   function setInfo(m: string) { setMsg(m); setMsgIsError(false); }
   function clearMsg() { setMsg(null); setMsgIsError(false); }
 
-  function selectRole(role: UserType) {
+  // startMode lets the role picker send someone straight to password login.
+  // App Review (28 Jul 2026, guideline 2.1) rejected 1.0 with "we were unable
+  // to sign in as no password login was found": the reviewer cannot receive an
+  // Indian SMS OTP, and the password path was a 12px grey link two steps deep.
+  // Password login must stay reachable in one obvious tap from this page.
+  function selectRole(role: UserType, startMode: LoginMode = 'otp-phone') {
     setUserType(role);
-    setMode('otp-phone');
+    setMode(startMode);
     setPhone('');
     setPhoneOtp('');
     setCredential('');
@@ -182,6 +187,26 @@ function LoginForm() {
                   <ArrowRight className="w-4 h-4 text-white ml-auto transition-transform group-hover:translate-x-0.5" />
                 </button>
 
+                {/* Existing accounts: mobile OTP or password, both plainly
+                    visible. Do not demote these to fine print — see the
+                    selectRole note above (App Review guideline 2.1). */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => selectRole('student', 'otp-phone')}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white py-3 text-xs font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" /> Log in with OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectRole('student', 'password')}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white py-3 text-xs font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" /> Log in with password
+                  </button>
+                </div>
+
                 <div className="pt-1 text-center">
                   <InstallButton variant="text" />
                 </div>
@@ -223,6 +248,30 @@ function LoginForm() {
                     </span>
                   </div>
                 </div>
+
+                {/* Mode switch — a real, visible control on both login modes.
+                    Hidden during OTP verification so the code entry stays
+                    focused. See the selectRole note (App Review 2.1). */}
+                {mode !== 'otp-phone-verify' && (
+                  <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-stone-100 p-1">
+                    {([
+                      { m: 'otp-phone' as LoginMode, label: 'Mobile OTP' },
+                      { m: 'password' as LoginMode, label: 'Password' },
+                    ]).map(({ m, label }) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => { setMode(m); clearMsg(); }}
+                        className={cn(
+                          'rounded-lg py-2 text-xs font-bold transition-all',
+                          mode === m ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* OTP: enter phone */}
                 {mode === 'otp-phone' && (
@@ -266,15 +315,6 @@ function LoginForm() {
                       {loading ? 'Sending…' : <><span>Send OTP</span> <ArrowRight className="w-4 h-4" /></>}
                     </button>
 
-                    <div className="text-center pt-1">
-                      <button
-                        type="button"
-                        onClick={() => { setMode('password'); clearMsg(); }}
-                        className="text-xs text-stone-500 hover:text-stone-800 font-medium"
-                      >
-                        Log in with password instead
-                      </button>
-                    </div>
                   </form>
                 )}
 
@@ -354,26 +394,32 @@ function LoginForm() {
                           Log in with password
                         </p>
                         <p className="text-xs text-stone-500">
-                          Enter your mobile number and password.
+                          Use your mobile number, email or username.
                         </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-stone-800 mb-1.5">Mobile number</label>
-                        <div className="relative flex items-center">
-                          <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                          <input
-                            type="tel"
-                            inputMode="numeric"
-                            name="credential"
-                            value={credential}
-                            onChange={(e) => setCredential(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            placeholder="9876543210"
-                            required
-                            autoComplete="tel"
-                            maxLength={10}
-                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
-                          />
-                        </div>
+                        <label className="block text-sm font-medium text-stone-800 mb-1.5">
+                          Mobile number, email or username
+                        </label>
+                        {/* Free text on purpose. /api/auth/login resolves a
+                            phone, an email OR a username (see that route), but
+                            this field used to strip every non-digit and cap at
+                            10 — so an email or username was physically
+                            untypeable. That is why App Review could not sign in
+                            with the credentials they were given (guideline 2.1).
+                            Do not re-add digit stripping here. */}
+                        <input
+                          type="text"
+                          name="credential"
+                          value={credential}
+                          onChange={(e) => setCredential(e.target.value)}
+                          placeholder="9876543210 or you@example.com"
+                          required
+                          autoComplete="username"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-xl text-sm focus:outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-stone-800 mb-1.5">Password</label>
@@ -408,16 +454,6 @@ function LoginForm() {
                         Sign in <ArrowRight className="w-4 h-4" />
                       </button>
                     </form>
-
-                    <div className="text-center mt-4">
-                      <button
-                        type="button"
-                        onClick={() => { setMode('otp-phone'); clearMsg(); }}
-                        className="text-xs text-stone-500 hover:text-stone-800 font-medium"
-                      >
-                        ← Back to mobile OTP
-                      </button>
-                    </div>
                   </>
                 )}
               </div>

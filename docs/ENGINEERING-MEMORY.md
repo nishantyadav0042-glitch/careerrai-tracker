@@ -223,6 +223,70 @@
 
 ---
 
+## Incident #10 — App Store rejection: unreachable login, foreign status bar, fictional demo accounts
+
+- **Date:** 28 July 2026 · **Area:** Growth OS (install/distribution) ·
+  **Severity:** live, launch-blocking
+- **Impact:** iOS 1.0 (1) rejected on three guidelines at once (submission
+  `ddfd8f62-381c-43a3-879d-55ad808461b1`), blocking the App Store launch.
+- **What happened, in three separate failures:**
+  1. **Guideline 2.1** — "unable to sign in as no password login was found."
+     Our primary auth is a +91 SMS OTP a reviewer cannot receive; the password
+     escape hatch was a 12px grey link two steps behind a role picker. Worse,
+     the password form's credential input ran
+     `e.target.value.replace(/\D/g, '').slice(0, 10)` while
+     `/api/auth/login` happily accepts phone **or email or username** — so the
+     credentials a reviewer would be given were *physically untypeable*.
+  2. **Guideline 2.3.10** — "remove non-iOS status bar images."
+     `public/testimonials/vedprakash-wa.jpg` was a raw Android WhatsApp
+     screenshot: Android status bar, WhatsApp chrome and all. Alongside it,
+     `WhatsAppLiveChat` rendered a replica of WhatsApp's interface (header
+     green, chat wallpaper, bubble colours, ✓✓ receipts) inside our own app.
+  3. **Guideline 2.3.3** — the 13-inch iPad screenshots were promotional art,
+     not the app in use. Nobody had opened "View All Sizes in Media Manager"
+     to see what was attached to that slot.
+- **The compounding failure — documentation as fiction:** `DEMO_ACCESS.md`
+  described a one-tap demo button (`POST /api/auth/demo-login`), a `cr_demo`
+  read-only cookie enforced in `src/proxy.ts`, and seven shared demo accounts.
+  **None of it existed** — no route, no cookie reference anywhere in `src/`,
+  and not one of those accounts in the database. `scripts/seed-demo-data.sql`
+  was stale the same way, `UPDATE`-ing profiles by UUIDs long gone. Any
+  credential handed to Apple from that file would have failed on contact.
+- **Root cause:** two of the three rejections trace to shipping *other
+  platforms' pixels* as our own proof, and the third to an access path we
+  documented but never tested. A credential written in a markdown file is a
+  claim, not a fact; only a login attempt is a fact.
+- **Fix:** WhatsApp screenshot, WhatsApp-replica component and the whole
+  social-proof onboarding screen deleted; testimonials reduced to real student
+  words in our own styling. Password login promoted to a labelled button on the
+  role picker plus a visible `Mobile OTP | Password` toggle, and the credential
+  field now accepts phone/email/username. A real review account
+  (`appreview@careerrai.in`, `is_demo = TRUE`) created and seeded with 21 logged
+  days, 2 mock debriefs and a 21-day streak, so no screen looks empty. Password
+  verified cryptographically (correct matches, wrong rejected).
+- **Lessons:**
+  1. Never ship a screenshot of another app, or an imitation of its interface,
+     inside ours. Quote the student; don't photograph their messaging app.
+  2. An auth path that only works for +91 SMS is an auth path that excludes
+     every reviewer, auditor and partner outside India. Password login is not
+     a fallback to hide in fine print.
+  3. Client-side input sanitising must match what the server accepts. Stripping
+     to digits in front of an endpoint that resolves emails is a silent lockout.
+  4. Access documentation must be re-verified against the database before it is
+     used, and never trusted because it reads plausibly.
+- **Prevention (encoded):** `docs/APP-STORE-SUBMISSION.md` — the resubmission
+  runbook, including a deploy-before-submit gate (the wrapper serves
+  `careerrai.in`, so code fixes are invisible until production deploys) and a
+  two-part credential check: SQL verification **and** a real UI sign-in.
+  `DEMO_ACCESS.md` rewritten to describe only what exists, with the rotation
+  and verification SQL inline. Comments at each removal site
+  (`src/lib/testimonials.ts`, `src/components/testimonials.tsx`,
+  `src/app/login/page.tsx`) name the guideline so the next person doesn't
+  reintroduce it.
+- **Owner:** Nishant
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a
