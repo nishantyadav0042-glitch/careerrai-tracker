@@ -12,6 +12,7 @@ import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
+import { planReason } from '@/lib/plan-reason';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
@@ -82,7 +83,7 @@ export async function GET() {
     // the recent window.
     admin
       .from('daily_reports')
-      .select('study_duration, plan_fit, report_date, mock_taken')
+      .select('study_duration, plan_fit, report_date, mock_taken, day_outcome, blocker_reason')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
   ]);
@@ -356,8 +357,27 @@ export async function GET() {
     timesPracticed: t.topic ? history.timesPracticedByTopic[t.topic] ?? 0 : 0,
   }));
 
+  // The because-line: the single specific, TRUE reason today looks the way it
+  // does. Null when no specific claim is true — the card then falls back to
+  // its generic narration. Yesterday's check-in comes from the same reports
+  // window the capacity engine already fetched.
+  const yStr = new Date(Date.parse(today) - 86_400_000).toISOString().slice(0, 10);
+  const yReport = ((recentReports ?? []) as { report_date: string; day_outcome?: string | null; blocker_reason?: string | null }[])
+    .find((r) => r.report_date === yStr);
+  const because = planReason({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    todayTasks: (tasksWithStatus as any[]).map((t) => ({ topic: (t.topic as string | null) ?? null })),
+    yesterday: history.yesterday,
+    yesterdayUnfinishedTopics: history.yesterdayUnfinishedTopics,
+    postponedTopics: history.postponedTopics,
+    dayOutcome: (yReport?.day_outcome as 'studied' | 'partial' | 'not_studied' | 'skipped' | null) ?? null,
+    blockerReason: yReport?.blocker_reason ?? null,
+    adaptationVolumeFactor: adaptation.trust === 'learning' ? adaptation.volumeFactor : null,
+  });
+
   return NextResponse.json({
     routine: { ...routine, tasks: tasksWithStatus },
+    because,
     whySummary,
     mission,
     roadmap,
@@ -424,7 +444,7 @@ function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[]; yesterday: { total: number; done: number } | null; completedTasks: number; plannedTasks: number; planDays: number }> {
+async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[]; yesterday: { total: number; done: number } | null; yesterdayUnfinishedTopics: string[]; completedTasks: number; plannedTasks: number; planDays: number }> {
   const [{ data: pastRoutines }, { data: pastCompletions }] = await Promise.all([
     admin
       .from('daily_routines')
@@ -461,6 +481,17 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
         done: (completedByDate.get(lastPastDay.routine_date) ?? new Set()).size,
       }
     : null;
+  // Topic names on yesterday's plan whose task never got completed — the raw
+  // material of the because-line ("Geometry first — it didn't get finished
+  // yesterday"). Legacy rows without a topic field simply don't contribute,
+  // the same honest scoping as the recency signals below.
+  const yesterdayDoneIds = lastPastDay ? (completedByDate.get(lastPastDay.routine_date) ?? new Set()) : new Set();
+  const yesterdayUnfinishedTopics: string[] = lastPastDay && Array.isArray(lastPastDay.tasks)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? (lastPastDay.tasks as any[])
+        .filter((t) => t && typeof t.topic === 'string' && t.topic.length > 0 && !yesterdayDoneIds.has(t.id))
+        .map((t) => t.topic as string)
+    : [];
 
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
   // Per-topic recency, keyed by topic name — only populated going forward,
@@ -502,7 +533,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       }
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics, yesterday, completedTasks, plannedTasks, planDays };
+  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, timesPracticedByTopic, postponedTopics, yesterday, yesterdayUnfinishedTopics, completedTasks, plannedTasks, planDays };
 }
 
 // The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for
