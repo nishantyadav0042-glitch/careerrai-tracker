@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { Video, Star, ArrowRight } from 'lucide-react';
@@ -12,7 +13,7 @@ import { track } from '@/lib/journey';
 import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
-const FeedbackAnimation = dynamic(() => import('./FeedbackAnimation').then((m) => m.FeedbackAnimation), { ssr: false });
+const PlanRebuildPayoff = dynamic(() => import('@/components/plan-rebuild-payoff').then((m) => m.PlanRebuildPayoff), { ssr: false });
 
 function SessionStrip({ session }: { session: TodaySession }) {
   const startsAt = new Date(session.scheduled_at);
@@ -81,6 +82,7 @@ export function DailyTrackerApp({
   const [lastNudge, setLastNudge] = useState<string | null>(null);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Mock details are captured INLINE in the daily log now (single sheet), so the
   // separate "pending debrief" card + forced modal are gone (founder, 24 Jul) —
@@ -265,7 +267,20 @@ export function DailyTrackerApp({
       </Card>
 
       <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />
-      <FeedbackAnimation isVisible={showFeedback} onComplete={() => setShowFeedback(false)} streakIncrement={currentStreak} bonus={feedbackData?.bonus} noticed={lastNudge} />
+      {/* The payoff replaces the old "Logged! 🎉 Your streak is now 1 day"
+          modal, which celebrated the act of recording and said nothing about
+          the plan the recording produced. Now the student watches the plan
+          rebuild 0 → 100% and is handed today's study. FeedbackAnimation is
+          still used for its confetti-only role elsewhere; this surface no
+          longer needs it. */}
+      {showFeedback && (
+        <PlanRebuildPayoff
+          source="today_sheet"
+          streak={currentStreak}
+          noticed={lastNudge ?? feedbackData?.bonus ?? null}
+          onDone={() => { setShowFeedback(false); router.refresh(); }}
+        />
+      )}
     </div>
   );
 }

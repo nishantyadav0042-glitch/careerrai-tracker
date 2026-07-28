@@ -163,10 +163,28 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   const isValid = outcomeIsTerminal
     || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0;
 
+  // The hint must name what is ACTUALLY missing. It used to say "Start by
+  // tapping how today went" whenever the outcome was unanswered — but the
+  // outcome has never been required (isValid above doesn't test it), so the hint
+  // was inventing a mandatory first step and adding a tap to every save.
+  // Founder call, 29 Jul (option A): don't block on the summary; the per-task
+  // Not done / Half / Done chips already say how the day went, and when the
+  // student skips the question we derive it from those instead of losing it.
   const missingHint = (): string =>
-    outcome == null
-      ? 'Start by tapping how today went.'
-      : 'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
+    'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
+
+  // Derived outcome, used only when the student didn't tap one. Every branch is
+  // checkable against what they actually marked — we never guess 'studied'.
+  const deriveOutcome = (): DayOutcome | null => {
+    const marks = [...taskChoice.values()];
+    if (marks.length > 0 && marks.length >= planTasks.length && marks.every((m) => m === 'full')) {
+      return 'studied';                                  // every plan topic finished
+    }
+    if (marks.length > 0 || offSections.length > 0 || mockTaken === true) {
+      return 'partial';                                  // real work, not the whole plan
+    }
+    return null;                                         // nothing to infer from — stay silent
+  };
 
   const handleSubmit = async () => {
     if (!isValid) {
@@ -216,7 +234,10 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         blocker_reason: planFit === 'couldnt_finish' && blockerReason ? blockerReason : undefined,
         completedTasks,
         mock,
-        day_outcome: outcome ?? undefined,
+        // Their own answer wins; otherwise inferred from what they marked, so
+        // skipping the summary question never costs us the signal that
+        // plan-reason.ts and the adaptation engine read.
+        day_outcome: outcome ?? deriveOutcome() ?? undefined,
       });
 
       // Reset
@@ -275,7 +296,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
 
           {/* 0 — How did today go? Asked first, answerable in one tap. */}
           <div>
-            {label('How did today go?')}
+            {label('How did today go?  ·  optional')}
             <div className="grid grid-cols-2 gap-2">
               {OUTCOMES.map((o) => {
                 const on = outcome === o.id;
