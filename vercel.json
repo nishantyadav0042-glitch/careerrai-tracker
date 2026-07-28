@@ -93,8 +93,8 @@
       "schedule": "30 5 * * *"
     },
     {
-      "path": "/api/cron/study-companion?slot=wind",
-      "schedule": "0 13 * * *"
+      "schedule": "0 15 * * *",
+      "path": "/api/cron/study-companion?slot=progress"
     },
     {
       "path": "/api/cron/study-companion?slot=log",
