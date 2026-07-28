@@ -7,25 +7,42 @@ import { InstallButton } from '@/components/install/install-button';
 // Public landing at "/". Founder direction: the phone previews are SALES
 // ASSETS — colourful, dense, and convincing like Cal AI's, not flat
 // wireframes (the in-app product stays black & white; the landing is the one
-// place colour sells). Six rotating screens, one per concrete promise:
-//   syllabus → set your own finish date
-//   ontrack  → finish your syllabus on time
-//   plan     → daily plan ready + real reminders
-//   coverage → what's covered / left / revised
-//   mock     → analyse every mock with an IIM buddy
-//   chat     → chat 1:1 with your IIM buddy
-const SCREENS = ['syllabus', 'ontrack', 'plan', 'coverage', 'mock', 'chat'] as const;
+// place colour sells).
+//
+// REFRESHED 29 Jul (founder: "our live screens on the very first screen are
+// very old"). Every preview must depict a screen the app ACTUALLY has today —
+// a landing page selling a UI the product dropped weeks ago is worse than no
+// preview, because the first thing a new student notices after installing is
+// that they were shown something else.
+//
+// What changed and why:
+//   · plan REBUILT — was a generic checkbox list with strike-throughs and a
+//     "9:00 PM reminder" toast; now mirrors TodaysRoutineCard (Start Here /
+//     Next badges, per-task minutes) and the real CTA wording.
+//   · rebuild ADDED — the 0→100% plan rebuild plus the because-line. The
+//     product's actual differentiator, shipped this week, previously unsold.
+//   · dailypick ADDED — Today's Top Pick, live since 29 Jul.
+//   · plan leads the rotation: the daily experience is the most concrete
+//     thing a stranger can understand in three seconds.
+// Order is a marketing call, easy to change — the story is:
+//   what today looks like → it adapts to you → you own the date → you land it
+//   → mocks read by a human → that human is a tap away → students help too.
+const SCREENS = ['plan', 'rebuild', 'syllabus', 'ontrack', 'coverage', 'mock', 'chat', 'dailypick'] as const;
 type ScreenId = (typeof SCREENS)[number];
 
-const ROTATE_MS = 3200;
+// 8 screens at 3.2s is a 25s cycle — too long to ever be seen whole. 2.6s keeps
+// the full story inside ~21s while staying readable.
+const ROTATE_MS = 2600;
 
 const CAPTIONS: Record<ScreenId, { title: string; sub: string }> = {
+  plan: { title: 'Know exactly what to study today.', sub: 'Three blocks, in order, with the first one marked.' },
+  rebuild: { title: 'Your daily update rebuilds the plan.', sub: 'Tell us how the day went — today reshapes around it.' },
   syllabus: { title: 'Set your own finish date.', sub: 'You own the deadline — we build the plan around it.' },
   ontrack: { title: 'Finish your syllabus on time.', sub: 'Always know if today’s pace lands your date.' },
-  plan: { title: 'Your day, planned. With reminders.', sub: 'Wake up knowing exactly what to study — and get nudged.' },
   coverage: { title: 'Covered, left, revised — live.', sub: 'Never lose track of your syllabus again.' },
   mock: { title: 'Analyse every mock with your buddy.', sub: 'A real IIM topper reads your score — not a bot.' },
   chat: { title: 'Chat 1:1 with your IIM buddy.', sub: 'Real guidance the moment you’re stuck.' },
+  dailypick: { title: 'One tricky question a day.', sub: 'Picked by students, for students — vote on what stays.' },
 };
 
 function PhoneFrame({ children }: { children: React.ReactNode }) {
@@ -41,10 +58,9 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   return <p className="mb-2 text-[9.5px] font-bold uppercase tracking-[0.14em] text-stone-400">{children}</p>;
 }
 
-// Coloured rounded icon chip — the Cal-AI move that makes a card feel alive.
-function Chip({ bg, children }: { bg: string; children: React.ReactNode }) {
-  return <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] ${bg}`}>{children}</span>;
-}
+// (The Chip helper lived here. Its only caller was the old plan screen's
+// "9:00 PM reminder" toast, removed in the 29 Jul refresh — deleted rather than
+// left as dead code for a future reader to wonder about.)
 
 // 1 — Set your own finish date
 function ScreenSyllabus() {
@@ -117,44 +133,94 @@ function ScreenOnTrack() {
   );
 }
 
-// 3 — Daily plan + reminders
+// 3 — Today's Study Plan, as it ACTUALLY looks in the app now.
+//
+// Rebuilt 29 Jul: the old version showed a generic checkbox list with strike-
+// throughs and a "9:00 PM reminder" toast — a design the product has not used
+// for weeks. A landing page that previews screens the app no longer has is
+// worse than no preview: the first thing a new student notices after installing
+// is that they were shown something else. This mirrors TodaysRoutineCard: the
+// "Start Here" badge on the first task, "Next" on the rest, per-task minutes,
+// and the real home CTA wording ("Update topics studied today").
 function ScreenPlan() {
   const rows = [
-    { tag: 'DILR', chip: 'bg-blue-100 text-blue-700', topic: 'Seating sets', time: '45m', done: true },
-    { tag: 'VARC', chip: 'bg-violet-100 text-violet-700', topic: 'RC practice', time: '40m', done: true },
-    { tag: 'QA', chip: 'bg-amber-100 text-amber-700', topic: 'Time & Speed', time: '50m', done: false },
+    { tag: 'QA', chip: 'bg-amber-100 text-amber-700', topic: 'Ratio & Proportion', time: '40m', badge: 'Start Here' },
+    { tag: 'VARC', chip: 'bg-violet-100 text-violet-700', topic: 'Reading Comprehension', time: '30m', badge: 'Next' },
+    { tag: 'DILR', chip: 'bg-blue-100 text-blue-700', topic: 'Arrangements', time: '45m', badge: 'Next' },
   ];
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between">
-        <Eyebrow>Today’s plan</Eyebrow>
-        <span className="text-[9px] font-bold text-stone-400">Mon · 2h 15m</span>
+        <Eyebrow>Today’s study plan</Eyebrow>
+        <span className="text-[9px] font-bold text-emerald-600">0 of 3 done</span>
       </div>
       <div className="space-y-1.5">
         {rows.map((r) => (
-          <div key={r.topic} className={`flex items-center gap-2 rounded-xl border bg-white px-2 py-1.5 ${r.done ? 'border-stone-100' : 'border-stone-300 shadow-sm'}`}>
-            <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] ${r.done ? 'bg-emerald-500 text-white' : 'border-2 border-stone-300'}`}>{r.done ? '✓' : ''}</span>
-            <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${r.chip}`}>{r.tag}</span>
-            <p className={`flex-1 truncate text-[10px] font-semibold ${r.done ? 'text-stone-400 line-through' : 'text-stone-800'}`}>{r.topic}</p>
-            <span className="text-[8.5px] font-bold text-stone-400">{r.time}</span>
+          <div key={r.topic} className={`rounded-xl border bg-white px-2 py-1.5 ${r.badge === 'Start Here' ? 'border-stone-300 shadow-sm' : 'border-stone-100'}`}>
+            <div className="flex items-center gap-1.5">
+              <span className={`rounded px-1.5 py-0.5 text-[7.5px] font-extrabold uppercase tracking-wide ${r.badge === 'Start Here' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-500'}`}>
+                {r.badge}
+              </span>
+              <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${r.chip}`}>{r.tag}</span>
+              <span className="ml-auto text-[8.5px] font-bold text-stone-400">{r.time}</span>
+            </div>
+            <p className="mt-1 truncate text-[10px] font-bold text-stone-800">{r.topic}</p>
           </div>
         ))}
       </div>
-      {/* reminder toast */}
-      <div className="mt-2 flex items-center gap-2 rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-white px-2.5 py-2">
-        <Chip bg="bg-orange-500 text-white">🔔</Chip>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold text-stone-800">9:00 PM reminder</p>
-          <p className="text-[9px] text-stone-500 truncate">Revise Geometry before bed</p>
+      {/* The real home CTA, in the real words the app uses. */}
+      <div className="mt-2 rounded-xl bg-stone-900 px-3 py-2 text-center">
+        <p className="text-[10px] font-bold text-white">Update topics studied today →</p>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between">
+        <span className="text-[8.5px] font-semibold text-stone-400">about 2h</span>
+        <span className="text-[9px] font-bold text-orange-500">🔥 12-day streak</span>
+      </div>
+    </div>
+  );
+}
+
+// 4 — The loop: your update rebuilds today's plan.
+//
+// The product's actual differentiator and the newest thing in the app — the
+// 0→100% rebuild the student watches after their daily update, then the
+// because-line naming what changed. It was missing from the landing entirely.
+// The because-line here is the shape plan-reason.ts really produces; keep it
+// that way, and never write a preview claim the engine cannot make.
+function ScreenRebuild() {
+  return (
+    <div className="flex h-full flex-col">
+      <Eyebrow>✓ Got your progress</Eyebrow>
+      <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-3">
+        <p className="text-[11px] font-extrabold leading-tight text-stone-900">Updating your study plan</p>
+        <div className="mt-2 flex items-baseline gap-1">
+          <span className="text-2xl font-extrabold leading-none tabular-nums text-stone-900">100</span>
+          <span className="text-[11px] font-bold text-stone-400">%</span>
         </div>
+        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-stone-200">
+          <div className="h-full w-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500" />
+        </div>
+        <p className="mt-1.5 text-[9px] font-semibold text-stone-500">Setting your pace from here…</p>
       </div>
-      <div className="mt-2 flex items-center justify-between rounded-xl bg-stone-900 px-3 py-2">
-        <p className="text-[10px] font-semibold text-white">2 of 3 done</p>
-        <span className="text-[9px] font-bold text-emerald-300">🔥 12-day streak</span>
+      <div className="mt-2 rounded-xl border border-orange-100 bg-orange-50 px-2.5 py-2">
+        <p className="text-[9.5px] font-bold leading-snug text-stone-800">
+          Geometry first — it didn’t get finished yesterday.
+        </p>
       </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
-        <div className="h-full w-2/3 rounded-full bg-emerald-500" />
+      <div className="mt-2 space-y-1">
+        {[
+          { n: '1', t: 'Geometry', m: '40m' },
+          { n: '2', t: 'Reading Comp', m: '30m' },
+          { n: '3', t: 'Arrangements', m: '45m' },
+        ].map((r) => (
+          <div key={r.t} className="flex items-center gap-2 rounded-lg border border-stone-100 bg-white px-2 py-1.5">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-stone-900 text-[8px] font-bold text-white">{r.n}</span>
+            <p className="flex-1 truncate text-[10px] font-bold text-stone-800">{r.t}</p>
+            <span className="text-[8.5px] font-semibold text-stone-400">{r.m}</span>
+          </div>
+        ))}
       </div>
+      <p className="mt-auto pt-1.5 text-center text-[8.5px] text-stone-400">Every update reshapes tomorrow</p>
     </div>
   );
 }
@@ -268,13 +334,53 @@ function ScreenChat() {
   );
 }
 
+// 7 — Daily Pick: today's top question, chosen by students.
+//
+// Live in the app since 29 Jul and absent from the landing page. Shown WITHOUT
+// vote counts, exactly as the real surface does it — first votes herd later
+// ones, and a preview that promises counts would misrepresent the product.
+function ScreenDailyPick() {
+  return (
+    <div className="flex h-full flex-col">
+      <Eyebrow>Daily Pick</Eyebrow>
+      <div className="rounded-2xl border border-l-4 border-amber-200 border-l-amber-500 bg-gradient-to-br from-amber-50 to-white p-2.5">
+        <span className="inline-block rounded-full bg-amber-500 px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-white">
+          🏆 Today’s Top Pick
+        </span>
+        <p className="mt-1.5 text-[10px] font-bold leading-snug text-stone-900">
+          If 3 machines fill 600 bottles in 8 min, how many bottles do 5 fill in 12 min?
+        </p>
+        <ol className="mt-1 space-y-px text-[9px] leading-snug text-stone-600">
+          <li>A. 1200</li><li>B. 1500</li><li>C. 1800</li>
+        </ol>
+        <p className="mt-1.5 text-[8px] text-stone-400">— a CareerRai student · a new pick every day</p>
+      </div>
+      <div className="mt-2 rounded-xl border border-l-4 border-stone-200 border-l-amber-400 bg-white p-2.5">
+        <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-700">
+          💡 Student tip
+        </span>
+        <p className="mt-1.5 text-[9.5px] leading-snug text-stone-800">
+          In QA, plug the options in before solving algebraically.
+        </p>
+        <div className="mt-2 flex gap-1.5">
+          <span className="flex-1 rounded-lg bg-amber-600 py-1 text-center text-[9px] font-bold text-white">👍 Yes, helpful</span>
+          <span className="flex-1 rounded-lg bg-stone-100 py-1 text-center text-[9px] font-bold text-stone-500">👎 Not really</span>
+        </div>
+      </div>
+      <p className="mt-auto pt-1.5 text-center text-[8.5px] text-stone-400">Students decide what gets featured</p>
+    </div>
+  );
+}
+
 const RENDER: Record<ScreenId, () => React.ReactElement> = {
+  plan: ScreenPlan,
+  rebuild: ScreenRebuild,
   syllabus: ScreenSyllabus,
   ontrack: ScreenOnTrack,
-  plan: ScreenPlan,
   coverage: ScreenCoverage,
   mock: ScreenMock,
   chat: ScreenChat,
+  dailypick: ScreenDailyPick,
 };
 
 export default function WelcomePage() {
