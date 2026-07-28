@@ -259,18 +259,22 @@ left behind in any size tab.
 
 ## Native-shell flag — set this on the wrapper's start URL
 
-The install CTAs are now suppressed inside a store build, but only when the app
-identifies itself. Set the iOS wrapper's **start URL** to:
+The install CTAs and the payment escape-to-browser both key off the app
+identifying itself. Set the iOS wrapper's **start URL** (the URL your Xcode
+project's WKWebView loads) to:
 
 ```
-https://careerrai.in/student/tracker?source=ios-app
+https://careerrai.in/student/tracker?source=ios
 ```
 
-(mirroring `startUrl: "/student/tracker?source=twa"` in
-`android/twa-manifest.json`). The marker is persisted in `localStorage`, so it
-survives navigation away from the start URL. Without it the app still works —
-it will simply keep showing the "Install the app" banner, which is what you want
-to avoid inside an App Store build.
+`ios` is the canonical value (`ios-app` still works — it normalises). The
+middleware turns it into a long-lived `cr_store` cookie on the very first
+response, BEFORE the logged-out redirect to /login strips the query — so the
+flag survives the exact first-run flow a reviewer performs. Client persistence
+in localStorage backs it up. Without the flag the app still works — it will
+simply keep showing the "Install the app" banner inside the App Store build,
+and the payment sheet will open inline instead of escaping to Safari (an Apple
+3.1.1 hazard). Set it.
 
 If you cannot change the start URL for this submission, that is not a blocker
 for the three cited guidelines — but say so and we'll gate on iOS detection

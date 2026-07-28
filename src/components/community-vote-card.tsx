@@ -31,9 +31,15 @@ const TONE: Record<string, { chip: string; border: string; yes: string }> = {
   VARC: { chip: 'bg-rose-100 text-rose-700',     border: 'border-l-rose-400',    yes: 'bg-rose-600' },
 };
 
+// Today's Top Pick — the daily rotation's winner (max votes takes the slot for
+// exactly one day; with no votes the queue moves up anyway). Displayed, never
+// re-balloted: it already had its day of voting, so it renders without thumbs.
+type TopPickItem = Omit<VoteItem, 'prompt'>;
+
 export function CommunityVoteCard() {
   const [tip, setTip] = useState<VoteItem | null>(null);
   const [questions, setQuestions] = useState<VoteItem[]>([]);
+  const [topPick, setTopPick] = useState<{ question: TopPickItem | null; tip: TopPickItem | null } | null>(null);
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -54,6 +60,13 @@ export function CommunityVoteCard() {
       const json = await res.json();
       setTip(json.tip ?? null);
       setQuestions((json.questions as VoteItem[]) ?? []);
+      setTopPick(json.topPick ?? null);
+      if (json.topPick?.question || json.topPick?.tip) {
+        track('top_pick_shown', {
+          question: json.topPick?.question?.id ?? null,
+          tip: json.topPick?.tip?.id ?? null,
+        });
+      }
     } catch { /* render nothing */ }
     setLoaded(true);
   }, []);
@@ -76,7 +89,11 @@ export function CommunityVoteCard() {
     setBusy(null);
   }
 
-  if (!loaded || (!tip && questions.length === 0)) return null;
+  const hasTopPick = !!(topPick?.question || topPick?.tip);
+  // The top pick must render even when this student has judged everything —
+  // hiding the day's winner because YOUR ballot is empty would make the
+  // surface look broken to exactly the most engaged voters.
+  if (!loaded || (!hasTopPick && !tip && questions.length === 0)) return null;
 
   const all = [tip, ...questions].filter(Boolean) as VoteItem[];
   const done = all.filter((i) => votedIds.has(i.id)).length;
@@ -157,8 +174,45 @@ export function CommunityVoteCard() {
     );
   };
 
+  // The winner's showcase: gold, above the ballot, no thumbs. The attribution
+  // line is always true (every item is a student's); we never claim "voted to
+  // the top" because on quiet days the queue promotes without votes.
+  const topBlock = (item: TopPickItem | null, kindLabel: string) => {
+    if (!item) return null;
+    return (
+      <div key={`top-${item.id}`} className="rounded-xl border border-l-4 border-amber-200 border-l-amber-500 bg-gradient-to-br from-amber-50 to-white p-3">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block rounded-full bg-amber-500 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-white">
+            🏆 Today&apos;s Top Pick
+          </span>
+          <span className="text-[10px] font-bold text-amber-700">{kindLabel}{item.topic ? ` · ${item.topic}` : ''}</span>
+        </div>
+        {item.text && (
+          <p className="mt-1.5 whitespace-pre-line text-[13px] font-medium leading-snug text-stone-900">{item.text}</p>
+        )}
+        {item.options && item.options.length > 0 && (
+          <ol className="mt-1 space-y-px text-[11.5px] leading-snug text-stone-600">
+            {item.options.map((o, i) => (
+              <li key={i}>{String.fromCharCode(65 + i)}. {o}</li>
+            ))}
+          </ol>
+        )}
+        {item.imageUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element -- storage URL, dimensions unknown */
+          <img src={item.imageUrl} alt="Today's top pick" className="mt-1.5 max-h-60 w-full rounded-lg border border-amber-100 object-contain" />
+        )}
+        <div className="mt-1 flex items-center">
+          <p className="text-[10px] text-stone-400">— {item.displayName}, CareerRai student · a new pick every day</p>
+          <ReportItem submissionId={item.id} />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-2">
+      {topBlock(topPick?.question ?? null, '📷 Question of the day')}
+      {topBlock(topPick?.tip ?? null, '💡 Tip of the day')}
       {/* Progress up top — four small decisions, and it shows you're moving. */}
       {!allDone && (
         <p className="text-[10.5px] font-bold text-stone-400">

@@ -20,6 +20,7 @@ import type {
   InstallEnvironment,
   Platform,
 } from './types';
+import { normalizeStoreSource, storeCookieValue, launchedFromAndroidApp, hasStoreBuildFlag } from '@/lib/store-build';
 
 function hasWindow(): boolean {
   return typeof window !== 'undefined' && typeof navigator !== 'undefined';
@@ -52,22 +53,32 @@ export function getDisplayMode(): DisplayMode {
 // the kind of non-App-Store-distribution messaging App Review penalises
 // (guideline 2.3.10, and it invites a 4.2 look at the same time).
 //
-// The store build declares itself with ?source= on its start URL — the same
-// convention android/twa-manifest.json already uses (?source=twa) — and we
-// persist it, because the flag must survive in-app navigation away from the
-// start URL. Nothing changes for any visitor who does not carry the marker.
+// CORRECTED 29 Jul: the first version of this function was a second, parallel
+// implementation of "am I inside the store build?" — its own param list
+// ('ios-app'/'android-app', which proxy.ts's cookie never matched) and its own
+// storage key, and it never read the server-set cr_store cookie. Net effect:
+// on the wrapper's FIRST run the logged-out redirect stripped the ?source=
+// param before any client code mounted, no flag was ever set, and the login
+// screen — the exact screen App Review lands on — still showed the install
+// banner. lib/store-build.ts had already solved every part of this (canonical
+// values, a middleware cookie that survives the redirect, the android-app://
+// referrer). This now delegates to it; NATIVE_SHELL_KEY remains only as a
+// local cache and for devices that stored it before the fix.
+
 const NATIVE_SHELL_KEY = 'cr_native_shell';
-const NATIVE_SHELL_SOURCES = /^(ios-app|android-app|twa)$/;
 
 export function detectNativeShell(): boolean {
   if (!hasWindow()) return false;
   try {
-    const source = new URLSearchParams(window.location.search).get('source');
-    if (source && NATIVE_SHELL_SOURCES.test(source)) {
-      window.localStorage.setItem(NATIVE_SHELL_KEY, source);
-      return true;
-    }
-    return window.localStorage.getItem(NATIVE_SHELL_KEY) != null;
+    const fromUrl = normalizeStoreSource(new URLSearchParams(window.location.search).get('source'));
+    const isShell =
+      fromUrl != null ||
+      storeCookieValue() != null ||      // server-set: survives the login redirect
+      launchedFromAndroidApp() ||        // TWA launch referrer, needs no storage
+      hasStoreBuildFlag() ||             // store-build.ts's persisted flag
+      window.localStorage.getItem(NATIVE_SHELL_KEY) != null;
+    if (isShell) window.localStorage.setItem(NATIVE_SHELL_KEY, fromUrl ?? storeCookieValue() ?? 'shell');
+    return isShell;
   } catch {
     return false; // private mode / storage blocked — fail open, never crash
   }

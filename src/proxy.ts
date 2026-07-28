@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { normalizeStoreSource } from '@/lib/store-build';
 
 // Alternate hosts that must land on the canonical domain. The old
 // careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
@@ -84,8 +85,13 @@ export async function proxy(request: NextRequest) {
   //
   // Deliberately NOT httpOnly: the checkout components read it in the browser.
   // It marks which build you launched, not who you are — nothing to protect.
-  const source = searchParams.get('source');
-  if (source === 'twa' || source === 'ios') {
+  // normalizeStoreSource is the ONE accepted-values list (lib/store-build) —
+  // this used to be a literal twa|ios check here while the client grew its own
+  // different list, and the two never matched. Aliases ('ios-app',
+  // 'android-app') normalise to the canonical value so every cookie consumer's
+  // regex keeps working.
+  const source = normalizeStoreSource(searchParams.get('source'));
+  if (source) {
     response.cookies.set('cr_store', source, {
       path: '/',
       maxAge: 60 * 60 * 24 * 3650,

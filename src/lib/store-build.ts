@@ -17,10 +17,39 @@ const FLAG = 'cr_store_build';
 // scoped to one tab, so it can never leak back into the wrapper.
 const ESCAPED = 'cr_payment_tab';
 
+/**
+ * Canonicalise a `?source=` value to a store platform, or null.
+ *
+ * THIS IS THE ONLY LIST. The install-CTA suppressor (lib/install/detect.ts)
+ * briefly grew its own parallel list with different accepted values
+ * ('ios-app'/'android-app', never matching proxy.ts's 'ios'/'twa' cookie) —
+ * one concept, two implementations, already diverged. Both layers now call
+ * this. The aliases stay accepted so no start URL ever configured from any
+ * doc version becomes a silent no-op; they normalise to the canonical value
+ * the `cr_store` cookie and its regex consumers expect.
+ *
+ * Pure and exported for tests.
+ */
+export function normalizeStoreSource(v: string | null | undefined): 'twa' | 'ios' | null {
+  switch (v) {
+    case 'twa':
+    case 'android-app': return 'twa';
+    case 'ios':
+    case 'ios-app': return 'ios';
+    default: return null;
+  }
+}
+
 /** Server-set cookie (see proxy.ts) — survives the logged-out login redirect. */
+export function storeCookieValue(): 'twa' | 'ios' | null {
+  try {
+    const m = /(?:^|;\s*)cr_store=(twa|ios)(?:;|$)/.exec(document.cookie);
+    return (m?.[1] as 'twa' | 'ios' | undefined) ?? null;
+  } catch { return null; }
+}
+
 function hasStoreCookie(): boolean {
-  try { return /(?:^|;\s*)cr_store=(?:twa|ios)(?:;|$)/.test(document.cookie); }
-  catch { return false; }
+  return storeCookieValue() != null;
 }
 
 /**
@@ -28,7 +57,7 @@ function hasStoreCookie(): boolean {
  * navigation of a TWA. Definitive proof we're inside the Play wrapper, and it
  * needs no param, cookie or storage to survive.
  */
-function launchedFromAndroidApp(): boolean {
+export function launchedFromAndroidApp(): boolean {
   try { return document.referrer.startsWith('android-app://'); }
   catch { return false; }
 }
@@ -36,11 +65,16 @@ function launchedFromAndroidApp(): boolean {
 /** Call once on app load: if launched from a store wrapper, remember it. */
 export function markStoreBuildFromUrl(): void {
   try {
-    const src = new URLSearchParams(window.location.search).get('source');
-    if (src === 'twa' || src === 'ios' || hasStoreCookie() || launchedFromAndroidApp()) {
+    const src = normalizeStoreSource(new URLSearchParams(window.location.search).get('source'));
+    if (src || hasStoreCookie() || launchedFromAndroidApp()) {
       localStorage.setItem(FLAG, '1');
     }
   } catch { /* storage blocked — treat as non-store, safe default */ }
+}
+
+/** The persisted store-build flag, shared with the install-CTA suppressor. */
+export function hasStoreBuildFlag(): boolean {
+  try { return localStorage.getItem(FLAG) === '1'; } catch { return false; }
 }
 
 /** Mark THIS tab as the real-browser payment tab (called by /go). */
@@ -66,7 +100,19 @@ export function isStoreBuild(): boolean {
     // Definitive: this navigation came from the Android wrapper itself.
     if (launchedFromAndroidApp()) return true;
 
-    const flagged = localStorage.getItem(FLAG) === '1' || hasStoreCookie();
+    // iOS store build: the cookie says 'ios'. Decided WITHOUT the standalone
+    // check below, because a WKWebView never reports display-mode: standalone
+    // — that media query matches installed PWAs, not native web views. With
+    // the old standalone requirement this function was structurally false
+    // inside the iOS wrapper, which meant the payment escape-to-browser (the
+    // Apple 3.1.1 compliance path this file exists for) could never fire
+    // there, and Razorpay's card sheet would have opened INLINE in front of an
+    // App Review reviewer. The ESCAPED guard above still protects the
+    // payment tab; the standalone check remains for the Android/TWA path,
+    // where it is genuinely meaningful.
+    if (storeCookieValue() === 'ios') return true;
+
+    const flagged = hasStoreBuildFlag() || hasStoreCookie();
     if (!flagged) return false;
 
     const standalone = !!window.matchMedia?.('(display-mode: standalone)').matches

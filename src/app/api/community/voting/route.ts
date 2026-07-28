@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { dailyPickIndex, VOTE_PROMPT } from '@/lib/community-pipeline';
 import { recycleCommunityPool } from '@/lib/community-recycle';
+import { promoteDailyPick } from '@/lib/daily-pick-runner';
 import { getLogDateString } from '@/lib/streak-utils';
 
 export const maxDuration = 30;
@@ -57,10 +58,30 @@ export async function GET() {
     }
   }
 
-  const voted = new Set((myVotes ?? []).map((v) => v.submission_id as string));
-  const eligible = (pool ?? []).filter((p) => p.student_id !== user.id && !voted.has(p.id as string));
-
   const day = getLogDateString();
+
+  // ── Today's Top Pick (founder, 29 Jul: max votes tops the slot for one day;
+  // no votes → the queue moves up anyway) ────────────────────────────────────
+  // Promoted lazily here as well as from the 07:30 cron, for the same reason
+  // the recycle runs lazily above: a cron that silently stops must never leave
+  // the surface empty. promoteDailyPick is idempotent — once today's slot is
+  // stamped it returns without writing, so a late vote can never swap the
+  // winner mid-day.
+  try { await promoteDailyPick(admin); } catch (e) { console.error('[community/voting] promote failed', e); }
+  const { data: topRows } = await admin
+    .from('student_submissions')
+    .select('id, kind, topic, payload, image_path, display_name')
+    .eq('featured_on', day)
+    .in('status', ['voting', 'featured', 'archived']);
+  const topIds = new Set((topRows ?? []).map((r) => r.id as string));
+
+  const voted = new Set((myVotes ?? []).map((v) => v.submission_id as string));
+  // Top-pick items are excluded from the ballot: the same content appearing
+  // twice on one screen — once as "the pick", once asking for a vote — reads
+  // as a bug, and the pick already had its day of voting.
+  const eligible = (pool ?? []).filter(
+    (p) => p.student_id !== user.id && !voted.has(p.id as string) && !topIds.has(p.id as string)
+  );
   const pickBy = (kind: string, section?: string) => {
     const items = eligible.filter((p) => {
       if (p.kind !== kind) return false;
@@ -93,5 +114,28 @@ export async function GET() {
     .map((sec) => pickBy('question', sec))
     .filter((q) => q != null);
 
-  return NextResponse.json({ tip: pickBy('tip'), questions });
+  // Shape the top-pick rows with the same payload mapping the ballot uses.
+  // No vote counts in the payload, same as everywhere else on this surface.
+  const shapeTop = (item: { id: unknown; kind: unknown; topic: unknown; payload: unknown; image_path: unknown; display_name: unknown } | undefined) => {
+    if (!item) return null;
+    const payload = (item.payload ?? {}) as { text?: string; section?: string; options?: string[] };
+    return {
+      id: item.id as string,
+      kind: item.kind as string,
+      section: payload.section ?? null,
+      topic: (item.topic as string | null) ?? null,
+      text: payload.text ?? null,
+      options: Array.isArray(payload.options) ? payload.options : null,
+      imageUrl: item.image_path
+        ? admin.storage.from('community-questions').getPublicUrl(item.image_path as string).data.publicUrl
+        : null,
+      displayName: (item.display_name as string | null) ?? 'a CareerRai student',
+    };
+  };
+  const topPick = {
+    question: shapeTop((topRows ?? []).find((r) => r.kind === 'question')),
+    tip: shapeTop((topRows ?? []).find((r) => r.kind === 'tip')),
+  };
+
+  return NextResponse.json({ tip: pickBy('tip'), questions, topPick });
 }

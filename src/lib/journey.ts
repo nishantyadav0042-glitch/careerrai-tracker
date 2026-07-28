@@ -185,6 +185,9 @@ export type EventName =
   | 'challenge_opened' | 'challenge_answered' | 'challenge_shared'
   | 'coaching_progress_logged'
   | 'daily_pick_open' | 'community_voted' | 'community_submitted'
+  // Impressions of the daily rotation's winner — without this the next "are
+  // students really picking anything?" question is unanswerable again.
+  | 'top_pick_shown'
   | 'community_share_opened' | 'community_share_blocked'
   | 'content_reported'
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
