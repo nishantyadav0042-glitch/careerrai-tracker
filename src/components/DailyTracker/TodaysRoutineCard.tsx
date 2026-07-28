@@ -60,6 +60,9 @@ interface RoutineResponse {
   currentStreak: number;
   isCatchUp: boolean;
   yesterday?: { total: number; done: number } | null;
+  /** The specific, TRUE reason today looks the way it does. Null = no
+   *  specific claim is true, fall back to the generic narration. */
+  because?: { line: string; kind: string } | null;
 }
 
 // Time budget filters today's list — same tasks, never invented ones.
@@ -309,7 +312,17 @@ export function TodaysRoutineCard() {
 
       {/* The engine's daily auto-adjustment, said OUT LOUD — students should
           know the plan recalculates from what they actually did, every day. */}
-      {!fullyDone && (data.isCatchUp ? (
+      {/* The because-line: proof, not a claim. "Geometry first — it didn't
+          get finished yesterday" is what makes a student feel their check-in
+          changed their plan. Only ever rendered when the statement is TRUE
+          (plan-reason.ts enforces it); otherwise the generic line below. */}
+      {!fullyDone && data.because ? (
+        <p className="mb-1.5 rounded-lg border border-orange-100 bg-orange-50 px-2.5 py-1.5 text-[11px] font-medium text-orange-800">
+          <span className="mr-1 font-bold uppercase tracking-wide text-orange-500 text-[9px]">Built from your check-in</span>
+          <br />{data.because.line}
+        </p>
+      ) : null}
+      {!fullyDone && !data.because && (data.isCatchUp ? (
         <p className="mb-1.5 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1.5 text-[11px] font-medium text-teal-800">
           ⚡ Welcome back — your plan has already adjusted around the missed days. Only today matters.
         </p>

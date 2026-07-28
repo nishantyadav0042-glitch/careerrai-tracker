@@ -345,11 +345,15 @@ export default async function DailyTrackerPage() {
   // anyone who joined today or yesterday: they have no yesterday with us to
   // report on, and a check-in about a day before they existed is nonsense.
   const showCheckIn = !hasLoggedYesterday && daysSinceJoin >= 2 && tourReady;
+  // Framing experiment: stable per-student assignment from the id, so a
+  // student always sees the same framing. A = task, B = coach-dependency.
+  const checkInVariant: 'A' | 'B' =
+    Array.from(user.id).reduce((a, c) => a + c.charCodeAt(0), 0) % 2 === 0 ? 'A' : 'B';
 
   return (
     <div className="bg-stone-50 px-1 pb-4">
       {showCheckIn && (
-        <CheckInGate yesterdayStr={yesterdayStr} yesterdayLabel={yesterdayLabel} />
+        <CheckInGate yesterdayStr={yesterdayStr} yesterdayLabel={yesterdayLabel} variant={checkInVariant} />
       )}
       <div className="mx-auto flex max-w-md flex-col gap-1.5">
         {/* New Mastery plans — gated per section to opted-in test accounts

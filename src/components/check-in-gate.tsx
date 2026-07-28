@@ -33,15 +33,27 @@ import {
 interface Props {
   yesterdayStr: string;    // ISO date — what we write
   yesterdayLabel: string;  // e.g. "26 Jul" — what the student reads
+  /**
+   * Framing experiment (co-founder spec, 29 Jul). Assigned server-side from a
+   * stable hash of the student id, so each student always sees one framing:
+   *   A — task framing:  "Quick check-in — how did yesterday go?"
+   *   B — coach framing: "Your coach needs yesterday before it can finish
+   *                       today's plan."
+   * Same four buttons, same follow-up, same writes. Only the story differs.
+   * Measured via the variant prop on checkin_shown/answered/completed —
+   * completion rate, next-day return. HYPOTHESIS (untested): B outperforms A.
+   */
+  variant?: 'A' | 'B';
 }
 
-export function CheckInGate({ yesterdayStr, yesterdayLabel }: Props) {
+export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Props) {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
   const [done, setDone] = useState(false);
   const [outcome, setOutcome] = useState<DayOutcome | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState<DayOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const askWhy = outcome != null && outcomeAsksWhy(outcome);
@@ -54,7 +66,7 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel }: Props) {
     const timer = setTimeout(() => {
       if (!tourDone() || notifAskVisible() || insightVisible()) return;
       setVisible(true);
-      track('checkin_shown', { forDate: yesterdayStr });
+      track('checkin_shown', { forDate: yesterdayStr, variant });
     }, 900);
     return () => clearTimeout(timer);
   }, [done, yesterdayStr]);
@@ -85,8 +97,14 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel }: Props) {
         }),
       });
       if (!res.ok) throw new Error('save failed');
-      track('checkin_completed', { outcome: finalOutcome, reason: finalReason, forDate: yesterdayStr });
-      finish();
+      track('checkin_completed', { outcome: finalOutcome, reason: finalReason, forDate: yesterdayStr, variant });
+      // The coach-thinking moment. The plan REALLY is rebuilt from this
+      // answer on the refresh below — /api/routine/today recomputes and the
+      // because-line names what changed. These two seconds exist so the
+      // student watches the connection happen instead of getting a silent
+      // refresh. Communicated work is the reward stage of the loop.
+      setAnalyzing(finalOutcome);
+      setTimeout(finish, 2200);
     } catch {
       setError("Couldn't save that. Check your connection and try again.");
       setSaving(false);
@@ -95,12 +113,30 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel }: Props) {
 
   function choose(o: DayOutcome) {
     setOutcome(o);
-    track('checkin_answered', { outcome: o, forDate: yesterdayStr });
+    track('checkin_answered', { outcome: o, forDate: yesterdayStr, variant });
     // Answers that need no follow-up finish immediately — one tap, done.
     if (!outcomeAsksWhy(o)) void submit(o, null);
   }
 
   if (!visible || done) return null;
+
+  if (analyzing) {
+    const lines: Record<DayOutcome, string> = {
+      studied: 'Locking yesterday in…',
+      partial: "Noting where you stopped — today starts there…",
+      not_studied: 'No problem. Rebuilding today so nothing is lost…',
+      skipped: 'Rest logged. Picking up exactly where you left off…',
+    };
+    return (
+      <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-900/70 p-4 backdrop-blur-sm sm:items-center">
+        <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-[3px] border-stone-200 border-t-orange-500" />
+          <p className="mt-5 text-sm font-bold text-stone-900">{lines[analyzing]}</p>
+          <p className="mt-1.5 text-[12px] text-stone-500">Rebuilding today&apos;s plan from your check-in.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-900/70 p-4 backdrop-blur-sm sm:items-center">
@@ -109,13 +145,17 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel }: Props) {
         {!askWhy ? (
           <>
             <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
-              Quick check-in
+              {variant === 'B' ? "Your coach is waiting on one thing" : 'Quick check-in'}
             </p>
             <h2 className="mt-1.5 text-xl font-bold leading-snug text-stone-900">
-              Before we start today — how did {yesterdayLabel} go?
+              {variant === 'B'
+                ? <>Today&apos;s plan can&apos;t be finished until we know how {yesterdayLabel} went.</>
+                : <>Before we start today — how did {yesterdayLabel} go?</>}
             </h2>
             <p className="mt-1.5 text-[13px] text-stone-500">
-              Takes a few seconds. There&apos;s no wrong answer.
+              {variant === 'B'
+                ? 'About 15 seconds. Every answer makes tomorrow smarter.'
+                : "Takes a few seconds. There's no wrong answer."}
             </p>
 
             <div className="mt-5 space-y-2">
