@@ -13,6 +13,7 @@ import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-pl
 import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
+import { planStaleReason } from '@/lib/plan-freshness';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
@@ -62,7 +63,9 @@ export async function GET() {
       .eq('student_id', user.id),
     admin
       .from('daily_routines')
-      .select('phase, tasks, est_minutes, calibration, generated_pace_hours')
+      // created_at is needed to answer "was today's plan built BEFORE the
+      // student told us about yesterday?" — see the regeneration rule below.
+      .select('phase, tasks, est_minutes, calibration, generated_pace_hours, created_at')
       .eq('student_id', user.id)
       .eq('routine_date', today)
       .maybeSingle(),
@@ -83,7 +86,7 @@ export async function GET() {
     // the recent window.
     admin
       .from('daily_reports')
-      .select('study_duration, plan_fit, report_date, mock_taken, day_outcome, blocker_reason')
+      .select('study_duration, plan_fit, report_date, mock_taken, day_outcome, blocker_reason, updated_at')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
   ]);
@@ -198,19 +201,46 @@ export async function GET() {
   // day pace and silently reverted the student's topic swaps). Legacy rows
   // generated before this column existed have generated_pace_hours=null —
   // treated as "not stale" rather than force-regenerating them.
+  // Staleness is decided by lib/plan-freshness (pure + tested), not inline
+  // here, so the rule has one implementation and its edge cases — legacy rows,
+  // unparseable timestamps, the rebuild-loop guard — are covered by tests
+  // rather than by reading this route carefully.
+  const yStrForFreshness = new Date(Date.parse(today) - 86_400_000).toISOString().slice(0, 10);
+  const yesterdayReport = ((recentReports ?? []) as { report_date: string; updated_at?: string | null }[])
+    .find((r) => r.report_date === yStrForFreshness);
+
   let routine = existing;
-  if (routine && (completions ?? []).length === 0 && paceHours != null && routine.generated_pace_hours != null) {
-    if (Math.abs((routine.generated_pace_hours as number) - paceHours) > 0.5) routine = null;
-  }
+  const staleReason = existing
+    ? planStaleReason({
+        completionCount: (completions ?? []).length,
+        routineCreatedAt: (existing.created_at as string | null) ?? null,
+        generatedPaceHours: (existing.generated_pace_hours as number | null) ?? null,
+        currentPaceHours: paceHours,
+        yesterdayReportUpdatedAt: yesterdayReport?.updated_at ?? null,
+      })
+    : null;
+  // 'checked_in_after_build' is the founder-approved same-day rebuild: the
+  // student told us about yesterday AFTER today's plan was already generated,
+  // so the plan could not have used it. Both reasons are gated inside
+  // planStaleReason on nothing being ticked yet — completed work is never wiped.
+  if (staleReason) routine = null;
+
   if (!routine) {
     const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
-        { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_pace_hours: paceHours },
+        // created_at is written EXPLICITLY, not left to the column default.
+        // On the upsert's conflict path this is an UPDATE, which would keep the
+        // original created_at — and then the "was the plan built before the
+        // check-in?" test below would stay true forever and regenerate the plan
+        // on every single request. Stamping it here is what makes that rule
+        // self-terminating: one rebuild per check-in, then the plan is newer
+        // than the report and the condition goes quiet.
+        { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_pace_hours: paceHours, created_at: new Date().toISOString() },
         { onConflict: 'student_id,routine_date' }
       )
-      .select('phase, tasks, est_minutes, calibration, generated_pace_hours')
+      .select('phase, tasks, est_minutes, calibration, generated_pace_hours, created_at')
       .single();
     if (error || !inserted) return NextResponse.json({ error: 'Could not generate routine' }, { status: 500 });
     routine = inserted;

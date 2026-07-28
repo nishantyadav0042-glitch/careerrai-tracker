@@ -286,7 +286,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-end sm:items-center sm:justify-center">
       <div className={cn('w-full max-w-md bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-800', 'max-h-[92vh] overflow-y-auto flex flex-col')}>
         <div className="sticky top-0 bg-zinc-950 border-b border-zinc-800 px-6 py-5 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Today&apos;s Study</h2>
+          <h2 className="text-xl font-bold text-white">Topics Studied Today</h2>
           <button onClick={handleClose} disabled={isSubmitting} className="text-zinc-500 hover:text-zinc-300 transition disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
@@ -491,7 +491,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
             className={cn('w-full py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2',
               isValid && !isSubmitting ? 'bg-orange-500 text-white hover:bg-orange-400 active:scale-[0.98] shadow-lg shadow-orange-500/20' : 'bg-zinc-800 text-zinc-400')}>
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Saving…' : mockTaken ? "Update today's study + mock" : "Update today's study"}
+            {isSubmitting ? 'Saving…' : mockTaken ? "Update topics + mock" : "Update topics studied today"}
           </button>
         </div>
       </div>

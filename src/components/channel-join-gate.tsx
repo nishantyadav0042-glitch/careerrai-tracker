@@ -105,7 +105,7 @@ export function ChannelJoinGate() {
 
         <ul className="mt-4 space-y-1.5 text-[13px] text-stone-600">
           <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />Today&apos;s student tip</li>
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />A reminder to update today’s study</li>
+          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />A reminder to update topics studied today</li>
           <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />No forwards, no spam, no group chat</li>
         </ul>
 

@@ -219,7 +219,7 @@ export function DailyTrackerApp({
       )}
 
       {/* Today's Focus — star + TODAY'S FOCUS label + one-line focus on the
-          left, the black "Update today's study" action on the right. Always
+          left, the black "Update topics studied today" action on the right. Always
           side-by-side (compact) to keep Home to one screen.
           STUDENT VOCABULARY: never the word "log" in visible copy — a CAT
           aspirant thinks "aaj kitna padha", not "I'll log my study". Code
@@ -228,42 +228,50 @@ export function DailyTrackerApp({
       <Card className="p-2.5">
         {todaySession && <div className="mb-2"><SessionStrip session={todaySession} /></div>}
 
-        <div className="flex flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
-              <p className="text-[13px] font-extrabold leading-tight text-stone-900">
-                {hasLoggedToday ? "Today's study updated ✓" : 'Be consistent, not perfect.'}
-              </p>
-            </div>
+        {/* The action is a FULL-WIDTH row under the focus line, not beside it.
+            It used to sit side-by-side to keep Home to one screen, and that
+            worked while the label was short. "Update topics studied today"
+            measures 233px at 12px bold, which at 360px crushed "Be consistent,
+            not perfect." into four lines and overlapped it — verified in a
+            render, not assumed. A ~40px taller card is a cheap price for the
+            founder's exact wording plus a full-width tap target. If Home ever
+            has to shrink again, shorten the LABEL rather than re-cramming this
+            button next to the text. */}
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
           </div>
-
-          {hasLoggedToday ? (
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
+            <p className="text-[13px] font-extrabold leading-tight text-stone-900">
+              {hasLoggedToday ? 'Topics updated ✓' : 'Be consistent, not perfect.'}
+            </p>
+          </div>
+          {hasLoggedToday && (
             <p className="shrink-0 text-right text-[10px] text-stone-400">Tomorrow&apos;s plan<br />builds on it.</p>
-          ) : (
-            <div className="flex shrink-0 flex-col items-end gap-0.5">
-              <button
-                data-tour="log"
-                onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-[12px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
-              >
-                {isSubmitting ? 'Saving…' : <>Update today&apos;s study <ArrowRight className="h-3.5 w-3.5" /></>}
-              </button>
-              {!hasLoggedYesterday && yesterdayStr && (
-                <button
-                  onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-                  className="text-right text-[10px] text-stone-400 hover:text-stone-600"
-                >
-                  Add {yesterdayLabel} too
-                </button>
-              )}
-            </div>
           )}
         </div>
+
+        {!hasLoggedToday && (
+          <div className="mt-2.5">
+            <button
+              data-tour="log"
+              onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
+              disabled={isSubmitting}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3 py-3 text-[13px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
+            >
+              {isSubmitting ? 'Saving…' : <>Update topics studied today <ArrowRight className="h-4 w-4" /></>}
+            </button>
+            {!hasLoggedYesterday && yesterdayStr && (
+              <button
+                onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
+                className="mt-1 block w-full text-center text-[10px] text-stone-400 hover:text-stone-600"
+              >
+                Add {yesterdayLabel} too
+              </button>
+            )}
+          </div>
+        )}
       </Card>
 
       <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />

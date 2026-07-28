@@ -164,7 +164,7 @@ export function planOpenCopy(nextTopic: string, target: string | null, hoursToda
 export function planProgressCopy(doneCount: number, totalCount: number, nextTopic: string): SlotCopy {
   return {
     title: `${doneCount} of ${totalCount} done ✓`,
-    body: `${nextTopic} is next — finish the set and update today's study →`,
+    body: `${nextTopic} is next — finish the set and update topics studied →`,
     expectedAction: 'log_today',
   };
 }
@@ -173,7 +173,7 @@ export function planProgressCopy(doneCount: number, totalCount: number, nextTopi
 // already done, it's a pure log nudge; otherwise it names the remaining topic.
 export function planLogCopy(nextTopic: string | null, dreamCollege: string): SlotCopy {
   return nextTopic
-    ? { title: `One block left: ${nextTopic}`, body: `Finish it, update today's study, done. ${dreamCollege} gets a little closer.`, expectedAction: 'log_today' }
+    ? { title: `One block left: ${nextTopic}`, body: `Finish it, update topics studied, done. ${dreamCollege} gets a little closer.`, expectedAction: 'log_today' }
     : { title: 'Plan done — just update it', body: `You cleared today's plan. 5 seconds to update it and lock the streak.`, expectedAction: 'log_today' };
 }
 
@@ -303,9 +303,9 @@ export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): S
     case 'wind':
       return { title: `${c.daysToExam} days to CAT`, body: `The clock doesn't pause for a break. One block tonight and you're moving toward ${c.dreamCollege} again.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: 'The gap is still closeable', body: `You've done it before. Update today's study and your path to ${c.dreamCollege} restarts.`, expectedAction: 'log_today' };
+      return { title: 'The gap is still closeable', body: `You've done it before. Update topics studied today and your path to ${c.dreamCollege} restarts.`, expectedAction: 'log_today' };
     case 'log':
-      return { title: "Update today's study", body: `90 seconds to break the silence. Tomorrow-you will be glad you did.`, expectedAction: 'log_today' };
+      return { title: "Update topics studied today", body: `90 seconds to break the silence. Tomorrow-you will be glad you did.`, expectedAction: 'log_today' };
     case 'close':
       return null;
   }
