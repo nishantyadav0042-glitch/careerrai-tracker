@@ -151,7 +151,7 @@ export async function computeDailyInsight(
     return {
       kind: 'consistency',
       title: '🔥 Your consistency is showing',
-      text: oneLine(`${last5} of the last 5 days logged. Tomorrow just needs to match today.`),
+      text: oneLine(`${last5} of the last 5 days studied. Tomorrow just needs to match today.`),
     };
   }
 

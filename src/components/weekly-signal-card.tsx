@@ -85,7 +85,7 @@ export function WeeklySignalCard({ studentId, studentName, onVoiceNote, onFeedba
       {stats && (
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-white rounded-xl p-3 border border-stone-100">
-            <div className="text-xs text-stone-500 mb-1">Days logged</div>
+            <div className="text-xs text-stone-500 mb-1">Days studied</div>
             <div className="text-2xl font-bold text-stone-900">
               {stats.daysLogged}<span className="text-sm font-normal text-stone-400">/7</span>
             </div>

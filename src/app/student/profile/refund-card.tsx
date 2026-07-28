@@ -93,7 +93,7 @@ export function RefundCard({ daysLogged, required, eligible, existingRequest }: 
       {/* Progress bar */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-stone-500">{daysLogged} of {required} days logged</span>
+          <span className="text-xs text-stone-500">{daysLogged} of {required} days studied</span>
           {eligible
             ? <Badge color="green">Eligible</Badge>
             : <Badge color="stone">{required - daysLogged} more to go</Badge>
@@ -118,7 +118,7 @@ export function RefundCard({ daysLogged, required, eligible, existingRequest }: 
           {loading ? 'Submitting…' : 'Request refund'}
         </button>
       ) : (
-        <p className="text-xs text-stone-400 text-center">Keep logging daily to unlock the refund guarantee.</p>
+        <p className="text-xs text-stone-400 text-center">Keep updating daily to unlock the refund guarantee.</p>
       )}
     </Card>
   );

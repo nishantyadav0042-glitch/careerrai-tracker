@@ -152,7 +152,7 @@ export function HistorySection() {
         })}
         {reports.length === 0 && (
           <Card className="p-8 text-center">
-            <p className="text-sm text-stone-600">No logs yet — log today to start your streak.</p>
+            <p className="text-sm text-stone-600">Nothing yet — update today’s study to start your streak.</p>
           </Card>
         )}
       </div>

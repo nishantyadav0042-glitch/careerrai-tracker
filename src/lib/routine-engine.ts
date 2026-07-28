@@ -354,7 +354,7 @@ export function generateRoutine(
         section: 'General',
         topic: null,
         label: 'Mock analysis',
-        target: 'Re-open your last mock, log 3 mistakes',
+        target: 'Re-open your last mock, note 3 mistakes',
         estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
         reason: 'Mistakes > new topics',
       });

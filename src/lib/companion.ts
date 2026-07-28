@@ -115,14 +115,14 @@ export function progressCopy(daysStudied: number, windowDays: number): SlotCopy 
 export function logCopy(dreamCollege: string): SlotCopy {
   return {
     title: '5 seconds, one step closer',
-    body: `A quick log tonight keeps you moving toward ${dreamCollege}. Close the day right.`,
+    body: `A quick update tonight keeps you moving toward ${dreamCollege}. Close the day right.`,
     expectedAction: 'log_today',
   };
 }
 
 export function closeCopy(streak: number, weakest: string): SlotCopy {
   return {
-    title: streak > 1 ? `Logged. ${streak}-day run.` : 'Logged. Day closed.',
+    title: streak > 1 ? `Done. ${streak}-day run.` : 'Done. Day closed.',
     body: `Tomorrow: ${weakest} first. Good night.`,
     expectedAction: 'open_plan',
   };
@@ -164,7 +164,7 @@ export function planOpenCopy(nextTopic: string, target: string | null, hoursToda
 export function planProgressCopy(doneCount: number, totalCount: number, nextTopic: string): SlotCopy {
   return {
     title: `${doneCount} of ${totalCount} done ✓`,
-    body: `${nextTopic} is next — finish the set and log the day →`,
+    body: `${nextTopic} is next — finish the set and update today's study →`,
     expectedAction: 'log_today',
   };
 }
@@ -173,8 +173,8 @@ export function planProgressCopy(doneCount: number, totalCount: number, nextTopi
 // already done, it's a pure log nudge; otherwise it names the remaining topic.
 export function planLogCopy(nextTopic: string | null, dreamCollege: string): SlotCopy {
   return nextTopic
-    ? { title: `One block left: ${nextTopic}`, body: `Finish it, log the day, done. ${dreamCollege} gets a little closer.`, expectedAction: 'log_today' }
-    : { title: 'Plan done — just log it', body: `You cleared today's plan. 5 seconds to log it and lock the streak.`, expectedAction: 'log_today' };
+    ? { title: `One block left: ${nextTopic}`, body: `Finish it, update today's study, done. ${dreamCollege} gets a little closer.`, expectedAction: 'log_today' }
+    : { title: 'Plan done — just update it', body: `You cleared today's plan. 5 seconds to update it and lock the streak.`, expectedAction: 'log_today' };
 }
 
 // 08:00 — a warm start to the day. Streak when there's a run to protect;
@@ -260,7 +260,7 @@ export interface ActivationCtx { firstName: string; daysToExam: number; rotate: 
 export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotCopy | null {
   switch (slot) {
     case 'kickoff':
-      return { title: `${c.daysToExam} days to ${c.dreamCollege}`, body: `${c.firstName}, it starts with one 5-second log. Your plan is built — take the first step today.`, expectedAction: 'log_today' };
+      return { title: `${c.daysToExam} days to ${c.dreamCollege}`, body: `${c.firstName}, it starts with one 5-second update. Your plan is built — take the first step today.`, expectedAction: 'log_today' };
     case 'morning':
       return { title: 'Your journey starts today', body: `All it takes is a few focused minutes a day toward ${c.dreamCollege}. Your plan is ready — open the first task and go.`, expectedAction: 'log_today' };
     case 'spark':
@@ -275,9 +275,9 @@ export function activationSlotCopy(slot: CompanionSlot, c: ActivationCtx): SlotC
     case 'wind':
       return { title: `${c.daysToExam} days left — start tonight`, body: `A dream like ${c.dreamCollege} is built one small day at a time. 30 focused minutes tonight beats a perfect plan you never open.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: `Your first log starts it · ${c.daysToExam} days to CAT`, body: `Every single day counts toward ${c.dreamCollege}. One 5-second log tonight starts it.`, expectedAction: 'log_today' };
+      return { title: `Your first update starts it · ${c.daysToExam} days to CAT`, body: `Every single day counts toward ${c.dreamCollege}. One 5-second update tonight starts it.`, expectedAction: 'log_today' };
     case 'log':
-      return { title: `5 seconds to ${c.dreamCollege}`, body: `One quick log tonight starts your streak — and the journey there. Do it now.`, expectedAction: 'log_today' };
+      return { title: `5 seconds to ${c.dreamCollege}`, body: `One quick update tonight starts your streak — and the journey there. Do it now.`, expectedAction: 'log_today' };
     case 'close':
       return null; // nothing to celebrate until they log
   }
@@ -303,9 +303,9 @@ export function reactivationSlotCopy(slot: CompanionSlot, c: ReactivationCtx): S
     case 'wind':
       return { title: `${c.daysToExam} days to CAT`, body: `The clock doesn't pause for a break. One block tonight and you're moving toward ${c.dreamCollege} again.`, expectedAction: 'log_today' };
     case 'progress':
-      return { title: 'The gap is still closeable', body: `You've done it before. Log tonight and your path to ${c.dreamCollege} restarts.`, expectedAction: 'log_today' };
+      return { title: 'The gap is still closeable', body: `You've done it before. Update today's study and your path to ${c.dreamCollege} restarts.`, expectedAction: 'log_today' };
     case 'log':
-      return { title: 'Log tonight', body: `90 seconds to break the silence. Tomorrow-you will be glad you did.`, expectedAction: 'log_today' };
+      return { title: "Update today's study", body: `90 seconds to break the silence. Tomorrow-you will be glad you did.`, expectedAction: 'log_today' };
     case 'close':
       return null;
   }

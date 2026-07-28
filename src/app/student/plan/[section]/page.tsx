@@ -179,7 +179,7 @@ function TopicCard({ slot, isPriority, busy, needMore, setNeedMore, onLog, onSwa
               className="rounded-xl bg-zinc-800 py-2.5 text-xs font-semibold text-zinc-200 active:scale-95 disabled:opacity-50">Calculation mistakes</button>
           </div>
           <button disabled={!!busy} onClick={() => onLog({ action: 'study', topic: slot.topic, sessionsDone: slot.sessionsToday, gotIt: false }, `nm-${slot.topic}`)}
-            className="mt-2 w-full py-1.5 text-[11px] font-medium text-zinc-500">Skip — just log &ldquo;need more&rdquo;</button>
+            className="mt-2 w-full py-1.5 text-[11px] font-medium text-zinc-500">Skip — just mark &ldquo;need more&rdquo;</button>
         </div>
       )}
     </div>

@@ -69,7 +69,7 @@ export function ProfileOverview({
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">{daysLogged}</div>
-            <div className="text-xs text-stone-500 mt-0.5">Days logged</div>
+            <div className="text-xs text-stone-500 mt-0.5">Days studied</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">{bestStreak}</div>

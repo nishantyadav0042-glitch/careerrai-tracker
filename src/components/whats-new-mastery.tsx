@@ -49,7 +49,7 @@ export function WhatsNewMastery({ enabled }: { enabled: boolean }) {
         <ul className="mt-3 space-y-2">
           {[
             ['📈', 'See your progress topic by topic — from first concept to exam ready.'],
-            ['👍', 'One tap after you study: “Got it” or “Need more”. That’s the whole log.'],
+            ['👍', 'One tap after you study: “Got it” or “Need more”. That’s the whole update.'],
             ['⇄', 'Not feeling a topic today? Swap it — it comes back later, never lost.'],
           ].map(([icon, text]) => (
             <li key={text} className="flex items-start gap-2.5 text-[13px] leading-snug text-stone-700">

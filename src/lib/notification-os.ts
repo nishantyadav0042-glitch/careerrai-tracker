@@ -192,13 +192,13 @@ export { dreamCollegeLabel } from './dream-college';
 // student's own target college (see dreamCollegeLabel), used mid-sentence.
 export function activationCopy(day: number, firstName: string, dc: string): { title: string; body: string } {
   if (day === 0) {
-    return { title: 'The journey starts now', body: `${firstName}, the plan you built is live. It begins with one 5-second log toward ${dc}.` };
+    return { title: 'The journey starts now', body: `${firstName}, the plan you built is live. It begins with one 5-second update toward ${dc}.` };
   }
   if (day === 1) {
-    return { title: '5 seconds to get moving', body: `Your plan is built and waiting. One quick log tonight starts the journey to ${dc}.` };
+    return { title: '5 seconds to get moving', body: `Your plan is built and waiting. One quick update tonight starts the journey to ${dc}.` };
   }
   if (day === 3) {
     return { title: 'Your plan is holding your spot', body: `A few minutes a day is all it takes to move toward ${dc} — start today.` };
   }
-  return { title: 'Still time to make your move', body: `Your plan reshapes around the time you have left. One log today restarts the momentum toward ${dc}.` };
+  return { title: 'Still time to make your move', body: `Your plan reshapes around the time you have left. One update today restarts the momentum toward ${dc}.` };
 }

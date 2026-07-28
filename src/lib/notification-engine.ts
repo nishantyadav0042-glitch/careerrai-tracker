@@ -21,31 +21,31 @@ interface OnboardingDay { pending: OnboardingCopy; done: OnboardingCopy }
 
 export const ONBOARDING_DAYS: Record<number, OnboardingDay> = {
   1: {
-    pending: { title: 'Pehla kadam abhi baaki hai 🚀', body: (n) => `${n}, sirf 90 seconds. Aaj ka pehla log — shuruaat yahin se hoti hai.` },
+    pending: { title: 'Pehla kadam abhi baaki hai 🚀', body: (n) => `${n}, sirf 90 seconds. Aaj ki padhai update karo — shuruaat yahin se hoti hai.` },
     done: { title: 'Day 1 done! 🎉', body: (n) => `Shuruaat ho gayi, ${n}. 6 din aur — habit yahin se banti hai.` },
   },
   2: {
-    pending: { title: 'Kal shuru kiya tha, aaj bhi? 💪', body: (n) => `${n}, Day 2 ka log abhi baaki hai. Do din lagatar — chalo karte hain.` },
+    pending: { title: 'Kal shuru kiya tha, aaj bhi? 💪', body: (n) => `${n}, Day 2 ki padhai abhi baaki hai. Do din lagatar — chalo karte hain.` },
     done: { title: 'Day 2 ✅ — 2 din lagatar!', body: (n) => `Pattern bann raha hai, ${n}. Kal Day 3 — mat rukna.` },
   },
   3: {
-    pending: { title: 'Day 3 ka log ready hai', body: (n) => `${n}, teesra din sabse important hota hai — 90 seconds mein aaj ka log karo, habit yahin banti hai.` },
+    pending: { title: 'Day 3 ka update ready hai', body: (n) => `${n}, teesra din sabse important hota hai — teesre din ki padhai update karo, habit yahin banti hai.` },
     done: { title: 'Day 3 — halfway to habit 🔥', body: (n) => `3 din ho gaye, ${n}. Ab aadat banna shuru ho rahi hai.` },
   },
   4: {
-    pending: { title: 'Day 4 — momentum tumhare saath hai', body: (n) => `${n}, 3 din ki mehnat jam gayi hai. Aaj ka quick log — aur streak 4 ki.` },
+    pending: { title: 'Day 4 — momentum tumhare saath hai', body: (n) => `${n}, 3 din ki mehnat jam gayi hai. Aaj ki padhai update karo — aur streak 4 ki.` },
     done: { title: 'Day 4 ✅', body: (n) => `4/7, ${n}. Teen din aur — habit lock hone waali hai.` },
   },
   5: {
-    pending: { title: 'Day 5 — bas 2 din aur', body: (n) => `${n}, Day 5 aa gaya. Aaj ka log 90 seconds ka hai — aur hafta almost poora.` },
+    pending: { title: 'Day 5 — bas 2 din aur', body: (n) => `${n}, Day 5 aa gaya. Aaj ki padhai update karo — aur hafta almost poora.` },
     done: { title: 'Day 5 — 2 din baaki 🎯', body: (n) => `${n}, itni consistency rare hai. Weekend mein bhi milte hain.` },
   },
   6: {
-    pending: { title: 'Day 6 — kal last din hai', body: (n) => `${n}, aaj ka log karo — kal 7 poore. Finish line saamne hai.` },
+    pending: { title: 'Day 6 — kal last din hai', body: (n) => `${n}, aaj ki padhai update karo — kal 7 poore. Finish line saamne hai.` },
     done: { title: 'Day 6 — kal 7 poore! 🔥', body: (n) => `${n}, ek din aur — pura hafta complete karoge.` },
   },
   7: {
-    pending: { title: 'Aaj 7th din — habit lock din', body: (n) => `${n}, poora hafta ban sakta hai aaj. Bas ek log — mat chuko.` },
+    pending: { title: 'Aaj 7th din — habit lock din', body: (n) => `${n}, poora hafta ban sakta hai aaj. Bas aaj ki padhai update karo — mat chuko.` },
     done: { title: '7/7 — HABIT LOCKED 🔒🎉', body: (n) => `${n}, ek hafta lagatar. Ab yeh routine hai, task nahi. Proud of you.` },
   },
 };

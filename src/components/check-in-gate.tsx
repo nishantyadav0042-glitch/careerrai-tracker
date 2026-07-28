@@ -245,7 +245,7 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
       studied: 'Locking yesterday in…',
       partial: "Noting where you stopped — today starts there…",
       not_studied: 'No problem. Rebuilding today so nothing is lost…',
-      skipped: 'Rest logged. Picking up exactly where you left off…',
+      skipped: 'Rest day saved. Picking up exactly where you left off…',
     };
     return (
       <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-900/70 p-4 backdrop-blur-sm sm:items-center">

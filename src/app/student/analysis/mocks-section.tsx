@@ -78,7 +78,7 @@ export function MocksSection() {
         <div className="flex items-start justify-between mb-3">
           <div>
             <h3 className="font-semibold text-stone-900">Mock history</h3>
-            <p className="text-xs text-stone-500 mt-0.5">{loading ? 'Loading…' : `${mocks.length} mock${mocks.length === 1 ? '' : 's'} logged`}</p>
+            <p className="text-xs text-stone-500 mt-0.5">{loading ? 'Loading…' : `${mocks.length} mock${mocks.length === 1 ? '' : 's'} added`}</p>
           </div>
           {latestMock?.overall_percentile != null && (
             <div className="text-right">
@@ -109,7 +109,7 @@ export function MocksSection() {
           </div>
         ) : mocks.length === 0 ? (
           <div className="bg-stone-50 rounded-xl p-4 text-center">
-            <p className="text-xs text-stone-600">No mocks logged yet — log your first IMS/TIME/2IIM/Cracku mock above.</p>
+            <p className="text-xs text-stone-600">No mocks yet — add your first IMS/TIME/2IIM/Cracku mock above.</p>
           </div>
         ) : (
           <div className="space-y-2">

@@ -217,8 +217,12 @@ export function DailyTrackerApp({
       )}
 
       {/* Today's Focus — star + TODAY'S FOCUS label + one-line focus on the
-          left, the black "Log today's study" action on the right. Always
-          side-by-side (compact) to keep Home to one screen. */}
+          left, the black "Update today's study" action on the right. Always
+          side-by-side (compact) to keep Home to one screen.
+          STUDENT VOCABULARY: never the word "log" in visible copy — a CAT
+          aspirant thinks "aaj kitna padha", not "I'll log my study". Code
+          identifiers (submitLog, useLogging, log_date, companion_log) keep the
+          old name on purpose: renaming those breaks data continuity. */}
       <Card className="p-2.5">
         {todaySession && <div className="mb-2"><SessionStrip session={todaySession} /></div>}
 
@@ -230,7 +234,7 @@ export function DailyTrackerApp({
             <div className="min-w-0">
               <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
               <p className="text-[13px] font-extrabold leading-tight text-stone-900">
-                {hasLoggedToday ? 'Logged today ✓' : 'Be consistent, not perfect.'}
+                {hasLoggedToday ? "Today's study updated ✓" : 'Be consistent, not perfect.'}
               </p>
             </div>
           </div>
@@ -245,14 +249,14 @@ export function DailyTrackerApp({
                 disabled={isSubmitting}
                 className="inline-flex items-center justify-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-[12px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
               >
-                {isSubmitting ? 'Logging…' : <>Log today&apos;s study <ArrowRight className="h-3.5 w-3.5" /></>}
+                {isSubmitting ? 'Saving…' : <>Update today&apos;s study <ArrowRight className="h-3.5 w-3.5" /></>}
               </button>
               {!hasLoggedYesterday && yesterdayStr && (
                 <button
                   onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
                   className="text-right text-[10px] text-stone-400 hover:text-stone-600"
                 >
-                  Missed {yesterdayLabel}? Log it too
+                  Add {yesterdayLabel} too
                 </button>
               )}
             </div>

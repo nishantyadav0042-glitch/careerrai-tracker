@@ -75,7 +75,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
         </p>
 
         <ul className="mx-auto mt-4 max-w-xs space-y-2 text-sm text-stone-700">
-          <li className="flex gap-2"><span>🎯</span> A plan for tomorrow, built from today&apos;s logs</li>
+          <li className="flex gap-2"><span>🎯</span> A plan for tomorrow, built from today&apos;s study</li>
           <li className="flex gap-2"><span>📊</span> Every mock decoded with you — each error named</li>
           <li className="flex gap-2"><span>🎥</span> A weekly 1-on-1 video session</li>
         </ul>

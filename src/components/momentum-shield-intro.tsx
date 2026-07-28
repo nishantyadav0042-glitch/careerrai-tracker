@@ -74,7 +74,7 @@ export function MomentumShieldIntro({ streak, shields, enabled }: { streak: numb
           </div>
           <div className="flex items-start gap-2.5 rounded-xl bg-stone-50 p-3">
             <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-            <p>Log <b>21 days in a row</b> to earn a shield back (max 3). Consistency builds your safety net.</p>
+            <p>Study <b>21 days in a row</b> to earn a shield back (max 3). Consistency builds your safety net.</p>
           </div>
           {streak >= 1 && (
             <div className="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-3">
