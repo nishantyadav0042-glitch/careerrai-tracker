@@ -38,8 +38,41 @@ export default async function AdminAnalyticsPage() {
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const sinceIso = new Date(Date.now() - DAYS * 86_400_000).toISOString();
 
-  const [{ data: events }, { data: students }, { data: reports }, { data: dna }] = await Promise.all([
-    admin.from('student_events').select('user_id, event, path, created_at').gte('created_at', sinceIso).limit(50_000),
+  // ── Why this is paginated instead of one .limit(50_000) ────────────────────
+  //
+  // PostgREST caps a response server-side regardless of the .limit() asked
+  // for, and this query had no .order(), so Postgres returned whatever slice
+  // it liked — in practice the OLDEST rows in the window. The page then showed
+  // "506 tracked events over 14 days" when there were more than 18,000, and
+  // every recent day rendered as "0 open · 9 log": opens existed, they were
+  // just past the cut. A dashboard that silently truncates is worse than no
+  // dashboard, because you act on it.
+  //
+  // Explicit order + page until exhausted. Bounded by MAX_EVENT_PAGES so a
+  // runaway table can never hang the admin page; if we ever hit that ceiling
+  // the page says so rather than quietly under-reporting again.
+  const PAGE = 1000;
+  const MAX_EVENT_PAGES = 60; // 60k events
+  async function fetchAllEvents() {
+    const out: Row[] = [];
+    let truncated = false;
+    for (let page = 0; page < MAX_EVENT_PAGES; page++) {
+      const { data } = await admin
+        .from('student_events')
+        .select('user_id, event, path, created_at')
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
+        .range(page * PAGE, page * PAGE + PAGE - 1);
+      const batch = (data ?? []) as Row[];
+      out.push(...batch);
+      if (batch.length < PAGE) return { rows: out, truncated };
+      if (page === MAX_EVENT_PAGES - 1) truncated = true;
+    }
+    return { rows: out, truncated };
+  }
+
+  const [{ rows: allEvents, truncated: eventsTruncated }, { data: students }, { data: reports }, { data: dna }] = await Promise.all([
+    fetchAllEvents(),
     admin.from('profiles').select('id, role, is_test_account').eq('role', 'student'),
     admin.from('daily_reports').select('student_id, report_date').gte('report_date', istDay(sinceIso)),
     admin.from('student_dna').select('student_id, activation, consistency, momentum, purchase_intent, churn_risk, journey_stage'),
@@ -48,7 +81,7 @@ export default async function AdminAnalyticsPage() {
   // Only real students count. A founder test account inflating "daily actives"
   // is how a dashboard starts lying to you.
   const real = new Set((students ?? []).filter((s) => s.is_test_account !== true).map((s) => s.id));
-  const rows = ((events ?? []) as Row[]).filter((e) => e.user_id && real.has(e.user_id));
+  const rows = allEvents.filter((e) => e.user_id && real.has(e.user_id));
 
   const days = lastNDays(DAYS);
   const openers = new Map<string, Set<string>>();
@@ -56,7 +89,14 @@ export default async function AdminAnalyticsPage() {
 
   for (const d of days) { openers.set(d, new Set()); loggers.set(d, new Set()); }
 
+  // ONE definition of "opened the app", shared with /admin/launch: an app_open
+  // event. This counted ANY event, so the two dashboards disagreed — by one
+  // student on 2 of the last 8 days, which is small but is exactly the drift
+  // that makes people stop trusting both numbers. A student who fires a tap or
+  // a screen_view without an app_open is a telemetry gap to fix at the source,
+  // not a second definition of active.
   for (const e of rows) {
+    if (e.event !== 'app_open') continue;
     const d = istDay(e.created_at);
     if (!openers.has(d)) continue;
     openers.get(d)!.add(e.user_id!);
@@ -111,6 +151,11 @@ export default async function AdminAnalyticsPage() {
       </div>
       <p className="mb-6 text-sm text-stone-500">
         What students actually do, from {rows.length.toLocaleString('en-IN')} tracked events over the last {DAYS} days.
+        {eventsTruncated && (
+          <span className="font-semibold text-amber-700">
+            {' '}Capped at {(MAX_EVENT_PAGES * PAGE).toLocaleString('en-IN')} events — figures below are an undercount.
+          </span>
+        )}
         Test accounts excluded.
       </p>
 

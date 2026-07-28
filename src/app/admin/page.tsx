@@ -27,7 +27,20 @@ export default async function AdminTodayPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: adminProfile } = await admin.from('profiles').select('role, notif_prefs').eq('id', user.id).single();
+  // One wave, not three. This page's measured TTFB was median 1.16s / p95
+  // 2.9s (perf_events, 82 samples), and the biggest self-inflicted share was
+  // sequencing: role check -> people -> real students ran as three serial
+  // round trips before the seven attention lists could even start. All three
+  // are independent service-role reads, so they run together; the role check
+  // still gates rendering — it just no longer gates the OTHER queries.
+  const [{ data: adminProfile }, { data: people }, real] = await Promise.all([
+    admin.from('profiles').select('role, notif_prefs').eq('id', user.id).single(),
+    admin
+      .from('profiles')
+      .select('id, role, created_at, is_premium, premium_since, last_seen_at, call_feedback, is_test_account')
+      .in('role', ['student', 'buddy']),
+    getRealStudents(admin),
+  ]);
   if (adminProfile?.role !== 'admin') redirect('/login');
   const adminPushEnabled = (adminProfile?.notif_prefs as { push?: boolean } | null)?.push === true;
 
@@ -35,10 +48,6 @@ export default async function AdminTodayPage() {
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
 
-  const { data: people } = await admin
-    .from('profiles')
-    .select('id, role, created_at, is_premium, premium_since, last_seen_at, call_feedback, is_test_account')
-    .in('role', ['student', 'buddy']);
   const rows = (people ?? []).filter((p) => !p.is_test_account);
   const students = rows.filter((p) => p.role === 'student');
   const buddies = rows.filter((p) => p.role === 'buddy');
@@ -55,7 +64,6 @@ export default async function AdminTodayPage() {
   // the SAME shared filter its page renders (lib/admin-filters.ts). No card
   // computes its number one way and its list another — that's how the
   // dashboard contradicted itself.
-  const real = await getRealStudents(admin);
   const totalStudents = real.length;
   const [loggedList, aliveList, remindList, streakBreakers, salesList, coldList, wantsBuddyList] = await Promise.all([
     getLoggedToday(admin, real),

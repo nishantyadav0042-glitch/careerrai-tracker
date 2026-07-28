@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { VALID_BLOCKER_REASONS, VALID_DAY_OUTCOMES } from '@/lib/check-in';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -23,12 +24,22 @@ interface LoggingRequest {
   blocker_reason?: string; // why the plan wasn't finished (only when plan_fit='couldnt_finish')
   confidence?: number; // single-tap 1-5 "how confident about CAT right now"
   log_date?: string; // optional backdate — must be today or yesterday (IST)
+  day_outcome?: string; // 'studied' | 'partial' | 'not_studied' | 'skipped'
 }
+
+// The shape of the day, asked first in the log sheet. 'not_studied' and
+// 'skipped' are complete answers on their own — a day with nothing in it has
+// nothing to describe, and the hours/sections validation above already allows
+// that combination (0 hours, no sections).
+const VALID_DAY_OUTCOME = VALID_DAY_OUTCOMES;
 
 // New single-sheet log adds 'easy' + 'couldnt_finish'; 'too_little' kept for
 // backward compatibility with any client still sending the old value.
 const VALID_PLAN_FIT = ['easy', 'right', 'too_much', 'couldnt_finish', 'too_little'] as const;
-const VALID_BLOCKER_REASON = ['college', 'office', 'travel', 'health', 'family', 'procrastination', 'mock_ran_long', 'plan_too_heavy', 'other'] as const;
+// Single source of truth lives in lib/check-in.ts — the check-in gate and the
+// full log sheet both offer these, and a value accepted by one must never be
+// rejected by the other.
+const VALID_BLOCKER_REASON = VALID_BLOCKER_REASONS;
 
 export async function POST(request: NextRequest) {
   try {
@@ -132,6 +143,9 @@ export async function POST(request: NextRequest) {
     }
     if (typeof body.confidence === 'number' && Number.isInteger(body.confidence) && body.confidence >= 1 && body.confidence <= 5) {
       reviewUpdate.confidence = body.confidence;
+    }
+    if (typeof body.day_outcome === 'string' && (VALID_DAY_OUTCOME as readonly string[]).includes(body.day_outcome)) {
+      reviewUpdate.day_outcome = body.day_outcome;
     }
     if (Object.keys(reviewUpdate).length > 0) {
       void admin.from('daily_reports').update(reviewUpdate)

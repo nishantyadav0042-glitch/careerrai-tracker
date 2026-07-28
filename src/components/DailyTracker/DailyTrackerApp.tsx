@@ -96,6 +96,34 @@ export function DailyTrackerApp({
     submitLog,
   } = useLogging(studentId, initialLogging);
 
+  // ── Deep link straight into the log ────────────────────────────────────────
+  //
+  // Every notification, including the one whose entire job is "fill your log",
+  // used to land on the home screen and leave the student to find the log
+  // themselves. companion_log ran to 93 delivered pushes and ZERO taps. A
+  // reminder that costs a tap to act on is a reminder about a chore.
+  //
+  // /student/tracker?log=1 now opens the sheet on arrival. Fires once per
+  // arrival, and never fights the first-run sequence or a log already filled.
+  useEffect(() => {
+    if (hasLoggedToday) return;
+    let params: URLSearchParams;
+    try { params = new URLSearchParams(window.location.search); } catch { return; }
+    if (params.get('log') !== '1') return;
+    const timer = setTimeout(() => {
+      if (insightVisible()) return;
+      track('log_open', { via: 'deeplink' });
+      setIsLogOpen(true);
+      // Drop the param so a refresh or a back-navigation doesn't reopen it.
+      try {
+        params.delete('log');
+        const qs = params.toString();
+        window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      } catch { /* cosmetic only */ }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [hasLoggedToday]);
+
   // First-log moment (20 July zero-log fix): the journey funnels install →
   // tour → notifications and then just… ends — the first log was outsourced to
   // an evening push most new students can't receive. This auto-opens the real
