@@ -22,14 +22,25 @@ export interface OutcomeOption {
   asksWhy: boolean;
 }
 
+// ONE array, both surfaces. The gate (yesterday) and the full sheet (today)
+// ask the same four things, and until now each owned its own copy — which had
+// already drifted: "Rest day / Planned break, away, ill" in the gate versus
+// "Rest / away / Planned break, travel, ill" in the sheet, plus two different
+// sub-lines for 'studied' and 'not_studied'. A student who saw both read them
+// as the same question asked twice, worded slightly differently, which is worse
+// than either wording alone. Exactly the failure class in ENGINEERING-MEMORY
+// #4/#5/#9: one business concept with two implementations.
+//
+// Wording below takes the better line from each copy. Anything rendering these
+// four answers imports from here — never re-declare them in a component.
 export const OUTCOME_OPTIONS: OutcomeOption[] = [
-  { id: 'studied',     emoji: '✅', label: 'Studied',        sub: 'Got through the plan',      asksWhy: false },
+  { id: 'studied',     emoji: '✅', label: 'Studied',        sub: 'Finished what I planned',    asksWhy: false },
   // 'partial' asks why as well, deliberately. It is the most common honest day
   // and the most diagnostic one: someone who sat down and did not finish is
   // telling us the PLAN is wrong, which is a product signal we can act on.
-  { id: 'partial',     emoji: '📚', label: 'Studied a bit',  sub: "Sat down, didn't finish",   asksWhy: true  },
-  { id: 'not_studied', emoji: '⭕', label: "Didn't study",   sub: 'The day got away',          asksWhy: true  },
-  { id: 'skipped',     emoji: '⏭', label: 'Rest day',       sub: 'Planned break, away, ill',  asksWhy: false },
+  { id: 'partial',     emoji: '📚', label: 'Studied a bit',  sub: "Sat down, didn't finish",    asksWhy: true  },
+  { id: 'not_studied', emoji: '⭕', label: "Didn't study",   sub: 'Today got away from me',     asksWhy: true  },
+  { id: 'skipped',     emoji: '⏭', label: 'Rest / away',    sub: 'Planned break, travel, ill', asksWhy: false },
 ];
 
 // ── Why the day didn't happen ───────────────────────────────────────────────

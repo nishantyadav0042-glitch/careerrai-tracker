@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 import { setLogModalOpen } from '@/lib/first-run-events';
 import type { MockDebriefData } from './MockDebriefModal';
+import { OUTCOME_OPTIONS, type DayOutcome } from '@/lib/check-in';
 
 // Today's plan tasks, pulled into the log so "what did you cover" IS the plan.
 interface PlanTask { id: string; section: string; topic: string | null; label: string; target: string | null; }
@@ -72,14 +73,23 @@ type TaskState = 'half' | 'full';
 // Four states because real days have four states. 'partial' matters as much as
 // the rest: "I sat down and didn't finish" is the most common honest day, and
 // the one a two-option form silently pushes into a lie.
-export type DayOutcome = 'studied' | 'partial' | 'not_studied' | 'skipped';
+// Re-exported for any existing importer; the definition lives in lib/check-in,
+// which is also where the server's allow-list reads it from. Declaring it here
+// as well is how the two surfaces drifted in the first place.
+export type { DayOutcome };
 
-const OUTCOMES: { id: DayOutcome; label: string; sub: string; emoji: string; tone: string }[] = [
-  { id: 'studied',     label: 'Studied',        sub: 'Finished what I planned', emoji: '✅', tone: 'emerald' },
-  { id: 'partial',     label: 'Studied a bit',  sub: "Sat down, didn't finish", emoji: '📚', tone: 'amber' },
-  { id: 'not_studied', label: "Didn't study",   sub: 'Today got away from me',  emoji: '⭕', tone: 'zinc' },
-  { id: 'skipped',     label: 'Rest / away',    sub: 'Planned break, travel, ill', emoji: '⏭', tone: 'zinc' },
-];
+// The four answers come from lib/check-in — the same array the check-in gate
+// renders. This file used to declare its own copy, and the two had drifted in
+// three of four sub-lines, so the gate and this sheet asked one question in two
+// voices. Only the COLOUR is local: tone is presentation, and the leaf
+// vocabulary module has no business knowing Tailwind.
+const OUTCOME_TONE: Record<DayOutcome, string> = {
+  studied: 'emerald',
+  partial: 'amber',
+  not_studied: 'zinc',
+  skipped: 'zinc',
+};
+const OUTCOMES = OUTCOME_OPTIONS.map((o) => ({ ...o, tone: OUTCOME_TONE[o.id] }));
 
 /** The two answers that need nothing else — one tap and the day is recorded. */
 const NO_DETAIL_NEEDED: DayOutcome[] = ['not_studied', 'skipped'];
