@@ -9,7 +9,6 @@ import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { CoachingMirror } from '@/components/coaching-mirror';
 import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
-import { NextActionCard } from '@/components/next-action-card';
 import { DailyChallengeCard } from '@/components/daily-challenge-card';
 import { HomeTipCard } from '@/components/home/home-tip-card';
 import { InsightBubble } from '@/components/home/insight-bubble';
@@ -435,11 +434,38 @@ export default async function DailyTrackerPage() {
               coaching — their coaching's daily share, or the upload entry */}
         {blockOrder.map((b: HomeBlock) => {
           if (b === 'action') return (
-            /* The challenge rides directly under the action card in every
-               slot: both answer "what can I do right now", and the challenge
-               is the 2-minute version for a student who can't start a block. */
+            /* NextActionCard ("DO THIS NEXT") REMOVED 29 Jul, on the taps —
+               not on taste. Three home surfaces were answering "what do I do
+               now" and all three wrote to /api/routine/complete-task:
+               DO THIS NEXT, Today's Study Plan, and the update sheet.
+               /student/tracker tap counts decided which one goes:
+
+                 Today's Study Plan (header/expand)  194 taps · 14-17 people
+                 Swap, on the plan card               62 taps · 17 people
+                 "Next" task rows on the plan card    57 taps · 17 people
+                 Update-topics CTA                    51 taps · 26 people
+                 DO THIS NEXT "Start now"             21 taps · 13 people
+                 DO THIS NEXT "Done"                  13 taps ·  8 people
+                 DO THIS NEXT expanded                 7 taps ·  4 people
+                 DO THIS NEXT time-changed             7 taps ·  1 person
+
+               And its primary CTA had never once worked: hrefFor() in
+               api/next-action ignores the topic entirely and only routes to
+               /student/plan/<section> when that section's model flag is on.
+               All 251 students have every flag off, so all 21 "Start now" taps
+               landed on /student/plan/topics — a grid of every topic — from a
+               card naming one specific 40-minute task. A 0% success rate.
+
+               Nothing is lost: TodaysRoutineCard already badges its first task
+               "Start Here" and the rest "Next" (TodaysRoutineCard.tsx:415), so
+               the ranked "just tell me one thing" job is already done on the
+               surface with ~9x the engagement.
+
+               The component and /api/next-action are left in place, unmounted:
+               the reconcile-actions cron reads the recommendations table, and
+               an unmounted card simply stops adding rows. If this ever returns,
+               fix hrefFor to deep-link the topic FIRST. */
             <div key="action" className="space-y-3">
-              <NextActionCard />
               <DailyChallengeCard />
             </div>
           );
