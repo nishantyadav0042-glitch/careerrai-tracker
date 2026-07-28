@@ -42,6 +42,37 @@ export function getDisplayMode(): DisplayMode {
   return 'browser';
 }
 
+// ---------------------------------------------------------------------------
+// Native app shell (App Store / Play Store build)
+// ---------------------------------------------------------------------------
+// An iOS WKWebView wrapper is NOT display-mode:standalone and has no
+// navigator.standalone, so detectStandalone() reads it as plain iOS Safari and
+// the UI happily offers "Install the app — no app store needed" INSIDE a build
+// distributed by the App Store. That is both nonsense to the user and exactly
+// the kind of non-App-Store-distribution messaging App Review penalises
+// (guideline 2.3.10, and it invites a 4.2 look at the same time).
+//
+// The store build declares itself with ?source= on its start URL — the same
+// convention android/twa-manifest.json already uses (?source=twa) — and we
+// persist it, because the flag must survive in-app navigation away from the
+// start URL. Nothing changes for any visitor who does not carry the marker.
+const NATIVE_SHELL_KEY = 'cr_native_shell';
+const NATIVE_SHELL_SOURCES = /^(ios-app|android-app|twa)$/;
+
+export function detectNativeShell(): boolean {
+  if (!hasWindow()) return false;
+  try {
+    const source = new URLSearchParams(window.location.search).get('source');
+    if (source && NATIVE_SHELL_SOURCES.test(source)) {
+      window.localStorage.setItem(NATIVE_SHELL_KEY, source);
+      return true;
+    }
+    return window.localStorage.getItem(NATIVE_SHELL_KEY) != null;
+  } catch {
+    return false; // private mode / storage blocked — fail open, never crash
+  }
+}
+
 export function detectStandalone(): boolean {
   if (!hasWindow()) return false;
   const byMedia =
@@ -230,8 +261,9 @@ export function getEnvironment(): InstallEnvironment {
   const browser = detectBrowser();
   const inApp = detectInAppBrowser();
   const displayMode = getDisplayMode();
+  const isNativeShell = detectNativeShell();
   const isStandalone = detectStandalone();
   const capabilities = computeCapabilities(platform, engine, browser, inApp);
 
-  return { platform, engine, browser, inApp, displayMode, isStandalone, capabilities, ua: ua() };
+  return { platform, engine, browser, inApp, displayMode, isStandalone, isNativeShell, capabilities, ua: ua() };
 }

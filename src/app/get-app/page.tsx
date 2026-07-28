@@ -5,10 +5,17 @@ import Link from 'next/link';
 import { Logo } from '@/components/logo';
 import { InstallButton } from '@/components/install/install-button';
 import { OpenInBrowser } from '@/components/open-in-browser';
+import { detectNativeShell } from '@/lib/install/detect';
 
+// Inside the App Store / Play Store build this page must never pitch an
+// install, and must never say "no app store needed" — that is non-App-Store
+// distribution messaging inside an App-Store-distributed app (guideline
+// 2.3.10). detectNativeShell() is the store-build marker; treat it as
+// installed, exactly like a standalone launch.
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return (
+    detectNativeShell() ||
     window.matchMedia('(display-mode: standalone)').matches ||
     ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
   );

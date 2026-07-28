@@ -81,6 +81,12 @@ export interface InstallEnvironment {
   inApp: InAppBrowser;
   displayMode: DisplayMode;
   isStandalone: boolean;
+  /**
+   * Running inside the App Store / Play Store build (start URL carries
+   * ?source=ios-app | android-app | twa, persisted thereafter). Install CTAs
+   * must never render here — see detectNativeShell().
+   */
+  isNativeShell: boolean;
   capabilities: InstallCapabilities;
   /** Raw UA kept for analytics + debugging only — never for control flow if avoidable. */
   ua: string;

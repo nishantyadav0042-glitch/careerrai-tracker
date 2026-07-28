@@ -42,6 +42,23 @@ compiles 182 pages.
 
 ---
 
+## Release gate — verified state, 28 Jul 2026 15:5x UTC
+
+Checked against the live systems, not inferred:
+
+| Gate | State | Evidence |
+| --- | --- | --- |
+| Fixes on `main` | ❌ **NO** | `76acc14` exists only on `origin/claude/student-buddy-opt-in-qcdr92`. `origin/main` is at `b4a46c62`. |
+| Fixes in production | ❌ **NO** | `careerrai.in` served `dpl_94pqnJJV8tFfSihs9dVSsXivuPDQ`; the branch build `dpl_ERX3sprsoYa2axw1MVwBBoYrY6V7` is a **preview** (`target: null`) and was `CANCELED`. |
+| Offending image live | ❌ **STILL LIVE** | `GET careerrai.in/testimonials/vedprakash-wa.jpg` → **200, image/jpeg, 278,236 bytes** — byte-identical to the deleted file. |
+| Review account exists | ✅ yes | `appreview@careerrai.in`, bcrypt verified (right password matches, wrong rejected), `email_confirmed`, 1 identity row. |
+| Review account seeded | ✅ yes | 21 logged days, 2 mock debriefs, 21-day streak, `onboarding_completed = TRUE`. |
+| Login fix renders | ✅ yes | Playwright at 390×844 and 820×1180: password button visible on the first screen, email accepted in the credential field. |
+| typecheck / lint / tests / build | ✅ pass | 0 TS errors · 0 lint errors · 104/104 · 182 pages. |
+
+**Conclusion: submitting before merging to `main` reproduces the exact 2.3.10
+rejection**, because the Android/WhatsApp screenshot is still being served.
+
 ## Step 0 — Deploy production FIRST
 
 The iOS app loads `careerrai.in` (same model as the Android TWA — see
@@ -50,7 +67,9 @@ The iOS app loads `careerrai.in` (same model as the Android TWA — see
 app still sees the rejected content no matter what you change in App Store
 Connect.
 
-1. Merge and deploy the branch above to production.
+1. **Merge `claude/student-buddy-opt-in-qcdr92` into `main`** and wait for the
+   `main` deployment to reach `state: READY, target: production`. A preview
+   deployment of the branch is **not** production — see the release gate above.
 2. On a real device, open `https://careerrai.in/login` and confirm:
    - "Log in with password" is visible **without scrolling**.
    - The password screen's first field accepts `appreview@careerrai.in` — letters
@@ -63,6 +82,19 @@ Do not proceed until all four pass.
 ---
 
 ## Step 1 — Decide: iPhone-only, or keep iPad?
+
+**The evidence says your binary currently declares iPad support.** Two
+independent signals: Apple reviewed on an *iPad Air 11-inch*, and the 2.3.3
+complaint names *13-inch iPad screenshots* — App Store Connect only requires
+that size when iPad is a supported device. So treat `UIDeviceFamily = 1,2` as
+the working assumption and confirm it before you decide.
+
+How to confirm, in order of speed:
+1. App Store Connect → your app → the 1.0 version page → **Previews and
+   Screenshots**: if iPad size tabs are present and required, iPad is declared.
+2. The binary's `Info.plist` → `UIDeviceFamily` (`1` = iPhone only, `1,2` =
+   iPhone + iPad).
+3. If PWABuilder produced it, its iOS package targets both by default.
 
 **Recommendation: go iPhone-only for 1.0.**
 
@@ -94,6 +126,12 @@ App Store Connect → your app → the **1.0** version page → scroll to
 - **User name:** `appreview@careerrai.in`
 - **Password:** the password shared privately (see `DEMO_ACCESS.md` — it is
   deliberately not written into the repo, which is public)
+
+The same account also carries the mobile number **9000000050**, which works in
+the 10-digit field. That is deliberate insurance: it means the credential is
+usable even on a build that predates the credential-field fix, and it lets you
+sanity-check the account **before** merging. Give Apple the email — it is the
+form the notes explain.
 
 **Notes** field — paste this:
 
@@ -202,6 +240,42 @@ Trim the bracketed line if you kept iPad support.
 
 ---
 
+## Step 5 — App Store Connect metadata (the second-rejection killers)
+
+These are present in the app and just need pasting into App Store Connect:
+
+| Field | Value |
+| --- | --- |
+| Privacy Policy URL | `https://careerrai.in/privacy` |
+| Terms of Use URL | `https://careerrai.in/terms` |
+| Support URL | `https://careerrai.in/contact` |
+| Marketing URL (optional) | `https://careerrai.in` |
+| Support email | `business@careerrai.com` |
+
+There is no `/support` route — use `/contact`. Also confirm: version and build
+number both incremented, new archive uploaded and **attached to the version**,
+new screenshots saved, App Review Information saved, and no stale screenshot
+left behind in any size tab.
+
+## Native-shell flag — set this on the wrapper's start URL
+
+The install CTAs are now suppressed inside a store build, but only when the app
+identifies itself. Set the iOS wrapper's **start URL** to:
+
+```
+https://careerrai.in/student/tracker?source=ios-app
+```
+
+(mirroring `startUrl: "/student/tracker?source=twa"` in
+`android/twa-manifest.json`). The marker is persisted in `localStorage`, so it
+survives navigation away from the start URL. Without it the app still works —
+it will simply keep showing the "Install the app" banner, which is what you want
+to avoid inside an App Store build.
+
+If you cannot change the start URL for this submission, that is not a blocker
+for the three cited guidelines — but say so and we'll gate on iOS detection
+instead.
+
 ## Known risks on this resubmission
 
 - **4.2 Minimum Functionality.** A webview wrapper around a website is the
@@ -209,12 +283,18 @@ Trim the bracketed line if you kept iPad support.
   2.3.3 / 2.3.10 does not retire it. Going iPhone-only helps. The durable answer
   is genuine native capability — push notifications, offline access, home-screen
   widgets — not more metadata polish.
-- **Other third-party mentions.** `/get-app` says *"no app store needed"* and
-  promotes a PWA install; `src/components/install/meta-escape.tsx` references
-  Instagram/Facebook in-app browsers. Apple's cited next-step for 2.3.10 was
-  only about status bar images, so these were left alone. If 2.3.10 recurs,
-  hide these surfaces when the app runs inside the iOS wrapper. Student-facing
-  "WhatsApp us" support links are normally fine and were also left alone.
+- **Install CTAs inside the store build (now fixed, needs the flag).** The
+  login screen was rendering an "Install the CareerRai app — Just ~3 MB" banner
+  and `/get-app` said *"no app store needed"* **inside the iOS app**, because an
+  iOS WKWebView is not `display-mode: standalone` and read as plain Safari.
+  `detectNativeShell()` now suppresses every install surface in a store build.
+  Requires the start-URL flag above to take effect.
+- **Other third-party mentions.** `src/components/install/meta-escape.tsx`
+  references Instagram/Facebook in-app browsers; student-facing "WhatsApp us"
+  support links exist in `/app` and the escape sheet. Apple's cited next-step
+  for 2.3.10 was only about status bar images, and support links are normally
+  fine, so these were left alone. If 2.3.10 recurs, gate them on
+  `isNativeShell` too.
 - **Admin/sales screens** are full of WhatsApp tooling, but they need an admin
   login a reviewer does not have. Left as-is deliberately.
 

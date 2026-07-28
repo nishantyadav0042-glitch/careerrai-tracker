@@ -123,7 +123,10 @@ export function useInstall(): UseInstallResult {
 
   const recompute = useCallback(async () => {
     const env = getEnvironment();
-    const alreadyInstalled = capturedInstalled || (await checkInstalledRelatedApps());
+    // env.isNativeShell short-circuits everything: inside the App Store /
+    // Play Store build the app IS installed, so every install CTA hides.
+    const alreadyInstalled =
+      capturedInstalled || env.isNativeShell || (await checkInstalledRelatedApps());
     const strategy = resolveStrategy(env, {
       hasDeferredPrompt: deferredPrompt != null,
       alreadyInstalled,
