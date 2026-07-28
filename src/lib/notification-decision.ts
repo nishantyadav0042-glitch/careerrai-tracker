@@ -53,7 +53,24 @@ export interface StudentNudgeState {
   ignoredStreak: number;
   /** Can we physically reach them? */
   reachable: boolean;
+  /**
+   * Hour of the IST study day, 0-23. REQUIRED, and its absence was a real bug:
+   * without it, 'start_the_day' and 'inactivity' evaluate the same condition
+   * ("has not opened") and therefore always fire together. A simulation over
+   * 448 real student-days showed both firing 335 times each — two notifications
+   * for one fact. Time is what distinguishes a morning invitation from an
+   * afternoon nudge.
+   */
+  hourIST: number;
 }
+
+/** When each intent is allowed to fire. Outside its window, it never sends. */
+export const INTENT_WINDOW: Record<NudgeIntent, [number, number]> = {
+  start_the_day: [7, 10],   // morning invitation
+  inactivity:    [14, 16],  // afternoon: still nothing today
+  log_reminder:  [20, 22],  // evening: the day is done, how did it go
+  recovery:      [9, 11],   // one calm morning reach for someone who has gone quiet
+};
 
 export interface Decision {
   send: boolean;
@@ -75,6 +92,23 @@ export interface NudgePolicy {
   probeEveryDays: number;
 }
 
+// EVIDENCE TAGS (docs/EVIDENCE-POLICY.md). None of these three numbers is
+// derived from an experiment, and saying so here is the point:
+//
+//   maxPerDay: 4        HYPOTHESIS · evidence: none · confidence: low
+//                       EXPERIMENT: compare 2 / 3 / 4 against logs completed.
+//                       DERIVED: at cap 3 vs 4 the simulated load is identical
+//                       (2.38/student-day), so 4 is not currently binding.
+//   fatigueThreshold: 6 HYPOTHESIS · evidence: none · confidence: low
+//                       The REASONING is derived — at a 1-3% tap rate, four
+//                       ignored in a row is ordinary — but 6 itself is
+//                       intuition. EXPERIMENT: 4 / 6 / 8 over two weeks.
+//   probeEveryDays: 3   HYPOTHESIS · evidence: none · confidence: low
+//
+// DERIVED, from 448 real student-days (scripts/simulate-nudges.mjs):
+//   mean 2.38 nudges/student-day · 71.9% of student-days receive 3 · 8.3%
+//   receive 0. An earlier claim of "~1.2/day" was wrong by roughly 2x and was
+//   never measured before being stated.
 export const DEFAULT_POLICY: NudgePolicy = {
   maxPerDay: 4,
   fatigueThreshold: 6,
@@ -114,6 +148,11 @@ export function decideNudge(
   // best-performing notification at 6.9% for exactly this reason.
   if (s.ignoredStreak >= policy.fatigueThreshold && intent !== 'recovery') {
     return { send: false, why: `fatigued — ${s.ignoredStreak} delivered and ignored in a row` };
+  }
+
+  const [from, to] = INTENT_WINDOW[intent];
+  if (s.hourIST < from || s.hourIST > to) {
+    return { send: false, why: `outside the ${from}:00-${to}:00 window for ${intent}` };
   }
 
   switch (intent) {
@@ -160,13 +199,19 @@ export function decideNudge(
  * actually get?" without guessing.
  */
 export function nudgesForDay(s: StudentNudgeState, policy: NudgePolicy = DEFAULT_POLICY): NudgeIntent[] {
-  const order: NudgeIntent[] = ['start_the_day', 'inactivity', 'log_reminder', 'recovery'];
+  // Walks the day hour by hour, because a day is a sequence and not a set:
+  // an intent that fires at 09:00 changes the state the 14:00 intent sees.
+  const order: NudgeIntent[] = ['start_the_day', 'recovery', 'inactivity', 'log_reminder'];
   const out: NudgeIntent[] = [];
   const state = { ...s };
-  for (const intent of order) {
-    if (decideNudge(intent, state, policy).send) {
-      out.push(intent);
-      state.sentToday += 1;
+  for (let hour = 0; hour < 24; hour++) {
+    state.hourIST = hour;
+    for (const intent of order) {
+      if (out.includes(intent)) continue; // once per day, per intent
+      if (decideNudge(intent, state, policy).send) {
+        out.push(intent);
+        state.sentToday += 1;
+      }
     }
   }
   return out;
