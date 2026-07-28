@@ -61,8 +61,28 @@ export interface Decision {
   why: string;
 }
 
+// ── Tuning ──────────────────────────────────────────────────────────────────
+//
+// These are guesses. Not one of them is derived from an experiment, because we
+// have never run one. They are therefore CONFIGURABLE, not constants: the
+// co-founder's point is that 6 might turn out to be 4 or 8, and a number
+// baked into a function is a number nobody ever revisits.
+//
+// Defaults below are the starting position, overridable per call.
+export interface NudgePolicy {
+  maxPerDay: number;
+  fatigueThreshold: number;
+  probeEveryDays: number;
+}
+
+export const DEFAULT_POLICY: NudgePolicy = {
+  maxPerDay: 4,
+  fatigueThreshold: 6,
+  probeEveryDays: 3,
+};
+
 /** Hard ceiling. Nobody receives more than this in a day, whatever their state. */
-export const MAX_NUDGES_PER_DAY = 4;
+export const MAX_NUDGES_PER_DAY = DEFAULT_POLICY.maxPerDay;
 
 /**
  * Back off after this many ignored-in-a-row. Chosen deliberately low: at a 1-3%
@@ -71,16 +91,20 @@ export const MAX_NUDGES_PER_DAY = 4;
  * person has stopped seeing us", and the answer to that is to stop talking,
  * not to talk louder.
  */
-export const FATIGUE_THRESHOLD = 6;
+export const FATIGUE_THRESHOLD = DEFAULT_POLICY.fatigueThreshold;
 
 /** After backing off, allow one probe every N days rather than going silent forever. */
-export const FATIGUE_PROBE_EVERY_DAYS = 3;
+export const FATIGUE_PROBE_EVERY_DAYS = DEFAULT_POLICY.probeEveryDays;
 
-export function decideNudge(intent: NudgeIntent, s: StudentNudgeState): Decision {
+export function decideNudge(
+  intent: NudgeIntent,
+  s: StudentNudgeState,
+  policy: NudgePolicy = DEFAULT_POLICY,
+): Decision {
   if (!s.reachable) return { send: false, why: 'no live push subscription' };
 
-  if (s.sentToday >= MAX_NUDGES_PER_DAY) {
-    return { send: false, why: `daily ceiling of ${MAX_NUDGES_PER_DAY} already reached` };
+  if (s.sentToday >= policy.maxPerDay) {
+    return { send: false, why: `daily ceiling of ${policy.maxPerDay} already reached` };
   }
 
   // ── Fatigue ───────────────────────────────────────────────────────────────
@@ -88,7 +112,7 @@ export function decideNudge(intent: NudgeIntent, s: StudentNudgeState): Decision
   // aimed at a student who has already gone quiet — that is precisely when a
   // rare, well-timed message is worth its cost. inactive_recovery is our
   // best-performing notification at 6.9% for exactly this reason.
-  if (s.ignoredStreak >= FATIGUE_THRESHOLD && intent !== 'recovery') {
+  if (s.ignoredStreak >= policy.fatigueThreshold && intent !== 'recovery') {
     return { send: false, why: `fatigued — ${s.ignoredStreak} delivered and ignored in a row` };
   }
 
@@ -121,7 +145,7 @@ export function decideNudge(intent: NudgeIntent, s: StudentNudgeState): Decision
       if (s.daysSinceLastLog == null) return { send: true, why: 'never logged — activation case' };
       if (s.daysSinceLastLog < 2) return { send: false, why: 'logged within the last day — too soon to call it lapsed' };
       // Once fatigued, probe occasionally instead of daily.
-      if (s.ignoredStreak >= FATIGUE_THRESHOLD && s.daysSinceLastLog % FATIGUE_PROBE_EVERY_DAYS !== 0) {
+      if (s.ignoredStreak >= policy.fatigueThreshold && s.daysSinceLastLog % policy.probeEveryDays !== 0) {
         return { send: false, why: 'fatigued — waiting for the next probe day' };
       }
       return { send: true, why: `${s.daysSinceLastLog} study days since their last log` };
@@ -135,12 +159,12 @@ export function decideNudge(intent: NudgeIntent, s: StudentNudgeState): Decision
  * the admin desk to answer "how many notifications does an engaged student
  * actually get?" without guessing.
  */
-export function nudgesForDay(s: StudentNudgeState): NudgeIntent[] {
+export function nudgesForDay(s: StudentNudgeState, policy: NudgePolicy = DEFAULT_POLICY): NudgeIntent[] {
   const order: NudgeIntent[] = ['start_the_day', 'inactivity', 'log_reminder', 'recovery'];
   const out: NudgeIntent[] = [];
   const state = { ...s };
   for (const intent of order) {
-    if (decideNudge(intent, state).send) {
+    if (decideNudge(intent, state, policy).send) {
       out.push(intent);
       state.sentToday += 1;
     }
