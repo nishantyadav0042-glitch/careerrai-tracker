@@ -51,6 +51,18 @@ export async function GET(request: NextRequest) {
   const skipTop = Math.max(0, Number(params.get('skipTop') ?? DEFAULT_SKIP_TOP));
   const send = params.get('send') === '1';
 
+  // Configuration is checked ONCE, before anything is claimed. The cooldown
+  // stamp goes on before each call (it has to — that's what makes the claim
+  // atomic), so an unset webhook URL would otherwise stamp every student in the
+  // batch and lock them out of a follow-up for the full cooldown without a
+  // single call having been placed. Fail the whole run instead.
+  if (send && !process.env.EXPEDIFY_WEBHOOK_URL) {
+    return NextResponse.json({
+      error: 'EXPEDIFY_WEBHOOK_URL is not set on this deployment — nothing was sent and no student was marked as called.',
+      configured: false,
+    }, { status: 503 });
+  }
+
   // ONE definition of "who is ready for the buddy call", shared with
   // /admin/sales-queue and the dashboard count. A second ranking here would
   // mean the founder's screen and the dialler disagree about who is hottest.
