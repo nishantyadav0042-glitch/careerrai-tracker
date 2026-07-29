@@ -52,3 +52,9 @@ playwright-report/
 android/*.keystore
 android/*.jks
 android_keystore_password.txt
+# Build artifacts: large, regenerated from careerrai.in on every build, and a
+# signed bundle in git history is a signing-key question nobody wants to answer.
+*.aab
+*.apk
+android/app/build/
+android/build/
