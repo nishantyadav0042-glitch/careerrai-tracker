@@ -5,6 +5,7 @@ import { sendNotification } from '@/lib/notifications';
 import { resolvePair } from '@/lib/chat';
 import { resolveGrantAccess, MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 import { serverError } from '@/lib/api-error';
+import { isBlockedPair } from '@/lib/chat-safety';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -48,6 +49,23 @@ export async function POST(request: NextRequest) {
       );
     }
     pair = { studentId: grantAccess.studentId, buddyId: grantAccess.buddyId };
+  }
+
+  // A block stops messages in BOTH directions (App Store 1.2 / Play UGC). A
+  // block that only silences the person who filed it is not a block — the
+  // abusive party would keep talking, which is the exact thing the guideline
+  // exists to prevent. Enforced HERE, on the server: a UI-only block is a
+  // gesture, not a protection.
+  const { data: blockRows } = await admin
+    .from('chat_blocks')
+    .select('blocker_id, blocked_id')
+    .in('blocker_id', [pair.studentId, pair.buddyId])
+    .in('blocked_id', [pair.studentId, pair.buddyId]);
+  if (isBlockedPair(blockRows, pair.studentId, pair.buddyId)) {
+    return NextResponse.json(
+      { error: 'blocked', message: 'This conversation is blocked. Email business@careerrai.com if you need it reopened.' },
+      { status: 403 }
+    );
   }
 
   const { data: message, error } = await admin

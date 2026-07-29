@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from './types';
+import { ReportConversation } from './report-conversation';
 
 function checkAuthorship(aiBulletText: string, submitted: string): string | null {
   const norm = (s: string): string[] =>
@@ -209,11 +210,16 @@ export function ChatThread({
       className={embedded ? 'h-full flex flex-col' : 'fixed left-0 right-0 flex flex-col max-w-2xl mx-auto px-4'}
       style={embedded ? undefined : { top: '6rem', bottom: '4.5rem' }}
     >
-      {/* Header */}
+      {/* Header. The report/block control lives here rather than per-message:
+          in a 1:1 thread you report the person, not one line. Required by
+          App Store 1.2 and Play's UGC policy — see lib/chat-safety. */}
       <div className="shrink-0 pb-3 mb-1 border-b border-stone-200">
-        <h1 className="text-lg font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
-          {otherName}
-        </h1>
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-lg font-bold text-stone-900 truncate" style={{ fontFamily: 'Georgia, serif' }}>
+            {otherName}
+          </h1>
+          <ReportConversation otherId={meId === studentId ? buddyId : studentId} otherName={otherName} />
+        </div>
         {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
       </div>
 
