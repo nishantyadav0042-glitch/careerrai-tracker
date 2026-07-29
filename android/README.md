@@ -1,5 +1,12 @@
 # CareerRai — Android app (Play Store) via TWA
 
+> **Superseded for uploading.** This file is the original build note and parts of
+> it are now stale (assetlinks is already filled in and live; the Play Console
+> section predates the App content declarations, the review credentials and the
+> closed-testing gate). For an upload, follow
+> **`docs/PLAY-STORE-UPLOAD-GUIDE.md`** — written 29 Jul 2026 against the live
+> database and site. Keep this file for the Bubblewrap/PWABuilder build detail.
+
 This turns the existing web app into a real, installable **Google Play Store**
 app using a **Trusted Web Activity (TWA)**. It is still the same website under the
 hood (`careerrai.in`) — no separate codebase, content updates ship
