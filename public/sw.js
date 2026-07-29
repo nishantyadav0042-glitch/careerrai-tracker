@@ -1,15 +1,49 @@
-﻿// Service Worker — push notifications + installability (v6: delivery beacon)
+﻿// Service Worker — push notifications + installability (v7: never answer a
+// navigation)
 //
 // Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
 // site has a service worker with a REAL fetch handler. So we add one — but it is
 // strictly NETWORK-ONLY: it caches nothing and always goes to the network, which
 // means deploys are never stale (the reason an earlier version had no handler at
 // all). This gives us both: clean one-click install AND always-fresh builds.
+//
+// ⚠️ v7 — DO NOT reintroduce respondWith on navigations. v6 did this:
+//
+//     event.respondWith(fetch(event.request).catch(() => Response.error()));
+//
+// which made this worker the thing that answers the page load itself. When that
+// inner fetch fails for ANY reason, the worker hands the browser a synthetic
+// network error and the result is a blank screen — with no request ever leaving
+// the process, so a network monitor reads 0 bytes / no active connections and
+// the failure looks like the device is offline when it isn't.
+//
+// That is not theoretical: it is the shape of the iOS wrapper's blank screen.
+// A service worker registration lives in WKWebView's own data store, so once
+// registered inside the app it controls every later launch — while Safari on the
+// same device, which has a completely separate store, keeps loading the site
+// perfectly. Any first-load hiccup (a cold start before the network stack is
+// ready, an app-bound-domain block, a killed process mid-request) becomes a
+// permanent blank screen the app can never recover from on its own, because the
+// worker also has to be reachable to be replaced.
+//
+// A worker must never be able to break a page load. So navigations go straight
+// to the network untouched, while subresources keep flowing through a real
+// handler — Chrome's installability check wants a worker that actually does
+// something, and a failed image or script degrades a page instead of replacing
+// it with a blank one.
 self.addEventListener('fetch', (event) => {
   // Only GET requests; let POST/PUT/etc. (API calls) pass through untouched.
   if (event.request.method !== 'GET') return;
-  // Pure network pass-through — no cache read or write, so never stale.
-  event.respondWith(fetch(event.request).catch(() => Response.error()));
+  // THE FIX: never intercept a navigation or a document request. Returning
+  // without calling respondWith hands it back to the browser's own network
+  // stack, which has real retries, real reachability logic and real error
+  // pages — none of which a worker can reproduce, and all of which it can
+  // destroy by answering first.
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') return;
+  // Subresources: still a genuine network-only pass-through. No .catch that
+  // manufactures a synthetic error — a rejected fetch is left to fail exactly
+  // as it would have without a worker in the path.
+  event.respondWith(fetch(event.request));
 });
 
 self.addEventListener('push', (event) => {
