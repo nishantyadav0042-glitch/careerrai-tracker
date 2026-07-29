@@ -341,20 +341,34 @@ Install from the internal-testing link and confirm:
 - [ ] Profile → Settings → **Delete account** exists and is reachable
 - [ ] Back button behaves (doesn't exit the app from a sub-page)
 
-### Two gaps on the review account, found 29 Jul
+### What the reviewer will actually see (seeded and verified 29 Jul)
 
-Both verified against the live database. Neither blocks submission, but a
-reviewer who taps around will hit them:
+Two gaps were found and closed the same day. Current state of
+`appreview@careerrai.in`, straight from the database:
 
-1. **`topic_coverage` is empty for `appreview@careerrai.in`** (0 rows, while
-   real students have 11,731 between them). The syllabus and coverage screens —
-   which the landing page sells as "Covered, left, revised — live" — will render
-   **empty** for the reviewer.
-2. **No buddy is assigned.** The mentor chat and "analyse every mock with your
-   buddy" screens will be locked or empty.
+| | |
+|---|---|
+| Logged study days | 21 |
+| Streak | 21 |
+| Syllabus coverage | 55 topics, **34 touched** — 6 revising, 15 practicing, 13 learning |
+| Mock analyses | 2 |
+| Mentor | assigned (`Aarav Mehta (Test Mentor)`) |
+| Mentor chat | 6 messages, a real coaching exchange about DILR set selection |
+| Premium | on — so the mentor hub opens instead of the paywall |
 
-Ask me to seed both and it's a ten-minute fix. Worth doing: an empty screen
-behind a headline feature is exactly what got Apple's 2.1 rejection.
+Two deliberate choices in that seed, both worth knowing:
+
+- **The mentor is the test-mentor account, not a real one.** Assigning a real
+  IIM mentor would drop a fake student into their live queue and their
+  notifications. If you'd rather the chat header didn't read "(Test Mentor)",
+  that's a one-word rename — but the account stays `is_test_account = true`
+  either way, because the data should say what it is.
+- **Premium is on.** Without it the mentor hub renders `LockedBuddyHub` — the
+  paywall — and the reviewer never sees the headline feature. It also keeps an
+  Apple reviewer away from a payment screen entirely, which is the safer side of
+  guideline 3.1.1. It does **not** touch your paid numbers: the admin dashboard
+  filters `is_test_account` out of its upgraded count, and real paid students
+  still reads the same as before the change (verified).
 
 ---
 
