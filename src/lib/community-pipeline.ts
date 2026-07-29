@@ -26,6 +26,13 @@ export const MAX_SUBMISSIONS_PER_DAY = 1; // BeReal rule: the limit creates qual
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
+// Tip length, for exactly the same reason: 150 was written out separately in
+// the server validator, the textarea's slice() and the character counter, so
+// changing the limit meant finding all three. Curated seed stock is held to the
+// same ceiling, so a curated tip and a student's tip always lay out alike.
+export const MIN_TIP_CHARS = 15;
+export const MAX_TIP_CHARS = 150;
+
 // ── The shelf must never be empty ───────────────────────────────────────────
 //
 // Every submission carries a 72h voting window, so a pool left alone DECAYS:

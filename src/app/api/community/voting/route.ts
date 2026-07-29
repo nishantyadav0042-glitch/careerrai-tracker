@@ -32,7 +32,7 @@ export async function GET() {
   // gamble the launch surface on. 'featured' items have no expiry at all.
   const shelf = async () => {
     const { data } = await admin.from('student_submissions')
-      .select('id, kind, topic, payload, image_path, display_name, student_id, status, voting_ends_at')
+      .select('id, kind, topic, payload, image_path, display_name, curated, student_id, status, voting_ends_at')
       .in('status', ['voting', 'featured'])
       .order('id');
     return (data ?? []).filter((r: { status: string; voting_ends_at: string | null }) =>
@@ -70,7 +70,7 @@ export async function GET() {
   try { await promoteDailyPick(admin); } catch (e) { console.error('[community/voting] promote failed', e); }
   const { data: topRows } = await admin
     .from('student_submissions')
-    .select('id, kind, topic, payload, image_path, display_name')
+    .select('id, kind, topic, payload, image_path, display_name, curated')
     .eq('featured_on', day)
     .in('status', ['voting', 'featured', 'archived']);
   const topIds = new Set((topRows ?? []).map((r) => r.id as string));
@@ -104,6 +104,7 @@ export async function GET() {
         ? admin.storage.from('community-questions').getPublicUrl(item.image_path as string).data.publicUrl
         : null,
       displayName: (item.display_name as string | null) ?? 'a CareerRai student',
+      curated: item.curated === true,
       prompt: VOTE_PROMPT[kind],
     };
   };
@@ -116,7 +117,7 @@ export async function GET() {
 
   // Shape the top-pick rows with the same payload mapping the ballot uses.
   // No vote counts in the payload, same as everywhere else on this surface.
-  const shapeTop = (item: { id: unknown; kind: unknown; topic: unknown; payload: unknown; image_path: unknown; display_name: unknown } | undefined) => {
+  const shapeTop = (item: { id: unknown; kind: unknown; topic: unknown; payload: unknown; image_path: unknown; display_name: unknown; curated: unknown } | undefined) => {
     if (!item) return null;
     const payload = (item.payload ?? {}) as { text?: string; section?: string; options?: string[] };
     return {
@@ -130,6 +131,7 @@ export async function GET() {
         ? admin.storage.from('community-questions').getPublicUrl(item.image_path as string).data.publicUrl
         : null,
       displayName: (item.display_name as string | null) ?? 'a CareerRai student',
+      curated: item.curated === true,
     };
   };
   const topPick = {

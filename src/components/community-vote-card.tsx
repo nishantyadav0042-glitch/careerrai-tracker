@@ -20,7 +20,17 @@ import { track } from '@/lib/journey';
 interface VoteItem {
   id: string; kind: string; section: string | null; topic: string | null;
   text: string | null; options: string[] | null; imageUrl: string | null;
-  displayName: string; prompt: string;
+  displayName: string; curated: boolean; prompt: string;
+}
+
+// Attribution, and it has to be literally true for every item on this surface.
+// A student's submission carries an anonymised first name — the name is hidden,
+// the words are theirs, so "— Priya, CareerRai student" is honest. Curated stock
+// is written by us; putting a student's byline on it is the invented-testimonial
+// failure TRUST-OS rule 1 forbids, and the same class of misrepresentation that
+// got iOS 1.0 rejected under 2.3.10. One helper, so the two can never blur.
+function byline(item: { displayName: string; curated: boolean }): string {
+  return item.curated ? '— Curated by CareerRai' : `— ${item.displayName}, CareerRai student`;
 }
 
 // Section identities — colour is what separates "alive" from "grey wall".
@@ -127,7 +137,7 @@ export function CommunityVoteCard() {
           <img src={item.imageUrl} alt="Community question" className="mt-1.5 max-h-60 w-full rounded-lg border border-stone-100 object-contain" />
         )}
         <div className="mt-1 flex items-center">
-          <p className="text-[10px] text-stone-400">— {item.displayName}, CareerRai student</p>
+          <p className="text-[10px] text-stone-400">{byline(item)}</p>
           {/* Play UGC compliance: every shared item is reportable in-app. */}
           <ReportItem submissionId={item.id} />
         </div>
@@ -202,7 +212,7 @@ export function CommunityVoteCard() {
           <img src={item.imageUrl} alt="Today's top pick" className="mt-1.5 max-h-60 w-full rounded-lg border border-amber-100 object-contain" />
         )}
         <div className="mt-1 flex items-center">
-          <p className="text-[10px] text-stone-400">— {item.displayName}, CareerRai student · a new pick every day</p>
+          <p className="text-[10px] text-stone-400">{byline(item)} · a new pick every day</p>
           <ReportItem submissionId={item.id} />
         </div>
       </div>

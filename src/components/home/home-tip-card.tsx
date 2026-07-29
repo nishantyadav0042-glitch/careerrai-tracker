@@ -15,7 +15,7 @@ import { ReportItem } from '@/components/report-item';
 
 interface VoteItem {
   id: string; text: string | null; topic: string | null;
-  displayName: string; prompt: string;
+  displayName: string; curated: boolean; prompt: string;
 }
 
 export function HomeTipCard() {
@@ -64,15 +64,20 @@ export function HomeTipCard() {
         <div className="px-3.5 py-3">
           {/* WHAT this is, on top — so a Para Jumbles tip never reads as
               "kya hai ye". */}
+          {/* The label and the byline must both be true. Curated stock is ours;
+              calling it a "Student Tip" under an anonymised first name is the
+              invented-attribution failure TRUST-OS rule 1 forbids. */}
           <p className="text-[9.5px] font-extrabold uppercase tracking-widest text-amber-600">
-            💡 Student Tip{tip.topic ? ` · ${tip.topic}` : ''}
+            {tip.curated ? '💡 CAT Tip' : '💡 Student Tip'}{tip.topic ? ` · ${tip.topic}` : ''}
           </p>
 
           <p className="mt-1 text-[13.5px] font-semibold leading-snug text-stone-900">
             &ldquo;{tip.text}&rdquo;
           </p>
           <div className="mt-0.5 flex items-center gap-2">
-            <p className="text-[10.5px] text-stone-400">— {tip.displayName}, CareerRai student</p>
+            <p className="text-[10.5px] text-stone-400">
+              {tip.curated ? '— Curated by CareerRai' : `— ${tip.displayName}, CareerRai student`}
+            </p>
             {/* Play UGC compliance: reportable wherever it's shown. */}
             <ReportItem submissionId={tip.id} />
           </div>

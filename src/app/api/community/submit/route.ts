@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
 import { checkTipSafety, checkImageSafety } from '@/lib/community-safety';
-import { randomDisplayName, VOTING_WINDOW_HOURS, MAX_SUBMISSIONS_PER_DAY, MAX_IMAGE_BYTES, IMAGE_MIMES } from '@/lib/community-pipeline';
+import { randomDisplayName, VOTING_WINDOW_HOURS, MAX_SUBMISSIONS_PER_DAY, MAX_IMAGE_BYTES, IMAGE_MIMES, MIN_TIP_CHARS, MAX_TIP_CHARS } from '@/lib/community-pipeline';
 
 export const maxDuration = 60;
 
@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
 
   if (kind === 'tip') {
     const text = typeof tip === 'string' ? tip.trim() : '';
-    if (text.length < 15 || text.length > 150) {
-      return NextResponse.json({ error: 'Tips are 15–150 characters — one sharp idea' }, { status: 400 });
+    if (text.length < MIN_TIP_CHARS || text.length > MAX_TIP_CHARS) {
+      return NextResponse.json({ error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` }, { status: 400 });
     }
 
     const safety = await checkTipSafety(text);

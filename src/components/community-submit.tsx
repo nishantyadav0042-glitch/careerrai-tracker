@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { X, HeartHandshake, Camera } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
-import { MAX_IMAGE_BYTES, IMAGE_MIMES } from '@/lib/community-pipeline';
+import { MAX_IMAGE_BYTES, IMAGE_MIMES, MAX_TIP_CHARS } from '@/lib/community-pipeline';
 
 // "Help the next student" — exactly two things, minimum friction:
 //   💡 a Tip — one sharp idea in plain text (≤150 chars), section + topic
@@ -135,11 +135,11 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
             {kind === 'tip' ? (
               <label className="mt-3 block">
                 <textarea
-                  value={tip} onChange={(e) => setTip(e.target.value.slice(0, 150))} rows={3}
+                  value={tip} onChange={(e) => setTip(e.target.value.slice(0, MAX_TIP_CHARS))} rows={3}
                   placeholder="One idea, simple words. e.g. Always mark the fixed positions first."
                   className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
                 />
-                <span className="mt-0.5 block text-right text-[10px] text-stone-400">{tip.length}/150</span>
+                <span className="mt-0.5 block text-right text-[10px] text-stone-400">{tip.length}/{MAX_TIP_CHARS}</span>
               </label>
             ) : (
               <div className="mt-3">

@@ -353,7 +353,7 @@ function ScreenDailyPick() {
         <ol className="mt-1 space-y-px text-[9px] leading-snug text-stone-600">
           <li>A. 1200</li><li>B. 1500</li><li>C. 1800</li>
         </ol>
-        <p className="mt-1.5 text-[8px] text-stone-400">— a CareerRai student · a new pick every day</p>
+        <p className="mt-1.5 text-[8px] text-stone-400">— Curated by CareerRai · a new pick every day</p>
       </div>
       <div className="mt-2 rounded-xl border border-l-4 border-stone-200 border-l-amber-400 bg-white p-2.5">
         <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-700">

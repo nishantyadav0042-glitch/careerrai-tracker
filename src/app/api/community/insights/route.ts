@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data } = await admin
     .from('student_submissions')
-    .select('topic, kind, payload, display_name, published_at')
+    .select('topic, kind, payload, display_name, curated, published_at')
     .in('topic', topics)
     .eq('status', 'approved').in('kind', ['tip', 'mistake', 'shortcut'])
     .not('published_at', 'is', null)
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
   // Cap 2 per topic — the freshest verified items. More than that turns
   // curriculum back into a feed.
-  const byTopic: Record<string, { kind: string; text: string; name: string | null }[]> = {};
+  const byTopic: Record<string, { kind: string; text: string; name: string | null; curated: boolean }[]> = {};
   for (const row of data ?? []) {
     const t = row.topic as string;
     byTopic[t] ??= [];
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const text = (row.payload as { text?: string })?.text;
     if (!text) continue;
     // Anonymous by rule: the stored random display name, never a real one.
-    byTopic[t].push({ kind: row.kind as string, text, name: (row.display_name as string | null) ?? null });
+    byTopic[t].push({ kind: row.kind as string, text, name: (row.display_name as string | null) ?? null, curated: row.curated === true });
   }
 
   return NextResponse.json({ insights: byTopic });

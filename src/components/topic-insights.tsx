@@ -11,12 +11,18 @@ import { useEffect, useState } from 'react';
 // Renders NOTHING when a topic has no verified insights — an empty community
 // section would advertise emptiness.
 
-interface Insight { kind: string; text: string; name: string | null }
+interface Insight { kind: string; text: string; name: string | null; curated: boolean }
 
 const FRAME: Record<string, { emoji: string; label: string; tone: string }> = {
   tip:      { emoji: '💡', label: 'Student tip',           tone: 'bg-indigo-50 text-indigo-900' },
   mistake:  { emoji: '⚠️', label: 'Common mistake',        tone: 'bg-amber-50 text-amber-900' },
   shortcut: { emoji: '⚡', label: 'Shortcut from a student', tone: 'bg-emerald-50 text-emerald-900' },
+};
+
+// Curated stock carries no student label at all — not in the heading, not in
+// the byline. TRUST-OS rule 1: our own words never wear a student's name.
+const CURATED_LABEL: Record<string, string> = {
+  tip: 'CAT tip', mistake: 'Common mistake', shortcut: 'Shortcut',
 };
 
 // Module-level cache: several topics can expand in one session and the plan
@@ -50,9 +56,13 @@ export function TopicInsights({ topic }: { topic: string }) {
         const f = FRAME[ins.kind] ?? FRAME.tip;
         return (
           <div key={i} className={`rounded-xl px-2.5 py-2 text-[12px] leading-relaxed ${f.tone}`}>
-            <span className="font-bold">{f.emoji} {f.label}:</span> {ins.text}
+            <span className="font-bold">
+              {f.emoji} {ins.curated ? (CURATED_LABEL[ins.kind] ?? 'CAT tip') : f.label}:
+            </span> {ins.text}
             <span className="mt-0.5 block text-[10px] opacity-70">
-              — {ins.name ?? 'a CareerRai student'} · verified by CareerRai
+              {ins.curated
+                ? '— Curated by CareerRai'
+                : `— ${ins.name ?? 'a CareerRai student'} · verified by CareerRai`}
             </span>
           </div>
         );

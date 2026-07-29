@@ -287,6 +287,53 @@
 
 ---
 
+## Incident #11 — Curated Daily Pick content wearing a student's byline
+
+- **Date:** 29 Jul 2026
+- **Severity:** S3 (no outage; a Constitution violation live in front of students)
+- **Found:** While seeding a month of curated questions and tips, on reading the
+  existing shelf. Not reported by anyone — it had been live since 25 Jul.
+- **What happened:** All 28 items on the Daily Pick shelf were owned by the
+  founder's own admin account (`role = 'admin'`) and rendered as
+  "— Pooja, CareerRai student". The content was good; the byline was invented.
+  Three surfaces did it: `community-vote-card.tsx` (ballot **and** Top Pick),
+  `home-tip-card.tsx` (which also labelled it "💡 Student Tip"), and
+  `topic-insights.tsx` ("Shortcut from a student · verified by CareerRai").
+- **Why it slipped through:** the anonymisation convention is legitimate — a real
+  student's submission gets a random first name so no one becomes a star, and
+  "— Priya, CareerRai student" is then *true*: the name is hidden, the words are
+  hers. Seed rows reused that same field, so the identical render turned into a
+  fabricated attribution with no code change and nothing to notice.
+- **Root cause:** the row carried no way to say who wrote it. `display_name` was
+  doing double duty as "anonymised student" and "author", and only one of those
+  two readings is honest in the UI.
+- **Blast radius:** every student who opened Daily Pick or Home between 25 and
+  29 Jul. Same class as the 2.3.10 rejection in Incident #10 — a
+  misrepresentation of who is speaking.
+- **Fix:** `student_submissions.curated` (migration
+  `20260729_daily_pick_curated_flag.sql`), backfilled `true` for every
+  admin-owned row. All three surfaces now branch on it: "— Curated by CareerRai",
+  and the labels drop the word "Student" too. New curated stock is inserted with
+  `display_name = 'CareerRai'`, `curated = true`.
+- **Lessons:**
+  1. A field that means two different things will eventually render a lie. If a
+     row can be authored by us *or* by a student, the row has to say which.
+  2. Attribution is not copy — it is a claim. Reviewing the seed content for
+     quality is not the same as reviewing what the screen asserts about it.
+  3. Curated is not the problem and never was. Curated content presented as
+     curated is honest and, for hard questions, more credible.
+- **Prevention (encoded):** the `byline()` helper in
+  `community-vote-card.tsx` is the single place the two cases are decided, so a
+  new block cannot hand-roll a student claim. `src/lib/daily-pick-seed.test.ts`
+  holds the founder's content constraints (all three sections, no RC, question
+  and tip length ceilings, a trap named in every explanation) so the next batch
+  clears the same bar. Tip length now comes from `MAX_TIP_CHARS` in
+  `community-pipeline.ts` instead of the literal `150` that had been copied into
+  the server validator, the textarea and the character counter.
+- **Owner:** Nishant
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a
