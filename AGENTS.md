@@ -34,3 +34,9 @@ founder, don't ship the violation.
 incidents that touched it — permanent record of what went wrong, why, and what
 now prevents it. Never repeat a logged mistake. When a new incident happens, add
 an entry.
+
+**Orientation for anyone (human or AI) new to this repo:**
+`docs/KNOWLEDGE.md` is the single knowledge document — what the company is,
+the live-state snapshot, the architecture map, the failure patterns already
+paid for, and which deeper doc answers which question. Read it before your
+first change; update its dated facts the day they change.
