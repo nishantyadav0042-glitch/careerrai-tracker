@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
+import { mergeCallFeedback, type PriorFeedback } from '@/lib/call-feedback';
 
 // Inbound Expedify webhook — the RETURN pipe. Their workflow POSTs here after
 // every call attempt / reschedule / CRM contact update, and everything lands in
@@ -68,17 +69,31 @@ export async function POST(request: NextRequest) {
       const callbackAt = str(payload.callback_at);
       const statusBits = [event, outcome, category, callbackAt ? `callback ${callbackAt}` : null].filter(Boolean);
 
-      // Agent notes APPEND to call_feedback with a timestamp line — founder
-      // notes already in the field are preserved verbatim.
+      // call_feedback is jsonb, and this route used to write a bare STRING into
+      // it while /expedify/callback wrote an object and the leads export read
+      // `.disposition` / `.notes` off that object. Result: every outcome this
+      // route recorded exported as blank columns, and folding a string onto an
+      // existing object produced "[object Object]". One shared merge now owns
+      // the shape, and a sparse event can no longer erase what an earlier call
+      // learned (lib/call-feedback).
       const summary = str(payload.agent_summary) ?? str(payload.notes) ?? str(payload.summary);
-      const prior = (data?.call_feedback as string | null) ?? '';
-      const stamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-      const appended = summary ? `${prior ? prior + '\n' : ''}[${stamp} · ${event}] ${summary}`.slice(0, 5000) : prior;
+      const momentum = typeof payload.momentum_score === 'number'
+        ? Math.max(0, Math.min(5, payload.momentum_score)) : null;
+      const feedback = mergeCallFeedback(data?.call_feedback as PriorFeedback, {
+        disposition: str(payload.disposition) ?? outcome ?? category,
+        reason_code: str(payload.reason_code),
+        drop_reason: str(payload.drop_reason),
+        momentum_score: momentum,
+        emotional_trigger: str(payload.emotional_trigger),
+        notes: summary,
+        event,
+        at: new Date().toISOString(),
+      });
 
       await admin.from('profiles').update({
         expedify_status: statusBits.join(' · ').slice(0, 200),
         expedify_synced_at: new Date().toISOString(),
-        ...(summary ? { call_feedback: appended } : {}),
+        call_feedback: feedback,
       }).eq('id', studentId);
     }
   }

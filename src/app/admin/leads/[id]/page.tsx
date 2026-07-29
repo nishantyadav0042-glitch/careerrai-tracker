@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getAuthUser } from '@/lib/auth';
+import { expedifyStatusBadge, readCallFeedback } from '@/lib/call-feedback';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { momentumStreak } from '@/lib/streak-utils';
 import { Card } from '@/components/ui/card';
@@ -41,7 +42,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (me?.role !== 'admin') redirect('/login');
 
   const { data: profile } = await admin.from('profiles')
-    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account, expedify_status, expedify_synced_at, signup_device, signup_browser')
+    .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account, expedify_status, expedify_synced_at, call_feedback, signup_device, signup_browser')
     .eq('id', id).in('role', ['student', 'buddy']).single();
   if (!profile) notFound();
 
@@ -55,6 +56,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       ? (profile.post_signup_done === true ? 'Full journey done' : 'Plan built · ceremony pending')
       : `Dropped at: ${stepLabel((profile.onboarding_step_reached as number | null) ?? 0)}`;
   const journeyDone = profile.role === 'buddy' ? profile.buddy_onboarding_completed === true : profile.onboarding_completed === true;
+  const callBadge = expedifyStatusBadge(profile.expedify_status as string | null);
+  const callFeedback = readCallFeedback(profile.call_feedback);
   const statusStrip = (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -75,12 +78,22 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         )}
       </div>
       <TestToggle id={profile.id as string} initial={profile.is_test_account === true} />
-      {profile.expedify_status && (
+      {/* Two different things write expedify_status: the signup state machine
+          ('sent'/'failed'/'queued'/…) and the return webhook, which writes an
+          outcome string like "call_report · interested · HOT". This used to test
+          `=== 'sent'` and paint everything else red as "sync failed", so a
+          successful call outcome displayed as a failure. One mapping now
+          (lib/call-feedback). */}
+      {callBadge && (
         <span className={cn(
           'inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold',
-          profile.expedify_status === 'sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+          callBadge.tone === 'good' ? 'bg-emerald-50 text-emerald-700'
+            : callBadge.tone === 'bad' ? 'bg-rose-50 text-rose-700'
+            : callBadge.tone === 'wait' ? 'bg-amber-50 text-amber-700'
+            : callBadge.tone === 'info' ? 'bg-indigo-50 text-indigo-700'
+            : 'bg-stone-100 text-stone-600'
         )}>
-          {profile.expedify_status === 'sent' ? '📞 Expedify call triggered' : '📞 Expedify sync failed'}
+          {callBadge.label}
           {profile.expedify_synced_at ? ` · ${new Date(profile.expedify_synced_at as string).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
         </span>
       )}
@@ -206,6 +219,57 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
         {/* Founder spec: journey / installed / notifications — first thing on the profile */}
         {statusStrip}
+
+        {/* What the AI call actually produced. Before this, the outcome webhook
+            wrote to the database and there was nowhere in the app to read it —
+            the summary existed only in a jsonb column. */}
+        {callFeedback && (callFeedback.notes || callFeedback.disposition || callFeedback.drop_reason) && (
+          <Card className="border-indigo-200 bg-indigo-50/40 p-4">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-500">
+              📞 AI call outcome
+              {callFeedback.at ? ` · ${new Date(callFeedback.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {callFeedback.disposition && (
+                <span className="rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-bold text-white">{callFeedback.disposition}</span>
+              )}
+              {callFeedback.momentum_score != null && (
+                <span className="rounded-lg bg-white px-2 py-1 text-[11px] font-bold text-indigo-700">Momentum {callFeedback.momentum_score}/5</span>
+              )}
+              {callFeedback.emotional_trigger && (
+                <span className="rounded-lg bg-white px-2 py-1 text-[11px] font-bold text-indigo-700">{callFeedback.emotional_trigger}</span>
+              )}
+            </div>
+            {/* The activation-gold field: why they stopped using the app. */}
+            {callFeedback.drop_reason && (
+              <p className="mt-2 text-sm text-stone-800">
+                <span className="font-bold">Why they dropped off:</span> {callFeedback.drop_reason}
+              </p>
+            )}
+            {callFeedback.notes && (
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-stone-700">{callFeedback.notes}</p>
+            )}
+            {callFeedback.log && callFeedback.log.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[11px] font-bold text-indigo-600">
+                  Earlier calls ({callFeedback.log.length})
+                </summary>
+                <ul className="mt-1.5 space-y-1.5 border-l-2 border-indigo-200 pl-2.5">
+                  {[...callFeedback.log].reverse().map((e, i) => (
+                    <li key={i} className="text-[12px] text-stone-600">
+                      {e.at && (
+                        <span className="text-[10px] font-bold text-stone-400">
+                          {new Date(e.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' })}{e.event ? ` · ${e.event}` : ''}{' — '}
+                        </span>
+                      )}
+                      {e.notes}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </Card>
+        )}
 
         {/* Identity strip */}
         <div>

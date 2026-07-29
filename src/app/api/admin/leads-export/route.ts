@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { readCallFeedback } from '@/lib/call-feedback';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { stepLabel } from '@/lib/lead-intel';
@@ -64,10 +65,12 @@ export async function GET() {
       csvCell(r.self_reported_weakest_section),
       csvCell(lastLog.get((r as { id: string }).id) ?? ''),
       csvCell(r.expedify_status ?? ''),
-      csvCell((r.call_feedback as { disposition?: string } | null)?.disposition ?? ''),
-      csvCell((r.call_feedback as { drop_reason?: string } | null)?.drop_reason ?? ''),
-      csvCell((r.call_feedback as { momentum_score?: number } | null)?.momentum_score ?? ''),
-      csvCell((r.call_feedback as { notes?: string } | null)?.notes ?? ''),
+      // One reader for the column, so a legacy string write still exports its
+      // text instead of four blank cells (lib/call-feedback).
+      csvCell(readCallFeedback(r.call_feedback)?.disposition ?? ''),
+      csvCell(readCallFeedback(r.call_feedback)?.drop_reason ?? ''),
+      csvCell(readCallFeedback(r.call_feedback)?.momentum_score ?? ''),
+      csvCell(readCallFeedback(r.call_feedback)?.notes ?? ''),
     ].join(','));
   }
 
