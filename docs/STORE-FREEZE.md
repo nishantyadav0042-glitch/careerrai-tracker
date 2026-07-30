@@ -71,10 +71,23 @@ we cannot test on their device. That is the whole argument for the freeze.
 - Applied database migrations — production and the reviewer share one database
 - The review account (below)
 
-### The one exception — P0 only
-Students blocked right now: login broken, payments broken, data loss, security.
-Fix and ship. A freeze with no emergency valve is a liability. Tell the founder
-when it happens, because it re-opens review risk on both listings.
+### Two exceptions, and only two
+
+**1. P0 incidents.** Students blocked right now: login broken, payments broken,
+data loss, security. Fix and ship. A freeze with no emergency valve is a
+liability. Tell the founder when it happens, because it re-opens review risk on
+both listings.
+
+**2. Deploys the store approval itself requires.** The freeze exists to protect
+the review, so it must not block the review. Allowed: `assetlinks.json`
+fingerprints, review-account access fixes, anything App Review explicitly asks
+for. Not allowed: product work riding along in the same deploy. One file, one
+reason, reviewed.
+
+**Open now:** `assetlinks.json` carries 2 fingerprints. Play re-signs with
+Google's key, so the App-signing SHA-256 from Play Console → App integrity is a
+required third. Without it the Android app renders a URL bar, which reads as a
+broken build. This is exception 2, pending the fingerprint from Sumukh.
 
 ## The review account — do not touch · VERIFIED
 
@@ -108,6 +121,41 @@ regularly.
 Project → Settings → Git → disable production deployments for `main` (or set
 Ignored Build Step to `exit 0`). One click, reversible, and it needs no deploy
 of its own. Recommended for the duration.
+
+## Apple reviewed on 29 Jul at 22:04 IST, and got in · VERIFIED
+
+Found in `student_events`, not assumed. Session
+`51ad85a4-74f4-4b6e-995c-f35a9c500aa5`, IP `139.178.131.4` — which appears
+**exactly once in the whole database**: one user, one session, 119 events,
+22:04:07–22:08:20 IST on 29 Jul, never before or since. Every team IP recurs
+across many users and days. iOS, `display_mode: standalone`, viewport 402×820.
+(Attribution to App Review is inference from that chain; the uniqueness is fact.)
+
+**Two results worth keeping:**
+
+1. **The login works.** `/login` 22:04:07 → two taps → `/student/tracker`
+   22:04:52. The 2.1 rejection cause — *"unable to sign in as no password login
+   was found"* — is proven fixed by the reviewer's own session, not by our
+   testing.
+2. **The iOS wrapper launched clean.** `standalone` means inside the app. No
+   blank screen. **The `sw.js` v7 fix held on a real reviewer device** — which is
+   precisely why that file must not move while a review is open.
+
+They swept tracker → blueprint → buddy → buddy/history → profile → community →
+plan/topics → analysis, opened the log twice, and opened the Daily Pick composer
+tapping both "A tip" and "A question" (UGC — Guideline 1.2). They never opened
+the mentor chat. At 22:08:10 they hit `log_blocked` — tried to save without
+marking a topic and were refused by our validation guard. Working as designed,
+but a reviewer meeting a refusal is a real if small risk; noted, not changed.
+
+## Known IPs — so nobody raises a false alarm
+
+| IP | Who |
+|---|---|
+| `157.119.177.23` | team — 974 events, 6 users, 26 sessions |
+| `122.169.48.134` | founder, mobile — confirmed 30 Jul |
+| `49.36.219.103` | Sumukh — the 29 Jul 23:54 IST session is `display_mode: twa`, which only appears when launched from the Android package. **His Play build installs and runs.** |
+| `139.178.131.4` | Apple App Review, 29 Jul only |
 
 ## Lifting the freeze
 
