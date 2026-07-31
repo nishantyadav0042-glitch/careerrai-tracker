@@ -15,7 +15,7 @@ Facts below are VERIFIED against production, Vercel and the database on
 
 | Store | State |
 |---|---|
-| **Apple** | Build 1.0 (3), **iPhone-only**, resubmitted 29 Jul. Prior rejection (2.1 unreachable login · 2.3.10 foreign status bar · 2.3.3 stale screenshots) remediated. Resolution Center reply posted. |
+| **Apple** | ✅ **APPROVED FOR DISTRIBUTION, 30 Jul 2026.** Build 1.0 (3), iPhone-only. Prior rejection (2.1 unreachable login · 2.3.10 foreign status bar · 2.3.3 stale screenshots) remediated. Pending founder checks: Free Apps agreement active, and version released vs. Pending Developer Release. |
 | **Play** | `CareerRai.aab` built 29 Jul, new keystore, both fingerprints live in `assetlinks.json`. Awaiting Sumukh's upload; App-signing SHA-256 owed back. |
 
 Production is running **`86e5b7f`** (Vercel `dpl_5pi2orenCAmjJZtqyqyMS2RRwkrW`,
@@ -56,6 +56,18 @@ we cannot test on their device. That is the whole argument for the freeze.
 ## The rule
 
 **Nothing merges to `main` while either store review is open.**
+
+**Apple approved on 30 Jul, and the freeze does not lift.** The reason changed
+rather than expired, and the new reason is heavier than the old one:
+
+- **Play review is still open.** The original argument stands in full for it.
+- **iOS users are now real users, not a reviewer.** Before approval, a bad
+  deploy cost us a rejection. Now it breaks live students on a platform where
+  this exact wrapper has a documented history of blank screens (`132f3db`).
+  Apple never sees a web deploy, so nothing catches it but us.
+
+That second point outlives both reviews. When the freeze finally lifts,
+`public/sw.js` does not go back to being an ordinary file.
 
 ### Allowed
 - Branch work: code, tests, docs, migrations authored but **not applied**
