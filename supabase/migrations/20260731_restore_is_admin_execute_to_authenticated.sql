@@ -1,0 +1,31 @@
+-- P0 restore, 31 Jul 2026. Applied to production the same night.
+--
+-- Students hit a raw Postgres error mid-onboarding, rendered into the UI:
+--   "permission denied for function is_admin"
+--
+-- is_admin(uuid) is referenced by FOUR RLS policies — profiles (cmd = ALL),
+-- daily_reports, test_results, buddy_feedback. Postgres evaluates every
+-- applicable policy on a statement, so a logged-in student reading or writing
+-- their OWN profile still causes is_admin() to be called under the
+-- `authenticated` role. Without EXECUTE the whole statement aborts, and the
+-- error surfaces to the student.
+--
+-- 20260726_security_hardening_pre_launch.sql revoked it from `authenticated`,
+-- doing precisely what two earlier migrations warned against in their comments:
+--
+--   20260707: "is_admin(): revoked from anon only (not authenticated) — four
+--              RLS policies call is_admin(auth.uid()) and need `authenticated`
+--              to keep [working]"
+--   20260712: "is_admin(uuid) is referenced by 4 RLS policies, so authenticated
+--              must keep its explicit EXECUTE; only strip the PUBLIC default
+--              and anon."
+--
+-- That migration's own header claims "every revoked RPC was verified
+-- server-side-only (service role) by grep before revoking". The grep was over
+-- application code, and is_admin's caller is not application code — it is four
+-- RLS policies inside the database. The check could not see them.
+--
+-- This restores the documented intended state. PUBLIC and `anon` stay revoked,
+-- so the hardening intent survives: the function is reachable only by a
+-- signed-in session, and all it reports is whether a given uuid is an admin.
+grant execute on function public.is_admin(uuid) to authenticated;
