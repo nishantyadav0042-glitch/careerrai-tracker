@@ -361,11 +361,22 @@
 - **Fix:** `20260731_restore_is_admin_execute_to_authenticated.sql` —
   `grant execute on function public.is_admin(uuid) to authenticated;`
   PUBLIC and `anon` stay revoked, so the hardening intent survives.
-- **Blast radius, honestly:** 13 students signed up after the revoke. One is
-  confirmed by screenshot. The rest cannot be proven from `exam_target`
-  completion, because its base rate was only 5.1% *before* the revoke — 0 of 13
-  after is well inside chance. The honest answer to "how many were blocked" is
-  UNKNOWN, and the reason we cannot answer it is the next lesson.
+- **Blast radius, honestly — and narrower than first stated:** 13 students
+  signed up after 26 Jul. **10 of them completed onboarding**, so this was not
+  blocking everyone, and the first framing of "onboarding broken for five days"
+  was wrong. One student is confirmed by screenshot, at 00:08 IST on 1 Aug.
+  How many others hit it is UNKNOWN, and *stays* unknown because nothing was
+  logged — which is the next lesson. The revoke's exact landing date could not
+  be established either: the repo file
+  `20260726_security_hardening_pre_launch.sql` has no matching row in
+  `supabase_migrations.schema_migrations`, so it reached production by some
+  other path.
+- **The number that mattered more, found while building the outreach list:**
+  **12 of those 13 students have never logged a single day.** That is not a
+  permissions bug, it is the activation cliff — the same wall the check-in
+  analysis hit from the other side (27 of 246 opened the app in 2.5 days, while
+  the gate converts 85% of students it actually meets). The P0 was real and
+  worth fixing in an hour; it was not why those students left.
 - **Lessons:**
   1. **A grep over `src/` cannot verify a database permission.** Callers of a
      SQL function live in policies, triggers, views and other functions. Before
