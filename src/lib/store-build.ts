@@ -124,27 +124,105 @@ export function isStoreBuild(): boolean {
 }
 
 /**
+ * True only inside the **iOS** store wrapper, and only on positive evidence of
+ * iOS — the cookie, or an Apple user-agent. Never true on Android.
+ *
+ * The asymmetry is deliberate. Android's payment escape works today and is what
+ * Play review sees, so the iOS branch must be impossible to reach from an
+ * Android device: `launchedFromAndroidApp()` short-circuits first, and no
+ * Android UA can satisfy the test below. A "not Android, therefore iOS" default
+ * would have put the Play build on an untested path — exactly the wrong risk to
+ * take while a Play submission is open.
+ */
+export interface IosStoreSignals {
+  storeBuild: boolean;
+  androidReferrer: boolean;
+  cookie: 'twa' | 'ios' | null;
+  userAgent: string;
+  platform: string;
+  maxTouchPoints: number;
+}
+
+/** The decision, pure and exported so every branch is covered by tests. */
+export function isIosStoreBuildFrom(s: IosStoreSignals): boolean {
+  if (!s.storeBuild) return false;
+  if (s.androidReferrer) return false;             // definitive Android — leave alone
+  if (s.cookie === 'twa') return false;            // definitive Android — leave alone
+  if (s.cookie === 'ios') return true;             // definitive iOS
+  return /iPad|iPhone|iPod/.test(s.userAgent)      // iPhone / iPad
+    || (s.platform === 'MacIntel' && s.maxTouchPoints > 1); // iPadOS desktop-mode UA
+}
+
+export function isIosStoreBuild(): boolean {
+  try {
+    return isIosStoreBuildFrom({
+      storeBuild: isStoreBuild(),
+      androidReferrer: launchedFromAndroidApp(),
+      cookie: storeCookieValue(),
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    });
+  } catch { return false; }
+}
+
+/** Mint a one-time hand-off of the current session. Null if it can't be minted. */
+async function mintHandoffToken(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/install/handoff', { method: 'POST' });
+    if (!res.ok) return null;
+    const { url } = (await res.json()) as { url?: string };
+    const q = url?.split('?')[1];
+    return q ? new URLSearchParams(q).get('k') : null;
+  } catch { return null; }
+}
+
+/** The `/go` hand-off URL. Pure, so the query-building is testable. */
+export function buildGoUrl(token: string, dest: string, origin: string): string {
+  const target = new URL('/go', origin);
+  target.searchParams.set('k', token);
+  target.searchParams.set('dest', dest);
+  return target.toString();
+}
+
+/**
+ * A ready-to-tap signed-in checkout URL, for the **iOS** path.
+ *
+ * WKWebView ignores scripted popups — `window.open()` returns null while the
+ * wrapper still paints a blank view over the app, so the student gets a white
+ * screen and never sees the fallback underneath it. VERIFIED in production on
+ * 31 Jul 2026: three Buy taps, three `pay_escape_browser {opened:false}`, and
+ * zero rows in `pwa_session_handoff` — proving `escapeToBrowserForPayment`
+ * returned at `if (!win)` before a token was ever minted.
+ *
+ * A real `<a target="_blank">` IS honoured by WKWebView's navigation delegate,
+ * so on iOS we skip `window.open` entirely and hand the caller a URL to render
+ * as a link. No popup, so no blank view can appear.
+ */
+export async function paymentHandoffUrl(dest = '/student/buddy'): Promise<string | null> {
+  const token = await mintHandoffToken();
+  if (!token) return null;
+  return buildGoUrl(token, dest, window.location.origin);
+}
+
+/**
  * Sync-open a browser tab INSIDE the user gesture (so it isn't popup-blocked),
  * then point it at a one-time logged-in hand-off (`/go`) that lands the student
  * on `dest` (the paywall) in the real browser, already signed in, where web
  * Razorpay is allowed. Returns false if a tab couldn't be opened (the caller
  * then shows a manual "open careerrai.in in your browser" fallback — never
  * navigates the wrapper itself, which would loop).
+ *
+ * ANDROID / TWA ONLY as of 31 Jul 2026 — callers route iOS to
+ * `paymentHandoffUrl` above. The window.open-first order is load-bearing here
+ * (the tab must be opened inside the gesture) and is deliberately unchanged.
  */
 export async function escapeToBrowserForPayment(dest = '/student/buddy'): Promise<boolean> {
   let win: Window | null = null;
   try { win = window.open('about:blank', '_blank'); } catch { win = null; }
   if (!win) return false;
 
-  let token: string | null = null;
-  try {
-    const res = await fetch('/api/install/handoff', { method: 'POST' });
-    if (res.ok) {
-      const { url } = (await res.json()) as { url?: string };
-      const q = url?.split('?')[1];
-      if (q) token = new URLSearchParams(q).get('k');
-    }
-  } catch { /* handled below */ }
+  const token = await mintHandoffToken();
 
   // Without a token /go can't sign them in, and they'd land on a login screen
   // in a strange tab with no idea why. Better to close it and let the caller
@@ -154,9 +232,6 @@ export async function escapeToBrowserForPayment(dest = '/student/buddy'): Promis
     return false;
   }
 
-  const target = new URL('/go', window.location.origin);
-  target.searchParams.set('k', token);
-  target.searchParams.set('dest', dest);
-  win.location.href = target.toString();
+  win.location.href = buildGoUrl(token, dest, window.location.origin);
   return true;
 }
