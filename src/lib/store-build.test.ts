@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeStoreSource, isIosStoreBuildFrom, buildGoUrl, type IosStoreSignals } from './store-build';
+import {
+  normalizeStoreSource, isIosStoreBuildFrom, buildGoUrl, userAgentFamily,
+  shouldStampStoreCookie, storeCookieContradictsDevice, type IosStoreSignals,
+} from './store-build';
 
 // The one accepted-values list for "?source= says this is a store build."
 // Guarded by tests because this exact concept once had TWO implementations —
@@ -156,5 +159,140 @@ describe('buildGoUrl', () => {
     const dest = new URL(buildGoUrl('t', '/student/profile', 'https://careerrai.in')).searchParams.get('dest')!;
     expect(dest.startsWith('/')).toBe(true);
     expect(dest.startsWith('//')).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Who is allowed to be marked a store build in the first place.
+//
+// The cr_store cookie disables inline Razorpay and sends payment out to the
+// real browser. Before this gate, ANY request carrying ?source=ios was marked,
+// so a shared link that kept its query string marked a plain browser as a
+// store build for ten years — silent conversion loss nobody would report.
+//
+// The asymmetry these tests pin down: refusing a REAL wrapper is far worse
+// than marking a stray browser, because an unmarked iOS wrapper opens Razorpay
+// inline in a WKWebView — the Apple 3.1.1 posture, and a payment path that is
+// 100% broken there. So "cannot tell" must always mean yes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The UA a WKWebView sends with no custom applicationNameForUserAgent. Note it
+// carries no "Safari/" or "Version/" token, unlike Safari proper — which is
+// why nothing here may test for those.
+const IOS_WKWEBVIEW_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const LINUX_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+describe('userAgentFamily', () => {
+  it('reads Android BEFORE Linux — the order is load-bearing', () => {
+    // Android's UA is "(Linux; Android 14; ...)". A Linux test placed first
+    // would classify every Android phone as a desktop and this whole gate
+    // would invert on the platform most students are on.
+    expect(userAgentFamily(ANDROID_UA)).toBe('android');
+    expect(LINUX_UA).toContain('Linux');
+    expect(userAgentFamily(LINUX_UA)).toBe('other');
+  });
+
+  it('treats every Apple surface as one family', () => {
+    for (const ua of [IPHONE_UA, IOS_WKWEBVIEW_UA, IPAD_DESKTOP_UA, MAC_UA]) {
+      expect(userAgentFamily(ua), ua).toBe('apple');
+    }
+  });
+
+  it('classifies non-Apple desktops as other', () => {
+    expect(userAgentFamily(WINDOWS_UA)).toBe('other');
+    expect(userAgentFamily('Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)')).toBe('other');
+  });
+
+  it('says unknown when there is no evidence, rather than guessing', () => {
+    for (const ua of ['', '   ', null, undefined, 'CareerRai/1.0']) {
+      expect(userAgentFamily(ua), JSON.stringify(ua)).toBe('unknown');
+    }
+  });
+});
+
+describe('shouldStampStoreCookie — never refuse a real wrapper', () => {
+  it('marks the iOS wrapper, including a bare WKWebView UA', () => {
+    expect(shouldStampStoreCookie('ios', IOS_WKWEBVIEW_UA)).toBe(true);
+    expect(shouldStampStoreCookie('ios', IPHONE_UA)).toBe(true);
+  });
+
+  it('marks the Play TWA', () => {
+    expect(shouldStampStoreCookie('twa', ANDROID_UA)).toBe(true);
+  });
+
+  it('marks an unreadable UA for either platform — "cannot tell" means yes', () => {
+    // A custom applicationNameForUserAgent, a privacy proxy that strips the
+    // header, anything unrecognised. Refusing here would silently un-mark a
+    // wrapper and re-break iOS payment; marking a stray browser only costs a
+    // conversion. Given that asymmetry, this must stay permissive.
+    for (const ua of ['', null, undefined, 'CareerRai/1.0']) {
+      expect(shouldStampStoreCookie('ios', ua), `ios / ${JSON.stringify(ua)}`).toBe(true);
+      expect(shouldStampStoreCookie('twa', ua), `twa / ${JSON.stringify(ua)}`).toBe(true);
+    }
+  });
+
+  it('marks an iPad in desktop mode, which the server cannot tell from a Mac', () => {
+    // maxTouchPoints would separate them and does not exist on the server.
+    // Erring toward marking is the safe direction; the cost is the Mac case
+    // in the next test, which is deliberately accepted.
+    expect(shouldStampStoreCookie('ios', IPAD_DESKTOP_UA)).toBe(true);
+  });
+});
+
+describe('shouldStampStoreCookie — refuse the stray link', () => {
+  it('refuses ?source=ios on Android, the case that motivated this', () => {
+    expect(shouldStampStoreCookie('ios', ANDROID_UA)).toBe(false);
+  });
+
+  it('refuses ?source=ios on non-Apple desktops', () => {
+    expect(shouldStampStoreCookie('ios', WINDOWS_UA)).toBe(false);
+    expect(shouldStampStoreCookie('ios', LINUX_UA)).toBe(false);
+  });
+
+  it('refuses ?source=twa on anything that is not Android', () => {
+    for (const ua of [IPHONE_UA, IOS_WKWEBVIEW_UA, IPAD_DESKTOP_UA, MAC_UA, WINDOWS_UA, LINUX_UA]) {
+      expect(shouldStampStoreCookie('twa', ua), ua).toBe(false);
+    }
+  });
+
+  it('still marks a Mac for ios — a known, accepted cost', () => {
+    // Documented rather than fixed: 'apple' is one family so that no
+    // iPad-shaped wrapper is ever refused. A Mac is a rounding error against
+    // an Android-majority student base; an unmarked wrapper is not.
+    expect(shouldStampStoreCookie('ios', MAC_UA)).toBe(true);
+  });
+});
+
+describe('storeCookieContradictsDevice — cleaning up ten-year cookies already issued', () => {
+  it('clears an ios cookie stranded on an Android phone', () => {
+    // The live harm: gating new stamps does nothing for cookies already out
+    // there, and this device has inline Razorpay disabled on every visit.
+    expect(storeCookieContradictsDevice('ios', ANDROID_UA)).toBe(true);
+    expect(storeCookieContradictsDevice('ios', WINDOWS_UA)).toBe(true);
+  });
+
+  it('clears a twa cookie stranded on an iPhone', () => {
+    expect(storeCookieContradictsDevice('twa', IPHONE_UA)).toBe(true);
+  });
+
+  it('NEVER clears a real wrapper, which is the way this could hurt', () => {
+    expect(storeCookieContradictsDevice('ios', IOS_WKWEBVIEW_UA)).toBe(false);
+    expect(storeCookieContradictsDevice('ios', IPHONE_UA)).toBe(false);
+    expect(storeCookieContradictsDevice('ios', IPAD_DESKTOP_UA)).toBe(false);
+    expect(storeCookieContradictsDevice('twa', ANDROID_UA)).toBe(false);
+  });
+
+  it('never clears on an unreadable UA', () => {
+    for (const ua of ['', null, undefined, 'CareerRai/1.0']) {
+      expect(storeCookieContradictsDevice('ios', ua), JSON.stringify(ua)).toBe(false);
+      expect(storeCookieContradictsDevice('twa', ua), JSON.stringify(ua)).toBe(false);
+    }
+  });
+
+  it('does nothing when there is no cookie', () => {
+    expect(storeCookieContradictsDevice(null, ANDROID_UA)).toBe(false);
+    expect(storeCookieContradictsDevice(null, null)).toBe(false);
   });
 });

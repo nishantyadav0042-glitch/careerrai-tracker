@@ -1,6 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { normalizeStoreSource } from '@/lib/store-build';
+import {
+  normalizeStoreSource,
+  shouldStampStoreCookie,
+  storeCookieContradictsDevice,
+} from '@/lib/store-build';
 
 // Alternate hosts that must land on the canonical domain. The old
 // careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
@@ -90,8 +94,9 @@ export async function proxy(request: NextRequest) {
   // different list, and the two never matched. Aliases ('ios-app',
   // 'android-app') normalise to the canonical value so every cookie consumer's
   // regex keeps working.
+  const userAgent = request.headers.get('user-agent');
   const source = normalizeStoreSource(searchParams.get('source'));
-  if (source) {
+  if (source && shouldStampStoreCookie(source, userAgent)) {
     response.cookies.set('cr_store', source, {
       // DELIBERATELY LONG-LIVED. On iOS this cookie is the ONLY evidence that
       // we are inside the store wrapper: isStoreBuild() returns true there via
@@ -106,16 +111,36 @@ export async function proxy(request: NextRequest) {
       // a cold start, so any restored-webview session past the expiry lands in
       // exactly that state. Nothing in the app would report it.
       //
-      // KNOWN COST, accepted for now: one stray link carrying ?source=ios
-      // opened in a normal browser marks it a store build for ten years,
-      // disabling inline Razorpay for a web student. The fix is to gate the
-      // cookie on an Apple user-agent rather than to shorten it — a change to
-      // iOS payment classification, which is frozen until the stores are done.
+      // The stray-link problem a short life was meant to solve is handled at
+      // the door instead, by shouldStampStoreCookie above: a `?source=` value
+      // is only believed when the device could plausibly be that platform. A
+      // long life is safe once the wrong devices are never marked at all.
       maxAge: 60 * 60 * 24 * 3650,
       path: '/',
       sameSite: 'lax',
       secure: true,
     });
+  } else if (storeCookieContradictsDevice(
+    normalizeStoreSource(request.cookies.get('cr_store')?.value),
+    userAgent,
+  )) {
+    // CLEANUP for cookies already in the wild. Gating new stamps does nothing
+    // about the ten-year cookies handed out before that gate existed, and those
+    // are the live harm: an Android phone or a Windows desktop still carrying
+    // `cr_store=ios` has inline Razorpay disabled on every visit.
+    //
+    // Only a definite contradiction clears — 'apple' and an unreadable UA never
+    // do — so this cannot unmark a real wrapper. Deleted rather than rewritten
+    // because the honest state for a device that is not a store build is no
+    // cookie at all; if it ever really is one, the next `?source=` launch
+    // re-stamps it.
+    //
+    // `path` is spelled out because the cookie was set with Path=/ and a
+    // deletion only matches when its path matches. This Next version happens
+    // to default the field to '/', so the bare call works today — but that is
+    // an undocumented default, and if it ever changed the deletion would
+    // become a silent no-op rather than an error.
+    response.cookies.delete({ name: 'cr_store', path: '/' });
   }
 
   // Any redirect issued AFTER getUser() must carry the cookies Supabase may

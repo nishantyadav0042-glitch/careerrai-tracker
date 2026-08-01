@@ -40,6 +40,78 @@ export function normalizeStoreSource(v: string | null | undefined): 'twa' | 'ios
   }
 }
 
+/**
+ * The platform family a user-agent DEFINITELY belongs to, or 'unknown'.
+ *
+ * 'unknown' is a real answer, not a failure: it means "no evidence either
+ * way", and every caller below treats it as permission rather than as proof
+ * against a wrapper. A WKWebView with a custom applicationNameForUserAgent, a
+ * stripped UA behind a privacy proxy, or a bot all land here, and none of them
+ * should be able to un-mark a store build.
+ *
+ * Pure and exported so every branch is covered by tests.
+ */
+export type UaFamily = 'android' | 'apple' | 'other' | 'unknown';
+
+export function userAgentFamily(ua: string | null | undefined): UaFamily {
+  if (!ua || !ua.trim()) return 'unknown';
+  // ANDROID IS TESTED FIRST and the order is load-bearing: Android's UA string
+  // is "(Linux; Android 13; ...)", so a Linux test would claim it as a desktop.
+  if (/Android/i.test(ua)) return 'android';
+  // "Mac OS X" catches iOS too — an iPhone UA reads "CPU iPhone OS 17_0 like
+  // Mac OS X" — which is deliberate. Every Apple surface is one family here,
+  // because the server cannot tell an iPad in desktop mode from a Mac: that
+  // needs navigator.maxTouchPoints, which exists only in the browser and is
+  // exactly why isIosStoreBuildFrom takes it as a signal.
+  if (/iPhone|iPad|iPod|Macintosh|Mac OS X/i.test(ua)) return 'apple';
+  if (/Windows|CrOS|X11|Linux/i.test(ua)) return 'other';
+  return 'unknown';
+}
+
+/**
+ * Is this `?source=` value believable coming from THIS device?
+ *
+ * The cr_store cookie disables inline Razorpay and routes payment out to the
+ * real browser. That is correct inside the store wrappers and wrong everywhere
+ * else, but until now ANY request carrying `?source=ios` got marked — so one
+ * shared link that happened to keep the query string marked a plain browser as
+ * a store build for ten years. Nobody reports that as a bug; it just quietly
+ * costs conversions.
+ *
+ * THE ASYMMETRY IS THE WHOLE DESIGN. Refusing a genuine wrapper is far worse
+ * than marking a stray browser: an unmarked iOS wrapper opens Razorpay inline
+ * in a WKWebView, which is both the Apple 3.1.1 posture this file exists to
+ * hold and a payment path that is 100% broken there (window.open is ignored —
+ * see the 31 Jul fix). So this refuses ONLY on positive evidence that the
+ * device belongs to the other platform, and an unreadable UA always passes.
+ *
+ * Known and accepted: a Mac desktop carrying a stray ?source=ios link still
+ * gets marked, because 'apple' is one family (see above). That is the price of
+ * never risking an iPad-shaped wrapper, and Macs are a rounding error against
+ * an Android-majority student base.
+ */
+export function shouldStampStoreCookie(source: 'twa' | 'ios', ua: string | null | undefined): boolean {
+  const family = userAgentFamily(ua);
+  if (family === 'unknown') return true;          // no evidence — never punish a wrapper
+  return source === 'ios' ? family === 'apple' : family === 'android';
+}
+
+/**
+ * True when an ALREADY-SET cr_store cookie contradicts the device holding it.
+ *
+ * Gating new stamps does nothing for the ten-year cookies already issued, and
+ * those are the actual harm in the wild today. This is what lets the proxy
+ * clear one. Same asymmetry: only a definite contradiction counts, so 'apple'
+ * and 'unknown' never clear an iOS mark.
+ */
+export function storeCookieContradictsDevice(
+  cookie: 'twa' | 'ios' | null,
+  ua: string | null | undefined,
+): boolean {
+  if (!cookie) return false;
+  return !shouldStampStoreCookie(cookie, ua);
+}
+
 /** Server-set cookie (see proxy.ts) — survives the logged-out login redirect. */
 export function storeCookieValue(): 'twa' | 'ios' | null {
   try {
