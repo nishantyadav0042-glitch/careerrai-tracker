@@ -59,7 +59,13 @@ export async function POST(request: NextRequest) {
       student_id: user?.id ?? null,
       fingerprint,
       message,
-      source: body.source === 'unhandledrejection' ? 'unhandledrejection' : 'error',
+      // 'handled' = an error we caught and showed the student (see
+      // lib/report-error.ts). Kept as its own value rather than folded into
+      // 'error', because a message a student actually read is worth more than
+      // a stack nobody saw, and we want to be able to query for exactly those.
+      source: body.source === 'unhandledrejection' || body.source === 'handled'
+        ? body.source
+        : 'error',
       stack: typeof body.stack === 'string' ? body.stack.slice(0, MAX_STACK) : null,
       path: typeof body.path === 'string' ? body.path.slice(0, 200) : null,
       display_mode: typeof body.displayMode === 'string' ? body.displayMode.slice(0, 40) : null,

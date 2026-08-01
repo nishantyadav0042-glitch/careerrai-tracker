@@ -33,8 +33,20 @@ export async function GET() {
     // the email path writes `email`, so `phone` has never held a value.
     // Distinct RECIPIENT now spans both columns.
     admin.from('otp_send_events').select('phone, email, sent_at').gte('sent_at', since24),
+    // Crashes only. `source = 'handled'` rows are errors we CAUGHT and showed
+    // the student (lib/report-error.ts) — real signal, but not crashes, and
+    // counting them here would silently redefine crash_free_pct against its
+    // metric-registry definition ("students with zero client errors") the day
+    // handled reporting shipped. A retried "Failed to fetch" is not a crash.
+    //
+    // `source IS NULL OR source <> 'handled'`, not a bare `.neq()`. The column
+    // is nullable with no default, and in SQL `NULL <> 'handled'` is NULL, not
+    // true — so a bare neq() drops NULL-source rows. Every row today is written
+    // by /api/client-error, which always sets a source, but a crash silently
+    // vanishing from a CRASH metric fails in the flattering direction: the
+    // number goes UP and nobody goes looking.
     admin.from('client_errors').select('student_id, fingerprint, message, path, install_source, created_at')
-      .gte('created_at', since24),
+      .gte('created_at', since24).or('source.is.null,source.neq.handled'),
     admin.from('profiles').select('install_source, created_at, is_test_account'),
     admin.from('daily_reports').select('student_id, report_date').gte('created_at', since24),
     admin.from('submission_votes').select('student_id').gte('created_at', since24),

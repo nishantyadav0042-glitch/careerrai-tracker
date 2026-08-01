@@ -334,6 +334,73 @@
 
 ---
 
+## Incident #14 — a security sweep revoked the one grant two migrations told it not to
+
+- **When:** revoked 26 Jul 2026. Found 1 Aug, 00:10 IST, from a student's screenshot.
+- **Symptom:** a raw Postgres string rendered into the onboarding UI —
+  `permission denied for function is_admin`. Student `+917011443800` signed up
+  at 00:08 IST, hit it, and was last seen at 00:10. Ninety seconds, no exam
+  target saved.
+- **Cause:** `20260726_security_hardening_pre_launch.sql` ran
+  `revoke execute on function public.is_admin(uuid) from anon, authenticated;`.
+  But `is_admin(uuid)` is referenced by **four RLS policies** — `profiles`
+  (cmd `ALL`), `daily_reports`, `test_results`, `buddy_feedback`. Postgres
+  evaluates every applicable policy on a statement, so a student reading or
+  writing their *own* profile still invokes `is_admin()` as `authenticated`.
+  With no EXECUTE the statement aborts.
+- **Why the guard failed:** that migration's header states "every revoked RPC
+  was verified server-side-only (service role) by grep before revoking." The
+  grep ran over application code. `is_admin`'s callers are not application code
+  — they are four policies **inside the database**. The verification was
+  structurally incapable of seeing them.
+- **What makes it worse:** two earlier migrations had already written the
+  exception down. 20260707: *"revoked from anon only (not authenticated) — four
+  RLS policies call is_admin(auth.uid())"*. 20260712: *"authenticated must keep
+  its explicit EXECUTE; only strip the PUBLIC default and anon."* The knowledge
+  existed, in this repo, in comments on the very statements being changed.
+- **Fix:** `20260731_restore_is_admin_execute_to_authenticated.sql` —
+  `grant execute on function public.is_admin(uuid) to authenticated;`
+  PUBLIC and `anon` stay revoked, so the hardening intent survives.
+- **Blast radius, honestly — and narrower than first stated:** 13 students
+  signed up after 26 Jul. **10 of them completed onboarding**, so this was not
+  blocking everyone, and the first framing of "onboarding broken for five days"
+  was wrong. One student is confirmed by screenshot, at 00:08 IST on 1 Aug.
+  How many others hit it is UNKNOWN, and *stays* unknown because nothing was
+  logged — which is the next lesson. The revoke's exact landing date could not
+  be established either: the repo file
+  `20260726_security_hardening_pre_launch.sql` has no matching row in
+  `supabase_migrations.schema_migrations`, so it reached production by some
+  other path.
+- **The number that mattered more, found while building the outreach list:**
+  **12 of those 13 students have never logged a single day.** That is not a
+  permissions bug, it is the activation cliff — the same wall the check-in
+  analysis hit from the other side (27 of 246 opened the app in 2.5 days, while
+  the gate converts 85% of students it actually meets). The P0 was real and
+  worth fixing in an hour; it was not why those students left.
+- **Lessons:**
+  1. **A grep over `src/` cannot verify a database permission.** Callers of a
+     SQL function live in policies, triggers, views and other functions. Before
+     revoking EXECUTE, query `pg_policies`, `pg_trigger` and `pg_proc` — not the
+     application code.
+  2. **A comment explaining why something must stay is not a guard.** Both
+     warnings were written and both were overwritten. Only a test or a check
+     that *runs* can stop this.
+  3. **A raw Postgres error reached a student's screen.** Whatever the
+     underlying fault, `permission denied for function is_admin` is never an
+     acceptable thing for a 20-year-old deciding whether to trust us.
+  4. **The error was never reported.** `client_errors` holds zero rows matching
+     it. We found this from a screenshot, not from our own instrumentation —
+     which is why the blast radius is unknowable.
+- **Prevention (encoded):**
+  `supabase/migrations/20260731_restore_is_admin_execute_to_authenticated.sql`
+  carries the full reasoning at the point of change. Still open, and worth more
+  than the fix itself: a check that fails when any function referenced by an RLS
+  policy lacks `authenticated` EXECUTE — the query already exists in this
+  incident's investigation and belongs in `business_invariants()`.
+- **Owner:** Nishant
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a

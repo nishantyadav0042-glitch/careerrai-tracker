@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
-import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
+import { isStoreBuild, isIosStoreBuild, escapeToBrowserForPayment, paymentHandoffUrl } from '@/lib/store-build';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 
@@ -50,6 +50,22 @@ function useBuddyCheckout() {
     if (isStoreBuild()) {
       setBusy(planId);
       try {
+        // iOS (WKWebView) never opens a scripted popup, but the wrapper still
+        // paints a blank view over the app — a white screen with the fallback
+        // stranded underneath it. So on iOS we skip window.open entirely and
+        // hand them a real link, which the navigation delegate does honour.
+        // Android/TWA keeps the working escape below, unchanged.
+        if (isIosStoreBuild()) {
+          const url = await paymentHandoffUrl('/student/buddy');
+          track('pay_escape_browser', { plan: planId, opened: false, ios: true, linkReady: url != null });
+          setMessage(url
+            ? 'One more tap — payment opens securely in your browser:'
+            : 'We couldn’t open your browser automatically. Tap below to finish there:');
+          // Signed-in hand-off when we have it; the bare paywall (which will
+          // ask them to log in) only as a last resort, never a dead end.
+          setManualUrl(url ?? 'https://careerrai.in/student/buddy');
+          return;
+        }
         const opened = await escapeToBrowserForPayment('/student/buddy');
         track('pay_escape_browser', { plan: planId, opened });
         if (!opened) {
@@ -140,6 +156,10 @@ function useBuddyCheckout() {
 // Shown only when the browser hand-off failed: a real link they can tap, so
 // the flow always has a way forward.
 function ManualPayLink({ url }: { url: string }) {
+  // A `/go` link carries a one-time signed-in hand-off, so it lands straight on
+  // checkout — worth saying, because "open careerrai.in" reads like extra work.
+  // The bare-domain fallback keeps the honest, plainer label.
+  const signedIn = url.includes('/go?');
   return (
     <a
       href={url}
@@ -147,7 +167,7 @@ function ManualPayLink({ url }: { url: string }) {
       rel="noopener noreferrer"
       className="mt-2 block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-900"
     >
-      Open careerrai.in to pay →
+      {signedIn ? 'Continue to secure payment →' : 'Open careerrai.in to pay →'}
     </a>
   );
 }

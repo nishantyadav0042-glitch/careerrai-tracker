@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
-import { isStoreBuild, escapeToBrowserForPayment } from '@/lib/store-build';
+import { isStoreBuild, isIosStoreBuild, escapeToBrowserForPayment, paymentHandoffUrl } from '@/lib/store-build';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
@@ -34,14 +34,31 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
   const router = useRouter();
   const [busy, setBusy] = useState<PlanId | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [payUrl, setPayUrl] = useState<string | null>(null);
   const [coupon, setCoupon] = useState('');
 
   async function upgrade(planId: PlanId) {
     // Store builds ONLY (Apple/Play): pay in the real browser (see
     // store-build.ts). Web + browser-PWA keep the inline Razorpay below.
     if (isStoreBuild()) {
+      // iOS (WKWebView): a scripted popup never opens but the wrapper paints a
+      // blank view over the app, so the student sees only white. Hand them a
+      // real link instead — see store-build.ts. Android/TWA unchanged.
+      if (isIosStoreBuild()) {
+        const url = await paymentHandoffUrl('/student/profile');
+        setPayUrl(url ?? 'https://careerrai.in/student/profile');
+        setMessage(url
+          ? 'One more tap — payment opens securely in your browser:'
+          : 'To finish, open careerrai.in in your browser to complete payment:');
+        return;
+      }
       const opened = await escapeToBrowserForPayment('/student/profile');
-      if (!opened) setMessage('To finish, open careerrai.in in your browser to complete payment.');
+      if (!opened) {
+        // This card had no link at all — only a sentence telling the student to
+        // go and find the site themselves, which is a dead end on a phone.
+        setPayUrl('https://careerrai.in/student/profile');
+        setMessage('To finish, open careerrai.in in your browser to complete payment:');
+      }
       return;
     }
     setBusy(planId);
@@ -225,6 +242,16 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       )}
 
       {message && <p className="text-xs text-stone-600 mt-3">{message}</p>}
+      {payUrl && (
+        <a
+          href={payUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-900"
+        >
+          {payUrl.includes('/go?') ? 'Continue to secure payment →' : 'Open careerrai.in to pay →'}
+        </a>
+      )}
     </Card>
   );
 }
