@@ -10,7 +10,7 @@ interface Props {
   onboarding: Record<string, unknown>;
 }
 
-type Step = 'phone' | 'otp';
+type Step = 'phone' | 'otp' | 'password';
 
 const CHECKLIST = [
   'Locking your target date',
@@ -189,6 +189,79 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
               {busy ? 'Sending…' : 'Send OTP →'}
             </button>
           </div>
+
+          {/* THE ESCAPE FROM AN SMS-ONLY DEAD END.
+              Everything above this line requires a 10-digit INDIAN mobile and
+              an SMS that only that number can receive. Anyone who cannot —
+              a store reviewer with demo credentials, a student on a new phone,
+              anyone abroad — had no way past this screen at all. That is the
+              Guideline 2.1 rejection we already took once (Incident #10):
+              "our login sends an SMS OTP to an Indian number a reviewer cannot
+              receive. They had no way in."
+              Deliberately a plain, readable control rather than fine print. */}
+          <div className="pt-1">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="h-px flex-1 bg-stone-200" />
+              <span className="text-[11px] font-medium text-stone-400">or</span>
+              <div className="h-px flex-1 bg-stone-200" />
+            </div>
+            <button
+              type="button"
+              onClick={() => { setStep('password'); setError(null); }}
+              className="w-full rounded-xl border border-stone-300 bg-white py-3 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+            >
+              Already have an account? Log in with password
+            </button>
+          </div>
+        </form>
+      ) : step === 'password' ? (
+        // Native form POST to the SAME endpoint /login uses. Not a fetch: the
+        // route answers with a 302 and sets the session cookies on it, so the
+        // browser must follow it. Reusing the endpoint also means this path
+        // inherits its brute-force throttling (5/credential, 30/IP) instead of
+        // opening a second, weaker door to the same passwords.
+        <form action="/api/auth/login" method="POST" className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-stone-800">Email or mobile number</label>
+            <input
+              type="text"
+              name="credential"
+              autoComplete="username"
+              placeholder="you@example.com or 9876543210"
+              required
+              autoFocus
+              className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-stone-800">Password</label>
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              placeholder="Your password"
+              required
+              className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10"
+            />
+          </div>
+          <p className="text-[11px] text-stone-400">
+            Logging in takes you to your existing plan — the answers you just gave aren&apos;t applied to it.
+          </p>
+          <div className="sticky bottom-0 z-20 bg-white/95 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+            <button
+              type="submit"
+              className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+            >
+              Log in →
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setStep('phone'); setError(null); }}
+            className="w-full text-center text-xs font-medium text-stone-500 hover:text-stone-700"
+          >
+            ← Back to creating a new account
+          </button>
         </form>
       ) : (
         <form onSubmit={verifyAndBuild} className="space-y-4">
