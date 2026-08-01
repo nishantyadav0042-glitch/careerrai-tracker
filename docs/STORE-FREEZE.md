@@ -123,6 +123,27 @@ critical waits unnoticed. Empty is a valid and good state; **missing** is not.
 *(`claude/status-update-t1g5as` was merged 1 Aug as the P0 in Incident #15 —
 the queue is empty because it was drained, not because it was never used.)*
 
+> ## ⛔ THE ONE THING THAT STILL FAILS PLAY
+>
+> **`assetlinks.json` is missing the Play App-signing fingerprint.** Verified
+> live 1 Aug: `https://careerrai.in/.well-known/assetlinks.json` serves 200 with
+> exactly **two** fingerprints (upload keys `30:7D:08…` and `C4:A7:C5…`).
+>
+> Play App Signing **re-signs the app with Google's own key**, so the installed
+> build presents a certificate that is in neither entry. Digital Asset Links
+> verification then fails, and a TWA that fails verification **renders a URL bar
+> across the top** — which reads as a broken, un-finished app to a reviewer.
+>
+> Nothing in this repo can fix it. The value only exists after the first upload:
+> **Play Console → Setup → App integrity → App signing key certificate →
+> SHA-256**. Add it as a third entry, redeploy, and confirm the app opens with
+> no URL bar before submitting for review.
+>
+> Everything else on the Play path was verified clean on 1 Aug (launch lands on
+> /login with the password option, store flag stamped, sw.js v7 never answers a
+> navigation, no install banner, no pre-auth purchase surface, UGC report+block
+> enforced server-side). This is the remaining blocker.
+
 **Open now:** `assetlinks.json` carries 2 fingerprints. Play re-signs with
 Google's key, so the App-signing SHA-256 from Play Console → App integrity is a
 required third. Without it the Android app renders a URL bar, which reads as a
@@ -146,9 +167,26 @@ the safer side of Guideline 3.1.1.
 `.eq('subscription_status', 'active')`; this account is `free_beta`, so the cron
 **cannot** flip its premium off. Do not change that filter during the freeze.
 
-**Do not use `reviewer@careerrai.in` / `+919000000001`.** It is the superseded
-26 Jul account, `is_premium` false — a reviewer given those credentials would
-hit the paywall.
+**Use `appreview@careerrai.in`.** It is the seeded one (streak, coverage,
+assigned mentor, chat, debriefs) and the only one that shows the product as
+intended.
+
+`reviewer@careerrai.in` / `+919000000001` is the superseded 26 Jul account. It
+was a live rejection risk hiding in plain sight: its `full_name` was literally
+**"Play Reviewer"**, so anyone filling in Play Console's demo credentials would
+reach for it by name — and it had `is_premium` **false**, which lands a reviewer
+on the paywall instead of the mentor feature they were sent to test. A warning
+in this file could not stop that, because the trap was in the data.
+
+Defused 1 Aug, both halves:
+- `is_premium` set **true**, mirroring appreview (`subscription_status` stays
+  `free_beta`, so `/api/cron/expire-subscriptions` — which filters on
+  `active` — still cannot touch it). Wrong credentials now still get in.
+- renamed to **"SUPERSEDED - use appreview@careerrai.in"**, so it cannot be
+  picked by name again.
+
+It is still the second-best account (no seeded mentor or history). Put
+`appreview@careerrai.in` in both Consoles.
 
 ## What this document cannot do
 
