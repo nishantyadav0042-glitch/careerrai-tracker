@@ -23,6 +23,16 @@
 | 5 | 2026-07-20 | Dashboard contradicted itself | Analytics | founder (decisions) |
 | 6 | 2026-07 | 0-hour log excluded from streak | Learning | honest loggers |
 | 7 | 2026-07 | Invented statistic nearly shipped | Trust | (caught pre-ship) |
+| 8 | 2026-07-25 | PWA start_url redirected, installs silently failed | Growth | student-reported |
+| 9 | 2026-07-25 | exam_ready was self-declarable | Trust / data | 6 students |
+| 10 | 2026-07-28 | App Store rejection: unreachable login | Growth | launch-blocking |
+| 11 | 2026-07-29 | Curated Daily Pick wearing a student's byline | Trust | all readers |
+| 14 | 2026-08-01 | Security sweep revoked the one grant | Database access | ≥1 confirmed |
+| 15 | 2026-08-01 | iOS payment fix sat on a branch for a day | Trust (payment) | every iOS student |
+
+> Entries 12 and 13 were never written. The gap is left visible rather than
+> renumbered — the numbers are referenced from commit messages and code
+> comments, so closing it would break those references.
 
 ---
 
@@ -397,6 +407,56 @@
   than the fix itself: a check that fails when any function referenced by an RLS
   policy lacks `authenticated` EXECUTE — the query already exists in this
   incident's investigation and belongs in `business_invariants()`.
+- **Owner:** Nishant
+
+---
+
+## Incident #15 — the iOS payment fix sat on a branch for a day while everyone believed it shipped
+
+- **When:** fixed 31 Jul 2026 13:28 UTC. Still broken in production 1 Aug
+  19:24 IST, when the founder hit it on his own iPhone.
+- **Symptom:** identical to the bug that was already "fixed" — tap Buy inside
+  the iOS app, get a white screen. `window.open()` returns null in a WKWebView,
+  `escapeToBrowserForPayment` returned at its `if (!win)` guard, and the wrapper
+  painted a blank view over the error message the code correctly produced.
+- **Cause — and it is not a code bug.** `cc3c1eb` fixed this properly: iOS skips
+  `window.open` entirely and renders a real anchor the navigation delegate
+  honours. It was committed, tested, and **pushed to `claude/status-update-t1g5as`.
+  It was never merged to `main`.** Vercel deploys production from `main` only, so
+  the fix never reached a single student. Production ran the broken code for the
+  entire time it was considered fixed.
+- **Why it hid:** every signal that normally means "done" was green. The commit
+  existed, its message documented production-verified evidence, the tests passed,
+  the branch was pushed, and Vercel even built it — as a **preview** with
+  `target: null`. Nothing anywhere said "not live." The 31 Jul session's own
+  commit message reads as a completed fix, because from inside that session it was.
+- **Evidence it was never live:** `origin/main` still contained
+  `window.open('about:blank','_blank')`, and grep for `paymentHandoffUrl`,
+  `isIosStoreBuild` and `buildGoUrl` in `origin/main` returned **zero** matches —
+  the entire iOS anchor path was absent. Telemetry agreed: `pay_escape_browser`
+  with `opened:false` on `platform:ios, display_mode:standalone` at 19:24 IST,
+  and `pwa_session_handoff` empty since 31 Jul 08:07, proving no token was ever
+  minted on the new path.
+- **Cost:** every iOS student who tried to pay between 31 Jul and 1 Aug got a
+  white screen. Zero payments have ever completed on iOS. Because the wrapper
+  hides the error, none of them could have reported anything but "it's broken."
+- **Lessons:**
+  1. **A fix on a branch is not a fix.** "Committed", "tested" and "pushed" are
+     not "shipped". The only question that matters is whether the code is on the
+     branch production deploys from.
+  2. **A freeze is a queue, and a queue needs a reader.** STORE-FREEZE.md
+     correctly stopped the merge. What it never had was a list of what was
+     waiting, so a P0 fix and a docs change queued identically and both waited.
+  3. **The most dangerous bug is one everybody believes is fixed.** Nobody
+     re-checked iOS payment for a day, because the incident was closed.
+  4. **A preview build looks exactly like a deploy.** Vercel reported success on
+     every branch push. `target: null` was the only difference and nobody reads it.
+- **Prevention (encoded):** none yet, and this is the honest gap. The check that
+  would have caught it is cheap — for any commit claiming a production fix,
+  verify the change is an ancestor of `origin/main` before closing it
+  (`git merge-base --is-ancestor <sha> origin/main`). Until the freeze lifts,
+  STORE-FREEZE.md needs a "waiting to ship" list naming every unmerged fix and
+  its severity, so nothing P0 sits in the queue unnoticed again.
 - **Owner:** Nishant
 
 ---

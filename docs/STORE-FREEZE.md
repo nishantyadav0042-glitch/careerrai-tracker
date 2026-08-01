@@ -90,11 +90,38 @@ data loss, security. Fix and ship. A freeze with no emergency valve is a
 liability. Tell the founder when it happens, because it re-opens review risk on
 both listings.
 
+> **Use it, or the freeze eats the fix.** This exception already failed once by
+> being available and unused: the iOS payment fix (`cc3c1eb`, 31 Jul) was
+> committed, tested and pushed to a branch, and simply never merged. Production
+> ran the broken code for another day while the incident was considered closed,
+> and every iOS student who tried to pay got a white screen. **Incident #15.**
+>
+> A fix on a branch is not a fix. Before closing any commit that claims to fix
+> production, prove it is live:
+>
+>     git merge-base --is-ancestor <sha> origin/main && echo LIVE || echo NOT SHIPPED
+>
+> A green Vercel build is not proof. Branch pushes build too — they just carry
+> `target: null` and go nowhere.
+
 **2. Deploys the store approval itself requires.** The freeze exists to protect
 the review, so it must not block the review. Allowed: `assetlinks.json`
 fingerprints, review-account access fixes, anything App Review explicitly asks
 for. Not allowed: product work riding along in the same deploy. One file, one
 reason, reviewed.
+
+### Waiting to ship — keep this list current
+
+A freeze is a queue, and a queue nobody reads is where a P0 goes to die. Every
+fix held back by this document belongs here with its severity, so nothing
+critical waits unnoticed. Empty is a valid and good state; **missing** is not.
+
+| Branch | What | Severity | Since |
+|---|---|---|---|
+| — | nothing held back | — | — |
+
+*(`claude/status-update-t1g5as` was merged 1 Aug as the P0 in Incident #15 —
+the queue is empty because it was drained, not because it was never used.)*
 
 **Open now:** `assetlinks.json` carries 2 fingerprints. Play re-signs with
 Google's key, so the App-signing SHA-256 from Play Console → App integrity is a
