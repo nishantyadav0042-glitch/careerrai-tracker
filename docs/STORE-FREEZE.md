@@ -158,6 +158,33 @@ broken build. This is exception 2, pending the fingerprint from Sumukh.
 | Seeded | 21-day streak, syllabus coverage, assigned mentor, 6-message chat, 2 debriefs |
 | Last seen | **30 Jul 2026 05:35 UTC** — someone signed in today |
 
+**Credential check, 1 Aug — the password in the Consoles is still the live one.**
+Verified from `auth.users`, not assumed:
+- `recovery_sent_at` is **null** — no password reset was ever initiated.
+- `updated_at` is **26 milliseconds** after `last_sign_in_at`, i.e. that bump is
+  the sign-in itself, not an edit. Nothing has changed the password since it
+  last worked.
+- It last signed in successfully at **30 Jul 22:23 IST**, inside Apple's review
+  window. Whatever string is in the Consoles worked then and is unchanged.
+- `login_attempts` for it: **0 ever**. Never locked, never brute-forced.
+- `banned_until` null, `email_confirmed` true.
+
+The handover docs (`PLAY-STORE-UPLOAD-GUIDE.md` §4.2,
+`ANDROID-BUILD-HANDOVER.md`) both name `appreview@careerrai.in`, matching this
+account — not the superseded one. Their reviewer instructions also match the
+real UI: **"Log in with password"** is the literal button label on /login, and
+the "Mobile OTP / Password" toggle exists as described.
+
+Not verifiable from here, and the only remaining gap: whether the password
+string typed into Play Console matches the one that works. Confirm by signing in
+at `careerrai.in/login` with exactly what is in the Console — copy-paste it, do
+not retype.
+
+> **If a reviewer ever reports being locked out:** `/api/auth/login` throttles at
+> 5 failures per credential / 30 per IP over 15 minutes and redirects to
+> `/login?error=locked`. It clears itself; deleting the account's rows from
+> `login_attempts` clears it immediately.
+
 Do not delete it, rename it, or turn premium off. Premium must stay on for two
 reasons: without it the mentor hub renders a paywall and the reviewer never
 reaches the feature, and it keeps an Apple reviewer away from a payment screen —
