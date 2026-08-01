@@ -160,9 +160,33 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/admin');
 
   if (isProtected && !user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    return redirectWithSession(loginUrl);
+    // A logged-out arrival splits two ways, and the split is the whole point.
+    //
+    // The store wrappers launch on `/student/tracker?source=twa|ios` — a
+    // PROTECTED path — so a fresh install always landed here and was sent to
+    // /login. Every store student therefore met a phone field before they met
+    // the product, while the web funnel (/start) asks its nine questions first
+    // and signs you up last, deliberately: "you decide the date, you own the
+    // plan." Store installs got the exact inverse of the funnel we designed.
+    // A NEW arrival now gets /start, so both doors lead to the same journey.
+    //
+    // `user_role` is the returning-student signal, and it is reused rather
+    // than invented: every login path sets it for 30 days (verify-phone-otp,
+    // auth/login, install/exchange) and nothing clears it. So a student whose
+    // session merely lapsed still goes straight to /login instead of being
+    // dropped into a nine-screen funnel they finished weeks ago.
+    //
+    // REVIEW SAFETY, since this is the first screen App Review sees. /start
+    // carries a plainly visible "Log in" on every screen (see start/page.tsx)
+    // — added in the same commit as this redirect, and load-bearing for it.
+    // An unreachable login is the Guideline 2.1 rejection we already took
+    // (Incident #10). Neither destination is protected, so there is no loop,
+    // and clone() preserves `?source=`, so the store flag survives the hop
+    // exactly as it did before.
+    const returning = request.cookies.get('user_role') != null;
+    const dest = request.nextUrl.clone();
+    dest.pathname = returning ? '/login' : '/start';
+    return redirectWithSession(dest);
   }
 
   // Already logged in? Skip the login page and route to the right home. EVERY

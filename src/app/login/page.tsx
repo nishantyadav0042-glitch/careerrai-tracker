@@ -3,6 +3,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, Smartphone, ChevronLeft, KeyRound } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { InstallButton } from '@/components/install/install-button';
 import { cn } from '@/lib/utils';
 
@@ -172,9 +173,15 @@ function LoginForm() {
             {/* ── STEP 1: Role picker ── */}
             {userType === null && (
               <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => selectRole('student')}
+                {/* Goes to the funnel it names. This was selectRole('student'),
+                    which only swapped this same screen to the phone field — so
+                    a new student tapping "Build my free study plan" got asked
+                    for a number and never saw a plan being built (founder,
+                    1 Aug, watching a friend install the app). The questions
+                    belong BEFORE the account, as on web. */}
+                <Link
+                  href="/start"
+                  prefetch={false}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-stone-900 bg-stone-900 hover:bg-stone-800 transition-all group"
                 >
                   <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-2xl shrink-0">
@@ -185,7 +192,7 @@ function LoginForm() {
                     <p className="text-xs text-stone-300">I&apos;m preparing for CAT</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-white ml-auto transition-transform group-hover:translate-x-0.5" />
-                </button>
+                </Link>
 
                 {/* Existing accounts: mobile OTP or password, both plainly
                     visible. Do not demote these to fine print — see the

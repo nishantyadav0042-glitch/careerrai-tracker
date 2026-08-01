@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Logo } from '@/components/logo';
 import ScreenNeedCheck from './screens/screen-need-check';
 import ScreenTargetDate from './screens/screen-target-date';
@@ -188,6 +189,23 @@ export default function StartPage() {
               </button>
             )}
             {showProgress && <p className="text-[11px] font-medium text-stone-400">{stepIdx + 1} / {TOTAL_SCREENS}</p>}
+            {/* LOGIN, ON EVERY SCREEN, AND NEVER FINE PRINT.
+                This is a store-review requirement, not decoration. The store
+                wrappers now launch a logged-out student into this funnel, so
+                for anyone with an account — including an App Review tester
+                holding demo credentials — this link is the ONLY way in. Before
+                it existed, login lived on screen 10, behind nine questions.
+                An unreachable login is precisely what got the app rejected
+                under Guideline 2.1 (Incident #10), and login/page.tsx carries
+                the same warning about not demoting it to fine print.
+                Bordered and stone-700 so it reads as a control, not a caption. */}
+            <Link
+              href="/login"
+              prefetch={false}
+              className="rounded-lg border border-stone-300 px-2.5 py-1 text-[11px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+            >
+              Log in
+            </Link>
           </div>
         </div>
         {showProgress && (
