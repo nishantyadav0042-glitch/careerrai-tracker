@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
@@ -25,6 +25,108 @@ function logCtaClick() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ event: 'buddy_cta_click' }),
   }).catch(() => {});
+}
+
+/**
+ * Inside the iOS wrapper only: the hand-off URL, minted BEFORE the student taps.
+ *
+ * WHY THIS EXISTS. A WKWebView ignores window.open, so the only way out to the
+ * real browser is a genuine anchor the navigation delegate can honour. The
+ * first version of that fix minted the URL inside the tap handler and then
+ * rendered the link, which turned buying into TWO taps: the plan button
+ * appeared to do nothing, and a "Continue to secure payment" link materialised
+ * somewhere further down the page with no visible connection to what was
+ * tapped. Founder, 1 Aug: "only the bottom fixed button is working" and "this
+ * secure payment button is coming without any reason" — both are that flow.
+ * Production agreed: five pay_escape_browser events with linkReady:true and
+ * not one hand-off consumed. Nobody found the second tap.
+ *
+ * Minting on mount makes the plan button itself the anchor, so it is one tap
+ * again, exactly like every other platform.
+ *
+ * The token is single-use and lives 15 minutes (api/install/handoff), so it is
+ * re-minted when the page becomes visible again and on a timer comfortably
+ * inside that window. A student who reads the page for twenty minutes must not
+ * tap a dead link.
+ */
+function useIosPayUrl(dest: string): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Non-iOS store builds and the plain web never mint anything: Android's
+    // window.open escape works, and the web pays inline.
+    if (!isStoreBuild() || !isIosStoreBuild()) return;
+
+    let alive = true;
+    const mint = () => {
+      paymentHandoffUrl(dest)
+        .then((u) => { if (alive && u) setUrl(u); })
+        .catch(() => {});
+    };
+    mint();
+
+    // Ten minutes, against a fifteen-minute token — refreshed before it can
+    // expire rather than after, because the failure is silent.
+    const timer = setInterval(mint, 10 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') mint(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [dest]);
+
+  return url;
+}
+
+/**
+ * A plan CTA. An anchor inside the iOS wrapper, a button everywhere else.
+ *
+ * Same markup either way, so the student sees one control that behaves the
+ * same on every platform — which is the whole point. Only the element differs,
+ * because only iOS needs a real navigation to escape the webview.
+ */
+function PlanCta({
+  iosUrl, onClick, disabled, className, analytics, children,
+}: {
+  iosUrl: string | null;
+  onClick: () => void;
+  disabled?: boolean;
+  className: string;
+  analytics?: string;
+  children: React.ReactNode;
+}) {
+  if (iosUrl) {
+    return (
+      <a
+        href={iosUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-analytics={analytics}
+        data-section="paywall"
+        // Fires before the navigation, and the wrapper stays open (the link
+        // opens a separate browser), so a plain fire-and-forget beacon lands.
+        onClick={onClick}
+        className={className}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-analytics={analytics}
+      data-section="paywall"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+    >
+      {children}
+    </button>
+  );
 }
 
 // The single payment path — order → Razorpay → reassure/refresh, with the
@@ -118,7 +220,10 @@ function useBuddyCheckout() {
         currency: data.currency,
         name: 'CareerRai',
         description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
-        prefill: fullName ? { name: fullName } : undefined,
+        // Server-resolved from the profile (create-order). Passing only `name`
+        // made Razorpay ask a signed-in student for the phone number and email
+        // we already hold — friction on the one screen where it costs the sale.
+        prefill: data.prefill ?? (fullName ? { name: fullName } : undefined),
         theme: { color: '#E8652D' },
         modal: {
           // Razorpay keeps the sheet open on a failed attempt so they can retry
@@ -150,7 +255,17 @@ function useBuddyCheckout() {
     }
   }
 
-  return { pay, busy, message, callMe, setCallMe, manualUrl };
+  // The iOS anchor navigates by itself; this only records the intent, so the
+  // funnel still shows the tap. `opened:true` because the browser really does
+  // open here — unlike the old two-tap flow, which logged opened:false and
+  // then waited for a second tap that never came.
+  function trackIosTap(planId: PlanId) {
+    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
+    track('pay_escape_browser', { plan: planId, opened: true, ios: true, oneTap: true });
+    logCtaClick();
+  }
+
+  return { pay, trackIosTap, busy, message, callMe, setCallMe, manualUrl };
 }
 
 // Shown only when the browser hand-off failed: a real link they can tap, so
@@ -191,23 +306,24 @@ function CallMeModal({ onClose }: { onClose: () => void }) {
 
 // The price choice, rendered inline on the sales page. One tap → Razorpay.
 export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: string; sticky?: boolean }) {
-  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const { pay, trackIosTap, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const iosUrl = useIosPayUrl('/student/buddy');
+  const tap = (plan: PlanId) => (iosUrl ? trackIosTap(plan) : pay(plan, fullName));
 
   if (sticky) {
     return (
       <>
-        <button
-          type="button"
-          data-analytics="buy_tillcat_sticky"
-          data-section="paywall"
-          onClick={() => pay('tillcat', fullName)}
+        <PlanCta
+          iosUrl={iosUrl}
+          analytics="buy_tillcat_sticky"
+          onClick={() => tap('tillcat')}
           disabled={busy !== null}
-          className="w-full rounded-2xl bg-stone-900 px-4 py-4 text-center text-white shadow-xl shadow-stone-900/25 transition-transform active:scale-[0.99] disabled:opacity-60"
+          className="block w-full rounded-2xl bg-stone-900 px-4 py-4 text-center text-white shadow-xl shadow-stone-900/25 transition-transform active:scale-[0.99] disabled:opacity-60"
         >
           <span className="text-[15px] font-bold">
             {busy === 'tillcat' ? 'Starting…' : 'Get my buddy till CAT · ₹2,999 →'}
           </span>
-        </button>
+        </PlanCta>
         {message && <p className="mt-2 text-center text-xs font-medium text-stone-700">{message}</p>}
         {manualUrl && <ManualPayLink url={manualUrl} />}
         {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
@@ -218,13 +334,12 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
   return (
     <div>
       {/* Hero — one payment, buddy till exam day */}
-      <button
-        type="button"
-        data-analytics="buy_tillcat"
-        data-section="paywall"
-        onClick={() => pay('tillcat', fullName)}
+      <PlanCta
+        iosUrl={iosUrl}
+        analytics="buy_tillcat"
+        onClick={() => tap('tillcat')}
         disabled={busy !== null}
-        className="w-full rounded-2xl bg-stone-900 px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-60"
+        className="block w-full rounded-2xl bg-stone-900 px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-60"
       >
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold">Get my IIM buddy — till CAT</span>
@@ -239,23 +354,22 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
         <span className="mt-2.5 block rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-white">
           {busy === 'tillcat' ? 'Starting…' : 'Start now →'}
         </span>
-      </button>
+      </PlanCta>
 
       {/* Low-commitment option */}
-      <button
-        type="button"
-        data-analytics="buy_monthly"
-        data-section="paywall"
-        onClick={() => pay('monthly', fullName)}
+      <PlanCta
+        iosUrl={iosUrl}
+        analytics="buy_monthly"
+        onClick={() => tap('monthly')}
         disabled={busy !== null}
-        className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-60"
+        className="mt-2 block w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-60"
       >
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-stone-900">Just this month</span>
           <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : '₹999'}</span>
         </div>
         <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
-      </button>
+      </PlanCta>
 
       <p className="mt-2.5 text-center text-[11px] text-stone-400">
         Verified IIM alumni · no auto-debit, ever · full refund in your first month if you&apos;ve logged 20+ study days
@@ -284,7 +398,9 @@ export function UnlockBuddyButton({
   fullName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const { pay, trackIosTap, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const iosUrl = useIosPayUrl('/student/buddy');
+  const tap = (plan: PlanId) => (iosUrl ? trackIosTap(plan) : pay(plan, fullName));
 
   function openSheet() {
     logCtaClick();
@@ -317,10 +433,11 @@ export function UnlockBuddyButton({
             </p>
 
             <div className="mt-5 space-y-2.5">
-              <button
-                onClick={() => pay('tillcat', fullName)}
+              <PlanCta
+                iosUrl={iosUrl}
+                onClick={() => tap('tillcat')}
                 disabled={busy !== null}
-                className="w-full rounded-2xl border-2 border-stone-900 bg-stone-900 px-4 py-3.5 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50"
+                className="block w-full rounded-2xl border-2 border-stone-900 bg-stone-900 px-4 py-3.5 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold">Till CAT</span>
@@ -335,19 +452,20 @@ export function UnlockBuddyButton({
                 <span className="mt-2 inline-block text-sm font-bold text-orange-300">
                   {busy === 'tillcat' ? 'Starting…' : 'Get my buddy till CAT →'}
                 </span>
-              </button>
+              </PlanCta>
 
-              <button
-                onClick={() => pay('monthly', fullName)}
+              <PlanCta
+                iosUrl={iosUrl}
+                onClick={() => tap('monthly')}
                 disabled={busy !== null}
-                className="w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-50"
+                className="block w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-stone-900">Just this month</span>
                   <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : '₹999'}</span>
                 </div>
                 <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
-              </button>
+              </PlanCta>
             </div>
 
             <p className="mt-3 text-center text-[11px] text-stone-400">
