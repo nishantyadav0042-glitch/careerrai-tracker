@@ -15,6 +15,7 @@ import ScreenMentor from './screens/screen-mentor';
 import ScreenLoginBuild from './screens/screen-login-build';
 import type { CoverageSectionId } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
+import { START_STEP_KEYS } from '@/lib/funnel-steps';
 
 // Screen order as stable KEYS, not raw index. login-build is deliberately
 // excluded (it's the default/final screen, reached once stepIdx >= stepKeys.length).
@@ -26,9 +27,11 @@ import { trackFunnel } from '@/lib/funnel';
 // pre-auth funnel still asks the two repeater QUESTIONS below (last year's
 // percentile, had-a-buddy) — that data alone is real sales value (feeds the
 // Expedify call brief), no extra screen required.
-const BASE_STEP_KEYS = ['need-check', 'target-date', 'dream-percentile', 'quick-facts', 'pain-points', 'reality-check', 'topic-coverage', 'instant-insight', 'mentor'];
+// Screen order lives in lib/funnel-steps so the beacon route accepts exactly
+// what this file fires. They were separate lists once; see that file.
+const BASE_STEP_KEYS: readonly string[] = START_STEP_KEYS;
 
-function stepKeysFor(): string[] {
+function stepKeysFor(): readonly string[] {
   return BASE_STEP_KEYS;
 }
 
