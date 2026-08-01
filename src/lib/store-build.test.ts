@@ -77,6 +77,28 @@ describe('isIosStoreBuildFrom — Android must never take the iOS path', () => {
       userAgent: ANDROID_UA, platform: 'Linux armv8l', maxTouchPoints: 5,
     }))).toBe(false);
   });
+
+  it('is false on Android even when the browser carries an ios cookie', () => {
+    // Real and reachable: open a link containing ?source=ios on an Android
+    // phone and proxy.ts stamps cr_store=ios on that browser. Before the
+    // Android-UA veto this returned TRUE, putting a Play user on the iOS
+    // branch and breaking the guarantee in this function's own docstring.
+    expect(isIosStoreBuildFrom(sig({
+      cookie: 'ios', androidReferrer: false,
+      userAgent: ANDROID_UA, platform: 'Linux armv8l', maxTouchPoints: 5,
+    }))).toBe(false);
+  });
+
+  it('refuses every Android combination there is', () => {
+    for (const cookie of [null, 'ios', 'twa'] as const) {
+      for (const androidReferrer of [true, false]) {
+        expect(
+          isIosStoreBuildFrom(sig({ cookie, androidReferrer, userAgent: ANDROID_UA, platform: 'Linux armv8l', maxTouchPoints: 5 })),
+          `cookie=${cookie} referrer=${androidReferrer}`,
+        ).toBe(false);
+      }
+    }
+  });
 });
 
 describe('isIosStoreBuildFrom — iOS must take it', () => {

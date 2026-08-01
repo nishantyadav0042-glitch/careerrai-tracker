@@ -407,12 +407,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     } catch (err) {
       console.error('Blueprint Builder error:', err);
       const message = (err as { message?: string })?.message;
-      // Report BEFORE rendering it. This screen showed students
-      // "permission denied for function is_admin" for five days while
-      // client_errors stayed empty — the console.error above went to a phone
-      // nobody was holding. A failure here costs us the student entirely, so
-      // it is the last place that should fail silently. (Incident #14.)
-      reportHandledError(err, { where: 'onboarding:blueprint-save', screen: currentScreen });
+      // Report BEFORE rendering it. This screen showed a student
+      // "permission denied for function is_admin" while client_errors stayed
+      // empty — the console.error above went to a phone nobody was holding,
+      // and we only learned of it from a screenshot. A failure here costs us
+      // the student entirely, so it is the last place that should fail
+      // silently. (Incident #14.)
+      reportHandledError(err, { where: 'onboarding:blueprint-save', detail: currentScreen });
       setError(message ?? 'Something went wrong. Please try again.');
       setIsLoading(false);
     }

@@ -148,6 +148,12 @@ export function isIosStoreBuildFrom(s: IosStoreSignals): boolean {
   if (!s.storeBuild) return false;
   if (s.androidReferrer) return false;             // definitive Android — leave alone
   if (s.cookie === 'twa') return false;            // definitive Android — leave alone
+  // An Android USER-AGENT vetoes everything below, including the cookie. A
+  // student who once opened a ?source=ios link on an Android phone carries a
+  // cr_store=ios cookie, and without this line that phone would take the iOS
+  // branch — breaking the "never true on Android" guarantee this function's
+  // documentation makes, on the platform where the escape already works.
+  if (/Android/i.test(s.userAgent)) return false;
   if (s.cookie === 'ios') return true;             // definitive iOS
   return /iPad|iPhone|iPod/.test(s.userAgent)      // iPhone / iPad
     || (s.platform === 'MacIntel' && s.maxTouchPoints > 1); // iPadOS desktop-mode UA

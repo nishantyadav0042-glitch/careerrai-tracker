@@ -93,8 +93,26 @@ export async function proxy(request: NextRequest) {
   const source = normalizeStoreSource(searchParams.get('source'));
   if (source) {
     response.cookies.set('cr_store', source, {
-      path: '/',
+      // DELIBERATELY LONG-LIVED. On iOS this cookie is the ONLY evidence that
+      // we are inside the store wrapper: isStoreBuild() returns true there via
+      // `storeCookieValue() === 'ios'` alone, because a WKWebView never
+      // reports display-mode: standalone, so the localStorage-flag fallback
+      // below it cannot fire. If this cookie lapses while the wrapper is open,
+      // the app silently becomes "web", Razorpay opens INLINE in the WKWebView
+      // — the Apple 3.1.1 posture this file exists to hold — and payment is
+      // 100% broken there (window.open is ignored; see the 31 Jul fix).
+      //
+      // A shortened life was tried and reverted: the wrapper only re-stamps on
+      // a cold start, so any restored-webview session past the expiry lands in
+      // exactly that state. Nothing in the app would report it.
+      //
+      // KNOWN COST, accepted for now: one stray link carrying ?source=ios
+      // opened in a normal browser marks it a store build for ten years,
+      // disabling inline Razorpay for a web student. The fix is to gate the
+      // cookie on an Apple user-agent rather than to shorten it — a change to
+      // iOS payment classification, which is frozen until the stores are done.
       maxAge: 60 * 60 * 24 * 3650,
+      path: '/',
       sameSite: 'lax',
       secure: true,
     });
