@@ -5,6 +5,7 @@ import {
   shouldStampStoreCookie,
   storeCookieContradictsDevice,
 } from '@/lib/store-build';
+import { storeFunnelEnabled } from '@/lib/feature-flags';
 
 // Alternate hosts that must land on the canonical domain. The old
 // careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
@@ -183,9 +184,19 @@ export async function proxy(request: NextRequest) {
     // (Incident #10). Neither destination is protected, so there is no loop,
     // and clone() preserves `?source=`, so the store flag survives the hop
     // exactly as it did before.
+    // STORE LAUNCHES ARE HELD BACK, and this is the load-bearing line.
+    // /start ends at an SMS-OTP-to-an-Indian-mobile screen with no password
+    // option, which a store reviewer cannot pass — the Guideline 2.1 rejection
+    // from Incident #10, precisely. Until Play approves, anything launched from
+    // a wrapper keeps landing on /login exactly as the approved build does.
+    // `source` covers the very first request (the cookie is only being set on
+    // this same response, so it is not yet readable from request.cookies).
+    const storeLaunch = source != null || request.cookies.get('cr_store') != null;
+    const holdBack = storeLaunch && !storeFunnelEnabled();
+
     const returning = request.cookies.get('user_role') != null;
     const dest = request.nextUrl.clone();
-    dest.pathname = returning ? '/login' : '/start';
+    dest.pathname = (returning || holdBack) ? '/login' : '/start';
     return redirectWithSession(dest);
   }
 

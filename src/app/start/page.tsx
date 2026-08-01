@@ -213,6 +213,23 @@ export default function StartPage() {
             <div className="h-full rounded-full bg-stone-900 transition-all duration-300" style={{ width: `${((stepIdx + 1) / TOTAL_SCREENS) * 100}%` }} />
           </div>
         )}
+        {/* A SECOND, UNMISSABLE LOGIN DOOR, on the first screen only.
+            The header link is small by design; this one is for the person who
+            must not miss it. Anyone who already has an account and lands at the
+            top of this funnel — including a store reviewer holding demo
+            credentials — should not have to hunt, because the way FORWARD ends
+            at an SMS OTP to an Indian mobile that they cannot receive. That
+            dead end is what rejected us once (Incident #10). Shown only at
+            stepIdx 0 so it never interrupts a student mid-funnel. */}
+        {stepIdx === 0 && (
+          <Link
+            href="/login"
+            prefetch={false}
+            className="mb-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-stone-50 px-4 py-2.5 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+          >
+            Already have an account? <span className="underline underline-offset-2">Log in</span>
+          </Link>
+        )}
         {content}
       </div>
     </div>
