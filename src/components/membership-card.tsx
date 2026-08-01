@@ -97,7 +97,9 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         currency: data.currency,
         name: 'CareerRai',
         description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
-        prefill: { name: fullName },
+        // See create-order: server-resolved phone/email so Razorpay stops
+        // re-asking a signed-in student for details we already verified.
+        prefill: data.prefill ?? { name: fullName },
         theme: { color: '#E8652D' },
         modal: {
           ondismiss: () => {

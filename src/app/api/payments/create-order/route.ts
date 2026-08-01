@@ -6,6 +6,7 @@ import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { createRazorpayOrder } from '@/lib/razorpay';
 import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
+import { normalizeIndianPhone } from '@/lib/phone';
 
 export async function POST(request: NextRequest) {
   if (!paymentsEnabled()) return NextResponse.json({ error: 'Payments are not enabled.' }, { status: 403 });
@@ -75,6 +76,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ free: true });
     }
 
+    // Contact details for Razorpay's prefill, read SERVER-SIDE from the profile.
+    //
+    // Without these, Razorpay's first screen asks a signed-in student for their
+    // phone number and email again — details we already hold and already
+    // verified at signup. It reads as "why is this asking me this?" on the one
+    // screen where hesitation costs the sale, and every extra field on a mobile
+    // checkout is a place to drop out.
+    //
+    // Resolved here rather than passed from the client because every surface
+    // (buddy paywall, membership card) needs the same values, and a prop
+    // threaded through four components is a place for them to drift — the
+    // failure this codebase keeps paying for. One authoritative source.
+    const { data: payer } = await admin
+      .from('profiles')
+      .select('full_name, phone, email')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    // normalizeIndianPhone, NOT a regex written here. profiles.phone is not
+    // guaranteed canonical — the same number appears stored as +91XXXXXXXXXX,
+    // 91XXXXXXXXXX and bare XXXXXXXXXX (see phoneVariants, which exists because
+    // an inbound webhook kept missing matches for exactly that reason). A local
+    // check that only understood one of those shapes would hand Razorpay a
+    // malformed contact, which it IGNORES SILENTLY — leaving the student asked
+    // for their number again and no error anywhere to say why.
+    const contact = normalizeIndianPhone(payer?.phone) ?? undefined;
+    const prefill = {
+      name: payer?.full_name || undefined,
+      contact,
+      email: payer?.email || undefined,
+    };
+
     // Return the existing pending order if one was created in the last 30 minutes
     // AND for the SAME final price. Prevents duplicate Razorpay orders from
     // double-clicks or multi-tab checkouts, while closing a real billing bug
@@ -104,6 +137,7 @@ export async function POST(request: NextRequest) {
         keyId:         process.env.RAZORPAY_KEY_ID,
         plan,
         discountLabel: price.label,
+        prefill,
       });
     }
 
@@ -139,6 +173,7 @@ export async function POST(request: NextRequest) {
       keyId: process.env.RAZORPAY_KEY_ID, // public key id — safe on the client
       plan,
       discountLabel: price.label,
+      prefill,
     });
   } catch (e) {
     console.error('[create-order]', e);
