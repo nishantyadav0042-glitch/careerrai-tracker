@@ -16,6 +16,9 @@ import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenPathChoice from './screens/screen-path-choice';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
+// Shared with the pre-auth /start funnel — the SAME diagnosis, not a second
+// copy. See the instant-insight screen entry below for why it is here at all.
+import ScreenInstantInsight from '@/app/start/screens/screen-instant-insight';
 import { BlueprintPanel } from './components/blueprint-panel';
 import { BLUEPRINT_SECTIONS, computeBlueprintPreview, type SectionId } from '@/lib/blueprint-builder';
 import { reportHandledError } from '@/lib/report-error';
@@ -51,7 +54,9 @@ function draftKey(userId: string): string {
   // v8: real WhatsApp testimonial screenshot inserted after Meet-Buddy.
   // v9: repeater-only buddy pitch inserted after the commitment screen, and
   //     screens are now identified by a stable `key`, not raw index.
-  return `cr_onboarding_draft_v9_${userId}`;
+  // v10: Instant Insight inserted after topic-coverage, so a v9 draft's
+  //      currentScreen would resume one screen off.
+  return `cr_onboarding_draft_v10_${userId}`;
 }
 
 function loadOnboardingDraft(userId: string): OnboardingDraft | null {
@@ -176,8 +181,46 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // shared device could resume a DIFFERENT student's half-finished
       // coverage taps into this account. userId is known by the time this
       // screen is reachable — screen 0 already needs a session.
-      extraProps: { draftKey: userId ? `cr_onboarding_topic_coverage_draft_v3_${userId}` : undefined },
+      extraProps: {
+        draftKey: userId ? `cr_onboarding_topic_coverage_draft_v3_${userId}` : undefined,
+        // Keep the raw matrix, not just the counts. The insight screen below
+        // needs which topics are untouched and how much mark-weight they carry;
+        // coverage_practicing/learning/total cannot answer that.
+        onMatrixReady: (matrix: unknown) =>
+          setOnboardingData((prev) => ({ ...prev, topic_matrix: matrix })),
+      },
     },
+    // INSTANT INSIGHT — the diagnosis, now on BOTH doors.
+    //
+    // This screen existed only in the pre-auth /start funnel, so it reached web
+    // visitors and nobody else. Everyone who installs the app lands on /login
+    // instead (the wrappers launch on a protected path), signs up, and gets
+    // THIS modal — which had fourteen screens and not one of them was the one
+    // whose entire job is to prove we know something their coaching does not.
+    // The store is now the primary channel, so the WOW moment was reaching the
+    // smaller half of the funnel.
+    //
+    // Same position as in /start: immediately after the coverage taps, while
+    // the answers are still in the student's head. That adjacency IS the
+    // effect — a diagnosis ten seconds after the input reads as "it knows me";
+    // the identical words three screens later read as marketing.
+    //
+    // Rendered only when a real matrix exists. The component treats a missing
+    // one as `[]` and renders its "fresh start" variant, which would be a
+    // hollow diagnosis shown to someone who just tapped forty topics — so the
+    // screen is omitted entirely instead (a draft saved before this shipped).
+    ...(Array.isArray(onboardingData.topic_matrix) && (onboardingData.topic_matrix as unknown[]).length > 0
+      ? [{
+          key: 'instant-insight',
+          component: ScreenInstantInsight,
+          sectionId: null,
+          extraProps: {
+            matrix: onboardingData.topic_matrix,
+            isRepeater: onboardingData.is_repeater === true,
+            targetPercentile: (onboardingData.target_percentile as number | undefined) ?? null,
+          },
+        } satisfies Screen]
+      : []),
     {
       // The finish-date chooser (replaces the old Daily Commitment screen):
       // hours + target date picked together, AFTER coverage so the date
@@ -266,6 +309,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 'about-you': return hAttemptYear ? `CAT ${hAttemptYear}. Now make the plan yours.` : 'The more honest, the better the plan.';
       case 'reality-check': return 'A 30-second gut check.';
       case 'topic-coverage': return hFirstName ? `${hFirstName}, we'll skip what you've already finished.` : "We'll skip what you've already finished.";
+      // Deliberately promises nothing. The screen's own headline delivers the
+      // finding; a subtitle that pre-announces it ("here's your weak spot")
+      // softens the moment the whole screen exists to land.
+      case 'instant-insight': return hFirstName ? `${hFirstName}, one thing stands out.` : 'One thing stands out.';
       case 'finish-date': return hFirstName ? `${hFirstName}, lock your date with the real math.` : 'Lock your date with the real math.';
       case 'repeater-buddy-pitch': return 'One more thing, before we go on.';
       case 'meet-buddy': return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
