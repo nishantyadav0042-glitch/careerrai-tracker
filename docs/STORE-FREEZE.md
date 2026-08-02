@@ -1,5 +1,33 @@
 # STORE FREEZE — active until Play AND Apple both approve
 
+> ## 🔴 PLAY IS IN REVIEW RIGHT NOW. DO NOT MERGE TO `main`.
+>
+> Uploaded ~28 Jul. **In review for 5 days as of 2 Aug.** Not "awaiting upload"
+> — that line was stale for days and is corrected below.
+>
+> `main` deploys production. The Play app is a wrapper that loads production
+> **live**, so every merge changes the app the reviewer is holding, mid-review.
+> That is the entire reason this document exists.
+>
+> **The stale status caused real deploys.** On 1 Aug, believing Play had not yet
+> been uploaded, eight commits went to production during the review — including
+> `2ab27ba`, which changed the LAUNCH SCREEN (store launches → /start) and was
+> live for ~10 minutes before `33ebc1d` reverted it. A reviewer opening the app
+> in that window would have landed in the signup funnel instead of login.
+>
+> Verified, and the reason this was not worse: **`public/sw.js` was never
+> touched in any of them.** That is the file with `skipWaiting()` that produced
+> the iOS blank screen; it is the one that could actually break a reviewer's
+> session.
+>
+> **Do not "fix" this by reverting.** A revert is another deploy, and every
+> deploy is another chance to break the app under review. Production is
+> currently tested and green. Stop, do not rewind.
+>
+> **The switch that actually enforces this** is Vercel → Project → Settings →
+> Git → disable production deployments for `main`. A document cannot stop a
+> merge; that toggle can. Turn it on until both stores clear.
+
 **Founder instruction, 30 Jul 2026:** *"no changes need to be done until we get
 our app passed from playstore and apple store."*
 
@@ -16,7 +44,7 @@ Facts below are VERIFIED against production, Vercel and the database on
 | Store | State |
 |---|---|
 | **Apple** | ✅ **APPROVED FOR DISTRIBUTION, 30 Jul 2026.** Build 1.0 (3), iPhone-only. Prior rejection (2.1 unreachable login · 2.3.10 foreign status bar · 2.3.3 stale screenshots) remediated. Pending founder checks: Free Apps agreement active, and version released vs. Pending Developer Release. |
-| **Play** | `CareerRai.aab` built 29 Jul, new keystore, both fingerprints live in `assetlinks.json`. Awaiting Sumukh's upload; App-signing SHA-256 owed back. |
+| **Play** | **UPLOADED ~28 Jul — IN REVIEW since then (5 days as of 2 Aug).** `CareerRai.aab` built 29 Jul, new keystore. `assetlinks.json` still carries only the TWO upload-key fingerprints; the Play App-signing SHA-256 is STILL OWED and is the one open technical blocker (see the box above §4.2). |
 
 Production is running **`86e5b7f`** (Vercel `dpl_5pi2orenCAmjJZtqyqyMS2RRwkrW`,
 target production, READY).
@@ -118,10 +146,12 @@ critical waits unnoticed. Empty is a valid and good state; **missing** is not.
 
 | Branch | What | Severity | Since |
 |---|---|---|---|
-| — | nothing held back | — | — |
+| `claude/study-report` | Study report page (`/student/reports`) — hours/day chart, weekly average, where-the-hours-went split. Requested by name by our most engaged student. **Deliberately NOT in the bottom nav**: a new nav item is a visible change to the app a reviewer is holding. | product, not urgent | 2 Aug |
 
-*(`claude/status-update-t1g5as` was merged 1 Aug as the P0 in Incident #15 —
-the queue is empty because it was drained, not because it was never used.)*
+To ship once Play clears: merge the branch, then add
+`{ href: '/student/reports', icon: BarChart3, label: 'Report' }` to the MORE
+menu in `bottom-nav.tsx`. The page already works at its URL and can be linked
+to a student directly today, without any deploy.
 
 > ## ⛔ THE ONE THING THAT STILL FAILS PLAY
 >
@@ -269,4 +299,4 @@ merge the backlog in small reviewed steps — not all at once.
 | Store | Status | Date approved |
 |---|---|---|
 | Apple App Store | Build 1.0 (3) in review since 29 Jul | — |
-| Google Play | Awaiting upload | — |
+| Google Play | **In review** (uploaded ~28 Jul) | Reviewer has NOT signed in with `appreview@careerrai.in` — zero Android/TWA events on that account as of 2 Aug |
