@@ -6,7 +6,9 @@ import { getLogDateString } from '@/lib/streak-utils';
 import type { StreakData } from '@/types';
 
 interface LoggingPayload {
-  hours: number;
+  /** Stated hours, or null when the student left the optional row alone. The
+   *  API treats null as "unchanged", never as zero — see log-daily. */
+  hours: number | null;
   sections: string[];
   energy: string;
   notes?: string;

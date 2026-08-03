@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { VALID_BLOCKER_REASONS, VALID_DAY_OUTCOMES } from '@/lib/check-in';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { resolveLoggedHours } from '@/lib/resolve-logged-hours';
 import {
   getLogDateString,
   VALID_SECTIONS,
@@ -15,7 +16,8 @@ import { generateBuddyBriefing } from '@/lib/buddy-briefing';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 
 interface LoggingRequest {
-  hours: number;
+  /** Hours the student STATED. null = they left the field alone — not zero. */
+  hours: number | null;
   sections: string[];
   energy: string;
   notes?: string;
@@ -53,12 +55,15 @@ export async function POST(request: NextRequest) {
     // 15 July, but this cap still said 6 — every 8h/10h log bounced with a 400
     // and the student saw "Failed to log". The serious day-1 students are
     // exactly the ones picking 8-10h.
-    if (!Number.isInteger(body.hours) || body.hours < 0 || body.hours > 10) {
+    // null is valid and means "didn't say". It is NOT the same as 0, and the
+    // difference is the whole bug this guard now protects — see the merge below.
+    const statedHours: number | null = body.hours === null || body.hours === undefined ? null : body.hours;
+    if (statedHours !== null && (!Number.isInteger(statedHours) || statedHours < 0 || statedHours > 10)) {
       return NextResponse.json({ error: 'Invalid hours (0-10)' }, { status: 400 });
     }
     // An honest "didn't study today" log (0 hours, no mock) carries no
     // sections — allowed. Any log with real hours must say what was studied.
-    if (!Array.isArray(body.sections) || (body.sections.length === 0 && body.hours !== 0)) {
+    if (!Array.isArray(body.sections) || (body.sections.length === 0 && statedHours !== 0 && statedHours !== null)) {
       return NextResponse.json({ error: 'Select at least one section' }, { status: 400 });
     }
     if (!body.sections.every((s) => (VALID_SECTIONS as readonly string[]).includes(s))) {
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existingLog } = await admin
       .from('daily_reports')
-      .select('id, updated_at')
+      .select('id, updated_at, study_duration')
       .eq('student_id', user.id)
       .eq('report_date', dateStr)
       .maybeSingle();
@@ -116,12 +121,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // The hours actually written — stated if they said, preserved if they didn't.
+    // Every consumer below uses THIS, never body.hours, so the buddy
+    // notification and the analytics event can't report a zero the row does not
+    // contain.
+    const resolvedHours = resolveLoggedHours(statedHours, existingLog?.study_duration as number | null);
+
     // Atomic: both daily_reports and streak_data are updated inside a single Postgres
     // transaction so a mid-flight server crash cannot leave them out of sync.
     const { data: rpcResult, error: rpcError } = await admin.rpc('upsert_log_and_streak', {
       p_student_id:      user.id,
       p_report_date:     dateStr,
-      p_study_duration:  body.hours,
+      // NEVER let an unstated field erase hours that were already earned.
+      //
+      // This route wrote `body.hours` straight through, and LoggingModal sent
+      // `hours ?? 0`, so a student who left the optional hours row alone
+      // submitted 0 — and upsert_log_and_streak OVERWRITES study_duration.
+      // Completing planned tasks had already credited real hours via
+      // complete-task's `Math.max(1, routineMinutes/60, existing)`; opening the
+      // log afterwards wiped them back to zero.
+      //
+      // Abhishek completed a 9-HOUR plan on 30 Jul and his row read 0.0. The
+      // capacity engine then read those zeros as proof he studies nothing and
+      // cut his day to 30 minutes. 28 such days across 20 students.
+      //
+      // The rule: a STATED number is the student's word and is honoured exactly,
+      // including a correction downward or an honest 0. An UNSTATED one changes
+      // nothing — we keep what is already there. Silence is not a zero.
+      p_study_duration:  resolvedHours,
       p_topics_covered:  body.sections,
       p_mood_emoji:      body.energy,
       p_mock_taken:      body.sections.includes('Mock'),
@@ -215,7 +242,7 @@ export async function POST(request: NextRequest) {
       })().catch(console.error);
     }
 
-    notifyBuddy(user.id, profile.buddy_id, { hours: body.hours, energy: body.energy }).catch(console.error);
+    notifyBuddy(user.id, profile.buddy_id, { hours: resolvedHours, energy: body.energy }).catch(console.error);
     if (body.sections.includes('Mock')) {
       notifyBuddyMock(user.id, profile.buddy_id, dateStr).catch(console.error);
       // AI copilot: regenerate the buddy's facts-briefing NOW, so it's already
@@ -235,7 +262,7 @@ export async function POST(request: NextRequest) {
     if (isNewLog) void checkHistoryDoorAfterLog(admin, user.id);
 
     logAnalyticsEvent(user.id, 'log_submitted', {
-      hours: body.hours,
+      hours: resolvedHours,
       sectionCount: body.sections.length,
       hasMock: body.sections.includes('Mock'),
       emotionalChips: body.emotional_chips ?? [],

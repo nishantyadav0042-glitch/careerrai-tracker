@@ -19,7 +19,13 @@ interface LoggingModalProps {
 }
 
 export interface LoggingData {
-  hours: number;
+  /**
+   * Hours the student STATED. `null` means they left the optional row alone —
+   * which is NOT zero, and the API preserves whatever is already recorded when
+   * it sees null. Flattening these two with `?? 0` is what erased hours already
+   * earned by completing planned tasks (28 days, 20 students).
+   */
+  hours: number | null;
   sections: string[];
   energy: string; // kept for the log RPC contract; defaulted, not asked
   plan_fit?: string;        // 'easy' | 'right' | 'too_much' | 'couldnt_finish'
@@ -227,7 +233,12 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         : null;
 
       await onSubmit({
-        hours: hours ?? 0,
+        // NULL, not 0, when the student left the hours row alone. `hours ?? 0`
+        // here is what destroyed real study time: the server overwrites
+        // study_duration with whatever arrives, so an untouched optional field
+        // wiped hours already credited by completing planned tasks. Silence and
+        // zero are different answers and the API now tells them apart.
+        hours,
         sections: finalSections,
         energy: '💪', // defaulted — no longer asked
         plan_fit: planFit ?? undefined,
