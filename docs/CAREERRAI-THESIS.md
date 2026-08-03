@@ -466,9 +466,57 @@ sentence the Behavior Engine ever writes must trace to these.
 > can stop thinking and start studying — and it earns tomorrow's open by
 > noticing things about their preparation before they do.**
 
-*Pending: external adversarial review (founder running the thesis through an
-independent model with five kill-questions). Absorb findings, then lock and
-proceed to the build map.*
+---
+
+# v1.4 — FROZEN. The Constitution (founder + cofounder, 4 Aug)
+
+**The company:** a personal AI coach with perfect memory. The Morning Note is
+its delivery mechanism. The moat is neither the memory nor the note — **the
+moat is the loop**: evidence → interpretation → action → evidence, daily,
+months deep. Models can be copied overnight; months of a student's own loop
+cannot.
+
+## The Nine Laws
+
+1. **Memory is infrastructure, never interface.** No memory-browser, ever.
+   (Roam/Evernote/Rewind died waiting to be visited; Timehop hit 50%
+   DAU/registered by pushing one daily slice.)
+2. **Interpret only meaningful change — silence is information.** Bands and
+   personal baselines, never decimals (WHOOP's 3 bands; Oura's
+   baseline-deviation; Levels died surfacing noise). "Steady" is a positive
+   message.
+3. **Every note begins with psychological safety; recognition follows —
+   never shame first.** The earned delta always leads (ostrich effect, 852M
+   logins: red on open trains avoidance). Hurt is allowed at position 2;
+   dread is never allowed at position 1.
+4. **Every note ends with one tiny action — Today's Win.** Reading is not
+   success; behavior is. The Win is the note's unfinished business; the
+   evening close settles the contract.
+5. **Every note earns tomorrow's note.** Today's action is tomorrow's
+   evidence; an observation that cannot change tomorrow's data failed.
+6. **The student owns the memory. Always.** See, correct, delete; grace is
+   bounded (Duolingo's capped freezes); recovered lapses stop being cited;
+   the Buddy reads only by consent. (Flo/Strava: memory serving another
+   audience is trust death.)
+7. **The loop — not the memory — is the moat.**
+8. **Certainty about today only, never about November.** ON TRACK is
+   plan-denominated. Confidence about the exam is built from a chain of won
+   todays. (Retained from v1.1 — constitutional.)
+9. **Every observation ships with receipts.** It must survive the student
+   checking it; "why" ships as co-occurrence with dates, never causation as
+   fact. One jaw-drop when earned beats five useful ones daily — and the WTF
+   frequency curve is respected: fabricated wonder is trust suicide.
+   (Retained from v1.3 — constitutional.)
+
+## The validation gate (pre-registered, 4 Aug)
+
+**21-day hand-run pilot**, n≈19 active students: engine-computed notes,
+founder-sent on WhatsApp each morning; **skip-day probe on day 14** (send
+nothing; count who asks). PASS: ≥40% engaged at day 21 AND ≥3 unprompted
+"where's my note" asks. KILL: <20% engaged or zero asks → thesis wrong for
+this population, stop. Between: iterate sentences, not thesis. Shipped-product
+forecast on record: D1 45–60%, D7 35–45%, D21 25–35% for note-receivers —
+the pilot exists to collapse these ranges before the roadmap bets on them.
 
 *Research citations live in the six agent reports (session transcripts, 3 Aug
 2026). Key quantitative anchors: WHOOP 83% DAU/MAU · BeReal −61%/5mo ·
