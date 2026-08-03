@@ -341,6 +341,67 @@ prescription is anxiety.
    tiers**, Mother-Tested before any screen is designed. The screen is easy;
    the 200 never-generic sentences are the product.
 
+---
+
+# v1.2 — The complete daily loop: the Won Day (founder session, 3 Aug)
+
+## The new invention: closure
+
+The bedrock pain (Q1) recurs every evening as *"pata nahi aaj productive tha
+ya nahi"* — every day feels unfinished because nobody defines what finishing
+means. PW says attend; TIME says attempt; Telegram says 8 hours. **CareerRai
+defines the win.** "Today's Win" operationalizes the certainty rule: certainty
+about today requires today to have an explicit, achievable definition of
+success. The unit of the company is the **Won Day**; the chain of won todays
+is the only honest road to November.
+
+## The loop (morning open, evening close)
+
+```
+MORNING — the popup
+  "Before you study..."                ← cue (first three words never change)
+  🟢 ON TRACK · plan intact             ← verdict (plan-denominated, never percentile)
+  "If I were you today..."             ← voice (a senior's humility; the register Buddy inherits)
+  TODAY'S WIN — 1–2 items, max         ← the definition of success; win ⊂ plan
+  "Everything else is optional."       ← the anxiety-killer
+
+EVENING — the close
+  "Did we get today's win?"            ← ONE tap
+  ✅ Won / ⚠️ Almost — priced shortfall  ← closure, not judgment
+  → feeds tomorrow's morning            ← the flywheel sentence made literal
+```
+
+The plan is the route; **the win is the summit of the day.** Buddy speaks the
+same object ("did we get today's win?"). Referral stories write themselves
+("it told me NOT to finish Algebra — my win was analysing my mistakes").
+
+## The capture breakthrough
+
+**The evening close replaces the self-report log.** Win defined in the
+morning → confirming it is binary → logging becomes claiming victory
+(Strava's principle), never filing a report. The lightest possible capture,
+attached to the most satisfying moment of the day. The old log modal demotes
+to an optional detail layer. Nothing important gates on it (Law preserved).
+
+## Win calibration — the hard problem, with guardrails
+
+- Sized to real sustained capacity (capacity engine IS this component), with
+  the student's explicit override honoured.
+- Flexes on bad days: the salvage win ("40 minutes and today still counts")
+  is the worst-day screen wearing its morning face.
+- Target achievability ~85% of days: below = guilt machine (BeReal law),
+  above = flattery (trust decay).
+- The won-day chain renders as trajectory, never as streak pressure; Momentum
+  Shield protects it from the what-the-hell effect.
+- The Mother Test applies to the win itself: their coaching, their topic,
+  their bottleneck — never a win that could be anyone's.
+
+## Existing assets, re-derived (the thesis explains the product, not replaces it)
+
+capacity engine → win sizing · Momentum Shield → chain protection · check-in →
+evening close · Instant Insight → recognition layer · pace card → verdict ·
+buddy → the voice, monetized · coaching name (to add) → Borrow-phase sentences.
+
 *Research citations live in the six agent reports (session transcripts, 3 Aug
 2026). Key quantitative anchors: WHOOP 83% DAU/MAU · BeReal −61%/5mo ·
 journaling 87% D7 abandonment · habit trackers 43% D30 · self-assessment
