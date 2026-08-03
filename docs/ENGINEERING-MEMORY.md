@@ -461,6 +461,49 @@
 
 ---
 
+## Incident #16 — the founder dashboards were lying, each in a way already fixed elsewhere
+
+- **Date found:** 3 Aug 2026 (full 7-phase metric audit, production-verified).
+- **What happened:** `/admin/launch` counted the founder's admin account,
+  staff, a test account and NULL user_ids as students — "Active today" read
+  16 on a day with 12 real students, crash-free 88% when honest was 83%. The
+  same route, the growth `/start` funnel, momentum and mission-queue all
+  fetched time-windows bigger than PostgREST's 1,000-row cap without
+  pagination, so their numbers came from an arbitrary slice (the funnel showed
+  ~130 for a stage whose true count was 519; momentum bands could flip between
+  page loads). The payments table's only "paid" row belongs to the Razorpay
+  review account. Three labels described filters that don't exist.
+- **Why it matters beyond the numbers:** every one of these defects was a
+  RECURRENCE. The test-account contamination was fixed in daily-pick-stats
+  days earlier, with a comment naming the 16-vs-12 discrepancy; the
+  truncation was fixed in analytics/page.tsx, with a comment saying "a
+  dashboard that silently truncates is worse than no dashboard". The lessons
+  were learned, written down — and not encoded, so the next route repeated
+  them.
+- **Fix (branch `claude/study-report`, 4 Aug):** shared `fetch-all-rows.ts`
+  (bounded pagination, honest `truncated` flag) used by every windowed admin
+  fetch; the real-student filter applied at launch-metrics, daily-pick
+  retention, payments, capability-health, leads (NULL-safe form); study-day
+  windows replacing UTC/IST-midnight; labels corrected; authored
+  `20260804_notifications_time_indexes.sql` (apply at merge).
+- **Also recorded here per the audit:** the 3 Aug study-hours repair
+  retroactively updated 13 `daily_reports` rows (report_dates 24 Jul–2 Aug,
+  hours reconstructed from ticked-task est_minutes after the `hours ?? 0`
+  corruption). Hour-based week-over-week comparisons spanning that date are
+  not apples-to-apples; log-count and DAU histories are unaffected.
+- **Lessons:**
+  1. **A per-route fix for a systemic defect is a countdown to recurrence.**
+     If the fix is a pattern ("filter to real students", "paginate windows"),
+     it must land as a shared function the next author cannot skip.
+  2. **Every people-count needs a denominator with a name.** "Active" without
+     "real students, app_open, 24h rolling" is not a metric, it is a mood.
+  3. **The registry only protects what it is enforced against.** The metric
+     registry defined dau correctly while its owner route violated it.
+- **Owner:** cofounder (AI) — found by audit, fixed same night, unmerged
+  pending store freeze.
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a
