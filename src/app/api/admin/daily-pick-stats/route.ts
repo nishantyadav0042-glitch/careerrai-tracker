@@ -20,7 +20,7 @@ export async function GET() {
   const since24 = dayStart.toISOString();
   const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  const [{ data: events24 }, { data: votes }, { data: subs }, { data: submitters24 }] = await Promise.all([
+  const [{ data: events24 }, { data: votes }, { data: subs }, { data: submitters24 }, { data: realProfiles }] = await Promise.all([
     // One pass over the last 24h of events; funnel derived in memory.
     admin.from('student_events').select('user_id, event').gte('created_at', since24)
       .in('event', ['app_open', 'daily_pick_open', 'community_voted', 'community_submitted', 'community_share_blocked']),
@@ -29,15 +29,24 @@ export async function GET() {
       .select('id, kind, topic, payload, display_name, status, created_at, voting_ends_at')
       .in('status', ['voting', 'featured', 'archived']),
     admin.from('student_submissions').select('student_id').gte('created_at', since24),
+    // The honesty filter for every people-count below. Without it "ACTIVE
+    // STUDENTS 24H" counted the founder's admin account, the store-review test
+    // account, staff, and even a null user_id as students — it read 16 on a
+    // day with 12 real students. A founder metric that flatters by 33% is
+    // worse than no metric.
+    admin.from('profiles').select('id').eq('role', 'student').not('is_test_account', 'is', true),
   ]);
 
+  const realStudentIds = new Set((realProfiles ?? []).map((p: { id: string }) => p.id as string));
+  const isReal = (uid: unknown): uid is string => typeof uid === 'string' && realStudentIds.has(uid);
+
   // ── Funnel (last 24h) ──
-  const uniq = (ev: string) => new Set((events24 ?? []).filter((e) => e.event === ev).map((e) => e.user_id as string));
-  const dau = new Set((events24 ?? []).map((e) => e.user_id as string)).size;
+  const uniq = (ev: string) => new Set((events24 ?? []).filter((e) => e.event === ev && isReal(e.user_id)).map((e) => e.user_id as string));
+  const dau = new Set((events24 ?? []).filter((e) => isReal(e.user_id)).map((e) => e.user_id as string)).size;
   const openers = uniq('daily_pick_open');
   const voters24 = uniq('community_voted');
   const blocked24 = (events24 ?? []).filter((e) => e.event === 'community_share_blocked').length;
-  const contributors24 = new Set((submitters24 ?? []).map((s) => s.student_id as string)).size;
+  const contributors24 = new Set((submitters24 ?? []).filter((s) => isReal(s.student_id)).map((s) => s.student_id as string)).size;
 
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null);
 

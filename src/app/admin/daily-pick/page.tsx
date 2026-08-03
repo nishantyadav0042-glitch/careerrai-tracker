@@ -82,9 +82,17 @@ export default function DailyPickDashboard() {
 
         {/* Content quality */}
         <section className="rounded-2xl border border-stone-200 bg-white p-4">
-          <h2 className="text-sm font-bold text-stone-900">Content quality</h2>
+          <h2 className="text-sm font-bold text-stone-900">Shelf lifecycle (long-term pool only)</h2>
+          {/* The TOP SLOT has no bar since 29 Jul (lib/daily-pick.ts): max votes
+              wins the day, one day per item, per kind — zero votes still rotates
+              by queue order. The grading below only decides which expired items
+              stay on the permanent shelf vs archive. It never gates the pick,
+              so "needs N more votes" here does NOT mean the item can't go on
+              top — it already can, and does. */}
           <p className="mt-0.5 text-[11px] text-stone-500">
-            Judged past {stats.bars.minVotes} votes: ≥{stats.bars.featurePct}% → feature · {stats.bars.archivePct}–{stats.bars.featurePct}% → archive · below → drop
+            Top Pick has <b>no vote bar</b> — max votes tops the slot for one day (zero-vote items rotate by queue order).
+            This panel only grades the long-term shelf: past {stats.bars.minVotes} votes, ≥{stats.bars.featurePct}% keeps
+            an expired item on the permanent shelf; {stats.bars.archivePct}–{stats.bars.featurePct}% archives it. Nothing here blocks the daily rotation.
           </p>
           <div className="mt-2 space-y-1">
             {stats.items.map((it) => (
