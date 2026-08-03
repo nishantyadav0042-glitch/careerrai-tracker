@@ -402,6 +402,74 @@ capacity engine → win sizing · Momentum Shield → chain protection · check-
 evening close · Instant Insight → recognition layer · pace card → verdict ·
 buddy → the voice, monetized · coaching name (to add) → Borrow-phase sentences.
 
+---
+
+# v1.3 — The Morning Note & the Behavior Engine (founder session, 4 Aug)
+
+## Reframes adopted
+
+- **The surface is a NOTE, not a screen.** Internally: "the Morning Note" — a
+  coach's sticky note left before the student woke: looked at yesterday,
+  thought carefully, one honest message, 90-second read, then *"that's
+  enough — go study. We'll review tonight."* The app tells the student to
+  LEAVE. Anti-screen-time is the retention mechanic (WHOOP's sub-minute check
+  → 83% DAU/MAU), not a philosophy.
+- **The engine is the Behavior Engine** (supersedes "PPI" as internal name):
+  it predicts the *student*, not the exam. Its daily internal question: *"if
+  this student never opened the app again today, what is the ONE observation
+  that would most improve today's decisions?"* Observation → earns attention.
+  Recommendation → earns action. Plan → executes. Close → verifies. Buddy →
+  explains.
+- **Observations, not insights.** Insights are opinions; observations are
+  facts about the student from their own data. The calibration science is why
+  this works: students cannot self-observe (18.5% accurate, ρ = −0.59). The
+  headline register: *"Here's what you're not noticing."*
+- **The WTF Test** (supersedes the Mother Test as the top bar): at least one
+  moment where the student thinks *"wait — how did it catch that?"* Because
+  the signals are ones no human coach would manually notice daily.
+
+## The honesty constraints (what keeps the WTF Test from killing us)
+
+1. **The WTF frequency curve is real and must be respected.** Honest
+   projection per student: week 1 ≈ 1–2 total WTF-grade observations
+   (onboarding cross-analysis + first avoidance patterns); weeks 2–3 ≈ 2–3
+   per week; week 4+ approaching daily. **The note is daily; the WTF moment
+   is as-earned.** Forcing daily WTF ⇒ fabrication ⇒ wrong-twice ⇒ dead. The
+   note has tiers: WTF-grade when earned, plain-and-true otherwise.
+2. **Every observation ships with receipts.** It must survive the student
+   checking it ("6 sessions: Jul 14, 17, 19…"). The first observation a
+   student disproves is the last one they read.
+3. **Observations only from owned sensors** — never inference dressed as
+   fact, never coaching-content claims (module completion is the coaching's
+   data; treaty holds).
+
+## The sensor audit (numbers before poetry — which notes are writable, when)
+
+| Observation class (founder's examples) | Sensors needed | Status | Writable |
+|---|---|---|---|
+| "Marked T&W weakest, studied it 6×— bottleneck is moving on" | weak-topic + daily topics | have | week 1 |
+| "68% Quant / 12% VARC — silently stopped opening it" | section × hours | have (repaired 2 Aug) | week 2 |
+| "Best mocks follow 2 study days / full sleep" | mocks + logs + sleep_quality | have | after 3–4 mocks |
+| "100% lectures, 38% practice of your modules" | coaching-content completion | **absent — treaty-adjacent; do not build** | — |
+| "Bad mock → 3 days of lectures, 3rd time this month" | mocks + **activity type** | absent | week 3, IF sensor added |
+
+**Minimum sensor set (complete, closed list):** morning open (automatic) ·
+evening one-tap close, win itemized by section (avoidance = earliest WTF
+fuel) · optional one-chip activity type (📺/✍️/🔁/📊 — unlocks the
+lecture-hoarding observation class) · mock entry (densest fuel) · coaching
+name (one tap, day-1 Borrow sentences). Nothing else may be demanded. Every
+sentence the Behavior Engine ever writes must trace to these.
+
+## The company, in one sentence (v1.3 final)
+
+> **CareerRai removes just enough uncertainty every morning that the student
+> can stop thinking and start studying — and it earns tomorrow's open by
+> noticing things about their preparation before they do.**
+
+*Pending: external adversarial review (founder running the thesis through an
+independent model with five kill-questions). Absorb findings, then lock and
+proceed to the build map.*
+
 *Research citations live in the six agent reports (session transcripts, 3 Aug
 2026). Key quantitative anchors: WHOOP 83% DAU/MAU · BeReal −61%/5mo ·
 journaling 87% D7 abandonment · habit trackers 43% D30 · self-assessment
