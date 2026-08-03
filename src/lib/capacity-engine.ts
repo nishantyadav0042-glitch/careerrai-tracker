@@ -45,8 +45,34 @@ export function computeCapacity(recentStudyHours: number[], loggedDays: number, 
     };
   }
 
+  // NO POSITIVE EVIDENCE IS NOT EVIDENCE OF NOTHING.
+  //
+  // This used to read `const behaviour = typical ?? 0.5`, inventing half an
+  // hour of capacity for a student we had never seen study. That invented
+  // number then became their whole day: capBudget takes min(pace, sustainable),
+  // so 0.5h beat a 9h requirement, and routine-engine's
+  // `Math.max(30, hours * 60)` floored the plan at exactly 30 minutes.
+  //
+  // A student then asked why his day was 12m + 9m + 9m under a headline saying
+  // "9h needed". The answer was that he had marked VARC, DILR and QA as studied
+  // but skipped the OPTIONAL hours field, LoggingModal sent `hours ?? 0`, and
+  // we read those zeros as proof he studies nothing. He had told us he worked;
+  // we recorded that he hadn't, and then shrank his plan for it. Twenty-eight
+  // such days exist across twenty students.
+  //
+  // So: when there is no day we can point to, fall back to what they TOLD us —
+  // exactly as the `loggedDays < MIN_DAYS_FOR_BEHAVIOUR` branch above already
+  // does. The two branches now agree: absent evidence, trust the claim. We only
+  // plan below someone's claim when we can name the days that justify it.
+  if (typical == null) {
+    return {
+      claimedHours, loggedDays, typicalStudyHours: null, sustainableHours: claimedHours, trust: 'input',
+      note: `No day with hours recorded yet — trusting the ${claimedHours ?? '?'}h entered rather than assuming zero.`,
+    };
+  }
+
   // Believe the LOWER of claim and behaviour; never plan above what they said.
-  const behaviour = typical ?? 0.5;
+  const behaviour = typical;
   const sustainable = claimedHours != null ? round2(Math.min(claimedHours, behaviour)) : round2(behaviour);
   const trust: Capacity['trust'] = claimedHours != null && behaviour < claimedHours - 0.5 ? 'behaviour' : 'input';
 
@@ -60,7 +86,24 @@ export function computeCapacity(recentStudyHours: number[], loggedDays: number, 
 
 // Cap a proposed daily budget at what the student can actually sustain. Only
 // trims down; a null/absent capacity leaves the budget untouched.
-export function capBudget(proposedHours: number | null, capacity: Capacity): number | null {
+export type PlanSizing = 'adaptive' | 'full';
+
+/**
+ * `sizing` is the student's own override, and it only ever appears because they
+ * asked for it (Home pace card → "Use my full plan"). 'full' skips the
+ * behavioural cap entirely and plans to whatever the pace requires.
+ *
+ * The cap is right by default and wrong as an absolute: someone who studied 2h
+ * a day through exam week, then clears their calendar, should not be told for a
+ * fortnight that they are a 2h person. Our memory of them must not become their
+ * ceiling. Defaults to 'adaptive', so every existing caller is unchanged.
+ */
+export function capBudget(
+  proposedHours: number | null,
+  capacity: Capacity,
+  sizing: PlanSizing = 'adaptive',
+): number | null {
+  if (sizing === 'full') return proposedHours;
   if (capacity.sustainableHours == null) return proposedHours;
   if (proposedHours == null) return capacity.sustainableHours;
   return Math.min(proposedHours, capacity.sustainableHours);

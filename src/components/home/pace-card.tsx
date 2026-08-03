@@ -74,6 +74,7 @@ interface PaceCardProps {
 export function PaceCard({ pace, targetIso, week, weekLabels, plannedMinutes = null }: PaceCardProps) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sizingBusy, setSizingBusy] = useState(false);
   const [date, setDate] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
@@ -104,6 +105,24 @@ export function PaceCard({ pace, targetIso, week, weekLabels, plannedMinutes = n
   const remainingWithMocks = pace.remainingHours + remainingMockHours(pace.remainingHours);
   const requiredForNew = daysToNew ? Math.round((remainingWithMocks / daysToNew) * 2) / 2 : null;
   const tooDemanding = requiredForNew != null && requiredForNew > committedPerDay + 0.5;
+
+  // The door out of the capacity cap. Only ever reachable from the capped
+  // state, because offering "plan me more" to someone already on a full plan is
+  // noise. Reloads so the regenerated plan is what they see next.
+  async function useFullPlan() {
+    setSizingBusy(true);
+    try {
+      const res = await fetch('/api/student/plan-sizing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sizing: 'full' }),
+      });
+      if (!res.ok) throw new Error();
+      window.location.reload();
+    } catch {
+      setSizingBusy(false);
+    }
+  }
 
   async function saveDate() {
     if (!date) return;
@@ -204,6 +223,17 @@ export function PaceCard({ pace, targetIso, week, weekLabels, plannedMinutes = n
       {head.sub && (
         <div className={`mt-3 rounded-xl border px-3 py-2.5 ${head.capped ? 'border-amber-200 bg-amber-50' : 'border-stone-200 bg-stone-50'}`}>
           <p className={`text-[12px] font-medium leading-relaxed ${head.capped ? 'text-amber-900' : 'text-stone-600'}`}>{head.sub}</p>
+          {/* The ceiling gets a door. A student who has cleared their calendar
+              must be able to say so — otherwise our memory of a slow fortnight
+              quietly becomes the most they are ever planned for. */}
+          {head.capped && (
+            <button
+              type="button" onClick={useFullPlan} disabled={sizingBusy}
+              className="mt-2 w-full rounded-lg border border-amber-300 bg-white py-2 text-[12px] font-bold text-amber-900 active:scale-[0.99] disabled:opacity-60"
+            >
+              {sizingBusy ? 'Rebuilding your plan…' : `No — plan my full ${pace.requiredPerDay}h a day`}
+            </button>
+          )}
         </div>
       )}
 

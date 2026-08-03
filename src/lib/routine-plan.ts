@@ -23,7 +23,7 @@ import {
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
-import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
+import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS, type PlanSizing } from '@/lib/capacity-engine';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 import { weakestFromCoverage } from '@/lib/section-weakness';
@@ -193,7 +193,7 @@ export async function computeTodaysPlan(
         .from('profiles')
         .select(`
           is_working_professional, is_repeater, target_percentile,
-          hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
+          hours_available, study_target_hours, weekend_hours_available, syllabus_target_date, plan_sizing,
           self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
           baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, start_with
         `)
@@ -249,13 +249,16 @@ export async function computeTodaysPlan(
     const claimedHours = (profile.study_target_hours ?? profile.hours_available) as number | null;
     const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
     const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
+    const sizing: PlanSizing = profile.plan_sizing === 'full' ? 'full' : 'adaptive';
 
     const routineProfile: RoutineProfile = {
       isWorkingProfessional: !!profile.is_working_professional,
       isRepeater: !!profile.is_repeater,
       targetPercentile: profile.target_percentile as number | null,
-      weekdayHours: capBudget(paceHours ?? claimedHours, capacity),
-      weekendHours: capBudget(paceHours ?? (profile.weekend_hours_available as number | null), capacity),
+      // The student's own override, when they asked for it. Defaults to
+      // 'adaptive' so an absent/unknown value behaves exactly as before.
+      weekdayHours: capBudget(paceHours ?? claimedHours, capacity, sizing),
+      weekendHours: capBudget(paceHours ?? (profile.weekend_hours_available as number | null), capacity, sizing),
       weakestSection: weakest,
       strongestSection: strongest,
       weakTopic,
