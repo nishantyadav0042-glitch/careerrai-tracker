@@ -278,11 +278,26 @@ describe('recognition days — the surprising-positive quota', () => {
     throw new Error('no recognition day found in range');
   });
 
-  it('a student with nothing crossed gets a hold, not a fabricated swap', () => {
-    const s: StudentSnapshot = { ...base, logs: [], coverage: [] };
+  it('a student with a record but nothing crossed gets a hold, not a fabricated swap', () => {
+    const s: StudentSnapshot = {
+      ...base,
+      logs: [log('2026-08-04', ['QA'])],
+      coverage: [cov('Percentages', 'QA', 'practicing', '2026-08-03')],
+    };
     const n = composeInterrupt(s, TODAY);
     expect(n.decision.kind).toBe('hold');
     expect(n.recognition).toBe(true);
+  });
+
+  it('a cold-start student (no logs, nothing started) gets a BEGIN decision, not fake steadiness', () => {
+    const s: StudentSnapshot = { ...base, logs: [], coverage: [] };
+    const n = composeInterrupt(s, TODAY);
+    expect(n.decision.kind).toBe('swap');
+    expect(n.reason.kind).toBe('cold_start');
+    expect(n.text).toContain('Today’s plan is one line.');
+    expect(n.text).not.toContain('steady'); // never tell an unstarted student they are steady
+    expect(n.text).toContain(String(s.daysToCat)); // the receipt is the calendar
+    expect(n.text.trim().endsWith(TRUST_CLOSE)).toBe(true);
   });
 });
 

@@ -48,7 +48,7 @@ export interface StudentSnapshot {
 }
 
 export interface Observation {
-  kind: 'avoidance' | 'drift' | 'revision_gap' | 'earned' | 'steady';
+  kind: 'avoidance' | 'drift' | 'revision_gap' | 'earned' | 'steady' | 'cold_start';
   text: string;
   /** Law 9: the proof, human-readable, shown WITH the claim. */
   receipts: string;
@@ -114,15 +114,19 @@ function fmtDates(dates: string[]): string {
     .join(', ');
 }
 
+const CORE_SECTIONS = ['QA', 'VARC', 'DILR'];
+
 /** The section eating the most recent study days — the natural donor of
- * minutes in a swap. Null when nothing dominates or nothing is loggable. */
+ * minutes in a swap. Prefers a core section: "cut 20 min → Revision" is not
+ * a decision a student can execute; "cut 20 min → DILR" is. */
 function dominantSection(logs: SnapshotLog[], exclude?: string | null): string | null {
   const counts = new Map<string, number>();
   for (const l of logs) for (const sec of new Set(l.sections)) {
     if (sec !== exclude) counts.set(sec, (counts.get(sec) ?? 0) + 1);
   }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  return ranked[0]?.[0] ?? null;
+  const core = ranked.filter(([sec]) => CORE_SECTIONS.includes(sec));
+  return (core[0] ?? ranked[0])?.[0] ?? null;
 }
 
 /** A concrete re-entry point inside a section, from the student's OWN record —
@@ -176,8 +180,7 @@ export function detectDrift(s: StudentSnapshot, today: string): Observation | nu
   if (ranked.length < 2) return null;
 
   const [topSec, topDays] = ranked[0];
-  const core = ['QA', 'VARC', 'DILR'];
-  const starved = core.filter((sec) => (counts.get(sec) ?? 0) / logs.length <= DRIFT_NEGLECTED_SHARE);
+  const starved = CORE_SECTIONS.filter((sec) => (counts.get(sec) ?? 0) / logs.length <= DRIFT_NEGLECTED_SHARE);
   if (topDays / logs.length < DRIFT_DOMINANT_SHARE || starved.length === 0) return null;
 
   const entry = startPoint(s, starved[0]);
@@ -415,6 +418,36 @@ export function isRecognitionDay(firstName: string, today: string): boolean {
 }
 
 export function composeInterrupt(s: StudentSnapshot, today: string): MorningInterrupt {
+  // Cold start — no logs, nothing started. "Steady" would be a lie for a
+  // student who never began, and the deficit-open is banned. The only honest
+  // decision is to BEGIN, sized embarrassingly small. Receipts: the empty
+  // record and the calendar, both checkable.
+  if (s.logs.length === 0 && !s.coverage.some((c) => c.status !== 'not_started')) {
+    const reason: Observation = {
+      kind: 'cold_start',
+      text: 'Your record is empty and the calendar is not.',
+      receipts: `0 topics started, ${s.daysToCat} days to CAT`,
+      weight: 0,
+      swap: { add: 'QA', cut: null },
+    };
+    const lines = [
+      `Before you study, ${s.firstName} —`,
+      '',
+      'Today’s plan is one line.',
+      '➕ 30 min → QA. That’s the whole plan.',
+      '',
+      `Why: your record is empty and CAT is ${s.daysToCat} days out (0 topics started). One 30-minute block today starts the record — tomorrow’s note reads it.`,
+      '',
+      TRUST_CLOSE,
+    ];
+    return {
+      text: lines.join('\n'),
+      decision: { kind: 'swap', minutes: 30, add: 'QA', cut: null },
+      reason,
+      recognition: false,
+    };
+  }
+
   const logs = recentLogs(s, today);
   const behavioural = logs.length >= MIN_DAYS_FOR_BEHAVIOUR;
 
