@@ -6,6 +6,7 @@ import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
 import { remainingMockHours } from '@/lib/study-pace';
 import type { PaceResult } from '@/lib/study-pace';
+import { paceHeadline } from '@/lib/pace-headline';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
 // steady-pace headline, three at-a-glance pace facts, a weekly study sparkline,
@@ -62,9 +63,15 @@ interface PaceCardProps {
   targetIso: string;
   week: number[];
   weekLabels: string[];
+  /**
+   * Today's plan size in minutes (daily_routines.est_minutes), or null before
+   * one exists. Passed in so this card can never claim a number the plan
+   * underneath it contradicts — see lib/pace-headline for the incident.
+   */
+  plannedMinutes?: number | null;
 }
 
-export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
+export function PaceCard({ pace, targetIso, week, weekLabels, plannedMinutes = null }: PaceCardProps) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
@@ -117,13 +124,20 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
     }
   }
 
-  const headline = pace.status === 'done'
-    ? 'Syllabus complete 🎉'
-    : pace.catchUpPerDay > 0
-      ? `${pace.committedPerDay ?? pace.requiredPerDay}h + ${pace.catchUpPerDay}h catch-up`
-      : pace.aheadPerDay > 0
-        ? `${pace.requiredPerDay}h needed · ${pace.aheadPerDay}h ahead`
-        : `${pace.requiredPerDay}h a day, steady`;
+  // ONE place decides what this card says, and it is aware of the plan sitting
+  // directly beneath it. Previously this ternary knew only the pace, so it
+  // printed "9h needed · 1h ahead" above a 30-minute day and a student had to
+  // ask us why. See lib/pace-headline.
+  const head = paceHeadline({
+    status: pace.status,
+    requiredPerDay: pace.requiredPerDay,
+    aheadPerDay: pace.aheadPerDay,
+    catchUpPerDay: pace.catchUpPerDay,
+    committedPerDay: pace.committedPerDay ?? null,
+    plannedMinutes,
+    weekHours: week,
+  });
+  const headline = head.text;
 
   if (expired && !editing) {
     return (
@@ -181,6 +195,17 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           <Sparkline week={week} labels={weekLabels} color={tone.ring} />
         </div>
       </div>
+
+      {/* The reconciliation line. Full-width UNDER the row, not squeezed beside
+          the ring: when it appears it is the most important sentence on the
+          card — the answer to the question the student would otherwise have to
+          message us to ask. Amber when the plan is capped, because that is a
+          warning; plain when it is only context. */}
+      {head.sub && (
+        <div className={`mt-3 rounded-xl border px-3 py-2.5 ${head.capped ? 'border-amber-200 bg-amber-50' : 'border-stone-200 bg-stone-50'}`}>
+          <p className={`text-[12px] font-medium leading-relaxed ${head.capped ? 'text-amber-900' : 'text-stone-600'}`}>{head.sub}</p>
+        </div>
+      )}
 
       <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
         <span className="text-[12px] text-stone-500">Finish by <span className="font-bold text-stone-800">{fmt(targetIso)}</span></span>

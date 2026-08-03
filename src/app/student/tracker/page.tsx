@@ -184,6 +184,19 @@ export default async function DailyTrackerPage() {
     (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
   ).length;
 
+  // Today's plan SIZE, read straight from the row the routine engine already
+  // wrote — a plain select, never a generate. The pace card needs it so it can
+  // never print "9h needed" above a 30-minute day (lib/pace-headline). Null is
+  // fine and means "no plan generated yet", which the headline handles.
+  const todaysRoutine = await admin
+    .from('daily_routines')
+    .select('est_minutes')
+    .eq('student_id', user.id)
+    .eq('routine_date', getLogDateString())
+    .maybeSingle()
+    .then((r) => r.data as { est_minutes: number | null } | null);
+  const plannedMinutes = todaysRoutine?.est_minutes ?? null;
+
   const existingDebrief = recentMock
     ? await admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
     : null;
@@ -482,7 +495,7 @@ export default async function DailyTrackerPage() {
         {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
 
         {/* Progress card — % done, pace, weekly trend, reschedule. */}
-        {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
+        {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} plannedMinutes={plannedMinutes} />}
 
         {/* Important dates — syllabus / mocks / revision */}
         {targetIso && <ImportantDates syllabus={syllabusLabel} mocks={mockLabel} revision={revLabel} />}
