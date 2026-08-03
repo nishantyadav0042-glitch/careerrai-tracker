@@ -259,6 +259,88 @@ the second exam cheaper than the first.
 
 ---
 
+---
+
+# v1.1 — The Ritual, and the amendments (founder + cofounder session, 3 Aug)
+
+## The Ritual: "Before you study..."
+
+We do not name the engine (internally it is **PPI — Personal Preparation
+Intelligence**; every surface reads it, no feature owns data). We do not brand
+a metric. **We own a ritual**, and the ritual is one screen with three layers,
+in fixed order, every morning:
+
+```
+"Before you study..."                          ← the CUE
+🟢 ON TRACK · 🟠 SLIPPING · 🔴 RECOVER TODAY      ← the VERDICT
+"Here's the move." (one move, its why, its cost) ← the VOICE
+```
+
+- **The cue** is a habit-stacking device: "before X" anchors to the routine
+  every aspirant already has. The first three words never change, ever. The
+  notification IS the sentence — unfinishable on a lock screen.
+- **The verdict** speaks vocabulary students already use ("track pe hai?").
+  Three states, no more. A slipping state always prices its own recovery,
+  bounded ("recovery today: 45 min; delayed: 2 hours") — Anki's debt mechanic
+  with the hope loop attached.
+- **The voice** — "here's what I'd do if I were you" — is the Buddy bridge:
+  the register the free product speaks for weeks is the relationship the paid
+  Buddy inherits. The pitch becomes "the voice that's been right about you
+  every morning — talk to it."
+- **Public naming waits.** The community names rituals (Wrapped, Streaks,
+  Rings were christened by usage). We ship the sentence; hostel talk names it;
+  then we canonize.
+
+## The certainty rule (hardened — non-negotiable)
+
+> **We sell certainty about TODAY. We never sell certainty about November.**
+
+"ON TRACK" is denominated in the **plan**, never the outcome: *"On track —
+your 99-percentile plan is intact"* is honest (we own the plan); *"on track
+for 99 percentile"* is a loan the first bad mock calls in. Confidence about
+November is built one way only: a chain of won todays, plus trajectory shown
+as trajectory — never destiny. The complete verdict sequence: **recognition
+("it caught me") → prescription ("do this") → certainty ("today is
+winnable")**. Prescription without diagnosis is astrology; diagnosis without
+prescription is anxiety.
+
+## The engraved flywheel sentence (founder)
+
+> **Every interaction must increase the accuracy of tomorrow morning's
+> recommendation.** Study log, skipped lecture, mock, Buddy chat, coaching
+> upload, mood, every tap — everything feeds tomorrow, or it is waste.
+
+## Amendments accepted in session
+
+1. **Moat restated:** graph = asset, intelligence = product, **moat = the
+   compounding loop between them** (graph → sharper verdict → student acts →
+   graph deepens). Copyable intelligence starts at zero with each student.
+2. **Hope loop:** every screen's arc is truth → path → hope. **Design the
+   day-after-the-worst-day screen first** — the returning student after a
+   bombed mock or four silent days is the most retention-critical surface.
+   Register is segment-tuned: partner for first-attempt, respectful mirror
+   for repeaters.
+3. **CAT-centric language stays** (founder concurred): exam-agnostic bones,
+   CAT-only words. Generality is earned by winning the wedge, never declared.
+   North star: **the most accurate model of an individual CAT aspirant ever
+   built — measured by whether they follow its advice tomorrow morning.**
+4. **Two taglines, two audiences:** investors/press — *"Every coaching teaches
+   thousands the same way. CareerRai ensures no two aspirants prepare the same
+   way."* Students — *"Your coaching knows the syllabus. CareerRai knows
+   you."*
+5. **December physics, stated:** revenue = activation × trust-formation-speed
+   × Buddy conversion, inside one ~115-day season. Trust must form in days.
+   The cohort-prior layer is the only asset that outlives November — build it
+   as such.
+6. **Fuel hierarchy for PPI:** calendar (free, always) → coverage + plan
+   adherence (held) → **mock entry — the densest Mother-Test fuel; its entry
+   moment must be the most-loved ritual after the morning check, never a
+   form.**
+7. **Day-2 problem:** the ritual's hardest day is the second morning. First
+   build-map artifact is the **sentence library keyed to data-availability
+   tiers**, Mother-Tested before any screen is designed. The screen is easy;
+   the 200 never-generic sentences are the product.
+
 *Research citations live in the six agent reports (session transcripts, 3 Aug
 2026). Key quantitative anchors: WHOOP 83% DAU/MAU · BeReal −61%/5mo ·
 journaling 87% D7 abandonment · habit trackers 43% D30 · self-assessment
