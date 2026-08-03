@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  composeNote, detectAvoidance, detectDrift, detectRevisionGap, detectEarned,
-  paceLine, type StudentSnapshot,
+  composeNote, composeInterrupt, detectAvoidance, detectDrift, detectEarned,
+  isRecognitionDay, paceLine, TRUST_CLOSE, type StudentSnapshot,
 } from './note-engine';
 
 // These tests enforce the Nine Laws (docs/CAREERRAI-THESIS.md v1.4) as
@@ -176,5 +176,129 @@ describe('the note as a whole', () => {
     const firstContentLine = note.text.split('\n').filter(Boolean)[1]; // after greeting
     expect(firstContentLine.startsWith('✅') || firstContentLine.startsWith('🟢') || firstContentLine.startsWith('🟠') || firstContentLine.startsWith('🔴')).toBe(true);
     expect(firstContentLine).not.toContain('not noticing');
+  });
+});
+
+// ─── v0.2: the Morning Interrupt (thesis v1.5 — influence, not interest) ────
+
+describe('the interrupt leads with the decision, never the deficit', () => {
+  it('the first content line IS the decision; the why comes after', () => {
+    const s = driftStudent(); // avoidance-class: QA silent 6 days
+    const n = composeInterrupt(s, TODAY);
+    const lines = n.text.split('\n').filter(Boolean);
+    expect(lines[1]).toBe('Today’s plan changes.');
+    expect(n.text.indexOf('plan changes')).toBeLessThan(n.text.indexOf('Why:'));
+  });
+
+  it('the swap is explicit and symmetric: same minutes in and out', () => {
+    const n = composeInterrupt(driftStudent(), TODAY);
+    expect(n.decision.kind).toBe('swap');
+    expect(n.text).toContain(`➕ ${n.decision.minutes} min → ${n.decision.add}`);
+    expect(n.text).toContain(`➖ ${n.decision.minutes} min → ${n.decision.cut}`);
+  });
+
+  it('avoidance swap adds the weak section and cuts the dominant one', () => {
+    const n = composeInterrupt(driftStudent(), TODAY);
+    expect(n.reason.kind).toBe('avoidance');
+    expect(n.decision.add).toContain('QA');
+    expect(n.decision.cut).toBe('DILR');
+  });
+
+  it('the why still carries receipts inline (Law 9 survives the pivot)', () => {
+    const n = composeInterrupt(driftStudent(), TODAY);
+    expect(n.text).toMatch(/Why: .+\(.+\)/);
+  });
+});
+
+describe('the trust close — the compliance instrument', () => {
+  it('every interrupt ends with the exact four-option close', () => {
+    const swap = composeInterrupt(driftStudent(), TODAY);
+    const hold = composeInterrupt({ ...base, logs: [], coverage: [] }, TODAY);
+    for (const n of [swap, hold]) {
+      expect(n.text.trim().endsWith(TRUST_CLOSE)).toBe(true);
+      expect(n.text).toContain('✅ Followed exactly');
+      expect(n.text).toContain('🟡 Mostly');
+      expect(n.text).toContain('🔄 Modified it');
+      expect(n.text).toContain('❌ Ignored');
+    }
+  });
+});
+
+describe('recognition days — the surprising-positive quota', () => {
+  it('lands near 30% of student-days, deterministically', () => {
+    let hits = 0;
+    const names = ['Aman', 'Ved', 'Harshil', 'Nishu', 'Saurav', 'Tanvi', 'Jyoti', 'Arnav', 'Harsh', 'Aadith'];
+    for (const name of names) {
+      for (let d = 1; d <= 30; d++) {
+        if (isRecognitionDay(name, `2026-08-${String(d).padStart(2, '0')}`)) hits++;
+      }
+    }
+    const share = hits / (names.length * 30);
+    expect(share).toBeGreaterThan(0.2);
+    expect(share).toBeLessThan(0.42);
+  });
+
+  it('a recognition day HOLDS the plan and cites the earned delta with receipts', () => {
+    // Find a recognition date for a steady student with an earned delta.
+    const s: StudentSnapshot = {
+      ...base,
+      logs: [log('2026-08-04', ['QA', 'VARC']), log('2026-08-03', ['DILR', 'VARC']), log('2026-08-02', ['QA', 'VARC'])],
+      coverage: [cov('Percentages', 'QA', 'practicing', '2026-08-03')],
+    };
+    // Probe only days where the fixture stays below every threshold (past
+    // 8 Aug the VARC silence legitimately crosses avoidance — and avoidance
+    // SHOULD override recognition). Vary the name to find a quota hit.
+    let day: string | null = null;
+    for (const name of ['Aman', 'Ved', 'Harshil', 'Nishu', 'Saurav', 'Tanvi', 'Jyoti', 'Arnav']) {
+      for (let d = 5; d <= 8; d++) {
+        const t = `2026-08-0${d}`;
+        if (isRecognitionDay(name, t)) { s.firstName = name; day = t; break; }
+      }
+      if (day) break;
+    }
+    expect(day).not.toBeNull();
+    const n = composeInterrupt(s, day!);
+    expect(n.recognition).toBe(true);
+    expect(n.decision.kind).toBe('hold');
+    expect(n.text).toContain('Today’s plan holds. Change nothing.');
+    expect(n.text).toContain('✅');
+    expect(n.text).toContain('('); // receipts still travel
+  });
+
+  it('a critical (avoidance-class) signal overrides the recognition quota', () => {
+    const s = driftStudent(); // avoidance weight ≥ 90
+    for (let d = 5; d <= 30; d++) {
+      const t = `2026-08-${String(d).padStart(2, '0')}`;
+      if (isRecognitionDay(s.firstName, t)) {
+        const n = composeInterrupt(s, t);
+        expect(n.decision.kind).toBe('swap'); // the burning signal ships anyway
+        return;
+      }
+    }
+    throw new Error('no recognition day found in range');
+  });
+
+  it('a student with nothing crossed gets a hold, not a fabricated swap', () => {
+    const s: StudentSnapshot = { ...base, logs: [], coverage: [] };
+    const n = composeInterrupt(s, TODAY);
+    expect(n.decision.kind).toBe('hold');
+    expect(n.recognition).toBe(true);
+  });
+});
+
+describe('the interrupt as a whole', () => {
+  it('reads in 30 seconds — under 600 characters', () => {
+    expect(composeInterrupt(driftStudent(), TODAY).text.length).toBeLessThan(600);
+    expect(composeInterrupt({ ...base, logs: [], coverage: [] }, TODAY).text.length).toBeLessThan(600);
+  });
+
+  it('uses the coaching as leverage, not as a rival', () => {
+    const n = composeInterrupt(driftStudent(), TODAY);
+    expect(n.text).toContain('TIME');
+    expect(n.text).toMatch(/batch pace/);
+  });
+
+  it('is deterministic — same snapshot, same date, same note', () => {
+    expect(composeInterrupt(driftStudent(), TODAY).text).toBe(composeInterrupt(driftStudent(), TODAY).text);
   });
 });

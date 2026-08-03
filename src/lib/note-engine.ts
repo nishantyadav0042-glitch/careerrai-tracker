@@ -54,6 +54,11 @@ export interface Observation {
   receipts: string;
   /** Higher = more worth saying. Used to pick ONE. */
   weight: number;
+  /** One-sentence form of the claim, for the 30-second interrupt format. */
+  short?: string;
+  /** The decision this observation implies: what gains time, what loses it.
+   * `cut` is null when there is nothing dominant to take the minutes from. */
+  swap?: { add: string; cut: string | null };
 }
 
 export interface MorningNote {
@@ -109,6 +114,26 @@ function fmtDates(dates: string[]): string {
     .join(', ');
 }
 
+/** The section eating the most recent study days — the natural donor of
+ * minutes in a swap. Null when nothing dominates or nothing is loggable. */
+function dominantSection(logs: SnapshotLog[], exclude?: string | null): string | null {
+  const counts = new Map<string, number>();
+  for (const l of logs) for (const sec of new Set(l.sections)) {
+    if (sec !== exclude) counts.set(sec, (counts.get(sec) ?? 0) + 1);
+  }
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  return ranked[0]?.[0] ?? null;
+}
+
+/** A concrete re-entry point inside a section, from the student's OWN record —
+ * never an invented topic (Law 9). */
+function startPoint(s: StudentSnapshot, section: string): string | null {
+  const inSection = s.coverage
+    .filter((c) => c.section === section && (c.status === 'learning' || c.status === 'practicing'))
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  return inSection[0]?.topic ?? null;
+}
+
 // ── Detectors (each returns null below threshold — Law 2) ───────────────────
 
 /** The student told us their weak section, and their own logs show they've
@@ -125,11 +150,17 @@ export function detectAvoidance(s: StudentSnapshot, today: string): Observation 
   if (silence < AVOIDANCE_MIN_DAYS) return null;
 
   const studiedInstead = [...new Set(logs.flatMap((l) => l.sections))].filter((x) => x !== s.weakSection);
+  const entry = startPoint(s, s.weakSection);
   return {
     kind: 'avoidance',
     text: `You called ${s.weakSection} your weak section — and you've been behaving like someone who has quietly decided it can wait. ${silence} days without opening it.`,
     receipts: `${logs.length} study days in the last two weeks (${studiedInstead.join(', ') || 'other sections'}); last ${s.weakSection} session: ${lastTouch ? fmtDates([lastTouch]) : 'none on record'}.`,
     weight: 90 + Math.min(10, silence - AVOIDANCE_MIN_DAYS),
+    short: `${silence} days since you last opened ${s.weakSection} — the section you yourself called weak.`,
+    swap: {
+      add: entry ? `${s.weakSection} (start: ${entry})` : s.weakSection,
+      cut: dominantSection(logs, s.weakSection),
+    },
   };
 }
 
@@ -149,11 +180,17 @@ export function detectDrift(s: StudentSnapshot, today: string): Observation | nu
   const starved = core.filter((sec) => (counts.get(sec) ?? 0) / logs.length <= DRIFT_NEGLECTED_SHARE);
   if (topDays / logs.length < DRIFT_DOMINANT_SHARE || starved.length === 0) return null;
 
+  const entry = startPoint(s, starved[0]);
   return {
     kind: 'drift',
     text: `${topDays} of your last ${logs.length} study days were ${topSec}. ${starved.join(' and ')} ${starved.length === 1 ? 'has' : 'have'} nearly disappeared from your prep — not because ${starved[0]} got easier.`,
     receipts: `${topSec}: ${topDays}/${logs.length} days · ${starved.map((x) => `${x}: ${counts.get(x) ?? 0}/${logs.length}`).join(' · ')}.`,
     weight: 70 + Math.round((topDays / logs.length) * 20),
+    short: `${topDays} of your last ${logs.length} study days went to ${topSec}; ${starved.join(' and ')} ${starved.length === 1 ? 'has' : 'have'} nearly disappeared.`,
+    swap: {
+      add: entry ? `${starved[0]} (start: ${entry})` : starved[0],
+      cut: topSec,
+    },
   };
 }
 
@@ -169,11 +206,17 @@ export function detectRevisionGap(s: StudentSnapshot, today: string): Observatio
   if (stale.length === 0) return null;
 
   const worst = stale[0];
+  const donor = dominantSection(recentLogs(s, today), worst.section);
   return {
     kind: 'revision_gap',
     text: `${worst.topic} — a topic you'd already pushed to ${worst.status === 'revising' ? 'revision' : 'practice'} — hasn't been touched in ${worst.gap} days. Work you've done is quietly evaporating.`,
     receipts: `Last touched ${fmtDates([worst.updatedAt])}; ${stale.length > 1 ? `${stale.length - 1} more topic${stale.length > 2 ? 's' : ''} in the same state.` : 'only one in this state — catch it early.'}`,
     weight: 50 + Math.min(20, worst.gap - REVISION_GAP_DAYS),
+    short: `${worst.topic} — already at ${worst.status === 'revising' ? 'revision' : 'practice'} level — untouched for ${worst.gap} days. That work is decaying.`,
+    swap: {
+      add: `revising ${worst.topic}`,
+      cut: donor ?? 'new material',
+    },
   };
 }
 
@@ -310,4 +353,132 @@ export function composeNote(s: StudentSnapshot, today: string): MorningNote {
   lines.push(`That's enough. Everything else is optional. Go study — we'll review tonight.`);
 
   return { text: lines.join('\n'), earned, observation, win, paceLine: pace };
+}
+
+// ── v0.2: the Morning Interrupt (thesis v1.5) ───────────────────────────────
+//
+// The pivot: the pilot measures INFLUENCE, not interest. The KPI is the
+// Decision Override Rate — did the student change today's plan because we
+// said so. So the note leads with a DECISION (an explicit swap: minutes in,
+// minutes out), the deficit rides behind it as the why, and the close asks
+// for a trust verdict, not a diary entry.
+//
+// Law 3 as amended (v1.5): the interrupt opens decision-first or
+// recognition-first — never deficit-first. "Today's plan changes" is a
+// verdict, not an accusation; the ostrich research is about leading with
+// failure, and a decision is not a failure.
+//
+// Wall sentence: CareerRai should change today's decision — not just
+// describe today's preparation.
+
+/** Share of days (in tenths) that open with recognition instead of a swap —
+ * the "surprising positive" quota. Deterministic per student+date so the
+ * pilot batch hits ~30% without a random source. */
+const RECOGNITION_SHARE_TENTHS = 3;
+/** Observations at or above this weight (avoidance-class) are too important
+ * to defer for the recognition quota — the swap ships anyway. */
+const CRITICAL_WEIGHT = 85;
+/** Minutes moved per swap, by observation kind. Small on purpose: a swap the
+ * student can actually execute beats a plan they admire. */
+const SWAP_MINUTES: Record<string, number> = { avoidance: 25, drift: 25, revision_gap: 20 };
+
+/** The compliance-learning close — fixed wording, one tap. The four options
+ * ARE the Advice Trust Rate instrument; never reword them mid-pilot. */
+export const TRUST_CLOSE =
+  'Tonight, one tap — did you trust today’s advice?\n' +
+  '✅ Followed exactly · 🟡 Mostly · 🔄 Modified it · ❌ Ignored';
+
+export interface InterruptDecision {
+  kind: 'swap' | 'hold';
+  minutes: number | null;      // null on hold days
+  add: string | null;
+  cut: string | null;
+}
+
+export interface MorningInterrupt {
+  /** Assembled, WhatsApp-ready, readable in ≤30 seconds. */
+  text: string;
+  decision: InterruptDecision;
+  /** The observation behind the decision (the why), or the earned delta on
+   * recognition days. */
+  reason: Observation;
+  /** True on surprising-positive days: the plan holds and we say why. */
+  recognition: boolean;
+}
+
+/** Deterministic ~30% of student-days are recognition days. Pure function of
+ * (student, date) so reruns produce the same batch. */
+export function isRecognitionDay(firstName: string, today: string): boolean {
+  let h = 0;
+  for (const ch of `${firstName}|${today}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 10 < RECOGNITION_SHARE_TENTHS;
+}
+
+export function composeInterrupt(s: StudentSnapshot, today: string): MorningInterrupt {
+  const logs = recentLogs(s, today);
+  const behavioural = logs.length >= MIN_DAYS_FOR_BEHAVIOUR;
+
+  const candidates = (behavioural
+    ? [detectAvoidance(s, today), detectDrift(s, today), detectRevisionGap(s, today)]
+    : [detectRevisionGap(s, today)]
+  ).filter((o): o is Observation => o !== null);
+  const observation = candidates.sort((a, b) => b.weight - a.weight)[0] ?? null;
+  const earned = detectEarned(s, today);
+
+  // Recognition day: the quota fires AND nothing critical is burning AND we
+  // actually have something earned to recognise (never fabricate — Law 9).
+  const critical = observation !== null && observation.weight >= CRITICAL_WEIGHT;
+  const recognition =
+    observation === null || (isRecognitionDay(s.firstName, today) && !critical && earned !== null);
+
+  const lines: string[] = [];
+  lines.push(`Before you study, ${s.firstName} —`);
+  lines.push('');
+
+  if (recognition) {
+    const delta = earned ?? steadyObservation();
+    lines.push('Today’s plan holds. Change nothing.');
+    lines.push(`✅ ${delta.text} (${delta.receipts})`);
+    // The surprise is real, not flattery: the median student's log dies at
+    // day 2 — a production number, not a motivational poster.
+    const loggedDays = logs.length;
+    if (loggedDays > 2) {
+      lines.push(`Most students’ logs die by day 2. Yours is at ${loggedDays} this fortnight.`);
+    }
+    if (s.coachingName) {
+      lines.push(`${s.coachingName === 'coaching' ? 'Your coaching' : s.coachingName} sets the pace today — we checked, and it’s working for you.`);
+    }
+    lines.push('');
+    lines.push(TRUST_CLOSE);
+    return {
+      text: lines.join('\n'),
+      decision: { kind: 'hold', minutes: null, add: null, cut: null },
+      reason: delta,
+      recognition: true,
+    };
+  }
+
+  const obs = observation!; // non-null: recognition covered the null case
+  const minutes = SWAP_MINUTES[obs.kind] ?? 20;
+  const add = obs.swap?.add ?? s.weakSection ?? 'your thinnest section';
+  const cut = obs.swap?.cut ?? 'anything else';
+
+  lines.push('Today’s plan changes.');
+  lines.push(`➕ ${minutes} min → ${add}`);
+  lines.push(`➖ ${minutes} min → ${cut}`);
+  lines.push('');
+  lines.push(`Why: ${obs.short ?? obs.text} (${obs.receipts})`);
+  if (s.coachingName) {
+    const batch = s.coachingName === 'coaching' ? 'Your coaching batch' : `Your ${s.coachingName} batch`;
+    lines.push(`${batch} runs at batch pace — this swap is YOUR pace. Don’t confuse the two.`);
+  }
+  lines.push('');
+  lines.push(TRUST_CLOSE);
+
+  return {
+    text: lines.join('\n'),
+    decision: { kind: 'swap', minutes, add, cut },
+    reason: obs,
+    recognition: false,
+  };
 }

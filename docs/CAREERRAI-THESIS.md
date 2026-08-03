@@ -525,3 +525,101 @@ accuracy 18.5%, ρ=−0.59 · monitoring d=0.40 (n=19,951), amplified when
 witnessed · Duolingo 2.4× at 7-day streak · Anki: dependency and abandonment
 are the same mechanism at different debt levels · CareerRai: median 2 logged
 days, 7% W1 active — the fragile pattern, measured on ourselves.*
+
+---
+
+# v1.5 — The Influence Amendment (founder + cofounder, 4 Aug, pre-pilot)
+
+The founder stopped the day-1 batch hours before send, with the correct
+objection: **v1.4's note tests whether students find us interesting. The
+company only exists if students find us load-bearing.** A note can be read,
+liked, even quoted — and change nothing about the day. That note is a
+horoscope with receipts.
+
+**The wall sentence:** CareerRai should change today's decision — not just
+describe today's preparation.
+
+## The KPI change
+
+The pilot's primary metric is no longer engagement. It is the **Decision
+Override Rate**: on what share of student-days did the student do something
+different because we said so. Engagement is now a diagnostic, not a goal.
+
+## The format change: the Morning Interrupt
+
+The Morning Note becomes the **Morning Interrupt** — readable in ≤30
+seconds, and it leads with a decision, not an observation:
+
+```
+Today's plan changes.
+➕ 25 min → QA (start: Percentages)
+➖ 25 min → DILR
+
+Why: 6 days since you last opened QA — the section you yourself
+called weak. (receipts)
+Your TIME batch runs at batch pace — this swap is YOUR pace.
+
+Tonight, one tap — did you trust today's advice?
+✅ Followed exactly · 🟡 Mostly · 🔄 Modified it · ❌ Ignored
+```
+
+The swap is explicit and symmetric: minutes in, minutes out. A student can
+comply with it, modify it, or ignore it — all three are signal.
+
+## Law 3, amended (the only law this touches)
+
+Law 3 read "the earned delta always leads." The interrupt amends it:
+**the note opens decision-first or recognition-first — never
+deficit-first.** "Today's plan changes" is a verdict, not an accusation;
+the ostrich evidence forbids leading with *failure*, and a decision is not
+a failure. The deficit rides behind the decision as the *why*, with its
+receipts. All other laws stand unamended — receipts (9), bands (2),
+plan-denominated certainty (8), student-owned memory (6).
+
+## The recognition quota
+
+**≥30% of student-days open with a surprising positive and a HOLD**
+("Today's plan holds. Change nothing.") — deterministic per student+day,
+never random, never fabricated: a hold day requires a real earned delta to
+cite. Rationale: an engine that only ever redirects becomes nagging; the
+authority to change a day is built on the days we visibly chose not to.
+Exception: an avoidance-class signal (critical weight) overrides the quota
+— a burning observation ships regardless of whose day it is.
+
+## Coaching as leverage, not rival
+
+The interrupt uses the coaching by name to create the swap's legitimacy:
+"Your TIME batch runs at batch pace — this swap is YOUR pace. Don't
+confuse the two." The treaty (v1.0) stands: we never contradict the
+coaching's syllabus; we allocate the student's marginal minutes, which the
+batch cannot see.
+
+## The evening close is now a trust instrument
+
+"Did you win today?" becomes **"Did you trust today's advice?"** with a
+fixed four-option taxonomy: ✅ Followed exactly · 🟡 Mostly · 🔄 Modified
+it · ❌ Ignored. This is compliance learning: 🔄 teaches us how students
+edit our advice (the most valuable answer), ❌ measured honestly is the
+kill-condition sensor. The wording is frozen for the pilot — changing the
+instrument mid-experiment destroys the data.
+
+## The five pilot metrics (pre-registered, replacing the v1.4 gate's sole focus)
+
+1. **Decision Override Rate** — % of swap-days marked ✅ or 🟡 (primary).
+2. **Advice Trust Rate** — distribution of the four close options over time;
+   trend matters more than level.
+3. **Prediction Accuracy** — when a note claims a pattern, does the student's
+   subsequent data confirm it. Wrong predictions are logged, not hidden.
+4. **Morning-to-Evening Completion** — % of days where the morning read gets
+   an evening close; the loop's pulse.
+5. **Unprompted Quotes** — students repeating a note's sentence back in
+   WhatsApp without being asked; the memetic signal (≥3 by day 21 retained
+   from v1.4).
+
+Day-14 skip-day probe retained. PASS/KILL bands from v1.4 retained but now
+denominated in Override Rate: PASS ≥40% of swap-days overridden by day 21;
+KILL <15% override AND flat trust trend → students read us as content, not
+counsel — thesis wrong for this population.
+
+*Engine: `src/lib/note-engine.ts` `composeInterrupt` (v0.2) implements this
+amendment structurally; `note-engine.test.ts` enforces it as behavior.*
