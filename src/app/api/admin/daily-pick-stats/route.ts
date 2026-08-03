@@ -42,7 +42,10 @@ export async function GET() {
 
   // ── Funnel (last 24h) ──
   const uniq = (ev: string) => new Set((events24 ?? []).filter((e) => e.event === ev && isReal(e.user_id)).map((e) => e.user_id as string));
-  const dau = new Set((events24 ?? []).filter((e) => isReal(e.user_id)).map((e) => e.user_id as string)).size;
+  // app_open only — the metric-registry definition of dau. Counting "any of
+  // the five fetched events" happened to match today but drifts the moment a
+  // student votes without an app_open in the window.
+  const dau = uniq('app_open').size;
   const openers = uniq('daily_pick_open');
   const voters24 = uniq('community_voted');
   const blocked24 = (events24 ?? []).filter((e) => e.event === 'community_share_blocked').length;
@@ -91,7 +94,9 @@ export async function GET() {
   const helpScore = votes24.filter((v) => v.helpful).length + openers.size;
 
   // ── Retention: voters vs non-voters (needs a week of life to mean much) ──
-  const everVoters = new Set((votes ?? []).map((v) => v.student_id as string));
+  // Same honesty filter as the funnel: a test account that voted once must
+  // not live in the retention cohort forever.
+  const everVoters = new Set((votes ?? []).map((v) => v.student_id).filter(isReal));
   const { data: active7 } = await admin.from('student_events')
     .select('user_id').gte('created_at', since7d).eq('event', 'app_open');
   const active7Set = new Set((active7 ?? []).map((e) => e.user_id as string));

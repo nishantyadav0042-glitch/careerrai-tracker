@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminCtx } from '@/lib/require-admin';
-import { studyDayString } from '@/lib/study-day';
+import { studyDayString, studyDayStart } from '@/lib/study-day';
 
 export const maxDuration = 60;
 
@@ -48,8 +48,12 @@ export async function GET() {
 
   const [{ data: inv, error }, { data: opens }, { data: logs }, { data: students }] = await Promise.all([
     admin.rpc('business_invariants'),
+    // Same window as loggedToday: the STUDY day (3 AM IST rollover), not IST
+    // midnight. With T00:00:00, between midnight and 3 AM `today` is still
+    // yesterday's date so the opens window started 24h early — the KPI's
+    // numerator and denominator were measured over different days.
     admin.from('student_events').select('user_id')
-      .eq('event', 'app_open').gte('created_at', `${today}T00:00:00+05:30`),
+      .eq('event', 'app_open').gte('created_at', studyDayStart().toISOString()),
     admin.from('daily_reports').select('student_id').eq('report_date', today),
     admin.from('profiles').select('id, is_test_account').eq('role', 'student'),
   ]);
@@ -59,7 +63,9 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: 'invariants failed', detail: error.message }, { status: 500 });
   }
 
-  const real = new Set((students ?? []).filter((s) => !s.is_test_account).map((s) => s.id));
+  // `!== true`, not `!flag`: keeps a NULL flag counted as real (NULL-safe,
+  // same convention as admin-filters.ts).
+  const real = new Set((students ?? []).filter((s) => s.is_test_account !== true).map((s) => s.id));
   const openedToday = new Set((opens ?? []).map((o) => o.user_id as string).filter((id) => real.has(id))).size;
   const loggedToday = new Set((logs ?? []).map((l) => l.student_id as string).filter((id) => real.has(id))).size;
 

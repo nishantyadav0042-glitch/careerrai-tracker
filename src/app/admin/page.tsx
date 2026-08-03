@@ -90,7 +90,10 @@ export default async function AdminTodayPage() {
     { label: 'Logged today', val: `${loggedToday}/${totalStudents}`, href: '/admin/logged-today', hot: false },
     { label: 'Streaks alive (incl. 🛡️ shield-protected)', val: aliveList.length, href: '/admin/live-streaks', hot: false },
     { label: 'Remind to log today', val: remindList.length, href: '/admin/reminders', hot: remindList.length > 0 },
-    { label: '🛡️ Shield used yesterday — win them back', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
+    // Label matches the actual filter (streak-breakers.ts: logged the day
+    // before yesterday, skipped yesterday, silent today) — it never checked
+    // shields, and a card that names the wrong filter gets acted on wrongly.
+    { label: 'Broke a streak yesterday — win them back', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
     { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
     { label: '💛 Want a buddy — said yes at signup', val: wantsBuddyList.length, href: '/admin/wants-buddy', hot: wantsBuddyList.length > 0 },
     { label: 'Going cold (4+ days)', val: coldList.length, href: '/admin/going-cold', hot: coldList.length > 0 },

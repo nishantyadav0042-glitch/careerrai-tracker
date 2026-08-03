@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminCtx } from '@/lib/require-admin';
 import { MIN_ACTIVE_QUESTIONS, MIN_ACTIVE_TIPS } from '@/lib/community-pipeline';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 
 export const maxDuration = 60;
 
@@ -20,11 +21,17 @@ export async function GET() {
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null);
 
   const [
-    { data: ev24 }, { data: otp24 }, { data: errs24 },
+    { rows: ev24 }, { data: otp24 }, { data: errs24 },
     { data: sources }, { data: logs24 }, { data: votes24 },
-    { data: subs24 }, { data: notifs24 }, { data: shelf },
+    { data: subs24 }, { rows: notifs24 }, { data: shelf },
   ] = await Promise.all([
-    admin.from('student_events').select('user_id, event').gte('created_at', since24),
+    // Paginated: a busy day already exceeds PostgREST's 1,000-row cap (1,311
+    // events on 3 Aug), and an unpaginated fetch computes DAU and every rate
+    // below from an arbitrary slice — the exact silent-truncation failure the
+    // analytics page documents having been burned by.
+    fetchAllRows<{ user_id: string | null; event: string }>((from, to) =>
+      admin.from('student_events').select('user_id, event').gte('created_at', since24)
+        .order('created_at', { ascending: false }).range(from, to)),
     // OTP sends. This queried `created_at` — a column that does not exist on
     // this table; it is `sent_at`. PostgREST rejected the filter, the route
     // swallowed it, and the whole "Login door (OTP)" panel rendered confident
@@ -47,7 +54,7 @@ export async function GET() {
     // number goes UP and nobody goes looking.
     admin.from('client_errors').select('student_id, fingerprint, message, path, install_source, created_at')
       .gte('created_at', since24).or('source.is.null,source.neq.handled'),
-    admin.from('profiles').select('install_source, created_at, is_test_account'),
+    admin.from('profiles').select('id, role, install_source, created_at, is_test_account'),
     admin.from('daily_reports').select('student_id, report_date').gte('created_at', since24),
     admin.from('submission_votes').select('student_id').gte('created_at', since24),
     admin.from('student_submissions').select('kind, status, voting_ends_at, created_at'),
@@ -56,17 +63,33 @@ export async function GET() {
     // voice notes), so this tile showed 0 opens forever no matter what
     // students did. The service worker beacons the truth: received_at when
     // the push lands on the device, clicked_at when it is tapped.
-    admin.from('notifications').select('id, pushed_at, received_at, clicked_at, created_at').gte('created_at', since24),
+    // Paginated: 1,088 rows in the last 24h already breach the 1,000 cap.
+    fetchAllRows<{ id: string; pushed_at: string | null; received_at: string | null; clicked_at: string | null }>((from, to) =>
+      admin.from('notifications').select('id, pushed_at, received_at, clicked_at, created_at').gte('created_at', since24)
+        .order('created_at', { ascending: false }).range(from, to)),
     admin.from('student_submissions').select('kind, status, voting_ends_at'),
   ]);
 
+  // The honesty filter for every people-count below — same rule as the
+  // daily-pick dashboard and the metric registry's definition of dau
+  // ("distinct REAL students"). Without it this route counted the founder's
+  // admin account, staff, a test account and a NULL user_id as students: it
+  // read 16 on a day with 12 real students, and crash-free read 88% when the
+  // honest figure was 83%. NULL-safe on the flag, like admin-filters.ts.
+  const realStudentIds = new Set(
+    (sources ?? []).filter((p) => p.role === 'student' && p.is_test_account !== true).map((p) => p.id as string)
+  );
+  const isReal = (uid: unknown): uid is string => typeof uid === 'string' && realStudentIds.has(uid);
+
   // ── Reach ──
-  const dauSet = new Set((ev24 ?? []).filter((e) => e.event === 'app_open').map((e) => e.user_id as string));
-  const anyEventUsers = new Set((ev24 ?? []).map((e) => e.user_id as string));
-  const dau = dauSet.size || anyEventUsers.size;
+  const dauSet = new Set((ev24 ?? []).filter((e) => e.event === 'app_open' && isReal(e.user_id)).map((e) => e.user_id as string));
+  // No any-event fallback: `dau || anyEventUsers` silently swapped the metric
+  // definition on quiet days — the exact dual-definition drift the registry
+  // exists to prevent. A real zero renders as zero.
+  const dau = dauSet.size;
 
   // ── Crash-free: students with zero client errors, out of students seen ──
-  const crashed = new Set((errs24 ?? []).map((e) => e.student_id as string).filter(Boolean));
+  const crashed = new Set((errs24 ?? []).map((e) => e.student_id).filter(isReal));
   const crashFreePct = dau > 0 ? Math.round(((dau - crashed.size) / dau) * 100) : null;
 
   // Top crash groups, so a real bug is one line not 200.
@@ -89,7 +112,7 @@ export async function GET() {
   // show a gap no matter how badly login was failing. One definition, one
   // value, used twice; if they must differ, they need different sources.
   const loggedIn24 = dauSet.size;
-  const newStudents24 = (sources ?? []).filter((p) => !p.is_test_account && (p.created_at as string) >= since24).length;
+  const newStudents24 = (sources ?? []).filter((p) => p.role === 'student' && p.is_test_account !== true && (p.created_at as string) >= since24).length;
   // Honest framing: distinct phones sent vs new accounts created. Not a true
   // per-attempt success rate (we don't log verify failures yet) — labelled as
   // such in the UI.
@@ -98,7 +121,9 @@ export async function GET() {
   ).size;
 
   // ── Install source split (the Play vs web question) ──
-  const real = (sources ?? []).filter((p) => !p.is_test_account);
+  // Students only — the subtitle says students, so buddies/staff don't belong
+  // in the "unknown" bar.
+  const real = (sources ?? []).filter((p) => p.role === 'student' && p.is_test_account !== true);
   const bySource: Record<string, number> = { play: 0, pwa: 0, ios: 0, browser: 0, unknown: 0 };
   for (const p of real) {
     const k = (p.install_source as string) ?? 'unknown';
@@ -106,11 +131,11 @@ export async function GET() {
   }
 
   // ── Study behaviour ──
-  const loggedStudents24 = new Set((logs24 ?? []).map((l) => l.student_id as string)).size;
+  const loggedStudents24 = new Set((logs24 ?? []).map((l) => l.student_id).filter(isReal)).size;
 
   // ── Peer-learning layer ──
-  const openers = new Set((ev24 ?? []).filter((e) => e.event === 'daily_pick_open').map((e) => e.user_id as string)).size;
-  const voters = new Set((votes24 ?? []).map((v) => v.student_id as string)).size;
+  const openers = new Set((ev24 ?? []).filter((e) => e.event === 'daily_pick_open' && isReal(e.user_id)).map((e) => e.user_id as string)).size;
+  const voters = new Set((votes24 ?? []).map((v) => v.student_id).filter(isReal)).size;
   const sharedTips24 = (subs24 ?? []).filter((s) => s.kind === 'tip' && (s.created_at as string) >= since24).length;
   const sharedQs24 = (subs24 ?? []).filter((s) => s.kind === 'question' && (s.created_at as string) >= since24).length;
 
@@ -135,9 +160,10 @@ export async function GET() {
   const pushOpened = (notifs24 ?? []).filter((n) => n.clicked_at != null).length;
 
   // ── Retention: students seen in the last 7 days who were also seen today ──
-  const { data: ev7 } = await admin.from('student_events')
-    .select('user_id').eq('event', 'app_open').gte('created_at', since7d);
-  const weekly = new Set((ev7 ?? []).map((e) => e.user_id as string));
+  const { rows: ev7 } = await fetchAllRows<{ user_id: string | null }>((from, to) =>
+    admin.from('student_events').select('user_id').eq('event', 'app_open').gte('created_at', since7d)
+      .order('created_at', { ascending: false }).range(from, to));
+  const weekly = new Set(ev7.map((e) => e.user_id).filter(isReal));
 
   return NextResponse.json({
     reach: { dau, weeklyActive: weekly.size, newStudents24 },

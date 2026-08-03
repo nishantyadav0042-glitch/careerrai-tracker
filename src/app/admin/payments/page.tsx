@@ -21,8 +21,12 @@ export default async function AdminPaymentsPage() {
 
   const { data: profiles } = await admin
     .from('profiles')
-    .select('id, role, full_name, buddy_id, subscription_status, subscription_plan, subscription_renews_at, agreed_monthly_payout');
-  const all = profiles ?? [];
+    .select('id, role, full_name, buddy_id, subscription_status, subscription_plan, subscription_renews_at, agreed_monthly_payout, is_test_account');
+  // Test accounts out. The only `paid` payment row in the system belongs to
+  // the Razorpay review account, and both is_premium profiles are store-review
+  // accounts — without this filter the Money screen's per-student table shows
+  // payment activity that is 100% synthetic.
+  const all = (profiles ?? []).filter((p) => p.is_test_account !== true);
   const students = all.filter((p) => p.role === 'student');
   const buddies = all.filter((p) => p.role === 'buddy');
 

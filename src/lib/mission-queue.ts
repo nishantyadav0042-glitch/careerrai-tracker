@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { daysSinceLastLog } from '@/lib/streak-utils';
+import { studyDayString } from '@/lib/study-day';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { SITE_URL } from '@/lib/site';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -80,13 +82,21 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
   const istDayStart = istDay + 'T00:00:00+05:30';
   const since3d = new Date(nowMs - 3 * 86_400_000).toISOString();
 
-  const [{ data: students }, { data: streaks }, { data: eng }, { data: events }, { data: notifs }, { data: outreach }] = await Promise.all([
+  const [{ data: students }, { data: streaks }, { data: eng }, { rows: events }, { rows: notifs }, { data: outreach }] = await Promise.all([
     db.from('profiles').select('id, full_name, phone, onboarding_completed, app_installed, is_premium, buddy_id, notif_prefs, push_subscription')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
     db.from('streak_data').select('student_id, last_log_date'),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened'),
-    db.from('student_events').select('user_id, session_id').gte('created_at', istDayStart),
-    db.from('notifications').select('user_id, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', new Date(nowMs - 7 * 86_400_000).toISOString()),
+    // Both windowed event fetches paginate: a busy day exceeds PostgREST's
+    // 1,000-row cap and an unpaginated fetch silently computes the queue's
+    // "opens pushes"/"in app today" signals from an arbitrary slice.
+    fetchAllRows<{ user_id: string | null; session_id: string | null }>((from, to) =>
+      db.from('student_events').select('user_id, session_id').gte('created_at', istDayStart)
+        .order('created_at', { ascending: false }).range(from, to)),
+    fetchAllRows<{ user_id: string; clicked_at: string | null }>((from, to) =>
+      db.from('notifications').select('user_id, clicked_at').not('pushed_at', 'is', null)
+        .gte('pushed_at', new Date(nowMs - 7 * 86_400_000).toISOString())
+        .order('pushed_at', { ascending: false }).range(from, to)),
     db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', since3d),
   ]);
 
@@ -109,7 +119,10 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
   for (const o of outreach ?? []) {
     if (o.action === 'sent') {
       excludeStudents.add(o.student_id);
-      if (new Date(o.created_at).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) sentToday++;
+      // Study-day, not UTC day: the founder works the queue in the evening
+      // IST; with UTC "today", last evening's sends (18:30+ UTC) vanished
+      // from the counter between midnight and 5:30 AM IST.
+      if (studyDayString(new Date(o.created_at)) === studyDayString()) sentToday++;
     }
     if (o.action === 'snoozed' && o.snoozed_until && new Date(o.snoozed_until).getTime() > nowMs) excludeStudents.add(o.student_id);
     if (o.action === 'skipped' && new Date(o.created_at).getTime() > nowMs - 20 * 3600_000) excludeStudents.add(o.student_id);

@@ -71,12 +71,12 @@ export default async function LeadsPage() {
     admin.from('profiles')
       .select('id, full_name, phone, created_at, onboarding_completed, onboarding_step_reached, post_signup_done, app_installed, notif_prefs, pain_points, wants_mentor, buddy_id, syllabus_target_date, dream_colleges')
       .eq('role', 'student')
-      .eq('is_test_account', false)
+      .not('is_test_account', 'is', true)
       .order('created_at', { ascending: false }),
     admin.from('profiles')
       .select('id, full_name, phone, created_at, college, cat_percentile, app_installed, notif_prefs')
       .eq('role', 'buddy')
-      .eq('is_test_account', false)
+      .not('is_test_account', 'is', true)
       .order('created_at', { ascending: false }),
   ]);
 

@@ -100,9 +100,15 @@ export default function LaunchDashboard() {
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {tile('OTP sends', String(m.otp.sends24))}
-            {tile('Distinct phones', String(m.otp.distinctPhones24))}
+            {/* Phone OR email — the phone path records inside the RPC and the
+                email path writes `email`, so "phones" was never accurate. */}
+            {tile('Distinct recipients', String(m.otp.distinctPhones24))}
             {tile('New accounts', String(m.otp.newAccounts24))}
-            {tile('Students who got in', String(m.otp.loggedIn24))}
+            {/* Same number as "Active today" BY CONSTRUCTION — we don't log
+                OTP verify successes yet, so this cannot show a login gap.
+                Labelled as what it is instead of pretending to close the
+                funnel. */}
+            {tile('Active today (not a login count)', String(m.otp.loggedIn24))}
           </div>
         </section>
 

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { TrendingUp } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -21,11 +22,17 @@ export default async function AdminGrowthPage() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  const [{ data: profiles }, { data: streaks }, { data: engagement }, { data: funnel }] = await Promise.all([
+  const [{ data: profiles }, { data: streaks }, { data: engagement }, { rows: funnel }] = await Promise.all([
     admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account'),
     admin.from('streak_data').select('student_id, last_log_date'),
     admin.from('student_engagement').select('student_id, buddy_cta_clicks'),
-    admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30)),
+    // Paginated: 30 days of funnel_events is 4,000+ rows and PostgREST caps
+    // any single response at 1,000 — the unpaginated version computed every
+    // stage from an arbitrary quarter of the data (need-check showed ~130
+    // when the true count was 519).
+    fetchAllRows<{ step: string; anon_id: string | null }>((from, to) =>
+      admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30))
+        .order('created_at', { ascending: false }).range(from, to)),
   ]);
 
   // Test/friend accounts (is_test_account) are excluded from every funnel
@@ -105,7 +112,11 @@ export default async function AdminGrowthPage() {
     anonByStep.set(e.step, set);
   }
   const funnelStages = FUNNEL_ORDER.map(([key, label]) => ({ label, count: anonByStep.get(key)?.size ?? 0 }));
-  const funnelTop = funnelStages[0]?.count ?? 0;
+  // Bars are scaled to the LARGEST stage, not stage 1: start:landed fires
+  // unreliably (111 landed vs 519 at need-check over 30 days), so a
+  // stage-1 denominator produced >100% bars and overflowing widths. Until
+  // the landed beacon is fixed, the widest real stage is the honest base.
+  const funnelTop = Math.max(0, ...funnelStages.map((s) => s.count));
 
   return (
     <div className="min-h-screen bg-stone-50">
