@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  function buildResponse(dest: string, role: string) {
+  function buildResponse(dest: string, role: string, email?: string | null) {
     const response = NextResponse.redirect(`${origin}${dest}`, { status: 302 });
     pending.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
@@ -83,6 +83,18 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 60 * 60 * 24 * 30,
     });
+    // The buddy demo account is a guided TOUR of the student side — viewing
+    // only. The cookie is what the proxy uses to refuse writes, and it is
+    // NOT httpOnly so the tour overlay can key off it client-side. Any other
+    // login on the same browser clears it.
+    if (email?.toLowerCase() === 'buddydemo@careerrai.in') {
+      response.cookies.set('cr_demo', '1', {
+        path: '/', sameSite: 'lax', httpOnly: false,
+        secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24,
+      });
+    } else {
+      response.cookies.delete({ name: 'cr_demo', path: '/' });
+    }
     return response;
   }
 
@@ -116,7 +128,7 @@ export async function POST(request: NextRequest) {
     await clearAttempts(admin, attemptKey);
     const role = profile.role ?? 'student';
     const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : role === 'sales' ? '/sales' : '/student/tracker';
-    return buildResponse(dest, role);
+    return buildResponse(dest, role, profile.email);
   }
 
   // Email + password (admin fallback or non-phone users)
@@ -142,5 +154,5 @@ export async function POST(request: NextRequest) {
   await clearAttempts(admin, attemptKey);
   const role = profile.role ?? 'student';
   const dest = role === 'admin' ? '/admin' : role === 'buddy' ? '/buddy/home' : role === 'sales' ? '/sales' : '/student/tracker';
-  return buildResponse(dest, role);
+  return buildResponse(dest, role, profile.email);
 }

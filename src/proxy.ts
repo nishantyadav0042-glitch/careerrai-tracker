@@ -44,6 +44,24 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
+  // Buddy demo account = a guided tour of the student side, VIEWING ONLY
+  // (founder: "don't let them type or do anything"). The cookie is stamped at
+  // login for buddydemo@careerrai.in and cleared on any other login. Blocking
+  // here — the one chokepoint every API call passes through — means no
+  // individual route needs to remember the rule. Auth stays open so the demo
+  // can log in/out; everything else that would write gets a friendly refusal.
+  if (
+    request.method !== 'GET' &&
+    pathname.startsWith('/api/') &&
+    !pathname.startsWith('/api/auth/') &&
+    request.cookies.get('cr_demo') != null
+  ) {
+    return NextResponse.json(
+      { ok: false, error: 'This is the buddy demo tour — viewing only. Nothing can be changed from this account.' },
+      { status: 403 }
+    );
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
