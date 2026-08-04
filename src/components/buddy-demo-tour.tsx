@@ -74,7 +74,6 @@ export function BuddyDemoTour() {
     try { seen = !!sessionStorage.getItem(SESSION_KEY); } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
     setDemo(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
     if (!seen) setIdx(0);
   }, []);
 
