@@ -37,6 +37,11 @@ const STEPS: Step[] = [
     body: 'Two minutes every night: what they studied, how long, how it felt. Honest zeros are allowed. THIS is the data you read before every session — streaks, topic map and your advice all run on it.',
   },
   {
+    sel: '[data-tour="coaching"]',
+    title: 'Coaching timetable — the app follows THEIR class',
+    body: 'A coaching student photographs their weekly timetable and uploads it here. The daily plan then mirrors what their coaching is teaching that week — so the app never fights the classroom, and the student logs progress against their coaching\'s own targets. Self-study students plan from the app\'s own sequence instead.',
+  },
+  {
     sel: '[data-tour="daily-pick"]',
     title: 'Daily Pick — peers, not loneliness',
     body: 'One tip or question from a fellow aspirant daily; students vote what gets featured. Small, but it makes prep less alone.',

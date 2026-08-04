@@ -69,7 +69,10 @@ export function CoachingMirror() {
   if (hasPlan === false) {
     return (
       <>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
+        {/* data-tour: the buddy demo tour spotlights this card (founder, 5 Aug:
+            the timetable feature belongs in the tour). Same marker on the
+            has-plan mirror below so the tour finds the card in either state. */}
+        <div data-tour="coaching" className="rounded-2xl border border-stone-200 bg-white p-4">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange-500">
               <Upload className="h-4 w-4 text-white" />
@@ -105,7 +108,7 @@ export function CoachingMirror() {
   if (rows.length === 0) {
     return (
       <>
-        <div className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4">
+        <div data-tour="coaching" className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-stone-900">
             <Target className="h-4 w-4 text-white" />
           </span>
@@ -130,7 +133,7 @@ export function CoachingMirror() {
   }
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4">
+    <div data-tour="coaching" className="rounded-2xl border border-stone-200 bg-white p-4">
       <div className="flex items-center gap-2">
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900">
           <Target className="h-4 w-4 text-white" />
