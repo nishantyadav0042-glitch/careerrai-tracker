@@ -59,7 +59,7 @@ export async function activatePaidOrder(
     metadata: { plan: row.plan, orderId, paymentId, coupon: row.coupon_code ?? null, source },
   });
 
-  const { data: prof } = await admin.from('profiles').select('email, phone').eq('id', row.student_id).maybeSingle();
+  const { data: prof } = await admin.from('profiles').select('full_name, email, phone').eq('id', row.student_id).maybeSingle();
   await sendMetaCapiEvent({
     eventName: 'Purchase',
     eventId: orderId,
@@ -69,7 +69,40 @@ export async function activatePaidOrder(
     phone: prof?.phone,
   });
 
+  // The founder finds out a student paid — immediately, on every channel we
+  // have. This path previously confirmed to the STUDENT, logged, and fired ad
+  // attribution, but never told the one person running the company; the first
+  // real payment (4 Aug) was discovered by asking. Fire-and-forget: an alert
+  // failure must never fail an activation.
+  void notifyFounderOfPayment(admin, row, prof?.full_name ?? null, prof?.phone ?? null, source)
+    .catch((e) => console.error(`[activate:${source}] founder alert failed`, e));
+
   return true;
+}
+
+async function notifyFounderOfPayment(
+  admin: ReturnType<typeof createAdminClient>,
+  row: PayableRow,
+  studentName: string | null,
+  studentPhone: string | null,
+  source: ActivationSource,
+): Promise<void> {
+  const rupees = Math.round((row.amount ?? 0) / 100);
+  const who = studentName ?? row.student_id;
+  const title = `💰 ₹${rupees} received — ${who} upgraded (${row.plan})`;
+
+  const { sendAdminAlert } = await import('@/lib/email');
+  await sendAdminAlert(
+    title,
+    `<p><strong>${who}</strong> (${studentPhone ?? 'no phone on file'}) just paid ₹${rupees} for the <strong>${row.plan}</strong> plan (activated via ${source}).</p><p>Premium is live and the buddy queue has them. See <a href="https://careerrai.in/admin/payments">/admin/payments</a>.</p>`
+  );
+
+  // Also push every admin device — email can wait, money shouldn't.
+  const { sendPushToUser } = await import('@/lib/push');
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+  for (const a of admins ?? []) {
+    await sendPushToUser(a.id, { title, body: `${row.plan} plan · via ${source}`, url: '/admin/payments' });
+  }
 }
 
 // Ranked by how directly each event indicates buying intent — the most recent
