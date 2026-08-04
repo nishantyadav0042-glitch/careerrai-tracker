@@ -48,8 +48,8 @@ const STEPS: Step[] = [
   },
   {
     sel: null,
-    title: 'Want the from-zero feeling?',
-    body: 'Every student built their plan themselves before ever seeing this screen — a 3-minute journey at careerrai.in/start. Open it in an incognito tab to walk it like a new student (just stop before creating an account). That\'s the tour. Explore anything — you can\'t break it.',
+    title: 'Now walk the journey from zero →',
+    body: 'Every student BUILT this plan themselves before ever seeing this screen — date, target, hours, and a 53-topic self-assessment, all before signup. Tap "Walk the journey" to experience it: each screen explains itself and auto-fills Aarav\'s answers, you just tap through. Nothing is saved. That\'s A to Z — explore anything after, you can\'t break it.',
   },
 ];
 
@@ -141,13 +141,24 @@ export function BuddyDemoTour() {
               <button type="button" onClick={finish} className="text-[12px] font-semibold text-stone-400">
                 Skip
               </button>
-              <button
-                type="button"
-                onClick={() => (idx + 1 < STEPS.length ? setIdx(idx + 1) : finish())}
-                className="rounded-xl bg-stone-900 px-4 py-2 text-[13px] font-bold text-white"
-              >
-                {idx + 1 < STEPS.length ? 'Next →' : 'Start exploring'}
-              </button>
+              <div className="flex gap-2">
+                {idx + 1 === STEPS.length && (
+                  <a
+                    href="/start?demo=1"
+                    onClick={finish}
+                    className="rounded-xl bg-orange-600 px-4 py-2 text-[13px] font-bold text-white"
+                  >
+                    Walk the journey →
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => (idx + 1 < STEPS.length ? setIdx(idx + 1) : finish())}
+                  className="rounded-xl bg-stone-900 px-4 py-2 text-[13px] font-bold text-white"
+                >
+                  {idx + 1 < STEPS.length ? 'Next →' : 'Explore here'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
