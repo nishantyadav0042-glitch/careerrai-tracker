@@ -2,8 +2,11 @@
 
 > ## 🔴 PLAY IS IN REVIEW RIGHT NOW. DO NOT MERGE TO `main`.
 >
-> Uploaded ~28 Jul. **In review for 5 days as of 2 Aug.** Not "awaiting upload"
-> — that line was stale for days and is corrected below.
+> Uploaded ~28 Jul. **In review for 5 days as of 2 Aug — UNVERIFIED SINCE.**
+> This line was last confirmed against Play Console on 2 Aug; as of 4 Aug
+> nobody has re-checked it. Treat it as IN REVIEW until the founder confirms
+> otherwise in Play Console — that is the only source of truth, and a stale
+> status line here is precisely what caused the 1 Aug mid-review deploys.
 >
 > `main` deploys production. The Play app is a wrapper that loads production
 > **live**, so every merge changes the app the reviewer is holding, mid-review.
@@ -146,6 +149,7 @@ critical waits unnoticed. Empty is a valid and good state; **missing** is not.
 
 | Branch | What | Severity | Since |
 |---|---|---|---|
+| `claude/study-report` @ `79e299f` | **THREE LOCKOUTS.** (a) `/welcome` — where root sends every logged-out arrival — has NO login link, so anyone with an account is locked out; this is Incident #10 (Guideline 2.1) recurring on the page that was later placed in FRONT of `/start`. (b) A logged-out buddy/admin is redirected into the STUDENT SIGNUP FUNNEL, which is how a mentor with a paying student could not reach her dashboard for 30 days. (c) A session vanishes from the mentor's app at T+0, taking the Join button with it — the 4 Aug orientation failed on this. See Incidents #17, #18. | **P0 — login unreachable, users blocked right now. Qualifies for exception 1.** Store-launch path verified UNCHANGED (`/student/tracker?source=twa` → `/login`) and pinned by `logged-out-routing.test.ts`. Cherry-picks onto `main` cleanly (code applies; only this file and ENGINEERING-MEMORY conflict). **Founder decision pending: needs current Play status.** | 4 Aug |
 | `claude/study-report` | Study report page (`/student/reports`) — hours/day chart, weekly average, where-the-hours-went split. Requested by name by our most engaged student. **Deliberately NOT in the bottom nav**: a new nav item is a visible change to the app a reviewer is holding. | product, not urgent | 2 Aug |
 
 To ship once Play clears: merge the branch, then add
