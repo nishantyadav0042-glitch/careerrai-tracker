@@ -168,6 +168,21 @@ export async function POST(request: NextRequest) {
         if (e) console.error('Notification insert failed:', e.message);
       });
 
+    // Push the mentee too — an in-app row only helps a student who is already
+    // in the app. The first real orientation (4 Aug) sat unseen for hours
+    // because the invite never buzzed a phone. Fire-and-forget.
+    void import('@/lib/push')
+      .then(({ sendPushToUser }) =>
+        sendPushToUser(studentId, {
+          title: isOrientation
+            ? `🎯 Orientation with ${buddy.full_name.split(' ')[0]} — ${istTime} IST`
+            : `📅 1:1 with ${buddy.full_name.split(' ')[0]} — ${istTime} IST`,
+          body: 'Your session is booked. Join from your dashboard.',
+          url: '/student/buddy',
+        })
+      )
+      .catch((e) => console.error('[schedule-meeting] push failed', e));
+
     return NextResponse.json({
       success: true,
       meetingId: session.id,
