@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
 import ScreenNeedCheck from './screens/screen-need-check';
@@ -14,8 +15,85 @@ import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
 import ScreenLoginBuild from './screens/screen-login-build';
 import type { CoverageSectionId } from '@/lib/topics-constants';
+import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS, MOCK_PREP_UNITS, READING_HABIT_UNITS } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
 import { START_STEP_KEYS } from '@/lib/funnel-steps';
+
+// ── Buddy demo mode (?demo=1) ───────────────────────────────────────────────
+// Buddies walk the REAL student journey A to Z without filling anything:
+// every screen gets a guide card explaining what the student does there, and
+// one tap auto-continues with "Aarav's" answers (the same persona as the
+// buddydemo account). Nothing is saved — no funnel beacons (they'd poison
+// the growth dashboard), no draft persistence, and the final screen closes
+// the loop instead of creating an account. Inert unless ?demo=1 is present.
+// The flag is read via useSearchParams (never window.location during render):
+// the server sees the same query on a dynamic render, so the demo UI can't
+// cause a hydration mismatch.
+
+type DemoMatrix = { section: string; topic: string; status: 'not_started' | 'learning' | 'practicing' | 'revising' }[];
+function demoMatrix(): DemoMatrix {
+  const all: { section: string; topic: string }[] = [
+    ...VERBAL_TOPICS.map((t) => ({ section: 'VARC', topic: t })),
+    ...LRDI_TOPICS.map((t) => ({ section: 'DILR', topic: t })),
+    ...QUANT_TOPICS.map((t) => ({ section: 'QA', topic: t })),
+    ...MOCK_PREP_UNITS.map((t) => ({ section: 'MOCKS', topic: t })),
+    ...READING_HABIT_UNITS.map((t) => ({ section: 'READING', topic: t })),
+  ];
+  const statuses = ['revising', 'practicing', 'learning', 'not_started'] as const;
+  return all.map((x, i) => ({ ...x, status: statuses[Math.floor((i / all.length) * 4)] }));
+}
+
+// What the student does on each screen + the answer Aarav gives. The patch
+// mirrors what the real screen's onNext would send, so downstream screens
+// (quick-facts reads the date; instant-insight reads the matrix) behave
+// exactly as they do for a real student.
+const DEMO_STEPS: Record<string, { what: string; answer: string; patch: Record<string, unknown> }> = {
+  'need-check': {
+    what: 'The opener — the student names their situation, and the journey speaks to it from here on.',
+    answer: 'Aarav: "I have a plan but I keep falling behind."',
+    patch: { need_check: 'falling_behind' },
+  },
+  'target-date': {
+    what: 'The student picks THEIR syllabus-finish date. Founder rule: you decide the date, you own the plan.',
+    answer: 'Aarav picks: 30 September (mock season from October).',
+    patch: { ambition_date: '2026-09-30' },
+  },
+  'dream-percentile': {
+    what: 'The ambition question. Everything after this is denominated in the student\'s own target.',
+    answer: 'Aarav: 99 percentile — IIM Ahmedabad.',
+    patch: { target_percentile: 99, dream_colleges: ['IIM Ahmedabad', 'IIM Bangalore'] },
+  },
+  'quick-facts': {
+    what: 'The facts the plan adapts to: attempt number, coaching, hours available per day.',
+    answer: 'Aarav: first attempt · has coaching · 4 hrs/day.',
+    patch: { is_repeater: false, coaching_enrolled: true, hours_available: 4 },
+  },
+  'pain-points': {
+    what: 'What has been going wrong so far — this feeds the first diagnosis and the sales brief.',
+    answer: 'Aarav: "no structure" + "mock scores stuck".',
+    patch: { pain_points: ['no_structure', 'mock_plateau'] },
+  },
+  'reality-check': {
+    what: 'Three honest calibration questions — separates confidence from wishful thinking.',
+    answer: 'Aarav answers honestly (mid confidence).',
+    patch: { reality_check: 'done' },
+  },
+  'topic-coverage': {
+    what: 'The heart of onboarding: all 53 CAT topics, one tap each — "where do you actually stand?" This map becomes the student\'s permanent prep memory.',
+    answer: 'Aarav\'s 53-topic map auto-fills (a real mid-journey spread).',
+    patch: { topic_matrix: [] }, // filled at click time — demoMatrix() is not needed until then
+  },
+  'instant-insight': {
+    what: 'The WOW moment: an instant diagnosis computed from the map they tapped 10 seconds ago — real value BEFORE any signup. This screen is the pitch.',
+    answer: 'Read it — this is Aarav\'s actual diagnosis.',
+    patch: {},
+  },
+  mentor: {
+    what: 'The mentor question — where buddy demand is captured. Students who tap yes here are your future mentees.',
+    answer: 'Aarav: "Yes, I want an IIM mentor."',
+    patch: { wants_mentor: true },
+  },
+};
 
 // Screen order as stable KEYS, not raw index. login-build is deliberately
 // excluded (it's the default/final screen, reached once stepIdx >= stepKeys.length).
@@ -82,9 +160,19 @@ function loadDraft(): { stepIdx: number; data: Record<string, unknown> } | null 
 }
 
 export default function StartPage() {
-  const draft = loadDraft();
+  // useSearchParams requires a Suspense boundary at the page root.
+  return (
+    <Suspense fallback={null}>
+      <StartPageInner />
+    </Suspense>
+  );
+}
+
+function StartPageInner() {
+  const demo = useSearchParams().get('demo') != null;
+  const draft = demo ? null : loadDraft();
   const initialData = draft?.data ?? {};
-  const [stepIdx, setStepIdx] = useState(() => Math.min(draft?.stepIdx ?? 0, stepKeysFor().length - 1));
+  const [stepIdx, setStepIdx] = useState(() => (demo ? 0 : Math.min(draft?.stepIdx ?? 0, stepKeysFor().length - 1)));
   const [data, setData] = useState<Record<string, unknown>>(initialData);
 
   // Recomputed live every render — reflects is_repeater the moment quick-facts
@@ -94,13 +182,17 @@ export default function StartPage() {
   const currentKey = stepIdx < stepKeys.length ? stepKeys[stepIdx] : 'login-build';
 
   useEffect(() => {
+    if (demo) return; // a buddy's walkthrough must never become a resumable student draft
     try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ stepIdx, data, savedAt: Date.now() })); } catch { /* best-effort */ }
-  }, [stepIdx, data]);
+  }, [stepIdx, data, demo]);
 
   // Funnel beacon: record which onboarding screen this visitor reached.
+  // Demo walkthroughs are excluded — buddies touring the funnel would inflate
+  // every stage of the growth dashboard.
   useEffect(() => {
+    if (demo) return;
     trackFunnel(`start:${currentKey}`);
-  }, [currentKey]);
+  }, [currentKey, demo]);
 
   const advance = (patch?: Record<string, unknown>) => {
     if (patch) setData((prev) => ({ ...prev, ...patch }));
@@ -171,8 +263,35 @@ export default function StartPage() {
       content = <ScreenMentor onNext={advance} {...shared} />;
       break;
     default:
-      content = <ScreenLoginBuild isLoading={false} onboarding={data} />;
+      content = demo ? (
+        // Demo journeys end with a summary, never an account. This screen is
+        // where a real student signs up "while we build your plan".
+        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-5 text-center">
+          <p className="text-3xl">🎓</p>
+          <h2 className="mt-2 text-lg font-bold text-stone-900">That&apos;s the full journey — A to Z</h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-stone-600">
+            A real student signs up right here — phone OTP or password — and lands on their tracker with the plan
+            you just watched them build: their date, their target, their hours, their 53-topic map. Everything the
+            app does daily (plan, log, streaks, insights, your buddy tab) runs on what was captured in these screens.
+          </p>
+          <p className="mt-2 text-[12px] text-stone-500">
+            Nothing you tapped was saved. Log in as <b>buddydemo@careerrai.in</b> to see where the student lands.
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
+            <button type="button" onClick={startOver} className="rounded-xl border border-stone-300 px-4 py-2 text-[13px] font-semibold text-stone-700">
+              Replay journey
+            </button>
+            <Link href="/login" className="rounded-xl bg-stone-900 px-4 py-2 text-[13px] font-bold text-white">
+              Open demo student →
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <ScreenLoginBuild isLoading={false} onboarding={data} />
+      );
   }
+
+  const demoStep = demo ? DEMO_STEPS[currentKey] : undefined;
 
   const showProgress = stepIdx < TOTAL_SCREENS;
 
@@ -233,7 +352,36 @@ export default function StartPage() {
             Already have an account? <span className="underline underline-offset-2">Log in</span>
           </Link>
         )}
+        {demo && (
+          <div className="mb-3 rounded-lg bg-stone-900 px-3 py-1.5 text-center text-[11px] font-semibold text-white">
+            🎓 Buddy demo — the student journey, nothing is saved
+          </div>
+        )}
         {content}
+        {/* The per-screen guide: what the student does here + one tap to
+            continue with Aarav's answer. The real screen above stays fully
+            interactive so buddies can FEEL it — but they never have to. */}
+        {demoStep && (
+          <div className="fixed inset-x-0 bottom-0 z-[90] border-t-2 border-orange-500 bg-white p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
+            <div className="mx-auto max-w-sm">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600">What happens on this screen</p>
+              <p className="mt-0.5 text-[12.5px] leading-snug text-stone-700">{demoStep.what}</p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="min-w-0 flex-1 text-[11.5px] font-semibold text-stone-500">{demoStep.answer}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const patch = currentKey === 'topic-coverage' ? { topic_matrix: demoMatrix() } : demoStep.patch;
+                    advance(patch);
+                  }}
+                  className="shrink-0 rounded-xl bg-stone-900 px-3.5 py-2 text-[12px] font-bold text-white"
+                >
+                  Auto-fill & continue →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

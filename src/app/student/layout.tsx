@@ -21,6 +21,7 @@ import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
 import { EvidenceAnnounce } from '@/components/evidence-announce';
 import { CrashReporter } from '@/components/crash-reporter';
+import { BuddyDemoTour } from '@/components/buddy-demo-tour';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
 
@@ -47,11 +48,18 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // role lookup and lands them on their real home.
   if (profile && profile.role !== 'student') redirect('/');
 
+  // Buddy demo account = the guided tour and NOTHING else (founder, 4 Aug:
+  // "in this ID just keep the tour only"). Every growth prompt, gate and
+  // nudge below is suppressed for it — a buddy touring the student side must
+  // never be interrupted by the timetable ask, coverage review, install
+  // journey, buddy pitch or push asks. The tour overlay is the one guide.
+  const isBuddyDemo = profile?.username === 'buddydemo';
+
   // Login → Blueprint Builder, nothing in between. Its own intro screen is
   // the one hero the founder wants; the old FirstLoginTour was a second,
   // redundant hero in front of it and is gone. The Builder stays until
   // completed — no skip, no dismiss.
-  const showOnboarding = profile?.onboarding_completed !== true;
+  const showOnboarding = profile?.onboarding_completed !== true && !isBuddyDemo;
 
   // Push, reordered: the FIRST ask now fires as early as possible — right
   // after login, before onboarding — because reach beats conversion rate
@@ -70,7 +78,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // first Career Insight. The browser PushGate asks are retired for students;
   // the post-signup sequence no longer asks either. Only the hoursLeft compute
   // below runs, and only when the sequence is actually about to render.
-  const showPostSignup = !showOnboarding && profile?.post_signup_done !== true;
+  const showPostSignup = !showOnboarding && profile?.post_signup_done !== true && !isBuddyDemo;
 
   let postSignupProps: { targetIso: string | null; hoursLeft: number } | null = null;
   if (showPostSignup) {
@@ -91,7 +99,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // Daily "try a buddy" nudge — only for students with no buddy yet and not
   // premium, and only once no higher-priority modal is up. The component itself
   // throttles to once per calendar day.
-  const noBlockingModal = !showOnboarding && !showPostSignup;
+  const noBlockingModal = !showOnboarding && !showPostSignup && !isBuddyDemo;
   // Fix #1 (activation): install is the finish line, gated on the authoritative
   // app_installed flag. For a plan-built student who genuinely hasn't installed,
   // the install journey shows every session (the component throttles to once per
@@ -149,6 +157,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
           invisible to Play Console and Crashlytics; this is the only way we
           hear about a broken screen before a 1-star review does. */}
       <CrashReporter />
+      {/* Buddy demo overlay: banner + guided tour, keyed off the cr_demo
+          cookie set at login for buddydemo@careerrai.in. Renders null for
+          everyone else. */}
+      <BuddyDemoTour />
       <PushHealer serverPushDead={!!profile?.push_died_at || !profile?.push_subscription} />
       <InstallPing />
       <StoreBuildDetector />
@@ -175,7 +187,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <OnboardingGate />
       ) : showPostSignup && postSignupProps ? (
         <PostSignupSequence {...postSignupProps} />
-      ) : (!pushEnabled || !profile?.push_subscription) ? (
+      ) : isBuddyDemo ? null : (!pushEnabled || !profile?.push_subscription) ? (
         // Permission architecture (22 July): the notification permission is
         // requested ONLY inside the installed app, right after the first Career
         // Insight — StandaloneNotifAsk renders solely in standalone mode and

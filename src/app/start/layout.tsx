@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 // Now the entrance drop-off (opened → reached screen 1) is measurable, not a
 // blind spot.
 const LANDED_BEACON = `(function(){try{
+if(/[?&]demo=1/.test(location.search))return;
 var m=document.cookie.match(/(?:^|; )cr_anon=([^;]+)/);
 var id=m?decodeURIComponent(m[1]):null;
 if(!id){id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'a'+Date.now()+Math.random().toString(36).slice(2,8);
