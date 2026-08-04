@@ -30,6 +30,7 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { Flame, CalendarCheck } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
+import { sessionsVisibleFrom } from '@/lib/session-window';
 
 export const metadata = {
   title: 'CareerRai',
@@ -68,7 +69,9 @@ export default async function DailyTrackerPage() {
       .select('id, title, scheduled_at, google_meet_link')
       .eq('student_id', user.id)
       .eq('session_status', 'scheduled')
-      .gte('scheduled_at', new Date().toISOString())
+      // Shared grace window — see lib/session-window. Without it this
+      // row vanished at T+0 and took the Join button with it (4 Aug).
+      .gte('scheduled_at', sessionsVisibleFrom())
       .order('scheduled_at', { ascending: true })
       .limit(1),
     admin

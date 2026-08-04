@@ -459,6 +459,24 @@ export default function WelcomePage() {
             Let&apos;s build your CAT tracking system →
           </Link>
           <InstallButton variant="text" />
+          {/* THE LOGIN DOOR. NEVER REMOVE IT, NEVER MAKE IT FINE PRINT.
+              This page is the landing screen for EVERY logged-out arrival —
+              root redirects here — and it shipped with no route to /login at
+              all. The only button was the student signup funnel, so anyone
+              who already has an account (a buddy on a new phone, a student
+              whose session lapsed, a store reviewer holding demo credentials)
+              was locked out of their own product.
+              /start carries the same door in triplicate because an
+              unreachable login is the Guideline 2.1 rejection we already took
+              (Incident #10). /welcome was later placed IN FRONT of /start and
+              never inherited the rule — this closes that gap. See #18. */}
+          <Link
+            href="/login"
+            prefetch={false}
+            className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-stone-300 bg-white py-3.5 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+          >
+            Already have an account? <span className="underline underline-offset-2">Log in</span>
+          </Link>
           <p className="text-center text-[11px] text-stone-400">Free to start · no credit card</p>
           {/* Public policy links. A payment provider or store reviewer lands
               here first, and previously had no route to pricing or policies —

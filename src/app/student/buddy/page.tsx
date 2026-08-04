@@ -6,6 +6,7 @@ import { LockedBuddyHub } from '@/components/locked-buddy-hub';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { getSocialProof } from '@/lib/social-proof';
 import { getChatUnreadCount } from '@/lib/chat-unread';
+import { sessionsVisibleFrom } from '@/lib/session-window';
 import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
 import { BuddyPanelTabs } from '@/components/buddy-panel-tabs';
@@ -57,7 +58,7 @@ export default async function BuddyPage() {
       .select('id, title, scheduled_at, google_meet_link, session_status, session_type')
       .eq('student_id', user.id)
       .eq('session_status', 'scheduled')
-      .gte('scheduled_at', new Date(now - 3_600_000).toISOString())
+      .gte('scheduled_at', sessionsVisibleFrom(now))
       .order('scheduled_at', { ascending: true })
       .limit(5),
     // Completed within last 7 days — dashboard cleanup: older sessions go to History

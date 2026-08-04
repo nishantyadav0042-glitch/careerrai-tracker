@@ -29,6 +29,8 @@
 | 11 | 2026-07-29 | Curated Daily Pick wearing a student's byline | Trust | all readers |
 | 14 | 2026-08-01 | Security sweep revoked the one grant | Database access | ≥1 confirmed |
 | 15 | 2026-08-01 | iOS payment fix sat on a branch for a day | Trust (payment) | every iOS student |
+| 17 | 2026-08-04 | One meeting, two truths — mentor lost Join at T+0 | Trust | 1st orientation |
+| 18 | 2026-08-04 | /welcome shipped with no login door | Growth | every returning user |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
@@ -458,6 +460,68 @@
   STORE-FREEZE.md needs a "waiting to ship" list naming every unmerged fix and
   its severity, so nothing P0 sits in the queue unnoticed again.
 - **Owner:** Nishant
+
+---
+
+## Incident #17 — one meeting, two truths: the mentor lost Join at T+0
+
+- **Date:** 2026-08-04 · **Area:** Trust OS · **Severity:** P1
+- **Impact:** The first paid orientation failed at the moment it began. The
+  student joined an empty room ("I had joined the call, nobody was in the
+  meet!"); her mentor could not get in ("joining my app was stuck").
+- **Root cause:** the student's list queried `scheduled_at >= now - 1h` (a
+  grace window, with a comment explaining why). Every buddy-side surface
+  queried `scheduled_at >= now`. At the scheduled second the row left the
+  mentor's query, so the session and its Join button vanished from her app.
+  With a `minsAway <= 15` gate, a mentor's whole join window was T-15min to
+  T-0, slamming shut exactly when the call started.
+- **How it hid:** Daily.co was healthy — room valid, key live, billing fine —
+  so every "is video working" check passed. The failure was in *who could see
+  the session*, not in video. Nobody had opened the mentor's app at T+0.
+- **Lessons:**
+  1. **Two people in one meeting must never get two different answers to "is
+     this happening."** Same class as Incident #5 (count and list from
+     different queries); here, the same session from different queries.
+  2. **A grace window added on one side of a two-sided feature is a bug on the
+     other side.** It was applied where the symptom was reported.
+  3. **Verify end-to-end from every seat**, not only the one that complained.
+- **Prevention (encoded):** `src/lib/session-window.ts` — `sessionsVisibleFrom()`
+  and `isJoinOpen()` are the single rule, imported by all four surfaces.
+  `logged-out-routing.test.ts` pins the join window including the cases that
+  used to fail (`isJoinOpen(0)`, `isJoinOpen(-4)`).
+- **Owner:** cofounder (AI)
+
+---
+
+## Incident #18 — the landing page shipped with no way to log in
+
+- **Date:** 2026-08-04 · **Area:** Growth OS · **Severity:** P1
+- **Impact:** A buddy with a paying student assigned could not reach her own
+  dashboard. She opened the link, landed in the student signup funnel, and
+  reported that it "is taking me to only student portal now." She had never
+  logged in once in the 30 days since her account was created. Every returning
+  user whose session lapsed hit the same wall.
+- **Root cause (two, compounding):**
+  1. `/welcome` — where root redirects every logged-out arrival — contained no
+     `/login` link at all. Its only CTA was `/start`, the student funnel.
+  2. The proxy sent any logged-out visitor on a protected path to `/start`
+     unless a `user_role` cookie existed. On a new device a buddy has no such
+     cookie, so `/buddy/home` redirected into the student funnel.
+- **How it hid:** `/start` carries a prominent Log in link *in triplicate*,
+  added after Incident #10. `/welcome` was built later and placed IN FRONT of
+  `/start`, never inheriting the rule. The door was fixed one level too deep.
+- **Lessons:**
+  1. **This is Incident #10 again.** An unreachable login already cost a store
+     rejection; the lesson was encoded on one page instead of as a rule for
+     whatever page is currently the front door.
+  2. **A new screen placed in front of an old one inherits its obligations.**
+  3. **A role that cannot be a new signup must never be routed to signup.**
+- **Prevention (encoded):** `/welcome` carries the login door with a
+  never-remove comment matching `/start` and `/login`. `proxy.ts` routes only
+  `/student*` into the funnel; `/buddy*` and `/admin*` always go to `/login`.
+  `logged-out-routing.test.ts` pins the full truth table, including the
+  store-launch holdback the store reviews depend on.
+- **Owner:** cofounder (AI)
 
 ---
 
