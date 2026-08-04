@@ -85,10 +85,13 @@ export async function POST(request: NextRequest) {
     });
     // The buddy demo account is a guided TOUR of the student side — viewing
     // only. The cookie is what the proxy uses to refuse writes, and it is
-    // NOT httpOnly so the tour overlay can key off it client-side. Any other
-    // login on the same browser clears it.
+    // NOT httpOnly so the tour overlay can key off it client-side. Its VALUE
+    // is unique per login: the tour replays whenever it sees a value it
+    // hasn't shown for, which makes every login a fresh from-zero tour
+    // (founder: "each time I login it should be considered fresh"). Any
+    // other login on the same browser clears it.
     if (email?.toLowerCase() === 'buddydemo@careerrai.in') {
-      response.cookies.set('cr_demo', '1', {
+      response.cookies.set('cr_demo', String(Date.now()), {
         path: '/', sameSite: 'lax', httpOnly: false,
         secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24,
       });

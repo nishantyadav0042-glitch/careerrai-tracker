@@ -55,9 +55,14 @@ const STEPS: Step[] = [
 
 const SESSION_KEY = 'cr_demo_tour_done';
 
-function hasDemoCookie(): boolean {
-  if (typeof document === 'undefined') return false;
-  return document.cookie.split(';').some((c) => c.trim().startsWith('cr_demo='));
+// The cookie's value is unique per login (stamped by the login route), so
+// comparing it against the value we last completed the tour for makes every
+// LOGIN start the tour fresh — while plain navigation between pages within
+// one login doesn't restart it.
+function demoCookieValue(): string | null {
+  if (typeof document === 'undefined') return null;
+  const m = document.cookie.match(/(?:^|; )cr_demo=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
 export function BuddyDemoTour() {
@@ -69,12 +74,13 @@ export function BuddyDemoTour() {
   // would make the server and client disagree (hydration mismatch) — so this
   // is the legitimate mount-once external-system sync case.
   useEffect(() => {
-    if (!hasDemoCookie()) return;
-    let seen = false;
-    try { seen = !!sessionStorage.getItem(SESSION_KEY); } catch { /* ignore */ }
+    const val = demoCookieValue();
+    if (!val) return;
+    let seenFor: string | null = null;
+    try { seenFor = sessionStorage.getItem(SESSION_KEY); } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
     setDemo(true);
-    if (!seen) setIdx(0);
+    if (seenFor !== val) setIdx(0); // new login → fresh tour
   }, []);
 
   const measure = useCallback((i: number): DOMRect | null => {
@@ -95,7 +101,7 @@ export function BuddyDemoTour() {
   if (!demo) return null;
 
   const finish = () => {
-    try { sessionStorage.setItem(SESSION_KEY, '1'); } catch { /* ignore */ }
+    try { sessionStorage.setItem(SESSION_KEY, demoCookieValue() ?? '1'); } catch { /* ignore */ }
     setIdx(-1);
   };
   const step = idx >= 0 ? STEPS[idx] : null;
