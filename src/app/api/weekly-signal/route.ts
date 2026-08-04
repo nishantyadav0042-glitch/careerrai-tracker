@@ -108,12 +108,17 @@ export async function POST(request: NextRequest) {
 
     const insight = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
 
-    // Persist to DB so all serverless instances share the same cached insight for the week.
-    admin.from('analytics_events').insert({
+    // Persist to DB so all serverless instances share the same cached insight
+    // for the week. This MUST be awaited: fire-and-forget writes die when the
+    // serverless function freezes right after the response is sent, which is
+    // why zero cache rows were ever written between 11 Jun and 4 Aug — every
+    // page open paid for a fresh AI call, and the weekly cache was fiction.
+    const { error: cacheErr } = await admin.from('analytics_events').insert({
       student_id: studentId,
       event_type: 'weekly_signal_cache',
       metadata: { insight, week: weekKey, buddy_id: user.id },
-    }).then(({ error: e }) => { if (e) console.error('weekly-signal cache save failed:', e.message); });
+    });
+    if (cacheErr) console.error('weekly-signal cache save failed:', cacheErr.message);
 
     return NextResponse.json({
       insight,
