@@ -37,7 +37,7 @@ export default async function AdminTodayPage() {
     admin.from('profiles').select('role, notif_prefs').eq('id', user.id).single(),
     admin
       .from('profiles')
-      .select('id, role, created_at, is_premium, premium_since, last_seen_at, call_feedback, is_test_account')
+      .select('id, role, created_at, is_premium, premium_since, buddy_id, last_seen_at, call_feedback, is_test_account')
       .in('role', ['student', 'buddy']),
     getRealStudents(admin),
   ]);
@@ -56,6 +56,7 @@ export default async function AdminTodayPage() {
     !!iso && new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === today;
 
   const upgraded = students.filter((s) => s.is_premium === true).length;
+  const premiumUnassigned = students.filter((s) => s.is_premium === true && !s.buddy_id).length;
   const upgradedToday = students.filter((s) => s.is_premium === true && isToday(s.premium_since as string | null)).length;
   const newLeadsToday = students.filter((s) => isToday(s.created_at as string | null)).length;
   const inactiveBuddies = buddies.filter((b) => !b.last_seen_at || (b.last_seen_at as string) < twoDaysAgo).length;
@@ -134,6 +135,18 @@ export default async function AdminTodayPage() {
         <div>
           <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Mission Control</div>
           <div className="mt-0.5 text-sm font-semibold">Reachability score · live health · momentum · leading indicators</div>
+        </div>
+        <span className="font-mono text-2xl">→</span>
+      </Link>
+
+      <Link href="/admin/premium" className={`mb-2 flex items-center justify-between rounded-2xl border-2 p-4 text-white transition-transform hover:scale-[1.01] ${premiumUnassigned > 0 ? 'border-orange-500 bg-gradient-to-r from-violet-600 to-orange-500' : 'border-violet-600 bg-violet-600'}`}>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-violet-100">Premium students — buddy console</div>
+          <div className="mt-0.5 text-sm font-semibold">
+            {premiumUnassigned > 0
+              ? `⚠ ${premiumUnassigned} paid student${premiumUnassigned === 1 ? '' : 's'} WITHOUT a buddy — assign now`
+              : `${upgraded} subscriber${upgraded === 1 ? '' : 's'} · all matched · assign & reassign here`}
+          </div>
         </div>
         <span className="font-mono text-2xl">→</span>
       </Link>
