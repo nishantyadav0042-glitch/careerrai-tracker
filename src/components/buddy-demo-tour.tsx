@@ -65,13 +65,16 @@ export function BuddyDemoTour() {
   const [idx, setIdx] = useState(-1); // -1 idle, otherwise step index
   const [rect, setRect] = useState<DOMRect | null>(null);
 
-  /* eslint-disable-next-line react-hooks/set-state-in-effect -- cookie check
-     must run client-side after mount; there is no render-time source for it */
+  // The cookie is only readable client-side, and reading it during render
+  // would make the server and client disagree (hydration mismatch) — so this
+  // is the legitimate mount-once external-system sync case.
   useEffect(() => {
     if (!hasDemoCookie()) return;
-    setDemo(true);
     let seen = false;
     try { seen = !!sessionStorage.getItem(SESSION_KEY); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
+    setDemo(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
     if (!seen) setIdx(0);
   }, []);
 
