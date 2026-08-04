@@ -212,9 +212,19 @@ export async function proxy(request: NextRequest) {
     const storeLaunch = source != null || request.cookies.get('cr_store') != null;
     const holdBack = storeLaunch && !storeFunnelEnabled();
 
+    // /start is the STUDENT signup funnel, so only a student path may fall
+    // into it. A logged-out buddy or admin is never a new student — sending
+    // them down nine "when do you want to finish your syllabus?" screens is
+    // nonsense, and it is precisely how a mentor got locked out on 4 Aug:
+    // she opened /buddy/home on a new phone, had no user_role cookie, and
+    // landed in the student funnel with no way to reach /login ("this link
+    // is taking me to only student portal now"). Store launches always come
+    // in on /student/tracker, so this leaves the holdback path untouched.
+    const isStudentPath = pathname.startsWith('/student');
+
     const returning = request.cookies.get('user_role') != null;
     const dest = request.nextUrl.clone();
-    dest.pathname = (returning || holdBack) ? '/login' : '/start';
+    dest.pathname = (returning || holdBack || !isStudentPath) ? '/login' : '/start';
     return redirectWithSession(dest);
   }
 

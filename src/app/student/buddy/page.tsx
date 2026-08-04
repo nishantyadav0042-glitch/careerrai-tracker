@@ -10,6 +10,7 @@ import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
 import { BuddyPanelTabs } from '@/components/buddy-panel-tabs';
 import { ChatThread } from '@/components/chat/chat-thread';
+import { sessionsVisibleFrom } from '@/lib/session-window';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -51,13 +52,15 @@ export default async function BuddyPage() {
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio, avatar_url').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
-    // Upcoming: scheduled sessions + 1h grace window
+    // Upcoming: scheduled sessions + the shared grace window. This page had
+    // the grace hand-rolled and the buddy's pages didn't — which is exactly
+    // how the two sides drifted. The rule now lives in lib/session-window.
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link, session_status, session_type')
       .eq('student_id', user.id)
       .eq('session_status', 'scheduled')
-      .gte('scheduled_at', new Date(now - 3_600_000).toISOString())
+      .gte('scheduled_at', sessionsVisibleFrom(now))
       .order('scheduled_at', { ascending: true })
       .limit(5),
     // Completed within last 7 days — dashboard cleanup: older sessions go to History

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { NotifPrefsPanel } from '@/components/notif-prefs-panel';
 import { LogoutButton } from '@/components/logout-button';
 import type { NotifPrefs } from '@/types';
+import { sessionsVisibleFrom } from '@/lib/session-window';
 
 export default async function BuddyProfilePage() {
   const supabase = await createClient();
@@ -28,7 +29,10 @@ export default async function BuddyProfilePage() {
       .select('id, title, scheduled_at, google_meet_link, student_id, profiles!video_sessions_student_id_fkey(full_name)')
       .eq('buddy_id', user.id)
       .eq('session_status', 'scheduled')
-      .gte('scheduled_at', new Date().toISOString())
+      // Same grace window the student's list uses — see lib/session-window.
+      // Without it this row vanished at T+0 and the mentor lost the Join
+      // button at the exact moment the call started (4 Aug).
+      .gte('scheduled_at', sessionsVisibleFrom())
       .order('scheduled_at', { ascending: true })
       .limit(5),
   ]);

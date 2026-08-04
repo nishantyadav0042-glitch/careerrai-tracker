@@ -10,6 +10,7 @@ import { FeedbackList } from './feedback-form';
 import { BuddyStudentViewClient } from './buddy-student-view-client';
 import { VideoSessionPromptClient } from './video-session-prompt-client';
 import { OrientationCompleteButton } from './orientation-complete-button';
+import { sessionsVisibleFrom } from '@/lib/session-window';
 import { BriefingPanel } from './briefing-panel';
 import { StudentDossier } from '@/components/student-dossier';
 import { StudyPlanFeed } from './study-plan-feed';
@@ -194,7 +195,8 @@ export default async function BuddyStudentDetailPage({
       .eq('student_id', id)
       .eq('buddy_id', user.id)
       .eq('session_status', 'scheduled')
-      .gte('scheduled_at', new Date().toISOString())
+      // Grace window shared with the student side — see lib/session-window.
+      .gte('scheduled_at', sessionsVisibleFrom())
       .order('scheduled_at', { ascending: true })
       .limit(3),
     admin
