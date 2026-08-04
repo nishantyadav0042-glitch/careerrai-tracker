@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Anthropic } from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { callGemini, GOVERNING_RULE } from '@/lib/gemini';
 
-const anthropic = new Anthropic();
+// Zero-cost fallback (founder, 5 Aug: "spend nothing"): when the AI is
+// unavailable for any reason, the card still shows a REAL observation
+// computed from the same weekly summary — never an error, never blank.
+function ruleBasedInsight(s: {
+  days_logged: number; avg_hours_per_day: string; avg_stress: string;
+  mock_taken: number; latest_mock_score: number | null; stress_trend: string;
+}, first: string): string {
+  if (s.days_logged === 0) return `${first} logged 0 of the last 7 days — the week is invisible.`;
+  if (s.stress_trend === 'rising') return `Stress trending up over the week (avg ${s.avg_stress}/5) — worth exploring why.`;
+  if (s.mock_taken > 0 && s.latest_mock_score != null) return `${s.mock_taken} mock${s.mock_taken > 1 ? 's' : ''} this week, latest score ${s.latest_mock_score} — review it together.`;
+  if (s.days_logged <= 3) return `Logged ${s.days_logged} of the last 7 days at ${s.avg_hours_per_day} hrs/day — consistency is the gap.`;
+  return `${s.days_logged}/7 days logged, ${s.avg_hours_per_day} hrs/day, stress steady at ${s.avg_stress}/5.`;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('weekly-signal: ANTHROPIC_API_KEY is not set in this environment');
-      return NextResponse.json(
-        { error: 'AI is not configured on the server — add ANTHROPIC_API_KEY in Vercel project settings' },
-        { status: 503 }
-      );
-    }
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -96,17 +101,23 @@ export async function POST(request: NextRequest) {
         : 'stable',
     };
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 80,
-      system: 'You are reviewing a CAT student\'s week of data for their IIM buddy. Give ONE precise observation (max 20 words) that a mentor should act on. No generic advice. Focus on the most unusual or concerning pattern. Output only the insight sentence, nothing else.',
-      messages: [{
-        role: 'user',
-        content: `Student 7-day summary: ${JSON.stringify(summaryJson)}. Student name: ${student.full_name.split(' ')[0]}.`,
+    // Gemini (free tier, same key the timetable scanner uses), under the
+    // product's governing rule: state the ONE most notable FACT of the week,
+    // never a diagnosis or recommendation. Null (no key / quota / error)
+    // falls through to the rule-based line — this card can no longer be dead.
+    const first = student.full_name.split(' ')[0];
+    const ai = await callGemini({
+      system: GOVERNING_RULE,
+      parts: [{
+        text: `Student 7-day summary: ${JSON.stringify(summaryJson)}. Student first name: ${first}. ` +
+          'State the single most notable FACT from this week for the mentor in ONE sentence, max 20 words. ' +
+          'Facts only — no diagnosis, no advice. If a fact invites interpretation, append "— worth exploring why". ' +
+          'Output only the sentence.',
       }],
+      maxTokens: 60,
+      temperature: 0.2,
     });
-
-    const insight = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
+    const insight = ai?.trim() || ruleBasedInsight(summaryJson, first);
 
     // Persist to DB so all serverless instances share the same cached insight
     // for the week. This MUST be awaited: fire-and-forget writes die when the
