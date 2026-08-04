@@ -43,6 +43,44 @@ export async function POST(request: NextRequest) {
       .update({ status: 'assigned', assigned_buddy_id: buddy_id, assigned_at: new Date().toISOString() })
       .eq('student_id', student_id)
       .eq('status', 'pending');
+
+    // Tell BOTH sides. The first real assignment (4 Aug) notified nobody:
+    // the student's "buddy unlocked" fired at payment time, but the buddy
+    // learned they had a paying mentee only because the founder messaged
+    // them — a paid match that depends on a WhatsApp side-channel isn't a
+    // product. Fire-and-forget: notify failures never fail the assignment.
+    void (async () => {
+      const [{ data: student }, { data: buddy }] = await Promise.all([
+        admin.from('profiles').select('full_name, target_percentile').eq('id', student_id).single(),
+        admin.from('profiles').select('full_name').eq('id', buddy_id).single(),
+      ]);
+      const studentName = student?.full_name ?? 'A new student';
+      await admin.from('notifications').insert([
+        {
+          user_id: buddy_id, type: 'buddy_assigned',
+          title: `🎓 New mentee: ${studentName}`,
+          body: `${studentName}${student?.target_percentile ? ` (targeting ${student.target_percentile}%ile)` : ''} just upgraded and is assigned to you. Say hello today — the first message sets the tone.`,
+          data: { url: `/buddy/chat?student=${student_id}` }, read: false, channel: 'in_app',
+        },
+        {
+          user_id: student_id, type: 'buddy_assigned',
+          title: `🤝 Meet ${buddy?.full_name ?? 'your buddy'}`,
+          body: `${buddy?.full_name ?? 'Your IIM senior'} is now your buddy. They'll message you here — say hi back.`,
+          data: { url: '/student/buddy' }, read: false, channel: 'in_app',
+        },
+      ]);
+      const { sendPushToUser } = await import('@/lib/push');
+      await sendPushToUser(buddy_id, {
+        title: `🎓 New mentee: ${studentName}`,
+        body: 'They just upgraded. Say hello today.',
+        url: `/buddy/chat?student=${student_id}`,
+      });
+      await sendPushToUser(student_id, {
+        title: `🤝 Meet ${buddy?.full_name ?? 'your buddy'}`,
+        body: 'Your buddy is ready — open the app to say hi.',
+        url: '/student/buddy',
+      });
+    })().catch((e) => console.error('[assign-buddy] notify failed', e));
   }
 
   logAdminAction(user.id, 'assign_buddy', 'student', student_id, { buddy_id: buddy_id || null });
