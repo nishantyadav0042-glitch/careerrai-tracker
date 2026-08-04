@@ -61,15 +61,15 @@ function waNumber(phone: string | null): string | null {
 function buildMessage(objective: Objective, first: string): string {
   switch (objective) {
     case 'log':
-      return `${first}, you haven't filled today's log on the CareerRai app. Nishant here, I built CareerRai. If something is stopping you, tell me directly and I will help. Warna 2 min lagenge, kar lo yaar.`;
+      return `${first}, you haven't filled today's log on the CareerRai app. Nishant here, I built CareerRai. If something is stopping you, tell me directly and I will help. Warna 2 min lagenge, kar lo yaar. ${SITE_URL}`;
     case 'reconnect':
-      return `${first}, your notifications on CareerRai have stopped, so your daily study plan isn't reaching you. Nishant here, I built CareerRai. Just open the app once and they reconnect on their own. Koi dikkat ho to seedha bata do.`;
+      return `${first}, your notifications on CareerRai have stopped, so your daily study plan isn't reaching you. Nishant here, I built CareerRai. Just open the app once — ${SITE_URL} — and they reconnect on their own. Koi dikkat ho to seedha bata do.`;
     case 'buddy':
-      return `${first}, you're studying consistently and you checked out the Exam Buddy option. Nishant here, I built CareerRai. An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you — it's just Rs 999, and if you don't find real value you get a full refund, so there's no risk. You also get 3 free messages to try it first. Zyada details chahiye to bata do, bhej deta hoon.`;
+      return `${first}, you're studying consistently and you checked out the Exam Buddy option. Nishant here, I built CareerRai. An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you — it's just Rs 999, and if you don't find real value you get a full refund, so there's no risk. You also get 3 free messages to try it first. Zyada details chahiye to bata do, bhej deta hoon. App: ${SITE_URL}`;
     case 'install':
       return `${first}, your CAT plan is ready but the app isn't installed yet, so your daily plan and reminders can't reach you. Nishant here, I built CareerRai. It takes 10 seconds: open ${SITE_URL} in Chrome and tap Add to Home Screen. Koi problem aaye to bata do.`;
     case 'winback':
-      return `${first}, your studies on CareerRai have been paused for a few days. Nishant here, I built CareerRai. Is everything okay? Aaj bas 20 minutes, ek topic — utna hi kaafi hai. Kahan atka bata do, main saath hoon.`;
+      return `${first}, your studies on CareerRai have been paused for a few days. Nishant here, I built CareerRai. Is everything okay? Aaj bas 20 minutes, ek topic — utna hi kaafi hai. Kahan atka bata do, main saath hoon. ${SITE_URL}`;
   }
 }
 

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, HeartHandshake, Flame, MousePointerClick, Smartphone } from 'lucide-react';
 import { getWantsBuddy } from '@/lib/admin-filters';
+import { SITE_URL } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function message(first: string): string {
-  return `Hi ${first}, Nishant from CareerRai. Signup pe aapne bola tha ki ek mentor chahiye — wo ab ready hai. Ek personal buddy jo aapka plan, weak areas aur mocks track karega. Interested? Bas YES reply kar do.`;
+  return `Hi ${first}, Nishant from CareerRai. Signup pe aapne bola tha ki ek mentor chahiye — wo ab ready hai. Ek personal buddy jo aapka plan, weak areas aur mocks track karega. Interested? Bas YES reply kar do. App: ${SITE_URL}`;
 }
 
 // The list behind "Want a buddy": students who EXPLICITLY said yes to the

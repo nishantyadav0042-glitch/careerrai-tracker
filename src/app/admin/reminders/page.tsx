@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getRemindToLog } from '@/lib/admin-filters';
 import { ArrowLeft } from 'lucide-react';
+import { SITE_URL } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function reminderText(firstName: string): string {
-  return `Hi ${firstName}, Nishant from CareerRai. You haven't logged today's study yet — it takes 30 seconds and keeps your plan accurate. Log it now. Koi dikkat ho to bata do.`;
+  return `Hi ${firstName}, Nishant from CareerRai. You haven't logged today's study yet — it takes 30 seconds and keeps your plan accurate. Log it now: ${SITE_URL}. Koi dikkat ho to bata do.`;
 }
 
 export default async function AdminRemindersPage() {

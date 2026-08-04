@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getStreakBreakers } from '@/lib/streak-breakers';
 import { ArrowLeft } from 'lucide-react';
+import { SITE_URL } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function message(first: string): string {
-  return `Hi ${first}, Nishant from CareerRai. You missed yesterday's log but your Momentum Shield covered it — your streak is safe. Log today's study and keep it going. Koi problem ho to bata do.`;
+  return `Hi ${first}, Nishant from CareerRai. You missed yesterday's log but your Momentum Shield covered it — your streak is safe. Log today's study and keep it going: ${SITE_URL}. Koi problem ho to bata do.`;
 }
 
 export default async function StreakBreakersPage() {

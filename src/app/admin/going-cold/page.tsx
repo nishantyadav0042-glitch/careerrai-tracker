@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getGoingCold } from '@/lib/admin-filters';
 import { ArrowLeft, Snowflake } from 'lucide-react';
+import { SITE_URL } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ function waNumber(phone: string | null): string | null {
 }
 
 function message(first: string): string {
-  return `Hi ${first}, Nishant here from CareerRai. Aapne kuch din se log nahi kiya — sab theek? Koi dikkat ho app me ya prep me, seedha yahin bata do. Main personally dekh raha hoon.`;
+  return `Hi ${first}, Nishant here from CareerRai. Aapne kuch din se log nahi kiya — sab theek? Koi dikkat ho app me ya prep me, seedha yahin bata do. Main personally dekh raha hoon. ${SITE_URL}`;
 }
 
 // The list behind "Going cold (4+ days)": students whose last log is 4 or more
