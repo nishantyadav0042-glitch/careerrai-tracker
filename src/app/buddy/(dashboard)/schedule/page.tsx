@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MeetingWidget } from '@/components/meeting-widget';
 import { GoogleConnectCard } from '@/components/google-connect-card';
-import { googleConnection } from '@/lib/google-oauth';
+import { buddyBookingReadiness } from '@/lib/buddy-room';
 
 export default async function BuddySchedulePage({
   searchParams,
@@ -24,11 +24,13 @@ export default async function BuddySchedulePage({
     .single();
   if (profile?.role !== 'buddy') redirect('/');
 
-  const [{ data: students }, google] = await Promise.all([
+  const [{ data: students }, readiness] = await Promise.all([
     admin.from('profiles').select('id, full_name').eq('buddy_id', user.id).order('full_name'),
-    // A Meet link is minted on the mentor's own calendar, so scheduling is
-    // gated on this — surfaced here rather than failing at the booking.
-    googleConnection(user.id),
+    // Booking needs BOTH a live Google connection and a permanent room. Asking
+    // for the full readiness — rather than just "is a token present" — is what
+    // catches the mentor whose grant died since their last visit, or whose room
+    // was never minted because Google was down that minute.
+    buddyBookingReadiness(user.id),
   ]);
 
   return (
@@ -50,19 +52,19 @@ export default async function BuddySchedulePage({
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         <GoogleConnectCard
-          connected={google.connected}
-          email={google.email}
+          connected={readiness.googleConnected}
+          email={readiness.googleEmail}
           from="/buddy/schedule"
           status={googleStatus}
         />
-        {/* Booking is only offered once Google is connected — the link is
-            minted on the mentor's calendar, so an unconnected mentor would
-            hit a 428 at submit. Better to say so before they fill the form. */}
-        {google.connected ? (
+        {/* Booking is only offered when it can actually succeed. An unready
+            mentor would otherwise fill in the whole form and collect a 428 at
+            submit — say it before they type, not after. */}
+        {readiness.ready ? (
           <MeetingWidget role="buddy" students={students ?? []} />
         ) : (
           <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center">
-            <p className="text-sm text-stone-500">Connect Google above to start scheduling sessions.</p>
+            <p className="text-sm text-stone-500">{readiness.blocker}</p>
           </div>
         )}
       </div>

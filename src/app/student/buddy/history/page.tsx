@@ -18,7 +18,9 @@ export default async function SessionHistoryPage() {
     .from('video_sessions')
     .select('id, title, scheduled_at, session_type, session_status, duration_minutes')
     .eq('student_id', user.id)
-    .in('session_status', ['completed', 'cancelled'])
+    // 'expired' too: the window passed with no outcome recorded. Hiding it
+    // would make a session a student attended vanish from their own history.
+    .in('session_status', ['completed', 'cancelled', 'expired'])
     .order('scheduled_at', { ascending: false })
     .limit(100);
 
@@ -46,6 +48,9 @@ export default async function SessionHistoryPage() {
             {sessions.map((s) => {
               const isOrientation = s.session_type === 'onboarding';
               const isCancelled = s.session_status === 'cancelled';
+              // 'expired' must not read as "Completed" — that is the claim the
+              // status exists to avoid making.
+              const isExpired = s.session_status === 'expired';
               return (
                 <div
                   key={s.id}
@@ -75,7 +80,7 @@ export default async function SessionHistoryPage() {
                         minute: '2-digit',
                       })}
                       {s.duration_minutes ? ` · ${s.duration_minutes}m` : ''}
-                      {isCancelled ? ' · Cancelled' : ' · Completed'}
+                      {isCancelled ? ' · Cancelled' : isExpired ? ' · No outcome recorded' : ' · Completed'}
                     </p>
                   </div>
                 </div>

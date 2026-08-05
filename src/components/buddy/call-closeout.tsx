@@ -45,12 +45,19 @@ export function CallCloseout(props: CloseoutProps) {
   const [outcome, setOutcome] = useState<Outcome>('kept');
   const [commitment, setCommitment] = useState('');
   const [typing, setTyping] = useState(false);
+  const [strength, setStrength] = useState('');
+  const [weakness, setWeakness] = useState('');
+  const [tasks, setTasks] = useState<string[]>(['', '', '']);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     if (!commitment.trim()) { setError('Pick what they committed to.'); return; }
+    if (!strength.trim() || !weakness.trim()) {
+      setError('One strength and one thing to fix — your student reads both.');
+      return;
+    }
     setSaving(true); setError(null);
     try {
       const res = await fetch('/api/buddy/commitment', {
@@ -62,6 +69,9 @@ export function CallCloseout(props: CloseoutProps) {
           readState: read,
           sessionId: props.sessionId,
           previousOutcome: props.openCommitment ? outcome : null,
+          strength,
+          weakness,
+          assignments: tasks.map((t) => t.trim()).filter(Boolean),
         }),
       });
       const json = await res.json();
@@ -79,7 +89,7 @@ export function CallCloseout(props: CloseoutProps) {
       <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
         <p className="text-sm font-bold text-teal-900">Call closed ✓</p>
         <p className="mt-0.5 text-[13px] text-teal-800">
-          Saved. Your next call with {props.studentFirstName} opens with this promise.
+          {props.studentFirstName} has your notes and their checklist. Your next call opens with this promise.
         </p>
       </div>
     );
@@ -89,7 +99,7 @@ export function CallCloseout(props: CloseoutProps) {
     <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
       <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50 px-4 py-2.5">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-600">After the call</p>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">~15 seconds</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">under a minute</p>
       </div>
 
       <div className="space-y-4 p-4">
@@ -161,6 +171,52 @@ export function CallCloseout(props: CloseoutProps) {
               placeholder="e.g. Finish Arithmetic by Sunday"
               className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-[14px] outline-none focus:border-teal-600"
             />
+          )}
+        </div>
+
+        {/* One strength, one weakness — founder, 5 Aug. Two single lines, not a
+            form: a debrief a working professional has no time to write is a
+            debrief that never happens. The student sees both verbatim, which
+            is why the placeholders show what a useful one looks like. */}
+        <div>
+          <p className="text-[13px] font-bold text-stone-900">One thing {props.studentFirstName} did well</p>
+          <input
+            value={strength} onChange={(e) => setStrength(e.target.value)}
+            placeholder="e.g. Actually finished the LR set we agreed on"
+            className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-[14px] outline-none focus:border-teal-600"
+          />
+        </div>
+
+        <div>
+          <p className="text-[13px] font-bold text-stone-900">One thing to fix</p>
+          <input
+            value={weakness} onChange={(e) => setWeakness(e.target.value)}
+            placeholder="e.g. Still skipping the accuracy check after each set"
+            className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-[14px] outline-none focus:border-teal-600"
+          />
+        </div>
+
+        {/* The 3–4 tasks that back the promise. Blank rows are ignored, so a
+            mentor in a hurry can fill one and go. */}
+        <div>
+          <p className="text-[13px] font-bold text-stone-900">What should they do before next time?</p>
+          <p className="mt-0.5 text-[11.5px] text-stone-500">Up to 4. These become a checklist on their home screen.</p>
+          <div className="mt-2 space-y-2">
+            {tasks.map((t, i) => (
+              <input
+                key={i} value={t}
+                onChange={(e) => setTasks(tasks.map((v, j) => (j === i ? e.target.value : v)))}
+                placeholder={i === 0 ? 'e.g. 2 LR sets, timed' : `Task ${i + 1} (optional)`}
+                aria-label={`Task ${i + 1}`}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-[14px] outline-none focus:border-teal-600"
+              />
+            ))}
+          </div>
+          {tasks.length < 4 && (
+            <button
+              type="button" onClick={() => setTasks([...tasks, ''])}
+              className="mt-2 text-[12.5px] font-semibold text-teal-700"
+            >+ Add one more</button>
           )}
         </div>
 

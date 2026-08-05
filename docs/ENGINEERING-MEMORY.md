@@ -639,6 +639,125 @@
   A buddy may now also supply their OWN meeting link (Meet/Zoom), used verbatim
   with no Daily room — a mentor should never be trapped inside our provider.
 - **Owner:** cofounder (AI)
+- **Follow-up (same day):** the prevention above was application-level only, and
+  the founder rejected the *supersede* semantics outright: a second booking must
+  **refuse**, not silently replace. See the architecture note below — the rule now
+  lives in two database constraints, where it cannot be forgotten by the next
+  endpoint someone writes.
+
+---
+
+## Architecture note — one permanent Meet room per buddy (2026-08-05)
+
+Not an incident. A founder decision that reverses a design from earlier the same
+day, recorded here because the reasoning matters more than the diff.
+
+**Before:** every booking minted a fresh Google Meet on the mentor's calendar.
+**After:** a buddy gets ONE permanent room, created the first time they connect
+Google, reused by every session they ever run. No calendar event is created per
+booking.
+
+**Why:**
+- A mentor learns one link. Ours are IIM alumni with day jobs; a new URL per
+  session is one more thing to hunt for while a student waits.
+- A link a student already saved can never go stale, so a reschedule cannot
+  strand anyone in a retired room — the exact shape of Incident #21.
+- Booking no longer depends on a live Google call succeeding.
+
+**What it costs, stated plainly:** the room is shared across all of a buddy's
+students, so two of them must never be scheduled into it at once. And neither
+side now receives a per-session calendar invite or Google reminder — which is
+why the student-side Google-connect card was pulled from `/student/buddy` the
+same hour it shipped, rather than left promising a calendar entry that no longer
+arrives.
+
+**What makes the shared room safe (encoded):**
+1. `no_overlapping_buddy_sessions` — a GiST exclusion constraint over
+   `(buddy_id, session_span)`. Sessions may sit flush (10:00–10:30 then
+   10:30–11:00) but never overlap. The span originally carried a 15-minute tail
+   buffer against a call running long; the founder removed it so a mentor can
+   run continuous calls on a free day, and the residual risk is covered by
+   Meet's knock-lobby — only the mentor is on the invite, so the next student
+   waits to be admitted rather than walking into a live 1:1.
+2. `one_live_session_per_pair` — a partial unique index. A second booking for a
+   pair is **refused** with a message telling the mentor to cancel the first.
+3. Meet's own knock-lobby. Only the buddy is on the invite, so every student
+   arrives as an uninvited joiner and the buddy admits them one at a time. A
+   student holding a months-old link still cannot walk into someone else's call.
+4. `cancel-meeting` compares against `profiles.buddy_meet_event_id` before
+   deleting anything in Google — cancelling one session must never be able to
+   destroy the room every one of that buddy's students uses.
+
+**The lesson worth keeping:** the first fix for Incident #21 lived in one API
+route. Constraints 1 and 2 live in Postgres, so they hold for the admin script,
+the next endpoint, and the race between two taps in the same second. *If a rule
+matters, put it where the data is.* Both were verified against the live database
+inside a deliberately aborted transaction before shipping — five cases, five
+expected outcomes, zero rows written.
+
+### Hardening pass (same day, founder review)
+
+The founder accepted the architecture and named ten gaps before merge. What
+they have in common is worth stating: **every one is about the states AFTER the
+happy path** — a revoked grant, a swapped Google account, a deleted event, a
+lost race, a support ticket at 10pm. The happy path was already fine. That is
+usually where the next incident is.
+
+- **Connection state and room state die together.** `clearGoogleState` is now
+  the only way to disconnect, and it clears the token AND `buddy_meet_url`.
+  Deleting just the token is the bug that hides for a week: the app keeps
+  believing it can hand out a link on a calendar it can no longer read.
+- **A dead grant is torn down once, not retried forever.** A 401 from any
+  Calendar call clears the connection on the spot and the mentor is told to
+  reconnect. A 429/500/network failure changes *nothing* — their setup is fine,
+  and wiping it would turn a 30-second blip into a support ticket. That
+  distinction is the point of `FailureReason`.
+- **A room belongs to a Google ACCOUNT, not to a buddy.** Reconnecting with a
+  different address mints a new room, because the old one now sits on a
+  calendar we cannot read, write or cancel.
+- **`integration_audit_log`** records every connect, disconnect, revoke, room
+  mint, booking, rejection and Google error. Incident #21 cost an hour to
+  reconstruct a timeline from `created_at` columns that were never meant to be
+  one. A CHECK constraint rejects any row whose detail mentions a token — the
+  log is the likeliest place for a credential to leak by accident, so that is
+  enforced by the database, not by review.
+- **Admin overrides** (`/api/admin/buddy-integration`) cover the four fixes
+  support has actually needed: cancel a stuck session to release the pair lock,
+  clear a broken Google connection, regenerate a room, and see who cannot book.
+  Nobody should be opening the SQL editor to fix a session — that skips the
+  audit trail and teaches us nothing.
+- **A business rule is a 409, never a 500.** `lib/booking-constraints.ts` is the
+  single translator from `23505`/`23P01` to a sentence, with buddy and student
+  wording, used by every write path and by the friendly pre-check — so one rule
+  cannot produce two different explanations. A 500 is wrong twice: it says
+  something is broken when nothing is, and it invites a retry that can only fail
+  identically forever.
+- **Idempotent booking.** An `Idempotency-Key` header makes a double tap on bad
+  mobile data one booking instead of two-then-an-error. Only successes are
+  stored — a failure must stay retryable, or a mentor whose one call hit a
+  Google blip would replay that error forever. Scoped by (user, endpoint, key),
+  because keys are client-generated and must not read across users.
+- **Stale sessions expire.** One live session per pair has a sharp edge: a
+  session nobody closes out holds the lock *forever*. This database already had
+  a 21 July row still `scheduled` — that pair could never have booked again, and
+  it would have been reported as "booking is broken", not "the lock is stuck".
+  A 6-hourly cron releases them, measured from each session's own END time so a
+  call running long is never touched.
+- **`expired` exists because both alternatives lie.** The dry run of that cron
+  against live data showed it would have marked the 4 Aug Shreya orientation
+  `cancelled` — the session the founder watched go well and rated 10/10.
+  `completed` fabricates evidence (Incident #9); `cancelled` denies a call that
+  happened. `expired` claims only that the window passed with no outcome
+  recorded. History renders it as "No outcome recorded", never "Completed".
+  *A cleanup job must not rewrite history it did not witness.*
+- **What is NOT proven:** the two-simultaneous-requests race was verified as
+  far as this environment allows (the constraint rejects the duplicate, live),
+  but genuine wall-clock concurrency needs two connections at once —
+  unavailable here (no service-role key, `max_prepared_transactions` is 0, and
+  the SQL tooling serialises). `scripts/race-booking-test.mjs` fires N parallel
+  requests at a deployed instance and asserts exactly one winner; it must be
+  run once against production after this ships. **Do not record this as proven
+  until that run is green.**
 
 ---
 

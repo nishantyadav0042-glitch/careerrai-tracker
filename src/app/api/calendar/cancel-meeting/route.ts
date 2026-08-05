@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { deleteGoogleMeet } from '@/lib/google-meet';
+import { audit } from '@/lib/integration-audit';
 
 /**
  * POST /api/calendar/cancel-meeting
- * Buddy cancels a scheduled session: marks the row cancelled and notifies the
- * student in-app. (Sessions use Daily/Jitsi links now — there is no calendar
- * event to delete; the DB confirmed zero legacy Google-event sessions.)
+ * Buddy cancels a scheduled session: removes the event from Google Calendar
+ * (which also emails the invited student), marks the row cancelled, and
+ * notifies the student in-app.
+ *
+ * Order matters. Google goes FIRST: if the calendar delete fails we still
+ * cancel the row, because a session the student can no longer be told about
+ * is worse than a stale entry on the mentor's calendar. But we never do the
+ * reverse — silently leaving a live Meet on the calendar of a session the app
+ * believes is cancelled is how a mentor ends up sitting in an empty room.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +37,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: session } = await admin
       .from('video_sessions')
-      .select('id, buddy_id, student_id, title, session_status')
+      .select('id, buddy_id, student_id, title, session_status, google_event_id')
       .eq('id', meetingId)
       .single();
 
@@ -44,6 +52,38 @@ export async function POST(request: NextRequest) {
     }
     if (session.session_status === 'cancelled') {
       return NextResponse.json({ success: true, alreadyCancelled: true });
+    }
+
+    // Sessions booked on the permanent-room design have no calendar event of
+    // their own, so there is usually nothing to delete. Older rows do.
+    //
+    // The guard is not optional: the buddy's PERMANENT room is also a calendar
+    // event, and deleting it would destroy the link every one of their students
+    // uses. A cancel must never be able to reach it.
+    const { data: buddyProfile } = await admin
+      .from('profiles')
+      .select('buddy_meet_event_id')
+      .eq('id', session.buddy_id)
+      .single();
+
+    const perSessionEventId =
+      session.google_event_id && session.google_event_id !== buddyProfile?.buddy_meet_event_id
+        ? session.google_event_id
+        : null;
+
+    let calendarRemoved = false;
+    let calendarError: string | null = null;
+    if (perSessionEventId) {
+      // sendUpdates=all means an invited student gets Google's own cancellation
+      // email; an already-deleted event counts as success, so a hand-deleted
+      // event can never wedge a cancel.
+      const removed = await deleteGoogleMeet(user.id, perSessionEventId);
+      if (removed.ok) {
+        calendarRemoved = true;
+      } else {
+        calendarError = removed.error;
+        console.error('Google event delete failed:', removed.reason, removed.error);
+      }
     }
 
     const { error: updateError } = await admin
@@ -72,7 +112,15 @@ export async function POST(request: NextRequest) {
         if (e) console.error('Notification insert failed:', e.message);
       });
 
-    return NextResponse.json({ success: true });
+    // The cancel succeeded. calendarError is reported, not thrown — the mentor
+    // should know their calendar still shows it, without the cancel appearing
+    // to have failed when it didn't.
+    await audit({
+      subjectId: user.id, action: 'booking.cancelled',
+      detail: { sessionId: session.id, studentId: session.student_id, calendarRemoved, calendarError },
+    });
+
+    return NextResponse.json({ success: true, calendarRemoved, calendarError });
   } catch (error) {
     console.error('cancel-meeting error:', error);
     return NextResponse.json(

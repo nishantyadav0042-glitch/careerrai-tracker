@@ -16,7 +16,11 @@ import { describe, it, expect } from 'vitest';
 // Daily was never at fault. These tests pin the two rules that make a shared
 // room deterministic, expressed as pure logic so they cannot silently rot.
 
-type Session = { id: string; scheduledAt: string; createdAt: string; status: 'scheduled' | 'cancelled' };
+type Session = {
+  id: string; scheduledAt: string; createdAt: string;
+  status: 'scheduled' | 'active' | 'cancelled';
+  buddyId: string; studentId: string; durationMins: number;
+};
 
 /** Mirrors the ordering every session query now uses. */
 function pickSession(rows: Session[]): Session | null {
@@ -28,18 +32,57 @@ function pickSession(rows: Session[]): Session | null {
     )[0] ?? null;
 }
 
-/** Mirrors the supersede step in schedule-meeting. */
-function bookSession(existing: Session[], fresh: Session): Session[] {
-  return [...existing.map((s) => ({ ...s, status: 'cancelled' as const })), fresh];
+const LIVE = ['scheduled', 'active'] as const;
+// Founder, 5 Aug: no gap between sessions — a mentor may run continuous
+// calls on a free day. Sessions still cannot OVERLAP; they can only sit flush.
+const BUFFER_MINS = 0;
+
+/**
+ * Mirrors the two DATABASE constraints that now govern booking:
+ * `one_live_session_per_pair` and `no_overlapping_buddy_sessions`.
+ *
+ * Booking used to SUPERSEDE — it cancelled every earlier session and inserted
+ * a new one. Founder rule, 5 Aug: it now REFUSES. A pair keeps exactly one
+ * live session until someone cancels it, so the mentor and the student can
+ * never disagree about which call is the call.
+ */
+function bookSession(
+  existing: Session[],
+  fresh: Session & { buddyId: string; studentId: string; durationMins: number },
+): { ok: true; sessions: Session[] } | { ok: false; reason: 'session_exists' | 'buddy_double_booked' } {
+  const live = existing.filter((s) => (LIVE as readonly string[]).includes(s.status));
+
+  if (live.some((s) => s.buddyId === fresh.buddyId && s.studentId === fresh.studentId)) {
+    return { ok: false, reason: 'session_exists' };
+  }
+  // Every session runs in the buddy's ONE permanent room, so two students in
+  // overlapping slots would be two students in the same room. Back-to-back is
+  // fine — Meet's knock-lobby holds the next student until the mentor admits
+  // them — but a genuine overlap never is.
+  const spanOf = (s: { scheduledAt: string; durationMins: number }) => {
+    const from = Date.parse(`${s.scheduledAt}Z`);
+    return [from, from + (s.durationMins + BUFFER_MINS) * 60_000] as const;
+  };
+  const [freshFrom, freshTo] = spanOf(fresh);
+  if (live.some((s) => {
+    if (s.buddyId !== fresh.buddyId) return false;
+    const [from, to] = spanOf(s);
+    return freshFrom < to && from < freshTo;
+  })) {
+    return { ok: false, reason: 'buddy_double_booked' };
+  }
+
+  return { ok: true, sessions: [...existing, fresh] };
 }
 
-// The real rows from that evening.
+// The real rows from that evening — one buddy, one student, five bookings.
+const P = { buddyId: 'vedashri', studentId: 'harsh', durationMins: 30 };
 const THAT_NIGHT: Session[] = [
-  { id: 'a', scheduledAt: '2026-08-05T16:30', createdAt: '2026-08-05T11:46', status: 'scheduled' },
-  { id: 'b', scheduledAt: '2026-08-05T18:00', createdAt: '2026-08-05T17:20', status: 'cancelled' },
-  { id: 'c', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:20', status: 'scheduled' },
-  { id: 'd', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:35', status: 'scheduled' }, // same minute as c
-  { id: 'e', scheduledAt: '2026-08-05T19:30', createdAt: '2026-08-05T19:23', status: 'scheduled' },
+  { id: 'a', scheduledAt: '2026-08-05T16:30', createdAt: '2026-08-05T11:46', status: 'scheduled', ...P },
+  { id: 'b', scheduledAt: '2026-08-05T18:00', createdAt: '2026-08-05T17:20', status: 'cancelled', ...P },
+  { id: 'c', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:20', status: 'scheduled', ...P },
+  { id: 'd', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:35', status: 'scheduled', ...P }, // same minute as c
+  { id: 'e', scheduledAt: '2026-08-05T19:30', createdAt: '2026-08-05T19:23', status: 'scheduled', ...P },
 ];
 
 describe('two people always resolve to the SAME session', () => {
@@ -53,30 +96,89 @@ describe('two people always resolve to the SAME session', () => {
 
   it('when two sessions share a minute, the newer booking wins', () => {
     const chosen = pickSession([
-      { id: 'c', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:20', status: 'scheduled' },
-      { id: 'd', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:35', status: 'scheduled' },
+      { id: 'c', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:20', status: 'scheduled', ...P },
+      { id: 'd', scheduledAt: '2026-08-05T19:00', createdAt: '2026-08-05T17:35', status: 'scheduled', ...P },
     ]);
     expect(chosen?.id).toBe('d');
   });
 });
 
 describe('a pair never has two live sessions at once', () => {
-  it('booking supersedes every earlier live session', () => {
-    const after = bookSession(THAT_NIGHT, {
-      id: 'new', scheduledAt: '2026-08-05T20:00', createdAt: '2026-08-05T19:40', status: 'scheduled',
+  it('a second booking is REFUSED, not silently substituted', () => {
+    const live: Session[] = [
+      { id: 'a', scheduledAt: '2026-08-05T16:30', createdAt: '2026-08-05T11:46', status: 'scheduled', ...P },
+    ];
+    const res = bookSession(live, {
+      id: 'new', scheduledAt: '2026-08-05T20:00', createdAt: '2026-08-05T19:40', status: 'scheduled', ...P,
     });
-    expect(after.filter((s) => s.status === 'scheduled')).toHaveLength(1);
-    expect(pickSession(after)?.id).toBe('new');
+    expect(res).toEqual({ ok: false, reason: 'session_exists' });
+  });
+
+  it('cancelling frees the lock', () => {
+    const cancelled: Session[] = [
+      { id: 'a', scheduledAt: '2026-08-05T16:30', createdAt: '2026-08-05T11:46', status: 'cancelled', ...P },
+    ];
+    const res = bookSession(cancelled, {
+      id: 'new', scheduledAt: '2026-08-05T20:00', createdAt: '2026-08-05T19:40', status: 'scheduled', ...P,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it('an in-progress session also holds the lock', () => {
+    const active: Session[] = [
+      { id: 'a', scheduledAt: '2026-08-05T16:30', createdAt: '2026-08-05T11:46', status: 'active', ...P },
+    ];
+    expect(bookSession(active, {
+      id: 'new', scheduledAt: '2026-08-05T20:00', createdAt: '2026-08-05T19:40', status: 'scheduled', ...P,
+    })).toEqual({ ok: false, reason: 'session_exists' });
   });
 
   it('the exact pile-up from 5 Aug can no longer occur', () => {
-    // Replay the evening one booking at a time.
+    // Replay the evening one booking at a time. Every booking after the first
+    // is now refused, so the pile-up never starts.
     let state: Session[] = [];
+    let accepted = 0;
     for (const s of THAT_NIGHT) {
-      state = bookSession(state, { ...s, status: 'scheduled' });
+      const res = bookSession(state, { ...s, status: 'scheduled' });
+      if (res.ok) { state = res.sessions; accepted++; }
       expect(state.filter((x) => x.status === 'scheduled').length,
-        'more than one live session for a pair').toBe(1);
+        'more than one live session for a pair').toBeLessThanOrEqual(1);
     }
-    expect(pickSession(state)?.id).toBe('e'); // the last booking is the session
+    expect(accepted).toBe(1);
+    expect(pickSession(state)?.id).toBe('a');
+  });
+});
+
+// One permanent Meet room per buddy (founder, 5 Aug) buys a stable link at the
+// cost of a shared room. These are the tests that make the trade safe: two of
+// a buddy's students must never be scheduled into it at the same time.
+describe('a buddy is never double-booked', () => {
+  const at = (hhmm: string, studentId: string, durationMins = 30): Session & { buddyId: string; studentId: string; durationMins: number } =>
+    ({ id: hhmm + studentId, scheduledAt: `2026-08-05T${hhmm}`, createdAt: '2026-08-05T10:00', status: 'scheduled', buddyId: 'vedashri', studentId, durationMins });
+
+  const existing = [at('19:00', 'harsh')]; // room busy 19:00 → 19:30
+
+  it('refuses a straddling slot for a different student', () => {
+    expect(bookSession(existing, at('19:20', 'sweccha'))).toEqual({ ok: false, reason: 'buddy_double_booked' });
+  });
+
+  it('allows a back-to-back session the moment the first ends', () => {
+    // Founder, 5 Aug: a mentor clearing a free day should be able to run
+    // 19:00, 19:30, 20:00 without artificial gaps.
+    expect(bookSession(existing, at('19:30', 'sweccha')).ok).toBe(true);
+  });
+
+  it('still refuses a slot that starts one minute before the first ends', () => {
+    expect(bookSession(existing, at('19:29', 'sweccha'))).toEqual({ ok: false, reason: 'buddy_double_booked' });
+  });
+
+  it('leaves a DIFFERENT buddy free at the same time', () => {
+    const other = { ...at('19:00', 'sweccha'), buddyId: 'shreya' };
+    expect(bookSession(existing, other).ok).toBe(true);
+  });
+
+  it('ignores cancelled sessions when checking the room', () => {
+    const freed: Session[] = [{ ...at('19:00', 'harsh'), status: 'cancelled' }];
+    expect(bookSession(freed, at('19:00', 'sweccha')).ok).toBe(true);
   });
 });
