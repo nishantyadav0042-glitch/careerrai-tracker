@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createDailyRoom } from '@/lib/daily';
+import { googleConfigured } from '@/lib/google-oauth';
 
 export const dynamic = 'force-dynamic';
 
-// One-tap video-system health check (admin only) — born from the 21 July
-// incident where Daily rooms created fine but JOINING was blocked by a
-// missing payment method. This creates a real short-lived test room from
-// production (where the API key lives) and returns its URL, so the admin can
-// verify end-to-end from a phone: green + a joinable link = the whole video
-// path works.
+// One-tap video-system health check (admin only).
+//
+// Rewritten 5 Aug when sessions moved to Google Meet. The old version created
+// a Daily room and called that "healthy" — and Incident #21 proved that check
+// answered the wrong question. A room existing tells you nothing about whether
+// the two people were sent to the SAME one. So this now reports the things
+// that actually break a session:
+//
+//   1. Is Google configured on the server at all?
+//   2. Which mentors have connected their calendar — an unconnected mentor
+//      cannot book, and finding that out at 9pm is too late.
+//   3. Are there any pairs holding MORE THAN ONE live session? That is the
+//      exact shape of Incident #21 and must always read zero.
 export async function GET() {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,16 +25,39 @@ export async function GET() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const url = await createDailyRoom({ expiresAt: new Date(Date.now() + 30 * 60_000) });
-  if (!url) {
-    return NextResponse.json({
-      ok: false,
-      message: 'Daily room creation FAILED — check the API key in server_config and the payment method on dashboard.daily.co.',
-    }, { status: 503 });
-  }
+  const [{ data: buddies }, { data: tokens }, { data: liveSessions }] = await Promise.all([
+    admin.from('profiles').select('id, full_name').eq('role', 'buddy'),
+    admin.from('google_oauth_tokens').select('user_id, google_email'),
+    admin.from('video_sessions').select('buddy_id, student_id').eq('session_status', 'scheduled'),
+  ]);
+
+  const connected = new Map((tokens ?? []).map((t) => [t.user_id, t.google_email]));
+  const mentors = (buddies ?? []).map((b) => ({
+    name: b.full_name,
+    googleConnected: connected.has(b.id),
+    googleEmail: connected.get(b.id) ?? null,
+    canSchedule: connected.has(b.id),
+  }));
+
+  // Incident #21 guard: a pair must never hold two live sessions at once.
+  const perPair = new Map<string, number>();
+  for (const s of liveSessions ?? []) perPair.set(`${s.buddy_id}|${s.student_id}`, (perPair.get(`${s.buddy_id}|${s.student_id}`) ?? 0) + 1);
+  const duplicatePairs = [...perPair.entries()].filter(([, n]) => n > 1).length;
+
+  const blockedMentors = mentors.filter((m) => !m.canSchedule).map((m) => m.name);
+  const ok = googleConfigured() && blockedMentors.length === 0 && duplicatePairs === 0;
+
   return NextResponse.json({
-    ok: true,
-    testRoom: url,
-    message: 'Room created. Open testRoom on your phone — if it joins with just a name (no payment/moderator wall), the video system is fully healthy. Room self-expires in 30 minutes.',
-  });
+    ok,
+    googleConfigured: googleConfigured(),
+    mentors,
+    duplicateLivePairs: duplicatePairs,
+    message: ok
+      ? 'Every mentor can schedule, and no pair holds two live sessions.'
+      : [
+          !googleConfigured() && 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set on the server.',
+          blockedMentors.length > 0 && `These mentors cannot schedule until they connect Google: ${blockedMentors.join(', ')}.`,
+          duplicatePairs > 0 && `${duplicatePairs} pair(s) hold more than one live session — this is the Incident #21 shape.`,
+        ].filter(Boolean).join(' '),
+  }, { status: ok ? 200 : 503 });
 }

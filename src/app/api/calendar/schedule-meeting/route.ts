@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createDailyRoom } from '@/lib/daily';
+import { createGoogleMeet } from '@/lib/google-meet';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     // ── Student must belong to this buddy ────────────────────────
     const { data: student } = await admin
       .from('profiles')
-      .select('full_name, buddy_id, free_onboarding_used')
+      .select('full_name, buddy_id, free_onboarding_used, email')
       .eq('id', studentId)
       .single();
     if (!student) {
@@ -110,24 +110,40 @@ export async function POST(request: NextRequest) {
         : `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`
     );
 
-    // Daily.co room — the one provider (see postmortem above). If it fails,
-    // refuse the booking with a clear message rather than saving a dead link.
-    const end = new Date(start.getTime() + durationMinutes * 60_000);
-    const roomExp = new Date(end.getTime() + 6 * 60 * 60 * 1000); // expire 6h after the session
-    // A buddy may bring their OWN link (Google Meet, Zoom, anything). Founder,
-    // 5 Aug — after a first session that fell apart, a mentor should never be
-    // trapped inside our provider. A pasted link is used verbatim and NO Daily
-    // room is created for it.
+    // GOOGLE MEET is the provider (founder, 5 Aug). The link is minted on the
+    // MENTOR's own calendar, so a mentor must have connected Google — that is
+    // enforced here rather than at the UI alone, because a booking that saves
+    // without a working link is the failure Incident #3 exists to prevent.
+    //
+    // The student is invited by email only when we have one. Both current
+    // paying students signed up by PHONE and have none — they still get the
+    // link in-app and by push, exactly as before. A missing student email
+    // must never block a session.
+    let meetLink: string;
+    let googleEventId: string | null = null;
+
     const manualLink = typeof body.meetingLink === 'string' ? body.meetingLink.trim() : '';
-    if (manualLink && !/^https:\/\/\S+$/i.test(manualLink)) {
-      return NextResponse.json({ error: 'That meeting link does not look like a valid https link.' }, { status: 400 });
-    }
-    const meetLink = manualLink || await createDailyRoom({ expiresAt: roomExp });
-    if (!meetLink) {
-      return NextResponse.json(
-        { error: 'The video system is unavailable right now — please try again in a minute. (Admin: check /api/admin/video-health.)' },
-        { status: 503 }
-      );
+    if (manualLink) {
+      // A mentor may still paste their own room (a personal Meet, Zoom).
+      if (!/^https:\/\/\S+$/i.test(manualLink)) {
+        return NextResponse.json({ error: 'That meeting link does not look like a valid https link.' }, { status: 400 });
+      }
+      meetLink = manualLink;
+    } else {
+      const meet = await createGoogleMeet({
+        buddyUserId: user.id,
+        title,
+        description: `CareerRai 1:1 with ${student.full_name}.`,
+        start,
+        durationMinutes,
+        studentEmail: student.email ?? null,
+      });
+      if (!meet.ok) {
+        const status = meet.reason === 'not_connected' ? 428 : 502;
+        return NextResponse.json({ error: meet.error, reason: meet.reason }, { status });
+      }
+      meetLink = meet.meetLink;
+      googleEventId = meet.eventId;
     }
 
     // ── Supersede, don't duplicate ───────────────────────────────
@@ -166,6 +182,7 @@ export async function POST(request: NextRequest) {
         session_status: 'scheduled',
         session_type: isOrientation ? 'onboarding' : 'guidance',
         google_meet_link: meetLink, // reused as the generic "join link" column
+        google_event_id: googleEventId,
       })
       .select('id')
       .single();
