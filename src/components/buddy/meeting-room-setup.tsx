@@ -12,10 +12,12 @@ import { Video, Check, ChevronRight } from 'lucide-react';
 // seconds and can never be blocked by anyone but us.
 
 export function MeetingRoomSetup({
-  currentRoom, from = '/buddy/home',
+  currentRoom, from = '/buddy/home', googleStatus,
 }: {
   currentRoom: string | null;
   from?: string;
+  /** ?google= after a round trip: connected | denied | failed | unavailable */
+  googleStatus?: string | null;
 }) {
   const [link, setLink] = useState('');
   const [saving, setSaving] = useState(false);
@@ -97,6 +99,18 @@ export function MeetingRoomSetup({
             </a>
             , then copy the link from the address bar and paste it here.
           </p>
+
+          {googleStatus === 'unavailable' && (
+            <p className="mt-2 text-[12px] font-medium text-stone-600">
+              Google sign-in is being set up right now — paste your link above instead,
+              it works exactly the same for your students.
+            </p>
+          )}
+          {googleStatus === 'denied' && (
+            <p className="mt-2 text-[12px] font-medium text-stone-600">
+              Google didn&apos;t finish connecting. Pasting your link above works just as well.
+            </p>
+          )}
 
           {error && <p className="mt-2 text-[12px] font-medium text-red-700">{error}</p>}
 

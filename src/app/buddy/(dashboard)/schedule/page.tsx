@@ -11,6 +11,7 @@ export default async function BuddySchedulePage({
   searchParams,
 }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
+  const googleStatus = typeof params.google === 'string' ? params.google : null;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -52,7 +53,7 @@ export default async function BuddySchedulePage({
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         {/* Pasting a link beats waiting on Google's verification queue, so it
             leads. Google stays available as the "make one for me" shortcut. */}
-        <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/schedule" />
+        <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/schedule" googleStatus={googleStatus} />
         {/* The widget is ALWAYS shown now. Hiding it when Google was not
             connected meant a mentor lost the whole surface and had to go find
             the connect button elsewhere; the modal itself now leads with
