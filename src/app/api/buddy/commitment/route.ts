@@ -12,17 +12,31 @@ export async function POST(request: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { studentId, commitment, readState, sessionId, previousOutcome, dueOn } =
+  const { studentId, commitment, readState, sessionId, previousOutcome, dueOn, strength, weakness, assignments } =
     (await request.json()) as {
       studentId?: string; commitment?: string;
       readState?: 'on_track' | 'struggling' | 'worried';
       sessionId?: string | null; previousOutcome?: 'kept' | 'partial' | 'missed' | null;
       dueOn?: string | null;
+      strength?: string; weakness?: string;
+      assignments?: string[];
     };
 
   if (!studentId || !commitment?.trim()) {
     return NextResponse.json({ error: 'Pick or type what they committed to.' }, { status: 400 });
   }
+  // Feedback is now part of closing a call, not an optional extra (founder,
+  // 5 Aug). One line each — the student reads these verbatim.
+  if (!strength?.trim() || !weakness?.trim()) {
+    return NextResponse.json({ error: 'Add one strength and one thing to fix — your student sees both.' }, { status: 400 });
+  }
+
+  // Up to four tasks. More than that is a to-do list nobody starts.
+  const tasks = (assignments ?? [])
+    .map((t) => (typeof t === 'string' ? t.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((t) => t.slice(0, 200));
 
   const admin = createAdminClient();
   const { data: student } = await admin
@@ -48,8 +62,41 @@ export async function POST(request: NextRequest) {
     commitment: commitment.trim().slice(0, 300),
     read_state: readState ?? 'on_track',
     due_on: dueOn ?? null,
+    strength: strength.trim().slice(0, 300),
+    weakness: weakness.trim().slice(0, 300),
   }).select('id, commitment, read_state, due_on, created_at').single();
   if (error) return NextResponse.json({ error: "Couldn't save the commitment." }, { status: 500 });
+
+  // The tasks that back the promise. Written after the commitment so a failed
+  // insert here can never leave assignments pointing at a call that was never
+  // closed out.
+  if (tasks.length) {
+    const { error: taskError } = await admin.from('session_assignments').insert(
+      tasks.map((task, i) => ({
+        buddy_id: user.id,
+        student_id: studentId,
+        session_id: sessionId ?? null,
+        task,
+        position: i,
+      })),
+    );
+    // Reported, not fatal: the call IS closed and the promise IS saved. Losing
+    // the checklist is worse than losing nothing, but far worse would be
+    // telling a mentor their close-out failed after it succeeded.
+    if (taskError) console.error('[commitment] assignments insert failed:', taskError.message);
+  }
+
+  // Tell the student there is something waiting — a debrief nobody reads is
+  // the same as no debrief.
+  await admin.from('notifications').insert({
+    user_id: studentId,
+    type: 'session_debrief',
+    title: 'Your buddy left notes from the call',
+    body: tasks.length
+      ? `${tasks.length} thing${tasks.length > 1 ? 's' : ''} to do before next time.`
+      : 'Open your Buddy tab to see what went well and what to fix.',
+    data: { sessionId: sessionId ?? null },
+  }).then(({ error: e }) => { if (e) console.error('debrief notification failed:', e.message); });
 
   // Mark the session done — the gap that made a 10/10 orientation invisible.
   if (sessionId) {

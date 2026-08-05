@@ -673,10 +673,12 @@ arrives.
 
 **What makes the shared room safe (encoded):**
 1. `no_overlapping_buddy_sessions` — a GiST exclusion constraint over
-   `(buddy_id, session_span)`, where the span carries a **15-minute tail
-   buffer**. A call that runs long cannot drop a second student into a live 1:1.
-   That is a privacy guarantee, not politeness: sessions are where a student
-   says their real percentile out loud.
+   `(buddy_id, session_span)`. Sessions may sit flush (10:00–10:30 then
+   10:30–11:00) but never overlap. The span originally carried a 15-minute tail
+   buffer against a call running long; the founder removed it so a mentor can
+   run continuous calls on a free day, and the residual risk is covered by
+   Meet's knock-lobby — only the mentor is on the invite, so the next student
+   waits to be admitted rather than walking into a live 1:1.
 2. `one_live_session_per_pair` — a partial unique index. A second booking for a
    pair is **refused** with a message telling the mentor to cancel the first.
 3. Meet's own knock-lobby. Only the buddy is on the invite, so every student

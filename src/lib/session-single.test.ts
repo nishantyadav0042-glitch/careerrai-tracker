@@ -33,7 +33,9 @@ function pickSession(rows: Session[]): Session | null {
 }
 
 const LIVE = ['scheduled', 'active'] as const;
-const BUFFER_MINS = 15;
+// Founder, 5 Aug: no gap between sessions — a mentor may run continuous
+// calls on a free day. Sessions still cannot OVERLAP; they can only sit flush.
+const BUFFER_MINS = 0;
 
 /**
  * Mirrors the two DATABASE constraints that now govern booking:
@@ -54,8 +56,9 @@ function bookSession(
     return { ok: false, reason: 'session_exists' };
   }
   // Every session runs in the buddy's ONE permanent room, so two students in
-  // overlapping slots would be two students in the same room. The buffer
-  // covers the call that runs long.
+  // overlapping slots would be two students in the same room. Back-to-back is
+  // fine — Meet's knock-lobby holds the next student until the mentor admits
+  // them — but a genuine overlap never is.
   const spanOf = (s: { scheduledAt: string; durationMins: number }) => {
     const from = Date.parse(`${s.scheduledAt}Z`);
     return [from, from + (s.durationMins + BUFFER_MINS) * 60_000] as const;
@@ -153,22 +156,20 @@ describe('a buddy is never double-booked', () => {
   const at = (hhmm: string, studentId: string, durationMins = 30): Session & { buddyId: string; studentId: string; durationMins: number } =>
     ({ id: hhmm + studentId, scheduledAt: `2026-08-05T${hhmm}`, createdAt: '2026-08-05T10:00', status: 'scheduled', buddyId: 'vedashri', studentId, durationMins });
 
-  const existing = [at('19:00', 'harsh')]; // room busy 19:00 → 19:45 (30 + 15 buffer)
+  const existing = [at('19:00', 'harsh')]; // room busy 19:00 → 19:30
 
   it('refuses a straddling slot for a different student', () => {
     expect(bookSession(existing, at('19:20', 'sweccha'))).toEqual({ ok: false, reason: 'buddy_double_booked' });
   });
 
-  it('refuses a slot inside the run-over buffer', () => {
-    // 19:40 starts after Harsh's 30 minutes end but while the room is still
-    // reserved. Without this, a call running five minutes long drops another
-    // student into a live 1:1 — where the first is discussing their real
-    // percentile. The buffer is a privacy guarantee, not politeness.
-    expect(bookSession(existing, at('19:40', 'sweccha'))).toEqual({ ok: false, reason: 'buddy_double_booked' });
+  it('allows a back-to-back session the moment the first ends', () => {
+    // Founder, 5 Aug: a mentor clearing a free day should be able to run
+    // 19:00, 19:30, 20:00 without artificial gaps.
+    expect(bookSession(existing, at('19:30', 'sweccha')).ok).toBe(true);
   });
 
-  it('allows the next slot once the buffer has passed', () => {
-    expect(bookSession(existing, at('19:45', 'sweccha')).ok).toBe(true);
+  it('still refuses a slot that starts one minute before the first ends', () => {
+    expect(bookSession(existing, at('19:29', 'sweccha'))).toEqual({ ok: false, reason: 'buddy_double_booked' });
   });
 
   it('leaves a DIFFERENT buddy free at the same time', () => {

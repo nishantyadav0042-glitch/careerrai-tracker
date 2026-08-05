@@ -11,6 +11,7 @@ import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
 import { BuddyPanelTabs } from '@/components/buddy-panel-tabs';
 import { ChatThread } from '@/components/chat/chat-thread';
+import { SessionDebrief } from '@/components/student/session-debrief';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -51,7 +52,7 @@ export default async function BuddyPage({
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
 
-  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: feedbackRows }, chatUnread, messages] = await Promise.all([
+  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: feedbackRows }, chatUnread, messages, { data: debrief }, { data: assignments }] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio, avatar_url').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
@@ -110,6 +111,28 @@ export default async function BuddyPage({
       : Promise.resolve({ data: [] }),
     getChatUnreadCount(user.id, 'student'),
     buddyId ? fetchPairMessages(admin, { studentId: user.id, buddyId }, 50) : Promise.resolve([]),
+    // The last call's debrief: one strength, one thing to fix.
+    buddyId
+      ? admin
+          .from('session_commitments')
+          .select('strength, weakness, created_at')
+          .eq('student_id', user.id)
+          .eq('buddy_id', buddyId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Open tasks first; recently ticked ones stay visible so finishing the
+    // list feels like finishing something.
+    buddyId
+      ? admin
+          .from('session_assignments')
+          .select('id, task, completed_at')
+          .eq('student_id', user.id)
+          .order('created_at', { ascending: false })
+          .order('position', { ascending: true })
+          .limit(4)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
@@ -150,6 +173,14 @@ export default async function BuddyPage({
           restoring the card is this one line — but we do not ask students for
           a Google account in exchange for a promise the app no longer keeps.
         */}
+        {buddyId && (
+          <SessionDebrief
+            buddyFirstName={buddyName}
+            strength={debrief?.strength ?? null}
+            weakness={debrief?.weakness ?? null}
+            tasks={(assignments ?? []).map((a) => ({ id: a.id, task: a.task, completedAt: a.completed_at }))}
+          />
+        )}
         <BuddyPanelTabs
           chatUnread={chatUnread}
           overview={
