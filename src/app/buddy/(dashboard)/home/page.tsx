@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { BuddyTriageView } from './buddy-triage-view';
 import { MeetingWidget } from '@/components/meeting-widget';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
-import { GoogleConnectCard } from '@/components/google-connect-card';
+import { MeetingRoomSetup } from '@/components/buddy/meeting-room-setup';
 import { UrgentRequestsPanel } from './urgent-requests-panel';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -120,9 +120,7 @@ export default async function BuddyHomePage() {
           A mentor who cannot book needs to see the reason and the fix on the
           first screen they land on, not discover it three taps deep after
           filling in a booking form. Disappears the moment it's done. */}
-      {!readiness.ready && (
-        <GoogleConnectCard connected={readiness.googleConnected} email={readiness.googleEmail} from="/buddy/home" />
-      )}
+      {!readiness.ready && <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/home" />}
 
       {/* Next session widget */}
       <MeetingWidget

@@ -156,8 +156,26 @@ export async function ensureBuddyRoom(buddyUserId: string): Promise<BuddyRoom> {
     googleConnection(buddyUserId),
   ]);
 
+  // A room that is already set is a room. It does not matter whether Google
+  // minted it or the mentor pasted it — and this check comes FIRST, before any
+  // connection requirement.
+  //
+  // Requiring Google here was a design mistake. Google's verification wall
+  // ("this app is being tested, only approved testers can access it") is an
+  // external dependency that can block every mentor for days, and we made
+  // BOOKING depend on it. The product need was never the Calendar API; it was
+  // a stable link. A pasted link satisfies that need completely — the Calendar
+  // API only ever saved the mentor from creating one themselves.
+  if (profile?.buddy_meet_url && !profile.buddy_meet_event_id) {
+    // Manually set room: nothing to verify against Google, nothing to expire.
+    return { ok: true, meetUrl: profile.buddy_meet_url, eventId: null, created: false };
+  }
+
   if (!connection.connected) {
-    return { ok: false, reason: 'not_connected', error: messageFor('not_connected') };
+    return {
+      ok: false, reason: 'not_connected',
+      error: 'Set your meeting room first — paste your Meet link, or connect Google to have one made for you.',
+    };
   }
 
   if (profile?.buddy_meet_url) {
@@ -244,6 +262,8 @@ export interface BookingReadiness {
   ready: boolean;
   googleConnected: boolean;
   hasRoom: boolean;
+  /** The room itself — safe to show a mentor; it is the link they hand out. */
+  roomUrl: string | null;
   googleEmail: string | null;
   /** One sentence for the UI when `ready` is false. */
   blocker: string | null;
@@ -264,15 +284,16 @@ export async function buddyBookingReadiness(buddyUserId: string): Promise<Bookin
     googleConnection(buddyUserId),
   ]);
 
+  // Booking needs a ROOM, not a Google connection. A mentor who pasted their
+  // own Meet link is every bit as ready as one who connected Google — and is
+  // not hostage to Google's app-verification queue.
   const hasRoom = !!profile?.buddy_meet_url;
-  const ready = connection.connected && hasRoom;
   return {
-    ready,
+    ready: hasRoom,
     googleConnected: connection.connected,
     hasRoom,
+    roomUrl: profile?.buddy_meet_url ?? null,
     googleEmail: connection.email,
-    blocker: connection.connected
-      ? (hasRoom ? null : 'Your meeting room has not been created yet. Reconnect Google to set it up.')
-      : 'Connect your Google Calendar before booking a session.',
+    blocker: hasRoom ? null : 'Set your meeting room before booking a session.',
   };
 }

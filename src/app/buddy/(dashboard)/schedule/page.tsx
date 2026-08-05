@@ -4,14 +4,13 @@ import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MeetingWidget } from '@/components/meeting-widget';
-import { GoogleConnectCard } from '@/components/google-connect-card';
+import { MeetingRoomSetup } from '@/components/buddy/meeting-room-setup';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
 
 export default async function BuddySchedulePage({
   searchParams,
 }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  const googleStatus = typeof params.google === 'string' ? params.google : null;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -51,12 +50,9 @@ export default async function BuddySchedulePage({
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        <GoogleConnectCard
-          connected={readiness.googleConnected}
-          email={readiness.googleEmail}
-          from="/buddy/schedule"
-          status={googleStatus}
-        />
+        {/* Pasting a link beats waiting on Google's verification queue, so it
+            leads. Google stays available as the "make one for me" shortcut. */}
+        <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/schedule" />
         {/* The widget is ALWAYS shown now. Hiding it when Google was not
             connected meant a mentor lost the whole surface and had to go find
             the connect button elsewhere; the modal itself now leads with

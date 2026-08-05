@@ -356,11 +356,11 @@ export function ScheduleSessionModal({
                         one tap, put the tap right here. */}
                     {needsGoogle && (
                       <a
-                        href={connectHref}
+                        href="/buddy/schedule"
                         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-stone-900 shadow-sm ring-1 ring-stone-200 active:scale-[0.99]"
                         style={{ minHeight: 44 }}
                       >
-                        <GoogleMark /> Connect Google Calendar
+                        Set my meeting room
                       </a>
                     )}
                   </div>
@@ -381,7 +381,7 @@ export function ScheduleSessionModal({
                       Creating your Meet link…
                     </span>
                   ) : !isConnected ? (
-                    'Connect Google Calendar first'
+                    'Set your meeting room first'
                   ) : sessionType === 'onboarding' ? (
                     'Book Free Orientation'
                   ) : (

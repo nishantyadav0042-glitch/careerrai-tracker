@@ -25,6 +25,7 @@ export async function GET() {
     ready: readiness.ready,
     connected: readiness.googleConnected,
     hasRoom: readiness.hasRoom,
+    roomUrl: readiness.roomUrl,
     email: readiness.googleEmail,
     blocker: readiness.blocker,
   });

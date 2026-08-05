@@ -83,6 +83,17 @@ export function GoogleConnectCard({
             </p>
           )}
 
+          {/* Said BEFORE they tap, not after. When the Google project is in
+              Testing mode, Google blocks unlisted accounts on its own page and
+              never redirects back to us — so we cannot detect it, cannot show
+              an error, and the mentor is left on a dead end wondering what they
+              did wrong. A warning up front is the only thing that reaches them. */}
+          <p className="mt-2.5 text-[11.5px] leading-relaxed text-stone-500">
+            If Google says <span className="font-semibold">&ldquo;app is being tested&rdquo;</span> or
+            blocks you, your Google account just needs to be added to our approved
+            list — send us the exact address you used and we&apos;ll enable it.
+          </p>
+
           <a
             href={`/api/google/connect?from=${encodeURIComponent(from)}`}
             className="mt-3 inline-flex items-center justify-center rounded-xl bg-stone-900 px-4 py-2.5 text-[13px] font-bold text-white"
