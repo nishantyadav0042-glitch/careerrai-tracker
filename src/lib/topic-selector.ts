@@ -55,6 +55,13 @@ export interface TopicChoice {
   topic: string;
   score: number;
   reasons: string[];
+  /**
+   * The chosen topic's coverage status, carried out of the selector so the
+   * task VERB can match it. Without this the label was written from the
+   * calendar phase alone, so in August every task read "Learn X" — including
+   * topics the student had been practising for weeks. See Incident #20.
+   */
+  coverageStatus: CoverageStatus | null;
 }
 
 // Coverage status → points. REBALANCED after real student feedback (16 Jul:
@@ -187,7 +194,11 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
   const winnerCand = candidates.find((c) => c.topic === winner.topic)!;
   // The chosen topic leads with the expert "why"; keep a secondary keyword reason.
   const why = expertWhy(winnerCand, revisionMultiplier);
-  return { topic: winner.topic, score: winner.score, reasons: [why, ...winner.reasons].slice(0, 2) };
+  return {
+    topic: winner.topic, score: winner.score,
+    reasons: [why, ...winner.reasons].slice(0, 2),
+    coverageStatus: winnerCand.coverageStatus,
+  };
 }
 
 export type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';

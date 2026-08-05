@@ -8,6 +8,7 @@ import type { TopicChoice } from './topic-selector';
 
 // One Section union for the whole app — prep-model owns it.
 import type { Section } from '@/lib/prep-model';
+import type { CoverageStatus } from '@/lib/topic-selector';
 export type { Section };
 export type Phase = 'foundation' | 'intensive' | 'revision';
 
@@ -243,6 +244,33 @@ function taskVolume(section: Section, topic: string, minutes: number, phase: Pha
   return { count: Math.max(floor, Math.min(unitCap(unit, phase), raw)), unit };
 }
 
+/**
+ * The phase for ONE topic, from that topic's own coverage status.
+ *
+ * getPhase() above answers "where is this student in the CAT calendar" — a
+ * single value for the whole day. That is the right input for how much volume
+ * to price, but the WRONG input for the verb on a specific task: in August the
+ * calendar says 'foundation', so every task was labelled "Learn X" even for
+ * topics the student had already marked practising. A real student caught it
+ * (5 Aug): "jo already completed hai wahi aa rha phir se krne ko kyu?" — and
+ * the card contradicted itself, printing "Learn Editorial Reading" directly
+ * above the reason "Finish what you started."
+ *
+ * A topic's own status is specific evidence and beats the calendar guess —
+ * the same evidence-over-aspiration rule the replan engine follows. The
+ * calendar phase remains the fallback when a topic has no coverage row.
+ */
+export function phaseForTopic(status: CoverageStatus | null | undefined, calendarPhase: Phase): Phase {
+  switch (status) {
+    case 'not_started':
+    case 'learning':    return 'foundation'; // genuinely new — "Learn X" is right
+    case 'practicing':  return 'intensive';  // past learning — practise, don't re-teach
+    case 'revising':
+    case 'exam_ready':  return 'revision';   // retrieval, not first contact
+    default:            return calendarPhase;
+  }
+}
+
 // The instruction, in the topic's natural unit and the phase's verb.
 // EXPORTED as the one task-instruction builder: swap-topic and the tracker
 // card used to hand-roll a flat minutes/3 "questions" formula here, telling
@@ -319,7 +347,8 @@ export function generateRoutine(
     section: weak,
     topic: weakChoice.topic,
     label: `${weak} — ${weakChoice.topic}`,
-    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phase, volumeFactor),
+    // Verb from the TOPIC's status; volume still priced by the day's phase.
+    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phaseForTopic(weakChoice.coverageStatus, phase), volumeFactor),
     estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
@@ -333,7 +362,7 @@ export function generateRoutine(
       section,
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
-      target: targetPhrase(section, choice.topic, minutes, phase, volumeFactor),
+      target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase), volumeFactor),
       estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });

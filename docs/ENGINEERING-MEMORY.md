@@ -32,6 +32,7 @@
 | 17 | 2026-08-04 | One meeting, two truths — mentor lost Join at T+0 | Trust | 1st orientation |
 | 18 | 2026-08-04 | /welcome shipped with no login door | Growth | every returning user |
 | 19 | 2026-08-05 | Play rejected listing — screenshots the guide had banned | Growth / store | launch-blocking |
+| 20 | 2026-08-05 | Plan told a paying student to re-learn finished topics | Learning | every student |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
@@ -551,6 +552,47 @@
   description, exact resubmit clicks; linked from the freeze doc's status box
   so the next submitter lands on the checklist first.
 - **Owner:** founder (upload) + cofounder AI (pack)
+
+---
+
+## Incident #20 — the plan told a paying student to re-learn what he had finished
+
+- **Date:** 2026-08-05 · **Area:** Learning OS · **Severity:** P1
+- **Impact:** Our first premium student, to his buddy on Instagram: *"Bhaiya jo
+  already completed hai wahi aa rha phir se krne ko kyu?"* His plan told him to
+  **Learn** Editorial Reading and **Learn** Arrangements — both marked
+  *practising* by him weeks earlier. The buddy had no answer and went quiet.
+  Every student on the app saw this every day of August.
+- **Root cause:** the task VERB was written from `getPhase()`, which answers
+  "where is this student in the CAT **calendar**" — one value for the whole
+  day. In August that is `foundation` for everyone, so every task rendered as
+  "Learn X" regardless of what the student had already done on that topic.
+  The topic's own coverage status was loaded, scored and used to CHOOSE the
+  topic, then discarded before the label was written — `TopicChoice` never
+  carried it out of the selector.
+- **How it hid:** the card contradicted itself in plain sight and no test
+  compared the two halves. `expertWhy()` read the coverage status and printed
+  *"Finish what you started."* directly under a heading that said *"Learn…"*.
+  Both were rendered from the same object, from different sources. It was
+  invisible to us because a self-consistent-looking card is only wrong if you
+  know what the student already did.
+- **Lessons:**
+  1. **Calendar is a guess; status is evidence — evidence wins.** The same rule
+     the replan engine adopted hours earlier after a student's declared 12
+     hrs/day outranked his two logged sessions. Two engines, one disease.
+  2. **When one card is built from two sources, test that they agree.** A
+     contradiction inside a single UI element is a class of bug, not a typo.
+  3. **The student is the best test suite we have.** 338 passing tests and a
+     paying customer found this in one glance at his own plan.
+- **Prevention (encoded):** `phaseForTopic()` in `routine-engine.ts` is the one
+  place a task verb is decided, and it reads the topic's status first, falling
+  back to the calendar only when a topic has no coverage row. `TopicChoice`
+  now carries `coverageStatus` out of the selector. `task-verb.test.ts` pins
+  the rule in both directions — a practised topic is never "Learn", a
+  never-started topic is still "Learn" even in November — and replays Harsh's
+  exact three cards from 5 Aug as a regression. The swap-topic route was
+  carrying the identical fault and is fixed in the same commit.
+- **Owner:** cofounder (AI)
 
 ---
 

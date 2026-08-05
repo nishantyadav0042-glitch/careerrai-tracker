@@ -1,4 +1,5 @@
-import { targetPhrase, type Section, type Phase } from '@/lib/routine-engine';
+import { phaseForTopic, targetPhrase, type Section, type Phase } from '@/lib/routine-engine';
+import type { CoverageStatus } from '@/lib/topic-selector';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -55,7 +56,19 @@ export async function POST(request: NextRequest) {
   const oldTopic = task.topic as string;
   task.topic = newTopic;
   task.label = `${task.section} — ${newTopic}`;
-  task.target = targetPhrase(task.section as Section, newTopic, task.estMinutes as number, (routine.phase as Phase) ?? 'foundation');
+  // Verb follows the NEW topic's own status, not the day's calendar phase —
+  // swapping to a topic you already practise must not say "Learn" it.
+  // Same fault as Incident #20, which shipped from the generator side.
+  const { data: swapCoverage } = await admin
+    .from('topic_coverage')
+    .select('status')
+    .eq('student_id', user.id)
+    .eq('topic', newTopic)
+    .maybeSingle();
+  task.target = targetPhrase(
+    task.section as Section, newTopic, task.estMinutes as number,
+    phaseForTopic(swapCoverage?.status as CoverageStatus | null, (routine.phase as Phase) ?? 'foundation'),
+  );
   task.reason = 'You picked this today — your plan, your call.';
 
   // Never delete, always postpone: the swapped-out topic is recorded and
