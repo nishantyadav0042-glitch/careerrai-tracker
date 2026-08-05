@@ -13,6 +13,7 @@ import { OrientationCompleteButton } from './orientation-complete-button';
 import { sessionsVisibleFrom } from '@/lib/session-window';
 import { BriefingPanel } from './briefing-panel';
 import { StudentDossier } from '@/components/student-dossier';
+import { BuddyCockpit } from '@/components/buddy/cockpit';
 import { StudyPlanFeed } from './study-plan-feed';
 import { PreparationDNA } from './preparation-dna';
 import type { DailyReport, BuddyFeedback } from '@/types';
@@ -131,7 +132,7 @@ export default async function BuddyStudentDetailPage({
 
   const { data: student } = await admin
     .from('profiles')
-    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges')
+    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, pain_points, need_check, self_reported_weakest_section, syllabus_target_date')
     .eq('id', id)
     .single();
   if (!student || student.buddy_id !== user.id) notFound();
@@ -261,6 +262,25 @@ export default async function BuddyStudentDetailPage({
       <Link href="/buddy/students" className="flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900">
         <ArrowLeft className="w-4 h-4" /> Back to students
       </Link>
+
+      {/* THE COCKPIT (founder, 5 Aug) — everything a mentor needs in the three
+          minutes before a call, above everything else on the page. */}
+      <BuddyCockpit
+        studentId={id}
+        buddyId={user.id}
+        fullName={student.full_name}
+        painPoints={(student.pain_points as string[] | null) ?? null}
+        needCheck={(student.need_check as string | null) ?? null}
+        dreamColleges={(student.dream_colleges as string[] | null) ?? null}
+        targetPercentile={student.target_percentile ? Number(student.target_percentile) : null}
+        weakestSection={(student.self_reported_weakest_section as string | null) ?? null}
+        coachingEnrolled={student.coaching_enrolled ?? null}
+        hoursAvailable={student.hours_available ?? null}
+        isRepeater={student.is_repeater ?? null}
+        isWorkingProfessional={student.is_working_professional ?? null}
+        syllabusTargetDate={(student.syllabus_target_date as string | null) ?? null}
+        nextSession={(upcomingSessions ?? [])[0] ?? null}
+      />
 
       <div className="px-1">
         <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Diagnosis view</p>
