@@ -53,7 +53,6 @@ export interface BuddyFeedback {
   student_id: string;
   feedback_date: string;
   feedback_text: string | null;
-  voice_note_url: string | null;
   feedback_type: 'buddy_feedback' | 'student_response' | 'text';
   rating: number;
   next_steps: string[];

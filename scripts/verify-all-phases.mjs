@@ -75,8 +75,6 @@ await page('/buddy/home', B, ['Students'], 'buddy home (triage) loads w/o redire
 await page('/buddy/setup', B, ['intro'], 'buddy setup page');
 
 console.log('PHASE 7 — Voice notes');
-await api('/api/voice-notes/send', 'voice note send API');
-await api('/api/voice-notes/mark-read', 'voice note read-receipt API');
 
 console.log('PHASE 8 — Journey timeline');
 await page('/student/journey', S, ['Journey', 'Timeline'], 'journey page');

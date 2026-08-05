@@ -20,7 +20,7 @@ export const metadata = {
 
 // Buddy and Chat used to be two separate bottom-nav destinations for the
 // same relationship. Merged: one screen, two tabs — Buddy (sessions,
-// feedback, voice notes) and Chat (messages), instead of splitting
+// feedback) and Chat (messages), instead of splitting
 // "everything about your buddy" across two nav slots.
 export default async function BuddyPage({
   searchParams,
@@ -95,7 +95,6 @@ export default async function BuddyPage({
           .select(`
             id,
             feedback_text,
-            voice_note_url,
             created_at,
             buddy_id,
             read_at,
@@ -142,21 +141,6 @@ export default async function BuddyPage({
   const hasPendingRequest = (pendingRequests?.length ?? 0) > 0;
   const sessions = [...(upcoming ?? []), ...(recentCompleted ?? [])];
 
-  // Pre-sign voice note URLs so VoiceNotePlayer renders immediately with no client-side round-trips.
-  const voiceRows = (feedbackRows ?? []).filter((r) => r.voice_note_url);
-  const signedUrlMap: Record<string, string> = {};
-  if (voiceRows.length > 0) {
-    const toPath = (urlOrPath: string) => {
-      const marker = '/object/public/voice-notes/';
-      const idx = urlOrPath.indexOf(marker);
-      return idx >= 0 ? urlOrPath.slice(idx + marker.length) : urlOrPath;
-    };
-    const paths = voiceRows.map((r) => toPath(r.voice_note_url!));
-    const { data: signed } = await admin.storage.from('voice-notes').createSignedUrls(paths, 3600);
-    if (signed) {
-      signed.forEach((s, i) => { if (s.signedUrl) signedUrlMap[voiceRows[i].id] = s.signedUrl; });
-    }
-  }
 
   const nextSession = (upcoming ?? [])[0] ?? null;
 
@@ -194,7 +178,6 @@ export default async function BuddyPage({
               nextSession={nextSession}
               hasPendingRequest={hasPendingRequest}
               feedbackRows={feedbackRows}
-              signedUrlMap={signedUrlMap}
               now={now}
             />
           }

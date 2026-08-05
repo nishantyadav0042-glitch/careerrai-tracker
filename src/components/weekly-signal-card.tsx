@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
-import { Mic, Send, Check, Sparkles, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { Send, Check, Sparkles, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface WeeklyStats {
@@ -17,11 +17,10 @@ interface WeeklyStats {
 interface WeeklySignalCardProps {
   studentId: string;
   studentName: string;
-  onVoiceNote: () => void;
   onFeedback: () => void;
 }
 
-export function WeeklySignalCard({ studentId, studentName, onVoiceNote, onFeedback }: WeeklySignalCardProps) {
+export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklySignalCardProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [stats, setStats] = useState<WeeklyStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,14 +123,6 @@ export function WeeklySignalCard({ studentId, studentName, onVoiceNote, onFeedba
 
       {/* Action Buttons */}
       <div className="flex gap-2">
-        <button
-          onClick={() => { onVoiceNote(); setActed(true); }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-all text-xs font-semibold"
-          style={{ minHeight: 44 }}
-        >
-          <Mic className="w-3.5 h-3.5" />
-          Voice note
-        </button>
         <button
           onClick={() => { setActed(true); }}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-all text-xs font-semibold"

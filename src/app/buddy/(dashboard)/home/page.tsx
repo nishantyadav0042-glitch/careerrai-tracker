@@ -2,8 +2,6 @@ import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { BuddyTriageView } from './buddy-triage-view';
-import { StudentVoiceNotesSection } from './student-voice-notes-section';
-import { BuddyQuickVoiceMessage } from '@/components/buddy-quick-voice-message';
 import { MeetingWidget } from '@/components/meeting-widget';
 import { UrgentRequestsPanel } from './urgent-requests-panel';
 import { Settings, LogOut, Plus } from 'lucide-react';
@@ -136,7 +134,6 @@ export default async function BuddyHomePage() {
       <section>
         <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Quick voice message</p>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <BuddyQuickVoiceMessage buddyId={user.id} buddyName={profile?.full_name || 'Buddy'} />
         </div>
       </section>
 
@@ -144,7 +141,6 @@ export default async function BuddyHomePage() {
       <section>
         <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Student voice notes</p>
         <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <StudentVoiceNotesSection buddyId={user.id} />
         </div>
       </section>
 

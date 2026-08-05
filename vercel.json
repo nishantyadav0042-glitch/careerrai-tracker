@@ -65,10 +65,6 @@
       "schedule": "0 15 * * *"
     },
     {
-      "path": "/api/admin/cleanup-voice-notes",
-      "schedule": "0 2 1,11,21 * *"
-    },
-    {
       "path": "/api/cron/expire-subscriptions",
       "schedule": "0 3 * * *"
     },

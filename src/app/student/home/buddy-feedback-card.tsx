@@ -3,14 +3,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { MessageSquare, Mic, Volume2 } from 'lucide-react';
-import { VoiceNotePlayer } from '@/components/voice-note-player';
-import { VoiceNoteRecorder } from '@/components/voice-note-recorder';
+import { MessageSquare } from 'lucide-react';
 
 interface BuddyFeedback {
   id: string;
   feedback_text: string | null;
-  voice_note_url: string | null;
   created_at: string;
   buddy_id: string;
   buddy_name: string;
@@ -23,7 +20,6 @@ interface BuddyFeedback {
 type RawFeedbackRow = {
   id: string;
   feedback_text: string | null;
-  voice_note_url: string | null;
   created_at: string;
   buddy_id: string;
   read_at: string | null;
@@ -35,7 +31,6 @@ function formatRows(rows: RawFeedbackRow[]): BuddyFeedback[] {
   return rows.map((f) => ({
     id: f.id,
     feedback_text: f.feedback_text,
-    voice_note_url: f.voice_note_url,
     created_at: f.created_at,
     buddy_id: f.buddy_id,
     buddy_name: f.profiles?.full_name || 'Buddy',
@@ -51,18 +46,15 @@ interface BuddyFeedbackCardProps {
   buddyName: string;
   /** Pre-fetched on the server — avoids a client-side loading flash on first paint */
   initialFeedbacks?: RawFeedbackRow[];
-  /** Server-pre-signed URLs keyed by feedback id — lets VoiceNotePlayer render without client round-trips */
-  initialSignedUrls?: Record<string, string>;
 }
 
-export function BuddyFeedbackCard({ studentId, buddyId, buddyName, initialFeedbacks, initialSignedUrls }: BuddyFeedbackCardProps) {
+export function BuddyFeedbackCard({ studentId, buddyId, buddyName, initialFeedbacks }: BuddyFeedbackCardProps) {
   const supabase = createClient();
   const [feedbacks, setFeedbacks] = useState<BuddyFeedback[]>(() =>
     initialFeedbacks ? formatRows(initialFeedbacks) : []
   );
   // If initial data was supplied by the server, skip the loading state entirely.
   const [loading, setLoading] = useState(!initialFeedbacks);
-  const [showRecorder, setShowRecorder] = useState(false);
 
   const fetchFeedbacks = useCallback(async () => {
     try {
@@ -78,7 +70,6 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName, initialFeedba
         .select(`
           id,
           feedback_text,
-          voice_note_url,
           created_at,
           buddy_id,
           read_at,
@@ -164,54 +155,11 @@ export function BuddyFeedbackCard({ studentId, buddyId, buddyName, initialFeedba
               </div>
             )}
 
-            {/* Audio Feedback */}
-            {feedback.voice_note_url && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-teal-700 font-medium">
-                  <Volume2 className="w-4 h-4" />
-                  <span>Voice message from {feedback.buddy_name}</span>
-                </div>
-                <VoiceNotePlayer
-                  audioUrl={feedback.voice_note_url}
-                  buddyName={feedback.buddy_name}
-                  buddyCollege={feedback.buddy_college}
-                  createdAt={feedback.created_at}
-                  feedbackId={feedback.id}
-                  initialSignedUrl={initialSignedUrls?.[feedback.id]}
-                  isNew={!feedback.read_at}
-                  thanked={!!feedback.thanked_at}
-                  canThank
-                />
-              </div>
-            )}
           </div>
         ))
       )}
 
-      {/* Record Response Button */}
-      <button
-        onClick={() => setShowRecorder(true)}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition-colors text-sm"
-      >
-        <Mic className="w-4 h-4" />
-        Record voice response
-      </button>
 
-      {/* Voice Recorder Modal */}
-      {showRecorder && (
-        <VoiceNoteRecorder
-          studentId={studentId}
-          buddyId={buddyId}
-          studentName={buddyName}
-          isOpen={showRecorder}
-          onClose={() => setShowRecorder(false)}
-          onSendComplete={() => {
-            setShowRecorder(false);
-            fetchFeedbacks();
-          }}
-          feedbackType="student_response"
-        />
-      )}
     </div>
   );
 }

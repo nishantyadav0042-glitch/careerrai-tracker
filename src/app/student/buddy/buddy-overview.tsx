@@ -33,7 +33,6 @@ export function BuddyOverview({
   nextSession,
   hasPendingRequest,
   feedbackRows,
-  signedUrlMap,
   now,
 }: {
   studentId: string;
@@ -46,7 +45,6 @@ export function BuddyOverview({
   hasPendingRequest: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   feedbackRows: any;
-  signedUrlMap: Record<string, string>;
   now: number;
 }) {
   return (
@@ -117,7 +115,7 @@ export function BuddyOverview({
         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
           <p className="text-stone-600 font-medium">Finding your IIM mentor</p>
           <p className="text-sm text-stone-400 mt-1">
-            We&apos;re matching you with the right mentor now — your sessions and voice notes will appear here within 24 hours.
+            We&apos;re matching you with the right mentor now — your sessions and notes will appear here within 24 hours.
           </p>
         </div>
       ) : (
@@ -235,7 +233,6 @@ export function BuddyOverview({
             buddyId={buddyId}
             buddyName={buddy?.full_name ?? 'Buddy'}
             initialFeedbacks={feedbackRows ?? []}
-            initialSignedUrls={signedUrlMap}
           />
         </>
       )}

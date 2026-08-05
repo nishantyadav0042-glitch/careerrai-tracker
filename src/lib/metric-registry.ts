@@ -98,7 +98,7 @@ export const METRICS: MetricDef[] = [
     source: 'streak_data',
     requires: ['current_streak', 'last_log_date'],
     owner: 'lib/streak-utils.liveStreak',
-    surfaces: ['student home', 'admin lists', 'mentor drafts', 'voice-note nudge'],
+    surfaces: ['student home', 'admin lists', 'mentor drafts'],
   },
   {
     id: 'otp_sends',

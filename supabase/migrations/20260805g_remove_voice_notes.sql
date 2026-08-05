@@ -1,0 +1,27 @@
+-- Voice notes removed (founder, 5 Aug: "if voice note is not working then
+-- remove it").
+--
+-- What the data actually showed, before removing anything:
+--   · 20 audio files in storage, ZERO rows referencing any of them
+--   · every file dated 7-11 June, all from one uploader pair — a single
+--     testing session, never real mentor use
+--   · nothing recorded in the ~2 months since
+--
+-- The feature was not broken so much as self-destructing: voice-cleanup.ts ran
+-- on a 10-day retention and deleted every row. So a mentor's note vanished
+-- within ten days, and a student returning later found nothing. The file
+-- delete used a different path convention than the stored URL, so the audio
+-- was orphaned rather than removed — which is why storage kept 20 files that
+-- no row had pointed to for weeks.
+--
+-- Replaced by things that keep what they capture: the session debrief (one
+-- strength, one weakness, up to 4 tasks) and chat attachments.
+--
+-- The column is dropped rather than left behind because it holds no data:
+-- verified zero non-null values before running this.
+alter table public.buddy_feedback drop column if exists voice_note_url;
+
+-- The `voice-notes` bucket and its 20 orphaned test files remain: Supabase
+-- blocks deleting storage rows via SQL (storage.protect_delete). They are
+-- unreachable — no referencing row means no UI path — and total ~2 MB. Remove
+-- the bucket from the Storage dashboard when convenient.

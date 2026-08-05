@@ -7,9 +7,8 @@ import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { loadBuddyStudents, getSeverityColor, getSeverityEmoji } from '@/lib/urgency-score';
 import { StudentUrgencyData } from '@/lib/urgency-score';
-import { Mic, Video, ArrowRight, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { MessageSquare, Video, ArrowRight, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { VoiceNoteRecorder } from '@/components/voice-note-recorder';
 import { ScheduleSessionModal } from '@/components/schedule-session-modal';
 
 interface BuddyTriageViewProps {
@@ -23,7 +22,6 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'critical' | 'warning'>('all');
   const [calendarConnected, setCalendarConnected] = useState(false);
-  const [recordFor, setRecordFor] = useState<StudentUrgencyData | null>(null);
   const [scheduleFor, setScheduleFor] = useState<StudentUrgencyData | null>(null);
 
   const loadStudents = useCallback(async () => {
@@ -243,13 +241,17 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 pt-2">
+                  {/* Was "Voice note" until voice notes were removed (5 Aug).
+                      The action a mentor wanted here is "reach this student
+                      now", and chat is the surviving way to do that — it also
+                      takes attachments, which a voice note never could. */}
                   <button
-                    onClick={() => setRecordFor(student)}
+                    onClick={() => router.push(`/buddy/chat/${student.student_id}`)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-all text-sm font-medium"
                     style={{ minHeight: 44 }}
                   >
-                    <Mic className="w-4 h-4" />
-                    Voice note
+                    <MessageSquare className="w-4 h-4" />
+                    Message
                   </button>
 
                   <button
@@ -276,18 +278,6 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
         </div>
       )}
 
-      {/* Voice note bottom sheet for the picked student */}
-      {recordFor && (
-        <VoiceNoteRecorder
-          studentId={recordFor.student_id}
-          buddyId={buddyId}
-          studentName={recordFor.student_name}
-          isOpen={!!recordFor}
-          onClose={() => setRecordFor(null)}
-          onSendComplete={() => { setRecordFor(null); loadStudents(); }}
-          feedbackType="buddy_feedback"
-        />
-      )}
 
       {/* Schedule modal for the picked student */}
       {scheduleFor && (

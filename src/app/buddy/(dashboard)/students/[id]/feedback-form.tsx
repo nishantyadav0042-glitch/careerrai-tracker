@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Send, Star, Volume2, Sparkles, Loader2 } from 'lucide-react';
-import { VoiceNotePlayer } from '@/components/voice-note-player';
+import { Send, Star, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import type { BuddyFeedback } from '@/types';
@@ -187,16 +186,6 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-stone-600">Responded {new Date(resp.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                 </div>
-                {resp.voice_note_url && (
-                  <div className="mb-2">
-                    <VoiceNotePlayer
-                      feedbackId={resp.id}
-                      audioUrl={resp.voice_note_url}
-                      buddyName={studentFirstName}
-                      createdAt={resp.created_at}
-                    />
-                  </div>
-                )}
                 {resp.feedback_text && (
                   <p className="text-sm text-stone-800">{resp.feedback_text}</p>
                 )}
@@ -213,17 +202,6 @@ export function FeedbackList({ initial, studentId, studentFirstName }: { initial
           <div className="space-y-2">
             {feedbackList.map((f) => (
               <Card key={f.id} className="p-4">
-                {f.voice_note_url && (
-                  <div className="mb-3">
-                    <VoiceNotePlayer
-                      feedbackId={f.id}
-                      audioUrl={f.voice_note_url}
-                      buddyName="You"
-                      createdAt={f.created_at}
-                    />
-                  </div>
-                )}
-
                 {/* Date and Rating */}
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-stone-600">{new Date(f.feedback_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>

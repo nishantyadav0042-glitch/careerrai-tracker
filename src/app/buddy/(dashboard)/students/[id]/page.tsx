@@ -546,32 +546,6 @@ export default async function BuddyStudentDetailPage({
         daysSinceLastSession={daysSinceLastSession}
       />
 
-      {/* Voice notes */}
-      {feedback.some((f) => f.voice_note_url) && (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2.5">Voice notes you sent</p>
-          <div className="space-y-1.5">
-            {feedback
-              .filter((f) => f.voice_note_url)
-              .slice(0, 5)
-              .map((f) => {
-                const listened = !!(f as unknown as { read_at: string | null }).read_at;
-                const thanked = !!(f as unknown as { thanked_at: string | null }).thanked_at;
-                return (
-                  <div key={f.id} className="flex items-center justify-between gap-2 text-xs py-1.5 px-2 rounded-lg bg-stone-50">
-                    <span className="text-stone-600">
-                      🎤 {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
-                    <span className={cn('font-medium', listened ? 'text-emerald-600' : 'text-stone-400')}>
-                      {thanked ? '❤️ Loved it' : listened ? '✓ Listened' : 'Not played yet'}
-                    </span>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
       {/* Feedback form */}
       <div id="feedback-section">
         <FeedbackList initial={feedback} studentId={id} studentFirstName={firstName} />
