@@ -31,6 +31,8 @@ import { Flame, CalendarCheck } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
+import { computeBreach, isAlertable } from '@/lib/plan-breach';
+import { BreachAlert } from '@/components/home/breach-alert';
 
 export const metadata = {
   title: 'CareerRai',
@@ -155,6 +157,25 @@ export default async function DailyTrackerPage() {
         completedPct: completedByTopics,
       }
     : null;
+  // Plan breach (founder, 5 Aug): the red alert when a student stops living
+  // inside the plan they set. Computed from the SAME pace object the card
+  // shows, so the alert can never contradict the number above it.
+  // observedPerDay is the honest denominator — logged hours over the days
+  // since the first log in the window, not over days they bothered to log.
+  const last21 = (logs ?? []).slice(0, 21);
+  const observedPerDay = last21.length > 0
+    ? last21.reduce((sum, l) => sum + Number(l.study_duration ?? 0), 0) / Math.max(last21.length, 7)
+    : null;
+  const breach = pace && targetIso
+    ? computeBreach({
+        lastLogDate: streakRow?.last_log_date ?? null,
+        requiredPerDay: pace.requiredPerDay,
+        observedPerDay,
+        daysToTarget: pace.daysLeft,
+        today: now,
+      })
+    : null;
+
   const targetLabel = targetIso
     ? new Date(targetIso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
     : null;
@@ -435,6 +456,9 @@ export default async function DailyTrackerPage() {
               log      — record what happened
               insight  — yesterday's pattern (and the install hook in a browser)
               coaching — their coaching's daily share, or the upload entry */}
+        {/* The red alert outranks every block. A student off their own plan
+            should not have to scroll past today's tip to learn it. */}
+        {breach && isAlertable(breach.level) && <BreachAlert breach={breach} />}
         {blockOrder.map((b: HomeBlock) => {
           if (b === 'action') return (
             /* NextActionCard ("DO THIS NEXT") REMOVED 29 Jul, on the taps —
