@@ -199,6 +199,9 @@ export default async function BuddyStudentDetailPage({
       // row vanished at T+0 and took the Join button with it (4 Aug).
       .gte('scheduled_at', sessionsVisibleFrom())
       .order('scheduled_at', { ascending: true })
+      // Tie-break: two sessions at the same minute must resolve IDENTICALLY on
+      // the student's phone and the buddy's, or they join different rooms.
+      .order('created_at', { ascending: false })
       .limit(3),
     admin
       .from('video_sessions')

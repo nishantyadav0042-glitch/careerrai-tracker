@@ -8,6 +8,8 @@ const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solvin
 type SessionType = typeof ALLOWED_SESSION_TYPES[number];
 
 interface ScheduleMeetingRequest {
+  /** Optional: the buddy's own link (Meet/Zoom). Used verbatim; skips Daily. */
+  meetingLink?: string;
   studentId: string;
   startTime: string; // ISO 8601
   durationMinutes: number;
@@ -112,12 +114,44 @@ export async function POST(request: NextRequest) {
     // refuse the booking with a clear message rather than saving a dead link.
     const end = new Date(start.getTime() + durationMinutes * 60_000);
     const roomExp = new Date(end.getTime() + 6 * 60 * 60 * 1000); // expire 6h after the session
-    const meetLink = await createDailyRoom({ expiresAt: roomExp });
+    // A buddy may bring their OWN link (Google Meet, Zoom, anything). Founder,
+    // 5 Aug — after a first session that fell apart, a mentor should never be
+    // trapped inside our provider. A pasted link is used verbatim and NO Daily
+    // room is created for it.
+    const manualLink = typeof body.meetingLink === 'string' ? body.meetingLink.trim() : '';
+    if (manualLink && !/^https:\/\/\S+$/i.test(manualLink)) {
+      return NextResponse.json({ error: 'That meeting link does not look like a valid https link.' }, { status: 400 });
+    }
+    const meetLink = manualLink || await createDailyRoom({ expiresAt: roomExp });
     if (!meetLink) {
       return NextResponse.json(
         { error: 'The video system is unavailable right now — please try again in a minute. (Admin: check /api/admin/video-health.)' },
         { status: 503 }
       );
+    }
+
+    // ── Supersede, don't duplicate ───────────────────────────────
+    // Incident #21 (5 Aug): "reschedule" only ever INSERTED, leaving every
+    // earlier session live. One pair accumulated FOUR live sessions with FOUR
+    // different rooms in a single evening. Because every surface picks the
+    // first row by scheduled_at — and two of them shared the SAME minute, so
+    // the tie-break was undefined — the student's phone and the mentor's phone
+    // could resolve to DIFFERENT rooms from identical data. The mentor said it
+    // out loud: "I am in separate meeting with Harsh." Each re-render could
+    // land somewhere else, which is what she experienced as "getting dropped
+    // off multiple times". The provider was never the problem.
+    //
+    // A pair has at most ONE live session. Booking a new one cancels the rest,
+    // BEFORE the insert, so there is no window where two are live at once.
+    const { error: supersedeError } = await admin
+      .from('video_sessions')
+      .update({ session_status: 'cancelled' })
+      .eq('buddy_id', user.id)
+      .eq('student_id', studentId)
+      .eq('session_status', 'scheduled');
+    if (supersedeError) {
+      console.error('superseding prior sessions failed:', supersedeError.message);
+      return NextResponse.json({ error: "Couldn't replace the earlier session — try again." }, { status: 500 });
     }
 
     // ── Persist session ──────────────────────────────────────────

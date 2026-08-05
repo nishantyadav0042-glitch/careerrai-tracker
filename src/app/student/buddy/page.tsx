@@ -60,6 +60,9 @@ export default async function BuddyPage() {
       .eq('session_status', 'scheduled')
       .gte('scheduled_at', sessionsVisibleFrom(now))
       .order('scheduled_at', { ascending: true })
+      // Tie-break: two sessions at the same minute must resolve IDENTICALLY on
+      // the student's phone and the buddy's, or they join different rooms.
+      .order('created_at', { ascending: false })
       .limit(5),
     // Completed within last 7 days — dashboard cleanup: older sessions go to History
     // VIEW FILTER ONLY — no data is ever deleted, all sessions persist forever

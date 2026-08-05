@@ -33,6 +33,7 @@
 | 18 | 2026-08-04 | /welcome shipped with no login door | Growth | every returning user |
 | 19 | 2026-08-05 | Play rejected listing — screenshots the guide had banned | Growth / store | launch-blocking |
 | 20 | 2026-08-05 | Plan told a paying student to re-learn finished topics | Learning | every student |
+| 21 | 2026-08-05 | A pair sent to two different video rooms | Trust | 1st paying student |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
@@ -592,6 +593,51 @@
   never-started topic is still "Learn" even in November — and replays Harsh's
   exact three cards from 5 Aug as a regression. The swap-topic route was
   carrying the identical fault and is fixed in the same commit.
+- **Owner:** cofounder (AI)
+
+---
+
+## Incident #21 — a pair in two different rooms: "I am in separate meeting with Harsh"
+
+- **Date:** 2026-08-05 · **Area:** Trust OS · **Severity:** P0 (paying customer)
+- **Impact:** Our first paying student and his mentor could not get into the
+  same call across THREE attempts in one evening (16:30, 19:00, 19:30). The
+  mentor reported *"Your meeting link is not good"* and *"I have been getting
+  dropped off multiple times"*, then moved the session to a personal Google
+  Meet — which in turn hit a permission wall. The founder, holding a link we
+  gave him, was in yet another room.
+- **Root cause:** `schedule-meeting` only ever INSERTed. "Rescheduling" created
+  a NEW session with a NEW Daily room and left every earlier one `scheduled`.
+  That pair accumulated **four live sessions with four different rooms**. Every
+  surface then picked "the first row by `scheduled_at`" — and two of the four
+  shared the SAME MINUTE, so the sort key was tied and the database was free to
+  return a different winner per query. The student's phone could resolve to one
+  room and the mentor's to another, from identical data, and a re-render could
+  move either of them again — experienced as being "dropped".
+- **How it hid:** every individual piece was healthy. The Daily key worked, the
+  rooms existed, were public and unexpired, and `/api/admin/video-health`
+  passed. We had verified *a* room end-to-end and concluded "video works" —
+  the real question was never "does the room work" but **"are both people
+  looking at the same room?"** Nothing in the product or the tests asked that.
+- **Lessons:**
+  1. **Reschedule is an UPDATE, never an INSERT.** Anything that models "the
+     next X" must have exactly one live row, enforced at the write.
+  2. **A tied sort key is a coin toss.** Ordering that two clients depend on
+     agreeing about must be total — Incident #5's "count and list from the same
+     function" rule, applied to ordering.
+  3. **Verifying one artifact is not verifying the system.** We proved the room
+     joined; we never proved both people were sent to it.
+  4. **Blaming the vendor is the expensive mistake.** The instinct was to
+     replace Daily. The provider was innocent, and switching would have carried
+     the same bug to Google Meet — two live sessions means two Meet links.
+- **Prevention (encoded):** `schedule-meeting` cancels a pair's live sessions
+  BEFORE inserting the new one, so there is no window with two. All four
+  session queries carry a deterministic `created_at DESC` tie-break.
+  `session-single.test.ts` replays the exact five rows from this evening and
+  asserts both that a pair can never hold two live sessions and that two
+  clients given the same rows in different orders resolve to the same session.
+  A buddy may now also supply their OWN meeting link (Meet/Zoom), used verbatim
+  with no Daily room — a mentor should never be trapped inside our provider.
 - **Owner:** cofounder (AI)
 
 ---
