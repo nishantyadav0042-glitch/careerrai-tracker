@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
 import { statusFor } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
+import { constraintFailure } from '@/lib/booking-constraints';
+import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -55,6 +57,12 @@ export async function POST(request: NextRequest) {
     if (!buddy || buddy.role !== 'buddy') {
       return NextResponse.json({ error: 'Only buddies can schedule sessions.' }, { status: 403 });
     }
+
+    // A double tap on a slow connection is one booking, not two. Checked here,
+    // before any work, so a replay costs a single indexed read.
+    const idemKey = idempotencyKey(request);
+    const replay = await replayIdempotent(user.id, 'schedule-meeting', idemKey);
+    if (replay) return replay;
 
     // ── Validate input ───────────────────────────────────────────
     let body: ScheduleMeetingRequest;
@@ -135,12 +143,15 @@ export async function POST(request: NextRequest) {
         subjectId: user.id, action: 'booking.rejected', ok: false,
         detail: { reason: 'session_exists', studentId, existingSessionId: existing.id },
       });
+      // Same sentence the constraint path produces — one source, so the mentor
+      // cannot get two different explanations for one rule.
+      const refused = constraintFailure({ code: '23505' }, 'buddy')!;
       return NextResponse.json({
-        error: 'You already have an active meeting with this student. Cancel or complete it before booking another session.',
-        reason: 'session_exists',
+        error: refused.message,
+        reason: refused.reason,
         existingSessionId: existing.id,
         existingStartTime: existing.scheduled_at,
-      }, { status: 409 });
+      }, { status: refused.status });
     }
 
     // ── The link: the buddy's ONE permanent room ─────────────────
@@ -193,23 +204,16 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (sessionError || !session) {
-      // 23505 — one_live_session_per_pair. 23P01 — no_overlapping_buddy_sessions.
-      // These are the authoritative answers, and they fire on races the SELECT
-      // above cannot see.
-      if (sessionError?.code === '23505') {
-        await audit({ subjectId: user.id, action: 'booking.rejected', ok: false, detail: { reason: 'session_exists', studentId, viaConstraint: true } });
-        return NextResponse.json({
-          error: 'You already have an active meeting with this student. Cancel or complete it before booking another session.',
-          reason: 'session_exists',
-        }, { status: 409 });
-      }
-      if (sessionError?.code === '23P01') {
-        // The losing side of a race, or an honest double-book. Same answer.
-        await audit({ subjectId: user.id, action: 'booking.rejected', ok: false, detail: { reason: 'buddy_double_booked', studentId, startTime: start.toISOString() } });
-        return NextResponse.json({
-          error: 'Buddy is no longer available for this slot. Every session of yours runs in the same room, so two students can never share a slot — pick a time at least 15 minutes clear of your other calls.',
-          reason: 'buddy_double_booked',
-        }, { status: 409 });
+      // The database is the authority on both booking rules, and it fires on
+      // races the SELECT above cannot see. A rule violation is a 409 with a
+      // sentence, never a 500 — see lib/booking-constraints.
+      const refused = constraintFailure(sessionError, 'buddy');
+      if (refused) {
+        await audit({
+          subjectId: user.id, action: 'booking.rejected', ok: false,
+          detail: { reason: refused.reason, studentId, startTime: start.toISOString(), viaConstraint: true },
+        });
+        return NextResponse.json({ error: refused.message, reason: refused.reason }, { status: refused.status });
       }
       console.error('video_sessions insert failed:', sessionError);
       return NextResponse.json({ error: "Couldn't save the session — try again." }, { status: 500 });
@@ -247,11 +251,10 @@ export async function POST(request: NextRequest) {
       detail: { sessionId: session.id, studentId, startTime: start.toISOString(), durationMinutes, sessionType },
     });
 
-    return NextResponse.json({
-      success: true,
-      meetingId: session.id,
-      meetLink,
-    });
+    const payload = { success: true, meetingId: session.id, meetLink };
+    await rememberIdempotent(user.id, 'schedule-meeting', idemKey, 200, payload);
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error('schedule-meeting error:', error);
     return NextResponse.json({ error: "Couldn't create the session — try again." }, { status: 500 });

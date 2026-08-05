@@ -30,6 +30,7 @@ export type AuditAction =
   | 'booking.created'
   | 'booking.rejected'
   | 'booking.cancelled'
+  | 'booking.expired'      // released by the stale-session cron, outcome unknown
   | 'booking.rescheduled'
   | 'admin.session_cancelled'
   | 'admin.room_regenerated';

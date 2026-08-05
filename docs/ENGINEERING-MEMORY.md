@@ -724,6 +724,30 @@ usually where the next incident is.
   clear a broken Google connection, regenerate a room, and see who cannot book.
   Nobody should be opening the SQL editor to fix a session — that skips the
   audit trail and teaches us nothing.
+- **A business rule is a 409, never a 500.** `lib/booking-constraints.ts` is the
+  single translator from `23505`/`23P01` to a sentence, with buddy and student
+  wording, used by every write path and by the friendly pre-check — so one rule
+  cannot produce two different explanations. A 500 is wrong twice: it says
+  something is broken when nothing is, and it invites a retry that can only fail
+  identically forever.
+- **Idempotent booking.** An `Idempotency-Key` header makes a double tap on bad
+  mobile data one booking instead of two-then-an-error. Only successes are
+  stored — a failure must stay retryable, or a mentor whose one call hit a
+  Google blip would replay that error forever. Scoped by (user, endpoint, key),
+  because keys are client-generated and must not read across users.
+- **Stale sessions expire.** One live session per pair has a sharp edge: a
+  session nobody closes out holds the lock *forever*. This database already had
+  a 21 July row still `scheduled` — that pair could never have booked again, and
+  it would have been reported as "booking is broken", not "the lock is stuck".
+  A 6-hourly cron releases them, measured from each session's own END time so a
+  call running long is never touched.
+- **`expired` exists because both alternatives lie.** The dry run of that cron
+  against live data showed it would have marked the 4 Aug Shreya orientation
+  `cancelled` — the session the founder watched go well and rated 10/10.
+  `completed` fabricates evidence (Incident #9); `cancelled` denies a call that
+  happened. `expired` claims only that the window passed with no outcome
+  recorded. History renders it as "No outcome recorded", never "Completed".
+  *A cleanup job must not rewrite history it did not witness.*
 - **What is NOT proven:** the two-simultaneous-requests race was verified as
   far as this environment allows (the constraint rejects the duplicate, live),
   but genuine wall-clock concurrency needs two connections at once —

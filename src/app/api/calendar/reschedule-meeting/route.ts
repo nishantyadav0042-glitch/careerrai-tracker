@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { updateGoogleMeet, statusFor } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
+import { constraintFailure } from '@/lib/booking-constraints';
+import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 
@@ -53,6 +55,10 @@ export async function POST(request: NextRequest) {
     if (start.getTime() < Date.now() + 60_000) {
       return NextResponse.json({ error: 'Pick a time in the future.' }, { status: 400 });
     }
+
+    const idemKey = idempotencyKey(request);
+    const replay = await replayIdempotent(user.id, 'reschedule-meeting', idemKey);
+    if (replay) return replay;
 
     const admin = createAdminClient();
     const { data: session } = await admin
@@ -117,13 +123,15 @@ export async function POST(request: NextRequest) {
       .eq('id', meetingId);
 
     if (updateError) {
-      if (updateError.code === '23P01') {
-        // no_overlapping_buddy_sessions. Every session runs in the buddy's one
-        // room, so an overlap would put two students in it together.
-        return NextResponse.json({
-          error: 'You have another session at that time. Pick a slot at least 15 minutes clear of your other calls.',
-          reason: 'buddy_double_booked',
-        }, { status: 409 });
+      // Same two rules, same shared wording. Moving a session into a slot the
+      // buddy's room is already booked for would put two students in one call.
+      const refused = constraintFailure(updateError, 'buddy');
+      if (refused) {
+        await audit({
+          subjectId: user.id, action: 'booking.rejected', ok: false,
+          detail: { reason: refused.reason, sessionId: session.id, to: start.toISOString(), viaConstraint: true },
+        });
+        return NextResponse.json({ error: refused.message, reason: refused.reason }, { status: refused.status });
       }
       console.error('reschedule update failed:', updateError);
       return NextResponse.json({ error: "Couldn't save the new time — try again." }, { status: 500 });
@@ -159,7 +167,10 @@ export async function POST(request: NextRequest) {
       detail: { sessionId: session.id, studentId: session.student_id, from: session.scheduled_at ?? null, to: start.toISOString() },
     });
 
-    return NextResponse.json({ success: true, meetingId: session.id, meetLink, startTime: start.toISOString() });
+    const payload = { success: true, meetingId: session.id, meetLink, startTime: start.toISOString() };
+    await rememberIdempotent(user.id, 'reschedule-meeting', idemKey, 200, payload);
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error('reschedule-meeting error:', error);
     return NextResponse.json({ error: "Couldn't move the meeting — try again." }, { status: 500 });
