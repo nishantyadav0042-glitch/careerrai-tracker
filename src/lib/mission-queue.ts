@@ -108,24 +108,26 @@ interface MessageCtx {
 
 function buildMessage(objective: Objective, first: string, ctx: MessageCtx): string {
   const d = ctx.daysToCat;
-  const link = SITE_URL;
+  // SITE_URL is interpolated directly in each template, not via a local alias:
+  // outreach-link.test.ts greps these literals to prove every message carries
+  // the app link, and an alias makes that guard unenforceable.
 
   switch (objective) {
     case 'log':
-      return `${first}, CAT is ${d} days away and today's log is still empty. Nishant here, I built CareerRai. Every student who converts does the same boring thing — they write down what they studied, so by October they know exactly which topic is weak. The ones who don't, find out in the exam hall. 2 minute ka kaam hai, aaj ka log bhar do. ${link}`;
+      return `${first}, CAT is ${d} days away and today's log is still empty. Nishant here, I built CareerRai. Every student who converts does the same boring thing — they write down what they studied, so by October they know exactly which topic is weak. The ones who don't, find out in the exam hall. 2 minute ka kaam hai, aaj ka log bhar do. ${SITE_URL}`;
 
     case 'reconnect':
-      return `${first}, your reminders have stopped, so your daily plan isn't reaching you at all — and only ${d} days are left. Nishant here, I built CareerRai. Bas app ek baar khol lo, reminders apne aap chalu ho jayenge. Jinka plan roz pahunchta hai unka syllabus October me khatam ho jata hai; baaki November me revision dhoondh rahe hote hain. ${link}`;
+      return `${first}, your reminders have stopped, so your daily plan isn't reaching you at all — and only ${d} days are left. Nishant here, I built CareerRai. Bas app ek baar khol lo, reminders apne aap chalu ho jayenge. Jinka plan roz pahunchta hai unka syllabus October me khatam ho jata hai; baaki November me revision dhoondh rahe hote hain. ${SITE_URL}`;
 
     case 'buddy':
-      return `${first}, ab sirf ${d} din bache hain. You looked at Exam Buddy and left it. Nishant here, I built CareerRai, so let me be straight with you. A buddy is an IIM student who sits with your plan every week — what to study, what to skip, and why your mock score isn't moving. Rs 999, full refund if you don't find value, and 3 free messages before you pay anything. In ${d} dino me ya to koi tumhare saath baithega, ya tum akele guess karte rahoge. Ek baar try karke dekh lo — I can tell you, you won't regret it at all. ${link}`;
+      return `${first}, ab sirf ${d} din bache hain. You looked at Exam Buddy and left it. Nishant here, I built CareerRai, so let me be straight with you. A buddy is an IIM student who sits with your plan every week — what to study, what to skip, and why your mock score isn't moving. Rs 999, full refund if you don't find value, and 3 free messages before you pay anything. In ${d} dino me ya to koi tumhare saath baithega, ya tum akele guess karte rahoge. Ek baar try karke dekh lo — I can tell you, you won't regret it at all. ${SITE_URL}`;
 
     case 'install':
-      return `${first}, your CAT plan is ready and sitting in your account, but the app isn't installed — so the plan and the reminders can't reach you. ${d} days left. Nishant here, I built CareerRai. 10 second ka kaam hai: ${link} Chrome me kholo aur Add to Home Screen dabao. Plan bana pada hai, use to kar lo.`;
+      return `${first}, your CAT plan is ready and sitting in your account, but the app isn't installed — so the plan and the reminders can't reach you. ${d} days left. Nishant here, I built CareerRai. 10 second ka kaam hai: ${SITE_URL} Chrome me kholo aur Add to Home Screen dabao. Plan bana pada hai, use to kar lo.`;
 
     case 'winback': {
       const away = ctx.daysSinceLog != null ? `${ctx.daysSinceLog} din` : 'kuch time';
-      return `${first}, ${away} se CareerRai par kuch nahi hua, aur CAT ab ${d} din door hai. Nishant here, I built CareerRai. Main judge nahi kar raha — har serious aspirant ke saath break hota hai. Farq sirf itna hai ki kuch log wapas aate hain. Woh aaj 20 minute aur ek topic se shuru karte hain, aur November tak unhe khud yakeen nahi hota ki wapas aa gaye. Jo nahi aate, woh agle saal yahi soch rahe hote hain. Aaj ek topic. ${link}`;
+      return `${first}, ${away} se CareerRai par kuch nahi hua, aur CAT ab ${d} din door hai. Nishant here, I built CareerRai. Main judge nahi kar raha — har serious aspirant ke saath break hota hai. Farq sirf itna hai ki kuch log wapas aate hain. Woh aaj 20 minute aur ek topic se shuru karte hain, aur November tak unhe khud yakeen nahi hota ki wapas aa gaye. Jo nahi aate, woh agle saal yahi soch rahe hote hain. Aaj ek topic. ${SITE_URL}`;
     }
   }
 }
