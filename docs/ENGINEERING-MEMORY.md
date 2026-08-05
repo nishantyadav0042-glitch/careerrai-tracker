@@ -31,6 +31,7 @@
 | 15 | 2026-08-01 | iOS payment fix sat on a branch for a day | Trust (payment) | every iOS student |
 | 17 | 2026-08-04 | One meeting, two truths — mentor lost Join at T+0 | Trust | 1st orientation |
 | 18 | 2026-08-04 | /welcome shipped with no login door | Growth | every returning user |
+| 19 | 2026-08-05 | Play rejected listing — screenshots the guide had banned | Growth / store | launch-blocking |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
@@ -522,6 +523,34 @@
   `logged-out-routing.test.ts` pins the full truth table, including the
   store-launch holdback the store reviews depend on.
 - **Owner:** cofounder (AI)
+
+---
+
+## Incident #19 — Play rejected the listing over screenshots the guide had already banned
+
+- **Date:** 2026-08-05 · **Area:** Growth / store · **Severity:** P1 (launch-blocking)
+- **Impact:** Play review ended in REJECTION (Metadata policy, "Unclear
+  Visuals") after ~8 days of waiting. Every day of re-review is a day with no
+  store presence.
+- **Root cause:** the three uploaded store screenshots were
+  `public/screenshots/{welcome,onboarding,diagnostic}.png` — the PWA-manifest
+  images: a mostly-blank onboarding question, a marketing phone-mockup, and a
+  pure promo card with zero app UI. `PLAY-STORE-UPLOAD-GUIDE.md` §5 warned
+  against exactly this before upload ("pre-login screens… lead with the app
+  in use"). The warning existed; nothing enforced it at upload time.
+- **How it hid:** a store listing has no CI. The only gate was a human reading
+  a paragraph in a long guide during a manual console workflow.
+- **Lessons:**
+  1. **A written warning is not a control.** Anything that can be rejected
+     needs a checklist at the point of action, not advice inside a long doc.
+  2. **Manifest screenshots are not store screenshots.** The PWA trio exists
+     for a browser install sheet; a store reviewer needs the app in use.
+  3. **Store assets are product surface** — same review bar as a student screen.
+- **Prevention (encoded):** `docs/PLAY-RESUBMISSION.md` — capture spec (6
+  in-use screens from the evergreen review account), paste-ready compliant
+  description, exact resubmit clicks; linked from the freeze doc's status box
+  so the next submitter lands on the checklist first.
+- **Owner:** founder (upload) + cofounder AI (pack)
 
 ---
 

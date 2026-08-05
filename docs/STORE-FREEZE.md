@@ -1,5 +1,13 @@
 # STORE FREEZE — active until Play AND Apple both approve
 
+> ## 🟠 STATUS 5 Aug 2026: PLAY REJECTED THE LISTING — METADATA ONLY, NOT THE APP.
+> Three store screenshots (the PWA-manifest trio `public/screenshots/*` that
+> PLAY-STORE-UPLOAD-GUIDE §5 warned against uploading) were flagged as
+> "Unclear Visuals". The binary, product, login flow and review account were
+> NOT flagged. Fix + resubmission: **`docs/PLAY-RESUBMISSION.md`**.
+> **No review is in flight right now**, so the mid-review deploy hazard is
+> suspended — it RESUMES the moment "Send for review" is clicked. Incident #19.
+
 **Founder instruction, 30 Jul 2026:** *"no changes need to be done until we get
 our app passed from playstore and apple store."*
 
