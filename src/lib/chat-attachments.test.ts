@@ -1,0 +1,201 @@
+import { describe, it, expect } from 'vitest';
+import {
+  validateDeclaredFile, sniffMatchesMime, extensionOf, attachmentPath,
+  IMAGE_MAX_BYTES, DOCUMENT_MAX_BYTES, humanSize,
+} from './chat-attachments';
+
+// Chat attachments are a MENTORING document channel, not file sharing
+// (founder, 5 Aug). These tests are the allowlist: if something gets added
+// here by accident, one of them should go red.
+
+const MB = 1024 * 1024;
+const ok = (name: string, mime: string, size = MB) => validateDeclaredFile(name, mime, size);
+
+describe('what is allowed through', () => {
+  it('accepts the six supported types', () => {
+    expect(ok('cv.jpg', 'image/jpeg')).toMatchObject({ ok: true, kind: 'image' });
+    expect(ok('cv.jpeg', 'image/jpeg')).toMatchObject({ ok: true, kind: 'image' });
+    expect(ok('shot.png', 'image/png')).toMatchObject({ ok: true, kind: 'image' });
+    expect(ok('shot.webp', 'image/webp')).toMatchObject({ ok: true, kind: 'image' });
+    expect(ok('resume.pdf', 'application/pdf')).toMatchObject({ ok: true, kind: 'document' });
+    expect(ok('sop.doc', 'application/msword')).toMatchObject({ ok: true, kind: 'document' });
+    expect(ok('sop.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'))
+      .toMatchObject({ ok: true, kind: 'document' });
+  });
+
+  it('is case-insensitive about the extension', () => {
+    expect(ok('SCORECARD.PDF', 'application/pdf').ok).toBe(true);
+  });
+});
+
+describe('what is turned away', () => {
+  it('refuses video, audio, archives and executables', () => {
+    const banned: [string, string][] = [
+      ['lecture.mp4', 'video/mp4'],
+      ['lecture.mov', 'video/quicktime'],
+      ['note.mp3', 'audio/mpeg'],
+      ['bundle.zip', 'application/zip'],
+      ['bundle.rar', 'application/vnd.rar'],
+      ['app.apk', 'application/vnd.android.package-archive'],
+      ['setup.exe', 'application/x-msdownload'],
+      ['script.sh', 'application/x-sh'],
+    ];
+    for (const [name, mime] of banned) {
+      expect(validateDeclaredFile(name, mime, MB).ok, name).toBe(false);
+    }
+  });
+
+  it('refuses a file with no extension at all', () => {
+    expect(ok('resume', 'application/pdf').ok).toBe(false);
+  });
+
+  it('treats a dotfile as having no extension', () => {
+    // ".pdf" is a hidden file named .pdf, not a PDF.
+    expect(extensionOf('.pdf')).toBe('');
+    expect(ok('.pdf', 'application/pdf').ok).toBe(false);
+  });
+
+  it('reads only the LAST extension, so resume.pdf.exe is an exe', () => {
+    expect(extensionOf('resume.pdf.exe')).toBe('exe');
+    expect(ok('resume.pdf.exe', 'application/pdf').ok).toBe(false);
+  });
+});
+
+describe('the extension and the MIME type must agree', () => {
+  it('refuses an executable wearing a .pdf extension', () => {
+    const res = ok('malware.pdf', 'application/x-msdownload');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/not supported/i);
+  });
+
+  it('refuses a PDF mime on a .png name', () => {
+    const res = ok('thing.png', 'application/pdf');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/don't match/i);
+  });
+
+  it('refuses an empty MIME type — the browser not knowing is not a pass', () => {
+    expect(ok('resume.pdf', '').ok).toBe(false);
+  });
+});
+
+describe('size caps', () => {
+  it('allows an image right at 10 MB and refuses one byte over', () => {
+    expect(validateDeclaredFile('a.png', 'image/png', IMAGE_MAX_BYTES).ok).toBe(true);
+    expect(validateDeclaredFile('a.png', 'image/png', IMAGE_MAX_BYTES + 1).ok).toBe(false);
+  });
+
+  it('allows a document right at 20 MB and refuses one byte over', () => {
+    expect(validateDeclaredFile('a.pdf', 'application/pdf', DOCUMENT_MAX_BYTES).ok).toBe(true);
+    expect(validateDeclaredFile('a.pdf', 'application/pdf', DOCUMENT_MAX_BYTES + 1).ok).toBe(false);
+  });
+
+  it('holds images to the image cap even though documents may be larger', () => {
+    expect(validateDeclaredFile('big.png', 'image/png', 15 * MB).ok).toBe(false);
+    expect(validateDeclaredFile('big.pdf', 'application/pdf', 15 * MB).ok).toBe(true);
+  });
+
+  it('refuses an empty file', () => {
+    expect(validateDeclaredFile('a.pdf', 'application/pdf', 0).ok).toBe(false);
+  });
+
+  it('refuses a negative or nonsense size', () => {
+    expect(validateDeclaredFile('a.pdf', 'application/pdf', -1).ok).toBe(false);
+    expect(validateDeclaredFile('a.pdf', 'application/pdf', NaN).ok).toBe(false);
+  });
+
+  it('says the actual limit in the error, not just "too big"', () => {
+    const res = validateDeclaredFile('a.png', 'image/png', 12 * MB);
+    if (!res.ok) {
+      expect(res.error).toContain('10.0 MB');
+      expect(res.error).toContain('12.0 MB');
+    }
+  });
+});
+
+describe('filenames', () => {
+  it('refuses an absurdly long name', () => {
+    expect(ok(`${'a'.repeat(200)}.pdf`, 'application/pdf').ok).toBe(false);
+  });
+
+  it('ignores any path a client tries to smuggle in the name', () => {
+    // The stored key is generated by us, but the extension is read from this,
+    // so traversal must not survive the parse.
+    expect(extensionOf('../../etc/passwd.pdf')).toBe('pdf');
+    expect(extensionOf('C:\\evil\\thing.png')).toBe('png');
+  });
+});
+
+// ── The check the client cannot lie to ─────────────────────────────────────
+
+const bytes = (...n: number[]) => new Uint8Array(n);
+const ascii = (s: string) => new Uint8Array(Array.from(s, (c) => c.charCodeAt(0)));
+
+describe('magic bytes must match the claimed type', () => {
+  it('accepts real headers', () => {
+    expect(sniffMatchesMime(bytes(0xff, 0xd8, 0xff, 0xe0), 'image/jpeg')).toBe(true);
+    expect(sniffMatchesMime(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a), 'image/png')).toBe(true);
+    expect(sniffMatchesMime(ascii('%PDF-1.7\n'), 'application/pdf')).toBe(true);
+    expect(sniffMatchesMime(bytes(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1), 'application/msword')).toBe(true);
+  });
+
+  it('accepts a WEBP only with both RIFF and WEBP markers', () => {
+    const good = new Uint8Array(16);
+    good.set(ascii('RIFF'), 0);
+    good.set(ascii('WEBP'), 8);
+    expect(sniffMatchesMime(good, 'image/webp')).toBe(true);
+
+    const riffOnly = new Uint8Array(16);
+    riffOnly.set(ascii('RIFF'), 0);
+    riffOnly.set(ascii('AVI '), 8);   // a RIFF container that is NOT a webp
+    expect(sniffMatchesMime(riffOnly, 'image/webp')).toBe(false);
+  });
+
+  it('rejects an executable renamed to .pdf — the whole point', () => {
+    // MZ header: a Windows executable. Extension and MIME could both be
+    // spoofed to say PDF; the bytes cannot.
+    expect(sniffMatchesMime(ascii('MZ\x90\x00'), 'application/pdf')).toBe(false);
+  });
+
+  it('rejects a plain ZIP renamed to .docx', () => {
+    // A .docx IS a zip, so the PK header alone would let any archive through —
+    // exactly the hole this closes. OOXML always names its first entry.
+    const plainZip = ascii('PK\x03\x04' + 'x'.repeat(60));
+    expect(sniffMatchesMime(plainZip, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(false);
+
+    const realDocx = ascii('PK\x03\x04' + '\x00'.repeat(26) + '[Content_Types].xml');
+    expect(sniffMatchesMime(realDocx, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(true);
+  });
+
+  it('rejects an empty or truncated header instead of guessing', () => {
+    expect(sniffMatchesMime(new Uint8Array(0), 'application/pdf')).toBe(false);
+    expect(sniffMatchesMime(bytes(0xff), 'image/jpeg')).toBe(false);
+  });
+
+  it('rejects any type outside the allowlist, whatever the bytes say', () => {
+    expect(sniffMatchesMime(ascii('%PDF-'), 'application/zip')).toBe(false);
+  });
+});
+
+describe('storage keys', () => {
+  it('are scoped to the pair and named by id, never by the user\'s filename', () => {
+    const path = attachmentPath('stu-1', 'bud-1', 'abc-123', 'pdf');
+    expect(path).toBe('stu-1/bud-1/abc-123.pdf');
+    // The prefix is what the verifier re-derives to stop someone attaching
+    // another conversation's file to their own message.
+    expect(path.startsWith('stu-1/bud-1/')).toBe(true);
+  });
+
+  it('never contains the original filename', () => {
+    const path = attachmentPath('s', 'b', 'id', 'pdf');
+    expect(path).not.toMatch(/resume|\s/);
+  });
+});
+
+describe('sizes read the way a person would say them', () => {
+  it('formats bytes, KB and MB', () => {
+    expect(humanSize(512)).toBe('512 B');
+    expect(humanSize(2048)).toBe('2 KB');
+    expect(humanSize(5 * MB)).toBe('5.0 MB');
+  });
+});

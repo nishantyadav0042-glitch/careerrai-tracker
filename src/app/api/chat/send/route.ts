@@ -6,6 +6,8 @@ import { resolvePair } from '@/lib/chat';
 import { resolveGrantAccess, MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 import { serverError } from '@/lib/api-error';
 import { isBlockedPair } from '@/lib/chat-safety';
+import { verifyUploadedAttachment, discardAttachment } from '@/lib/chat-attachment-verify';
+import { audit } from '@/lib/integration-audit';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -17,7 +19,10 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let payload: { body?: unknown; studentId?: unknown };
+  let payload: {
+    body?: unknown; studentId?: unknown;
+    attachment?: { path?: unknown; filename?: unknown; mime?: unknown };
+  };
   try {
     payload = await request.json();
   } catch {
@@ -25,8 +30,16 @@ export async function POST(request: NextRequest) {
   }
 
   const body = typeof payload.body === 'string' ? payload.body.trim() : '';
-  if (body.length < 1 || body.length > 2000) {
+  const att = payload.attachment;
+  const hasAttachment = !!att && typeof att.path === 'string' && typeof att.filename === 'string';
+
+  // A message may be text, or a file, or both — but not nothing. Sending a
+  // resume with no covering note is a completely normal thing to do.
+  if (!hasAttachment && (body.length < 1 || body.length > 2000)) {
     return NextResponse.json({ error: 'Message must be 1–2000 characters' }, { status: 400 });
+  }
+  if (body.length > 2000) {
+    return NextResponse.json({ error: 'Message must be under 2000 characters' }, { status: 400 });
   }
   const studentId = typeof payload.studentId === 'string' ? payload.studentId : undefined;
 
@@ -68,6 +81,36 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Now go and look at the bytes. Everything up to here believed the client.
+  let attachmentColumns = {};
+  if (hasAttachment) {
+    const verified = await verifyUploadedAttachment({
+      path: String(att!.path),
+      filename: String(att!.filename),
+      mime: typeof att!.mime === 'string' ? att!.mime : '',
+      studentId: pair.studentId,
+      buddyId: pair.buddyId,
+    });
+    if (!verified.ok) {
+      // The object is unreferenced and always will be — take it back out
+      // rather than leaving it to be paid for forever.
+      await discardAttachment(String(att!.path));
+      await admin.from('attachment_uploads').delete().eq('path', String(att!.path));
+      await audit({
+        subjectId: user.id, action: 'chat.attachment_rejected', ok: false,
+        detail: { reason: verified.error, stage: 'verify' },
+      });
+      return NextResponse.json({ error: verified.error }, { status: 400 });
+    }
+    attachmentColumns = {
+      attachment_path: verified.attachment.path,
+      attachment_name: verified.attachment.name,
+      attachment_mime: verified.attachment.mime,
+      attachment_size: verified.attachment.size,
+      attachment_kind: verified.attachment.kind,
+    };
+  }
+
   const { data: message, error } = await admin
     .from('chat_messages')
     .insert({
@@ -75,12 +118,31 @@ export async function POST(request: NextRequest) {
       buddy_id: pair.buddyId,
       sender_id: user.id,
       body,
+      ...attachmentColumns,
     })
-    .select('id, student_id, buddy_id, sender_id, body, created_at, read_at')
+    .select('id, student_id, buddy_id, sender_id, body, created_at, read_at, attachment_name, attachment_mime, attachment_size, attachment_kind')
     .single();
 
   if (error || !message) {
+    // No message row means nothing will ever point at the file.
+    if (hasAttachment) await discardAttachment(String(att!.path));
     return serverError('chat-send', error);
+  }
+
+  if (hasAttachment) {
+    // Claimed: a message now references this object, so cleanup must leave it
+    // alone forever.
+    await admin
+      .from('attachment_uploads')
+      .update({ claimed_at: new Date().toISOString() })
+      .eq('path', String(att!.path));
+    await audit({
+      subjectId: user.id, action: 'chat.attachment_uploaded',
+      detail: {
+        messageId: message.id, kind: message.attachment_kind,
+        mime: message.attachment_mime, size: message.attachment_size,
+      },
+    });
   }
 
   // Best-effort notification to the recipient (the other member of the pair).
@@ -93,7 +155,7 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single();
       const senderName = sender?.full_name?.split(' ')[0] ?? 'your buddy';
-      const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+      const preview = body.length > 80 ? `${body.slice(0, 80)}…` : (body || (hasAttachment ? '📎 Sent you a file' : ''));
       // Deep-link each side to THEIR chat screen — a buddy tapping the push
       // must land on the buddy chat, not the student page.
       const recipientIsBuddy = recipientId === pair.buddyId;

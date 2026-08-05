@@ -1,9 +1,12 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Sparkles, X } from 'lucide-react';
+import { Send, Sparkles, X, Paperclip } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useAttachmentUpload } from './use-attachment-upload';
+import { AttachmentBubble } from './attachment-bubble';
+import { ACCEPT_ATTRIBUTE } from '@/lib/chat-attachments';
 import type { ChatMessage } from './types';
 import { ReportConversation } from './report-conversation';
 
@@ -66,6 +69,8 @@ export function ChatThread({
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [aiBullets, setAiBullets] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const upload = useAttachmentUpload(sendStudentId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -122,7 +127,8 @@ export function ChatThread({
 
   const send = useCallback(async () => {
     const body = draft.trim();
-    if (!body || sending) return;
+    // A file with no covering note is a normal thing to send.
+    if ((!body && !upload.ready) || sending || upload.uploading) return;
 
     // Authorship gate — buddy only, only when AI facts were loaded.
     if (aiBullets) {
@@ -135,6 +141,8 @@ export function ChatThread({
     setSendError(null);
     setSending(true);
 
+    const pending = upload.ready;
+
     // Optimistic message.
     const tempId = `temp-${Date.now()}`;
     const optimistic: ChatMessage = {
@@ -145,6 +153,10 @@ export function ChatThread({
       body,
       created_at: new Date().toISOString(),
       read_at: null,
+      attachment_kind: pending?.kind ?? null,
+      attachment_name: pending?.filename ?? null,
+      attachment_mime: pending?.mime ?? null,
+      attachment_size: pending?.size ?? null,
     };
     seenIds.current.add(tempId);
     setMessages((prev) => [...prev, optimistic]);
@@ -155,26 +167,36 @@ export function ChatThread({
       const res = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          sendStudentId ? { body, studentId: sendStudentId } : { body }
-        ),
+        body: JSON.stringify({
+          body,
+          ...(sendStudentId ? { studentId: sendStudentId } : {}),
+          ...(pending
+            ? { attachment: { path: pending.path, filename: pending.filename, mime: pending.mime } }
+            : {}),
+        }),
       });
-      if (!res.ok) throw new Error('send failed');
-      const { message } = (await res.json()) as { message: ChatMessage };
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'send failed');
+      const { message } = json as { message: ChatMessage };
+      upload.clear();
       // Swap optimistic for the real row.
       seenIds.current.delete(tempId);
       seenIds.current.add(message.id);
       setMessages((prev) => prev.map((m) => (m.id === tempId ? message : m)));
-    } catch {
-      // Roll back optimistic message and restore draft.
+    } catch (e) {
+      // Roll back optimistic message and restore draft. The attachment is
+      // deliberately KEPT — it uploaded fine, and making someone re-pick a
+      // 15 MB file because the message row failed would be cruel.
       seenIds.current.delete(tempId);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setDraft(body);
-      setSendError("Couldn't send — check your connection and try again.");
+      setSendError(e instanceof Error && e.message !== 'send failed'
+        ? e.message
+        : "Couldn't send — check your connection and try again.");
     } finally {
       setSending(false);
     }
-  }, [draft, sending, aiBullets, studentId, buddyId, meId, sendStudentId]);
+  }, [draft, sending, aiBullets, studentId, buddyId, meId, sendStudentId, upload]);
 
   const generateDraft = useCallback(async () => {
     if (!sendStudentId || generatingDraft) return;
@@ -242,7 +264,8 @@ export function ChatThread({
                       : 'bg-stone-100 text-stone-900 rounded-bl-sm'
                   )}
                 >
-                  <span>{m.body}</span>
+                  {m.attachment_kind && <AttachmentBubble message={m} mine={mine} />}
+                  {m.body && <span className={cn(m.attachment_kind && 'mt-1.5 block')}>{m.body}</span>}
                   <span
                     className={cn(
                       'block text-[10px] mt-1 text-right',
@@ -297,6 +320,41 @@ export function ChatThread({
           <p className="text-xs text-red-600 font-medium">{sendError}</p>
         )}
 
+        {/* Pending attachment — one per message, cancellable mid-upload. */}
+        {(upload.file || upload.ready) && (
+          <div className="flex items-center gap-2.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+            {upload.ready?.previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={upload.ready.previewUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+            ) : (
+              <Paperclip className="h-4 w-4 shrink-0 text-stone-400" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12.5px] font-medium text-stone-800">{upload.label}</p>
+              {upload.uploading ? (
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-stone-200">
+                  <div
+                    className="h-full rounded-full bg-teal-600 transition-[width] duration-150"
+                    style={{ width: `${upload.progress}%` }}
+                  />
+                </div>
+              ) : (
+                <p className="text-[11px] text-teal-700">Ready to send</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={upload.cancel}
+              aria-label={upload.uploading ? 'Cancel upload' : 'Remove attachment'}
+              className="shrink-0 rounded-lg p-1.5 text-stone-400 hover:bg-stone-200 hover:text-stone-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {upload.error && <p className="text-xs font-medium text-red-600">{upload.error}</p>}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -304,6 +362,28 @@ export function ChatThread({
           }}
           className="flex items-end gap-2"
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPT_ATTRIBUTE}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Reset the input so picking the SAME file twice still fires.
+              e.target.value = '';
+              if (file) void upload.start(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={upload.uploading || !!upload.ready}
+            aria-label="Attach a file"
+            title="Attach an image or document"
+            className="shrink-0 w-11 h-11 rounded-full text-stone-500 flex items-center justify-center transition-colors hover:bg-stone-100 disabled:opacity-40"
+          >
+            <Paperclip className="w-5 h-5" />
+          </button>
           <textarea
             value={draft}
             onChange={(e) => { setDraft(e.target.value); if (sendError) setSendError(null); }}
@@ -320,7 +400,7 @@ export function ChatThread({
           />
           <button
             type="submit"
-            disabled={!draft.trim() || sending}
+            disabled={(!draft.trim() && !upload.ready) || sending || upload.uploading}
             aria-label="Send message"
             className="shrink-0 w-11 h-11 rounded-full bg-orange-600 text-white flex items-center justify-center transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-700"
           >

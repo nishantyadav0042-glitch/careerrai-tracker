@@ -104,8 +104,34 @@ export async function POST(request: NextRequest) {
     .select('key');
   if (pruneErr) console.error('[release-stale-sessions] key prune failed:', pruneErr.message);
 
+  // Abandoned chat attachments: uploaded, never sent, referenced by nothing.
+  // A day is far longer than any composer session, so anything unclaimed by
+  // now never will be.
+  const { data: abandoned } = await admin
+    .from('attachment_uploads')
+    .select('path')
+    .is('claimed_at', null)
+    .lt('created_at', keyCutoff)
+    .limit(500);
+
+  let attachmentsPruned = 0;
+  if (abandoned?.length) {
+    const paths = abandoned.map((a) => a.path);
+    const { error: rmError } = await admin.storage.from('chat-attachments').remove(paths);
+    if (rmError) {
+      console.error('[release-stale-sessions] attachment prune failed:', rmError.message);
+    } else {
+      // Only forget the bookkeeping once the objects are actually gone —
+      // otherwise a failed delete would strand files with nothing left
+      // pointing at them, which is the exact problem this solves.
+      await admin.from('attachment_uploads').delete().in('path', paths);
+      attachmentsPruned = paths.length;
+    }
+  }
+
   return NextResponse.json({
     ok: true,
+    attachmentsPruned,
     examined: candidates?.length ?? 0,
     released: released.length,
     sessionIds: released,

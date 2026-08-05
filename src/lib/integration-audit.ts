@@ -32,6 +32,9 @@ export type AuditAction =
   | 'booking.cancelled'
   | 'booking.expired'      // released by the stale-session cron, outcome unknown
   | 'booking.rescheduled'
+  | 'chat.attachment_uploaded'
+  | 'chat.attachment_rejected'  // failed validation, at either stage
+  | 'chat.attachment_denied'    // someone asked for a conversation they are not in
   | 'admin.session_cancelled'
   | 'admin.room_regenerated';
 

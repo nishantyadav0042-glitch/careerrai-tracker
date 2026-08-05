@@ -47,7 +47,7 @@ export default async function BuddyChatInboxPage() {
     // All messages for this buddy across the assigned students (last ~50 per inbox view).
     const { data: msgs } = await admin
       .from('chat_messages')
-      .select('id, student_id, buddy_id, sender_id, body, created_at, read_at')
+      .select('id, student_id, buddy_id, sender_id, body, created_at, read_at, attachment_name, attachment_mime, attachment_size, attachment_kind')
       .eq('buddy_id', user.id)
       .in('student_id', studentIds)
       .order('created_at', { ascending: false });
