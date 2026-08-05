@@ -12,6 +12,34 @@ import { SITE_URL } from '@/lib/site';
 
 export type Objective = 'log' | 'reconnect' | 'buddy' | 'install' | 'winback';
 
+/** Once messaged, a student is out of the queue for this long. */
+export const SEND_COOLDOWN_DAYS = 14;
+
+/**
+ * How many alternating pools the no-intent tail is split into.
+ *
+ * Founder, 6 Aug: "most of the students are repeating... change the pool at
+ * least alternate days." The ranking is a pure function of stable facts, so
+ * without this the SAME 45 students appear in the SAME order every single
+ * night — the queue looked personalised and was actually frozen.
+ *
+ * Students carrying real intent are never rotated out (see TIER 1 below);
+ * only the cold tail takes turns.
+ */
+const ROTATION_POOLS = 2;
+
+/** Stable per-student bucket. Same student, same bucket, forever. */
+function rotationBucket(studentId: string): number {
+  let h = 0;
+  for (let i = 0; i < studentId.length; i++) h = (h * 31 + studentId.charCodeAt(i)) | 0;
+  return Math.abs(h) % ROTATION_POOLS;
+}
+
+/** Days since epoch in IST — the thing that flips the pool over at midnight. */
+function istDayIndex(nowMs: number): number {
+  return Math.floor((nowMs + 5.5 * 3_600_000) / 86_400_000);
+}
+
 export const OBJECTIVE_LABEL: Record<Objective, string> = {
   log: 'Get today’s log',
   reconnect: 'Reconnect notifications',
@@ -78,42 +106,84 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
   const nowMs = Date.now();
   const istDay = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const istDayStart = istDay + 'T00:00:00+05:30';
-  const since3d = new Date(nowMs - 3 * 86_400_000).toISOString();
+  const since7d = new Date(nowMs - 7 * 86_400_000).toISOString();
+  const since30d = new Date(nowMs - 30 * 86_400_000).toISOString();
+  // Cooldown window. Was 3 days, which meant everyone you messaged on Monday
+  // was back in Thursday's queue — the founder saw "the same students, every
+  // night". Two weeks is long enough that a repeat is a genuine second attempt.
+  const sinceCooldown = new Date(nowMs - SEND_COOLDOWN_DAYS * 86_400_000).toISOString();
 
-  const [{ data: students }, { data: streaks }, { data: eng }, { data: events }, { data: notifs }, { data: outreach }] = await Promise.all([
-    db.from('profiles').select('id, full_name, phone, onboarding_completed, app_installed, is_premium, buddy_id, notif_prefs, push_subscription')
+  const [
+    { data: students }, { data: streaks }, { data: eng }, { data: recentEvents },
+    { data: notifs }, { data: outreach }, { data: payAttempts }, { data: sessionReqs },
+  ] = await Promise.all([
+    db.from('profiles').select('id, full_name, phone, email, onboarding_completed, app_installed, is_premium, buddy_id, notif_prefs, push_subscription')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
     db.from('streak_data').select('student_id, last_log_date'),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened'),
-    db.from('student_events').select('user_id, session_id').gte('created_at', istDayStart),
-    db.from('notifications').select('user_id, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', new Date(nowMs - 7 * 86_400_000).toISOString()),
-    db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', since3d),
+    // 7 days, not "since midnight". The old query asked for events since IST
+    // midnight, so opening this page at 1:38 AM looked at a 1.6-hour window and
+    // essentially nobody counted as active — the intent boost never fired.
+    db.from('student_events').select('user_id, session_id, event, created_at').gte('created_at', since7d),
+    db.from('notifications').select('user_id, clicked_at').not('pushed_at', 'is', null).gte('pushed_at', since7d),
+    db.from('founder_outreach').select('student_id, objective, action, snoozed_until, created_at').gte('created_at', sinceCooldown),
+    // Someone who reached checkout and did not complete is the strongest
+    // signal in the whole product — they tried to give us money.
+    db.from('student_payments').select('student_id, status, created_at').neq('status', 'paid').gte('created_at', since30d),
+    db.from('session_requests').select('student_id, created_at').gte('created_at', since30d),
   ]);
 
   const lastLogById = new Map((streaks ?? []).map((s: any) => [s.student_id, s.last_log_date]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
   const openedPush = new Set<string>();
   for (const n of notifs ?? []) if (n.clicked_at) openedPush.add(n.user_id);
-  // Sessions in the app today, per student.
-  const sessionsToday = new Map<string, Set<string>>();
-  for (const ev of events ?? []) {
+
+  // ── Intent signals — the whole point of this rewrite ────────────────
+  // Founder, 6 Aug: message "who opened the app, or want a buddy, or tried to
+  // login, or at least put in 0.1". Every one of these already existed in the
+  // database and none of them was being used to choose who to contact.
+  const sessionsToday = new Map<string, Set<string>>();   // for the copy
+  const openedRecently = new Map<string, number>();       // user -> days ago
+  const wantsBuddy = new Set<string>();                   // opened the unlock screen
+  for (const ev of recentEvents ?? []) {
     if (!ev.user_id) continue;
-    if (!sessionsToday.has(ev.user_id)) sessionsToday.set(ev.user_id, new Set());
-    sessionsToday.get(ev.user_id)!.add(ev.session_id ?? 'x');
+    const ageDays = (nowMs - Date.parse(ev.created_at)) / 86_400_000;
+    if (ev.created_at >= istDayStart) {
+      if (!sessionsToday.has(ev.user_id)) sessionsToday.set(ev.user_id, new Set());
+      sessionsToday.get(ev.user_id)!.add(ev.session_id ?? 'x');
+    }
+    if (ev.event === 'app_open' || ev.event === 'screen_view' || ev.event === 'log_open') {
+      const prev = openedRecently.get(ev.user_id);
+      if (prev == null || ageDays < prev) openedRecently.set(ev.user_id, ageDays);
+    }
+    if (ev.event === 'buddy_unlock_open' || ev.event === 'daily_pick_open') {
+      if (ev.event === 'buddy_unlock_open') wantsBuddy.add(ev.user_id);
+    }
   }
+
+  // Reached checkout and did not finish. The strongest signal we have.
+  const triedToPay = new Set<string>((payAttempts ?? []).map((r: any) => r.student_id).filter(Boolean));
+  // Asked a mentor for a session.
+  const askedForSession = new Set<string>((sessionReqs ?? []).map((r: any) => r.student_id).filter(Boolean));
 
   // Dedupe memory: a student messaged (sent) in the last 3 days, or snoozed and
   // still under snooze, or skipped today, is out of tonight's queue.
   const excludeStudents = new Set<string>();
+  const contactedEver = new Set<string>();
   let sentToday = 0;
   for (const o of outreach ?? []) {
     if (o.action === 'sent') {
+      // The fetch window IS the cooldown, so anything returned here is still
+      // inside it.
       excludeStudents.add(o.student_id);
+      contactedEver.add(o.student_id);
       if (new Date(o.created_at).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) sentToday++;
     }
     if (o.action === 'snoozed' && o.snoozed_until && new Date(o.snoozed_until).getTime() > nowMs) excludeStudents.add(o.student_id);
     if (o.action === 'skipped' && new Date(o.created_at).getTime() > nowMs - 20 * 3600_000) excludeStudents.add(o.student_id);
   }
+
+  const todayBucket = istDayIndex(nowMs) % ROTATION_POOLS;
 
   // Root-cause tree — where is everyone stuck (attack the biggest branch).
   const rc: RootCause = { total: (students ?? []).length, notInstalled: 0, installedNotifOff: 0, reachableNeverLogged: 0, wasActiveNowSilent: 0, activeRecently: 0 };
@@ -128,6 +198,9 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
     const e = engById.get(p.id) as any;
     const buddyTaps = (e?.buddy_cta_clicks as number | null) ?? 0;
     const sessions = sessionsToday.get(p.id)?.size ?? 0;
+    const openedDaysAgo = openedRecently.get(p.id);
+    const paid_attempt = triedToPay.has(p.id);
+    const buddyIntent = wantsBuddy.has(p.id) || askedForSession.has(p.id);
     const isPremium = p.is_premium === true;
     const hasBuddy = p.buddy_id != null;
 
@@ -151,6 +224,19 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
     if (!objective) continue;
     if (isPremium && objective !== 'reconnect') continue; // paying students aren't a founder-growth target
 
+    // ── TIER 1: real intent — always eligible, never rotated out ──
+    // These are people who did something deliberate: tried to pay, asked for a
+    // buddy, or opened the app in the last three days. There are few of them
+    // and they are the entire reason to spend an evening messaging.
+    const buddyTapIntent = buddyIntent || buddyTaps >= 1;
+    const openedRecentlyEnough = openedDaysAgo != null && openedDaysAgo <= 3;
+    const hasIntent = paid_attempt || buddyTapIntent || openedRecentlyEnough;
+
+    // ── TIER 2: the cold tail — takes turns ──
+    // Without this the same names surfaced every single night, because rank is
+    // a pure function of facts that do not change day to day.
+    if (!hasIntent && rotationBucket(p.id) !== todayBucket) continue;
+
     // ── Why (concrete, trusted signals) + likelihood ──
     const why: string[] = [];
     if (sessions > 0 && (dsl == null || dsl >= 1)) why.push(`opened the app ${sessions}× today but didn’t log — likely just forgot`);
@@ -158,11 +244,19 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
     else if (dsl != null) why.push(`${dsl}d since last study`);
     else why.push('never logged a day');
     why.push(liveSub ? (openedPush.has(p.id) ? 'reminders ON · opens pushes' : 'reminders ON') : prefsPush ? 'reminders DIED' : 'reminders OFF');
+    if (paid_attempt) why.push('STARTED A PAYMENT and didn’t finish');
+    if (wantsBuddy.has(p.id)) why.push('opened the buddy unlock screen');
+    if (askedForSession.has(p.id)) why.push('asked a mentor for a session');
     if (buddyTaps > 0) why.push(`tapped buddy ${buddyTaps}×`);
+    if (openedRecentlyEnough && sessions === 0) {
+      why.push(openedDaysAgo! < 1 ? 'opened the app today' : `opened the app ${Math.round(openedDaysAgo!)}d ago`);
+    }
+    if (!contactedEver.has(p.id)) why.push('never messaged before');
     if (!installed) why.push('never installed the app');
 
     let likelihood: Likelihood = 'medium';
-    if (sessions > 0 && (dsl == null || dsl <= 3)) likelihood = 'high';
+    if (paid_attempt || buddyTapIntent) likelihood = 'high';
+    else if (openedRecentlyEnough) likelihood = 'high';
     else if (dsl != null && dsl <= 3) likelihood = 'high';
     else if (dsl != null && dsl >= 15) likelihood = 'low';
 
@@ -175,7 +269,19 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
     const objectiveWeight: Record<Objective, number> = { log: 100, reconnect: 96, install: 82, buddy: 68, winback: 55 };
     const likWeight = likelihood === 'high' ? 30 : likelihood === 'medium' ? 15 : 0;
     const sessionBoost = sessions > 0 ? 20 : 0;
-    const rank = objectiveWeight[objective] + likWeight + sessionBoost - (dsl ?? 30) * 0.5;
+
+    // Intent outranks everything. A student who reached checkout and stopped
+    // is worth more than any number of "hasn't logged in 4 days" rows, and
+    // these weights are large enough that no combination of the base signals
+    // can push a cold student above a warm one.
+    const intentBoost =
+      (paid_attempt ? 400 : 0) +
+      (buddyTapIntent ? 250 : 0) +
+      (openedRecentlyEnough ? 150 : 0) +
+      // A student never contacted before beats one already messaged twice.
+      (contactedEver.has(p.id) ? 0 : 40);
+
+    const rank = intentBoost + objectiveWeight[objective] + likWeight + sessionBoost - (dsl ?? 30) * 0.5;
 
     const first = (p.full_name ?? '').trim().split(' ')[0] || 'there';
     cards.push({
