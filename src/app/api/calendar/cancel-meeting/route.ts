@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { deleteGoogleMeet } from '@/lib/google-meet';
+import { audit } from '@/lib/integration-audit';
 
 /**
  * POST /api/calendar/cancel-meeting
@@ -114,6 +115,11 @@ export async function POST(request: NextRequest) {
     // The cancel succeeded. calendarError is reported, not thrown — the mentor
     // should know their calendar still shows it, without the cancel appearing
     // to have failed when it didn't.
+    await audit({
+      subjectId: user.id, action: 'booking.cancelled',
+      detail: { sessionId: session.id, studentId: session.student_id, calendarRemoved, calendarError },
+    });
+
     return NextResponse.json({ success: true, calendarRemoved, calendarError });
   } catch (error) {
     console.error('cancel-meeting error:', error);

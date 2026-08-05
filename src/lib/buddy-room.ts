@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createGoogleMeet } from '@/lib/google-meet';
+import { createGoogleMeet, deleteGoogleMeet, messageFor, type Failure } from '@/lib/google-meet';
+import { googleConnection } from '@/lib/google-oauth';
+import { audit } from '@/lib/integration-audit';
 
 // ONE permanent Google Meet room per buddy.
 //
@@ -31,29 +33,21 @@ const ROOM_ANCHOR_DAYS = 365;
 
 export type BuddyRoom =
   | { ok: true; meetUrl: string; eventId: string | null; created: boolean }
-  | { ok: false; reason: 'not_connected' | 'no_link' | 'api_error'; error: string };
+  | Failure;
 
-/**
- * The buddy's permanent room, creating it on first use.
- * Idempotent: once `buddy_meet_url` is on the profile this makes no API call.
- */
-export async function ensureBuddyRoom(buddyUserId: string): Promise<BuddyRoom> {
+async function mintRoom(
+  buddyUserId: string,
+  fullName: string | null,
+  ownerEmail: string | null,
+  reason: 'room.created' | 'room.regenerated',
+  actorId?: string | null,
+): Promise<BuddyRoom> {
   const admin = createAdminClient();
-
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('full_name, buddy_meet_url, buddy_meet_event_id')
-    .eq('id', buddyUserId)
-    .single();
-
-  if (profile?.buddy_meet_url) {
-    return { ok: true, meetUrl: profile.buddy_meet_url, eventId: profile.buddy_meet_event_id ?? null, created: false };
-  }
 
   // Anchor event far out and marked free, so it never sits on top of the
   // mentor's real day. Its only job is to hold the conference.
   const anchor = new Date(Date.now() + ROOM_ANCHOR_DAYS * 86_400_000);
-  const firstName = (profile?.full_name ?? '').split(' ')[0] || 'your';
+  const firstName = (fullName ?? '').split(' ')[0] || 'your';
 
   const room = await createGoogleMeet({
     buddyUserId,
@@ -66,18 +60,139 @@ export async function ensureBuddyRoom(buddyUserId: string): Promise<BuddyRoom> {
     busy: false,
   });
 
-  if (!room.ok) return room;
+  if (!room.ok) {
+    await audit({ subjectId: buddyUserId, actorId, action: reason, ok: false, detail: { failure: room.reason } });
+    return room;
+  }
 
   const { error } = await admin
     .from('profiles')
-    .update({ buddy_meet_url: room.meetLink, buddy_meet_event_id: room.eventId })
+    .update({
+      buddy_meet_url: room.meetLink,
+      buddy_meet_event_id: room.eventId,
+      buddy_meet_email: ownerEmail,
+      buddy_meet_calendar_id: room.calendarId,
+    })
     .eq('id', buddyUserId);
 
   if (error) {
     // The room exists in Google but we could not remember it. Saying "ok" here
     // would mint a second room on the next booking, forever.
+    await audit({ subjectId: buddyUserId, actorId, action: reason, ok: false, detail: { save: error.message } });
     return { ok: false, reason: 'api_error', error: `Created the room but could not save it: ${error.message}` };
   }
 
+  await audit({
+    subjectId: buddyUserId, actorId, action: reason,
+    detail: { eventId: room.eventId, ownerEmail },
+  });
   return { ok: true, meetUrl: room.meetLink, eventId: room.eventId, created: true };
+}
+
+/**
+ * The buddy's permanent room, creating it on first use.
+ *
+ * Idempotent: once `buddy_meet_url` is on the profile this makes no API call —
+ * UNLESS the connected Google account has changed. A mentor who reconnects
+ * with a different address no longer owns the old room: it sits on a calendar
+ * we can't read, write or cancel, so the link would keep "working" while being
+ * invisible to us. A changed owner means a new room, always.
+ */
+export async function ensureBuddyRoom(buddyUserId: string): Promise<BuddyRoom> {
+  const admin = createAdminClient();
+
+  const [{ data: profile }, connection] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('full_name, buddy_meet_url, buddy_meet_event_id, buddy_meet_email')
+      .eq('id', buddyUserId)
+      .single(),
+    googleConnection(buddyUserId),
+  ]);
+
+  if (!connection.connected) {
+    return { ok: false, reason: 'not_connected', error: messageFor('not_connected') };
+  }
+
+  if (profile?.buddy_meet_url) {
+    const owner = profile.buddy_meet_email;
+    const sameAccount = !owner || !connection.email || owner === connection.email;
+    if (sameAccount) {
+      return { ok: true, meetUrl: profile.buddy_meet_url, eventId: profile.buddy_meet_event_id ?? null, created: false };
+    }
+    // Different Google account. The old event is unreachable from the new
+    // credentials, so there is nothing to delete — just stop pointing at it.
+    await audit({
+      subjectId: buddyUserId, action: 'google.account_changed',
+      detail: { from: owner, to: connection.email, orphanedEventId: profile.buddy_meet_event_id },
+    });
+  }
+
+  return mintRoom(buddyUserId, profile?.full_name ?? null, connection.email, 'room.created');
+}
+
+/**
+ * Throw the current room away and mint a fresh one.
+ *
+ * For support: a mentor deletes the underlying calendar event by accident, or
+ * wants a clean room because an old link is circulating. Best-effort on the
+ * delete — if the old event is already gone, that is the desired end state,
+ * not a failure.
+ */
+export async function regenerateBuddyRoom(buddyUserId: string, actorId?: string | null): Promise<BuddyRoom> {
+  const admin = createAdminClient();
+  const [{ data: profile }, connection] = await Promise.all([
+    admin.from('profiles').select('full_name, buddy_meet_event_id').eq('id', buddyUserId).single(),
+    googleConnection(buddyUserId),
+  ]);
+
+  if (!connection.connected) {
+    return { ok: false, reason: 'not_connected', error: messageFor('not_connected') };
+  }
+
+  if (profile?.buddy_meet_event_id) {
+    const removed = await deleteGoogleMeet(buddyUserId, profile.buddy_meet_event_id);
+    if (!removed.ok) console.error('[room] old event not deleted:', removed.reason, removed.error);
+  }
+
+  return mintRoom(buddyUserId, profile?.full_name ?? null, connection.email, 'room.regenerated', actorId);
+}
+
+// ── Can this buddy take a booking at all? ───────────────────────────────────
+
+export interface BookingReadiness {
+  ready: boolean;
+  googleConnected: boolean;
+  hasRoom: boolean;
+  googleEmail: string | null;
+  /** One sentence for the UI when `ready` is false. */
+  blocker: string | null;
+}
+
+/**
+ * Everything the booking UI needs to decide whether to offer the button —
+ * and the same check the API runs before it accepts one.
+ *
+ * Deliberately exposes NO token, no calendar id and no event id. A client
+ * needs to know *whether* booking is possible, never the credentials that
+ * make it possible.
+ */
+export async function buddyBookingReadiness(buddyUserId: string): Promise<BookingReadiness> {
+  const admin = createAdminClient();
+  const [{ data: profile }, connection] = await Promise.all([
+    admin.from('profiles').select('buddy_meet_url').eq('id', buddyUserId).single(),
+    googleConnection(buddyUserId),
+  ]);
+
+  const hasRoom = !!profile?.buddy_meet_url;
+  const ready = connection.connected && hasRoom;
+  return {
+    ready,
+    googleConnected: connection.connected,
+    hasRoom,
+    googleEmail: connection.email,
+    blocker: connection.connected
+      ? (hasRoom ? null : 'Your meeting room has not been created yet. Reconnect Google to set it up.')
+      : 'Connect your Google Calendar before booking a session.',
+  };
 }

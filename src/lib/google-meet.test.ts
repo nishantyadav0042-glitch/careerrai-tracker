@@ -14,7 +14,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/lib/google-oauth', () => ({
   getAccessToken: vi.fn(async (userId: string) => (userId === 'unconnected' ? null : 'tok-123')),
+  clearGoogleState: vi.fn(async () => {}),
 }));
+vi.mock('@/lib/integration-audit', () => ({ audit: vi.fn(async () => {}) }));
 
 import { updateGoogleMeet, deleteGoogleMeet } from './google-meet';
 
@@ -114,10 +116,12 @@ describe('updateGoogleMeet — moving a session, not replacing it', () => {
     }
   });
 
-  it('turns a network failure into an error, never a fake success', async () => {
+  it('turns a network failure into a transient error, never a fake success', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNRESET'); }));
     const res = await updateGoogleMeet({ buddyUserId: 'b', eventId: 'ev-1', start: START, durationMinutes: 30 });
-    expect(res).toMatchObject({ ok: false, reason: 'api_error' });
+    // 'google_down', not 'api_error': nothing reached Google, so retrying is
+    // the right advice and the mentor's setup must be left alone.
+    expect(res).toMatchObject({ ok: false, reason: 'google_down' });
   });
 });
 
@@ -145,7 +149,7 @@ describe('deleteGoogleMeet — cancelling for real', () => {
   it('does not swallow a genuine failure', async () => {
     mockFetch(() => new Response('Rate Limit Exceeded', { status: 403 }));
     const res = await deleteGoogleMeet('b', 'ev-1');
-    expect(res).toMatchObject({ ok: false, reason: 'api_error' });
+    expect(res).toMatchObject({ ok: false, reason: 'forbidden' });
     if (!res.ok) expect(res.error).toContain('403');
   });
 

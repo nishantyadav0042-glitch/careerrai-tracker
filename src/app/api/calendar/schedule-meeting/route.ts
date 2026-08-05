@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
+import { statusFor } from '@/lib/google-meet';
+import { audit } from '@/lib/integration-audit';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -129,6 +131,10 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (existing) {
+      await audit({
+        subjectId: user.id, action: 'booking.rejected', ok: false,
+        detail: { reason: 'session_exists', studentId, existingSessionId: existing.id },
+      });
       return NextResponse.json({
         error: 'You already have an active meeting with this student. Cancel or complete it before booking another session.',
         reason: 'session_exists',
@@ -152,10 +158,17 @@ export async function POST(request: NextRequest) {
       }
       meetLink = manualLink;
     } else {
+      // ensureBuddyRoom is the availability check: it verifies the mentor is
+      // connected, mints the room if this is their first booking, and detects
+      // a reconnect under a different Google account. A booking never gets
+      // past here without a link we own on a calendar we can reach.
       const room = await ensureBuddyRoom(user.id);
       if (!room.ok) {
-        const status = room.reason === 'not_connected' ? 428 : 502;
-        return NextResponse.json({ error: room.error, reason: room.reason }, { status });
+        await audit({
+          subjectId: user.id, action: 'booking.rejected', ok: false,
+          detail: { reason: room.reason, studentId },
+        });
+        return NextResponse.json({ error: room.error, reason: room.reason }, { status: statusFor(room.reason) });
       }
       meetLink = room.meetUrl;
     }
@@ -184,14 +197,17 @@ export async function POST(request: NextRequest) {
       // These are the authoritative answers, and they fire on races the SELECT
       // above cannot see.
       if (sessionError?.code === '23505') {
+        await audit({ subjectId: user.id, action: 'booking.rejected', ok: false, detail: { reason: 'session_exists', studentId, viaConstraint: true } });
         return NextResponse.json({
           error: 'You already have an active meeting with this student. Cancel or complete it before booking another session.',
           reason: 'session_exists',
         }, { status: 409 });
       }
       if (sessionError?.code === '23P01') {
+        // The losing side of a race, or an honest double-book. Same answer.
+        await audit({ subjectId: user.id, action: 'booking.rejected', ok: false, detail: { reason: 'buddy_double_booked', studentId, startTime: start.toISOString() } });
         return NextResponse.json({
-          error: 'You already have another session at that time. Because every session of yours runs in the same room, two students can never be booked into the same slot — pick a time at least 15 minutes clear of your other calls.',
+          error: 'Buddy is no longer available for this slot. Every session of yours runs in the same room, so two students can never share a slot — pick a time at least 15 minutes clear of your other calls.',
           reason: 'buddy_double_booked',
         }, { status: 409 });
       }
@@ -225,6 +241,11 @@ export async function POST(request: NextRequest) {
       .then(({ error: e }) => {
         if (e) console.error('Notification insert failed:', e.message);
       });
+
+    await audit({
+      subjectId: user.id, action: 'booking.created',
+      detail: { sessionId: session.id, studentId, startTime: start.toISOString(), durationMinutes, sessionType },
+    });
 
     return NextResponse.json({
       success: true,

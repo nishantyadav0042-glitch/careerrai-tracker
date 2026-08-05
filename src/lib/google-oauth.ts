@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SITE_URL } from '@/lib/site';
+import { audit } from '@/lib/integration-audit';
 
 // ── Google account connection (mentors) ─────────────────────────────────────
 //
@@ -136,10 +137,14 @@ export async function getAccessToken(userId: string): Promise<string | null> {
     grant_type: 'refresh_token',
   });
   if (!tok.access_token) {
-    // Revoked or expired grant. Drop the dead row so the UI shows
-    // "not connected" and prompts a reconnect, instead of failing silently
-    // on every future booking.
-    await admin.from('google_oauth_tokens').delete().eq('user_id', userId);
+    // invalid_grant: the user revoked us in their Google account, changed
+    // their password, or the token aged out. It will NEVER work again, so
+    // retrying is pointless — tear the connection down once, loudly, and let
+    // the UI ask for a reconnect.
+    await clearGoogleState(userId, 'google.revoked', {
+      googleError: tok.error ?? null,
+      googleErrorDescription: tok.error_description ?? null,
+    });
     return null;
   }
   await admin.from('google_oauth_tokens').update({
@@ -160,7 +165,38 @@ export async function googleConnection(userId: string): Promise<{ connected: boo
   return { connected: !!data, email: data?.google_email ?? null };
 }
 
-export async function disconnectGoogle(userId: string): Promise<void> {
+/**
+ * Tear a Google connection down to nothing, in ONE place.
+ *
+ * Deleting the token alone is the bug that hides for a week: the profile
+ * keeps `buddy_meet_url`, so the app still believes it can hand out a Meet
+ * link, and every booking cheerfully saves a session pointing at a room on a
+ * calendar we can no longer read, write, or cancel. Connection state and room
+ * state must die together — so nothing calls the delete directly any more.
+ *
+ * Used both when a mentor disconnects on purpose and when Google tells us the
+ * grant is dead. The only difference is which action gets logged.
+ */
+export async function clearGoogleState(
+  userId: string,
+  action: 'google.disconnected' | 'google.revoked' | 'google.account_changed',
+  detail: Record<string, unknown> = {},
+  actorId?: string | null,
+): Promise<void> {
   const admin = createAdminClient();
   await admin.from('google_oauth_tokens').delete().eq('user_id', userId);
+  await admin
+    .from('profiles')
+    .update({
+      buddy_meet_url: null,
+      buddy_meet_event_id: null,
+      buddy_meet_email: null,
+      buddy_meet_calendar_id: null,
+    })
+    .eq('id', userId);
+  await audit({ subjectId: userId, actorId, action, detail, ok: true });
+}
+
+export async function disconnectGoogle(userId: string, actorId?: string | null): Promise<void> {
+  await clearGoogleState(userId, 'google.disconnected', {}, actorId);
 }

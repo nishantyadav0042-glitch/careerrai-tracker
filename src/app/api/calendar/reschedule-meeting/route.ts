@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { updateGoogleMeet } from '@/lib/google-meet';
+import { updateGoogleMeet, statusFor } from '@/lib/google-meet';
+import { audit } from '@/lib/integration-audit';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: session } = await admin
       .from('video_sessions')
-      .select('id, buddy_id, student_id, title, session_status, duration_minutes, google_event_id, google_meet_link')
+      .select('id, buddy_id, student_id, title, session_status, duration_minutes, scheduled_at, google_event_id, google_meet_link')
       .eq('id', meetingId)
       .single();
 
@@ -102,8 +103,7 @@ export async function POST(request: NextRequest) {
       // refuse a reschedule: the join link still works and the app row is the
       // source of truth.
       if (!moved.ok && moved.reason !== 'gone') {
-        const status = moved.reason === 'not_connected' ? 428 : 502;
-        return NextResponse.json({ error: moved.error, reason: moved.reason }, { status });
+        return NextResponse.json({ error: moved.error, reason: moved.reason }, { status: statusFor(moved.reason) });
       }
     }
 
@@ -153,6 +153,11 @@ export async function POST(request: NextRequest) {
       .then(({ error: e }) => {
         if (e) console.error('Notification insert failed:', e.message);
       });
+
+    await audit({
+      subjectId: user.id, action: 'booking.rescheduled',
+      detail: { sessionId: session.id, studentId: session.student_id, from: session.scheduled_at ?? null, to: start.toISOString() },
+    });
 
     return NextResponse.json({ success: true, meetingId: session.id, meetLink, startTime: start.toISOString() });
   } catch (error) {

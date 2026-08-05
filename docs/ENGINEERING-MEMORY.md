@@ -693,6 +693,46 @@ matters, put it where the data is.* Both were verified against the live database
 inside a deliberately aborted transaction before shipping — five cases, five
 expected outcomes, zero rows written.
 
+### Hardening pass (same day, founder review)
+
+The founder accepted the architecture and named ten gaps before merge. What
+they have in common is worth stating: **every one is about the states AFTER the
+happy path** — a revoked grant, a swapped Google account, a deleted event, a
+lost race, a support ticket at 10pm. The happy path was already fine. That is
+usually where the next incident is.
+
+- **Connection state and room state die together.** `clearGoogleState` is now
+  the only way to disconnect, and it clears the token AND `buddy_meet_url`.
+  Deleting just the token is the bug that hides for a week: the app keeps
+  believing it can hand out a link on a calendar it can no longer read.
+- **A dead grant is torn down once, not retried forever.** A 401 from any
+  Calendar call clears the connection on the spot and the mentor is told to
+  reconnect. A 429/500/network failure changes *nothing* — their setup is fine,
+  and wiping it would turn a 30-second blip into a support ticket. That
+  distinction is the point of `FailureReason`.
+- **A room belongs to a Google ACCOUNT, not to a buddy.** Reconnecting with a
+  different address mints a new room, because the old one now sits on a
+  calendar we cannot read, write or cancel.
+- **`integration_audit_log`** records every connect, disconnect, revoke, room
+  mint, booking, rejection and Google error. Incident #21 cost an hour to
+  reconstruct a timeline from `created_at` columns that were never meant to be
+  one. A CHECK constraint rejects any row whose detail mentions a token — the
+  log is the likeliest place for a credential to leak by accident, so that is
+  enforced by the database, not by review.
+- **Admin overrides** (`/api/admin/buddy-integration`) cover the four fixes
+  support has actually needed: cancel a stuck session to release the pair lock,
+  clear a broken Google connection, regenerate a room, and see who cannot book.
+  Nobody should be opening the SQL editor to fix a session — that skips the
+  audit trail and teaches us nothing.
+- **What is NOT proven:** the two-simultaneous-requests race was verified as
+  far as this environment allows (the constraint rejects the duplicate, live),
+  but genuine wall-clock concurrency needs two connections at once —
+  unavailable here (no service-role key, `max_prepared_transactions` is 0, and
+  the SQL tooling serialises). `scripts/race-booking-test.mjs` fires N parallel
+  requests at a deployed instance and asserts exactly one winner; it must be
+  run once against production after this ships. **Do not record this as proven
+  until that run is green.**
+
 ---
 
 ## How prevention becomes permanent

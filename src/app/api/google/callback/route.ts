@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { exchangeCodeAndStore } from '@/lib/google-oauth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureBuddyRoom } from '@/lib/buddy-room';
+import { audit } from '@/lib/integration-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,8 @@ export async function GET(request: Request) {
   // connection into "failed" over a retryable step would be a lie.
   const admin = createAdminClient();
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  await audit({ subjectId: user.id, action: 'google.connected', detail: { email: result.email, role: profile?.role ?? null } });
+
   if (profile?.role === 'buddy') {
     const room = await ensureBuddyRoom(user.id);
     if (!room.ok) console.error('[google] permanent room not created:', room.reason, room.error);
