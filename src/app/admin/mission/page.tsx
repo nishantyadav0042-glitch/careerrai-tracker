@@ -22,7 +22,7 @@ export default async function MissionPage() {
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  const { cards, rootCause: rc, sentToday } = await buildMissionQueue(admin, 45);
+  const { cards, rootCause: rc, sentToday } = await buildMissionQueue(admin, 40);
   const mins = Math.round(cards.length * 1.5);
   const hour = istHour();
   const primeTime = hour >= 18 && hour < 21;

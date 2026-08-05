@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { daysSinceLastLog } from '@/lib/streak-utils';
 import { SITE_URL } from '@/lib/site';
+import { resolveCatExamDate } from '@/lib/routine-engine';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -83,27 +84,62 @@ function waNumber(phone: string | null): string | null {
   return d.length === 12 && d.startsWith('91') ? d : null;
 }
 
-// The messages — Nishant's voice, founder's format (23 July): problem FIRST,
-// mostly English, only the closing nudge in Hinglish, no emoji, one objective.
-// No invented facts, no fake stats.
-function buildMessage(objective: Objective, first: string): string {
+// The messages — Nishant's voice, founder's format: problem FIRST, mostly
+// English, the nudge in Hinglish, no emoji, one objective, and the app link in
+// EVERY message (founder, 6 Aug — a message with no link is a message that
+// needs a second message).
+//
+// Rewritten 6 Aug to be direct and to carry real urgency: "ab to 3 mahine bche
+// hain, buddy try krke dekhlo". The countdown is COMPUTED from the real exam
+// date, never typed in — a hardcoded "3 months" is a lie by the end of the
+// month, and nothing kills a founder's credibility faster than a countdown the
+// student can tell is wrong.
+//
+// The rule that has not changed: no invented facts, no fake statistics. The
+// fear in these messages is real arithmetic — the days left, and how long this
+// student has personally been away.
+
+interface MessageCtx {
+  /** Real days to the exam, from catExamDate(). */
+  daysToCat: number;
+  /** Days since their last log, when we know it. */
+  daysSinceLog: number | null;
+}
+
+function buildMessage(objective: Objective, first: string, ctx: MessageCtx): string {
+  const d = ctx.daysToCat;
+  const link = SITE_URL;
+
   switch (objective) {
     case 'log':
-      return `${first}, you haven't filled today's log on the CareerRai app. Nishant here, I built CareerRai. If something is stopping you, tell me directly and I will help. Warna 2 min lagenge, kar lo yaar. ${SITE_URL}`;
+      return `${first}, CAT is ${d} days away and today's log is still empty. Nishant here, I built CareerRai. Every student who converts does the same boring thing — they write down what they studied, so by October they know exactly which topic is weak. The ones who don't, find out in the exam hall. 2 minute ka kaam hai, aaj ka log bhar do. ${link}`;
+
     case 'reconnect':
-      return `${first}, your notifications on CareerRai have stopped, so your daily study plan isn't reaching you. Nishant here, I built CareerRai. Just open the app once — ${SITE_URL} — and they reconnect on their own. Koi dikkat ho to seedha bata do.`;
+      return `${first}, your reminders have stopped, so your daily plan isn't reaching you at all — and only ${d} days are left. Nishant here, I built CareerRai. Bas app ek baar khol lo, reminders apne aap chalu ho jayenge. Jinka plan roz pahunchta hai unka syllabus October me khatam ho jata hai; baaki November me revision dhoondh rahe hote hain. ${link}`;
+
     case 'buddy':
-      return `${first}, you're studying consistently and you checked out the Exam Buddy option. Nishant here, I built CareerRai. An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you — it's just Rs 999, and if you don't find real value you get a full refund, so there's no risk. You also get 3 free messages to try it first. Zyada details chahiye to bata do, bhej deta hoon. App: ${SITE_URL}`;
+      return `${first}, ab sirf ${d} din bache hain. You looked at Exam Buddy and left it. Nishant here, I built CareerRai, so let me be straight with you. A buddy is an IIM student who sits with your plan every week — what to study, what to skip, and why your mock score isn't moving. Rs 999, full refund if you don't find value, and 3 free messages before you pay anything. In ${d} dino me ya to koi tumhare saath baithega, ya tum akele guess karte rahoge. Ek baar try karke dekh lo — I can tell you, you won't regret it at all. ${link}`;
+
     case 'install':
-      return `${first}, your CAT plan is ready but the app isn't installed yet, so your daily plan and reminders can't reach you. Nishant here, I built CareerRai. It takes 10 seconds: open ${SITE_URL} in Chrome and tap Add to Home Screen. Koi problem aaye to bata do.`;
-    case 'winback':
-      return `${first}, your studies on CareerRai have been paused for a few days. Nishant here, I built CareerRai. Is everything okay? Aaj bas 20 minutes, ek topic — utna hi kaafi hai. Kahan atka bata do, main saath hoon. ${SITE_URL}`;
+      return `${first}, your CAT plan is ready and sitting in your account, but the app isn't installed — so the plan and the reminders can't reach you. ${d} days left. Nishant here, I built CareerRai. 10 second ka kaam hai: ${link} Chrome me kholo aur Add to Home Screen dabao. Plan bana pada hai, use to kar lo.`;
+
+    case 'winback': {
+      const away = ctx.daysSinceLog != null ? `${ctx.daysSinceLog} din` : 'kuch time';
+      return `${first}, ${away} se CareerRai par kuch nahi hua, aur CAT ab ${d} din door hai. Nishant here, I built CareerRai. Main judge nahi kar raha — har serious aspirant ke saath break hota hai. Farq sirf itna hai ki kuch log wapas aate hain. Woh aaj 20 minute aur ek topic se shuru karte hain, aur November tak unhe khud yakeen nahi hota ki wapas aa gaye. Jo nahi aate, woh agle saal yahi soch rahe hote hain. Aaj ek topic. ${link}`;
+    }
   }
 }
 
-export async function buildMissionQueue(admin?: any, limit = 45): Promise<MissionQueue> {
+export async function buildMissionQueue(admin?: any, limit = 40): Promise<MissionQueue> {
   const db = admin ?? createAdminClient();
   const nowMs = Date.now();
+  // Real countdown, computed from the actual exam date. Never a typed-in
+  // number — a hardcoded "3 months" is wrong within weeks, and a student can
+  // tell. Also drives the FOMO honestly: the fear is arithmetic, not a claim.
+  // resolveCatExamDate, not catExamDate — it rolls forward once this year's
+  // exam has passed, so the countdown never reads 0 through December.
+  const exam = resolveCatExamDate(new Date(nowMs));
+  const daysToCat = Math.max(0, Math.ceil((exam.getTime() - nowMs) / 86_400_000));
   const istDay = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const istDayStart = istDay + 'T00:00:00+05:30';
   const since7d = new Date(nowMs - 7 * 86_400_000).toISOString();
@@ -294,7 +330,7 @@ export async function buildMissionQueue(admin?: any, limit = 45): Promise<Missio
       objectiveLabel: OBJECTIVE_LABEL[objective],
       why,
       likelihood,
-      message: buildMessage(objective, first),
+      message: buildMessage(objective, first, { daysToCat, daysSinceLog: dsl ?? null }),
       rank,
     });
   }
