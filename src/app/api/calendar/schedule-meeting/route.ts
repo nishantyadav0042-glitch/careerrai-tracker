@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createGoogleMeet } from '@/lib/google-meet';
+import { googleConnection } from '@/lib/google-oauth';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -130,13 +131,20 @@ export async function POST(request: NextRequest) {
       }
       meetLink = manualLink;
     } else {
+      // Invite address, best first: the Google account the STUDENT connected
+      // (always correct, always a real inbox), then whatever email is on their
+      // profile. Phone signups have neither until they connect — and that must
+      // never block the booking, so null is a fine answer.
+      const studentGoogle = await googleConnection(studentId);
+      const inviteEmail = studentGoogle.email ?? student.email ?? null;
+
       const meet = await createGoogleMeet({
         buddyUserId: user.id,
         title,
         description: `CareerRai 1:1 with ${student.full_name}.`,
         start,
         durationMinutes,
-        studentEmail: student.email ?? null,
+        studentEmail: inviteEmail,
       });
       if (!meet.ok) {
         const status = meet.reason === 'not_connected' ? 428 : 502;
