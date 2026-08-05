@@ -67,13 +67,18 @@ export async function POST(request: NextRequest) {
 
   const released: string[] = [];
   for (const s of stale) {
-    const { error: e } = await admin
+    const { data: updated, error: e } = await admin
       .from('video_sessions')
       .update({ session_status: 'expired', updated_at: new Date().toISOString() })
       .eq('id', s.id)
       // Guard against releasing a session someone closed out in the meantime.
-      .in('session_status', ['scheduled', 'active']);
+      .in('session_status', ['scheduled', 'active'])
+      .select('id');
     if (e) { console.error('[release-stale-sessions] release failed', s.id, e.message); continue; }
+    // A 0-row update means the guard fired — the mentor closed it out between
+    // our read and our write. Counting it as released would make the metric
+    // lie, and the audit log would claim an event that never happened.
+    if (!updated?.length) continue;
 
     released.push(s.id);
     await audit({
@@ -88,11 +93,23 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Idempotency keys are only useful for as long as a client might retry.
+  // Without this they accumulate one row per booking, forever — the orphan
+  // table nobody notices until it is large. A day is far beyond any retry.
+  const keyCutoff = new Date(now - 24 * 3_600_000).toISOString();
+  const { data: prunedKeys, error: pruneErr } = await admin
+    .from('idempotency_keys')
+    .delete()
+    .lt('created_at', keyCutoff)
+    .select('key');
+  if (pruneErr) console.error('[release-stale-sessions] key prune failed:', pruneErr.message);
+
   return NextResponse.json({
     ok: true,
     examined: candidates?.length ?? 0,
     released: released.length,
     sessionIds: released,
+    idempotencyKeysPruned: prunedKeys?.length ?? 0,
   });
 }
 

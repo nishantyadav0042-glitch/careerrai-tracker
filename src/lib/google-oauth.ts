@@ -197,6 +197,29 @@ export async function clearGoogleState(
   await audit({ subjectId: userId, actorId, action, detail, ok: true });
 }
 
+/**
+ * A user-initiated disconnect, which must leave NOTHING behind.
+ *
+ * The room is deleted from Google FIRST, while the token still exists — after
+ * clearGoogleState there is no credential to delete it with and no stored
+ * event id to name it, so the conference would live on their calendar forever,
+ * still joinable by anyone holding the link, belonging to a mentor who thinks
+ * they disconnected.
+ *
+ * Dynamic import because google-meet imports from this module; a static import
+ * would be a cycle.
+ */
 export async function disconnectGoogle(userId: string, actorId?: string | null): Promise<void> {
-  await clearGoogleState(userId, 'google.disconnected', {}, actorId);
+  let roomDeleted = false;
+  let roomError: string | undefined;
+  try {
+    const { releaseBuddyRoom } = await import('@/lib/buddy-room');
+    ({ deleted: roomDeleted, error: roomError } = await releaseBuddyRoom(userId));
+  } catch (e) {
+    // Never block a disconnect on the cleanup. A leftover calendar entry is a
+    // nuisance; refusing to let someone disconnect is a trust problem.
+    roomError = String(e);
+    console.error('[google] room release failed during disconnect:', roomError);
+  }
+  await clearGoogleState(userId, 'google.disconnected', { roomDeleted, roomError: roomError ?? null }, actorId);
 }

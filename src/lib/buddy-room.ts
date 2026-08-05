@@ -35,11 +35,28 @@ export type BuddyRoom =
   | { ok: true; meetUrl: string; eventId: string | null; created: boolean }
   | Failure;
 
+/**
+ * Mint the room and claim it, or lose the claim gracefully.
+ *
+ * `expectedCurrentUrl` makes the save a compare-and-swap:
+ *   null      — claim only if the buddy still has NO room
+ *   a string  — claim only if the room is still the one we read
+ *   undefined — force (regeneration; the caller means to replace whatever is there)
+ *
+ * Without this it is a plain read-then-write, and two concurrent first
+ * bookings by the same mentor each see "no room", each create a Google event,
+ * and the second UPDATE overwrites the first. The mentor ends up with TWO
+ * conference events on their calendar, one of which the app can never see
+ * again — it cannot be deleted on disconnect, regenerated, or found at all.
+ * That silently breaks the one invariant this whole design rests on: exactly
+ * one room per buddy.
+ */
 async function mintRoom(
   buddyUserId: string,
   fullName: string | null,
   ownerEmail: string | null,
   reason: 'room.created' | 'room.regenerated',
+  expectedCurrentUrl: string | null | undefined,
   actorId?: string | null,
 ): Promise<BuddyRoom> {
   const admin = createAdminClient();
@@ -65,7 +82,7 @@ async function mintRoom(
     return room;
   }
 
-  const { error } = await admin
+  let claim = admin
     .from('profiles')
     .update({
       buddy_meet_url: room.meetLink,
@@ -75,11 +92,40 @@ async function mintRoom(
     })
     .eq('id', buddyUserId);
 
+  if (expectedCurrentUrl === null) claim = claim.is('buddy_meet_url', null);
+  else if (typeof expectedCurrentUrl === 'string') claim = claim.eq('buddy_meet_url', expectedCurrentUrl);
+
+  const { data: claimed, error } = await claim.select('id');
+
   if (error) {
     // The room exists in Google but we could not remember it. Saying "ok" here
     // would mint a second room on the next booking, forever.
     await audit({ subjectId: buddyUserId, actorId, action: reason, ok: false, detail: { save: error.message } });
     return { ok: false, reason: 'api_error', error: `Created the room but could not save it: ${error.message}` };
+  }
+
+  if (!claimed?.length) {
+    // We lost the race: a concurrent call already claimed a room for this
+    // buddy. Ours is an orphan — delete it, or it sits on their calendar
+    // forever as a second conference nothing can reach.
+    const removed = await deleteGoogleMeet(buddyUserId, room.eventId);
+    if (!removed.ok) console.error('[room] orphan event not cleaned up:', room.eventId, removed.error);
+
+    const { data: winner } = await admin
+      .from('profiles')
+      .select('buddy_meet_url, buddy_meet_event_id')
+      .eq('id', buddyUserId)
+      .single();
+
+    await audit({
+      subjectId: buddyUserId, actorId, action: reason, ok: false,
+      detail: { lostRace: true, discardedEventId: room.eventId, orphanDeleted: removed.ok },
+    });
+
+    if (!winner?.buddy_meet_url) {
+      return { ok: false, reason: 'api_error', error: 'Could not set up your meeting room — please try again.' };
+    }
+    return { ok: true, meetUrl: winner.buddy_meet_url, eventId: winner.buddy_meet_event_id ?? null, created: false };
   }
 
   await audit({
@@ -126,9 +172,12 @@ export async function ensureBuddyRoom(buddyUserId: string): Promise<BuddyRoom> {
       subjectId: buddyUserId, action: 'google.account_changed',
       detail: { from: owner, to: connection.email, orphanedEventId: profile.buddy_meet_event_id },
     });
+    // Swap only if the stale room is still the one we read.
+    return mintRoom(buddyUserId, profile.full_name ?? null, connection.email, 'room.created', profile.buddy_meet_url);
   }
 
-  return mintRoom(buddyUserId, profile?.full_name ?? null, connection.email, 'room.created');
+  // First room for this mentor: claim it only if they still have none.
+  return mintRoom(buddyUserId, profile?.full_name ?? null, connection.email, 'room.created', null);
 }
 
 /**
@@ -155,7 +204,38 @@ export async function regenerateBuddyRoom(buddyUserId: string, actorId?: string 
     if (!removed.ok) console.error('[room] old event not deleted:', removed.reason, removed.error);
   }
 
-  return mintRoom(buddyUserId, profile?.full_name ?? null, connection.email, 'room.regenerated', actorId);
+  // Regeneration is a deliberate replacement — force the write.
+  return mintRoom(buddyUserId, profile?.full_name ?? null, connection.email, 'room.regenerated', undefined, actorId);
+}
+
+/**
+ * Take the permanent room OFF Google before a connection is torn down.
+ *
+ * Disconnecting used to clear our columns and leave the conference event
+ * sitting on the mentor's calendar forever — an artifact nothing could ever
+ * reach again, since we had just thrown away the only pointer to it. Worse,
+ * the link stays JOINABLE: anyone holding it keeps a working room attached to
+ * a mentor who believes they have disconnected.
+ *
+ * Ordering is the whole trick: this must run while the token still exists.
+ * Best-effort — a failure here must never prevent someone from disconnecting.
+ */
+export async function releaseBuddyRoom(buddyUserId: string): Promise<{ deleted: boolean; error?: string }> {
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('buddy_meet_event_id')
+    .eq('id', buddyUserId)
+    .single();
+
+  if (!profile?.buddy_meet_event_id) return { deleted: false };
+
+  const removed = await deleteGoogleMeet(buddyUserId, profile.buddy_meet_event_id);
+  if (!removed.ok) {
+    console.error('[room] could not delete permanent room on disconnect:', removed.reason, removed.error);
+    return { deleted: false, error: removed.error };
+  }
+  return { deleted: true };
 }
 
 // ── Can this buddy take a booking at all? ───────────────────────────────────

@@ -26,7 +26,7 @@ export async function GET() {
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const [{ data: buddies }, { data: tokens }, { data: liveSessions }] = await Promise.all([
-    admin.from('profiles').select('id, full_name').eq('role', 'buddy'),
+    admin.from('profiles').select('id, full_name, buddy_meet_url').eq('role', 'buddy'),
     admin.from('google_oauth_tokens').select('user_id, google_email'),
     admin.from('video_sessions').select('buddy_id, student_id').eq('session_status', 'scheduled'),
   ]);
@@ -36,7 +36,12 @@ export async function GET() {
     name: b.full_name,
     googleConnected: connected.has(b.id),
     googleEmail: connected.get(b.id) ?? null,
-    canSchedule: connected.has(b.id),
+    // Booking needs a connection AND a minted room — the same two conditions
+    // buddyBookingReadiness enforces. Reporting only the token here made this
+    // a second source of truth that could say "can schedule" while the API
+    // refused the booking.
+    hasRoom: !!b.buddy_meet_url,
+    canSchedule: connected.has(b.id) && !!b.buddy_meet_url,
   }));
 
   // Incident #21 guard: a pair must never hold two live sessions at once.
