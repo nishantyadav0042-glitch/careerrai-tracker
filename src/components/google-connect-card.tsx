@@ -66,7 +66,13 @@ export function GoogleConnectCard({
           {status === 'denied' && (
             <p className="mt-2 flex items-start gap-1.5 text-[12px] font-medium text-orange-800">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              You cancelled at Google&apos;s screen. Nothing was connected — try again when ready.
+              {/* This fires both when someone presses Cancel AND when Google
+                  refuses outright — so it must not accuse them of cancelling.
+                  If Google said "this app is being tested", that account has to
+                  be added as a test user; nothing they do on this screen helps. */}
+              Google didn&apos;t complete the connection. If it said the app is still
+              being tested or unverified, that Google account needs to be added as a
+              tester — tell the team which address you used.
             </p>
           )}
           {status === 'failed' && (

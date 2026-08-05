@@ -22,6 +22,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export type AuditAction =
   | 'google.connected'
   | 'google.disconnected'
+  | 'google.connect_failed'   // consent refused, or the token exchange failed
   | 'google.revoked'          // Google rejected our refresh token — not a user action
   | 'google.account_changed'
   | 'google.api_error'
