@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { buddyBookingReadiness } from '@/lib/buddy-room';
 import { computeWeeklyDiagnosis } from '@/lib/weekly-diagnosis';
 import { getAuthUser } from '@/lib/auth';
 import { computeSummary } from '@/lib/analytics';
@@ -147,7 +148,7 @@ export default async function BuddyStudentDetailPage({
     { data: debriefsRaw },
     { data: existingBriefing },
     { data: lastVideoSession },
-    { data: buddyTokens },
+    bookingReadiness,
     { data: upcomingSessions },
     { data: recentCompleted },
   ] = await Promise.all([
@@ -185,11 +186,8 @@ export default async function BuddyStudentDetailPage({
       .order('ended_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    admin
-      .from('google_oauth_tokens')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle(),
+    // Readiness (below) supersedes a bare token read — it also checks the room.
+    buddyBookingReadiness(user.id),
     admin
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link, session_type')
@@ -223,7 +221,10 @@ export default async function BuddyStudentDetailPage({
   const daysSinceLastSession = lastSessionDate
     ? Math.floor((new Date().getTime() - lastSessionDate.getTime()) / 86_400_000)
     : null;
-  const calendarConnected = !!buddyTokens;
+  // Was token-presence only, which said "connected" for a mentor whose room
+  // was never minted — they'd still be refused at booking. Same readiness the
+  // API enforces with.
+  const calendarConnected = bookingReadiness.ready;
 
   const summary = computeSummary(reports, period);
   const needsAttentionFlags = computeNeedsAttentionFlags(reports, debriefs);

@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { BuddyTriageView } from './buddy-triage-view';
 import { MeetingWidget } from '@/components/meeting-widget';
+import { buddyBookingReadiness } from '@/lib/buddy-room';
+import { GoogleConnectCard } from '@/components/google-connect-card';
 import { UrgentRequestsPanel } from './urgent-requests-panel';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -16,7 +18,7 @@ export default async function BuddyHomePage() {
   // profile/role gate, so they ride in the same wave as the profile fetch rather
   // than waiting behind it. On the rare non-buddy redirect path the two extra
   // reads are wasted; on every real buddy load we save a serial round-trip.
-  const [{ data: profile }, { data: students }, { data: pendingRequests }] = await Promise.all([
+  const [{ data: profile }, { data: students }, { data: pendingRequests }, readiness] = await Promise.all([
     admin
       .from('profiles')
       .select('role, full_name, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
@@ -33,6 +35,9 @@ export default async function BuddyHomePage() {
       .eq('buddy_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
+    // Same readiness the booking API enforces with, so the Schedule button and
+    // the server never disagree about whether this mentor can book.
+    buddyBookingReadiness(user.id),
   ]);
 
   if (profile?.role !== 'buddy') redirect('/');
@@ -111,10 +116,19 @@ export default async function BuddyHomePage() {
         </Link>
       )}
 
+      {/* Connect Google — on the HOME screen, not buried in the profile.
+          A mentor who cannot book needs to see the reason and the fix on the
+          first screen they land on, not discover it three taps deep after
+          filling in a booking form. Disappears the moment it's done. */}
+      {!readiness.ready && (
+        <GoogleConnectCard connected={readiness.googleConnected} email={readiness.googleEmail} from="/buddy/home" />
+      )}
+
       {/* Next session widget */}
       <MeetingWidget
         role="buddy"
         students={students ?? []}
+        calendarConnected={readiness.ready}
       />
 
       {/* 🚨 URGENT: Session requests from students */}
@@ -130,19 +144,7 @@ export default async function BuddyHomePage() {
         />
       )}
 
-      {/* Quick voice message */}
-      <section>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Quick voice message</p>
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-        </div>
-      </section>
 
-      {/* Student voice notes inbox */}
-      <section>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-stone-500 mb-2 px-1">Student voice notes</p>
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-        </div>
-      </section>
 
       {/* Student overview — stat tiles + urgency-ranked cards */}
       <section>

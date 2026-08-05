@@ -36,7 +36,15 @@ export function BuddyTriageView({ buddyId }: BuddyTriageViewProps) {
           .single(),
       ]);
       setStudents(data);
-      setCalendarConnected(profile?.google_calendar_connected ?? false);
+      // profiles.google_calendar_connected is a legacy column nothing writes
+      // any more — reading it meant this list ALWAYS said "not connected".
+      // /api/google/me is the same readiness the booking API enforces with.
+      try {
+        const r = await fetch('/api/google/me');
+        setCalendarConnected(r.ok ? (await r.json()).ready === true : false);
+      } catch {
+        setCalendarConnected(false);
+      }
     } catch (error) {
       console.error('Error loading students:', error);
     } finally {

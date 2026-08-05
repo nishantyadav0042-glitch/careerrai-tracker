@@ -53,11 +53,14 @@ export function GoogleConnectCard({
           <Calendar className="h-4 w-4 text-white" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-bold text-stone-900">Connect Google to schedule sessions</p>
+          <p className="text-sm font-bold text-stone-900">One step before you can book</p>
+          {/* Says what actually happens now. The permanent-room design stopped
+              creating a calendar event per booking, so promising that would be
+              a lie the mentor discovers on their first session. */}
           <p className="mt-0.5 text-[13px] leading-relaxed text-stone-600">
-            Your sessions run on Google Meet. Connecting once lets CareerRai put each
-            session on your calendar with a Meet link and reminders — so you never
-            have to create or share a link yourself.
+            Connect once and you get your own permanent Meet room. Every session you
+            ever book uses that same link — you never create or share a new one, and
+            a link you&apos;ve already sent a student never stops working.
           </p>
 
           {status === 'denied' && (

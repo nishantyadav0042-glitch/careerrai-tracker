@@ -57,16 +57,12 @@ export default async function BuddySchedulePage({
           from="/buddy/schedule"
           status={googleStatus}
         />
-        {/* Booking is only offered when it can actually succeed. An unready
-            mentor would otherwise fill in the whole form and collect a 428 at
-            submit — say it before they type, not after. */}
-        {readiness.ready ? (
-          <MeetingWidget role="buddy" students={students ?? []} />
-        ) : (
-          <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center">
-            <p className="text-sm text-stone-500">{readiness.blocker}</p>
-          </div>
-        )}
+        {/* The widget is ALWAYS shown now. Hiding it when Google was not
+            connected meant a mentor lost the whole surface and had to go find
+            the connect button elsewhere; the modal itself now leads with
+            Connect and keeps the Book button disabled until it works. Blocking
+            the path is right — hiding it is not. */}
+        <MeetingWidget role="buddy" students={students ?? []} calendarConnected={readiness.ready} />
       </div>
     </div>
   );
