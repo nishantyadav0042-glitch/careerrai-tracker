@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { exchangeCodeAndStore } from '@/lib/google-oauth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { ensureBuddyRoom } from '@/lib/buddy-room';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,5 +25,20 @@ export async function GET(request: Request) {
     console.error('[google] connect failed:', result.error);
     return NextResponse.redirect(new URL(`${back}?google=failed`, request.url));
   }
+
+  // A buddy gets their ONE permanent Meet room here, at connect time — the
+  // only moment it is ever created. Every session they run for the rest of
+  // their time on CareerRai uses this link.
+  //
+  // A failure is logged, not surfaced: the connection itself succeeded, and
+  // the first booking calls ensureBuddyRoom again anyway. Turning a working
+  // connection into "failed" over a retryable step would be a lie.
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  if (profile?.role === 'buddy') {
+    const room = await ensureBuddyRoom(user.id);
+    if (!room.ok) console.error('[google] permanent room not created:', room.reason, room.error);
+  }
+
   return NextResponse.redirect(new URL(`${back}?google=connected`, request.url));
 }

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createGoogleMeet } from '@/lib/google-meet';
-import { googleConnection } from '@/lib/google-oauth';
+import { ensureBuddyRoom } from '@/lib/buddy-room';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -18,22 +17,23 @@ interface ScheduleMeetingRequest {
   sessionType?: SessionType;
 }
 
-// Video provider history (21 July postmortem):
-// - Google Meet: removed — forced per-buddy Google OAuth + Google's
-//   app-verification wall.
-// - meet.jit.si fallback: removed — Jitsi's public server now requires the
-//   first participant to LOG IN as "moderator", so anonymous links dead-end.
-// - Daily.co is the ONE provider (card on file, free tier 10k participant-
-//   minutes/mo): public rooms, join with a display name only, no accounts for
-//   buddies or students, auto-expiring.
-// Rule learned the hard way: NEVER hand out a link we can't verify — if Daily
-// fails, refuse loudly so the buddy retries, instead of scheduling a session
-// around a dead link that only fails at meeting time.
+// Video provider history:
+// - Jitsi: removed — its public server now makes the first participant log in
+//   as "moderator", so anonymous links dead-end.
+// - Daily.co: removed (5 Aug) — it was never at fault for Incident #21, but
+//   the founder chose Meet for familiarity.
+// - Google Meet, one PERMANENT room per buddy: the current design. The room is
+//   minted once at Google connect, not per booking.
+//
+// Rule learned the hard way: NEVER hand out a link we can't verify. Refuse the
+// booking loudly rather than save a session around a link that only fails at
+// meeting time.
 
 /**
  * POST /api/calendar/schedule-meeting
- * Buddy schedules a 1:1. Creates a video room link, saves the session, and
- * notifies the student in-app (where the join link lives). No Google needed.
+ * Buddy schedules a 1:1 on their permanent Meet room, saves the session, and
+ * notifies the student in-app. Refuses if the pair already has a live session,
+ * or if it would double-book the buddy.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -111,17 +111,38 @@ export async function POST(request: NextRequest) {
         : `CareerRai: ${buddy.full_name.split(' ')[0]} × ${student.full_name.split(' ')[0]}`
     );
 
-    // GOOGLE MEET is the provider (founder, 5 Aug). The link is minted on the
-    // MENTOR's own calendar, so a mentor must have connected Google — that is
-    // enforced here rather than at the UI alone, because a booking that saves
-    // without a working link is the failure Incident #3 exists to prevent.
+    // ── One live session per pair ────────────────────────────────
+    // Founder rule, 5 Aug: a pair may have exactly ONE live session. Booking
+    // another REFUSES — it does not silently supersede — so the mentor and the
+    // student always agree on which call is the call.
     //
-    // The student is invited by email only when we have one. Both current
-    // paying students signed up by PHONE and have none — they still get the
-    // link in-app and by push, exactly as before. A missing student email
-    // must never block a session.
+    // This check exists for the message. The guarantee comes from the
+    // `one_live_session_per_pair` unique index, handled below: two taps in the
+    // same second cannot both pass a SELECT, but they cannot both pass the
+    // index either.
+    const { data: existing } = await admin
+      .from('video_sessions')
+      .select('id, scheduled_at')
+      .eq('buddy_id', user.id)
+      .eq('student_id', studentId)
+      .in('session_status', ['scheduled', 'active'])
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({
+        error: 'You already have an active meeting with this student. Cancel or complete it before booking another session.',
+        reason: 'session_exists',
+        existingSessionId: existing.id,
+        existingStartTime: existing.scheduled_at,
+      }, { status: 409 });
+    }
+
+    // ── The link: the buddy's ONE permanent room ─────────────────
+    // Founder decision, 5 Aug: no new Meet per booking. The room is minted
+    // once when a mentor connects Google and reused forever, so their link
+    // never changes and a student's saved link never rots. See buddy-room.ts
+    // for why the shared room is safe (it rests on the overlap constraint).
     let meetLink: string;
-    let googleEventId: string | null = null;
 
     const manualLink = typeof body.meetingLink === 'string' ? body.meetingLink.trim() : '';
     if (manualLink) {
@@ -131,54 +152,18 @@ export async function POST(request: NextRequest) {
       }
       meetLink = manualLink;
     } else {
-      // Invite address, best first: the Google account the STUDENT connected
-      // (always correct, always a real inbox), then whatever email is on their
-      // profile. Phone signups have neither until they connect — and that must
-      // never block the booking, so null is a fine answer.
-      const studentGoogle = await googleConnection(studentId);
-      const inviteEmail = studentGoogle.email ?? student.email ?? null;
-
-      const meet = await createGoogleMeet({
-        buddyUserId: user.id,
-        title,
-        description: `CareerRai 1:1 with ${student.full_name}.`,
-        start,
-        durationMinutes,
-        studentEmail: inviteEmail,
-      });
-      if (!meet.ok) {
-        const status = meet.reason === 'not_connected' ? 428 : 502;
-        return NextResponse.json({ error: meet.error, reason: meet.reason }, { status });
+      const room = await ensureBuddyRoom(user.id);
+      if (!room.ok) {
+        const status = room.reason === 'not_connected' ? 428 : 502;
+        return NextResponse.json({ error: room.error, reason: room.reason }, { status });
       }
-      meetLink = meet.meetLink;
-      googleEventId = meet.eventId;
-    }
-
-    // ── Supersede, don't duplicate ───────────────────────────────
-    // Incident #21 (5 Aug): "reschedule" only ever INSERTED, leaving every
-    // earlier session live. One pair accumulated FOUR live sessions with FOUR
-    // different rooms in a single evening. Because every surface picks the
-    // first row by scheduled_at — and two of them shared the SAME minute, so
-    // the tie-break was undefined — the student's phone and the mentor's phone
-    // could resolve to DIFFERENT rooms from identical data. The mentor said it
-    // out loud: "I am in separate meeting with Harsh." Each re-render could
-    // land somewhere else, which is what she experienced as "getting dropped
-    // off multiple times". The provider was never the problem.
-    //
-    // A pair has at most ONE live session. Booking a new one cancels the rest,
-    // BEFORE the insert, so there is no window where two are live at once.
-    const { error: supersedeError } = await admin
-      .from('video_sessions')
-      .update({ session_status: 'cancelled' })
-      .eq('buddy_id', user.id)
-      .eq('student_id', studentId)
-      .eq('session_status', 'scheduled');
-    if (supersedeError) {
-      console.error('superseding prior sessions failed:', supersedeError.message);
-      return NextResponse.json({ error: "Couldn't replace the earlier session — try again." }, { status: 500 });
+      meetLink = room.meetUrl;
     }
 
     // ── Persist session ──────────────────────────────────────────
+    // No per-booking calendar event is created. The two database constraints
+    // below are the real rules; everything above only produces better error
+    // messages than Postgres would.
     const { data: session, error: sessionError } = await admin
       .from('video_sessions')
       .insert({
@@ -190,12 +175,26 @@ export async function POST(request: NextRequest) {
         session_status: 'scheduled',
         session_type: isOrientation ? 'onboarding' : 'guidance',
         google_meet_link: meetLink, // reused as the generic "join link" column
-        google_event_id: googleEventId,
       })
       .select('id')
       .single();
 
     if (sessionError || !session) {
+      // 23505 — one_live_session_per_pair. 23P01 — no_overlapping_buddy_sessions.
+      // These are the authoritative answers, and they fire on races the SELECT
+      // above cannot see.
+      if (sessionError?.code === '23505') {
+        return NextResponse.json({
+          error: 'You already have an active meeting with this student. Cancel or complete it before booking another session.',
+          reason: 'session_exists',
+        }, { status: 409 });
+      }
+      if (sessionError?.code === '23P01') {
+        return NextResponse.json({
+          error: 'You already have another session at that time. Because every session of yours runs in the same room, two students can never be booked into the same slot — pick a time at least 15 minutes clear of your other calls.',
+          reason: 'buddy_double_booked',
+        }, { status: 409 });
+      }
       console.error('video_sessions insert failed:', sessionError);
       return NextResponse.json({ error: "Couldn't save the session — try again." }, { status: 500 });
     }

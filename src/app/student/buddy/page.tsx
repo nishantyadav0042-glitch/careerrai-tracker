@@ -11,8 +11,6 @@ import { fetchPairMessages } from '@/lib/chat';
 import { BuddyOverview } from './buddy-overview';
 import { BuddyPanelTabs } from '@/components/buddy-panel-tabs';
 import { ChatThread } from '@/components/chat/chat-thread';
-import { StudentGoogleConnect } from '@/components/student-google-connect';
-import { googleConnection } from '@/lib/google-oauth';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -26,8 +24,7 @@ export const metadata = {
 export default async function BuddyPage({
   searchParams,
 }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-  const params = (await searchParams) ?? {};
-  const googleStatus = typeof params.google === 'string' ? params.google : null;
+  await searchParams;
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
@@ -54,7 +51,7 @@ export default async function BuddyPage({
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
 
-  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: feedbackRows }, chatUnread, messages, studentGoogle] = await Promise.all([
+  const [{ data: buddy }, { data: upcoming }, { data: recentCompleted }, { data: pendingRequests }, { data: feedbackRows }, chatUnread, messages] = await Promise.all([
     buddyId
       ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio, avatar_url').eq('id', buddyId).single()
       : Promise.resolve({ data: null }),
@@ -113,8 +110,6 @@ export default async function BuddyPage({
       : Promise.resolve({ data: [] }),
     getChatUnreadCount(user.id, 'student'),
     buddyId ? fetchPairMessages(admin, { studentId: user.id, buddyId }, 50) : Promise.resolve([]),
-    // Optional: a connected Google account means real calendar invites.
-    googleConnection(user.id),
   ]);
 
   const buddyName = buddy?.full_name?.split(' ')[0] ?? 'your buddy';
@@ -145,13 +140,16 @@ export default async function BuddyPage({
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto pb-24">
-        {buddyId && (
-          <StudentGoogleConnect
-            connected={studentGoogle.connected}
-            email={studentGoogle.email}
-            status={googleStatus}
-          />
-        )}
+        {/*
+          The student Google-connect card is DELIBERATELY not rendered.
+
+          It sold one benefit: a calendar invite for each session. The
+          permanent-room architecture (founder, 5 Aug) stopped creating a
+          calendar event per booking, so connecting Google now buys a student
+          nothing. The component and the /api/google/* routes are kept intact —
+          restoring the card is this one line — but we do not ask students for
+          a Google account in exchange for a promise the app no longer keeps.
+        */}
         <BuddyPanelTabs
           chatUnread={chatUnread}
           overview={

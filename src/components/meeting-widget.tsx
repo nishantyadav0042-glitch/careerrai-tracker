@@ -2,9 +2,14 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Video, Calendar, MoreVertical, X } from 'lucide-react';
+import { Video, Calendar, MoreVertical, X, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScheduleSessionModal, type SchedulableStudent } from './schedule-session-modal';
+
+/** YYYY-MM-DD in IST — the floor for any date picker here. */
+function todayIST(): string {
+  return new Date(Date.now() + 5.5 * 60 * 60_000).toISOString().slice(0, 10);
+}
 
 interface Meeting {
   id: string;
@@ -68,6 +73,11 @@ export function MeetingWidget({ role, students = [], calendarConnected = false }
   const [menuOpen, setMenuOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [movingBusy, setMovingBusy] = useState(false);
+  const [moveDate, setMoveDate] = useState('');
+  const [moveTime, setMoveTime] = useState('');
+  const [moveError, setMoveError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const fetchMeetings = useCallback(async () => {
@@ -137,6 +147,50 @@ export function MeetingWidget({ role, students = [], calendarConnected = false }
       setCancelling(false);
       setConfirmCancel(false);
       setMenuOpen(false);
+    }
+  };
+
+  // MOVE, not rebook. The session keeps its row, its Google event and its Meet
+  // link — the student's saved link stays correct. Cancel-and-rebook is what
+  // gave one pair four live rooms in an evening (Incident #21).
+  const openMove = () => {
+    if (!meeting) return;
+    // Prefill with the current time, expressed in IST — the only clock our
+    // mentors and students think in.
+    const ist = new Date(new Date(meeting.scheduledAt).getTime() + 5.5 * 60 * 60_000).toISOString();
+    setMoveDate(ist.slice(0, 10));
+    setMoveTime(ist.slice(11, 16));
+    setMoveError(null);
+    setMoving(true);
+  };
+
+  const handleMove = async () => {
+    if (!meeting) return;
+    setMoveError(null);
+    // The picker's wall clock is IST (UTC+5:30), regardless of device timezone.
+    const utcMs = new Date(`${moveDate}T${moveTime}:00Z`).getTime() - 5.5 * 60 * 60_000;
+    if (isNaN(utcMs)) { setMoveError('Pick a valid date and time.'); return; }
+    if (utcMs < Date.now() + 60_000) { setMoveError('Pick a time in the future (IST).'); return; }
+
+    setMovingBusy(true);
+    try {
+      const res = await fetch('/api/calendar/reschedule-meeting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId: meeting.id, startTime: new Date(utcMs).toISOString() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMoveError(data.error || "Couldn't move the session — try again.");
+        return;
+      }
+      setMoving(false);
+      setMenuOpen(false);
+      await fetchMeetings();
+    } catch {
+      setMoveError("Couldn't reach the server — check your connection.");
+    } finally {
+      setMovingBusy(false);
     }
   };
 
@@ -257,13 +311,55 @@ export function MeetingWidget({ role, students = [], calendarConnected = false }
                           </button>
                         </div>
                       </div>
+                    ) : moving ? (
+                      <div className="px-3 py-2 w-[240px]">
+                        <p className="text-xs font-semibold text-stone-700 mb-2">Move to (IST)</p>
+                        <input
+                          type="date" value={moveDate} min={todayIST()}
+                          onChange={(e) => setMoveDate(e.target.value)}
+                          aria-label="New date"
+                          className="w-full rounded-lg border border-stone-300 px-2 py-1.5 text-sm mb-2"
+                        />
+                        <input
+                          type="time" value={moveTime}
+                          onChange={(e) => setMoveTime(e.target.value)}
+                          aria-label="New time"
+                          className="w-full rounded-lg border border-stone-300 px-2 py-1.5 text-sm"
+                        />
+                        <p className="mt-2 text-[11px] text-stone-500">
+                          Same joining link — nothing to re-share.
+                        </p>
+                        {moveError && <p className="mt-1.5 text-[11px] font-medium text-red-600">{moveError}</p>}
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={handleMove} disabled={movingBusy}
+                            className="flex-1 px-2 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-medium disabled:opacity-50"
+                          >
+                            {movingBusy ? 'Moving…' : 'Move session'}
+                          </button>
+                          <button
+                            onClick={() => setMoving(false)}
+                            className="px-2 py-1.5 rounded-lg text-stone-600 text-xs hover:bg-stone-100"
+                          >
+                            Back
+                          </button>
+                        </div>
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => setConfirmCancel(true)}
-                        className="w-full text-left px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                      >
-                        <X className="w-3.5 h-3.5" /> Cancel session
-                      </button>
+                      <>
+                        <button
+                          onClick={openMove}
+                          className="w-full text-left px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50 flex items-center gap-2"
+                        >
+                          <Clock className="w-3.5 h-3.5" /> Move session
+                        </button>
+                        <button
+                          onClick={() => setConfirmCancel(true)}
+                          className="w-full text-left px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <X className="w-3.5 h-3.5" /> Cancel session
+                        </button>
+                      </>
                     )}
                   </div>
                 )}

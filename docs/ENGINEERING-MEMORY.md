@@ -639,6 +639,59 @@
   A buddy may now also supply their OWN meeting link (Meet/Zoom), used verbatim
   with no Daily room — a mentor should never be trapped inside our provider.
 - **Owner:** cofounder (AI)
+- **Follow-up (same day):** the prevention above was application-level only, and
+  the founder rejected the *supersede* semantics outright: a second booking must
+  **refuse**, not silently replace. See the architecture note below — the rule now
+  lives in two database constraints, where it cannot be forgotten by the next
+  endpoint someone writes.
+
+---
+
+## Architecture note — one permanent Meet room per buddy (2026-08-05)
+
+Not an incident. A founder decision that reverses a design from earlier the same
+day, recorded here because the reasoning matters more than the diff.
+
+**Before:** every booking minted a fresh Google Meet on the mentor's calendar.
+**After:** a buddy gets ONE permanent room, created the first time they connect
+Google, reused by every session they ever run. No calendar event is created per
+booking.
+
+**Why:**
+- A mentor learns one link. Ours are IIM alumni with day jobs; a new URL per
+  session is one more thing to hunt for while a student waits.
+- A link a student already saved can never go stale, so a reschedule cannot
+  strand anyone in a retired room — the exact shape of Incident #21.
+- Booking no longer depends on a live Google call succeeding.
+
+**What it costs, stated plainly:** the room is shared across all of a buddy's
+students, so two of them must never be scheduled into it at once. And neither
+side now receives a per-session calendar invite or Google reminder — which is
+why the student-side Google-connect card was pulled from `/student/buddy` the
+same hour it shipped, rather than left promising a calendar entry that no longer
+arrives.
+
+**What makes the shared room safe (encoded):**
+1. `no_overlapping_buddy_sessions` — a GiST exclusion constraint over
+   `(buddy_id, session_span)`, where the span carries a **15-minute tail
+   buffer**. A call that runs long cannot drop a second student into a live 1:1.
+   That is a privacy guarantee, not politeness: sessions are where a student
+   says their real percentile out loud.
+2. `one_live_session_per_pair` — a partial unique index. A second booking for a
+   pair is **refused** with a message telling the mentor to cancel the first.
+3. Meet's own knock-lobby. Only the buddy is on the invite, so every student
+   arrives as an uninvited joiner and the buddy admits them one at a time. A
+   student holding a months-old link still cannot walk into someone else's call.
+4. `cancel-meeting` compares against `profiles.buddy_meet_event_id` before
+   deleting anything in Google — cancelling one session must never be able to
+   destroy the room every one of that buddy's students uses.
+
+**The lesson worth keeping:** the first fix for Incident #21 lived in one API
+route. Constraints 1 and 2 live in Postgres, so they hold for the admin script,
+the next endpoint, and the race between two taps in the same second. *If a rule
+matters, put it where the data is.* Both were verified against the live database
+inside a deliberately aborted transaction before shipping — five cases, five
+expected outcomes, zero rows written.
 
 ---
 
