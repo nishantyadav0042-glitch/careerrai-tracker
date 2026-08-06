@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
+import { googleConfigured } from '@/lib/google-oauth';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,10 @@ export async function GET() {
 
   const readiness = await buddyBookingReadiness(user.id);
   return NextResponse.json({
+    // Whether the SERVER has Google credentials at all — the difference
+    // between "you haven't connected" and "nobody could connect if they
+    // tried", which tonight took an hour to tell apart from the outside.
+    configured: googleConfigured(),
     ready: readiness.ready,
     connected: readiness.googleConnected,
     hasRoom: readiness.hasRoom,

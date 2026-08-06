@@ -101,14 +101,26 @@ export function MeetingRoomSetup({
           </p>
 
           {googleStatus === 'unavailable' && (
-            <p className="mt-2 text-[12px] font-medium text-stone-600">
-              Google sign-in is being set up right now — paste your link above instead,
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[12px] font-medium text-amber-800">
+              Google connect isn&apos;t switched on for the app yet (its server keys are
+              missing) — that&apos;s an admin job, nothing you did. Paste your link above;
               it works exactly the same for your students.
             </p>
           )}
           {googleStatus === 'denied' && (
             <p className="mt-2 text-[12px] font-medium text-stone-600">
               Google didn&apos;t finish connecting. Pasting your link above works just as well.
+            </p>
+          )}
+          {googleStatus === 'failed' && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[12px] font-medium text-amber-800">
+              Google refused the connection (this is usually a key/redirect mismatch on
+              the app&apos;s side, not yours). Paste your link above — it works the same.
+            </p>
+          )}
+          {googleStatus === 'connected' && (
+            <p className="mt-2 rounded-lg bg-teal-50 px-2.5 py-2 text-[12px] font-medium text-teal-800">
+              Google connected — your permanent room is being created.
             </p>
           )}
 

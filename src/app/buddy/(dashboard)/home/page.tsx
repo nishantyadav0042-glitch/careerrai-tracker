@@ -9,7 +9,14 @@ import { UrgentRequestsPanel } from './urgent-requests-panel';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
 
-export default async function BuddyHomePage() {
+export default async function BuddyHomePage({
+  searchParams,
+}: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // The Google round-trip bounces back here with ?google=... — dropping it
+  // (as this page did) turned every connect failure into a silent page
+  // reload, which reads as "nothing is working" (founder, tonight).
+  const params = await searchParams;
+  const googleStatus = typeof params.google === 'string' ? params.google : null;
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
@@ -120,7 +127,7 @@ export default async function BuddyHomePage() {
           A mentor who cannot book needs to see the reason and the fix on the
           first screen they land on, not discover it three taps deep after
           filling in a booking form. Disappears the moment it's done. */}
-      {!readiness.ready && <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/home" />}
+      {!readiness.ready && <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/home" googleStatus={googleStatus} />}
 
       {/* Next session widget */}
       <MeetingWidget
