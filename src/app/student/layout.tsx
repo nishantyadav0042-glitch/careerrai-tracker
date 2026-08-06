@@ -135,7 +135,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // them the option"). coaching_enrolled === false means they answered No in
   // the /start funnel; null means never asked, so we still offer it.
   let showTimetablePrompt = false;
-  if (noBlockingModal && !showCoverageReview && appInstalled && accountAgeDays <= 2 && profile?.coaching_enrolled !== false) {
+  // Premium only (founder, 7 Aug): the timetable is a mentor-curated feature,
+  // and the server rejects a free upload — popping the ask at a free student
+  // would walk them into a wall. The Home card shows them the locked door.
+  if (noBlockingModal && !showCoverageReview && appInstalled && accountAgeDays <= 2 && profile?.coaching_enrolled !== false && profile?.is_premium === true) {
     const { data: tt } = await admin
       .from('student_timetables').select('student_id').eq('student_id', user.id).maybeSingle();
     showTimetablePrompt = !tt;

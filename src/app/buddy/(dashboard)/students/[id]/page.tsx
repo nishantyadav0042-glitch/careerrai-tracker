@@ -15,6 +15,7 @@ import { OrientationCompleteButton } from './orientation-complete-button';
 import { sessionsVisibleFrom } from '@/lib/session-window';
 import { BriefingPanel } from './briefing-panel';
 import { StudentDossier } from '@/components/student-dossier';
+import { StudentTimetableEditor } from '@/components/buddy/student-timetable-editor';
 import { BuddyCockpit } from '@/components/buddy/cockpit';
 import { StudyPlanFeed } from './study-plan-feed';
 import { PreparationDNA } from './preparation-dna';
@@ -303,6 +304,10 @@ export default async function BuddyStudentDetailPage({
         </ul>
         <p className="mt-2 text-[11px] text-stone-400">Auto-generated from their real week. Add your advice and send — this is what they pay for.</p>
       </Card>
+
+      {/* Coaching timetable — the buddy's pen. What is set here is what the
+          student's daily plan follows (premium: curated together). */}
+      <StudentTimetableEditor studentId={id} studentName={student.full_name ?? 'your student'} />
 
       {/* Student profile dossier — everything they shared in onboarding, so the
           buddy knows who they're coaching. Collapsed by default. */}

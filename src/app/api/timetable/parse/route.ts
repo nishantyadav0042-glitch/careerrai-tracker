@@ -71,6 +71,18 @@ export async function POST(request: NextRequest) {
   // loop must not burn everyone's quota. This is a once-or-twice-per-student
   // action, so 10/hour is generous. Fail-open if the counter errors.
   const admin = createAdminClient();
+
+  // Premium feature (founder, 7 Aug) — gated at the scanner too, not just the
+  // save: a free upload that scans beautifully and then dies at save is a
+  // crueller wall, and every scan burns shared AI quota.
+  const { data: gate } = await admin.from('profiles').select('is_premium').eq('id', user.id).single();
+  if (gate?.is_premium !== true) {
+    return NextResponse.json(
+      { error: 'The coaching timetable is part of mentorship — unlock your 1:1 mentor to use it.', premiumRequired: true },
+      { status: 403 },
+    );
+  }
+
   const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
   const { count } = await admin
     .from('student_events')
@@ -120,7 +132,10 @@ export async function POST(request: NextRequest) {
     ];
   }
 
-  const raw = await callGemini({ parts, json: true, maxTokens: isSpreadsheet ? 8192 : 4096, temperature: 0.1 });
+  // Patient retries: this route has 60s (maxDuration) and a student who just
+  // picked a file will wait ten seconds; free-tier 429s usually clear within
+  // the minute, so waiting beats telling them the scanner is busy.
+  const raw = await callGemini({ parts, json: true, maxTokens: isSpreadsheet ? 8192 : 4096, temperature: 0.1, backoffBaseMs: 6000 });
   if (raw === null) {
     // Transient AI failure, NOT a bad upload — don't blame the student's photo.
     return NextResponse.json(

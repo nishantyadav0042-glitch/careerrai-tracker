@@ -20,6 +20,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 //     of quietly leaking in production.
 
 export type AuditAction =
+  | 'timetable.buddy_edited'  // a buddy rewrote their student's coaching timetable
   | 'google.connected'
   | 'google.disconnected'
   | 'google.connect_failed'   // consent refused, or the token exchange failed

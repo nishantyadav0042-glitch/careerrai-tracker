@@ -75,6 +75,14 @@ interface CallOpts {
   temperature?: number;
   model?: string;
   maxRetries?: number;
+  /**
+   * Backoff spacing in ms for 429/5xx. The default (400ms base) suits chat
+   * drafts where a user is watching a spinner. A route with maxDuration 60
+   * (timetable parse) can afford to wait out a free-tier per-minute window
+   * instead — pass something like 8000 and the retries land at ~8s/16s/32s,
+   * which turns "scanner is busy" into a slow success for most 429s.
+   */
+  backoffBaseMs?: number;
 }
 
 interface GeminiResponse {
@@ -114,7 +122,7 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
           console.error(`[gemini] API ${res.status} after ${attempt + 1} attempts (model=${model})`);
           return null;
         }
-        await backoff(attempt);
+        await backoff(attempt, opts.backoffBaseMs);
         continue;
       }
       if (!res.ok) {
@@ -131,14 +139,14 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
       return text && text.length > 0 ? text : null;
     } catch {
       if (attempt === maxRetries) return null;
-      await backoff(attempt);
+      await backoff(attempt, opts.backoffBaseMs);
     }
   }
   return null;
 }
 
-function backoff(attempt: number): Promise<void> {
-  const base = 400 * 2 ** attempt;        // 400ms, 800ms, 1600ms…
+function backoff(attempt: number, baseMs = 400): Promise<void> {
+  const base = baseMs * 2 ** attempt;     // e.g. 400ms, 800ms, 1600ms…
   const jitter = Math.random() * 300;     // ±jitter so retries don't sync up
   return new Promise((r) => setTimeout(r, base + jitter));
 }
