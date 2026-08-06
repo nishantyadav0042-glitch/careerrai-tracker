@@ -174,11 +174,24 @@ export function sniffMatchesMime(head: Uint8Array, mime: string): boolean {
     case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
       // OOXML (.docx AND .xlsx) is a ZIP, so the ZIP header alone would also
       // accept any archive renamed to the extension — exactly the hole we are
-      // closing. Every OOXML file's FIRST entry is [Content_Types].xml, so
-      // require that name in the first local file header too.
+      // closing. The first version of this check assumed the first zip entry
+      // is always [Content_Types].xml. Word writes files that way; plenty of
+      // real generators do not — the first genuine buddy-sent .xlsx opened
+      // with xl/worksheets/sheet1.xml and was refused as fake ("that upload
+      // did not finish", founder, 23:54). So: parse the first entry's NAME
+      // from the zip local-file header and require it to be OOXML-internal
+      // for the CLAIMED type. Stricter than before, and true to the format:
+      // a plain archive still fails, and an .xlsx renamed .docx now fails
+      // too (its first entry lives under xl/, not word/).
       if (!startsWith(head, [0x50, 0x4b, 0x03, 0x04])) return false;
-      const text = new TextDecoder('latin1').decode(head.slice(0, 512));
-      return text.includes('[Content_Types].xml');
+      if (head.length < 31) return false;
+      const nameLen = head[26] | (head[27] << 8);
+      const name = new TextDecoder('latin1').decode(head.slice(30, Math.min(30 + nameLen, head.length)));
+      const generic = name === '[Content_Types].xml' || name.startsWith('_rels/') || name.startsWith('docProps/');
+      const typed = mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ? name.startsWith('xl/')
+        : name.startsWith('word/');
+      return generic || typed;
     }
     default:
       return false;

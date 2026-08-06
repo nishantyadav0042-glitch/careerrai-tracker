@@ -157,6 +157,20 @@ describe('filenames', () => {
 const bytes = (...n: number[]) => new Uint8Array(n);
 const ascii = (s: string) => new Uint8Array(Array.from(s, (c) => c.charCodeAt(0)));
 
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** A faithful zip local-file header: PK\x03\x04 ... nameLen@26 ... name@30. */
+function zipHead(entryName: string): Uint8Array {
+  const name = ascii(entryName);
+  const head = new Uint8Array(30 + name.length);
+  head.set([0x50, 0x4b, 0x03, 0x04]);
+  head[26] = name.length & 0xff;
+  head[27] = name.length >> 8;
+  head.set(name, 30);
+  return head;
+}
+
 describe('magic bytes must match the claimed type', () => {
   it('accepts real headers', () => {
     expect(sniffMatchesMime(bytes(0xff, 0xd8, 0xff, 0xe0), 'image/jpeg')).toBe(true);
@@ -185,12 +199,26 @@ describe('magic bytes must match the claimed type', () => {
 
   it('rejects a plain ZIP renamed to .docx', () => {
     // A .docx IS a zip, so the PK header alone would let any archive through —
-    // exactly the hole this closes. OOXML always names its first entry.
-    const plainZip = ascii('PK\x03\x04' + 'x'.repeat(60));
-    expect(sniffMatchesMime(plainZip, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(false);
+    // exactly the hole this closes. The first entry name is the tell.
+    const plainZip = zipHead('random-folder/file.txt');
+    expect(sniffMatchesMime(plainZip, DOCX_MIME)).toBe(false);
+    expect(sniffMatchesMime(zipHead('[Content_Types].xml'), DOCX_MIME)).toBe(true);
+    expect(sniffMatchesMime(zipHead('word/document.xml'), DOCX_MIME)).toBe(true);
+  });
 
-    const realDocx = ascii('PK\x03\x04' + '\x00'.repeat(26) + '[Content_Types].xml');
-    expect(sniffMatchesMime(realDocx, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(true);
+  it('accepts the real buddy-sent .xlsx whose first entry is NOT [Content_Types].xml', async () => {
+    // Shreya's actual file opens with xl/worksheets/sheet1.xml — the entry
+    // order assumption that refused it as fake lives in version control now,
+    // and this fixture makes sure it stays there.
+    const { readFileSync } = await import('node:fs');
+    const head = new Uint8Array(readFileSync('src/lib/__fixtures__/buddy-weekly-plan.xlsx')).slice(0, 512);
+    expect(sniffMatchesMime(head, XLSX_MIME)).toBe(true);
+  });
+
+  it('rejects an .xlsx presented as .docx and vice versa — the interiors differ', () => {
+    expect(sniffMatchesMime(zipHead('xl/worksheets/sheet1.xml'), DOCX_MIME)).toBe(false);
+    expect(sniffMatchesMime(zipHead('word/document.xml'), XLSX_MIME)).toBe(false);
+    expect(sniffMatchesMime(zipHead('xl/worksheets/sheet1.xml'), XLSX_MIME)).toBe(true);
   });
 
   it('rejects an empty or truncated header instead of guessing', () => {
@@ -203,11 +231,8 @@ describe('magic bytes must match the claimed type', () => {
   });
 
   it('holds .xlsx to the same OOXML proof as .docx', () => {
-    const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    const plainZip = ascii('PK\x03\x04' + 'x'.repeat(60));
-    expect(sniffMatchesMime(plainZip, XLSX_MIME)).toBe(false);
-    const realXlsx = ascii('PK\x03\x04' + '\x00'.repeat(26) + '[Content_Types].xml');
-    expect(sniffMatchesMime(realXlsx, XLSX_MIME)).toBe(true);
+    expect(sniffMatchesMime(zipHead('secret-payload/x.bin'), XLSX_MIME)).toBe(false);
+    expect(sniffMatchesMime(zipHead('[Content_Types].xml'), XLSX_MIME)).toBe(true);
   });
 
   it('accepts a text CSV and rejects a binary renamed .csv', () => {
