@@ -35,6 +35,10 @@ incidents that touched it — permanent record of what went wrong, why, and what
 now prevents it. Never repeat a logged mistake. When a new incident happens, add
 an entry.
 
+**Code orientation:** `docs/CODEMAP.md` — where everything lives, the
+load-bearing modules, and the invariants with guard tests. Read it before your
+first code change; it is faster than discovering the same map by grep.
+
 **Orientation for anyone (human or AI) new to this repo:**
 `docs/KNOWLEDGE.md` is the single knowledge document — what the company is,
 the live-state snapshot, the architecture map, the failure patterns already

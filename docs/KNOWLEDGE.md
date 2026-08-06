@@ -14,6 +14,9 @@ Rules this file follows:
   with confidence.** Nothing is stated as fact that was not checked.
 - **This is a map, not the territory.** Deep detail lives in the linked docs;
   this file tells you which one to open and why it exists.
+- **For CODE orientation — where things live, which modules you must not
+  bypass, the invariants with guard tests — read `docs/CODEMAP.md` first.**
+  This file is the company; that file is the codebase.
 - **Dated facts rot.** Every number here is stamped 29 Jul 2026. Re-run the
   query before trusting a number older than a week.
 
@@ -55,6 +58,38 @@ is not. Every design decision in `docs/OS/LEARNING-OS.md` treats the daily
 check-in as the product and content as the excuse for it.
 
 ---
+
+## 1.5 Addendum — what changed 6–7 Aug 2026 (verified in production) ✅
+
+The snapshot below (§2) is stamped 29 Jul. These load-bearing facts changed
+since and supersede anything that contradicts them:
+
+- **Daily hours: one number, one owner.** `study_target_hours` is written only
+  by `lib/daily-hours.ts setDailyHours()` from a student action. The old
+  date→hours rewrite, capacity capping and `volumeFactor` are all REMOVED.
+  Falling behind moves the finish date instead — weekly, Sunday 19:00 IST
+  (`api/cron/weekly-plan-reconcile`), with the arithmetic shown. All 257
+  students carry `study_hours_source` provenance; unconfirmed ones get a
+  one-time in-app "is this number yours?" card.
+- **Coaching timetable is a PREMIUM feature, curated with the buddy.** Upload
+  accepts Excel (.xlsx/.xlsm/.csv) natively — daily + weekly sheets merge;
+  plans >30 days are windowed to 3 weeks in code. Buddies edit their
+  student's timetable (`api/buddy/student-timetable`); both writers share
+  `lib/timetable-apply.ts`. Today's classes lead today's plan (45-pt selector
+  bonus); a horizon cron reminds students to upload the next sheet. Free
+  students see a locked card with "Unlock with a mentor".
+- **Chat attachments** now include spreadsheets, with byte-verification that
+  parses zip structure (generator-agnostic). One save path; rejected uploads
+  auto re-upload. The bucket allowlist and app allowlist are guard-tested to
+  match.
+- **Sessions run on pasted meeting links as the primary path** (proven live —
+  Vedashri↔Shreya, 6 Aug). Google OAuth remains unconnected
+  (`google_oauth_tokens` = 0 rows) pending founder credential setup; every
+  connect failure now renders a named banner instead of silence.
+- **Mission queue** rotates alternate-day pools with a 14-day cooldown;
+  messages carry computed exam countdowns and the app link.
+- The founder tests as a student from +91 8233454449 (premium, Test Buddy);
+  test accounts are IN experience crons, OUT of metrics/CRM/outreach.
 
 ## 2. The state of the company — 29 Jul 2026 snapshot ✅
 

@@ -831,6 +831,65 @@ one module must own it and the others must only read.**
 
 ---
 
+## Incident #23 — one file, three walls: a rule written in N places drifts N−1 times (2026-08-06)
+
+**What the user saw.** A buddy tried to send her real study-plan Excel to her
+student in chat. Three failures in one evening, each behind the last:
+1. ".xlsx files aren't supported" — the app allowlist had no spreadsheets.
+2. "That upload didn't go through" — the app said yes, but the storage
+   bucket's OWN `allowed_mime_types` (a second copy of the same rule) still
+   said no; the PUT died at the bucket.
+3. "That upload did not finish" — the byte sniffer (a third copy, in effect)
+   required `[Content_Types].xml` in the first 512 bytes. Word writes files
+   that way; the library that wrote this file put `xl/worksheets/sheet1.xml`
+   first. A genuine file was rejected as a fake — and the server then
+   discarded the stored object while the client kept retrying the dead path
+   forever ("Ready to send" that could never send).
+
+Earlier the same day, the identical shape: the chat API allowed caption-less
+attachments while the DB CHECK constraint still demanded body text.
+
+**The lesson.** When a rule must exist in code AND in config (a DB
+constraint, a bucket setting, an external service), it WILL drift unless a
+test ties the copies together. And a retry button must know whether the thing
+it retries still exists.
+
+**Teeth.** `chat-attachments.test.ts` asserts the newest bucket migration
+names every MIME the app accepts; the sniffer parses zip structure instead of
+assuming entry order, with the real file's bytes as a fixture; verify
+failures return `attachmentGone` and the client re-uploads from the File it
+still holds. `lib/timetable-apply.ts` exists so the timetable's two writers
+(student upload, buddy editor) can never develop separate save semantics.
+
+---
+
+## Incident #24 — an instruction to a model is not a limit (2026-08-06)
+
+**What the user saw.** A perfect 117-day Excel study plan repeatedly rejected
+as "that doesn't look like a class timetable."
+
+**What happened.** The extraction prompt said, clearly, "output blocks only
+for the next 21 days." Gemini answered `is_timetable: true`, began emitting
+perfect blocks — for ALL 117 days — hit `MAX_TOKENS`, and its truncated JSON
+parsed as nothing. The polite request was ignored under exactly the load it
+existed for. Found by live-firing the real file at the real API with the real
+prompt — the reproduction took one run; the preceding theory-only fix had
+already failed in production.
+
+**The lesson.** Limits on model output are enforced on the model's INPUT, in
+code. The model cannot overrun dates it never receives. Keep a salvage path
+for truncated JSON anyway — dozens of complete objects should not be thrown
+away over two missing brackets. And when an AI feature fails in production,
+reproduce with the live-fire pattern (real artifact, real API, exact prompt)
+before theorising; the harness is committed and key-gated
+(`timetable-live-fire.test.ts`).
+
+**Teeth.** `windowDatedSheets` (deterministic 3-week window, threshold 30
+dated rows) + `salvageTruncatedJson`, both unit-tested against the exact
+observed failure shapes, plus the real file as a fixture.
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a
