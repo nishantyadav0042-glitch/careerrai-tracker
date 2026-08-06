@@ -47,8 +47,7 @@ export async function POST(request: NextRequest) {
     .from('profiles')
     .select('id, full_name, study_target_hours, weekend_hours_available, syllabus_target_date, attempt_year, created_at')
     .eq('role', 'student')
-    .not('is_test_account', 'is', true)
-    .not('is_demo', 'is', true)
+    .not('is_demo', 'is', true)  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
     .not('syllabus_target_date', 'is', null);
 
   if (error) {

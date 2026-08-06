@@ -29,8 +29,7 @@ export async function GET(request: NextRequest) {
     admin.from('profiles')
       .select('id, full_name, notif_prefs')
       .eq('role', 'student')
-      .not('is_test_account', 'is', true)
-      .not('is_demo', 'is', true)
+      .not('is_demo', 'is', true)  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
       .not('push_subscription', 'is', null),
     admin.from('notifications')
       .select('user_id')

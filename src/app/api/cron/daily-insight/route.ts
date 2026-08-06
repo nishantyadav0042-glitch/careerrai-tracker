@@ -27,8 +27,7 @@ export async function GET(request: NextRequest) {
       .select('id, full_name, notif_prefs, is_repeater, is_working_professional')
       .eq('role', 'student')
       .eq('onboarding_completed', true)
-      .not('is_test_account', 'is', true)
-      .not('is_demo', 'is', true),
+      .not('is_demo', 'is', true),  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
     admin.from('notifications').select('user_id').eq('type', 'daily_insight').gte('created_at', todayStart),
     admin.from('daily_reports').select('student_id, report_date'),
   ]);
