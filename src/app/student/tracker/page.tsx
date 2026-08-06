@@ -169,12 +169,19 @@ export default async function DailyTrackerPage() {
   const observedPerDay = last21.length > 0
     ? last21.reduce((sum, l) => sum + Number(l.study_duration ?? 0), 0) / Math.max(last21.length, 7)
     : null;
+  // How long they have actually been on the plan, so the debt window can never
+  // bill someone for days before they joined.
+  const firstLogIso = (logs ?? []).length > 0 ? logs![logs!.length - 1]?.report_date ?? null : null;
+  const daysOnPlan = firstLogIso
+    ? Math.max(1, Math.round((now.getTime() - Date.parse(firstLogIso + 'T00:00:00Z')) / 86_400_000) + 1)
+    : null;
   const breach = pace && targetIso
     ? computeBreach({
         lastLogDate: streakRow?.last_log_date ?? null,
         requiredPerDay: pace.requiredPerDay,
         observedPerDay,
         daysToTarget: pace.daysLeft,
+        daysOnPlan,
         today: now,
       })
     : null;
