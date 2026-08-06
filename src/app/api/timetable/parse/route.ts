@@ -3,28 +3,39 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { callGemini, extractJson, type GeminiPart } from '@/lib/gemini';
 import { ALLOWED_TOPICS, sanitizeBlocks, sanitizeSyllabusEndDate, sanitizeTargets } from '@/lib/timetable';
+import { workbookToSheets, csvToSheet, sheetsToPromptText, type SheetText } from '@/lib/workbook-text';
 
 export const maxDuration = 60;
 
 // Coaching timetable -> structured blocks.
 //
-// No OCR library and no PDF parser: Gemini reads the image (or PDF) directly,
-// which is the same path /api/parse-scorecard already uses for mock scorecards.
-// A blurry phone photo of a printed handout is the realistic input, and that's
-// exactly what this handles best.
+// Two ways in, one extractor, one sanitizer:
+//   · photo / PDF — Gemini reads the pixels directly (same path as scorecards)
+//   · Excel / CSV — the workbook is unpacked server-side (lib/workbook-text)
+//     and every sheet's grid goes to the SAME prompt as labeled text. Founder,
+//     6 Aug: "students will send excel files only mostly" — a workbook with a
+//     daily sheet AND a weekly sheet comes back as one merged plan.
 //
 // This route EXTRACTS ONLY. It never decides what the student should study —
 // that stays with the deterministic code in the confirm route (see
 // GOVERNING_RULE in lib/gemini.ts).
-const ALLOWED_MEDIA_TYPES = [
+const VISION_MEDIA_TYPES = [
   'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
   'application/pdf',
 ] as const;
-type AllowedMediaType = (typeof ALLOWED_MEDIA_TYPES)[number];
+const SPREADSHEET_MEDIA_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel.sheet.macroEnabled.12',                    // .xlsm — macros never execute here; only the grid is read
+  'text/csv',
+] as const;
+// Legacy binary .xls gets its own message: it is real and common, we cannot
+// read it, and "upload a photo" is the wrong advice for someone holding it.
+const LEGACY_XLS = 'application/vnd.ms-excel';
 
-const EXTRACT_PROMPT = `You are reading a photo, screenshot or PDF of something a CAT coaching institute gave a student (Rodha, TIME, IMS, CL, Endeavor, Cracku, Unacademy...).
+const VISION_PREFACE = `You are reading a photo, screenshot or PDF of something a CAT coaching institute gave a student (Rodha, TIME, IMS, CL, Endeavor, Cracku, Unacademy...).`;
+const SPREADSHEET_PREFACE = `You are reading the TEXT extracted from an Excel/CSV file a CAT coaching institute gave a student (Rodha, TIME, IMS, CL, Endeavor, Cracku, Unacademy...). Each sheet of the workbook appears below under a === SHEET: "name" === header. Cells are separated by " | ", one row per line. Sheet names carry meaning — a sheet named "Daily"/"Day wise" is usually a relative day plan, "Weekly"/"Schedule" a class timetable, "Targets" a target list. Read EVERY sheet; the answer merges all of them.`;
 
-It may be ANY of these, and often it is not a timetable at all:
+const EXTRACT_RULES = `It may be ANY of these, and often it is not a timetable at all:
  (a) a weekly class timetable with days and times,
  (b) a TARGET / strategy message listing how much to complete ("15-20 Quant sectionals by end September", "200 LRDI sets", "100+ topic tests"),
  (c) both.
@@ -80,6 +91,9 @@ TARGETS — how much work the coaching expects completed:
 ALLOWED TOPICS (the ONLY permitted values for "topic"):
 ${ALLOWED_TOPICS.join('\n')}`;
 
+const EXTRACT_PROMPT = `${VISION_PREFACE}\n\n${EXTRACT_RULES}`;
+const SPREADSHEET_PROMPT = `${SPREADSHEET_PREFACE}\n\n${EXTRACT_RULES}`;
+
 interface ParseResult {
   is_timetable?: boolean;
   blocks?: unknown;
@@ -98,8 +112,16 @@ export async function POST(request: NextRequest) {
   if (!file || !mediaType) {
     return NextResponse.json({ error: 'file and mediaType required' }, { status: 400 });
   }
-  if (!ALLOWED_MEDIA_TYPES.includes(mediaType as AllowedMediaType)) {
-    return NextResponse.json({ error: 'Upload a photo (JPG/PNG) or a PDF.' }, { status: 400 });
+  const isVision = (VISION_MEDIA_TYPES as readonly string[]).includes(mediaType);
+  const isSpreadsheet = (SPREADSHEET_MEDIA_TYPES as readonly string[]).includes(mediaType);
+  if (mediaType === LEGACY_XLS) {
+    return NextResponse.json(
+      { error: 'That is an old-format .xls file. Open it and save as .xlsx, then upload again.' },
+      { status: 400 },
+    );
+  }
+  if (!isVision && !isSpreadsheet) {
+    return NextResponse.json({ error: 'Upload a photo (JPG/PNG), a PDF, or an Excel file (.xlsx/.csv).' }, { status: 400 });
   }
   // ~5MB of base64. The client downscales images before sending.
   if (file.length > 7_000_000) {
@@ -124,10 +146,36 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const parts: GeminiPart[] = [
-    { inlineData: { mimeType: mediaType, data: file } },
-    { text: EXTRACT_PROMPT },
-  ];
+  let parts: GeminiPart[];
+  if (isSpreadsheet) {
+    // Unpack the workbook OURSELVES and hand the model labeled text. Never the
+    // raw bytes: the model can't read them, and the unpacking is where all the
+    // Excel quirks (times stored as day-fractions, formula cells, hidden
+    // sheets) get handled deterministically instead of by guesswork.
+    let sheets: SheetText[];
+    try {
+      sheets = mediaType === 'text/csv'
+        ? csvToSheet(Buffer.from(file, 'base64').toString('utf8'))
+        : await workbookToSheets(Buffer.from(file, 'base64'));
+    } catch {
+      return NextResponse.json(
+        { error: "Couldn't open that Excel file — it may be corrupted or password-protected. Re-save it and try again." },
+        { status: 422 },
+      );
+    }
+    if (sheets.length === 0) {
+      return NextResponse.json(
+        { error: 'That file has no readable rows. Check the sheet has your timetable in it.' },
+        { status: 422 },
+      );
+    }
+    parts = [{ text: `${SPREADSHEET_PROMPT}\n\nWORKBOOK CONTENT:\n\n${sheetsToPromptText(sheets)}` }];
+  } else {
+    parts = [
+      { inlineData: { mimeType: mediaType, data: file } },
+      { text: EXTRACT_PROMPT },
+    ];
+  }
 
   const raw = await callGemini({ parts, json: true, maxTokens: 4096, temperature: 0.1 });
   if (raw === null) {

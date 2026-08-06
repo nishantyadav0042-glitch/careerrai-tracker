@@ -58,10 +58,30 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
     onClose(reason);
   };
 
+  // WhatsApp downloads and some Android pickers hand over .xlsx with an empty
+  // or generic MIME type, so the extension is the reliable signal, not the
+  // browser's guess.
+  function spreadsheetType(file: File): string | null {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (name.endsWith('.xlsm')) return 'application/vnd.ms-excel.sheet.macroEnabled.12';
+    if (name.endsWith('.csv')) return 'text/csv';
+    if (name.endsWith('.xls')) return 'application/vnd.ms-excel'; // server answers with the save-as-xlsx message
+    return null;
+  }
+
+  // The server's rejection reasons are now file-specific ("save as .xlsx",
+  // "password-protected") — "try a clearer photo" is wrong advice for those,
+  // so the real message is kept and shown.
+  const lastServerError = useRef<string | null>(null);
+
   async function parseOne(file: File): Promise<{ blocks: TimetableBlock[]; targets: CoachingTarget[]; end: string | null } | null> {
-    const payload = file.type === 'application/pdf'
-      ? { file: await fileToBase64(file), mediaType: 'application/pdf' }
-      : await imageToBase64Jpeg(file).then((r) => ({ file: r.data, mediaType: r.mediaType }));
+    const sheetType = spreadsheetType(file);
+    const payload = sheetType
+      ? { file: await fileToBase64(file), mediaType: sheetType }
+      : file.type === 'application/pdf'
+        ? { file: await fileToBase64(file), mediaType: 'application/pdf' }
+        : await imageToBase64Jpeg(file).then((r) => ({ file: r.data, mediaType: r.mediaType }));
 
     const res = await fetch('/api/timetable/parse', {
       method: 'POST',
@@ -71,6 +91,7 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
     const json = await res.json();
     if (!res.ok) {
       track('timetable_parse_failed', { status: res.status });
+      if (typeof json?.error === 'string') lastServerError.current = json.error;
       return null;
     }
     return {
@@ -108,9 +129,11 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
     setProgress(null);
 
     if (allBlocks.length === 0 && allTargets.length === 0) {
-      setError(files.length > 1
-        ? "Couldn't read any of those. Try clearer photos."
-        : "Couldn't read that. Try a clearer photo.");
+      setError(lastServerError.current
+        ?? (files.length > 1
+          ? "Couldn't read any of those. Try clearer photos."
+          : "Couldn't read that. Try a clearer photo."));
+      lastServerError.current = null;
       setStage('ask');
       return;
     }
@@ -185,11 +208,12 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
 
             <h2 className="mt-4 text-xl font-bold text-stone-900">Add your class timetable</h2>
             <p className="mt-1.5 text-[15px] leading-relaxed text-stone-600">
-              Take a photo of it. Then when your class teaches Percentages, your plan here says Percentages too —
-              instead of sending you somewhere else.
+              Upload the Excel file your coaching sent, or just a photo of it. Then when your class teaches
+              Percentages, your plan here says Percentages too — instead of sending you somewhere else.
             </p>
             <p className="mt-2 text-[13px] text-stone-500">
-              A phone photo is fine. Pick more than one if it doesn&apos;t fit in a single shot.
+              Excel (.xlsx), PDF and photos all work — daily and weekly sheets both get read. Pick more than one
+              file if you need to.
             </p>
 
             {error && (
@@ -197,7 +221,9 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
             )}
 
             <input
-              ref={inputRef} type="file" accept="image/*,application/pdf" multiple className="hidden"
+              ref={inputRef} type="file"
+              accept="image/*,application/pdf,.xlsx,.xlsm,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+              multiple className="hidden"
               onChange={(e) => {
                 const fs = Array.from(e.target.files ?? []).slice(0, 8);
                 if (fs.length) void handleFiles(fs);
@@ -213,7 +239,7 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
             >
               {stage === 'reading'
                 ? (<><Loader2 className="h-4 w-4 animate-spin" /> {progress ?? 'Reading your plan…'}</>)
-                : (<><Upload className="h-4 w-4" /> Choose photos</>)}
+                : (<><Upload className="h-4 w-4" /> Choose file or photos</>)}
             </button>
 
             <button type="button" onClick={() => dismiss('declined')}
