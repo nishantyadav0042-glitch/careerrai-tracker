@@ -100,7 +100,12 @@ export async function POST(request: NextRequest) {
         subjectId: user.id, action: 'chat.attachment_rejected', ok: false,
         detail: { reason: verified.error, stage: 'verify' },
       });
-      return NextResponse.json({ error: verified.error }, { status: 400 });
+      // attachmentGone tells the client the stored object was just deleted —
+      // resending the same path can never work, so the composer must
+      // RE-UPLOAD the file it is still holding. Without this flag the client
+      // kept the dead path as "Ready to send" and every retry failed with
+      // "that upload did not finish" (founder, 00:54, four attempts).
+      return NextResponse.json({ error: verified.error, attachmentGone: true }, { status: 400 });
     }
     attachmentColumns = {
       attachment_path: verified.attachment.path,

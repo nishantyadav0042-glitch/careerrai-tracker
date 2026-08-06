@@ -176,7 +176,13 @@ export function ChatThread({
         }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error ?? 'send failed');
+      if (!res.ok) {
+        // The server deleted the stored object (verification failed), so the
+        // pending path can never send. Re-upload the file we are still
+        // holding — fresh path — and surface the real reason.
+        if (json.attachmentGone && pending) upload.reupload();
+        throw new Error(json.error ?? 'send failed');
+      }
       const { message } = json as { message: ChatMessage };
       upload.clear();
       // Swap optimistic for the real row.

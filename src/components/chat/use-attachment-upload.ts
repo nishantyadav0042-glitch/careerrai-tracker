@@ -145,10 +145,26 @@ export function useAttachmentUpload(studentId?: string) {
     setState(IDLE);
   }, [revokePreview]);
 
+  /**
+   * The stored object is gone (the server discards it when verification
+   * fails), so the path in `ready` is a corpse. If the File handle is still
+   * in memory, upload it again from scratch — fresh path, fresh URL. If not
+   * (page reloaded), the only honest option is asking for the file again.
+   */
+  const reupload = useCallback(() => {
+    const file = state.file;
+    if (file) {
+      void start(file);
+    } else {
+      revokePreview();
+      setState({ ...IDLE, error: 'That upload expired — pick the file again.' });
+    }
+  }, [state.file, start, revokePreview]);
+
   return {
     ...state,
     label: state.file ? `${state.file.name} · ${humanSize(state.file.size)}` : null,
-    start, cancel: reset, clear,
+    start, cancel: reset, clear, reupload,
     setError: (error: string | null) => setState((s) => ({ ...s, error })),
   };
 }
