@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   dailyHours, hoursForDay, normaliseHours, setDailyHours, needsHoursConfirmation,
-  MIN_DAILY_HOURS, MAX_DAILY_HOURS, CHOOSABLE_MAX_HOURS, hourOptions,
+  MIN_DAILY_HOURS, MAX_DAILY_HOURS, hourOptions,
 } from './daily-hours';
 import { generateRoutine, type RoutineProfile, type Section } from './routine-engine';
 import type { TopicChoice } from './topic-selector';
@@ -100,13 +100,16 @@ describe('setDailyHours — the one writer', () => {
 });
 
 describe('the options a student is offered', () => {
-  it('always includes the number they are already on', () => {
-    // One live account is on 15 and nine are on 12 — both above anything the
-    // pickers offer, both left there by the old derived write. Offering only
-    // 1..12 would mean "confirming" quietly moved them.
-    expect(hourOptions(15)).toContain(15);
-    expect(hourOptions(12)).toContain(12);
-    expect(hourOptions(5)).toEqual(Array.from({ length: CHOOSABLE_MAX_HOURS }, (_, i) => i + 1));
+  it('offers the whole range — a 15-hour day is a choice, not an anomaly', () => {
+    // Founder, 6 Aug: "I used to study 15 hours... let them build that. They
+    // might be the sincere students." A number a student can hold but cannot
+    // pick would be the app having an opinion about it again.
+    expect(hourOptions(5)).toContain(15);
+    expect(hourOptions(5)).toContain(MAX_DAILY_HOURS);
+  });
+
+  it('includes a half-hour value no button represents', () => {
+    expect(hourOptions(10.5)).toContain(10.5);
   });
 
   it('stays sorted so the picker reads left to right', () => {
@@ -183,7 +186,7 @@ describe('the same hours always produce the same day', () => {
 
   it('a bigger number is always a bigger day, right across the range', () => {
     let previous = 0;
-    for (let h = 1; h <= CHOOSABLE_MAX_HOURS; h += 1) {
+    for (let h = 1; h <= MAX_DAILY_HOURS; h += 1) {
       const mins = generateRoutine(PROFILE(h), WED, HISTORY, CHOICES).estMinutes;
       expect(mins).toBeGreaterThan(previous);
       previous = mins;

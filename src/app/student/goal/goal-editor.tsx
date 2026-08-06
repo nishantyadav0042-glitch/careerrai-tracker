@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { ArrowLeft, Target, TrendingUp, Clock } from 'lucide-react';
 import { resolveCatExamDate } from '@/lib/routine-engine';
-import { setDailyHours, MIN_DAILY_HOURS, CHOOSABLE_MAX_HOURS } from '@/lib/daily-hours';
+import { setDailyHours, MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 
 export function GoalEditor({
   userId,
@@ -158,7 +158,7 @@ export function GoalEditor({
             <input
               type="range"
               min={MIN_DAILY_HOURS}
-              max={Math.max(CHOOSABLE_MAX_HOURS, initialStudyHours)}
+              max={MAX_DAILY_HOURS}
               step={0.5}
               value={studyHours}
               onChange={(e) => setStudyHours(Number(e.target.value))}
@@ -166,8 +166,8 @@ export function GoalEditor({
             />
             <div className="flex justify-between text-xs text-stone-400 mt-1">
               <span>{MIN_DAILY_HOURS}h</span>
-              <span>{Math.max(CHOOSABLE_MAX_HOURS, initialStudyHours) / 2}h</span>
-              <span>{Math.max(CHOOSABLE_MAX_HOURS, initialStudyHours)}h</span>
+              <span>{MAX_DAILY_HOURS / 2}h</span>
+              <span>{MAX_DAILY_HOURS}h</span>
             </div>
           </div>
           <p className="text-xs text-stone-500">

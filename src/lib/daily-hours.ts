@@ -34,29 +34,27 @@
 // The hours don't.
 
 /**
- * The sanity ceiling on a stored value — NOT a policy cap.
+ * The range. One ceiling, and it is a sanity bound, NOT a policy cap.
  *
- * This has to be high enough to accept every number already in the database,
- * because the old date-derived write clamped at 12 and one account is sitting
- * on 15. Clamping those down on the way through would be the app changing a
- * student's hours behind their back, which is the entire thing this module
- * exists to stop. If a student confirms 12h is theirs, they keep 12h.
+ * There was briefly a second, lower "what a student may choose" ceiling here.
+ * The founder killed it, 6 Aug: "I completely agree with students who choose 12
+ * hours or 15 hours — I used to study 15 hours — so yes, let them build that.
+ * They might be the sincere students."
  *
- * What a student can PICK is a UI question, answered by CHOOSABLE_MAX_HOURS.
+ * He is right, and a second ceiling would have quietly recreated the exact
+ * problem this module exists to solve: a number the student can hold but not
+ * pick is a number the app has an opinion about. Anything storable is
+ * choosable. The app's job is to hold the number, not to judge it.
  */
 export const MIN_DAILY_HOURS = 0.5;
 export const MAX_DAILY_HOURS = 16;
 
-/** The largest number the sliders and pickers offer. A UI choice, not a rule. */
-export const CHOOSABLE_MAX_HOURS = 12;
-
 /**
- * The options a picker should show, always including whatever the student is
- * on now — so a student sitting on 15 can confirm 15 rather than being quietly
- * moved to the nearest thing we happened to offer.
+ * The options a picker shows: the whole range, plus whatever the student is on
+ * now even if it is a half hour that no button represents.
  */
 export function hourOptions(current: number | null): number[] {
-  const opts = Array.from({ length: CHOOSABLE_MAX_HOURS }, (_, i) => i + 1);
+  const opts = Array.from({ length: MAX_DAILY_HOURS }, (_, i) => i + 1);
   if (current != null && !opts.includes(current)) opts.push(current);
   return opts.sort((a, b) => a - b);
 }
