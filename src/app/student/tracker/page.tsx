@@ -31,8 +31,7 @@ import { Flame, CalendarCheck } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
-import { computeBreach, isAlertable } from '@/lib/plan-breach';
-import { BreachAlert } from '@/components/home/breach-alert';
+import { PlanExtendedAlert } from '@/components/home/plan-extended-alert';
 
 export const metadata = {
   title: 'CareerRai',
@@ -160,30 +159,26 @@ export default async function DailyTrackerPage() {
         completedPct: completedByTopics,
       }
     : null;
-  // Plan breach (founder, 5 Aug): the red alert when a student stops living
-  // inside the plan they set. Computed from the SAME pace object the card
-  // shows, so the alert can never contradict the number above it.
-  // observedPerDay is the honest denominator — logged hours over the days
-  // since the first log in the window, not over days they bothered to log.
-  const last21 = (logs ?? []).slice(0, 21);
-  const observedPerDay = last21.length > 0
-    ? last21.reduce((sum, l) => sum + Number(l.study_duration ?? 0), 0) / Math.max(last21.length, 7)
-    : null;
-  // How long they have actually been on the plan, so the debt window can never
-  // bill someone for days before they joined.
-  const firstLogIso = (logs ?? []).length > 0 ? logs![logs!.length - 1]?.report_date ?? null : null;
-  const daysOnPlan = firstLogIso
-    ? Math.max(1, Math.round((now.getTime() - Date.parse(firstLogIso + 'T00:00:00Z')) / 86_400_000) + 1)
-    : null;
-  const breach = pace && targetIso
-    ? computeBreach({
-        lastLogDate: streakRow?.last_log_date ?? null,
-        requiredPerDay: pace.requiredPerDay,
-        observedPerDay,
-        daysToTarget: pace.daysLeft,
-        daysOnPlan,
-        today: now,
-      })
+  // The most recent weekly extension, if the reconcile job moved this
+  // student's date. Shown once, dismissible — never a daily banner.
+  const { data: latestExtensionRow } = await admin
+    .from('plan_extensions')
+    .select('week_start, expected_hours, actual_hours, deficit_hours, days_added, previous_date, new_date, hit_exam_wall')
+    .eq('student_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const latestExtension = latestExtensionRow
+    ? {
+        weekStart: latestExtensionRow.week_start as string,
+        expectedHours: Number(latestExtensionRow.expected_hours),
+        actualHours: Number(latestExtensionRow.actual_hours),
+        deficitHours: Number(latestExtensionRow.deficit_hours),
+        daysAdded: Number(latestExtensionRow.days_added),
+        previousDate: latestExtensionRow.previous_date as string,
+        newDate: latestExtensionRow.new_date as string,
+        hitExamWall: !!latestExtensionRow.hit_exam_wall,
+      }
     : null;
 
   const targetLabel = targetIso
@@ -468,7 +463,11 @@ export default async function DailyTrackerPage() {
               coaching — their coaching's daily share, or the upload entry */}
         {/* The red alert outranks every block. A student off their own plan
             should not have to scroll past today's tip to learn it. */}
-        {breach && isAlertable(breach.level) && <BreachAlert breach={breach} />}
+        {/* The weekly notice replaces the daily breach banner (founder, 6 Aug:
+            "warning should be weekly not daily"). The breach computation still
+            runs — the BUDDY cockpit reads it to know who needs a call — but the
+            student is no longer told off every morning. */}
+        {latestExtension && <PlanExtendedAlert extension={latestExtension} />}
         {blockOrder.map((b: HomeBlock) => {
           if (b === 'action') return (
             /* NextActionCard ("DO THIS NEXT") REMOVED 29 Jul, on the taps —

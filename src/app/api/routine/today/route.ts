@@ -7,7 +7,6 @@ import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baseline
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
-import { MAX_HUMAN_HOURS_PER_DAY } from '@/lib/plan-breach';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
@@ -169,28 +168,31 @@ export async function GET() {
     .filter((f: unknown): f is string => typeof f === 'string');
   const adaptation = computeAdaptation(recentPlanFits, history.completedTasks, history.plannedTasks, history.planDays);
 
-  /** Nobody studies more than this in a day, whatever the date demands. */
-  const humanCap = (h: number | null): number | null =>
-    h == null ? null : Math.min(h, MAX_HUMAN_HOURS_PER_DAY);
-
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
     targetPercentile: profile.target_percentile as number | null,
-    // Two ceilings, both necessary.
+    // THE STUDENT'S OWN HOURS. Nothing else.
     //
-    // MAX_HUMAN_HOURS_PER_DAY first: `paceHours` is what the student's DATE
-    // demands, and a date can demand 12. Feeding that in built a twelve-hour
-    // task list nobody could ever finish. The date being unreachable is real
-    // information, but it belongs in the breach card — not in today's tasks.
+    // Founder, 6 Aug: "keep the daily hours same... don't change the hours on
+    // your own, unless the student themselves makes the change or plans again.
+    // You won't take any action yourself."
     //
-    // Then capacity, which sizes the day to what this student actually
-    // sustains. That part was already right; what was missing is that it
-    // happened SILENTLY. A student set 11 hours, got four, and asked us why
-    // the app was broken. The number and its reason are returned below so the
-    // plan can say it out loud.
-    weekdayHours: capBudget(humanCap(paceHours ?? claimedHours), capacity),
-    weekendHours: capBudget(humanCap(paceHours ?? (profile.weekend_hours_available as number | null)), capacity),
+    // This deliberately removes two layers that used to sit here:
+    //   · `paceHours` — what the DATE demanded. A date can demand 12 hrs/day,
+    //     and feeding that in built a task list nobody could finish.
+    //   · `capBudget` — capacity shrinking the day toward logged behaviour.
+    //     Well-intentioned and the direct cause of "Bhaiya 11 hr ka plan
+    //     bnwayi hu aur sirf 4 hr ka task milta hai?" — we quietly halved a
+    //     student's day and never told her.
+    //
+    // Falling behind no longer changes the day. It moves the FINISH DATE,
+    // once a week, with a warning that says by how much. See
+    // /api/cron/weekly-plan-reconcile. Capacity is still computed below,
+    // because the buddy and admin surfaces still want to know — it just no
+    // longer overrides what the student asked for.
+    weekdayHours: claimedHours,
+    weekendHours: (profile.weekend_hours_available as number | null) ?? claimedHours,
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
@@ -431,16 +433,14 @@ export async function GET() {
   const claimedForToday = isWeekendToday
     ? ((profile.weekend_hours_available as number | null) ?? claimedHours)
     : claimedHours;
-  const trimmedByCapacity = claimedForToday != null && hoursToday < claimedForToday - 0.25;
+  // Always equal to what the student set now, so `trimmed` is permanently
+  // false. The field stays so the client keeps rendering the hours badge — and
+  // so anything that starts silently resizing a day again shows up here.
   const todayBudget = {
     hours: Math.round(hoursToday * 2) / 2,
     claimedHours: claimedForToday,
-    trimmed: trimmedByCapacity,
-    reason: !trimmedByCapacity
-      ? null
-      : capacity.trust === 'behaviour'
-        ? `Sized to the ${Math.round(hoursToday * 2) / 2}h you actually finish on a normal day, not the ${claimedForToday}h you set. Finishing a real day beats missing a big one.`
-        : `Capped at ${Math.round(hoursToday * 2) / 2}h — more than that in one day is not a plan anyone completes.`,
+    trimmed: false,
+    reason: null as string | null,
   };
 
   return NextResponse.json({

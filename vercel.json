@@ -131,6 +131,10 @@
     {
       "path": "/api/cron/release-stale-sessions",
       "schedule": "15 */6 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-plan-reconcile",
+      "schedule": "30 13 * * 0"
     }
   ]
 }
