@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import ExcelJS from 'exceljs';
 import {
   workbookToSheets, csvToSheet, sheetsToPromptText,
-  MAX_SHEETS, MAX_ROWS_PER_SHEET, MAX_TOTAL_CHARS,
+  MAX_SHEETS, MAX_ROWS_PER_SHEET, MAX_TOTAL_CHARS, windowDatedSheets,
 } from './workbook-text';
 
 // Excel → text for the timetable extractor. Founder, 6 Aug: "students will
@@ -178,5 +178,28 @@ describe('the real file that broke in production (Shreya, 6 Aug)', () => {
     // The whole workbook stays comfortably inside the prompt budget.
     const total = sheets.reduce((n, s) => n + s.text.length, 0);
     expect(total).toBeLessThan(MAX_TOTAL_CHARS);
+  });
+});
+
+describe('windowing long day-plans (the MAX_TOKENS fix)', () => {
+  // Live-fire, 6 Aug: asked politely for "only the next 21 days", the model
+  // emitted all 117 dated rows anyway, hit the output ceiling, and its
+  // truncated JSON parsed as nothing. The window is enforced on the DATA now.
+  it('cuts the real file to the actionable window', async () => {
+    const buf = readFileSync(join(__dirname, '__fixtures__', 'buddy-weekly-plan.xlsx'));
+    const sheets = windowDatedSheets(await workbookToSheets(buf), '2026-08-06');
+    const daily = sheets.find((s) => s.name === 'Daily Schedule')!;
+    expect(daily.rows).toBeLessThan(30);          // 117 before
+    expect(daily.text).toContain('2026-08-06');   // today stays
+    expect(daily.text).toContain('Date | Day');   // header stays
+    expect(daily.text).not.toContain('2026-09-26'); // far future cut
+    // Undated sheets are untouched.
+    expect(sheets.find((s) => s.name === 'Weekly Plan')!.rows).toBe(17);
+    expect(sheets.find((s) => s.name === 'Topic Tracker')!.rows).toBe(47);
+  });
+
+  it('leaves a short dated sheet whole', () => {
+    const sheet = { name: 'S', rows: 3, text: 'Header\n2026-08-01 | x\n2026-12-01 | y' };
+    expect(windowDatedSheets([sheet], '2026-08-06')[0].text).toBe(sheet.text);
   });
 });

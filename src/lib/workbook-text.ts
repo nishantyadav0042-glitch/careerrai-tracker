@@ -127,3 +127,41 @@ export function sheetsToPromptText(sheets: SheetText[]): string {
     .map((s) => `=== SHEET: "${s.name}" ===\n${s.text}`)
     .join('\n\n');
 }
+
+// ── Windowing long day-plans ────────────────────────────────────────────────
+//
+// Live-fire against Shreya's real file proved the model cannot be trusted to
+// self-limit: told "output only the next 21 days", it emitted every one of the
+// 117 dated rows until it hit the output-token ceiling, and truncated JSON
+// parses as nothing — the student sees "that doesn't look like a timetable"
+// about a perfect file. So the window is enforced HERE, on the data: the model
+// cannot overrun dates it never sees.
+
+/** Keep a dated sheet's header + only the rows inside [today, today+spanDays]. */
+export const DATED_WINDOW_DAYS = 21;
+/** Sheets with fewer dated rows than this are left whole — no need to cut. */
+export const DATED_WINDOW_THRESHOLD = 30;
+
+const ISO_LINE = /^(\d{4}-\d{2}-\d{2})/;
+
+export function windowDatedSheets(
+  sheets: SheetText[],
+  todayIso: string,
+  spanDays = DATED_WINDOW_DAYS,
+): SheetText[] {
+  const endIso = new Date(Date.parse(todayIso + 'T00:00:00Z') + spanDays * 86_400_000)
+    .toISOString().slice(0, 10);
+
+  return sheets.map((sheet) => {
+    const lines = sheet.text.split('\n');
+    const datedCount = lines.filter((l) => ISO_LINE.test(l)).length;
+    if (datedCount <= DATED_WINDOW_THRESHOLD) return sheet;
+
+    const kept = lines.filter((l) => {
+      const m = ISO_LINE.exec(l);
+      if (!m) return true;                       // headers and notes stay
+      return m[1] >= todayIso && m[1] <= endIso; // the actionable window
+    });
+    return { ...sheet, text: kept.join('\n'), rows: kept.length };
+  });
+}
