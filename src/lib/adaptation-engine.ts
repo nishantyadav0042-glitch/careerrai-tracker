@@ -1,28 +1,33 @@
-// Adaptation Engine (LIS Layer 9) — "learn the student, then change tomorrow."
+// Adaptation Engine (LIS Layer 9) — "learn the student, and SAY what you learnt."
 //
-// Capacity (Layer 3) sizes the number of HOURS the plan may use. Adaptation
-// sizes how much WORK we ask for inside those hours — the pace assumption. Our
-// Learning Engine prices a foundation QA question at ~10 min; a particular
-// student may honestly need 15. If we never learn that, every day quietly
-// overshoots and they feel behind at hours that were correct (the Pranav
-// complaint was never "too many hours" — it was "too many questions").
+// This engine used to end in a `volumeFactor` that silently multiplied the task
+// count on today's plan by anything from 0.6 to 1.3. The intent was kind: a
+// student who never finishes the day gets a smaller day. The effect was not.
 //
-// Two signals feed it, both already logged, no model anywhere:
+// Founder, 6 Aug: "keep their hours fixed and remove volumeFactor... sometimes
+// they are seeing 4 hrs of study, sometimes 6 hours... I don't want them to
+// come on our app and feel confused daily. This will be the biggest blunder."
+//
+// He is right, and the reason is worth writing down so nobody adds it back. The
+// factor made the plan a moving target measured against a fixed commitment. A
+// student who set 5 hours and worked hard on Monday got a lighter Tuesday for
+// their trouble; one who under-logged got trimmed toward under-logging, which
+// is a slow slide nobody consented to. And because the trim was invisible, the
+// only way to notice was to count the questions — which is exactly what one
+// student did before asking why her 11-hour plan produced four hours of tasks.
+//
+// So the engine still watches. It still reads:
 //   1. plan_fit — the explicit Review-Engine tap ("too much / right / too
-//      little"). High signal, but optional, so it accrues slowly.
+//      little"). High signal, optional, so it accrues slowly.
 //   2. completion ratio — tasks finished ÷ tasks planned over recent days.
-//      Always present, so the engine can start learning from day one.
+//      Always present, so it can start learning from day one.
 //
-// The governing rule is asymmetric and motivation-first: **behaviour alone can
-// only make the day lighter.** Chronic under-completion trims volume even with
-// no complaint; but the ONLY route to a heavier plan is the student explicitly
-// saying "too little." Over-loading kills consistency faster than under-loading,
-// so we bias toward completable.
-//
-// Output is a single `volumeFactor` that multiplies task volume in the routine
-// engine — never the time budget (that is Capacity's job) and never below the
-// motivation cap (that is the Learning Engine's floor). Deterministic and
-// explainable, exactly like the Capacity Engine it sits beside.
+// It just doesn't act. What it produces is a READING — heavy, balanced, or
+// light — that goes to the buddy dossier, the admin surfaces, and the coaching
+// decision, where a human can do something about it. The student's day is sized
+// by the student's own hours and nothing else.
+
+export type LoadReading = 'heavy' | 'balanced' | 'light';
 
 export interface Adaptation {
   planFitCount: number;             // plan_fit reports in the window
@@ -30,9 +35,10 @@ export interface Adaptation {
   tooLittleRatio: number;           // share that were 'too_little'
   completionRatio: number | null;   // tasks done ÷ planned over recent plan-days
   planDays: number;                 // days that had a plan (for the ratio)
-  volumeFactor: number;             // multiplies task volume; 1.0 = unchanged
-  trust: 'default' | 'learning';    // whether we've adapted off real behaviour
-  note: string;                     // human explanation (admin + future student copy)
+  /** What the behaviour says about the load. An observation, never a lever. */
+  reading: LoadReading;
+  trust: 'default' | 'learning';    // whether there is enough behaviour to read
+  note: string;                     // human explanation (buddy + admin surfaces)
 }
 
 // Same recent window as the Capacity Engine, so the two engines reason over the
@@ -40,12 +46,9 @@ export interface Adaptation {
 export const ADAPTATION_WINDOW_DAYS = 21;
 const MIN_FIT_SIGNALS = 3;   // enough plan-fit taps to act on the explicit signal
 const MIN_PLAN_DAYS = 5;     // enough plan-days to trust the completion ratio
-const MIN_FACTOR = 0.6;      // never trim a day below 60% of its priced volume
-const MAX_FACTOR = 1.3;      // never inflate beyond 130% (still capped by unitCap)
 
-const clamp = (lo: number, hi: number, x: number) => Math.max(lo, Math.min(hi, x));
-// Round to the nearest 0.05 — factors stay clean and explainable ("×0.85").
-const round05 = (n: number) => Math.round(n * 20) / 20;
+/** Below this share of the plan finished, the day is genuinely running heavy. */
+export const HEAVY_COMPLETION_RATIO = 0.6;
 
 const VALID = new Set(['too_much', 'right', 'too_little']);
 
@@ -66,45 +69,39 @@ export function computeAdaptation(
   const tooLittleRatio = fits.length ? tooLittle / fits.length : 0;
   const completionRatio = planDays > 0 && plannedTasks > 0 ? completedTasks / plannedTasks : null;
 
-  // Explicit plan-fit factor. Asymmetric: a day that felt "too much" pulls down
-  // harder (×0.4) than a "too little" day pushes up (×0.3).
-  let fitFactor = 1.0;
-  if (fits.length >= MIN_FIT_SIGNALS) {
-    const net = tooLittleRatio - tooMuchRatio; // -1 (all heavy) .. +1 (all light)
-    fitFactor = net < 0 ? 1 + net * 0.4 : 1 + net * 0.3;
+  const enoughFits = fits.length >= MIN_FIT_SIGNALS;
+  const enoughDays = completionRatio != null && planDays >= MIN_PLAN_DAYS;
+  const haveSignal = enoughFits || enoughDays;
+
+  // Heavy wins ties. A day that is both under-finished and complained about is
+  // heavy, and mistaking a struggling student for a bored one is the worse
+  // error of the two.
+  let reading: LoadReading = 'balanced';
+  if ((enoughFits && tooMuchRatio > tooLittleRatio && tooMuchRatio >= 0.4)
+      || (enoughDays && completionRatio! < HEAVY_COMPLETION_RATIO)) {
+    reading = 'heavy';
+  } else if (enoughFits && tooLittleRatio >= 0.5) {
+    reading = 'light';
   }
 
-  // Behavioural completion factor — can ONLY lighten. Chronic under-completion
-  // (< 60% of the plan finished) trims volume even with no explicit complaint.
-  let completionFactor = 1.0;
-  if (completionRatio != null && planDays >= MIN_PLAN_DAYS && completionRatio < 0.6) {
-    completionFactor = clamp(0.7, 1.0, 0.4 + completionRatio);
-  }
+  const trust: Adaptation['trust'] = haveSignal && reading !== 'balanced' ? 'learning' : 'default';
 
-  // Motivation-first combine: a bigger plan requires the student to explicitly
-  // ask for it; behaviour on its own can only make the day lighter.
-  const raw = fitFactor > 1.0 ? fitFactor : Math.min(fitFactor, completionFactor);
-  const volumeFactor = clamp(MIN_FACTOR, MAX_FACTOR, round05(raw));
-
-  const haveSignal = fits.length >= MIN_FIT_SIGNALS || (completionRatio != null && planDays >= MIN_PLAN_DAYS);
-  const trust: Adaptation['trust'] = haveSignal && volumeFactor !== 1.0 ? 'learning' : 'default';
-
-  const pct = Math.round(volumeFactor * 100);
   let note: string;
   if (trust === 'default') {
     note = fits.length || planDays
-      ? 'Volume feels about right — no change to today.'
-      : 'Not enough logged days yet — learning this student’s real pace.';
-  } else if (volumeFactor < 1) {
-    const why = fits.length >= MIN_FIT_SIGNALS && tooMuchRatio > 0
+      ? 'Load looks about right — the plan is being finished at roughly the rate it is set.'
+      : 'Not enough logged days yet — still learning this student’s real pace.';
+  } else if (reading === 'heavy') {
+    const why = enoughFits && tooMuchRatio > 0
       ? `${tooMuch}/${fits.length} recent days logged "too much"`
-      : completionRatio != null
-        ? `only ~${Math.round(completionRatio * 100)}% of the plan finished lately`
-        : 'recent days ran heavy';
-    note = `Learned to trim: ${why} — today’s volume set to ${pct}% so it’s finishable, same hours.`;
+      : `only ~${Math.round(completionRatio! * 100)}% of the plan is getting finished`;
+    // Deliberately phrased as something a COACH acts on. The app will not quietly
+    // shrink the day; if the load is genuinely wrong, the student changes their
+    // hours, or their buddy talks to them about how they are working.
+    note = `Running heavy: ${why}. Their hours are unchanged — worth asking whether the number is still right for them.`;
   } else {
-    note = `Learned to add: ${tooLittle}/${fits.length} recent days logged "too little" — today’s volume raised to ${pct}%.`;
+    note = `Running light: ${tooLittle}/${fits.length} recent days logged "too little". They may be ready to raise their own daily hours.`;
   }
 
-  return { planFitCount: fits.length, tooMuchRatio, tooLittleRatio, completionRatio, planDays, volumeFactor, trust, note };
+  return { planFitCount: fits.length, tooMuchRatio, tooLittleRatio, completionRatio, planDays, reading, trust, note };
 }

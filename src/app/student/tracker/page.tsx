@@ -32,6 +32,8 @@ import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
 import { PlanExtendedAlert } from '@/components/home/plan-extended-alert';
+import { ConfirmHoursCard } from '@/components/home/confirm-hours-card';
+import { dailyHours, needsHoursConfirmation } from '@/lib/daily-hours';
 
 export const metadata = {
   title: 'CareerRai',
@@ -181,33 +183,34 @@ export default async function DailyTrackerPage() {
       }
     : null;
 
+  // "Is this number yours?" — asked exactly once, of students whose hours we
+  // cannot prove they chose. Until 6 Aug a date change silently rewrote them,
+  // and that write left no trace, so for existing accounts the honest answer is
+  // that we don't know. Founder: "any confusion for any student, ask them the
+  // question in app and then act, or confirm from them."
+  const confirmHours = needsHoursConfirmation(profile) ? dailyHours(profile).weekday : null;
+
   const targetLabel = targetIso
     ? new Date(targetIso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
     : null;
-  let finishStrip: { label: string; tone: 'done' | 'ahead' | 'tight' | 'critical' } | null;
-  if (targetIso && targetLabel) {
-    if (finish.status === 'done') {
-      finishStrip = { label: `Target ${targetLabel} — syllabus complete`, tone: 'done' };
-    } else if (!finish.rawFinishIso) {
-      // No pace yet — show the owned commitment neutrally, never "stalled".
-      finishStrip = { label: `Your target: ${targetLabel}`, tone: 'tight' };
-    } else {
-      const driftDays = Math.round((Date.parse(finish.rawFinishIso) - Date.parse(targetIso)) / 86_400_000);
-      finishStrip =
-        driftDays <= 2
-          ? { label: `Your target: ${targetLabel} · on track`, tone: 'done' }
-          : driftDays <= 9
-            ? { label: `Your target: ${targetLabel} · pace says ${finish.windowLabel}`, tone: 'tight' }
-            : { label: `Your target: ${targetLabel} · pace says ${finish.windowLabel}`, tone: 'critical' };
-    }
-  } else {
-    finishStrip =
-      finish.status === 'done'
+  // THE PROJECTED FINISH DATE IS GONE.
+  //
+  // This strip used to say "Your target: 12 September · pace says 3–9 October"
+  // — a second, competing date, computed from a different model than the one
+  // the weekly reconcile job moves. A student had two finish dates on one
+  // screen and no way to know which one to believe, and neither matched what
+  // their buddy could see.
+  //
+  // There is one finish date now: syllabus_target_date. It is theirs, it is on
+  // the card above and in Important Dates, and the only thing that moves it is
+  // the Sunday reconcile — which explains itself in hours when it does.
+  // Students with no date yet get the invitation to set one; that is all.
+  const finishStrip: { label: string; tone: 'done' | 'ahead' | 'tight' | 'critical' } | null =
+    targetIso && targetLabel
+      ? null
+      : finish.status === 'done'
         ? { label: 'Syllabus complete — revision & mocks now', tone: 'done' }
-        : finish.windowLabel
-          ? { label: `Syllabus done ${finish.windowLabel} at this pace`, tone: finish.status === 'ahead' ? 'done' : finish.status === 'tight' ? 'tight' : 'critical' }
-          : null;
-  }
+        : { label: 'Set your finish date to size your plan', tone: 'tight' };
   // Studied through (practicing+), not merely opened — matches My CAT Plan.
   const startedOnceCount = topicMemory.filter(
     (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
@@ -468,6 +471,10 @@ export default async function DailyTrackerPage() {
             runs — the BUDDY cockpit reads it to know who needs a call — but the
             student is no longer told off every morning. */}
         {latestExtension && <PlanExtendedAlert extension={latestExtension} />}
+
+        {/* The one-time ownership handshake. Only for students whose hours we
+            cannot prove they chose — see lib/daily-hours.needsHoursConfirmation. */}
+        {confirmHours != null && <ConfirmHoursCard hours={confirmHours} />}
         {blockOrder.map((b: HomeBlock) => {
           if (b === 'action') return (
             /* NextActionCard ("DO THIS NEXT") REMOVED 29 Jul, on the taps —

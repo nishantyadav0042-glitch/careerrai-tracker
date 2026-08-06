@@ -60,6 +60,8 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading,
   // (scarce time → highest-ROI, lighter weekdays). College / full-time both
   // read as not-working-professional for now.
   const payload = {
+    // Pre-signup blob, not a profile write — verify-phone-otp replays it
+    // through setDailyHours once the account actually exists.
     hours_available: hours, coaching_enrolled: coaching, is_repeater: repeater, is_working_professional: situation === 'working',
     last_year_percentile: repeater ? parsedLastYearPercentile : null,
     had_buddy_last_year: repeater ? hadBuddyLastYear : null,

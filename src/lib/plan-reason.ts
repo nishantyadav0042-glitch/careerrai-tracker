@@ -30,14 +30,12 @@ export interface PlanReasonInput {
   /** Yesterday's check-in, when one exists. */
   dayOutcome: 'studied' | 'partial' | 'not_studied' | 'skipped' | null;
   blockerReason: string | null;
-  /** Adaptation engine's volume factor when it is actively learning; null otherwise. */
-  adaptationVolumeFactor: number | null;
 }
 
 export interface PlanReason {
   line: string;
   /** Which truth produced it — for telemetry, so we learn which claims land. */
-  kind: 'carried' | 'postponed' | 'lightened' | 'built_on' | 'rest_return' | 'restart';
+  kind: 'carried' | 'postponed' | 'built_on' | 'rest_return' | 'restart';
 }
 
 export function planReason(input: PlanReasonInput): PlanReason | null {
@@ -68,16 +66,16 @@ export function planReason(input: PlanReasonInput): PlanReason | null {
     };
   }
 
-  // 3 — They said the plan was too heavy AND the engine genuinely reduced
-  // volume. Both halves required: the claim "today is lighter" must be true
-  // of the plan, not just sympathetic to the feedback.
-  if (input.blockerReason === 'plan_too_heavy'
-      && input.adaptationVolumeFactor != null && input.adaptationVolumeFactor < 1) {
-    return {
-      kind: 'lightened',
-      line: 'Today is lighter — yesterday you said the plan was too heavy, and we adjusted.',
-    };
-  }
+  // Rung 3 used to be "Today is lighter — you said the plan was too heavy, and
+  // we adjusted." It is gone because the app no longer adjusts. The plan is
+  // sized to the student's own hours and nothing else (lib/daily-hours.ts), so
+  // that sentence would now be a comforting claim about something that did not
+  // happen — the exact kind of line this module exists to refuse.
+  //
+  // A student who keeps saying the day is too heavy is not ignored: the reading
+  // reaches their buddy and the admin surfaces, and they can change their own
+  // number in one place. What we will not do is quietly shrink their day and
+  // tell them we helped.
 
   // 4 — A clean sweep yesterday. Momentum, said out loud with the number.
   if (input.yesterday && input.yesterday.total > 0 && input.yesterday.done >= input.yesterday.total) {

@@ -1,4 +1,5 @@
 import { computeCapacity } from '@/lib/capacity-engine';
+import { dailyHours } from '@/lib/daily-hours';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { getPhase } from '@/lib/routine-engine';
@@ -116,7 +117,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
     h.cohortSize++;
 
     const hrs = rep.map((r: any) => Number(r.study_duration) || 0);
-    const claimed = (p.study_target_hours ?? p.hours_available) as number | null;
+    const claimed = dailyHours(p).weekday;
     const capacity = computeCapacity(hrs, rep.length, claimed);
     if (capacity.trust === 'behaviour') h.capacityBehaviourCapped++;
 
@@ -143,8 +144,12 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
     const adaptation = computeAdaptation(planFits, completedTasks, plannedTasks, planDays);
     if (adaptation.trust === 'learning') {
       h.adaptation.learning++;
-      if (adaptation.volumeFactor < 1) { h.adaptation.trimmed++; trimSum += adaptation.volumeFactor; trimN++; }
-      else if (adaptation.volumeFactor > 1) h.adaptation.raised++;
+      // Was "how much did we trim the plan"; the plan is no longer trimmed, so
+      // this now counts what the behaviour SAYS about the load.
+      if (adaptation.reading === 'heavy') {
+        h.adaptation.trimmed++;
+        if (adaptation.completionRatio != null) { trimSum += adaptation.completionRatio; trimN++; }
+      } else if (adaptation.reading === 'light') h.adaptation.raised++;
     }
 
     // Direction windows + coverage + mock signals.
@@ -177,7 +182,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
       recentActive10, priorActive10,
       capacityTrust: capacity.trust,
       capacityGapHours,
-      volumeFactor: adaptation.volumeFactor,
+      completionRatio: adaptation.completionRatio,
       tooMuchRatio: adaptation.tooMuchRatio,
       momentumScore: momentumProxy(gapDays, activeDays21),
       coverage: coverageSnap,

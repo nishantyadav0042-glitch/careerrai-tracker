@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { ArrowLeft, Target, TrendingUp, Clock } from 'lucide-react';
 import { resolveCatExamDate } from '@/lib/routine-engine';
+import { setDailyHours, MIN_DAILY_HOURS, CHOOSABLE_MAX_HOURS } from '@/lib/daily-hours';
 
 export function GoalEditor({
   userId,
@@ -36,12 +37,9 @@ export function GoalEditor({
     // Writes the user's own row (RLS-scoped). Not on the page-load path.
     await supabase
       .from('profiles')
-      // Keep the two daily-hours columns in lock-step. study_target_hours is
-      // canonical (readers use `study_target_hours ?? hours_available`), but the
-      // buddy dossier / admin list / some crons still read hours_available
-      // directly — writing only one column here made them show a stale, older
-      // daily-hours number. Both move together now.
-      .update({ target_percentile: targetPercentile, study_target_hours: studyHours, hours_available: Math.round(studyHours) })
+      // Through setDailyHours — the one writer, which also records that this
+      // number is the student's own and stamps when they set it.
+      .update({ target_percentile: targetPercentile, ...setDailyHours(studyHours, 'student') })
       .eq('id', userId);
     setSaving(false);
     setSaved(true);
@@ -159,17 +157,17 @@ export function GoalEditor({
             </div>
             <input
               type="range"
-              min={0.5}
-              max={10}
+              min={MIN_DAILY_HOURS}
+              max={Math.max(CHOOSABLE_MAX_HOURS, initialStudyHours)}
               step={0.5}
               value={studyHours}
               onChange={(e) => setStudyHours(Number(e.target.value))}
               className="w-full accent-stone-800"
             />
             <div className="flex justify-between text-xs text-stone-400 mt-1">
-              <span>0.5h</span>
-              <span>5h</span>
-              <span>10h</span>
+              <span>{MIN_DAILY_HOURS}h</span>
+              <span>{Math.max(CHOOSABLE_MAX_HOURS, initialStudyHours) / 2}h</span>
+              <span>{Math.max(CHOOSABLE_MAX_HOURS, initialStudyHours)}h</span>
             </div>
           </div>
           <p className="text-xs text-stone-500">

@@ -5,8 +5,8 @@ const BUILT = '2026-07-29T10:00:00.000Z';
 const base: PlanFreshnessInput = {
   completionCount: 0,
   routineCreatedAt: BUILT,
-  generatedPaceHours: 3,
-  currentPaceHours: 3,
+  generatedHours: 3,
+  currentHours: 3,
   yesterdayReportUpdatedAt: null,
 };
 
@@ -17,14 +17,14 @@ describe('the completed-work guard', () => {
     const everythingStale = {
       ...base,
       completionCount: 1,
-      currentPaceHours: 9,                                   // pace wildly different
+      currentHours: 9,                                   // pace wildly different
       yesterdayReportUpdatedAt: '2026-07-29T18:00:00.000Z',  // reported long after
     };
     expect(planStaleReason(everythingStale)).toBeNull();
   });
 
   it('holds for many completions too', () => {
-    expect(planStaleReason({ ...base, completionCount: 7, currentPaceHours: 9 })).toBeNull();
+    expect(planStaleReason({ ...base, completionCount: 7, currentHours: 9 })).toBeNull();
   });
 });
 
@@ -78,25 +78,36 @@ describe('legacy and unparseable data default to keeping the plan', () => {
   });
 });
 
-describe('the pre-existing pace rule still works', () => {
-  it('rebuilds when pace drifted past the threshold', () => {
-    expect(planStaleReason({ ...base, currentPaceHours: 5 })).toBe('pace_changed');
+describe('the student changed their own hours', () => {
+  // This rule used to watch a date-derived pace, which moves on its own every
+  // morning as the calendar advances — so it could tear down a plan mid-day
+  // for a student who changed nothing. It now watches the number the plan is
+  // actually built from, and that only moves when the student moves it.
+  it('rebuilds when they raise their hours', () => {
+    expect(planStaleReason({ ...base, currentHours: 5 })).toBe('hours_changed');
   });
 
-  it('ignores drift at or below the threshold', () => {
-    expect(planStaleReason({ ...base, currentPaceHours: 3.5 })).toBeNull();
-    expect(planStaleReason({ ...base, currentPaceHours: 2.5 })).toBeNull();
+  it('rebuilds on the smallest change the slider can make', () => {
+    // Half-hour steps. A student who nudges 3 -> 3.5 asked for a different day
+    // and should get one.
+    expect(planStaleReason({ ...base, currentHours: 3.5 })).toBe('hours_changed');
+    expect(planStaleReason({ ...base, currentHours: 2.5 })).toBe('hours_changed');
   });
 
-  it('needs both pace numbers to act', () => {
-    expect(planStaleReason({ ...base, generatedPaceHours: null, currentPaceHours: 9 })).toBeNull();
-    expect(planStaleReason({ ...base, currentPaceHours: null })).toBeNull();
+  it('ignores float noise', () => {
+    // The threshold exists only to absorb rounding, never to tolerate drift.
+    expect(planStaleReason({ ...base, currentHours: 3.0000001 })).toBeNull();
   });
 
-  it('reports pace drift ahead of the check-in reason when both apply', () => {
+  it('needs both numbers to act', () => {
+    expect(planStaleReason({ ...base, generatedHours: null, currentHours: 9 })).toBeNull();
+    expect(planStaleReason({ ...base, currentHours: null })).toBeNull();
+  });
+
+  it('reports the hours change ahead of the check-in reason when both apply', () => {
     // Either answer rebuilds, so the distinction is only for telemetry — but it
     // should be stable rather than incidental.
-    const both = { ...base, currentPaceHours: 9, yesterdayReportUpdatedAt: '2026-07-29T18:00:00.000Z' };
-    expect(planStaleReason(both)).toBe('pace_changed');
+    const both = { ...base, currentHours: 9, yesterdayReportUpdatedAt: '2026-07-29T18:00:00.000Z' };
+    expect(planStaleReason(both)).toBe('hours_changed');
   });
 });

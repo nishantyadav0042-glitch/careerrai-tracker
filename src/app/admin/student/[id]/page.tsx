@@ -133,7 +133,7 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
             {s.adaptation.planFitCount > 0 && (
               <span className="rounded bg-white px-2 py-0.5 font-semibold text-stone-700 ring-1 ring-stone-200">{s.adaptation.planFitCount} plan-fit tap{s.adaptation.planFitCount === 1 ? '' : 's'}</span>
             )}
-            <span className={cn('rounded px-2 py-0.5 font-bold', s.adaptation.trust === 'learning' ? 'bg-indigo-500 text-white' : 'bg-stone-400 text-white')}>volume ×{s.adaptation.volumeFactor}</span>
+            <span className={cn('rounded px-2 py-0.5 font-bold', s.adaptation.reading === 'heavy' ? 'bg-rose-500 text-white' : s.adaptation.reading === 'light' ? 'bg-indigo-500 text-white' : 'bg-stone-400 text-white')}>load: {s.adaptation.reading}</span>
           </div>
           <p className="mt-1.5 text-[12px] text-stone-600">{s.adaptation.note}</p>
         </div>

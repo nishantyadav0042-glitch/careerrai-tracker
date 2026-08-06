@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { dailyHours as studentDailyHours } from '@/lib/daily-hours';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadMasteryState } from '@/lib/mastery-state';
 import { sectionConfig, sectionBudgetShare, isSectionReady, sectionNotReadyReason } from '@/lib/mastery-sections';
@@ -46,7 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ section
     profile.dilr_model_enabled === true ? 'DILR' : null,
     profile.varc_model_enabled === true ? 'VARC' : null,
   ].filter(Boolean) as string[];
-  const dailyHours = ((profile.study_target_hours ?? profile.hours_available ?? 3) as number);
+  const dailyHours = studentDailyHours(profile).weekday ?? 3;
   const share = sectionBudgetShare(cfg.key, enabledKeys);
   const budgetMinutes = Math.max(60, Math.round(dailyHours * 60 * share));
   const e = cfg.engine;

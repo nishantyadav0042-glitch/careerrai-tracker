@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dailyHours } from '@/lib/daily-hours';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
 import { computeWeeklyDiagnosis } from '@/lib/weekly-diagnosis';
 import { getAuthUser } from '@/lib/auth';
@@ -276,7 +277,7 @@ export default async function BuddyStudentDetailPage({
         targetPercentile={student.target_percentile ? Number(student.target_percentile) : null}
         weakestSection={(student.self_reported_weakest_section as string | null) ?? null}
         coachingEnrolled={student.coaching_enrolled ?? null}
-        hoursAvailable={student.hours_available ?? null}
+        hoursAvailable={dailyHours(student).weekday}
         isRepeater={student.is_repeater ?? null}
         isWorkingProfessional={student.is_working_professional ?? null}
         syllabusTargetDate={(student.syllabus_target_date as string | null) ?? null}

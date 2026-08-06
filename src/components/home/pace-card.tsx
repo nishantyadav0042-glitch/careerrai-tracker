@@ -13,10 +13,13 @@ import type { PaceResult } from '@/lib/study-pace';
 // pace engine as before — only the presentation changed.
 
 const TONE: Record<PaceResult['status'], { ring: string; chipBg: string; chipText: string; label: string }> = {
-  ahead:       { ring: '#10b981', chipBg: 'bg-emerald-50', chipText: 'text-emerald-700', label: 'Ahead of pace' },
-  on_pace:     { ring: '#6366f1', chipBg: 'bg-indigo-50',  chipText: 'text-indigo-700',  label: 'Right on pace' },
-  behind:      { ring: '#f59e0b', chipBg: 'bg-amber-50',   chipText: 'text-amber-700',   label: 'Catching up' },
-  unrealistic: { ring: '#f43f5e', chipBg: 'bg-rose-50',    chipText: 'text-rose-700',    label: 'Very tight' },
+  // The chip describes the DATE, not the day's workload — the date is the thing
+  // that moves when a student falls behind. "Catching up" used to sit above a
+  // headline that had silently added catch-up hours to their commitment.
+  ahead:       { ring: '#10b981', chipBg: 'bg-emerald-50', chipText: 'text-emerald-700', label: 'Date is safe' },
+  on_pace:     { ring: '#6366f1', chipBg: 'bg-indigo-50',  chipText: 'text-indigo-700',  label: 'Date is on track' },
+  behind:      { ring: '#f59e0b', chipBg: 'bg-amber-50',   chipText: 'text-amber-700',   label: 'Date is slipping' },
+  unrealistic: { ring: '#f43f5e', chipBg: 'bg-rose-50',    chipText: 'text-rose-700',    label: 'Date won\u2019t hold' },
   done:        { ring: '#10b981', chipBg: 'bg-emerald-50', chipText: 'text-emerald-700', label: 'Syllabus done' },
 };
 
@@ -92,11 +95,14 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   // half-hour-rounded number (compounding its rounding error by up to
   // daysLeft/4 hours) and silently folding mock hours into "syllabus", so
   // this warning could contradict the ring two centimetres above it.
-  const committedPerDay = pace.committedPerDay ?? pace.requiredPerDay;
+  // Their own number, never the date's demand. Falling back to requiredPerDay
+  // here would have this warning compare a new date against a number the
+  // student never chose.
+  const committedPerDay = pace.committedPerDay;
   const daysToNew = date ? Math.max(1, Math.ceil((new Date(date + 'T00:00:00').getTime() - new Date(todayIso + 'T00:00:00').getTime()) / 86_400_000)) : null;
   const remainingWithMocks = pace.remainingHours + remainingMockHours(pace.remainingHours);
   const requiredForNew = daysToNew ? Math.round((remainingWithMocks / daysToNew) * 2) / 2 : null;
-  const tooDemanding = requiredForNew != null && requiredForNew > committedPerDay + 0.5;
+  const tooDemanding = requiredForNew != null && committedPerDay != null && requiredForNew > committedPerDay + 0.5;
 
   async function saveDate() {
     if (!date) return;
@@ -117,21 +123,38 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
     }
   }
 
+  // THE HEADLINE IS THE STUDENT'S OWN NUMBER. Always.
+  //
+  // It used to be `pace.requiredPerDay` — remaining syllabus ÷ days to their
+  // date. That number moves on its own every morning, so this card showed one
+  // figure while the plan two cards below was built from another, and neither
+  // was the one the student had typed. It is the most visible half of "sometimes
+  // I see 4 hours, sometimes 6".
+  //
+  // The date is what gives now, so behind/ahead is said as a DATE fact, not by
+  // quietly adding hours to their day. A student who is behind sees their own
+  // hours and a warning about the date — never "5h + 2h catch-up", which is the
+  // app inventing a commitment on their behalf.
+  const mine = pace.committedPerDay;
   const headline = pace.status === 'done'
     ? 'Syllabus complete 🎉'
-    : pace.catchUpPerDay > 0
-      ? `${pace.committedPerDay ?? pace.requiredPerDay}h + ${pace.catchUpPerDay}h catch-up`
-      : pace.aheadPerDay > 0
-        ? `${pace.requiredPerDay}h needed · ${pace.aheadPerDay}h ahead`
-        : `${pace.requiredPerDay}h a day, steady`;
+    : mine == null
+      // No hours set yet (a day-one account). Say nothing about a number we
+      // do not have rather than substituting the date's demand for it.
+      ? 'Set your daily hours to size your plan'
+      : pace.catchUpPerDay > 0
+        ? `${mine}h a day — your date is slipping`
+        : pace.aheadPerDay > 0
+          ? `${mine}h a day — you're ahead`
+          : `${mine}h a day, steady`;
 
   if (expired && !editing) {
     return (
       <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
         <p className="text-[15px] font-bold text-stone-900">Your finish date has passed</p>
         <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
-          You set <span className="font-semibold">{fmt(targetIso)}</span>. Pick a new one and your plan and daily
-          hours recalculate from today — nothing you&apos;ve logged is lost.
+          You set <span className="font-semibold">{fmt(targetIso)}</span>. Pick a new one — your daily hours stay
+          exactly as you set them, and nothing you&apos;ve logged is lost.
         </p>
         <button
           type="button" onClick={() => { setEditing(true); setErr(null); }}
@@ -201,18 +224,20 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           </div>
 
           {/* The truth about the date they just picked — before they commit. */}
-          {requiredForNew != null && (
+          {requiredForNew != null && committedPerDay != null && (
             tooDemanding ? (
               <div className="rounded-xl border-2 border-rose-400 bg-rose-50 p-3">
-                <p className="text-[12px] font-bold text-rose-700">⚠ That date is demanding.</p>
+                <p className="text-[12px] font-bold text-rose-700">⚠ That date needs more than you study.</p>
                 <p className="mt-0.5 text-[12.5px] leading-relaxed text-stone-700">
-                  Finishing by <b>{fmt(date)}</b> means <b className="text-rose-700">{requiredForNew}h every single day</b> — more than your usual <b>{committedPerDay}h</b>. Are you sure you can sustain this? A date you actually hit beats one that looks good and breaks you.
+                  Finishing by <b>{fmt(date)}</b> would take <b className="text-rose-700">{requiredForNew}h a day</b>, and you study <b>{committedPerDay}h</b>.
+                  {' '}Setting it does <b>not</b> change your hours — you&apos;d just miss the date. If you want that date, raise your daily hours in{' '}
+                  <b>Your Goal</b> first.
                 </p>
               </div>
             ) : (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-[12.5px] leading-relaxed text-stone-700">
-                  Finishing by <b>{fmt(date)}</b> means about <b className="text-emerald-700">{requiredForNew}h a day</b> — that fits your routine.
+                  Finishing by <b>{fmt(date)}</b> takes about <b className="text-emerald-700">{requiredForNew}h a day</b> — your <b>{committedPerDay}h</b> covers it.
                 </p>
               </div>
             )
@@ -221,7 +246,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           <div className="flex items-center gap-2">
             <button type="button" disabled={busy || !date} onClick={saveDate}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${tooDemanding ? 'bg-rose-600' : 'bg-stone-900'}`}>
-              {busy ? 'Saving…' : tooDemanding ? `Yes, I'll do ${requiredForNew}h/day` : 'Set this date'}
+              {busy ? 'Saving…' : tooDemanding ? 'Set it anyway' : 'Set this date'}
             </button>
             <button type="button" onClick={() => { setEditing(false); setDate(''); setErr(null); }}
               className="text-xs font-medium text-stone-500 hover:text-stone-700">Cancel</button>

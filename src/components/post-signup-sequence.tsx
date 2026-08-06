@@ -270,7 +270,9 @@ export default function PostSignupSequence({ targetIso, hoursLeft }: Props) {
   const chooseDate = async (opt: DateOption) => {
     setBusy(true);
     setChosenLabel(fmt(opt.date));
-    await persist({ syllabus_target_date: toIso(opt.date), study_target_hours: opt.hours });
+    // `daily_hours`, not the column name: this is a request the student made,
+    // and the server is the only thing allowed to turn it into a column write.
+    await persist({ syllabus_target_date: toIso(opt.date), daily_hours: opt.hours });
     setBusy(false);
     setStep('commit');
   };

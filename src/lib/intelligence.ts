@@ -30,7 +30,7 @@ export interface IntelligenceInput {
   // Engine outputs already computed upstream.
   capacityTrust: 'input' | 'behaviour';
   capacityGapHours: number;
-  volumeFactor: number;
+  completionRatio: number | null;
   tooMuchRatio: number;
   momentumScore: number;
   // Coverage snapshot (null when the student has declared nothing).
@@ -60,7 +60,7 @@ export function assembleIntelligence(inp: IntelligenceInput): StudentIntelligenc
     activeDays: inp.activeDays21,
     capacityTrust: inp.capacityTrust,
     capacityGapHours: inp.capacityGapHours,
-    volumeFactor: inp.volumeFactor,
+    completionRatio: inp.completionRatio,
     tooMuchRatio: inp.tooMuchRatio,
     coverageNotStartedRatio: notStartedRatio,
     maxDaysSincePracticed: inp.maxDaysSincePracticed,
@@ -92,7 +92,7 @@ export function assembleIntelligence(inp: IntelligenceInput): StudentIntelligenc
     mocksTaken: inp.mocksTaken,
     activeDays: inp.activeDays21,
     loggedDays: inp.loggedDays,
-    volumeFactor: inp.volumeFactor,
+    completionRatio: inp.completionRatio,
     tooMuchRatio: inp.tooMuchRatio,
     gapDays: inp.gapDays,
   });

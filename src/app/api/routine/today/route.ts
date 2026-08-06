@@ -5,8 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
-import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
+import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
@@ -14,6 +13,7 @@ import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } f
 import { getLogDateString } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
+import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
@@ -65,7 +65,7 @@ export async function GET() {
       .from('daily_routines')
       // created_at is needed to answer "was today's plan built BEFORE the
       // student told us about yesterday?" — see the regeneration rule below.
-      .select('phase, tasks, est_minutes, calibration, generated_pace_hours, created_at')
+      .select('phase, tasks, est_minutes, calibration, generated_hours, created_at')
       .eq('student_id', user.id)
       .eq('routine_date', today)
       .maybeSingle(),
@@ -128,41 +128,20 @@ export async function GET() {
   // blocking you," so this is asked once and answered, not defaulted.
   const biggestBlocker = profile.biggest_blocker as Blocker | null;
 
-  // ONE source of truth for "how big is today": the same pace math as the
-  // Home ring. When a target date exists, hours/day = remaining syllabus
-  // hours ÷ days left — so rescheduling the date instantly resizes today's
-  // plan too, and the ring's number and the plan below it can never disagree
-  // (founder: a 6h ring above a 3.5h plan reads as a bogus plan).
   const targetIso = profile.syllabus_target_date as string | null;
-  let paceHours: number | null = null;
-  if (targetIso) {
-    const remaining = remainingSyllabusHours(coverageRows ?? []);
-    if (remaining > 0) {
-      // Through computeRequiredPace — the ONE pace implementation (this block
-      // used to inline the same formula; five inline copies of this division
-      // are how Home said 4.5h while the plan said 12h). The 1..12 clamp is
-      // plan-sizing policy: a plan larger than 12h cannot be scheduled.
-      const pace = computeRequiredPace({
-        remainingHours: remaining, today: new Date(),
-        targetDate: new Date(targetIso + 'T00:00:00'), committedPerDay: null,
-        mockHours: remainingMockHours(remaining),
-      });
-      paceHours = Math.min(12, Math.max(1, pace.requiredPerDay));
-    }
-  }
 
-  // Capacity Engine (LIS L3): believe behaviour over the claimed number. The
-  // date-driven pace proposes a budget; capacity caps it at what this student
-  // actually sustains, so the plan is completable instead of aspirational.
-  const claimedHours = (profile.study_target_hours ?? profile.hours_available) as number | null;
+  // Capacity is still computed — the buddy dossier and admin surfaces want to
+  // know how a student's logged hours compare to their commitment. It just no
+  // longer touches the plan.
   const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
+  const claimedHours = dailyHours(profile).weekday;
   const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
 
-  // Adaptation Engine (LIS L9): learn this student's real pace from behaviour —
-  // the explicit plan_fit taps + how much of the plan they actually finish —
-  // and scale today's task VOLUME by it (Capacity already sized the hours). The
-  // rule is motivation-first: behaviour can only lighten the day; only an
-  // explicit "too little" earns a heavier one.
+  // Adaptation reads the same behaviour it always did — the explicit plan_fit
+  // taps and how much of the plan gets finished — but it no longer resizes
+  // anything. It is an observation surfaced to coaches, not a lever on the
+  // student's day. (Founder, 6 Aug: "keep their hours fixed and remove
+  // volumeFactor.")
   const recentPlanFits = (recentReports ?? [])
     .map((r: { plan_fit: unknown }) => r.plan_fit)
     .filter((f: unknown): f is string => typeof f === 'string');
@@ -172,27 +151,25 @@ export async function GET() {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
     targetPercentile: profile.target_percentile as number | null,
-    // THE STUDENT'S OWN HOURS. Nothing else.
+    // THE STUDENT'S OWN HOURS. Nothing else. Read through lib/daily-hours, the
+    // one module that owns this number for the whole app.
     //
     // Founder, 6 Aug: "keep the daily hours same... don't change the hours on
     // your own, unless the student themselves makes the change or plans again.
     // You won't take any action yourself."
     //
-    // This deliberately removes two layers that used to sit here:
-    //   · `paceHours` — what the DATE demanded. A date can demand 12 hrs/day,
-    //     and feeding that in built a task list nobody could finish.
-    //   · `capBudget` — capacity shrinking the day toward logged behaviour.
-    //     Well-intentioned and the direct cause of "Bhaiya 11 hr ka plan
-    //     bnwayi hu aur sirf 4 hr ka task milta hai?" — we quietly halved a
-    //     student's day and never told her.
+    // Three layers used to sit between the student's number and their plan:
+    //   · `paceHours` — what the DATE demanded (remaining syllabus ÷ days left).
+    //     A tight date demanded 12 hrs/day and built a list nobody finishes.
+    //   · `capBudget` — capacity shrinking that toward logged behaviour.
+    //   · `volumeFactor` — and then task counts scaled ±30% on top.
+    // Each was defensible; stacked, they meant the number on the ring and the
+    // number in the plan were computed from different inputs and disagreed.
     //
-    // Falling behind no longer changes the day. It moves the FINISH DATE,
-    // once a week, with a warning that says by how much. See
-    // /api/cron/weekly-plan-reconcile. Capacity is still computed below,
-    // because the buddy and admin surfaces still want to know — it just no
-    // longer overrides what the student asked for.
+    // Falling behind no longer changes the day. It moves the FINISH DATE, once
+    // a week, with the arithmetic attached. See /api/cron/weekly-plan-reconcile.
     weekdayHours: claimedHours,
-    weekendHours: (profile.weekend_hours_available as number | null) ?? claimedHours,
+    weekendHours: dailyHours(profile).weekend,
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
@@ -208,22 +185,32 @@ export async function GET() {
   // in the parallel wave above.)
   const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
 
-  // A routine frozen earlier today at DIFFERENT hours (the student just
-  // rescheduled their target) is stale — regenerate it, but only while
-  // nothing is ticked off yet: completed work is never wiped by a resize.
+  // The number today's plan is built to, decided ONCE here and used for both
+  // generating the plan and judging whether a stored one is stale.
+  const nowDay = new Date().getDay();
+  const isWeekendToday = nowDay === 0 || nowDay === 6;
+  const hoursToday = (isWeekendToday ? routineProfile.weekendHours : routineProfile.weekdayHours)
+    ?? (isWeekendToday
+      ? (routineProfile.isWorkingProfessional ? 4 : 3)
+      : (routineProfile.isWorkingProfessional ? 1.5 : 2.5));
+
+  // A routine frozen earlier today at DIFFERENT hours is stale — regenerate it,
+  // but only while nothing is ticked off yet: completed work is never wiped.
   //
-  // Compares generated_pace_hours (the pace this routine was ACTUALLY built
-  // for) against today's paceHours — pace vs pace, not minutes vs minutes
-  // (bug audit, 14 July: comparing est_minutes to a plain hours*60 target
-  // ignored that intensive/revision/repeater phases add a ~15% closing task
-  // on top, so the comparison false-positived on every request above ~5.5h/
-  // day pace and silently reverted the student's topic swaps). Legacy rows
-  // generated before this column existed have generated_pace_hours=null —
-  // treated as "not stale" rather than force-regenerating them.
-  // Staleness is decided by lib/plan-freshness (pure + tested), not inline
-  // here, so the rule has one implementation and its edge cases — legacy rows,
-  // unparseable timestamps, the rebuild-loop guard — are covered by tests
-  // rather than by reading this route carefully.
+  // What this comparator watches matters more than it looks. It used to compare
+  // a date-derived pace against a stored date-derived pace, which was correct
+  // only while the plan was ALSO built from that pace. Once the plan started
+  // following the student's own hours, this was watching a number that no
+  // longer influenced anything — free to swing past the 0.5h threshold on a
+  // day the student changed nothing, tear down their plan mid-morning and hand
+  // them different topics. Now it compares the hours the stored plan was built
+  // to against the hours it would be built to right now, so the ONLY thing that
+  // triggers a rebuild is the student changing their own number. Which is
+  // exactly the one case where a rebuild is what they asked for.
+  //
+  // Legacy rows have generated_hours = null and are treated as "not stale"
+  // rather than force-regenerated. Staleness lives in lib/plan-freshness (pure
+  // + tested) so the rule has one implementation.
   const yStrForFreshness = new Date(Date.parse(today) - 86_400_000).toISOString().slice(0, 10);
   const yesterdayReport = ((recentReports ?? []) as { report_date: string; updated_at?: string | null }[])
     .find((r) => r.report_date === yStrForFreshness);
@@ -233,8 +220,8 @@ export async function GET() {
     ? planStaleReason({
         completionCount: (completions ?? []).length,
         routineCreatedAt: (existing.created_at as string | null) ?? null,
-        generatedPaceHours: (existing.generated_pace_hours as number | null) ?? null,
-        currentPaceHours: paceHours,
+        generatedHours: (existing.generated_hours as number | null) ?? null,
+        currentHours: hoursToday,
         yesterdayReportUpdatedAt: yesterdayReport?.updated_at ?? null,
       })
     : null;
@@ -245,7 +232,7 @@ export async function GET() {
   if (staleReason) routine = null;
 
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices, adaptation.volumeFactor);
+    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
@@ -256,10 +243,10 @@ export async function GET() {
         // on every single request. Stamping it here is what makes that rule
         // self-terminating: one rebuild per check-in, then the plan is newer
         // than the report and the condition goes quiet.
-        { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_pace_hours: paceHours, created_at: new Date().toISOString() },
+        { student_id: user.id, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_hours: hoursToday, created_at: new Date().toISOString() },
         { onConflict: 'student_id,routine_date' }
       )
-      .select('phase, tasks, est_minutes, calibration, generated_pace_hours, created_at')
+      .select('phase, tasks, est_minutes, calibration, generated_hours, created_at')
       .single();
     if (error || !inserted) return NextResponse.json({ error: 'Could not generate routine' }, { status: 500 });
     routine = inserted;
@@ -273,13 +260,7 @@ export async function GET() {
   // Recomputed fresh each request (cheap, pure) rather than stored on the row —
   // it's the "how did you plan this" answer, and should reflect the student's
   // CURRENT setup (and Coverage Matrix / revision state) even if today's task
-  // list was already frozen.
-  const nowDay = new Date().getDay();
-  const isWeekendToday = nowDay === 0 || nowDay === 6;
-  const hoursToday = (isWeekendToday ? routineProfile.weekendHours : routineProfile.weekdayHours)
-    ?? (isWeekendToday
-      ? (routineProfile.isWorkingProfessional ? 4 : 3)
-      : (routineProfile.isWorkingProfessional ? 1.5 : 2.5));
+  // list was already frozen. hoursToday was decided above, before generation.
   const weak = routineProfile.weakestSection ?? 'DILR';
   const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday, topicChoices[weak].topic);
 
@@ -370,7 +351,7 @@ export async function GET() {
     priorActive10,
     capacityTrust: capacity.trust,
     capacityGapHours,
-    volumeFactor: adaptation.volumeFactor,
+    completionRatio: adaptation.completionRatio,
     tooMuchRatio: adaptation.tooMuchRatio,
     momentumScore: momentumProxy(gapDays, activeDays21),
     coverage,
@@ -421,7 +402,6 @@ export async function GET() {
     postponedTopics: history.postponedTopics,
     dayOutcome: (yReport?.day_outcome as 'studied' | 'partial' | 'not_studied' | 'skipped' | null) ?? null,
     blockerReason: yReport?.blocker_reason ?? null,
-    adaptationVolumeFactor: adaptation.trust === 'learning' ? adaptation.volumeFactor : null,
   });
 
   // The number the plan was built to, and WHY it is that number.
@@ -430,9 +410,7 @@ export async function GET() {
   // student, 6 Aug. She was right to ask: we sized her day down (correctly)
   // and never said so. A plan that silently disagrees with what the student
   // asked for reads as a broken app, not as coaching.
-  const claimedForToday = isWeekendToday
-    ? ((profile.weekend_hours_available as number | null) ?? claimedHours)
-    : claimedHours;
+  const claimedForToday = hoursForDay(profile, isWeekendToday);
   // Always equal to what the student set now, so `trimmed` is permanently
   // false. The field stays so the client keeps rendering the hours badge — and
   // so anything that starts silently resizing a day again shows up here.
@@ -454,11 +432,10 @@ export async function GET() {
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,
     yesterday: history.yesterday,
-    // Adaptation Engine surface — only sent when the engine has actually
-    // learned something, so the client can show "we adjusted today's load"
-    // instead of a silent, invisible change.
+    // Adaptation is now a READING, not a change: "your days are running heavy"
+    // is information the student can act on. Nothing was resized behind it.
     adaptation: adaptation.trust === 'learning'
-      ? { volumeFactor: adaptation.volumeFactor, note: adaptation.note }
+      ? { reading: adaptation.reading, note: adaptation.note }
       : null,
     // Coaching Decision (LIS L5) — the one call framing today; Performance
     // heartbeat + the ranked bottlenecks behind it.

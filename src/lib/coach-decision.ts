@@ -51,7 +51,7 @@ export interface DecisionInput {
   mocksTaken: number;               // recent window
   activeDays: number;               // productive days in window
   loggedDays: number;
-  volumeFactor: number;             // Adaptation
+  completionRatio: number | null;   // Adaptation: plan finished ÷ planned
   tooMuchRatio: number;             // Adaptation
   gapDays: number | null;           // days since last full completion (catch-up)
 }
@@ -73,7 +73,7 @@ export function decideToday(inp: DecisionInput): Decision {
 
   // 2. Burnout guard — chronic over-load. Protect the habit over the syllabus;
   //    a broken streak costs more than a light day.
-  if (inp.volumeFactor <= 0.7 && inp.tooMuchRatio >= 0.5) {
+  if (inp.completionRatio != null && inp.completionRatio <= 0.5 && inp.tooMuchRatio >= 0.5) {
     return {
       type: 'recover',
       headline: 'Go light today — on purpose.',

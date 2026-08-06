@@ -13,7 +13,6 @@ const base: PlanReasonInput = {
   postponedTopics: [],
   dayOutcome: null,
   blockerReason: null,
-  adaptationVolumeFactor: null,
 };
 const input = (over: Partial<PlanReasonInput> = {}): PlanReasonInput => ({ ...base, ...over });
 
@@ -39,24 +38,25 @@ describe('the carried topic — the strongest proof of the loop', () => {
   });
 });
 
-describe('the lightened claim needs BOTH halves true', () => {
-  it('fires when they said too-heavy AND the engine actually reduced volume', () => {
-    const r = planReason(input({ blockerReason: 'plan_too_heavy', adaptationVolumeFactor: 0.85 }))!;
-    expect(r.kind).toBe('lightened');
+describe('we never claim we lightened the day, because we never do', () => {
+  // The "today is lighter, you said it was too heavy and we adjusted" line is
+  // gone with volumeFactor. The plan is sized to the student's own hours and
+  // nothing else, so that sentence would now describe something that did not
+  // happen — and a student who counts their tasks would catch it.
+  it('says nothing about lightening when they report a heavy day', () => {
+    const r = planReason(input({ blockerReason: 'plan_too_heavy' }));
+    expect(r?.line ?? '').not.toMatch(/lighter|adjusted|reduced/i);
   });
 
-  it('does not claim "lighter" on sympathy alone', () => {
-    // They said too heavy, but the engine did not reduce anything. Claiming
-    // "today is lighter" would be checkably false the moment they count tasks.
-    const r = planReason(input({ blockerReason: 'plan_too_heavy', adaptationVolumeFactor: null }));
-    expect(r?.kind).not.toBe('lightened');
-    const r2 = planReason(input({ blockerReason: 'plan_too_heavy', adaptationVolumeFactor: 1.0 }));
-    expect(r2?.kind).not.toBe('lightened');
-  });
-
-  it('does not claim "lighter" for a different blocker', () => {
-    const r = planReason(input({ blockerReason: 'office', adaptationVolumeFactor: 0.85 }));
-    expect(r?.kind).not.toBe('lightened');
+  it('leaves the other true claims untouched', () => {
+    // A carried-over topic is still the strongest thing we can say, and a
+    // heavy-day report must not suppress it.
+    const r = planReason(input({
+      blockerReason: 'plan_too_heavy',
+      todayTasks: [{ topic: 'Geometry' }],
+      yesterdayUnfinishedTopics: ['Geometry'],
+    }))!;
+    expect(r.kind).toBe('carried');
   });
 });
 
@@ -96,7 +96,6 @@ describe('priority — the strongest true claim wins', () => {
       postponedTopics: ['Reading Comprehension'],
       dayOutcome: 'skipped',
       blockerReason: 'plan_too_heavy',
-      adaptationVolumeFactor: 0.8,
     }))!;
     expect(r.kind).toBe('carried');
   });
@@ -123,7 +122,6 @@ describe('robustness', () => {
     expect(planReason({
       todayTasks: [], yesterday: null, yesterdayUnfinishedTopics: [],
       postponedTopics: [], dayOutcome: null, blockerReason: null,
-      adaptationVolumeFactor: null,
     })).toBeNull();
   });
 });

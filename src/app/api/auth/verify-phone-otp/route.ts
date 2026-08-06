@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { parseSignupDevice } from '@/lib/device-detect';
+import { setDailyHours } from '@/lib/daily-hours';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
@@ -216,9 +217,9 @@ export async function POST(request: NextRequest) {
       if (typeof onboarding.target_percentile === 'number' && onboarding.target_percentile >= 50 && onboarding.target_percentile <= 99) {
         profileUpdate.target_percentile = onboarding.target_percentile;
       }
-      if (typeof onboarding.hours_available === 'number' && onboarding.hours_available > 0 && onboarding.hours_available <= 16) {
-        profileUpdate.hours_available = onboarding.hours_available;
-        profileUpdate.study_target_hours = onboarding.hours_available;
+      if (typeof onboarding.hours_available === 'number') {
+        // Replaying what they entered pre-signup. Still their own number.
+        Object.assign(profileUpdate, setDailyHours(onboarding.hours_available, 'signup'));
       }
       if (typeof onboarding.coaching_enrolled === 'boolean') profileUpdate.coaching_enrolled = onboarding.coaching_enrolled;
       if (typeof onboarding.is_repeater === 'boolean') profileUpdate.is_repeater = onboarding.is_repeater;

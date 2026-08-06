@@ -8,8 +8,18 @@
 // class in ENGINEERING-MEMORY #4/#5/#9).
 //
 // Two exceptions exist:
-//   1. the student's pace target moved materially  (pre-existing)
+//   1. THE STUDENT changed their own daily hours (6 Aug — see below)
 //   2. the student reported yesterday AFTER today's plan was built (29 Jul)
+//
+// Exception 1 used to be "the pace target moved materially", where pace meant
+// remaining syllabus ÷ days to the finish date. That was a number the student
+// never chose and that drifts on its own every single day as the calendar
+// advances — so on any day near the 0.5h threshold it could tear down a plan
+// mid-morning and hand back different topics, with the student having done
+// nothing. Now it watches the hours the plan is actually built from, which
+// only ever move when the student themselves moves them. That makes the
+// rebuild a response to a request, which is the only kind of rebuild that has
+// ever been wanted here.
 //
 // Both are gated on the same hard precondition: NOTHING is ticked off today.
 // Regenerating over completed work would erase what the student has already
@@ -21,18 +31,23 @@ export interface PlanFreshnessInput {
   completionCount: number;
   /** daily_routines.created_at for today's row. null on legacy rows. */
   routineCreatedAt: string | null;
-  /** Pace the stored routine was built for. null on legacy rows. */
-  generatedPaceHours: number | null;
-  /** Today's computed pace. null when it can't be computed. */
-  currentPaceHours: number | null;
+  /** Daily hours the stored routine was built to. null on legacy rows. */
+  generatedHours: number | null;
+  /** The hours today's plan would be built to right now. */
+  currentHours: number | null;
   /** daily_reports.updated_at for YESTERDAY, when a report exists. */
   yesterdayReportUpdatedAt?: string | null;
 }
 
-export type StaleReason = 'pace_changed' | 'checked_in_after_build';
+export type StaleReason = 'hours_changed' | 'checked_in_after_build';
 
-/** Pace moved enough that the plan was sized for a different day. */
-const PACE_DRIFT_HOURS = 0.5;
+/**
+ * Hours moved enough that the plan was sized for a different day.
+ *
+ * The slider steps in half hours, so any real change the student makes clears
+ * this. It exists only to absorb float noise, not to tolerate drift.
+ */
+const HOURS_CHANGED_THRESHOLD = 0.25;
 
 function ms(v: string | null | undefined): number {
   if (!v) return NaN;
@@ -42,7 +57,7 @@ function ms(v: string | null | undefined): number {
 /**
  * Why today's plan should be rebuilt, or null to keep it exactly as stored.
  *
- * Defaults hard toward KEEPING the plan: an unknown timestamp, a missing pace,
+ * Defaults hard toward KEEPING the plan: an unknown timestamp, missing hours,
  * a legacy row or a single tick all mean "not stale". We only rebuild on
  * positive evidence that the stored plan predates what we now know.
  */
@@ -52,11 +67,11 @@ export function planStaleReason(input: PlanFreshnessInput): StaleReason | null {
   if (input.completionCount > 0) return null;
 
   if (
-    input.currentPaceHours != null &&
-    input.generatedPaceHours != null &&
-    Math.abs(input.generatedPaceHours - input.currentPaceHours) > PACE_DRIFT_HOURS
+    input.currentHours != null &&
+    input.generatedHours != null &&
+    Math.abs(input.generatedHours - input.currentHours) > HOURS_CHANGED_THRESHOLD
   ) {
-    return 'pace_changed';
+    return 'hours_changed';
   }
 
   // The check-in arrived after the plan was built, so the plan cannot have

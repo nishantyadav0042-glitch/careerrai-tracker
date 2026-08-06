@@ -231,15 +231,18 @@ function unitCap(unit: StudyUnit, phase: Phase): number {
   return 22;
 }
 
-// `volumeFactor` (Adaptation Engine, LIS Layer 9) scales the priced volume by
-// what we've LEARNED about this student's real pace — never the time budget
-// (Capacity owns that) and never past the motivation cap / floor below. 1.0 =
-// no adaptation yet.
-function taskVolume(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1): { count: number; unit: StudyUnit } {
+// Volume is a pure function of the minutes in the slot and the topic's own
+// pricing. It used to take a `volumeFactor` from the Adaptation Engine that
+// scaled this by ±30% based on recent behaviour — so two students with the same
+// hours got different amounts of work, and the SAME student got different
+// amounts on different days without asking for it. Founder, 6 Aug: "remove
+// volumeFactor... they should be on fixed hours throughout the preparation."
+// The same hours now always price the same day.
+function taskVolume(section: Section, topic: string, minutes: number, phase: Phase): { count: number; unit: StudyUnit } {
   const unit = unitFor(section, topic);
   // Foundation reserves a third of the slot for the concept before practice.
   const practiceMin = phase === 'foundation' ? Math.round(minutes * 0.67) : minutes;
-  const raw = Math.round((practiceMin / minutesPerUnit(unit, section, phase)) * volumeFactor);
+  const raw = Math.round(practiceMin / minutesPerUnit(unit, section, phase));
   const floor = unit === 'question' ? 3 : 1;
   return { count: Math.max(floor, Math.min(unitCap(unit, phase), raw)), unit };
 }
@@ -276,8 +279,8 @@ export function phaseForTopic(status: CoverageStatus | null | undefined, calenda
 // card used to hand-roll a flat minutes/3 "questions" formula here, telling
 // students to "Solve 15 Reading Comprehension questions" where this engine
 // says "3 RC passages, timed".
-export function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase, volumeFactor = 1): string {
-  const { count: n, unit } = taskVolume(section, topic, minutes, phase, volumeFactor);
+export function targetPhrase(section: Section, topic: string, minutes: number, phase: Phase): string {
+  const { count: n, unit } = taskVolume(section, topic, minutes, phase);
   const s = n === 1 ? '' : 's';
   if (unit === 'passage') return phase === 'foundation' ? `Read + solve ${n} RC passage${s}` : `${n} RC passage${s}, timed`;
   if (unit === 'set') return phase === 'foundation' ? `Learn ${topic}, then ${n} set${s}` : `Solve ${n} ${topic} set${s}`;
@@ -300,10 +303,7 @@ export function generateRoutine(
   // revision-due + (for the weak section only) the self-report bonus. This
   // is what replaced the old static "same topic for every student" default
   // for the two non-weakest sections.
-  topicChoices: Record<Section, TopicChoice>,
-  // Adaptation Engine (LIS L9): multiplies task volume by this student's
-  // learned pace. 1.0 until there's enough behaviour to adapt.
-  volumeFactor = 1
+  topicChoices: Record<Section, TopicChoice>
 ): GeneratedRoutine {
   const phase = getPhase(now, profile.attemptYear, profile.currentStage, profile.isRepeater);
   const weekend = isWeekend(now);
@@ -348,7 +348,7 @@ export function generateRoutine(
     topic: weakChoice.topic,
     label: `${weak} — ${weakChoice.topic}`,
     // Verb from the TOPIC's status; volume still priced by the day's phase.
-    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phaseForTopic(weakChoice.coverageStatus, phase), volumeFactor),
+    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phaseForTopic(weakChoice.coverageStatus, phase)),
     estMinutes: priorityMinutes,
     reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
     isImplementationIntention: true,
@@ -362,7 +362,7 @@ export function generateRoutine(
       section,
       topic: choice.topic,
       label: `${section} — ${choice.topic}`,
-      target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase), volumeFactor),
+      target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
       estMinutes: minutes,
       reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
     });

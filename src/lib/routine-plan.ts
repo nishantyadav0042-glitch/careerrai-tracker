@@ -22,8 +22,8 @@ import {
   type HistoryInput,
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
-import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
+import { dailyHours } from '@/lib/daily-hours';
+import { planStaleReason } from '@/lib/plan-freshness';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 import { weakestFromCoverage } from '@/lib/section-weakness';
@@ -188,7 +188,10 @@ export async function computeTodaysPlan(
   try {
     const today = getLogDateString();
 
-    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }, { data: recentReports }] = await Promise.all([
+    // The 21-day daily_reports read that used to ride along here fed the
+    // capacity cap. Nothing sizes the plan from behaviour any more, so the
+    // query is gone — one fewer round trip on the notification cron's hot path.
+    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }] = await Promise.all([
       admin
         .from('profiles')
         .select(`
@@ -202,13 +205,11 @@ export async function computeTodaysPlan(
       admin.from('topic_coverage').select('section, topic, status, is_priority').eq('student_id', studentId),
       admin
         .from('daily_routines')
-        .select('phase, tasks, est_minutes, generated_pace_hours')
+        .select('phase, tasks, est_minutes, generated_hours, created_at')
         .eq('student_id', studentId)
         .eq('routine_date', today)
         .maybeSingle(),
       admin.from('routine_task_completions').select('task_id').eq('student_id', studentId).eq('routine_date', today),
-      admin.from('daily_reports').select('study_duration').eq('student_id', studentId)
-        .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
     ]);
 
     if (!profile) return null;
@@ -221,41 +222,24 @@ export async function computeTodaysPlan(
     const weakTopic = (profile.self_reported_weak_topic as string | null) || null;
     const currentStage = profile.current_stage as Stage | null;
 
-    // Same pace math as the Home ring / tracker so the plan size matches.
-    // Through computeRequiredPace — the ONE required-pace implementation —
-    // not a re-derivation. This block used to inline the same formula, which
-    // is precisely how the Home-says-4.5h / plan-says-12h incident happened:
-    // five sites each doing their own division drift one rounding rule at a
-    // time. The 1..12h clamp is plan-sizing policy (a plan larger than 12h
-    // cannot be scheduled), so it stays here; the pace itself does not.
-    const targetIso = profile.syllabus_target_date as string | null;
-    let paceHours: number | null = null;
-    if (targetIso) {
-      const remaining = remainingSyllabusHours(coverageRows ?? []);
-      if (remaining > 0) {
-        const pace = computeRequiredPace({
-          remainingHours: remaining,
-          today: now,
-          targetDate: new Date(targetIso + 'T00:00:00'),
-          committedPerDay: null,
-          mockHours: remainingMockHours(remaining),
-        });
-        paceHours = Math.min(12, Math.max(1, pace.requiredPerDay));
-      }
-    }
-
-    // Capacity Engine (LIS L3) — same cap as today/route.ts so the notification
-    // copy names the same plan size the tracker shows.
-    const claimedHours = (profile.study_target_hours ?? profile.hours_available) as number | null;
-    const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
-    const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
-
+    // THE SAME HOURS THE TRACKER USES, from the same module.
+    //
+    // This generator writes to the same daily_routines row the app reads, and
+    // it runs FIRST — the 6am notification cron builds the day before the
+    // student ever opens the app. So while this file sized plans with
+    // capBudget(paceHours ?? claimed, capacity) and the route sized them with
+    // the student's own hours, the cron's version is the one that won, every
+    // morning, for every student who gets a notification. Fixing the route
+    // alone would have fixed nothing. That is how "sometimes 4 hours,
+    // sometimes 6" survived a fix aimed straight at it.
+    //
+    // Both callers now read lib/daily-hours and nothing else.
     const routineProfile: RoutineProfile = {
       isWorkingProfessional: !!profile.is_working_professional,
       isRepeater: !!profile.is_repeater,
       targetPercentile: profile.target_percentile as number | null,
-      weekdayHours: capBudget(paceHours ?? claimedHours, capacity),
-      weekendHours: capBudget(paceHours ?? (profile.weekend_hours_available as number | null), capacity),
+      weekdayHours: dailyHours(profile).weekday,
+      weekendHours: dailyHours(profile).weekend,
       weakestSection: weakest,
       strongestSection: strongest,
       weakTopic,
@@ -267,25 +251,37 @@ export async function computeTodaysPlan(
     const history = await buildHistory(admin, studentId);
     const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
 
-    // Read-or-generate, with the SAME staleness guard the tracker uses: a
-    // routine frozen earlier today at a different pace (target rescheduled) is
-    // regenerated, but only while nothing is ticked yet.
-    let routine = existing as { phase: string; tasks: unknown; est_minutes: number; generated_pace_hours: number | null } | null;
+    // Read-or-generate, through the SAME staleness rule the tracker uses —
+    // literally the same function now, rather than a hand-copied version of it
+    // that could drift. A plan built earlier today is only rebuilt when the
+    // student changed their own hours, and never over completed work.
+    const dow = now.getDay();
+    const hoursToday = (dow === 0 || dow === 6 ? routineProfile.weekendHours : routineProfile.weekdayHours)
+      ?? (dow === 0 || dow === 6
+        ? (routineProfile.isWorkingProfessional ? 4 : 3)
+        : (routineProfile.isWorkingProfessional ? 1.5 : 2.5));
+
+    let routine = existing as { phase: string; tasks: unknown; est_minutes: number; generated_hours: number | null; created_at?: string | null } | null;
     const completedIds = new Set((completions ?? []).map((c: { task_id: string }) => c.task_id));
-    if (routine && completedIds.size === 0 && paceHours != null && routine.generated_pace_hours != null) {
-      if (Math.abs(Number(routine.generated_pace_hours) - paceHours) > 0.5) routine = null;
+    if (routine && planStaleReason({
+      completionCount: completedIds.size,
+      routineCreatedAt: routine.created_at ?? null,
+      generatedHours: routine.generated_hours == null ? null : Number(routine.generated_hours),
+      currentHours: hoursToday,
+    })) {
+      routine = null;
     }
     if (!routine) {
       const generated = generateRoutine(routineProfile, now, history, topicChoices);
       const { data: inserted } = await admin
         .from('daily_routines')
         .upsert(
-          { student_id: studentId, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_pace_hours: paceHours },
+          { student_id: studentId, routine_date: today, phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_hours: hoursToday, created_at: new Date().toISOString() },
           { onConflict: 'student_id,routine_date' }
         )
-        .select('phase, tasks, est_minutes, generated_pace_hours')
+        .select('phase, tasks, est_minutes, generated_hours, created_at')
         .single();
-      routine = inserted ?? { phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_pace_hours: paceHours };
+      routine = inserted ?? { phase: generated.phase, tasks: generated.tasks, est_minutes: generated.estMinutes, generated_hours: hoursToday, created_at: null };
     }
     if (!routine) return null; // unreachable — the block above always assigns; satisfies the null-checker
 

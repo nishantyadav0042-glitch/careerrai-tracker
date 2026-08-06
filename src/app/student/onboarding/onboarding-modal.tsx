@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { setDailyHours } from '@/lib/daily-hours';
 import ScreenNeedCheck from './screens/screen-need-check';
 import ScreenAmbitionDate from './screens/screen-ambition-date';
 import ScreenDreamColleges from './screens/screen-dream-colleges';
@@ -399,9 +400,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         setWeekendHours(weekend);
         setIsLoading(true);
         const { error: e } = await supabase.from('profiles').update({
-          study_target_hours: hours,
-          hours_available: hours,
-          weekend_hours_available: weekend,
+          // Through setDailyHours — the one writer. This is the student typing
+          // their own number in the Blueprint Builder, so it counts as theirs.
+          ...setDailyHours(hours, 'student', weekend),
           syllabus_target_date: data.syllabus_target_date,
         }).eq('id', userId ?? '');
         if (e) throw e;
@@ -424,8 +425,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           // Completion re-anchors: from here this timestamp drives the
           // activation ladder (days 0/1/3/7 of "your routine is waiting").
           onboarding_last_activity_at: new Date().toISOString(),
-          study_target_hours: studyTargetHours,
-          weekend_hours_available: weekendHours,
+          ...setDailyHours(studyTargetHours, 'student', weekendHours),
         };
         if (merged.syllabus_target_date) update.syllabus_target_date = merged.syllabus_target_date;
         if (typeof merged.full_name === 'string' && merged.full_name.trim()) update.full_name = merged.full_name.trim();

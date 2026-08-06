@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Clock, Phone, ChevronDown, ChevronUp, UserX, AlertCircle, Sparkles, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { dailyHours as studentDailyHours } from '@/lib/daily-hours';
 import type { Profile } from '@/types';
 import { StudentDossier, type StudentDossierData } from '@/components/student-dossier';
 import { waMessages, leadState } from '@/lib/wa-messages';
@@ -86,11 +87,11 @@ function matchFacts(s: StudentStat['student']): string[] {
     const weakest = sections.reduce((a, b) => (b.val < a.val ? b : a));
     facts.push(`Weakest: ${weakest.name} (${weakest.val})`);
   }
-  // study_target_hours is canonical — hours_available is the signup-time
+  // Through dailyHours(): study_target_hours is canonical — hours_available is the signup-time
   // answer and goes stale the moment a student edits their goal. 42 of 234
   // students had drifted when this was checked, so admin was quoting a
   // different daily-hours number than the app was planning with.
-  const dailyHours = s.study_target_hours ?? s.hours_available;
+  const dailyHours = studentDailyHours(s).weekday;
   if (dailyHours != null) facts.push(`${dailyHours}h/day`);
   return facts;
 }

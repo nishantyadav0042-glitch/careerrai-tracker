@@ -761,6 +761,76 @@ usually where the next incident is.
 
 ---
 
+## Incident #22 — five engines, one student, and no two numbers the same (2026-08-06)
+
+**What the student saw.** "Bhaiya 11 hr ka plan bnwayi hu aur sirf 4 hr ka task
+milta hai?" — Abhishek, 6 Aug, on Instagram. She had set 11 hours a day. Her
+plan gave her four. And the founder: "sometimes they are seeing 4 hrs of study,
+sometimes 6 hours... I don't want them to come on our app and feel confused
+daily. This will be the biggest blunder."
+
+**What was actually happening.** Five separate pieces of code each held an
+opinion about how big her day should be, and they ran in sequence:
+
+| # | Where | What it did |
+|---|---|---|
+| 1 | `post-signup/route.ts` | A date change **rewrote** `study_target_hours` to remaining syllabus ÷ days left, clamped 1..12. Silent, in place, no record of the old value. |
+| 2 | `pace-card.tsx` | The Home headline showed `requiredPerDay` — the date's demand — while the plan below was built from something else. |
+| 3 | `routine/today` | Fed that same date-derived pace in as the day's budget. |
+| 4 | `capacity-engine` | Then shrank it toward what she had recently logged. |
+| 5 | `adaptation-engine` | Then scaled the task COUNT by 0.6–1.3 on top. |
+
+Every one was individually defensible and had a sensible comment above it. The
+composition was indefensible: her number went in at 11 and nothing she could see
+was 11.
+
+**The bug behind the bug.** `lib/routine-plan.ts` is a SECOND plan generator,
+written for the notification cron, writing to the same `daily_routines` row. It
+kept `capBudget(paceHours ?? claimed, capacity)` after `routine/today` was fixed
+to use the student's own hours — and it runs FIRST, at 6am, before the student
+opens the app. So for every student who gets a morning notification, the cron's
+version was the one that won. A fix aimed straight at this bug missed it by a
+whole file. **A duplicated generator is not a duplication problem; it is a
+correctness problem the moment the two copies disagree.**
+
+**The rule now** (founder: "one number, one owner, one place it can change"):
+
+- **THE NUMBER** — `profiles.study_target_hours`. `hours_available` is a
+  demoted mirror kept only for CRM/export payloads.
+- **THE OWNER** — the student. Nothing may derive, cap, trim, or round it
+  toward behaviour.
+- **THE CHANGE** — `lib/daily-hours.ts` `setDailyHours()` only, from an action
+  the student took. Every read goes through `dailyHours()`.
+- **THE CONSEQUENCE** — falling behind moves the FINISH DATE, once a week, with
+  the arithmetic attached (`lib/plan-extension.ts`). The date gives. The hours
+  don't.
+
+**Teeth.** `daily-hours.test.ts` greps every source file for a
+`study_target_hours` write outside the one writer, and for any site feeding
+`requiredPerDay` into an hours column. Either shape fails the build. The
+`daily_routines.generated_pace_hours` column was renamed `generated_hours`
+because it now stores the hours a plan was built to, and **a column whose name
+describes something it no longer holds is how the next person reintroduces the
+bug** — I had already left that comparator watching a dead number for half a day.
+
+**What could not be recovered.** The overwrite happened in place, so for the 257
+existing students there is no way to tell a number they chose from one we
+imposed. Nine sit on exactly 12 — the fingerprint of the old `Math.min(12, ...)`
+clamp — and one on 15, above anything any slider offers. Founder's call: "any
+confusion for any student, ask them the question in app and then act, or confirm
+from them." So every student gets a one-time in-app card naming their number and
+asking whether it is theirs; answering stamps `study_hours_source = 'student'`
+and the card never returns. The picker always includes their current value, so
+confirming can never quietly move a student off 12 or 15.
+
+**The general lesson.** Each of these five layers was added to help. None was
+wrong on its own. What made them a blunder was that no one owned the composed
+answer, so "how many hours is this student's day" had five right answers and no
+true one. **When several engines can each adjust the same user-visible number,
+one module must own it and the others must only read.**
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a

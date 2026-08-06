@@ -6,6 +6,7 @@
 // Deterministic — every line traces to a formula in docs/plan-engine-formulas.md.
 
 import { TOPIC_METADATA } from './topics-constants';
+import { dailyHours } from './daily-hours';
 import { remainingSyllabusHours, remainingMockHours } from './study-pace';
 
 export interface WeeklyDiagnosis {
@@ -99,7 +100,7 @@ export async function computeWeeklyDiagnosis(admin: any, studentId: string): Pro
 
   // Pace verdict — the exact core formula (syllabus + mock budget ÷ pace).
   const targetDate = (profile?.syllabus_target_date as string | null) ?? null;
-  const committed = (profile?.study_target_hours ?? profile?.hours_available) as number | null;
+  const committed = dailyHours(profile).weekday;
   let projectedFinish: string | null = null;
   if (committed && committed > 0) {
     const rem = remainingSyllabusHours(coverage ?? []);

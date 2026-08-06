@@ -1,4 +1,5 @@
 import { getStudentMomentum, type StudentMomentum } from '@/lib/momentum';
+import { dailyHours } from '@/lib/daily-hours';
 import { computeCapacity, type Capacity } from '@/lib/capacity-engine';
 import { computeAdaptation, type Adaptation, ADAPTATION_WINDOW_DAYS } from '@/lib/adaptation-engine';
 import { assembleIntelligence, type StudentIntelligence } from '@/lib/intelligence';
@@ -84,7 +85,7 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
   const todayStr = new Date(now).toISOString().slice(0, 10);
   const winReports = (reports ?? []).filter((r: any) => r.report_date >= windowStart);
   const hrs = winReports.map((r: any) => Number(r.study_duration) || 0);
-  const capacity = computeCapacity(hrs, winReports.length, (p.study_target_hours ?? p.hours_available) as number | null);
+  const capacity = computeCapacity(hrs, winReports.length, dailyHours(p).weekday);
 
   const completedByDate = new Map<string, Set<string>>();
   for (const c of winCompletions ?? []) {
@@ -139,7 +140,7 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
     recentActive10, priorActive10,
     capacityTrust: capacity.trust,
     capacityGapHours,
-    volumeFactor: adaptation.volumeFactor,
+    completionRatio: adaptation.completionRatio,
     tooMuchRatio: adaptation.tooMuchRatio,
     momentumScore: momentum.score,
     coverage,

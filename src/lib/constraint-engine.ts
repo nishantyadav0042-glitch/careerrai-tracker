@@ -18,6 +18,7 @@
 // energy logs) are wired; the architecture ranks whatever is present.
 
 import type { Blocker } from '@/lib/mission-engine';
+import { HEAVY_COMPLETION_RATIO } from '@/lib/adaptation-engine';
 
 export type ConstraintKey =
   | 'consistency' | 'time' | 'knowledge' | 'revision'
@@ -42,7 +43,7 @@ export interface ConstraintInput {
   activeDays: number;                     // days they actually studied (>0h)
   capacityTrust: 'input' | 'behaviour';   // Capacity Engine verdict
   capacityGapHours: number;               // claimed − sustainable (>0 = squeezed)
-  volumeFactor: number;                   // Adaptation Engine (<1 = can't clear volume)
+  completionRatio: number | null;         // Adaptation Engine: plan finished ÷ planned
   tooMuchRatio: number;                   // share of plan-fit taps that were "too much"
   coverageNotStartedRatio: number | null; // 0-1 of syllabus never begun
   maxDaysSincePracticed: number | null;   // worst section's revision recency
@@ -95,11 +96,13 @@ export function computeConstraints(inp: ConstraintInput): ConstraintProfile {
     push('time', 40 + inp.capacityGapHours * 15, 'behaviour', `Logs ${inp.capacityGapHours}h/day below what was entered — time is genuinely scarce`);
   }
 
-  // Speed — can't clear the priced volume in the hours available (Adaptation
-  // had to trim), or repeatedly says the day was too much.
-  if (inp.volumeFactor < 1) {
-    push('speed', 35 + (1 - inp.volumeFactor) * 120, inp.tooMuchRatio > 0 ? 'blend' : 'behaviour',
-      `Plan volume trimmed to ${Math.round(inp.volumeFactor * 100)}% — solving pace is the limiter, not effort`);
+  // Speed — can't clear the priced volume in the hours available, or repeatedly
+  // says the day was too much. Read straight off the completion ratio now: the
+  // plan is no longer trimmed to hide this, so the shortfall is visible here
+  // instead of being quietly absorbed.
+  if (inp.completionRatio != null && inp.completionRatio < HEAVY_COMPLETION_RATIO) {
+    push('speed', 35 + (1 - inp.completionRatio) * 120, inp.tooMuchRatio > 0 ? 'blend' : 'behaviour',
+      `Only ~${Math.round(inp.completionRatio * 100)}% of the plan is getting finished — solving pace is the limiter, not effort`);
   } else if (inp.tooMuchRatio >= 0.5) {
     push('speed', 30 + inp.tooMuchRatio * 40, 'behaviour', `Logged "too much" on ${Math.round(inp.tooMuchRatio * 100)}% of recent days`);
   }

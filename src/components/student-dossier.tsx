@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { dailyHours } from '@/lib/daily-hours';
 import {
   Phone, Mail, GraduationCap, Briefcase, BookOpen, Target, Calendar,
   TrendingUp, Trophy, Clock, MapPin, Award,
@@ -107,7 +108,7 @@ export function StudentDossier({ data }: { data: StudentDossierData }) {
             both hours_available and study_target_hours as separate rows made a
             student look like "4 hrs available / 8 hrs/day commitment" whenever
             the two columns had drifted. */}
-        <Row icon={Clock} label="Daily study hours" value={(() => { const h = data.study_target_hours ?? data.hours_available; return h != null ? `${h} hrs/day` : null; })()} />
+        <Row icon={Clock} label="Daily study hours" value={(() => { const h = dailyHours(data).weekday; return h != null ? `${h} hrs/day` : null; })()} />
       </Section>
 
       {/* Dream colleges (step: Dream Colleges) */}
