@@ -63,6 +63,13 @@ interface RoutineResponse {
   /** The specific, TRUE reason today looks the way it does. Null = no
    *  specific claim is true, fall back to the generic narration. */
   because?: { line: string; kind: string } | null;
+  /** The hours today's plan was built to, and why it is that number. */
+  todayBudget?: {
+    hours: number;
+    claimedHours: number | null;
+    trimmed: boolean;
+    reason: string | null;
+  } | null;
 }
 
 // Time budget filters today's list — same tasks, never invented ones.
@@ -305,10 +312,27 @@ export function TodaysRoutineCard() {
     <Card className="p-3" data-tour="plan">
       <div className="flex items-center justify-between mb-1">
         <p className="text-[11px] uppercase tracking-widest text-red-600 font-semibold">Today&apos;s Study Plan</p>
-        {!fullyDone && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-stone-200 px-2 py-0.5 text-[11px] font-semibold text-stone-900">🟢 Planned</span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {/* The size of today, stated. A student who set 11 hours and sees
+              four should never have to ask us why. */}
+          {data.todayBudget && (
+            <span className="inline-flex items-center rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-700">
+              {data.todayBudget.hours}h today
+            </span>
+          )}
+          {!fullyDone && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-stone-200 px-2 py-0.5 text-[11px] font-semibold text-stone-900">🟢 Planned</span>
+          )}
+        </div>
       </div>
+
+      {/* Why it is that size, but only when it differs from what they asked
+          for — otherwise it is noise on every single day. */}
+      {!fullyDone && data.todayBudget?.trimmed && data.todayBudget.reason && (
+        <p className="mb-1.5 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-[11px] font-medium text-stone-600">
+          {data.todayBudget.reason}
+        </p>
+      )}
 
       {/* The engine's daily auto-adjustment, said OUT LOUD — students should
           know the plan recalculates from what they actually did, every day. */}

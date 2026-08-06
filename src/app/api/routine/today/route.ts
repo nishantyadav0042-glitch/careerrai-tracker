@@ -7,6 +7,7 @@ import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baseline
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
 import { computeCapacity, capBudget, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
+import { MAX_HUMAN_HOURS_PER_DAY } from '@/lib/plan-breach';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
@@ -168,12 +169,28 @@ export async function GET() {
     .filter((f: unknown): f is string => typeof f === 'string');
   const adaptation = computeAdaptation(recentPlanFits, history.completedTasks, history.plannedTasks, history.planDays);
 
+  /** Nobody studies more than this in a day, whatever the date demands. */
+  const humanCap = (h: number | null): number | null =>
+    h == null ? null : Math.min(h, MAX_HUMAN_HOURS_PER_DAY);
+
   const routineProfile: RoutineProfile = {
     isWorkingProfessional: !!profile.is_working_professional,
     isRepeater: !!profile.is_repeater,
     targetPercentile: profile.target_percentile as number | null,
-    weekdayHours: capBudget(paceHours ?? claimedHours, capacity),
-    weekendHours: capBudget(paceHours ?? (profile.weekend_hours_available as number | null), capacity),
+    // Two ceilings, both necessary.
+    //
+    // MAX_HUMAN_HOURS_PER_DAY first: `paceHours` is what the student's DATE
+    // demands, and a date can demand 12. Feeding that in built a twelve-hour
+    // task list nobody could ever finish. The date being unreachable is real
+    // information, but it belongs in the breach card — not in today's tasks.
+    //
+    // Then capacity, which sizes the day to what this student actually
+    // sustains. That part was already right; what was missing is that it
+    // happened SILENTLY. A student set 11 hours, got four, and asked us why
+    // the app was broken. The number and its reason are returned below so the
+    // plan can say it out loud.
+    weekdayHours: capBudget(humanCap(paceHours ?? claimedHours), capacity),
+    weekendHours: capBudget(humanCap(paceHours ?? (profile.weekend_hours_available as number | null)), capacity),
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
@@ -405,8 +422,30 @@ export async function GET() {
     adaptationVolumeFactor: adaptation.trust === 'learning' ? adaptation.volumeFactor : null,
   });
 
+  // The number the plan was built to, and WHY it is that number.
+  //
+  // "Bhaiya 11 hr ka plan bnwayi hu aur sirf 4 hr ka task milta hai?" — a real
+  // student, 6 Aug. She was right to ask: we sized her day down (correctly)
+  // and never said so. A plan that silently disagrees with what the student
+  // asked for reads as a broken app, not as coaching.
+  const claimedForToday = isWeekendToday
+    ? ((profile.weekend_hours_available as number | null) ?? claimedHours)
+    : claimedHours;
+  const trimmedByCapacity = claimedForToday != null && hoursToday < claimedForToday - 0.25;
+  const todayBudget = {
+    hours: Math.round(hoursToday * 2) / 2,
+    claimedHours: claimedForToday,
+    trimmed: trimmedByCapacity,
+    reason: !trimmedByCapacity
+      ? null
+      : capacity.trust === 'behaviour'
+        ? `Sized to the ${Math.round(hoursToday * 2) / 2}h you actually finish on a normal day, not the ${claimedForToday}h you set. Finishing a real day beats missing a big one.`
+        : `Capped at ${Math.round(hoursToday * 2) / 2}h — more than that in one day is not a plan anyone completes.`,
+  };
+
   return NextResponse.json({
     routine: { ...routine, tasks: tasksWithStatus },
+    todayBudget,
     because,
     whySummary,
     mission,
