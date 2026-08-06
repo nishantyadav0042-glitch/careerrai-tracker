@@ -23,6 +23,8 @@ import {
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { dailyHours } from '@/lib/daily-hours';
+import { todaysTaughtTopics } from '@/lib/timetable-align';
+import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -116,7 +118,8 @@ function buildTopicChoices(
   coverageRows: { topic: string; status: string; is_priority?: boolean | null }[],
   profile: RoutineProfile,
   history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; postponedTopics: string[] },
-  startWith?: string | null
+  startWith?: string | null,
+  todayClassTopics: string[] = []
 ): Record<Section, TopicChoice> {
   const coverageByTopic = new Map<string, CoverageStatus>();
   const prioritySet = new Set<string>();
@@ -128,6 +131,7 @@ function buildTopicChoices(
     startWith ? (QA_GROUPS.find((g) => g.label === startWith)?.units ?? []) : []
   );
   const postponed = new Set(history.postponedTopics);
+  const todayClass = new Set(todayClassTopics);
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
   // Revision season — MUST match today/route.ts exactly (this module exists so
   // the notification names the same plan the student opens). The mirror had
@@ -149,6 +153,7 @@ function buildTopicChoices(
       priorityBonus: prioritySet.has(topic),
       focusBonus: focusUnits.has(topic),
       postponedBonus: postponed.has(topic),
+      todayClassBonus: todayClass.has(topic),
     }));
     result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason);
   }
@@ -191,12 +196,12 @@ export async function computeTodaysPlan(
     // The 21-day daily_reports read that used to ride along here fed the
     // capacity cap. Nothing sizes the plan from behaviour any more, so the
     // query is gone — one fewer round trip on the notification cron's hot path.
-    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }] = await Promise.all([
+    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }, { data: timetableRow }] = await Promise.all([
       admin
         .from('profiles')
         .select(`
           is_working_professional, is_repeater, target_percentile,
-          hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
+          hours_available, study_target_hours, weekend_hours_available, syllabus_target_date, plan_source,
           self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
           baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, start_with
         `)
@@ -210,6 +215,7 @@ export async function computeTodaysPlan(
         .eq('routine_date', today)
         .maybeSingle(),
       admin.from('routine_task_completions').select('task_id').eq('student_id', studentId).eq('routine_date', today),
+      admin.from('student_timetables').select('blocks').eq('student_id', studentId).maybeSingle(),
     ]);
 
     if (!profile) return null;
@@ -249,7 +255,13 @@ export async function computeTodaysPlan(
     };
 
     const history = await buildHistory(admin, studentId);
-    const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
+    // Same today's-class signal as the tracker route — this generator runs
+    // FIRST (6am cron), so if it didn't know about today's class, the morning
+    // notification would freeze an unaligned plan before the student woke up.
+    const todayClassTopics = (profile.plan_source === 'coaching')
+      ? todaysTaughtTopics((timetableRow?.blocks as TimetableBlock[] | null) ?? [], today)
+      : [];
+    const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics);
 
     // Read-or-generate, through the SAME staleness rule the tracker uses —
     // literally the same function now, rather than a hand-copied version of it

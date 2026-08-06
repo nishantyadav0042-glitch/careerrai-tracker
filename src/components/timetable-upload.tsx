@@ -37,7 +37,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-type Stage = 'ask' | 'reading' | 'review' | 'choose' | 'saving';
+type Stage = 'ask' | 'reading' | 'review' | 'choose' | 'saving' | 'hours';
 
 export type CloseReason = 'saved' | 'declined' | 'closed';
 
@@ -51,6 +51,11 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
   const [syllabusEndDate, setSyllabusEndDate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  // Set when the saved timetable plans materially different daily hours than
+  // the student's own setting. The founder's rule: we CHECK, the student
+  // decides — one tap adopts the timetable's number through the one writer.
+  const [hoursMismatch, setHoursMismatch] = useState<{ timetableHours: number; currentHours: number } | null>(null);
+  const [hoursBusy, setHoursBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const dismiss = (reason: CloseReason) => {
@@ -180,12 +185,33 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
       track('timetable_saved', {
         blocks: blocks.length, targets: targets.length,
         alignedTopics: json.alignedTopics ?? 0, planSource: json.planSource, kind,
+        planRebuilt: json.planRebuilt ?? false,
       });
+      if (json.hoursMismatch) {
+        // Saved fine — but the timetable plans different hours than the
+        // student's setting. Ask before closing; skipping keeps their number.
+        setHoursMismatch(json.hoursMismatch as { timetableHours: number; currentHours: number });
+        setStage('hours');
+        return;
+      }
       onClose('saved');
     } catch {
       setError('Could not save. Please try again.');
       setStage('choose');
     }
+  }
+
+  async function adoptTimetableHours() {
+    if (!hoursMismatch) return;
+    setHoursBusy(true);
+    try {
+      await fetch('/api/student/daily-hours', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hours: hoursMismatch.timetableHours }),
+      });
+    } catch { /* their old number stands; the card on Home will re-offer */ }
+    onClose('saved');
   }
 
   const mapped = blocks.filter((b) => b.topic).length;
@@ -332,6 +358,27 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
             <button type="button" onClick={() => { setStage('ask'); setBlocks([]); setTargets([]); }}
               className="mt-2 w-full py-2.5 text-center text-sm font-medium text-stone-500">
               Upload a different photo
+            </button>
+          </>
+        )}
+
+        {stage === 'hours' && hoursMismatch && (
+          <>
+            <h2 className="text-xl font-bold text-stone-900">One number to settle</h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-stone-600">
+              Your timetable plans about <strong>{hoursMismatch.timetableHours}h a day</strong>. Your daily hours here
+              are set to <strong>{hoursMismatch.currentHours}h</strong> — so your plan and your timetable would ask
+              different things of the same day.
+            </p>
+            <button
+              type="button" disabled={hoursBusy} onClick={() => void adoptTimetableHours()}
+              className="mt-5 w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {hoursBusy ? 'Saving…' : `Match my timetable — ${hoursMismatch.timetableHours}h a day`}
+            </button>
+            <button type="button" disabled={hoursBusy} onClick={() => onClose('saved')}
+              className="mt-2 w-full py-2.5 text-center text-sm font-medium text-stone-500">
+              Keep my {hoursMismatch.currentHours}h
             </button>
           </>
         )}

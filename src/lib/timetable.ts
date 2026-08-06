@@ -60,6 +60,13 @@ export interface TimetableBlock {
   topic: string | null;
   /** What the timetable actually said, kept verbatim so nothing is lost. */
   label: string;
+  /**
+   * Planned minutes for this task, when the sheet states them ("Planned mins
+   * 480", "2 hrs: ...") or the times imply them. null when nothing is printed
+   * — never estimated. This is what lets the app CHECK a student's daily
+   * hours against what their own timetable actually plans (founder, 7 Aug).
+   */
+  minutes: number | null;
 }
 
 /** Every topic name the extractor is allowed to choose from. */
@@ -128,7 +135,18 @@ export function sanitizeBlocks(raw: unknown): TimetableBlock[] {
 
     const label = labelRaw || topic || section || 'Class';
 
-    out.push({ day, date, dayIndex, start, end, allDay, section, topic, label });
+    // Minutes: printed value wins; a start-end pair implies one; else null.
+    let minutes: number | null = null;
+    const minsRaw = Number((b as { minutes?: unknown }).minutes);
+    if (Number.isFinite(minsRaw) && minsRaw >= 15 && minsRaw <= 960) {
+      minutes = Math.round(minsRaw);
+    } else if (start && end) {
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      const span = (eh * 60 + em) - (sh * 60 + sm);
+      minutes = span > 0 ? span : span + 24 * 60; // 22:00-00:00 runs overnight
+    }
+    out.push({ day, date, dayIndex, start, end, allDay, section, topic, label, minutes });
   }
 
   // Chronological where we can be: real dates first, then Day N, then weekday.

@@ -41,6 +41,10 @@ export interface TopicCandidateInput {
   // alternative can outrank it, so priority steers the plan without letting
   // a student break their own sequencing.
   priorityBonus?: boolean;
+  /** The coaching timetable puts this topic on TODAY. The strongest pull of
+   *  all: the whole point of uploading a timetable is that when class teaches
+   *  Percentages, the plan says Percentages — today, not eventually. */
+  todayClassBonus?: boolean;
   // "Start my preparation with <cluster>" — the student's chosen opening
   // cluster (e.g. Arithmetic). A steady bias, not an override: prerequisites
   // and revision-due still apply, so ownership never breaks sequencing.
@@ -101,6 +105,7 @@ function coverageReason(topic: string, status: CoverageStatus | null): string | 
 // weightage+coverage rationale.
 function expertWhy(c: TopicCandidateInput, revisionMultiplier: number): string {
   const meta = TOPIC_METADATA[c.topic];
+  if (c.todayClassBonus) return "Your coaching teaches this today — study in sync";
   if (c.postponedBonus) return "Back from yesterday's swap — as promised";
   if (c.priorityBonus) return 'Your priority pick';
   if (c.focusBonus) return 'Your chosen starting point';
@@ -182,10 +187,19 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     const focusPoints = c.focusBonus ? 22 : 0;
     if (c.focusBonus) reasons.unshift('Your "start with" pick');
 
-    const postponedPoints = c.postponedBonus ? 40 : 0;
+    // 50, above today's class: "back tomorrow" was said to the student in
+    // words, and a broken promise costs more trust than a missed sync.
+    const postponedPoints = c.postponedBonus ? 50 : 0;
     if (c.postponedBonus) reasons.unshift("Back from yesterday's swap");
 
-    const score = coveragePoints + weightagePoints + sequencePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints + focusPoints + postponedPoints;
+    // Outranks everything except a same-day postponement promise. 45 beats the
+    // 25-point evergreen priority flag by design: a topic taught TODAY must
+    // beat one the coaching will teach eventually, or uploading a timetable
+    // changes nothing a student can see (founder, 7 Aug).
+    const todayClassPoints = c.todayClassBonus ? 45 : 0;
+    if (c.todayClassBonus) reasons.unshift('On your coaching timetable today');
+
+    const score = coveragePoints + weightagePoints + sequencePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints + focusPoints + postponedPoints + todayClassPoints;
     return { topic: c.topic, score, reasons };
   });
 

@@ -135,6 +135,10 @@
     {
       "path": "/api/cron/weekly-plan-reconcile",
       "schedule": "30 13 * * 0"
+    },
+    {
+      "path": "/api/cron/timetable-horizon",
+      "schedule": "30 3 * * *"
     }
   ]
 }

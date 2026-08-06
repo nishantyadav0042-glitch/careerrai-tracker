@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sanitizeBlocks, topicsTaught, sanitizeSyllabusEndDate, sanitizeTargets, isTimetableKind, type TimetableBlock } from '@/lib/timetable';
+import { timetableDailyHours, horizonDaysLeft } from '@/lib/timetable-align';
+import { dailyHours } from '@/lib/daily-hours';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 
 // GET  — the student's saved timetable (or null).
@@ -145,8 +147,46 @@ export async function POST(request: NextRequest) {
   // No server-side event: the client fires 'timetable_saved' via journey.ts
   // for this same action — the extra context-less 'timetable_confirmed' row
   // made every timetable count ambiguous (two names, two rows, one action).
+  // TODAY'S PLAN MUST FEEL THE UPLOAD. It was generated before this timetable
+  // existed, and nothing else invalidates it — which is exactly what the
+  // founder hit: "my study plan didn't get aligned with the updated timetable,
+  // then what's the benefit of uploading?" Same rule as a daily-hours change:
+  // drop today's routine so the next open rebuilds with the timetable's
+  // today-class topics — but never over completed work.
+  let planRebuilt = false;
+  if (followCoaching) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: done } = await admin
+      .from('routine_task_completions')
+      .select('task_id')
+      .eq('student_id', user.id)
+      .eq('routine_date', today)
+      .limit(1);
+    if (!done || done.length === 0) {
+      await admin.from('daily_routines').delete().eq('student_id', user.id).eq('routine_date', today);
+      planRebuilt = true;
+    }
+  }
+
+  // The hours CHECK (founder: "calculate or check their hours as per their
+  // updated timetable"). Never a write — the one-owner rule stands. The
+  // client shows the mismatch and the student decides with a tap.
+  const impliedHours = timetableDailyHours(blocks);
+  const { data: hoursRow } = await admin
+    .from('profiles')
+    .select('study_target_hours, hours_available, weekend_hours_available')
+    .eq('id', user.id)
+    .single();
+  const currentHours = dailyHours(hoursRow).weekday;
+  const hoursMismatch =
+    impliedHours != null && currentHours != null && Math.abs(impliedHours - currentHours) >= 1
+      ? { timetableHours: impliedHours, currentHours }
+      : null;
+
   return NextResponse.json({
     ok: true, blocks: blocks.length, targets: targets.length, alignedTopics: aligned,
+    planRebuilt, hoursMismatch,
+    horizonDaysLeft: horizonDaysLeft(blocks, new Date().toISOString().slice(0, 10)),
     planSource, syllabusEndDate: followCoaching ? syllabusEndDate : null,
   });
 }

@@ -35,7 +35,7 @@ Extract whatever is actually there. An empty list is correct when that thing isn
   "is_timetable": boolean,
   "syllabus_end_date": "YYYY-MM-DD" or null,
   "blocks": [
-    { "day": 0, "date": null, "dayIndex": null, "start": "18:00", "end": "20:00", "section": "QA", "topic": "Time Speed Distance", "label": "Arithmetic - TSD" }
+    { "day": 0, "date": null, "dayIndex": null, "start": "18:00", "end": "20:00", "section": "QA", "topic": "Time Speed Distance", "label": "Arithmetic - TSD", "minutes": 120 }
   ],
   "targets": [
     { "kind": "sectional", "label": "15-20 Quant sectionals by end September", "count": 20, "section": "QA", "deadline": "2026-09-30" },
@@ -65,6 +65,7 @@ At least one of day / date / dayIndex MUST be set, or omit the row.
     Choose the closest match by meaning (e.g. "TSD" -> "Time Speed Distance", "P&C" -> "Permutation & Combination", "RC" -> "Reading Comprehension").
     If nothing in the list clearly matches, use null. NEVER invent a topic name and NEVER return a topic that is not in the list character-for-character.
 - "label": the raw text as printed on the timetable, so nothing is lost.
+- "minutes": planned minutes for THIS task, only when the sheet states a duration — an explicit minutes column ("Planned mins | 480" split across that row's tasks proportionally is NOT allowed; only per-task figures), an in-cell duration ("2 hrs: ..." -> 120, "30 min editorial" -> 30), or the start/end times. If the row states a WHOLE-DAY total and per-task splits ("2 hrs" VARC, "3 hrs" QA, "2 hrs" DILR), use each task's own figure. No duration printed -> null. NEVER estimate.
 - Ignore breaks, lunch, holidays, test/mock slots that name no topic — unless they are actual scheduled classes.
 - If the same class repeats on several days, output one block per day.
 TARGETS — how much work the coaching expects completed:

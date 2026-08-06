@@ -55,5 +55,20 @@ describe.skipIf(!KEY)('live fire: the real file through the real model', () => {
 
     expect(parsed?.is_timetable).toBe(true);
     expect(blocks.length).toBeGreaterThan(0);
+    // The hours check depends on minutes surviving extraction. Shreya's cells
+    // literally print "2 hrs:" / "3 hrs:", so at least SOME blocks must carry
+    // them — if this fails, the check silently degrades to "no opinion" for
+    // every student, which is exactly the quiet failure worth catching here.
+    const withMinutes = blocks.filter((b) => b.minutes != null);
+    console.log(`BLOCKS WITH MINUTES: ${withMinutes.length}/${blocks.length}`);
+    const byDay = new Map<string, number[]>();
+    for (const b of blocks) {
+      if (b.minutes == null || !b.date) continue;
+      byDay.set(b.date, [...(byDay.get(b.date) ?? []), b.minutes]);
+    }
+    for (const [d, mins] of [...byDay].slice(0, 6)) console.log('DAY', d, mins.join('+'), '=', mins.reduce((a, b) => a + b, 0));
+    const { timetableDailyHours } = await import('@/lib/timetable-align');
+    console.log('IMPLIED DAILY HOURS:', timetableDailyHours(blocks));
+    expect(withMinutes.length).toBeGreaterThan(0);
   });
 });

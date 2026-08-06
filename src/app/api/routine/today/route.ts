@@ -13,6 +13,8 @@ import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } f
 import { getLogDateString } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
+import { todaysTaughtTopics } from '@/lib/timetable-align';
+import type { TimetableBlock } from '@/lib/timetable';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
@@ -43,6 +45,7 @@ export async function GET() {
     history,
     { daysSincePendingMock, pendingMockName },
     { data: recentReports },
+    { data: timetableRow },
   ] = await Promise.all([
     admin
       .from('profiles')
@@ -50,7 +53,7 @@ export async function GET() {
         is_working_professional, is_repeater, target_percentile,
         hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with
+        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with, plan_source
       `)
       .eq('id', user.id)
       .single(),
@@ -89,6 +92,14 @@ export async function GET() {
       .select('study_duration, plan_fit, report_date, mock_taken, day_outcome, blocker_reason, updated_at')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
+    // The coaching timetable, so TODAY's class topics can lead today's plan —
+    // the founder's one-line spec for this feature: "when your class teaches
+    // Percentages, your plan here says Percentages too."
+    admin
+      .from('student_timetables')
+      .select('blocks')
+      .eq('student_id', user.id)
+      .maybeSingle(),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
@@ -183,7 +194,10 @@ export async function GET() {
   // request, the same reasoning as whySummary already being recomputed
   // fresh rather than frozen at generation time. (history itself is fetched
   // in the parallel wave above.)
-  const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null);
+  const todayClassTopics = (profile.plan_source === 'coaching')
+    ? todaysTaughtTopics((timetableRow?.blocks as TimetableBlock[] | null) ?? [], today)
+    : [];
+  const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics);
 
   // The number today's plan is built to, decided ONCE here and used for both
   // generating the plan and judging whether a stored one is stale.
@@ -588,7 +602,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 // revision-due + (weak section only) the self-reported bonus. This is what
 // replaced the old behavior where the two non-weakest sections used the
 // exact same static topic for every student in the product.
-function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; postponedTopics: string[] }, startWith?: string | null): Record<Section, TopicChoice> {
+function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; postponedTopics: string[] }, startWith?: string | null, todayClassTopics: string[] = []): Record<Section, TopicChoice> {
   const coverageByTopic = new Map<string, CoverageStatus>();
   const prioritySet = new Set<string>();
   for (const row of coverageRows) {
@@ -602,6 +616,7 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
     startWith ? (QA_GROUPS.find((g) => g.label === startWith)?.units ?? []) : []
   );
   const postponed = new Set(history.postponedTopics);
+  const todayClass = new Set(todayClassTopics);
 
   const revisionMultiplier = archetypeRevisionMultiplier(profile);
   // Revision season: from 1 September of the exam year, overdue revision of
@@ -621,6 +636,7 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
       priorityBonus: prioritySet.has(topic),
       focusBonus: focusUnits.has(topic),
       postponedBonus: postponed.has(topic),
+      todayClassBonus: todayClass.has(topic),
     }));
     result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason);
   }
