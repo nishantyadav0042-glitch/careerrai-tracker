@@ -139,3 +139,54 @@ describe('the student’s hours are used exactly as they set them', () => {
     expect(r.expectedHours).toBe(35); // 7 x 5
   });
 });
+
+describe('nobody is blamed for days before they arrived', () => {
+  // Three live students signed up mid-week. Without this, their very first
+  // message from the app would have been "you missed four days and your finish
+  // date has moved a week" — about days they were not here for.
+  const days = ['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08', '2026-08-09'];
+
+  it('counts only the days since they joined', () => {
+    const r = reconcileWeek({
+      ...base, daysInWeek: days, joinedOn: '2026-08-07',   // joined Friday
+      loggedHoursByDay: [0, 0, 0, 0, 0, 0, 0],
+    });
+    // Fri (5h) + Sat (6h) + Sun (6h) = 17, not the full 37.
+    expect(r.expectedHours).toBe(17);
+    expect(r.deficitHours).toBe(17);
+  });
+
+  it('does not count hours logged before they joined either', () => {
+    // Symmetry matters: crediting pre-join hours would be the same error with
+    // the sign flipped, and would quietly hide a real shortfall.
+    const r = reconcileWeek({
+      ...base, daysInWeek: days, joinedOn: '2026-08-07',
+      loggedHoursByDay: [9, 9, 9, 9, 5, 6, 6],
+    });
+    expect(r.actualHours).toBe(17);
+    expect(r.deficitHours).toBe(0);
+  });
+
+  it('says what it actually measured instead of claiming "last week"', () => {
+    const r = reconcileWeek({
+      ...base, daysInWeek: days, joinedOn: '2026-08-08',
+      loggedHoursByDay: [0, 0, 0, 0, 0, 0, 0],
+    });
+    expect(r.warning).toContain('since you joined (2 days)');
+    expect(r.warning).not.toContain('last week');
+  });
+
+  it('still says "last week" for a student who was here all of it', () => {
+    const r = reconcileWeek({
+      ...base, daysInWeek: days, joinedOn: '2026-07-01',
+      loggedHoursByDay: [0, 0, 0, 0, 0, 0, 0],
+    });
+    expect(r.expectedHours).toBe(FULL_WEEK);
+    expect(r.warning).toContain('last week');
+  });
+
+  it('is unchanged when no join date is supplied', () => {
+    const r = reconcileWeek({ ...base, loggedHoursByDay: [0, 0, 0, 0, 0, 0, 0] });
+    expect(r.expectedHours).toBe(FULL_WEEK);
+  });
+});

@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   const { data: students, error } = await admin
     .from('profiles')
-    .select('id, full_name, study_target_hours, weekend_hours_available, syllabus_target_date, attempt_year')
+    .select('id, full_name, study_target_hours, weekend_hours_available, syllabus_target_date, attempt_year, created_at')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true)
@@ -91,6 +91,11 @@ export async function POST(request: NextRequest) {
       isWeekendByDay,
       currentTargetDate: s.syllabus_target_date as string,
       examDate: iso(resolveCatExamDate(now, s.attempt_year as number | null)),
+      // Never blame a student for days before they joined. Three students who
+      // signed up mid-week would otherwise have been told, in their first week,
+      // that they had missed four days and lost a week off their date.
+      joinedOn: s.created_at ? String(s.created_at).slice(0, 10) : null,
+      daysInWeek: week.days,
     });
 
     // They kept up. Say nothing — the best version of this job is invisible.

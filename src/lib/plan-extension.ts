@@ -34,6 +34,13 @@ export interface WeekInput {
   currentTargetDate: string;
   /** The exam. The date can never move past it. */
   examDate: string;
+  /**
+   * The day this student joined, yyyy-mm-dd. Days before it are not counted
+   * against them — they were not here. Optional: omit and the whole week counts.
+   */
+  joinedOn?: string | null;
+  /** The seven dates, Mon..Sun, yyyy-mm-dd. Required to honour joinedOn. */
+  daysInWeek?: string[];
 }
 
 export interface WeekResult {
@@ -65,16 +72,33 @@ export function reconcileWeek(input: WeekInput): WeekResult {
   const weekday = Math.max(0, input.weekdayHours);
   const weekend = Math.max(0, input.weekendHours ?? input.weekdayHours);
 
-  // Expected is what the student's OWN setting asked of them, day by day.
+  // Expected is what the student's OWN setting asked of them, day by day —
+  // but only for the days they were actually here.
+  //
+  // Without this, a student who signed up on Friday is told on Sunday that they
+  // missed Monday through Thursday and their date has moved a week. Three live
+  // students would have got exactly that message this Sunday. A warning that
+  // blames someone for time before they arrived is not a coach, it is a bug
+  // wearing a coach's voice, and it is the first thing they would ever hear
+  // from us.
+  const joined = input.joinedOn ?? null;
   let expected = 0;
-  for (let i = 0; i < 7; i++) expected += input.isWeekendByDay[i] ? weekend : weekday;
+  let countedDays = 0;
+  for (let i = 0; i < 7; i++) {
+    if (joined && input.daysInWeek && input.daysInWeek[i] < joined) continue;
+    expected += input.isWeekendByDay[i] ? weekend : weekday;
+    countedDays++;
+  }
 
   // A day with no log is a day with no study. Founder's call, and it is what
   // actually happened — counting only logged days would mean a student who
   // never opens the app never sees their date move, which defeats the point.
   const actual = input.loggedHoursByDay
     .slice(0, 7)
-    .reduce((sum: number, h) => sum + Math.max(0, Number(h ?? 0)), 0);
+    .reduce((sum: number, h, i) => {
+      if (joined && input.daysInWeek && input.daysInWeek[i] < joined) return sum;
+      return sum + Math.max(0, Number(h ?? 0));
+    }, 0);
 
   const deficit = Math.max(0, expected - actual);
 
@@ -95,7 +119,9 @@ export function reconcileWeek(input: WeekInput): WeekResult {
 
   let warning: string | null = null;
   if (deficit > 0) {
-    const short = `You studied ${round1(actual)} of the ${round1(expected)} hours your plan needed last week — ${round1(deficit)} hours short.`;
+    // "last week" is a lie for someone who joined on Friday. Say what we counted.
+    const span = countedDays >= 7 ? 'last week' : `since you joined (${countedDays} day${countedDays === 1 ? '' : 's'})`;
+    const short = `You studied ${round1(actual)} of the ${round1(expected)} hours your plan needed ${span} — ${round1(deficit)} hours short.`;
     warning = hitExamWall
       ? `${short} Your finish date is already at ${pretty(newDate)}, exam day, so it cannot move again. From here every missed hour comes out of your revision time, not the syllabus.`
       : daysAdded > 0
