@@ -239,3 +239,29 @@ describe('sizes read the way a person would say them', () => {
     expect(humanSize(5 * MB)).toBe('5.0 MB');
   });
 });
+
+describe('the storage bucket allows everything the app allows', () => {
+  // TWICE today an allowlist existed in two places and drifted: the DB body
+  // check rejected caption-less attachments the API allowed, then the storage
+  // bucket rejected the spreadsheets the app allowed ("that upload didn't go
+  // through", founder, 23:50). A unit test cannot read the live bucket, but it
+  // CAN insist that the newest bucket migration names every MIME the app
+  // accepts — so adding a type here without updating the bucket fails the
+  // build instead of failing a buddy.
+  it('bucket migration names every allowed mime', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const dir = 'supabase/migrations';
+    const bucketMigrations = readdirSync(dir)
+      .filter((f) => f.includes('chat_attachments_bucket') || f.includes('chat_attachments'))
+      .sort();
+    expect(bucketMigrations.length).toBeGreaterThan(0);
+    const latest = readFileSync(`${dir}/${bucketMigrations[bucketMigrations.length - 1]}`, 'utf8');
+    const mimes = [
+      'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel', 'text/csv',
+    ];
+    for (const m of mimes) expect(latest).toContain(m);
+  });
+});
