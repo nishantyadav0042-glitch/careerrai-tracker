@@ -16,7 +16,8 @@ const ref = new URL(env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0];
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const { data: auth, error: authErr } = await supabase.auth.signInWithPassword({
   email: 'nishant@careerrai.com',
-  password: 'CareerRai2026!',
+  // Never hardcode a password in this PUBLIC repo — pass it in.
+  password: process.env.E2E_PASSWORD ?? (() => { throw new Error('Set E2E_PASSWORD'); })(),
 });
 if (authErr) { console.error('LOGIN FAILED:', authErr.message); process.exit(1); }
 console.log('logged in as buddy:', auth.user.id);

@@ -212,3 +212,40 @@ npx tsc --noEmit && npx vitest run && npm run lint    # the gate — ALWAYS &&-c
 | LIS | Learning Intelligence System — the layered engines in lib (capacity, adaptation, constraints, decision) |
 | the ring | Home's syllabus-% circle (`pace-card.tsx`) |
 ```
+
+---
+
+## 8. Where the structure is heading (owner's standing plan)
+
+`src/lib` is 163 flat files. It works because names are prefix-namespaced
+(`plan-*`, `chat-*`, `timetable-*`) and this map exists — but it is past the
+size where flat scales. The planned target, to be executed as ONE mechanical,
+gate-verified change in a quiet window (never mid-incident, never while the
+founder is live-testing):
+
+```
+lib/
+  core/        auth, supabase/, utils, site, api-error, cron-auth, require-admin,
+               server-config, security-log, feature-flags, integration-audit, idempotency
+  plan/        routine-engine, routine-plan, topic-selector, topics-constants,
+               daily-hours, plan-*, study-*, capacity/adaptation engines,
+               coverage-*, prep-*, mastery engines + topic graphs, check-in, replan-engine
+  timetable/   timetable*, workbook-text, coaching-progress, coaching-vocab, __fixtures__/
+  chat/        chat*, attachments + verification
+  sessions/    buddy-room, google-*, meeting-room-link, booking-constraints,
+               session-window, call-*, daily (video)
+  buddy/       buddy-match, buddy-banner, buddy-briefing, buddy-sla, weekly-diagnosis
+  intel/       intelligence, constraint/coach/decision/performance/signal engines,
+               lis-health, student-360/dna/brief, momentum, streak-*, mission-*, next-action
+  notify/      notifications, notification-*, push*, companion, daily-insight,
+               email, whatsapp, wa-messages, alerting, mission-queue, expedify
+  growth/      funnel*, journey, track, autocapture, analytics*, community-*,
+               challenge*, daily-pick*, sales-*, lead-intel, social-proof, channels
+  money/       razorpay*, pricing, plans, premium, activate-payment
+```
+
+Execution recipe (so anyone can do it): (1) rewrite relative imports inside
+lib to `@/lib/...` absolute; (2) `git mv` per the mapping; (3) global rewrite
+of `@/lib/<name>` specifiers; (4) fix CWD-relative fixture paths in tests;
+(5) `npx tsc --noEmit && npx vitest run && npm run lint` — the diff is done
+when the gate is green and `grep -r "@/lib/" src` shows no stale specifier.

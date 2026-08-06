@@ -46,9 +46,9 @@ function check(html, markers) {
 }
 
 const [studentSession, buddySession, adminSession] = await Promise.all([
-  login('teststudent1@careerrai.com', 'CareerRai2026!'),
-  login('testbuddy1@careerrai.com', 'CareerRai2026!'),
-  login('admin@careerrai.com', 'CareerRai2026!'),
+  login('teststudent1@careerrai.com', process.env.DEMO_PASSWORD ?? (() => { throw new Error('Set DEMO_PASSWORD'); })()),
+  login('testbuddy1@careerrai.com', process.env.DEMO_PASSWORD ?? (() => { throw new Error('Set DEMO_PASSWORD'); })()),
+  login('admin@careerrai.com', process.env.DEMO_PASSWORD ?? (() => { throw new Error('Set DEMO_PASSWORD'); })()),
 ]);
 const sc = buildCookies(studentSession);
 const bc = buildCookies(buddySession);

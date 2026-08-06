@@ -9,7 +9,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const PASS = 'CareerRai2026!';
+const PASS = process.env.SEED_PASSWORD ?? (() => { throw new Error('Set SEED_PASSWORD'); })();
 
 const USERS = [
   { email: 'admin@careerrai.com', full_name: 'Nishant (Admin)', role: 'admin' },
@@ -199,7 +199,7 @@ async function main() {
   }
 
   console.log('\nâœ… Seed complete!\n');
-  console.log('Demo login credentials (all use password: CareerRai2026!)');
+  console.log('Demo login credentials (password: the SEED_PASSWORD you provided)');
   console.log('â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€');
   console.log('Student (Aarav):  aarav@careerrai.com');
   console.log('Student (Priya):  priya@careerrai.com');

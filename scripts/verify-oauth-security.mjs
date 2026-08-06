@@ -17,7 +17,7 @@ const env = Object.fromEntries(
 
 const url = env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const PASSWORD = 'CareerRai2026!';
+const PASSWORD = process.env.DEMO_PASSWORD ?? (() => { throw new Error('Set DEMO_PASSWORD'); })();
 
 let failures = 0;
 const check = (name, ok, detail) => {

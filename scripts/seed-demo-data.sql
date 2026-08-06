@@ -681,7 +681,8 @@ ON CONFLICT (email) DO UPDATE SET
 -- known password so every demo account signs in via the staff
 -- username/password form. (Students normally use email OTP, but
 -- demo emails are unmonitored — username/password is the demo path.)
--- Password for ALL demo accounts: CareerRai2026!
+-- Password for ALL demo accounts: replace __SET_DEMO_PASSWORD__ below before
+-- running. Never commit a real password to this PUBLIC repo.
 -- =============================================================
 UPDATE public.profiles SET username = 'aarav'   WHERE id = v_aarav;
 UPDATE public.profiles SET username = 'priya'   WHERE id = v_priya;
@@ -694,7 +695,7 @@ UPDATE public.profiles SET username = 'arjun'   WHERE id = v_arjun;
 -- Reset passwords + confirm emails for all demo auth users.
 -- Requires pgcrypto (enabled by default on Supabase).
 UPDATE auth.users
-SET encrypted_password = crypt('CareerRai2026!', gen_salt('bf')),
+SET encrypted_password = crypt('__SET_DEMO_PASSWORD__', gen_salt('bf')),
     email_confirmed_at = COALESCE(email_confirmed_at, now()),
     updated_at = now()
 WHERE id IN (v_aarav, v_priya, v_nishant, v_admin, v_rohan, v_meera, v_arjun);
