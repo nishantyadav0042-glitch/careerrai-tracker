@@ -33,7 +33,22 @@ const SPREADSHEET_MEDIA_TYPES = [
 const LEGACY_XLS = 'application/vnd.ms-excel';
 
 const VISION_PREFACE = `You are reading a photo, screenshot or PDF of something a CAT coaching institute gave a student (Rodha, TIME, IMS, CL, Endeavor, Cracku, Unacademy...).`;
-const SPREADSHEET_PREFACE = `You are reading the TEXT extracted from an Excel/CSV file a CAT coaching institute gave a student (Rodha, TIME, IMS, CL, Endeavor, Cracku, Unacademy...). Each sheet of the workbook appears below under a === SHEET: "name" === header. Cells are separated by " | ", one row per line. Sheet names carry meaning — a sheet named "Daily"/"Day wise" is usually a relative day plan, "Weekly"/"Schedule" a class timetable, "Targets" a target list. Read EVERY sheet; the answer merges all of them.`;
+// Spreadsheet plans are usually richer than a photographed class timetable —
+// Shreya's real file (the format this preface is tuned against) is a 117-row
+// dated day-plan with one task column PER SECTION, plus a weekly phase sheet.
+// Two rules below exist specifically for that shape: a day-plan without clock
+// times IS a timetable, and long plans are windowed to the next three weeks so
+// the output can never truncate mid-JSON (the failure the founder hit live:
+// truncated output parses as nothing, and a perfect file gets "that doesn't
+// look like a timetable").
+const spreadsheetPreface = (todayIso: string) => `You are reading the TEXT extracted from an Excel/CSV file a CAT coaching institute or mentor gave a student. Each sheet of the workbook appears below under a === SHEET: "name" === header. Cells are separated by " | ", one row per line. Sheet names carry meaning — "Daily"/"Day wise" is usually a day plan, "Weekly"/"Schedule" a class timetable or phase plan, "Targets" a target list. Read EVERY sheet; the answer merges all of them.
+
+SPREADSHEET-SPECIFIC RULES (these OVERRIDE anything below that conflicts):
+- A DAY-PLAN GRID — dated or Day-N rows where each row describes study tasks (often one column per section: "VARC task", "QA task", "DILR task") — IS a timetable. Set "is_timetable": true even when no clock times appear anywhere.
+- For such rows output one block PER SECTION TASK: the row's date (or dayIndex), that column's section, "start"/"end" null, "topic" matched from the allowed list when the cell names one, "label" a SHORT version of the cell text (max ~10 words).
+- TODAY is ${todayIso}. If the plan spans MORE than 30 dated days, output blocks ONLY for dates from ${todayIso} through 21 days later — earlier rows are the past and later rows will still be here next week. Weekly/phase sheets and targets are NOT windowed: read those whole.
+- Rows marked OFF / blackout / rest / holiday are days off — skip them entirely, exactly as the skip rule below says.
+- A week-level phase sheet ("Week 5 | 07 Sep-13 Sep | Algebra I | ... | 1 full mock + 2 sectionals") does not produce class blocks, but its tests/mocks column often states real targets — extract those, and a printed syllabus-completion week ("Syllabus closure") may state syllabus_end_date only if an actual end date is printed.`;
 
 const EXTRACT_RULES = `It may be ANY of these, and often it is not a timetable at all:
  (a) a weekly class timetable with days and times,
@@ -92,7 +107,7 @@ ALLOWED TOPICS (the ONLY permitted values for "topic"):
 ${ALLOWED_TOPICS.join('\n')}`;
 
 const EXTRACT_PROMPT = `${VISION_PREFACE}\n\n${EXTRACT_RULES}`;
-const SPREADSHEET_PROMPT = `${SPREADSHEET_PREFACE}\n\n${EXTRACT_RULES}`;
+const spreadsheetPrompt = (todayIso: string) => `${spreadsheetPreface(todayIso)}\n\n${EXTRACT_RULES}`;
 
 interface ParseResult {
   is_timetable?: boolean;
@@ -169,7 +184,7 @@ export async function POST(request: NextRequest) {
         { status: 422 },
       );
     }
-    parts = [{ text: `${SPREADSHEET_PROMPT}\n\nWORKBOOK CONTENT:\n\n${sheetsToPromptText(sheets)}` }];
+    parts = [{ text: `${spreadsheetPrompt(new Date().toISOString().slice(0, 10))}\n\nWORKBOOK CONTENT:\n\n${sheetsToPromptText(sheets)}` }];
   } else {
     parts = [
       { inlineData: { mimeType: mediaType, data: file } },
@@ -177,7 +192,7 @@ export async function POST(request: NextRequest) {
     ];
   }
 
-  const raw = await callGemini({ parts, json: true, maxTokens: 4096, temperature: 0.1 });
+  const raw = await callGemini({ parts, json: true, maxTokens: isSpreadsheet ? 8192 : 4096, temperature: 0.1 });
   if (raw === null) {
     // Transient AI failure, NOT a bad upload — don't blame the student's photo.
     return NextResponse.json(

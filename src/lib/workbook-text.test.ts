@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import ExcelJS from 'exceljs';
 import {
   workbookToSheets, csvToSheet, sheetsToPromptText,
-  MAX_SHEETS, MAX_ROWS_PER_SHEET,
+  MAX_SHEETS, MAX_ROWS_PER_SHEET, MAX_TOTAL_CHARS,
 } from './workbook-text';
 
 // Excel → text for the timetable extractor. Founder, 6 Aug: "students will
@@ -145,5 +147,36 @@ describe('CSV is a one-sheet workbook', () => {
   it('returns nothing for an empty file', () => {
     expect(csvToSheet('')).toEqual([]);
     expect(csvToSheet('\n\n,,\n')).toEqual([]);
+  });
+});
+
+describe('the real file that broke in production (Shreya, 6 Aug)', () => {
+  // CAT_2026_Weekly_Study_Plan_8hr_Weekdays.xlsx — a buddy-made plan: 117
+  // dated day-rows with a task column per section, a 16-week phase sheet, and
+  // a topic tracker. The first live Excel upload, and it failed. Kept as a
+  // fixture so this format can never silently regress.
+  it('extracts all three sheets with faithful cells', async () => {
+    const buf = readFileSync(join(__dirname, '__fixtures__', 'buddy-weekly-plan.xlsx'));
+    const sheets = await workbookToSheets(buf);
+    expect(sheets.map((s) => s.name)).toEqual(['Daily Schedule', 'Weekly Plan', 'Topic Tracker']);
+
+    const daily = sheets[0].text;
+    // Dates as ISO — never the 1899-epoch/GMT garbage a naive Date print gives.
+    expect(daily).toContain('2026-08-05');
+    expect(daily).not.toContain('GMT');
+    expect(daily).not.toContain('00:00:00');
+    // The task text survives whole enough to carry topic names.
+    expect(daily).toContain('Percentages, Ratio & Proportion');
+    // Off days are present in the text (the extractor is told to skip them —
+    // that judgement belongs to the prompt, not to this converter).
+    expect(daily).toContain('OFF / blackout');
+
+    const weekly = sheets[1].text;
+    expect(weekly).toContain('Algebra I');
+    expect(weekly).toContain('1 full mock + 2 sectionals');
+
+    // The whole workbook stays comfortably inside the prompt budget.
+    const total = sheets.reduce((n, s) => n + s.text.length, 0);
+    expect(total).toBeLessThan(MAX_TOTAL_CHARS);
   });
 });

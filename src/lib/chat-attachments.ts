@@ -30,6 +30,17 @@ const ALLOWED: AllowedType[] = [
   { mime: 'image/webp', extensions: ['webp'], kind: 'image' },
   { mime: 'application/pdf', extensions: ['pdf'], kind: 'document' },
   { mime: 'application/msword', extensions: ['doc'], kind: 'document' },
+  // Spreadsheets: a buddy's study plan IS an Excel file (Shreya, 6 Aug, found
+  // out live: "I'm unable to attach it there on DM"), and the founder's call —
+  // "students will send excel files only mostly" — applies to chat as much as
+  // to the timetable upload.
+  {
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    extensions: ['xlsx'],
+    kind: 'document',
+  },
+  { mime: 'application/vnd.ms-excel', extensions: ['xls'], kind: 'document' },
+  { mime: 'text/csv', extensions: ['csv'], kind: 'document' },
   {
     mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     extensions: ['docx'],
@@ -85,21 +96,25 @@ export function validateDeclaredFile(
   const extension = extensionOf(name);
   if (!extension) return { ok: false, error: 'That file has no extension, so we cannot tell what it is.' };
 
-  const byMime = ALLOWED.find((t) => t.mime === mime);
   const byExt = ALLOWED.find((t) => t.extensions.includes(extension));
-
   if (!byExt) {
     return {
       ok: false,
-      error: `.${extension} files aren't supported. You can send images (JPG, PNG, WEBP) and documents (PDF, DOC, DOCX).`,
+      error: `.${extension} files aren't supported. You can send images (JPG, PNG, WEBP) and documents (PDF, DOC, DOCX, XLSX, CSV).`,
     };
   }
-  if (!byMime) {
-    return { ok: false, error: 'That file type is not supported here.' };
-  }
-  // The classic upload attack: resume.pdf.exe, or an executable renamed .pdf.
-  // If the two disagree, at least one of them is lying.
-  if (byMime.mime !== byExt.mime) {
+
+  // The browser's declared MIME splits three ways:
+  //   · UNKNOWN ("" or application/octet-stream) — files saved from WhatsApp
+  //     on Android routinely arrive like this. Not knowing is not lying: the
+  //     extension stands, and the byte sniff after upload (which the client
+  //     cannot lie to) remains the real boundary.
+  //   · the MATCHING allowed type — fine.
+  //   · anything else — an affirmative claim that contradicts the extension
+  //     (malware.pdf declared as x-msdownload, a PDF mime on a .png). At
+  //     least one of the two is lying; refuse.
+  const unknownMime = mime === '' || mime === 'application/octet-stream';
+  if (!unknownMime && mime !== byExt.mime) {
     return { ok: false, error: "That file's type and its extension don't match, so we can't accept it." };
   }
 
@@ -147,11 +162,20 @@ export function sniffMatchesMime(head: Uint8Array, mime: string): boolean {
     case 'application/msword':
       // OLE2 compound document.
       return startsWith(head, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
-    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-      // .docx is a ZIP, so the ZIP header alone would also accept any archive
-      // renamed .docx — which is exactly the hole we are trying to close.
-      // Every OOXML file's FIRST entry is [Content_Types].xml, so require that
-      // name in the first local file header too.
+    case 'application/vnd.ms-excel':
+      // Legacy .xls is the same OLE2 container as .doc.
+      return startsWith(head, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    case 'text/csv': {
+      // CSV has no magic bytes; the honest check is "is this actually text".
+      // Any NUL in the head means a binary renamed .csv — refuse it.
+      return !head.slice(0, 512).includes(0);
+    }
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+      // OOXML (.docx AND .xlsx) is a ZIP, so the ZIP header alone would also
+      // accept any archive renamed to the extension — exactly the hole we are
+      // closing. Every OOXML file's FIRST entry is [Content_Types].xml, so
+      // require that name in the first local file header too.
       if (!startsWith(head, [0x50, 0x4b, 0x03, 0x04])) return false;
       const text = new TextDecoder('latin1').decode(head.slice(0, 512));
       return text.includes('[Content_Types].xml');

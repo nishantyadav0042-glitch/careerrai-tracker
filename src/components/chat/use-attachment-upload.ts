@@ -100,7 +100,9 @@ export function useAttachmentUpload(studentId?: string) {
       const xhr = new XMLHttpRequest();
       xhrRef.current = xhr;
       xhr.open('PUT', url, true);
-      xhr.setRequestHeader('content-type', file.type);
+      // The server resolved the real type from the extension; the browser's
+      // file.type can be blank for WhatsApp-saved files.
+      xhr.setRequestHeader('content-type', signed.mime);
       xhr.setRequestHeader('x-upsert', 'false');
 
       xhr.upload.onprogress = (e) => {

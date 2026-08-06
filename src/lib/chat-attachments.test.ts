@@ -26,6 +26,26 @@ describe('what is allowed through', () => {
   it('is case-insensitive about the extension', () => {
     expect(ok('SCORECARD.PDF', 'application/pdf').ok).toBe(true);
   });
+
+  it('accepts the spreadsheets a buddy actually sends', () => {
+    // "I'm unable to attach it there on DM" — Shreya, 6 Aug, holding
+    // CAT_2026_Weekly_Study_Plan_8hr_Weekdays.xlsx. A buddy's study plan IS
+    // an Excel file; a chat that refuses it pushes the plan back to WhatsApp.
+    expect(ok('CAT_2026_Weekly_Study_Plan_8hr_Weekdays.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))
+      .toMatchObject({ ok: true, kind: 'document' });
+    expect(ok('plan.xls', 'application/vnd.ms-excel')).toMatchObject({ ok: true, kind: 'document' });
+    expect(ok('targets.csv', 'text/csv')).toMatchObject({ ok: true, kind: 'document' });
+  });
+
+  it('accepts an allowed extension whose browser MIME is blank or generic', () => {
+    // Files saved from WhatsApp on Android routinely arrive as "" or
+    // application/octet-stream. The declared MIME is a hint; the byte sniff
+    // after upload is the boundary the client cannot lie to.
+    expect(ok('plan.xlsx', '').ok).toBe(true);
+    expect(ok('plan.xlsx', 'application/octet-stream').ok).toBe(true);
+    expect(ok('scorecard.pdf', 'application/octet-stream').ok).toBe(true);
+  });
 });
 
 describe('what is turned away', () => {
@@ -63,9 +83,11 @@ describe('what is turned away', () => {
 
 describe('the extension and the MIME type must agree', () => {
   it('refuses an executable wearing a .pdf extension', () => {
+    // An AFFIRMATIVE foreign claim. Unlike a blank type, the browser here is
+    // saying "this is a Windows executable" — believe it and refuse.
     const res = ok('malware.pdf', 'application/x-msdownload');
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/not supported/i);
+    if (!res.ok) expect(res.error).toMatch(/don't match/i);
   });
 
   it('refuses a PDF mime on a .png name', () => {
@@ -74,8 +96,12 @@ describe('the extension and the MIME type must agree', () => {
     if (!res.ok) expect(res.error).toMatch(/don't match/i);
   });
 
-  it('refuses an empty MIME type — the browser not knowing is not a pass', () => {
-    expect(ok('resume.pdf', '').ok).toBe(false);
+  it('passes an empty MIME through to the byte sniff instead of refusing', () => {
+    // This used to refuse — and cost a real buddy her study-plan upload,
+    // because WhatsApp-saved files arrive with no type. Not knowing is not
+    // lying; the post-upload sniff still rejects anything whose bytes don't
+    // match the extension's type.
+    expect(ok('resume.pdf', '').ok).toBe(true);
   });
 });
 
@@ -174,6 +200,20 @@ describe('magic bytes must match the claimed type', () => {
 
   it('rejects any type outside the allowlist, whatever the bytes say', () => {
     expect(sniffMatchesMime(ascii('%PDF-'), 'application/zip')).toBe(false);
+  });
+
+  it('holds .xlsx to the same OOXML proof as .docx', () => {
+    const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const plainZip = ascii('PK\x03\x04' + 'x'.repeat(60));
+    expect(sniffMatchesMime(plainZip, XLSX_MIME)).toBe(false);
+    const realXlsx = ascii('PK\x03\x04' + '\x00'.repeat(26) + '[Content_Types].xml');
+    expect(sniffMatchesMime(realXlsx, XLSX_MIME)).toBe(true);
+  });
+
+  it('accepts a text CSV and rejects a binary renamed .csv', () => {
+    expect(sniffMatchesMime(ascii('Day,Topic,Hours\nDay 1,Percentages,2'), 'text/csv')).toBe(true);
+    // A NUL byte in the head means binary, whatever the name says.
+    expect(sniffMatchesMime(bytes(0x4d, 0x5a, 0x90, 0x00), 'text/csv')).toBe(false);
   });
 });
 
