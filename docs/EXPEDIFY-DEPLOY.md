@@ -1,109 +1,120 @@
-# Riya — Expedify Setup, start to finish (v1.1)
+# Riya — Expedify Setup, click by click (v1.2)
 
-**The one setup document.** Work top to bottom and Expedify is closed. Every
-step says exactly what to paste, where, and how to know it worked.
+**The one setup document**, written against the real Expedify screens
+(`app.expedify.ai`, 8 Aug). Work top to bottom and Expedify is closed.
 
-> **What already exists (verified in code, 7 Aug):** the OUTBOUND pipe is
-> live — every new signup is handed to Expedify with a full student brief
-> (`lib/expedify.ts` → flush cron), and 173 calls have been dispatched. The
-> INBOUND pipe is **built but has never fired**: `expedify_events` is empty
-> because Expedify's side was never pointed back at us. Step 6 is therefore
-> the highest-value step in this document — it is the entire "learning loop",
-> and it is one URL.
+> **State of the integration (verified in code + dashboard):** OUTBOUND
+> works — a new signup POSTs a contact into Expedify with a full spoken-ready
+> brief, the `Database Change Trigger` on Contacts/CREATE fires, and
+> `AI Calling Agent Workflow` places the call. 173 calls dispatched. INBOUND
+> has **never fired** — `expedify_events` is empty because no post-call node
+> points back at us. Step 6 fixes that.
 
 ---
 
-## 0. What goes where (the whole map in one table)
+## 0. Which document goes where — the whole map
 
-| Document | Where it goes | Why |
+| Document | Where it goes | How |
 |---|---|---|
-| **EXPEDIFY-RIYA-PROMPT.txt** | Expedify → agent **instructions / prompt** field | Riya's behavior. Self-contained by design |
-| **EXPEDIFY-KB.md** | Expedify → **knowledge base** upload (retrieval) | The facts she answers from |
-| Greeting line (§2 below) | Expedify → **first message** | Permission before anything |
-| CRM fields (§4) | Expedify → **post-call analysis / variables** | What every call must leave behind |
-| Return webhook (§6) | Expedify → **post-call HTTP / webhook node** | Sends the outcome back to CareerRai |
-| **EXPEDIFY-QUALIFICATION.md** | ❌ never uploaded — ours | Post-call scoring + CRM design |
-| **EXPEDIFY-CONVERSION.md** | ❌ never uploaded — ours | Why students decide; trains us, not her |
-| **EXPEDIFY-BEHAVIOR.md** | ❌ never uploaded — source | Already compressed into the prompt |
-| **EXPEDIFY-PROMPT-RULES.md** | ❌ never uploaded — source | Already inside the prompt |
+| **EXPEDIFY-RIYA-PROMPT.txt** | `AI Calling Agent Workflow` → **VoiceAgent** node → *System Prompt* | **Pasted**, not uploaded |
+| **EXPEDIFY-KB.md** | Automation → **Knowledge Bases** → new base `CareerRai — Riya KB` | **Uploaded** as a document |
+| Greeting line | **VoiceAgent** node → **Messages** tab | Pasted |
+| CRM fields | `Post Call - Lead Status Update Workflow` | Configured |
+| Return webhook | `Post Call - Lead Status Update Workflow` → HTTP node | Configured |
+| EXPEDIFY-QUALIFICATION.md | ❌ never — ours | Post-call scoring + CRM design |
+| EXPEDIFY-CONVERSION.md | ❌ never — ours | Why students decide; trains us |
+| EXPEDIFY-BEHAVIOR.md | ❌ never — source | Already compressed into the prompt |
+| EXPEDIFY-PROMPT-RULES.md | ❌ never — source | Already inside the prompt |
+| EXPEDIFY-DEPLOY.md (this) | ❌ never — the manual | For the founder |
 
-**Only two files ever enter Expedify: the prompt and the KB.** Uploading the
-thinking documents makes Riya recite frameworks at students.
+**Exactly one file is ever uploaded into Expedify: `EXPEDIFY-KB.md`.** One
+other file is pasted: the prompt. Everything else stays with us — uploading
+the thinking documents makes Riya recite frameworks at students.
 
 ---
 
-## 1. Agent instruction (the system prompt)
+## 1. The prompt → VoiceAgent node
 
-Paste the ENTIRE contents of **`EXPEDIFY-RIYA-PROMPT.txt`** into the agent's
-instruction/prompt field. It references no other document, because a live
-prompt cannot follow links.
+**Automation → Workflows → `AI Calling Agent Workflow` → click the
+`VoiceAgent` node** (the purple phone-handset node).
 
-**Maintenance rule:** edit the assets first, then re-compress into the
-prompt. Never patch the prompt directly and let the sources drift — that is
-the two-copies failure this codebase has paid for four times.
+- **System Prompt** — paste the entire `EXPEDIFY-RIYA-PROMPT.txt`.
+- **Agent Name** — change `Voice Agent` to `Riya`.
+- **Model** — `gpt-4o` is right: it's the fast one, and latency is the whole
+  game on voice. Don't "upgrade" to a slower reasoning model.
+- Click **Save to Library** and name it `Riya — CareerRai Admissions Caller
+  v1.0`. Keep the version in the name — that's how we compare v1.0 calls to
+  v1.1 calls later, and it's our substitute for A/B testing until volume
+  justifies real tests.
 
-## 2. Greeting (first message)
+## 2. The greeting → VoiceAgent → Messages tab
 
-> "Hi! Main Riya bol rahi hoon, CareerRai se. Aap ne humari site pe CAT ke
-> liye register kiya tha — abhi do minute baat kar sakte hain?"
+Bottom of the VoiceAgent node: **Messages · Voice · Timing · More**.
 
-If Expedify supports variables, insert the student's first name after "Hi".
-We already send `name` with every lead, so the variable will be populated.
+In **Messages**, set the first message:
 
-## 3. Knowledge base (retrieval)
+> "Hi {{student_name}}! Main Riya bol rahi hoon, CareerRai se. Aap ne humari
+> site pe CAT ke liye register kiya tha — abhi do minute baat kar sakte hain?"
 
-Upload **`EXPEDIFY-KB.md`** as the agent's knowledge document. If the
-uploader rejects `.md`, rename the file to `.txt` — the content is plain
-text either way. Upload ONLY this file.
+## 3. Voice + interruption → VoiceAgent → Voice and Timing tabs
 
-## 4. Post-call fields
+**Voice tab:** Indian female, Hinglish-capable, natural over crisp. "Sounds
+like a person" beats diction — it decides the first ten seconds.
 
-Configure these as post-call analysis fields / variables. The names on the
-left are what our webhook already parses (§6), so keeping them exact means
-zero mapping work:
+**Timing tab:** interruption / barge-in sensitivity to **maximum**. Riya
+stopping mid-word the instant a student speaks is the most trust-critical
+setting in the entire system. Silence before re-prompting: ~4 seconds
+(thinking silence is good silence). Max call duration: 7 minutes.
 
-| Field | Values |
-|---|---|
-| `lead_type` | student · working · repeater · coaching · parent · wrong |
-| `installed` | true / false — app reached the home screen on this call |
-| `plan_opened` | true / false — they saw today's plan (the Day-1 moment) |
-| `next_step` | short text — the ONE agreed action with its time |
-| `disposition` | HOT · WARM · COLD · NO_ANSWER · APP_ISSUE · DO_NOT_CALL |
-| `drop_reason` | short text — why they stopped using the app (activation gold) |
-| `emotional_trigger` | short text — the pain in THEIR words |
-| `momentum_score` | 0–5 |
-| `agent_summary` | 2–3 line summary of the call |
-| `callback_at` | date-time, only when a callback was agreed |
+## 4. The knowledge base → new base, then the Search node
 
-Booleans may be sent as `true`/`false`, `"yes"`/`"no"`, or `1`/`0` — all are
-accepted. A field left empty stays empty; it is never read as "no".
+**4a. Create the base.** Automation → **Knowledge Bases** → **+ Add
+Knowledge Base**:
+- Name: `CareerRai — Riya KB`
+- Description: `CareerRai product truth: features, plans, pricing, install steps, student FAQs.`
+- Create, then **+ Add Document** and upload `EXPEDIFY-KB.md`. If `.md` is
+  rejected, rename the file to `.txt` — same content.
 
-Lead tier (Hot/Warm/Cold) and SCOPE scores are NOT Expedify fields — they're
-computed later from these plus the transcript. Never ask a voice agent to do
-math mid-call.
+**4b. Point the agent at it.** In `AI Calling Agent Workflow`, click the
+**Search Knowledge Base** node:
+- **Knowledge Base Selection** — currently `1 KB (all docs)`. Change it to
+  **only** `CareerRai — Riya KB`.
+- **Tool description for the agent** — paste:
+  > `Look up facts about CareerRai — features, plans, pricing, installation steps, and answers to student questions. Use this before answering any factual question about the product. If it returns nothing, say you don't know and the team will confirm.`
 
-## 5. Call settings
+⚠️ **Do not leave this pointed at the shared/all-docs base.** The account
+holds `Product Docs` (201 docs), `Onboarding Agent Knowledge`, `My Business`
+and others. If Riya can retrieve those, she will confidently answer a CAT
+student with content from an unrelated product — the single fastest way to
+destroy the honesty this whole system is built on.
 
-- **Voice/language:** Hinglish, Indian female, natural pace. Pick the most
-  natural-sounding voice, not the clearest — "sounds like a person" beats
-  diction (Moment of Truth #1).
-- **Barge-in / interruption sensitivity:** ON, most sensitive. Riya stopping
-  mid-word is the most trust-critical behavior in the system.
-- **Max call duration:** 7 minutes (the design is a 5-minute call).
-- **Silence:** wait ~4 seconds before re-prompting; one gentle "hello, sun
-  paa rahe ho?" then a warm goodbye. Never monologue into dead air.
-- **Recording + transcripts:** ON for every call. This is the improvement
-  loop; without it we're guessing.
-- **Human transfer:** the founder's number, for distress or anger only.
-  Everything else is "team aapko call karegi" + the escalate flag.
-- **Calling hours:** 11:00–13:00 and 16:00–20:00 IST. Never before 10am or
-  after 9pm.
-- **Retries:** max 2 attempts per lead per day, 3 days apart, stop at 3
-  unanswered. No voicemails.
+## 5. Pass the student brief → Voice Outbound Call node
 
-## 6. Return webhook — the step that has never been done
+Click the **Voice Outbound Call** node (orange). It already maps:
+- Phone Number: `{{universaldatabasetrigger_1.new_data.phone}}`
+- Variable `student_name`
 
-In Expedify's post-call workflow, add an HTTP/webhook node pointing at:
+**Add one more variable** — this is a real upgrade, not housekeeping. Our
+signup hand-off already sends a plain-language paragraph written to be spoken
+by the agent (`summary` in `lib/student-brief.ts`): attempt number, coaching,
+hours they can study, the pains they ticked, strongest/weakest section, even
+which browser they signed up in. Today the workflow drops all of it and Riya
+calls blind.
+
+- **+ Add Variable** → Name: `student_brief` → Value:
+  `{{universaldatabasetrigger_1.new_data.summary}}`
+
+If `summary` isn't in the trigger's field list, check the Contacts table for
+where our payload landed (our POST sends `summary`, `pain_points`,
+`hours_per_day`, `coaching`, `attempt`, `weakest_section`) and map whichever
+column exists. The prompt already consumes `{{student_brief}}` and is
+instructed never to read it aloud and never to ask what it already answers.
+
+## 6. The return webhook → Post Call - Lead Status Update Workflow
+
+**This is the step that has never been done, and it is the whole learning
+loop.** Open `Post Call - Lead Status Update Workflow` and add an HTTP
+request node after the call completes:
 
 ```
 POST https://careerrai.in/api/expedify/outcome?key=<EXPEDIFY_INBOUND_SECRET>
@@ -113,16 +124,16 @@ Content-Type: application/json
 `<EXPEDIFY_INBOUND_SECRET>` is a Vercel environment variable on the
 `careerrai-daily` project. Check whether it already has a value; if not,
 create any long random string, save it in Vercel, redeploy, and use the same
-value in the URL. **The secret goes in Vercel and in Expedify — never in
-this repo, never in chat.**
+value here. **That secret belongs in Vercel and Expedify only — never in the
+repo, never in chat** (the repo is public).
 
-Body: the §4 fields plus the student's phone. Phone is the only required
-field — it is how the outcome finds the student:
+Body — `phone` is the only required field; everything else is what the call
+learned:
 
 ```json
 {
   "event": "call_report",
-  "phone": "+919876543210",
+  "phone": "{{contact.phone}}",
   "lead_type": "student",
   "installed": true,
   "plan_opened": true,
@@ -136,38 +147,33 @@ field — it is how the outcome finds the student:
 }
 ```
 
-Field-name variants are accepted (`lead_phone`/`contact_phone`/`mobile` for
-phone; `app_installed` for installed; `plan_seen` for plan_opened;
-`next_action` for next_step; `notes`/`summary` for agent_summary), so
-whatever their builder emits will land. The raw payload is always stored in
-`expedify_events` even if a field name is unrecognised — nothing is lost,
-and we can wire new fields later without asking them to re-send.
+Field-name variants are accepted (`lead_phone`/`contact_phone`/`mobile`;
+`app_installed`; `plan_seen`; `next_action`; `notes`/`summary`), booleans may
+be `true`/`"yes"`/`1`, and the raw payload is always stored in
+`expedify_events` even if a name is unrecognised. Nothing is lost.
 
-**What this unlocks:** every call outcome lands on the student's profile,
-flows into the leads Excel (new columns: lead type, installed, plan opened,
-next step) and the lead cards. That is the feedback loop — install rate per
-lead type, day-1 completion of called students, which pain predicts
-conversion — all from data we already collect elsewhere, joined by phone.
+**What it unlocks:** every outcome lands on the student's profile → lead
+cards and the leads Excel (new columns: lead type, installed, plan opened,
+next step) → install rate per lead type, day-1 completion of called students,
+which pain predicts conversion. All joined by phone to data we already have.
 
-## 7. Verify before any real student is called
+## 7. Activate, then verify both directions
 
-1. **Outbound + workflow attached:** open
-   `https://careerrai.in/api/admin/expedify-test?phone=<your number>` while
-   logged in as admin. It fires a realistic dummy lead through the exact
-   production pipeline and prints a verdict — including the specific
-   "⚠️ Expedify received the lead but NO WORKFLOW is connected" case, which
-   is the silent black hole that looks like success. **Your phone will
-   actually ring.**
-2. **Inbound:** after that test call ends, check the admin leads page for
-   that number — the call outcome should be on the lead card. If it isn't,
-   the §6 webhook is wrong (a 401 means the key doesn't match; a 503 means
-   the env var isn't set in Vercel).
+- **Activate** `AI Calling Agent Workflow` — several workflows in the list
+  show **Inactive**. An inactive workflow is the silent black hole where
+  every lead is accepted and nobody is ever called.
+- **Outbound test:** logged in as admin, open
+  `https://careerrai.in/api/admin/expedify-test?phone=<your number>`. It fires
+  a realistic dummy lead through the exact production pipeline and prints a
+  verdict — including the specific "⚠️ received but NO WORKFLOW connected"
+  case. **Your phone will actually ring.**
+- **Inbound test:** after that call, open that number's lead card in
+  `/admin/leads`. The outcome should be there. If not: 401 = key mismatch,
+  503 = env var not set in Vercel.
 
-Do not proceed until both directions are green.
+Do not proceed until both are green.
 
 ## 8. The five test calls
-
-Play each scenario straight, from your own phone:
 
 | # | You play | Riya must |
 |---|---|---|
@@ -177,33 +183,32 @@ Play each scenario straight, from your own phone:
 | 4 | Price interrogator ("kitne ka hai?" in minute 1) | Answer once honestly, bridge back to install, never repeat it |
 | 5 | Chaos: "ek sec" twice, a parent walks in | Stop instantly every time, resume from THEIR point, exit gracefully |
 
-**Score each against the Moments of Truth:** first 10 seconds human? · first
+**Score each on the Moments of Truth:** first 10 seconds human? · first
 question a story, not an interview? · stopped mid-word on interruption? ·
 admitted a limit or a "pata nahi"? · install patient, one step at a time? ·
-Buddy earned-or-absent, never forced? · closed on ONE next step? · CRM
-fields filled correctly afterward?
+Buddy earned-or-absent? · closed on ONE next step? · CRM fields filled?
 
-**Launch gate: 4 of 5 calls pass all eight.** Below that, the failing
-transcript comes back to me, the responsible asset gets a v1.1, the prompt
-re-compresses, re-test. No soft launch past a failing gate — the leads list
-is finite and first impressions don't retry.
+**Launch gate: 4 of 5 pass all eight.** Below that, the failing transcript
+comes back to me, the responsible asset gets a v1.1, the prompt
+re-compresses, re-test. No soft launch past a failing gate.
 
 ## 9. Go live
 
-- **New signups** are already automatic: signup → queued → daily flush cron
-  → Expedify calls anyone who hasn't installed + enabled notifications.
-- **Existing students**, first real batch: 20 leads maximum, from the sales
-  queue —
-  `https://careerrai.in/api/admin/expedify-followups?limit=20` (dry run,
-  shows exactly who would be dialled) then `&send=1` to actually dial. It
-  skips the #1 hottest lead for a personal call, and holds a 14-day cooldown
-  per student.
+- **New signups** are already automatic: signup → queued → daily flush cron →
+  Expedify calls anyone who hasn't installed and enabled notifications.
+- **Existing students**, first batch of 20:
+  `https://careerrai.in/api/admin/expedify-followups?limit=20` (dry run —
+  shows exactly who would be dialled), then `&send=1` to dial. Skips the #1
+  hottest lead for a personal call; 14-day cooldown per student.
 - Read all 20 transcripts before batch two. Every surprise updates an asset;
-  the assets version, the prompt re-compresses, Riya improves per batch.
+  assets version, prompt re-compresses, Riya improves per batch.
+- **Automation → Executions** holds the run history of the 173 calls already
+  placed. If recordings or transcripts are kept there, that is real data we
+  can learn from tonight — worth more than another document.
 
 ---
-*v1.1 — 7 Aug 2026. Sources: EXPEDIFY-KB.md · EXPEDIFY-QUALIFICATION.md ·
-EXPEDIFY-BEHAVIOR.md · EXPEDIFY-CONVERSION.md · EXPEDIFY-PROMPT-RULES.md.
-Code: `lib/expedify.ts` (outbound) · `api/expedify/outcome` +
-`api/expedify/callback` (inbound) · `lib/call-feedback.ts` (one shape for
-what a call leaves behind) · `api/admin/expedify-test` (verification).*
+*v1.2 — 8 Aug 2026. Written against the live dashboard. Sources:
+EXPEDIFY-KB.md · EXPEDIFY-QUALIFICATION.md · EXPEDIFY-BEHAVIOR.md ·
+EXPEDIFY-CONVERSION.md · EXPEDIFY-PROMPT-RULES.md. Code: `lib/expedify.ts` ·
+`lib/student-brief.ts` · `api/expedify/outcome` · `api/expedify/callback` ·
+`lib/call-feedback.ts` · `api/admin/expedify-test`.*
