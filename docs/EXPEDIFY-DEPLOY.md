@@ -152,6 +152,24 @@ Field-name variants are accepted (`lead_phone`/`contact_phone`/`mobile`;
 be `true`/`"yes"`/`1`, and the raw payload is always stored in
 `expedify_events` even if a name is unrecognised. Nothing is lost.
 
+**Where the field values come from.** `Transform Data` only JSON-parses
+`{{llmintegration_1.output}}` — it invents nothing. So the keys available to
+the webhook are exactly the keys the **LLM Integration** node is told to
+extract from the transcript. To see the real ones, open the workflow's
+**Executions** tab, pick a past run, and read that node's output.
+
+To add ours, append this to the LLM Integration node's extraction
+instructions (keep whatever it already extracts):
+
+> Also return these keys:
+> `lead_type` — one of: student, working, repeater, coaching, parent, wrong
+> `installed` — true only if the app reached their home screen during THIS call, else false
+> `plan_opened` — true only if they opened today's plan during THIS call, else false
+> `next_step` — the one agreed next action with its time, under 15 words
+> `emotional_trigger` — the student's OWN words for their main struggle, verbatim, else ""
+> `drop_reason` — if they had stopped using the app, why, in their words, else ""
+> Use false for installed/plan_opened only when you are sure it did not happen; if the call never reached that point, use false.
+
 **What it unlocks:** every outcome lands on the student's profile → lead
 cards and the leads Excel (new columns: lead type, installed, plan opened,
 next step) → install rate per lead type, day-1 completion of called students,
