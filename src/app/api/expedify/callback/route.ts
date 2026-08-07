@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
-import { mergeCallFeedback, type PriorFeedback } from '@/lib/call-feedback';
+import { mergeCallFeedback, parseBool, type PriorFeedback } from '@/lib/call-feedback';
 
 // Inbound webhook for Expedify's post-call workflow: after every AI call,
 // Expedify POSTs the outcome here and it lands on the student's profile —
@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
     notes: clean(b.notes, 500),                      // founder_note / verbatim quote
     event: clean(b.event, 40) ?? 'callback',
     at: new Date().toISOString(),
+    // Riya's post-call record — same fields the /outcome pipe accepts, so the
+    // two inbound routes can never disagree about what a call produced.
+    lead_type: clean(b.lead_type, 20) ?? clean(b.student_type, 20),
+    installed: parseBool(b.installed ?? b.app_installed),
+    plan_opened: parseBool(b.plan_opened ?? b.plan_seen),
+    next_step: clean(b.next_step, 200) ?? clean(b.next_action, 200),
   };
 
   const admin = createAdminClient();

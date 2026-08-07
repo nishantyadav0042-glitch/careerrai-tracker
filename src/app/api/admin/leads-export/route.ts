@@ -39,12 +39,16 @@ export async function GET() {
     return days >= 3 ? 'D - dormant' : 'B - active logger';
   };
 
+  // A tri-state the spreadsheet can read: yes / no / (unknown).
+  const yesNoBlank = (v: boolean | null | undefined) => (v === true ? 'yes' : v === false ? 'no' : '');
+
   const header = [
     'Name', 'Phone', 'Email', 'Type', 'Signed up', 'Journey', 'App installed',
     'Notifications on', 'Source', 'Target date', 'Hours/day', 'Pain points',
     'Wants buddy', 'Has buddy', 'College', 'Target %ile', 'Attempt year',
     'Category', 'Dream college', 'Weakest section', 'Last log',
     'AI call', 'Disposition', 'Drop reason', 'Momentum (0-5)', 'Call notes',
+    'Call: lead type', 'Call: installed', 'Call: plan opened', 'Call: next step',
   ];
   const lines = [header.join(',')];
   for (const r of rows ?? []) {
@@ -71,6 +75,13 @@ export async function GET() {
       csvCell(readCallFeedback(r.call_feedback)?.drop_reason ?? ''),
       csvCell(readCallFeedback(r.call_feedback)?.momentum_score ?? ''),
       csvCell(readCallFeedback(r.call_feedback)?.notes ?? ''),
+      // What the AI call actually produced. 'installed'/'plan opened' stay
+      // blank when the agent didn't report them — blank means unknown, which
+      // is not the same as 'no' and must not read as one.
+      csvCell(readCallFeedback(r.call_feedback)?.lead_type ?? ''),
+      csvCell(yesNoBlank(readCallFeedback(r.call_feedback)?.installed)),
+      csvCell(yesNoBlank(readCallFeedback(r.call_feedback)?.plan_opened)),
+      csvCell(readCallFeedback(r.call_feedback)?.next_step ?? ''),
     ].join(','));
   }
 

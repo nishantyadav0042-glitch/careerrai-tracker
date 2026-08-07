@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeCallFeedback, readCallFeedback, expedifyStatusBadge } from './call-feedback';
+import { mergeCallFeedback, readCallFeedback, expedifyStatusBadge, parseBool } from './call-feedback';
 
 describe('mergeCallFeedback', () => {
   it('records a first outcome flat, where the Excel export reads it', () => {
@@ -54,6 +54,51 @@ describe('mergeCallFeedback', () => {
     }
     expect(acc.log!.length).toBeLessThanOrEqual(20);
     expect(acc.notes).toBe('call 30');
+  });
+});
+
+describe("Riya's post-call record", () => {
+  it('captures what the call actually produced', () => {
+    const r = mergeCallFeedback(null, {
+      lead_type: 'working', installed: true, plan_opened: true,
+      next_step: 'Saturday 6pm callback', event: 'call_report', at: '2026-08-07T12:00:00Z',
+    });
+    expect(r.lead_type).toBe('working');
+    expect(r.installed).toBe(true);
+    expect(r.plan_opened).toBe(true);
+    expect(r.next_step).toBe('Saturday 6pm callback');
+  });
+
+  it('a later no-answer does not erase that they installed', () => {
+    // The whole point of the merge: the second call knows less, not more.
+    const first = mergeCallFeedback(null, {
+      installed: true, plan_opened: true, lead_type: 'student', at: '2026-08-07T12:00:00Z',
+    });
+    const second = mergeCallFeedback(first, { disposition: 'NO_ANSWER', at: '2026-08-08T12:00:00Z' });
+    expect(second.installed).toBe(true);
+    expect(second.plan_opened).toBe(true);
+    expect(second.lead_type).toBe('student');
+  });
+
+  it('an explicit false is recorded, not treated as missing', () => {
+    // `false ?? previous` must NOT fall through to the previous value —
+    // "they did not install today" is an answer, and the funnel depends on it.
+    const first = mergeCallFeedback(null, { installed: true, at: '2026-08-07T12:00:00Z' });
+    const second = mergeCallFeedback(first, { installed: false, at: '2026-08-08T12:00:00Z' });
+    expect(second.installed).toBe(false);
+  });
+
+  it('reads the boolean shapes a webhook actually sends', () => {
+    expect(parseBool(true)).toBe(true);
+    expect(parseBool('yes')).toBe(true);
+    expect(parseBool('TRUE')).toBe(true);
+    expect(parseBool(1)).toBe(true);
+    expect(parseBool('no')).toBe(false);
+    expect(parseBool(0)).toBe(false);
+    // Unknown stays unknown — never a silent "no".
+    expect(parseBool('maybe')).toBeNull();
+    expect(parseBool(undefined)).toBeNull();
+    expect(parseBool(null)).toBeNull();
   });
 });
 

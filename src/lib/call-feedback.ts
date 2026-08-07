@@ -34,8 +34,39 @@ export interface CallFeedback {
   event: string | null;
   /** When we recorded it. */
   at: string;
+
+  // ── What Riya records after every call (EXPEDIFY-RIYA-PROMPT.txt) ──────────
+  // The agent is instructed to report exactly these, and the two outcomes
+  // below are the ones the first call is FOR. Without them the call loop is
+  // write-only in the direction that matters: we would know a call happened
+  // and never know whether it produced a student.
+  /** student · working · repeater · coaching · parent · wrong */
+  lead_type: string | null;
+  /** Did the app reach their home screen on this call? */
+  installed: boolean | null;
+  /** Did they open today's plan — the Day-1 moment? */
+  plan_opened: boolean | null;
+  /** The ONE agreed next action, with its time. */
+  next_step: string | null;
+
   /** Previous calls, oldest first. Capped — this is a summary, not an archive. */
   log?: CallFeedbackEntry[];
+}
+
+/**
+ * Webhooks send booleans as booleans, as "true"/"false", as "yes"/"no", and as
+ * 1/0 — depending on which node in their builder produced the field. Accept
+ * all of it; anything unrecognised stays null rather than becoming a false
+ * "no", because a missing answer and a "no" mean different things here.
+ */
+export function parseBool(v: unknown): boolean | null {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v === 1 ? true : v === 0 ? false : null;
+  if (typeof v !== 'string') return null;
+  const s = v.trim().toLowerCase();
+  if (['true', 'yes', 'y', '1', 'haan', 'done', 'installed'].includes(s)) return true;
+  if (['false', 'no', 'n', '0', 'nahi', 'not_done'].includes(s)) return false;
+  return null;
 }
 
 const MAX_LOG = 20;
@@ -83,6 +114,13 @@ export function mergeCallFeedback(
     notes: pick('notes'),
     event: pick('event'),
     at: incoming.at,
+    lead_type: pick('lead_type'),
+    // Never un-install a student: a later NO_ANSWER carries no install flag,
+    // and `pick` would keep the old true anyway — but an explicit false from a
+    // second call is real information and does overwrite.
+    installed: pick('installed'),
+    plan_opened: pick('plan_opened'),
+    next_step: pick('next_step'),
     ...(log.length ? { log } : {}),
   };
 }
@@ -92,7 +130,8 @@ export function readCallFeedback(value: unknown): CallFeedback | null {
   if (!value) return null;
   if (typeof value === 'string') {
     return { disposition: null, reason_code: null, drop_reason: null, momentum_score: null,
-             emotional_trigger: null, notes: value, event: null, at: '' };
+             emotional_trigger: null, notes: value, event: null, at: '',
+             lead_type: null, installed: null, plan_opened: null, next_step: null };
   }
   if (typeof value !== 'object' || Array.isArray(value)) return null;
   const v = value as Partial<CallFeedback>;
@@ -105,6 +144,10 @@ export function readCallFeedback(value: unknown): CallFeedback | null {
     notes: v.notes ?? null,
     event: v.event ?? null,
     at: v.at ?? '',
+    lead_type: v.lead_type ?? null,
+    installed: v.installed ?? null,
+    plan_opened: v.plan_opened ?? null,
+    next_step: v.next_step ?? null,
     ...(Array.isArray(v.log) ? { log: v.log } : {}),
   };
 }

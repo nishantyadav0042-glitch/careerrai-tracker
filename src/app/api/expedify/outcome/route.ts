@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
-import { mergeCallFeedback, type PriorFeedback } from '@/lib/call-feedback';
+import { mergeCallFeedback, parseBool, type PriorFeedback } from '@/lib/call-feedback';
 
 // Inbound Expedify webhook — the RETURN pipe. Their workflow POSTs here after
 // every call attempt / reschedule / CRM contact update, and everything lands in
@@ -79,6 +79,10 @@ export async function POST(request: NextRequest) {
       const summary = str(payload.agent_summary) ?? str(payload.notes) ?? str(payload.summary);
       const momentum = typeof payload.momentum_score === 'number'
         ? Math.max(0, Math.min(5, payload.momentum_score)) : null;
+      // Riya's own post-call record (EXPEDIFY-RIYA-PROMPT.txt). Field-name
+      // variants are accepted for the same reason the phone and event fields
+      // are: whichever label their builder ends up emitting should just work,
+      // and the raw payload is audited below regardless.
       const feedback = mergeCallFeedback(data?.call_feedback as PriorFeedback, {
         disposition: str(payload.disposition) ?? outcome ?? category,
         reason_code: str(payload.reason_code),
@@ -88,6 +92,10 @@ export async function POST(request: NextRequest) {
         notes: summary,
         event,
         at: new Date().toISOString(),
+        lead_type: str(payload.lead_type) ?? str(payload.student_type),
+        installed: parseBool(payload.installed ?? payload.app_installed),
+        plan_opened: parseBool(payload.plan_opened ?? payload.plan_seen),
+        next_step: str(payload.next_step) ?? str(payload.next_action),
       });
 
       await admin.from('profiles').update({
