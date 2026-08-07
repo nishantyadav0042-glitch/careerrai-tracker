@@ -12,7 +12,7 @@ import { ArrowLeft, HeartHandshake } from 'lucide-react';
 interface Item {
   id: string; kind: string; topic: string | null; status: string; text: string;
   displayName: string | null; yes: number; no: number; totalVotes: number;
-  helpfulPct: number | null; daysInPipeline: number; verdict: string;
+  helpfulPct: number | null; daysInPipeline: number;
 }
 interface Stats {
   funnel: { dau: number; opened: number; openRate: number | null; voted: number; voteRate: number | null; contributed: number; contributionRate: number | null; sharesBlocked: number };
@@ -20,13 +20,15 @@ interface Stats {
   items: Item[];
   topics: { topic: string; items: number; votes: number; helpfulPct: number | null }[];
   retention: { everVoters: number; votersActiveLast7d: number; note: string | null };
-  bars: { minVotes: number; featurePct: number; archivePct: number };
 }
 
-const VERDICT_TONE: Record<string, string> = {
-  feature: 'bg-emerald-100 text-emerald-700',
-  archive: 'bg-stone-100 text-stone-500',
-  drop: 'bg-rose-100 text-rose-600',
+// Status = where the item is in the ROTATION, never a grade: 'voting' is on
+// the ballot now, 'archived' is resting between ballot turns, 'featured' is
+// legacy permanent shelf stock. All three are equally Top Pick-eligible.
+const STATUS_TONE: Record<string, string> = {
+  voting: 'bg-emerald-50 text-emerald-700',
+  featured: 'bg-amber-50 text-amber-700',
+  archived: 'bg-stone-100 text-stone-500',
 };
 
 export default function DailyPickDashboard() {
@@ -80,11 +82,11 @@ export default function DailyPickDashboard() {
           <p className="text-[11px] text-stone-500">{f.sharesBlocked} share attempt(s) blocked by the safety gate in the last 24h.</p>
         )}
 
-        {/* Content quality */}
+        {/* The queue — in pick order */}
         <section className="rounded-2xl border border-stone-200 bg-white p-4">
-          <h2 className="text-sm font-bold text-stone-900">Content quality</h2>
+          <h2 className="text-sm font-bold text-stone-900">The queue — in Top Pick order</h2>
           <p className="mt-0.5 text-[11px] text-stone-500">
-            Judged past {stats.bars.minVotes} votes: ≥{stats.bars.featurePct}% → feature · {stats.bars.archivePct}–{stats.bars.featurePct}% → archive · below → drop
+            No bar, no minimum votes. Max votes tops the slot for exactly one day; zero-vote items rise by queue order. Nothing is ever judged or dropped.
           </p>
           <div className="mt-2 space-y-1">
             {stats.items.map((it) => (
@@ -94,9 +96,11 @@ export default function DailyPickDashboard() {
                   <p className="truncate text-[12px] text-stone-800">{it.text}</p>
                   <p className="text-[10px] text-stone-400">{it.topic ?? '—'} · as “{it.displayName}” · day {it.daysInPipeline}</p>
                 </div>
-                <span className="shrink-0 font-mono text-[11px] text-stone-500">👍{it.yes} 👎{it.no}</span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${VERDICT_TONE[it.verdict] ?? 'bg-amber-50 text-amber-700'}`}>
-                  {it.helpfulPct != null ? `${it.helpfulPct}% · ${it.verdict}` : it.verdict}
+                <span className="shrink-0 font-mono text-[11px] text-stone-500">
+                  👍{it.yes} 👎{it.no}{it.helpfulPct != null ? ` · ${it.helpfulPct}%` : ''}
+                </span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_TONE[it.status] ?? 'bg-stone-100 text-stone-500'}`}>
+                  {it.status === 'voting' ? 'on ballot' : it.status === 'archived' ? 'resting' : it.status}
                 </span>
               </div>
             ))}

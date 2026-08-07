@@ -11,13 +11,12 @@
 
 export const VOTING_WINDOW_HOURS = 72;
 
-// Graduation bars (founder, 25 Jul). Judged only past MIN_VOTES_TO_JUDGE —
-// below that a percentage is noise. ≥85% helpful → featured pool; 65–85% →
-// archive (kept, not surfaced); <65% → dropped. Phase 2 automates this;
-// today the founder dashboard shows each item against these bars.
-export const MIN_VOTES_TO_JUDGE = 5;
-export const FEATURE_BAR = 0.85;
-export const ARCHIVE_BAR = 0.65;
+// There is NO vote bar and NO minimum-votes floor — anywhere. Founder, 29 Jul
+// ("don't set a bar; maximum votes gets the top position") and again 7 Aug,
+// after the graduation bars — killed in the pick — were found still narrating
+// the dashboard and still gating the recycle. Votes ORDER the queue; they
+// never gate, judge, or drop anything. The only content gate in this system
+// is the safety check at submission.
 export const MAX_SUBMISSIONS_PER_DAY = 1; // BeReal rule: the limit creates quality
 
 // Upload constraints — ONE declaration for the client picker and the server
@@ -42,33 +41,28 @@ export const MAX_TIP_CHARS = 150;
 // can make, and it happens exactly when we can least afford it.
 //
 // So the pipeline recycles instead of expiring:
-//   voting (72h) → graded → 'featured' if it earned it (PERMANENT, no expiry)
-//                          → 'archived' if it didn't
-//   and if the active shelf ever falls below the minimum, the best archived
-//   items come back with a fresh window rather than showing a blank page.
+//   voting (72h) → 'archived' when the window closes — a finished ballot turn,
+//   NOT a judgment. Archived items stay fully eligible for the Top Pick and
+//   come back onto the ballot with a fresh window whenever the active shelf
+//   falls below the minimum, most-voted first.
 //
-// Consequence: the shelf grows with every good contribution and can only be
-// empty if literally nothing has ever been good — never because time passed.
+// Consequence: the shelf can only be empty if nothing was ever submitted —
+// never because time passed, and never because an item "failed" a bar.
 export const MIN_ACTIVE_QUESTIONS = 10;
 export const MIN_ACTIVE_TIPS = 10;
 
 /**
- * The one graduation rule. Two admin surfaces used to rank the same voting
- * pool by two different rules (net votes vs the helpful%% bars) — a 3-yes/0-no
- * item topped one screen while the other said "needs 2 more votes".
+ * The one vote arithmetic, shared by every surface so no two screens can
+ * disagree about the same queue. It DESCRIBES the votes — total and helpful%
+ * — and issues no verdict, because there is none to issue: votes order the
+ * Daily Pick queue and nothing else. helpfulPct is null only when literally
+ * nobody has voted (0/0 has no percentage, honest or otherwise).
  */
-export function gradeSubmission(yes: number, no: number): {
+export function tallySubmission(yes: number, no: number): {
   total: number; helpfulPct: number | null;
-  verdict: 'feature' | 'archive' | 'drop' | 'pending';
 } {
   const total = yes + no;
-  if (total < MIN_VOTES_TO_JUDGE) return { total, helpfulPct: null, verdict: 'pending' };
-  const helpfulPct = Math.round((yes / total) * 100);
-  return {
-    total, helpfulPct,
-    verdict: helpfulPct >= FEATURE_BAR * 100 ? 'feature'
-      : helpfulPct >= ARCHIVE_BAR * 100 ? 'archive' : 'drop',
-  };
+  return { total, helpfulPct: total > 0 ? Math.round((yes / total) * 100) : null };
 }
 
 // The vote is phrased as HELPING, not judging (founder, 25 Jul): the student

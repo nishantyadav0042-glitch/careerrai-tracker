@@ -890,6 +890,39 @@ observed failure shapes, plus the real file as a fixture.
 
 ---
 
+## Incident #25 — a rule the founder killed kept running in three other files (2026-08-07)
+
+**Symptom.** The founder, seeing the Daily Pick dashboard say "needs N more
+votes": *"I told you there is no cap for top pick — why are you still working
+on minimum 5 cap."* Second time the same instruction had to be given.
+
+**What happened.** On 29 Jul the founder replaced the graduation-bars model
+(5-vote minimum, ≥85% → feature, 65–85% → archive, below → drop) with the
+no-bar rule: votes ORDER the queue, they never gate it. The fix (`9aa8a12`)
+rewrote the *pick* — and stopped there. The bars model kept living in three
+other places: `community-recycle.ts` (expired items still judged against the
+bars; under-5-vote items extended forever — the cap, live and gating),
+`daily-pick-stats` + the founder dashboard (still narrating verdicts and
+"needs N more votes"), and the challenges admin (still ranking by
+`gradeSubmission`). To the founder, the dashboard IS the system — a dead
+model still on screen is the cap still existing, and they were half right:
+it wasn't just on screen, it was still archiving items off the ballot.
+
+**The lesson.** Killing a rule means killing every surface that enforces OR
+DISPLAYS it, found by grepping for the rule's names, not by fixing the file
+the complaint pointed at. This is Incident #23's twin: a rule written in N
+places drifts N−1 times — and a rule *deleted* in one of N places survives
+in the other N−1. The checklist for retiring any rule: grep every identifier
+of the old model, follow every import, and only then say it's gone.
+
+**Teeth.** `gradeSubmission` / `MIN_VOTES_TO_JUDGE` / `FEATURE_BAR` /
+`ARCHIVE_BAR` deleted from the codebase; expiry now means "ballot turn over"
+(→ archived, still fully pick-eligible), never a judgment. Guard test
+`community-no-bar.guard.test.ts` greps the tree for the dead identifiers —
+reintroducing the model fails CI by name.
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a

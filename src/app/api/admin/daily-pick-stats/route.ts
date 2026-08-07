@@ -1,14 +1,15 @@
 import { requireAdminCtx as requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
-import { MIN_VOTES_TO_JUDGE, FEATURE_BAR, ARCHIVE_BAR, gradeSubmission } from '@/lib/community-pipeline';
+import { tallySubmission } from '@/lib/community-pipeline';
 
 export const maxDuration = 60;
 
 // The founder dashboard numbers for Daily Pick — the one screen that decides
 // whether this feature lives or dies. Every figure here comes from events we
-// actually log; where the data is too thin to be honest (helpful% under 5
-// votes, retention in week one) the API says so instead of inventing a
-// number.
+// actually log; where the data is too thin to be honest (retention in week
+// one) the API says so instead of inventing a number. There is NO vote bar
+// anywhere in this system (founder, 29 Jul + 7 Aug): items are listed in
+// queue order — the exact order the Top Pick uses — never judged.
 
 
 export async function GET() {
@@ -48,9 +49,13 @@ export async function GET() {
     if (v.helpful) t.yes += 1; else t.no += 1;
     tally.set(v.submission_id as string, t);
   }
+  // Listed in QUEUE ORDER — most votes first, oldest breaks ties — because
+  // that IS the Daily Pick rule (founder, 29 Jul: no bar, max votes tops the
+  // slot). No verdicts, no "needs N more votes": nothing here is waiting to
+  // be judged, it is waiting for its day on top.
   const items = (subs ?? []).map((s) => {
     const t = tally.get(s.id as string) ?? { yes: 0, no: 0 };
-    const { total, helpfulPct, verdict } = gradeSubmission(t.yes, t.no);
+    const { total, helpfulPct } = tallySubmission(t.yes, t.no);
     return {
       id: s.id, kind: s.kind, topic: s.topic, status: s.status,
       text: (s.payload as { text?: string } | null)?.text?.slice(0, 90) ?? '(photo)',
@@ -58,9 +63,9 @@ export async function GET() {
       yes: t.yes, no: t.no, totalVotes: total,
       helpfulPct,
       daysInPipeline: Math.floor((Date.now() - Date.parse(s.created_at as string)) / 86_400_000),
-      verdict: verdict === 'pending' ? `needs ${MIN_VOTES_TO_JUDGE - total} more votes` : verdict,
+      createdAt: s.created_at as string,
     };
-  }).sort((a, b) => (b.helpfulPct ?? -1) - (a.helpfulPct ?? -1) || b.totalVotes - a.totalVotes);
+  }).sort((a, b) => b.totalVotes - a.totalVotes || Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
   // ── Topic intelligence ──
   const byTopic = new Map<string, { n: number; yes: number; no: number }>();
@@ -72,8 +77,8 @@ export async function GET() {
   }
   const topics = [...byTopic.entries()].map(([topic, t]) => ({
     topic, items: t.n, votes: t.yes + t.no,
-    helpfulPct: t.yes + t.no >= MIN_VOTES_TO_JUDGE ? Math.round((t.yes / (t.yes + t.no)) * 100) : null,
-  })).sort((a, b) => (b.helpfulPct ?? -1) - (a.helpfulPct ?? -1));
+    helpfulPct: tallySubmission(t.yes, t.no).helpfulPct,
+  })).sort((a, b) => b.votes - a.votes || (b.helpfulPct ?? -1) - (a.helpfulPct ?? -1));
 
   // ── Community Help Score (yesterday, the north star) ──
   // Unique helpful votes + unique openers: each is one moment where one
@@ -104,6 +109,5 @@ export async function GET() {
       votersActiveLast7d: votersActive,
       note: everVoters.size < 20 ? 'Voters-vs-non-voters retention needs ~a week of votes to mean anything.' : null,
     },
-    bars: { minVotes: MIN_VOTES_TO_JUDGE, featurePct: FEATURE_BAR * 100, archivePct: ARCHIVE_BAR * 100 },
   });
 }

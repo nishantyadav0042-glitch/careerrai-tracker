@@ -9,9 +9,9 @@ export const maxDuration = 60;
 // Daily at 02:00 UTC (07:30 IST) — before the 8am study day begins, so the
 // shelf is stocked by the time the first student opens Daily Pick.
 //
-// Grades every closed voting window, promotes what earned it to a permanent
-// place, archives the rest, and refills the shelf from the archive if it ever
-// fell below the minimum. Idempotent: a double-run is a no-op.
+// Closes every expired voting window (a finished ballot turn — no grading,
+// no bars), refills the shelf from the archive if it fell below the minimum,
+// then stamps today's Top Pick. Idempotent: a double-run is a no-op.
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) {

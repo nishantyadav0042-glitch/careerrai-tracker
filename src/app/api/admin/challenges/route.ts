@@ -2,7 +2,7 @@ import { requireAdminCtx as requireAdmin } from '@/lib/require-admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { activeChallengeDate } from '@/lib/challenge';
-import { gradeSubmission } from '@/lib/community-pipeline';
+import { tallySubmission } from '@/lib/community-pipeline';
 
 export const maxDuration = 30;
 
@@ -42,28 +42,29 @@ export async function GET() {
   ]);
 
   // The ranking the community is producing — admin-only; students never see
-  // tallies. This is what decides which items graduate to featured.
+  // tallies. There is no bar and no verdict (founder, 29 Jul + 7 Aug): votes
+  // only ORDER the Daily Pick queue, so this list is shown in that exact
+  // order — total votes first, oldest first among equals (the rows arrive
+  // created_at-ascending and the sort is stable), matching the founder
+  // dashboard by construction.
   const tally = new Map<string, { yes: number; no: number }>();
   for (const v of votes ?? []) {
     const t = tally.get(v.submission_id as string) ?? { yes: 0, no: 0 };
     if (v.helpful) t.yes += 1; else t.no += 1;
     tally.set(v.submission_id as string, t);
   }
-  // Ranked by the SAME graduation rule the founder dashboard uses
-  // (gradeSubmission) — this screen previously sorted by net votes, so the
-  // two admin surfaces disagreed about the same queue.
   const pipeline = (votingRows ?? []).map((r) => {
     const t = tally.get(r.id as string) ?? { yes: 0, no: 0 };
-    const g = gradeSubmission(t.yes, t.no);
+    const g = tallySubmission(t.yes, t.no);
     return {
       id: r.id, kind: r.kind, topic: r.topic,
       text: (r.payload as { text?: string } | null)?.text ?? null,
       hasImage: !!r.image_path,
       displayName: r.display_name,
       votingEndsAt: r.voting_ends_at,
-      yes: t.yes, no: t.no, helpfulPct: g.helpfulPct, verdict: g.verdict,
+      yes: t.yes, no: t.no, totalVotes: g.total, helpfulPct: g.helpfulPct,
     };
-  }).sort((a, b) => (b.helpfulPct ?? -1) - (a.helpfulPct ?? -1) || b.yes - a.yes);
+  }).sort((a, b) => b.totalVotes - a.totalVotes);
 
   return NextResponse.json({
     activeDate: activeChallengeDate(),
