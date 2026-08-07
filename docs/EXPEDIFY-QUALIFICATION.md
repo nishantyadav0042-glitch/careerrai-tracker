@@ -1,10 +1,13 @@
 # CareerRai — AI Qualification Framework (v1.0)
 
-**Asset 2 of 3 in the Expedify system.** The Knowledge Base
-(`EXPEDIFY-KB.md`) is what the agent KNOWS. This document is how the agent
-THINKS — how it classifies a lead, decides what the call is for, and what it
-writes down afterward. Asset 3 (the Conversation Script) will show what all
-of this sounds like.
+**Asset 2 of 5 in the Expedify system — the DESIGN SPEC, not the runtime.**
+The Knowledge Base (`EXPEDIFY-KB.md`) is what Riya knows. This document is
+how CareerRai thinks about leads — the classification model, the scoring
+math, and the CRM contract. It is computed AFTER calls (from transcripts and
+CRM fields) and used by humans to audit and improve Riya; it never ships in
+the live prompt. What Riya executes on a call is the distilled runtime
+layer: `EXPEDIFY-BEHAVIOR.md` (Asset 3) + `EXPEDIFY-PROMPT-RULES.md`
+(Asset 5). Asset 4 (the Conversation Script) shows what it all sounds like.
 
 Where this document and the KB overlap, they must never disagree. Every rule
 here that touches Buddy, tone, guardrails, or dispositions defers to KB
