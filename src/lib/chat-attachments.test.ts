@@ -265,6 +265,13 @@ describe('sizes read the way a person would say them', () => {
   });
 });
 
+const ALLOWED_MIMES_FOR_GUARD = [
+  'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel', 'text/csv',
+];
+
 describe('the storage bucket allows everything the app allows', () => {
   // TWICE today an allowlist existed in two places and drifted: the DB body
   // check rejected caption-less attachments the API allowed, then the storage
@@ -273,6 +280,21 @@ describe('the storage bucket allows everything the app allows', () => {
   // CAN insist that the newest bucket migration names every MIME the app
   // accepts — so adding a type here without updating the bucket fails the
   // build instead of failing a buddy.
+  it('the chat_messages MIME constraint names every allowed mime', async () => {
+    // The FOURTH copy (7 Aug): the table's own CHECK constraint. The buddy's
+    // .xlsx passed the app, the bucket, AND the byte sniff — then died on the
+    // insert. Same rule as the bucket test: the NEWEST migration defining
+    // attachment_mime_allowed must name every MIME the app accepts.
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const dir = 'supabase/migrations';
+    const defining = readdirSync(dir)
+      .filter((f) => readFileSync(`${dir}/${f}`, 'utf8').includes('add constraint attachment_mime_allowed'))
+      .sort();
+    expect(defining.length).toBeGreaterThan(0);
+    const latest = readFileSync(`${dir}/${defining[defining.length - 1]}`, 'utf8');
+    for (const t of ALLOWED_MIMES_FOR_GUARD) expect(latest).toContain(t);
+  });
+
   it('bucket migration names every allowed mime', async () => {
     const { readFileSync, readdirSync } = await import('node:fs');
     const dir = 'supabase/migrations';
@@ -281,12 +303,6 @@ describe('the storage bucket allows everything the app allows', () => {
       .sort();
     expect(bucketMigrations.length).toBeGreaterThan(0);
     const latest = readFileSync(`${dir}/${bucketMigrations[bucketMigrations.length - 1]}`, 'utf8');
-    const mimes = [
-      'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel', 'text/csv',
-    ];
-    for (const m of mimes) expect(latest).toContain(m);
+    for (const m of ALLOWED_MIMES_FOR_GUARD) expect(latest).toContain(m);
   });
 });
