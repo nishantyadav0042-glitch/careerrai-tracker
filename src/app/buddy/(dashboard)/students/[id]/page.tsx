@@ -133,11 +133,21 @@ export default async function BuddyStudentDetailPage({
 
   const admin = createAdminClient();
 
-  const { data: student } = await admin
+  // `need_check` used to be in this select. It has NEVER been a profiles
+  // column (the /start funnel keeps it in the onboarding blob), so the query
+  // errored on every single request, `.single()` returned null, and the
+  // notFound() below turned a schema typo into a 404 for EVERY buddy opening
+  // ANY student. The error was invisible because it was never captured — hence
+  // the explicit logging now: a failed query and a missing student are
+  // different facts and must never share one silent outcome again.
+  const { data: student, error: studentError } = await admin
     .from('profiles')
-    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, pain_points, need_check, self_reported_weakest_section, syllabus_target_date')
+    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, pain_points, self_reported_weakest_section, syllabus_target_date')
     .eq('id', id)
     .single();
+  if (studentError) {
+    console.error('[buddy-student] profile query failed:', studentError.message);
+  }
   if (!student || student.buddy_id !== user.id) notFound();
 
   // eslint-disable-next-line react-hooks/purity
@@ -273,7 +283,7 @@ export default async function BuddyStudentDetailPage({
         buddyId={user.id}
         fullName={student.full_name}
         painPoints={(student.pain_points as string[] | null) ?? null}
-        needCheck={(student.need_check as string | null) ?? null}
+        needCheck={null}
         dreamColleges={(student.dream_colleges as string[] | null) ?? null}
         targetPercentile={student.target_percentile ? Number(student.target_percentile) : null}
         weakestSection={(student.self_reported_weakest_section as string | null) ?? null}
