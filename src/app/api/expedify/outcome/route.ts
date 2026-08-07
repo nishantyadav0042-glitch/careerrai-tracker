@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
 import { mergeCallFeedback, parseBool, type PriorFeedback } from '@/lib/call-feedback';
+import { flattenExpedifyPayload, pickScore } from '@/lib/expedify-payload';
 
 // Inbound Expedify webhook — the RETURN pipe. Their workflow POSTs here after
 // every call attempt / reschedule / CRM contact update, and everything lands in
@@ -41,6 +42,8 @@ export async function POST(request: NextRequest) {
   }
 
   const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  // Both dialects Expedify speaks, read as one (lib/expedify-payload).
+  const flat = flattenExpedifyPayload(payload);
 
   // Their event identifier — accept the common field names so whatever the
   // founder agrees with their team ("I will tell you the identifiers") just works.
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   // Phone — accept the likely field names, normalize to +91 E.164.
   const rawPhone =
-    str(payload.lead_phone) ?? str(payload.phone) ?? str(payload.contact_phone) ?? str(payload.mobile);
+    str(flat.lead_phone) ?? str(flat.phone) ?? str(flat.contact_phone) ?? str(flat.mobile);
   const phone = rawPhone ? normalizeIndianPhone(rawPhone) : null;
 
   const admin = createAdminClient();
@@ -64,9 +67,9 @@ export async function POST(request: NextRequest) {
 
     if (studentId) {
       // Compact status for the admin Leads card: "event · outcome · category".
-      const outcome = str(payload.outcome);
-      const category = str(payload.category);
-      const callbackAt = str(payload.callback_at);
+      const outcome = str(flat.outcome);
+      const category = str(flat.category) ?? str(flat.lead_status);
+      const callbackAt = str(flat.callback_at) ?? str(flat.callback_requested_at);
       const statusBits = [event, outcome, category, callbackAt ? `callback ${callbackAt}` : null].filter(Boolean);
 
       // call_feedback is jsonb, and this route used to write a bare STRING into
@@ -76,26 +79,24 @@ export async function POST(request: NextRequest) {
       // existing object produced "[object Object]". One shared merge now owns
       // the shape, and a sparse event can no longer erase what an earlier call
       // learned (lib/call-feedback).
-      const summary = str(payload.agent_summary) ?? str(payload.notes) ?? str(payload.summary);
-      const momentum = typeof payload.momentum_score === 'number'
-        ? Math.max(0, Math.min(5, payload.momentum_score)) : null;
-      // Riya's own post-call record (EXPEDIFY-RIYA-PROMPT.txt). Field-name
-      // variants are accepted for the same reason the phone and event fields
-      // are: whichever label their builder ends up emitting should just work,
-      // and the raw payload is audited below regardless.
+      // Riya's own post-call record (EXPEDIFY-RIYA-PROMPT.txt), plus the names
+      // their CRM extraction already uses on real calls (`pain_point`,
+      // `reason`, `lead_status`) — observed in a live 29 Jul payload. Accepting
+      // both means neither side has to be rebuilt to match the other.
+      const summary = str(flat.agent_summary) ?? str(flat.notes) ?? str(flat.summary) ?? str(flat.reason);
       const feedback = mergeCallFeedback(data?.call_feedback as PriorFeedback, {
-        disposition: str(payload.disposition) ?? outcome ?? category,
-        reason_code: str(payload.reason_code),
-        drop_reason: str(payload.drop_reason),
-        momentum_score: momentum,
-        emotional_trigger: str(payload.emotional_trigger),
+        disposition: str(flat.disposition) ?? outcome ?? category,
+        reason_code: str(flat.reason_code),
+        drop_reason: str(flat.drop_reason),
+        momentum_score: pickScore(flat, 'momentum_score'),
+        emotional_trigger: str(flat.emotional_trigger) ?? str(flat.pain_point),
         notes: summary,
         event,
         at: new Date().toISOString(),
-        lead_type: str(payload.lead_type) ?? str(payload.student_type),
-        installed: parseBool(payload.installed ?? payload.app_installed),
-        plan_opened: parseBool(payload.plan_opened ?? payload.plan_seen),
-        next_step: str(payload.next_step) ?? str(payload.next_action),
+        lead_type: str(flat.lead_type) ?? str(flat.student_type),
+        installed: parseBool(flat.installed ?? flat.app_installed),
+        plan_opened: parseBool(flat.plan_opened ?? flat.plan_seen),
+        next_step: str(flat.next_step) ?? str(flat.next_action),
       });
 
       await admin.from('profiles').update({
@@ -107,8 +108,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Always audit the raw event. Dedupe on their lead id + attempt + event when present.
-  const leadId = str(payload.expedify_lead_id) ?? str(payload.lead_id) ?? str(payload.contact_id);
-  const attempt = payload.attempt_number != null ? String(payload.attempt_number) : null;
+  // NOT keyed on their `entity_id`: contact.updated fires repeatedly for the
+  // same contact and carries no attempt number, so an entity-keyed dedupe
+  // would collapse every later call onto the first row and silently discard
+  // the newer outcomes. Only ids that identify one call attempt belong here.
+  const leadId = str(flat.expedify_lead_id) ?? str(flat.lead_id) ?? str(flat.contact_id);
+  const attempt = flat.attempt_number != null ? String(flat.attempt_number) : null;
   const dedupeKey = leadId ? [leadId, attempt ?? 'x', event].join(':') : null;
 
   const { error: insertError } = await admin.from('expedify_events').insert({
