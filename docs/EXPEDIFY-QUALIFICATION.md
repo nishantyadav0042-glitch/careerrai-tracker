@@ -7,7 +7,9 @@ math, and the CRM contract. It is computed AFTER calls (from transcripts and
 CRM fields) and used by humans to audit and improve Riya; it never ships in
 the live prompt. What Riya executes on a call is the distilled runtime
 layer: `EXPEDIFY-BEHAVIOR.md` (Asset 3) + `EXPEDIFY-PROMPT-RULES.md`
-(Asset 5). Asset 4 (the Conversation Script) shows what it all sounds like.
+(Asset 5). `EXPEDIFY-CONVERSION.md` (Asset 4) is why students decide at
+all. The Conversation Script is written last, from all five — an
+implementation artifact, not a foundation.
 
 Where this document and the KB overlap, they must never disagree. Every rule
 here that touches Buddy, tone, guardrails, or dispositions defers to KB

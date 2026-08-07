@@ -168,5 +168,6 @@ warm close.
 ---
 *v1.0 — 7 Aug 2026. Runtime companion to EXPEDIFY-PROMPT-RULES.md (the laws)
 and EXPEDIFY-KB.md (the knowledge, via retrieval). The Qualification
-Framework defines what gets computed post-call and what lands in CRM — it is
-the spec this engine was distilled from, and it never ships in the prompt.*
+Framework defines what gets computed post-call; EXPEDIFY-CONVERSION.md
+defines why students decide (triggers, windows, trust ladder) — both are
+thinking layers this engine distills, and neither ships in the prompt.*
