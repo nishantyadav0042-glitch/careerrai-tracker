@@ -29,19 +29,61 @@ export interface ExpedifyLead {
 // production signup callers ignore it.
 export interface ExpedifyResult {
   configured: boolean;      // false = env vars missing, nothing sent
-  ok: boolean;
+  ok: boolean;              // handed off AND their workflow actually ran
   httpStatus: number | null;
   responseBody: string | null;
   error: string | null;
+  /** Their workflow's own verdict: true ran, false failed, null unstated. */
+  workflowOk: boolean | null;
+  /** The failing node/message they named, e.g. "crmmanager_1: Operation failed". */
+  workflowError: string | null;
+}
+
+/**
+ * Expedify answers **200 OK even when the workflow behind the webhook failed**:
+ *
+ *   {"status":"failed","message":"0 of 1 workflows succeeded",
+ *    "results":[{"workflow_name":"Contact Updates Webhook","success":false,
+ *                "error":"crmmanager_1: Operation failed"}]}
+ *
+ * Observed live on 8 Aug: the lead was "accepted", no contact was created, the
+ * Database Change Trigger never fired and no call was placed — while we wrote
+ * `expedify_status: 'sent'`. Every "calls dispatched" figure since July counted
+ * HTTP acceptances, not calls. The body is the truth; the status line is not.
+ */
+export function readWorkflowVerdict(body: string | null): { ok: boolean | null; error: string | null } {
+  if (!body) return { ok: null, error: null };
+  try {
+    const p = JSON.parse(body) as {
+      status?: unknown;
+      results?: { success?: unknown; error?: unknown; workflow_name?: unknown }[];
+    };
+    const failing = Array.isArray(p.results)
+      ? p.results.find((r) => r?.success === false)
+      : undefined;
+    const named = failing
+      ? [failing.workflow_name, failing.error].filter((v) => typeof v === 'string').join(': ') || null
+      : null;
+    if (typeof p.status === 'string') {
+      return { ok: p.status.toLowerCase() !== 'failed', error: named };
+    }
+    if (failing) return { ok: false, error: named };
+  } catch {
+    // Not JSON — fall through to the text shapes they also emit.
+  }
+  if (/no workflows? connected/i.test(body)) return { ok: false, error: 'no workflow connected to this webhook' };
+  const counted = body.match(/(\d+)\s+of\s+(\d+)\s+workflows?\s+succeeded/i);
+  if (counted) return { ok: Number(counted[1]) > 0, error: counted[0] };
+  return { ok: null, error: null };
 }
 
 export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResult> {
   const url = process.env.EXPEDIFY_WEBHOOK_URL;
-  if (!url) return { configured: false, ok: false, httpStatus: null, responseBody: null, error: 'EXPEDIFY_WEBHOOK_URL not set' };
+  if (!url) return { configured: false, ok: false, httpStatus: null, responseBody: null, error: 'EXPEDIFY_WEBHOOK_URL not set', workflowOk: null, workflowError: null };
 
   const key = process.env.EXPEDIFY_API_KEY;
   const b = lead.brief;
-  const result: ExpedifyResult = { configured: true, ok: false, httpStatus: null, responseBody: null, error: null };
+  const result: ExpedifyResult = { configured: true, ok: false, httpStatus: null, responseBody: null, error: null, workflowOk: null, workflowError: null };
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -76,10 +118,18 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResu
       }),
       signal: AbortSignal.timeout(8000),
     });
-    result.ok = res.ok;
     result.httpStatus = res.status;
     result.responseBody = (await res.text().catch(() => '')).slice(0, 2000);
+    // Their 200 is only an acceptance receipt. The workflow's own verdict is
+    // in the body, and a failed workflow means no contact, no trigger, no call.
+    const verdict = readWorkflowVerdict(result.responseBody);
+    result.workflowOk = verdict.ok;
+    result.workflowError = verdict.error;
+    result.ok = res.ok && verdict.ok !== false;
     if (!res.ok) console.error(`[expedify] lead hand-off HTTP ${res.status}:`, result.responseBody);
+    else if (verdict.ok === false) {
+      console.error('[expedify] accepted but workflow FAILED — no call placed:', verdict.error, result.responseBody);
+    }
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err);
     console.error('[expedify] lead hand-off failed:', err);
@@ -90,7 +140,13 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResu
     try {
       const admin = createAdminClient();
       await admin.from('profiles')
-        .update({ expedify_status: result.ok ? 'sent' : 'failed', expedify_synced_at: new Date().toISOString() })
+        .update({
+          // 'workflow_failed' is deliberately its own state: the hand-off was
+          // fine, THEIR automation broke. Lumping it into 'failed' would send
+          // us re-checking our own API key for a problem on their canvas.
+          expedify_status: result.ok ? 'sent' : result.workflowOk === false ? 'workflow_failed' : 'failed',
+          expedify_synced_at: new Date().toISOString(),
+        })
         .eq('id', lead.studentId);
     } catch (err) {
       console.error('[expedify] status write failed:', err);
