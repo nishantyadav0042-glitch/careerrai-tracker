@@ -297,6 +297,30 @@ describe('one owner covers the floor too', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  // The floor crosses three files between the student's tap and their plan,
+  // and every crossing is a place it can be silently dropped. It already was:
+  // the column reached the profile and NEITHER plan caller selected it, so
+  // the answer was stored and ignored — the same shape as the phantom
+  // weakest_section column that 404'd every buddy. Each hop is asserted here
+  // because none of them fails loudly on its own.
+  it('the floor survives every hop: chip → signup payload → profile → plan', () => {
+    const screen = readFileSync('src/app/start/screens/screen-quick-facts.tsx', 'utf8');
+    const otp = readFileSync('src/app/api/auth/verify-phone-otp/route.ts', 'utf8');
+
+    // hop 1 — the screen emits the agreed key, not the column name
+    expect(screen).toMatch(/bad_day_floor:\s*floor/);
+    // hop 2 — signup replays it through the one writer, never a raw assignment
+    expect(otp).toMatch(/setBadDayFloor\(\s*onboarding\.bad_day_floor\s*\)/);
+    // hop 3 — both plan callers must SELECT the column, or the floor is
+    // written and then read as null on every single day
+    for (const f of ['src/app/api/routine/today/route.ts', 'src/lib/routine-plan.ts']) {
+      expect(readFileSync(f, 'utf8')).toContain('bad_day_floor_minutes');
+    }
+    // hop 4 — the fixture is what the schema guard compares the live table to
+    expect(readFileSync('src/lib/__fixtures__/profiles-columns.json', 'utf8'))
+      .toContain('bad_day_floor_minutes');
+  });
 });
 
 describe('floor days are small, few-task, and exactly the size promised', () => {

@@ -92,8 +92,8 @@ export function SixPromises({ onNext, ctaLabel = 'Turn on my reminders →' }: {
           Reminders are how we keep #4 and #6 — revision on time, and a nudge when you go quiet.
         </p>
         <p className="px-2 pt-1 text-center text-[11.5px] leading-snug text-stone-500">
-          In coaching? <b className="text-stone-700">Send a photo of your timetable</b> in the app and we&apos;ll
-          plan around your classes — saves you hours every week. Or do it later.
+          In coaching? <b className="text-stone-700">Send a photo of your timetable</b>{' '}
+          in the app and we&apos;ll plan around your classes — saves you hours every week. Or do it later.
         </p>
       </div>
     </div>

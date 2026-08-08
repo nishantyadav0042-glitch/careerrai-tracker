@@ -76,7 +76,11 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           A few quick facts.
         </h1>
-        <p className="mt-1.5 text-sm text-stone-500">Three taps — this is what shapes your daily plan.</p>
+        {/* Was "Three taps" from the day this screen had exactly three
+            questions. It has had four since the situation question was added,
+            and now the floor replaces hours — a promise the screen breaks in
+            the first two seconds is a bad way to open. */}
+        <p className="mt-1.5 text-sm text-stone-500">Four taps — this is what shapes your daily plan.</p>
       </div>
 
       <div>

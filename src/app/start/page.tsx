@@ -64,8 +64,8 @@ const DEMO_STEPS: Record<string, { what: string; answer: string; patch: Record<s
     patch: { target_percentile: 99, dream_colleges: ['IIM Ahmedabad', 'IIM Bangalore'] },
   },
   'quick-facts': {
-    what: 'The facts the plan adapts to: attempt number, coaching, hours available per day.',
-    answer: 'Aarav: first attempt · has coaching · 4 hrs/day.',
+    what: 'The facts the plan adapts to. The first one is the important one: the FLOOR — what the student can still do on a bad day. The daily plan is built to that, so finishing it is normal.',
+    answer: 'Aarav: 30 min on a bad day · first attempt · has coaching.',
     patch: { is_repeater: false, coaching_enrolled: true, bad_day_floor: 30 },
   },
   'pain-points': {
