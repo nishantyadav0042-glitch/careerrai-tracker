@@ -17,6 +17,7 @@ import { Shield } from 'lucide-react';
 import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { BusyDayButton } from '@/components/busy-day-button';
+import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
@@ -66,6 +67,8 @@ export default async function DailyTrackerPage() {
     { data: streakRow },
     completionRecords,
     { data: coverageRows },
+    { count: plansBuiltCount },
+    { count: remindersSentCount },
   ] = await Promise.all([
     getStudentProfile(user.id),
     admin
@@ -99,6 +102,11 @@ export default async function DailyTrackerPage() {
     admin.from('streak_data').select('*').eq('student_id', user.id).maybeSingle(),
     buildCompletionRecords(admin, user.id, '2000-01-01'),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
+    // Counts behind the value card. Head-only reads: we need the totals, never
+    // the rows, so none of this adds payload to a page already watched on
+    // /admin/perf.
+    admin.from('daily_routines').select('routine_date', { count: 'exact', head: true }).eq('student_id', user.id),
+    admin.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
   ]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
@@ -501,6 +509,22 @@ export default async function DailyTrackerPage() {
         {/* The one-time ownership handshake. Only for students whose hours we
             cannot prove they chose — see lib/daily-hours.needsHoursConfirmation. */}
         {confirmHours != null && <ConfirmHoursCard hours={confirmHours} />}
+        {/* What we do for them, free — repeated every third day. Founder,
+            8 Aug: "yeh sab cheezein baar baar highlight karni padengi... to
+            keep the retention." Counts come from their own rows, so the
+            repeat is proof rather than an advertisement. */}
+        <ValueProofCard
+          stats={{
+            plansBuilt: plansBuiltCount ?? 0,
+            topicsRemembered: (coverageRows ?? []).length,
+            revisionsFlagged: topicMemory.filter((t) => t.revisionOverdue).length,
+            remindersSent: remindersSentCount ?? 0,
+            daysLogged: (logs ?? []).length,
+            daysSinceSignup: profile?.created_at
+              ? Math.max(0, Math.round((Date.now() - Date.parse(String(profile.created_at))) / 86_400_000))
+              : 0,
+          }}
+        />
         {blockOrder.map((b: HomeBlock) => {
           if (b === 'action') return (
             /* NextActionCard ("DO THIS NEXT") REMOVED 29 Jul, on the taps —
