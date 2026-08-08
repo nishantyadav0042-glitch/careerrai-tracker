@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 // and the feasibility verdict is printed at the top whether it is good news
 // or not.
 
+interface Check { id: string; label: string; status: string; detail: string; items?: string[] }
+interface Integrity { checks: Check[]; passed: boolean; unscheduledTopics: string[] }
 interface PlanItem { kind: string; label: string; section: string | null; hours: number }
 interface PlanDay { date: string; phase: string; items: PlanItem[]; totalHours: number; isMockDay: boolean }
 interface Payload {
@@ -23,6 +25,7 @@ interface Payload {
   mockCount: number;
   verdict: string;
   horizonReason: string;
+  integrity: Integrity;
   feasibility: { fits: boolean; totalHours: number; mockHours: number; daysToExam: number };
 }
 
@@ -65,6 +68,13 @@ export function FullPlanView() {
 
   const shown = data.days.slice(0, limit);
   let lastPhase = '';
+  const MARK: Record<string, string> = { pass: '\u2713', fail: '\u2715', warn: '!', na: '\u2013' };
+  const MARK_STYLE: Record<string, string> = {
+    pass: 'bg-emerald-100 text-emerald-700',
+    fail: 'bg-rose-100 text-rose-700',
+    warn: 'bg-amber-100 text-amber-700',
+    na: 'bg-stone-100 text-stone-400',
+  };
 
   return (
     <div className="space-y-4">
@@ -94,6 +104,42 @@ export function FullPlanView() {
             <p className="text-[11px] leading-tight text-stone-500">{x.l}</p>
           </div>
         ))}
+      </div>
+
+      {/* The checklist door, shown to the student rather than asserted at
+          them. Founder, 8 Aug: "no study topic should be missed at all,
+          because a student will check whether the plan covered everything."
+          A failed check NAMES what is missing — a count cannot be acted on. */}
+      <div className="rounded-xl border border-stone-200 bg-white p-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[13px] font-bold text-stone-900">What this plan covers</p>
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold',
+            data.integrity.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700')}>
+            {data.integrity.passed ? 'All checks pass' : 'Needs your attention'}
+          </span>
+        </div>
+        <ul className="mt-2 space-y-2">
+          {data.integrity.checks.map((c) => (
+            <li key={c.id} className="flex gap-2.5">
+              <span className={cn('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold',
+                MARK_STYLE[c.status] ?? MARK_STYLE.na)}>
+                {MARK[c.status] ?? '-'}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-semibold leading-snug text-stone-800">{c.label}</p>
+                <p className="text-[12px] leading-snug text-stone-500">{c.detail}</p>
+                {c.items && c.items.length > 0 && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[11.5px] font-medium text-stone-600 underline underline-offset-2">
+                      Show the {c.items.length}
+                    </summary>
+                    <p className="mt-1 text-[11.5px] leading-snug text-stone-500">{c.items.join(' \u00b7 ')}</p>
+                  </details>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="space-y-2">

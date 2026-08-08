@@ -133,18 +133,43 @@ describe('feasibility is computed, and said out loud', () => {
     expect(f.totalHours).toBe(f.syllabusHours + f.mockHours);
   });
 
-  it('4h a day does NOT fit, and the number is exact', () => {
+  it('4h a day does NOT fit, and the numbers are the SAME ones the calendar uses', () => {
+    // Feasibility is measured against the days topics can actually use — not
+    // the raw calendar. The first version divided total work by every day to
+    // the exam, counting mock days, analysis days and November as free, and so
+    // reported "4.5h a day is enough" while the scheduler quietly dropped
+    // eighteen topics. The verdict and the calendar now answer with one number.
     const f = at(4);
     expect(f.fits).toBe(false);
     expect(f.daysOver).toBeGreaterThan(0);
-    expect(feasibilityLine(f)).toContain('AFTER CAT');
-    expect(feasibilityLine(f)).toContain('fewer topics');
+    expect(f.topicCapacityHours!).toBeLessThan(f.syllabusHours);
+    const line = feasibilityLine(f);
+    expect(line).toContain('run out of days');
+    expect(line).toContain('fewer topics');
+    expect(line).toContain(`${f.topicDaysAvailable} free study days`);
   });
 
-  it('6h a day fits, and says how much room is left', () => {
+  it('6h a day fits, and the capacity genuinely holds the syllabus', () => {
     const f = at(6);
     expect(f.fits).toBe(true);
-    expect(feasibilityLine(f)).toContain('before CAT');
+    expect(f.topicCapacityHours!).toBeGreaterThanOrEqual(f.syllabusHours);
+    expect(feasibilityLine(f)).toContain('fits');
+  });
+
+  it('THE INVARIANT: fits === every topic actually scheduled', () => {
+    // The whole point of the checklist door. If these two ever disagree, the
+    // plan is either promising a syllabus it will not schedule, or hiding one
+    // it could have.
+    for (const h of [4, 6, 8, 10]) {
+      const plan = buildFullPlan({
+        coverage: UNTOUCHED, effort: 1, weekdayHours: h, today: TODAY, attemptYear: 2026,
+      });
+      const scheduled = new Set(
+        plan.days.flatMap((d) => d.items.filter((i) => i.kind === 'topic').map((i) => i.label)),
+      );
+      expect(scheduled.size === ALL.length, `${h}h: fits=${plan.feasibility.fits} but ${scheduled.size}/${ALL.length} scheduled`)
+        .toBe(plan.feasibility.fits);
+    }
   });
 
   it('a strong repeater fits at 4h where a first-timer does not', () => {

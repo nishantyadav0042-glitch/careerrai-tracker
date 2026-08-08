@@ -64,8 +64,12 @@ export interface Feasibility {
   /** Hours/day needed to finish everything, if they studied every single day. */
   requiredPerDay: number;
   committedPerDay: number | null;
-  /** Days their own hours actually need. */
+  /** Days their own hours actually need, at topic capacity. */
   daysNeeded: number | null;
+  /** Days actually free for topic work — not mock, analysis or November. */
+  topicDaysAvailable: number;
+  /** Hours of topic work those days can hold at the student's own pace. */
+  topicCapacityHours: number | null;
   fits: boolean;
   /** How many days past the exam they land. 0 when it fits. */
   daysOver: number;
@@ -108,9 +112,18 @@ export function phaseOn(date: Date, exam: Date): PlanPhase {
   return 'build';
 }
 
-/** How many mocks the week containing `date` should carry. */
+/**
+ * How many mocks the week containing `date` should carry.
+ *
+ * Keyed on the MONTH, not on phaseOn — the study phase and the mock cadence
+ * are different things and conflating them silently put September on two
+ * mocks a week. The founder's rule is October and November: "two a week is
+ * right; three is too many."
+ */
 export function mocksForWeekOf(date: Date, exam: Date): number {
-  return phaseOn(date, exam) === 'build' ? MOCKS_PER_WEEK.build : MOCKS_PER_WEEK.intensive;
+  const sameYear = date.getFullYear() === exam.getFullYear();
+  const m = date.getMonth();
+  return sameYear && (m === 9 || m === 10) ? MOCKS_PER_WEEK.intensive : MOCKS_PER_WEEK.build;
 }
 
 /**
@@ -153,13 +166,66 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   }
   const mockHours = mockCount * MOCK_HOURS_EACH;
 
-  // Topics laid into days by the existing scheduler. Mock days are NOT excluded
-  // from its capacity — the overlay below takes the day over, and a student who
-  // wants both can still do both.
-  const topicDays: DayPlan[] = buildWeekPlan(
-    input.coverage, input.weekdayHours, input.today, input.effort, span, null,
-  );
-  const topicsByDate = new Map(topicDays.map((d) => [d.iso, d]));
+  // Hours each day owes to the exam calendar before any topic can be placed.
+  // A mock day owes 2h to the mock; the day after owes 2h to its analysis.
+  // Reserving the WHOLE day was the first attempt and it was too blunt — a
+  // student with six hours still has four left after a mock.
+  const reservedOn = (date: Date): number =>
+    (isMockDay(date, exam) ? 2 : 0) +
+    (isMockDay(new Date(date.getTime() - DAY_MS), exam) ? MOCK_ANALYSIS_HOURS : 0);
+
+  // Topic capacity, day by day, honestly: what the student has, minus what the
+  // exam calendar already claimed. November is zero — no new topics.
+  const committedDaily = input.weekdayHours && input.weekdayHours > 0 ? input.weekdayHours : 4;
+  const capacityByDate = new Map<string, number>();
+  let topicCapacityTotal = 0;
+  let topicDaysAvailable = 0;
+  for (let d = 0; d < span; d++) {
+    const date = new Date(input.today.getTime() + d * DAY_MS);
+    const free = phaseOn(date, exam) === 'revision'
+      ? 0
+      : Math.max(0, committedDaily - reservedOn(date));
+    capacityByDate.set(iso(date), free);
+    topicCapacityTotal += free;
+    if (free > 0) topicDaysAvailable++;
+  }
+
+  // buildWeekPlan is used for ORDER, not for day assignment: it decides which
+  // topic comes next (coverage, weightage, prerequisites, effort) and how many
+  // hours each needs. The re-flow below then pours that queue into the real
+  // capacity above. A second scoring model here would be the two-models trap.
+  const ordered: PlanItem[] = buildWeekPlan(
+    input.coverage, committedDaily, input.today, input.effort,
+    Math.max(1, Math.ceil(topicCapacityTotal / committedDaily)), null,
+  ).flatMap((d: DayPlan) => d.items.map((i) => ({
+    kind: 'topic' as const, label: i.topic, section: i.section, hours: i.hours,
+  })));
+
+  // A topic may SPAN days, which is both realistic (Reading Comprehension is
+  // 30 hours; nobody does it in one sitting) and necessary. The first version
+  // refused to start a 3-hour topic with 2 hours left, wasting the remainder —
+  // over 85 days that fragmentation alone dropped five topics off a plan whose
+  // hours said it fitted. A plan whose own arithmetic disagrees with its own
+  // calendar is exactly what this whole day has been about removing.
+  const topicsByDate = new Map<string, PlanItem[]>();
+  let qi = 0;
+  let leftOnItem = ordered.length ? ordered[0].hours : 0;
+  for (let d = 0; d < span && qi < ordered.length; d++) {
+    const key = iso(new Date(input.today.getTime() + d * DAY_MS));
+    let left = capacityByDate.get(key) ?? 0;
+    const items: PlanItem[] = [];
+    while (qi < ordered.length && left >= 0.5) {
+      const take = Math.min(leftOnItem, left);
+      if (take >= 0.5) {
+        items.push({ ...ordered[qi], hours: Math.round(take * 2) / 2 });
+        left -= take;
+        leftOnItem -= take;
+      }
+      if (leftOnItem < 0.5) { qi++; leftOnItem = qi < ordered.length ? ordered[qi].hours : 0; }
+      if (take < 0.5) break;
+    }
+    if (items.length) topicsByDate.set(key, items);
+  }
 
   const revisionQueue = [...(input.revisionDue ?? [])];
   const days: FullPlanDay[] = [];
@@ -192,9 +258,7 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
       if (topic) items.push({ kind: 'revision', label: `Revise ${topic}`, section: null, hours: 1.5 });
       else items.push({ kind: 'revision', label: 'Revise your weakest area', section: null, hours: 1.5 });
     } else {
-      for (const it of topicsByDate.get(key)?.items ?? []) {
-        items.push({ kind: 'topic', label: it.topic, section: it.section, hours: it.hours });
-      }
+      for (const it of topicsByDate.get(key) ?? []) items.push(it);
     }
 
     days.push({
@@ -208,7 +272,15 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
 
   const totalHours = syllabusHours + mockHours;
   const committed = input.weekdayHours && input.weekdayHours > 0 ? input.weekdayHours : null;
-  const daysNeeded = committed ? Math.ceil(totalHours / committed) : null;
+
+  // Feasibility measured against the days topics can ACTUALLY use — not the
+  // raw calendar. Dividing total work by every day to the exam counts mock
+  // days, analysis days and November as if they were free for new topics, and
+  // they are not. That version said 4.5h/day was enough while the scheduler
+  // was quietly dropping eighteen topics; the two now answer with one number.
+  const topicCapacityHours = Math.round(topicCapacityTotal);
+  const daysNeeded = committed ? Math.ceil(syllabusHours / committed) : null;
+  const fits = committed == null ? true : syllabusHours <= topicCapacityHours;
 
   return {
     days,
@@ -219,11 +291,14 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
       mockHours,
       totalHours,
       daysToExam,
-      requiredPerDay: Math.round((totalHours / daysToExam) * 10) / 10,
+      // The pace that would actually clear the syllabus in the free days.
+      requiredPerDay: Math.round((syllabusHours / Math.max(1, topicDaysAvailable)) * 10) / 10,
       committedPerDay: committed,
       daysNeeded,
-      fits: daysNeeded == null ? true : daysNeeded <= daysToExam,
-      daysOver: daysNeeded == null ? 0 : Math.max(0, daysNeeded - daysToExam),
+      topicDaysAvailable,
+      topicCapacityHours,
+      fits,
+      daysOver: daysNeeded == null ? 0 : Math.max(0, daysNeeded - topicDaysAvailable),
     },
   };
 }
@@ -238,11 +313,11 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
  */
 export function feasibilityLine(f: Feasibility): string {
   if (f.committedPerDay == null) {
-    return `${f.totalHours}h of work left and ${f.daysToExam} days — that is ${f.requiredPerDay}h a day. Set your study hours and we will tell you if it fits.`;
+    return `${f.syllabusHours}h of syllabus and ${f.mockHours}h of mocks left, across ${f.topicDaysAvailable} free study days — about ${f.requiredPerDay}h a day. Set your study hours and we will tell you if it fits.`;
   }
   if (f.fits) {
-    const spare = f.daysToExam - (f.daysNeeded ?? 0);
-    return `At ${f.committedPerDay}h a day you finish ${spare} day${spare === 1 ? '' : 's'} before CAT. ${f.totalHours}h left, including ${f.mockHours}h of mocks.`;
+    const spare = f.topicDaysAvailable - (f.daysNeeded ?? 0);
+    return `At ${f.committedPerDay}h a day the whole syllabus fits, with ${spare} study day${spare === 1 ? '' : 's'} to spare — and that is after setting aside ${f.mockHours}h for mocks and all of November for revision.`;
   }
-  return `At ${f.committedPerDay}h a day you finish ${f.daysOver} day${f.daysOver === 1 ? '' : 's'} AFTER CAT. You need ${f.requiredPerDay}h a day, or fewer topics. Nothing here is hidden — pick one and we will rebuild the plan.`;
+  return `At ${f.committedPerDay}h a day you run out of days ${f.daysOver} short. You have ${f.topicDaysAvailable} free study days before revision starts (mocks and November are already set aside), which holds ${f.topicCapacityHours}h — the syllabus needs ${f.syllabusHours}h. It takes about ${f.requiredPerDay}h a day, or fewer topics.`;
 }

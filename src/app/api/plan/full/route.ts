@@ -5,7 +5,9 @@ import { buildFullPlan, feasibilityLine } from '@/lib/full-plan';
 import { studentEffortMultiplier } from '@/lib/study-pace';
 import { dailyHours } from '@/lib/daily-hours';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
-import { PLAN_WINDOW_DAYS } from '@/lib/timetable-month';
+import { PLAN_WINDOW_DAYS, anchorToMonth } from '@/lib/timetable-month';
+import { checkPlanIntegrity } from '@/lib/plan-integrity';
+import type { TimetableBlock } from '@/lib/timetable';
 
 // GET /api/plan/full — the student's whole plan.
 //
@@ -31,7 +33,7 @@ export async function GET() {
         .eq('id', user.id).maybeSingle(),
       admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
       buildCompletionRecords(admin, user.id, '2000-01-01'),
-      admin.from('student_timetables').select('confirmed_at').eq('student_id', user.id).maybeSingle(),
+      admin.from('student_timetables').select('confirmed_at, blocks').eq('student_id', user.id).maybeSingle(),
     ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
@@ -75,8 +77,29 @@ export async function GET() {
     horizonDays,
   });
 
+  // The checklist door. Founder, 8 Aug: a student WILL check whether the plan
+  // covers everything and how it was built, so the answer is computed and
+  // shown rather than asserted. For a coaching student it also cross-checks
+  // their own sheet: every topic on the date their photo gives.
+  let coachingByDate: Record<string, string[]> | undefined;
+  if (profile.plan_source === 'coaching' && timetable?.blocks && timetable?.confirmed_at) {
+    const cal = anchorToMonth(
+      (timetable.blocks as TimetableBlock[] | null) ?? [],
+      String(timetable.confirmed_at).slice(0, 10),
+    );
+    coachingByDate = {};
+    for (const d of cal) if (d.topics.length) coachingByDate[d.date] = d.topics;
+  }
+  const integrity = checkPlanIntegrity({
+    plan,
+    committedHours: dailyHours(profile).weekday,
+    coachingByDate,
+    isCoachingMonth: horizonDays != null,
+  });
+
   return NextResponse.json({
     ...plan,
+    integrity,
     verdict: feasibilityLine(plan.feasibility),
     planSource: profile.plan_source ?? 'careerrai',
     // Coaching students are told WHY their view stops where it does, rather
