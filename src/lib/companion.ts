@@ -84,8 +84,8 @@ export interface SlotCopy { title: string; body: string; expectedAction: Expecte
 
 export function morningCopy(weakest: string, hoursToday: number): SlotCopy {
   return {
-    title: `Today: ${weakest} leads`,
-    body: `~${hoursToday}h planned. Your routine is built — first task is waiting.`,
+    title: `Today's plan is ready`,
+    body: `${weakest} leads. ~${hoursToday}h, already sorted.`,
     expectedAction: 'log_today',
   };
 }
@@ -96,34 +96,32 @@ export function factCopy(tip: string): SlotCopy {
 
 export function openCopy(weakTopic: string | null, weakest: string, hoursToday: number): SlotCopy {
   return {
-    title: 'Study window opens',
-    body: weakTopic
-      ? `${weakTopic} first — your ${hoursToday}h window starts now.`
-      : `${weakest} first — your ${hoursToday}h window starts now.`,
+    title: `${weakTopic ?? weakest} is waiting`,
+    body: `Everything else is handled. ${hoursToday}h whenever you start.`,
     expectedAction: 'log_today',
   };
 }
 
 export function progressCopy(daysStudied: number, windowDays: number): SlotCopy {
   return {
-    title: `${daysStudied} of last ${windowDays} days studied`,
-    body: 'Tonight keeps the run.',
+    title: `${daysStudied} of the last ${windowDays} days done`,
+    body: "We're keeping count so you don't have to.",
     expectedAction: 'open_plan',
   };
 }
 
 export function logCopy(dreamCollege: string): SlotCopy {
   return {
-    title: '5 seconds, one step closer',
-    body: `A quick update tonight keeps you moving toward ${dreamCollege}. Close the day right.`,
+    title: 'Only today is missing',
+    body: `Ten seconds to tell us how it went, and tomorrow builds itself. ${dreamCollege} gets closer.`,
     expectedAction: 'log_today',
   };
 }
 
 export function closeCopy(streak: number, weakest: string): SlotCopy {
   return {
-    title: streak > 1 ? `Done. ${streak}-day run.` : 'Done. Day closed.',
-    body: `Tomorrow: ${weakest} first. Good night.`,
+    title: streak > 1 ? `Day closed. ${streak} days safe.` : 'Day closed.',
+    body: `Tomorrow is ready — ${weakest} first. Nothing for you to plan.`,
     expectedAction: 'open_plan',
   };
 }
@@ -140,10 +138,10 @@ export function closeCopy(streak: number, weakest: string): SlotCopy {
 export function planMorningCopy(firstName: string, firstTopic: string, secondTopic: string | null, blocks: number, estHours: number): SlotCopy {
   const hrs = estHours >= 1 ? `~${estHours}h` : '';
   return {
-    title: `${firstName}, today: ${firstTopic}`,
+    title: `${firstName}, today is ready`,
     body: secondTopic
-      ? `Start with ${firstTopic}, then ${secondTopic}${blocks > 2 ? ` (+${blocks - 2} more)` : ''}. ${hrs} planned — tap to begin →`
-      : `${firstTopic} is today's focus.${hrs ? ` ${hrs} planned.` : ''} Tap to begin →`,
+      ? `${firstTopic}, then ${secondTopic}${blocks > 2 ? ` (+${blocks - 2} more)` : ''}.${hrs ? ` ${hrs}.` : ''} Already planned — just start.`
+      : `${firstTopic}.${hrs ? ` ${hrs}.` : ''} Already planned — just start.`,
     expectedAction: 'log_today',
   };
 }
@@ -151,10 +149,10 @@ export function planMorningCopy(firstName: string, firstTopic: string, secondTop
 // 17:00 — study window opens, on the first not-yet-done topic with its target.
 export function planOpenCopy(nextTopic: string, target: string | null, hoursToday: number): SlotCopy {
   return {
-    title: 'Study window’s open',
+    title: `${nextTopic} is waiting`,
     body: target
-      ? `${nextTopic} — ${target}. Your ${hoursToday}h starts now.`
-      : `${nextTopic} first — your ${hoursToday}h window starts now.`,
+      ? `${target}. Everything else is handled.`
+      : `Everything else is handled — ${hoursToday}h whenever you start.`,
     expectedAction: 'log_today',
   };
 }
@@ -163,26 +161,29 @@ export function planOpenCopy(nextTopic: string, target: string | null, hoursToda
 // least one block is ticked and one remains, so it's always true encouragement.
 export function planProgressCopy(doneCount: number, totalCount: number, nextTopic: string): SlotCopy {
   return {
-    title: `${doneCount} of ${totalCount} done ✓`,
-    body: `${nextTopic} is next — finish the set and update topics studied →`,
+    title: `${doneCount} of ${totalCount} done`,
+    body: `${nextTopic} is the last one. We'll update everything after.`,
     expectedAction: 'log_today',
   };
 }
 
-// 21:30 — the one demand, but concrete. "One block left: RC." If everything's
-// already done, it's a pure log nudge; otherwise it names the remaining topic.
+// 21:30 — the ONE asking slot, and it stays (see the note above windCopy):
+// the plan, the revision timing and the finish date are all computed FROM the
+// log. A manager that never asks eventually manages nothing. Framed as the
+// one thing only the student can do, never as a chase.
 export function planLogCopy(nextTopic: string | null, dreamCollege: string): SlotCopy {
   return nextTopic
-    ? { title: `One block left: ${nextTopic}`, body: `Finish it, update topics studied, done. ${dreamCollege} gets a little closer.`, expectedAction: 'log_today' }
-    : { title: 'Plan done — just update it', body: `You cleared today's plan. 5 seconds to update it and lock the streak.`, expectedAction: 'log_today' };
+    ? { title: `Last one: ${nextTopic}`, body: `Finish it and we'll sort the rest. ${dreamCollege} gets closer.`, expectedAction: 'log_today' }
+    : { title: 'Just one thing left for you', body: `Tell us how today went — ten seconds. We handle tomorrow.`, expectedAction: 'log_today' };
 }
 
-// 08:00 — a warm start to the day. Streak when there's a run to protect;
-// otherwise a clean fresh-day line. A gift, never a demand.
+// 08:00 — a warm start. Reports what we've already done; the streak appears
+// as a FACT that is safe, never as a threat ("don't break your streak" is
+// banned — that line belongs to a teacher, not a manager).
 export function kickoffCopy(streak: number, weakest: string, dreamCollege: string): SlotCopy {
   return streak > 1
-    ? { title: `🔥 ${streak}-day run`, body: `One focused ${weakest} block today keeps it alive — and ${dreamCollege} closer.`, expectedAction: 'open_plan' }
-    : { title: 'A fresh day toward your goal', body: `Your plan's ready — a few minutes on ${weakest} while you're sharp moves you toward ${dreamCollege}.`, expectedAction: 'open_plan' };
+    ? { title: `🔥 ${streak} days — and today's ready`, body: `${weakest} first. We planned it; you just study.`, expectedAction: 'open_plan' }
+    : { title: 'Today is ready', body: `${weakest} first — planned around your time. One step toward ${dreamCollege}.`, expectedAction: 'open_plan' };
 }
 
 // 08:00 — STATE-TRIGGERED, not clock-triggered. Yesterday has no check-in, so
@@ -204,8 +205,8 @@ export function kickoffCopy(streak: number, weakest: string, dreamCollege: strin
 // simply outstanding. Never "you missed", "don't break", "you forgot".
 export function missedCheckInKickoffCopy(yesterdayLabel: string, weakest: string): SlotCopy {
   return {
-    title: "Today's plan is waiting on one answer",
-    body: `How did ${yesterdayLabel} go? Fifteen seconds, and today rebuilds around it — ${weakest} is queued either way.`,
+    title: 'One answer and today rebuilds',
+    body: `How did ${yesterdayLabel} go? Fifteen seconds — ${weakest} is queued either way.`,
     expectedAction: 'log_today',
   };
 }
@@ -219,24 +220,77 @@ export function sparkCopy(dayOfYear: number): SlotCopy {
 }
 
 // 18:30 — the evening nudge. Only sent when they haven't logged yet (caller
-// gates), framed as "small beats zero", never guilt.
+// gates). Offers the smallest honest version of the day instead of the whole
+// plan: "plan too heavy" is the top product-caused blocker students filed
+// themselves (churn cohort, 8 Aug).
 export function windCopy(weakest: string): SlotCopy {
   return {
-    title: 'Evening block',
-    body: `30 focused minutes on ${weakest} beats a perfect plan you skip.`,
+    title: 'Short version of today',
+    body: `Just 30 minutes of ${weakest} counts. We'll adjust the rest.`,
     expectedAction: 'log_today',
   };
 }
 
-// ── Growth cadence: emotional activation / reactivation ─────────────────────
-// The push channel's real job is pulling in students who AREN'T using the app —
-// signups who never logged, and dormant ones. Urgency is real (their own
-// inaction + the countdown to CAT); no invented statistics, no shaming. One
-// angle per slot so up to 8/day never repeats.
-// ── Aphorism hooks (Cal-AI style) ───────────────────────────────────────────
-// A familiar phrase, twisted to point at the ONE action (the 5-second log).
-// Witty, zero guilt, no invented stats. Rotated against the emotional
-// dream-college lines so the tray never feels repetitive.
+// ── "We already handled it" copy (founder, 8 Aug) ───────────────────────────
+//
+// The philosophy shift: a notification must never carry OUR goal ("come back
+// to the app"). It carries the student's. The test every line below passes:
+// remove the app entirely and the message is still worth receiving.
+//
+// Only two of the four categories the founder sketched are shippable today,
+// and the other two are deliberately absent rather than faked:
+//   ✅ "we already did something"  — the plan really is rebuilt nightly
+//   ✅ "we protected you"          — shields and the weekly date move are real
+//   ❌ "we noticed a pattern"      — needs behavioural data we do not have
+//                                    (confidence is 92% untouched defaults)
+//   ❌ "mock analysed, 3 changes"  — the cross-mock engine does not exist yet
+// Each stays out until the thing behind it is true.
+
+/** A missed day that a shield absorbed. The app worked; the student didn't. */
+export function shieldUsedCopy(streak: number): SlotCopy {
+  return {
+    title: 'Yesterday is covered',
+    body: `A streak save took it — your ${streak} days are safe. Today's plan is ready.`,
+    expectedAction: 'open_plan',
+  };
+}
+
+/** The Sunday reconcile moved the finish date. Protection, not punishment. */
+export function dateMovedCopy(daysAdded: number, newDateLabel: string): SlotCopy {
+  return {
+    title: 'Week adjusted for you',
+    body: `Finish date moved ${daysAdded} day${daysAdded === 1 ? '' : 's'} to ${newDateLabel}. Your hours stay the same — you're still on track.`,
+    expectedAction: 'open_plan',
+  };
+}
+
+/** A revision-due topic, framed as the one thing we caught for them. */
+export function revisionDueCopy(topic: string, daysSince: number): SlotCopy {
+  return {
+    title: `${topic} needs 20 minutes`,
+    body: `Last done ${daysSince} days ago — we caught it before it slipped. Nothing else changed.`,
+    expectedAction: 'open_plan',
+  };
+}
+
+/** Their coaching timetable is running out; we need the next sheet to keep #1. */
+export function timetableEndingCopy(daysLeft: number): SlotCopy {
+  return {
+    title: `Your coaching plan ends in ${daysLeft} days`,
+    body: 'Send a photo of the next timetable and we\'ll keep planning around your classes.',
+    expectedAction: 'open_plan',
+  };
+}
+
+/** Back after silence. Never a backlog, never a count of missed days. */
+export function comebackCopy(weakest: string): SlotCopy {
+  return {
+    title: 'Nothing broke',
+    body: `Your week is already adjusted. Today: 15 minutes of ${weakest}, that's all.`,
+    expectedAction: 'log_today',
+  };
+}
+
 const HOOK_LINES: string[] = [
   'Time is money — a 5-second log is the cheapest investment in your rank.',
   "Toppers don't study more. They just never skip the log.",

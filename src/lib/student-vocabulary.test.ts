@@ -121,3 +121,60 @@ describe('the identifiers that must NOT be renamed', () => {
     expect(missedCheckInKickoffCopy('27 Jul', 'DILR').expectedAction).toBe('log_today');
   });
 });
+
+// ── The manager's vocabulary (founder, 8 Aug) ───────────────────────────────
+//
+// Positioning changed from "study planner" to "we manage your preparation",
+// so notifications changed job too. A reminder carries OUR goal ("come back
+// to the app"). A manager's update carries the STUDENT'S ("this is handled").
+//
+// The test every line must pass: remove the app entirely, and the message is
+// still worth receiving.
+//
+// These words belong to a teacher chasing homework, and are banned from
+// anything a student reads. Note "streak" is NOT banned — the number is the
+// student's own, and "your 23 days are safe" is reassurance. Only the THREAT
+// is banned.
+const TEACHER_WORDS = /\b(don'?t forget|do not forget|you haven'?t|you missed|pending|falling behind|you'?re behind|break your streak|streak is at risk|complete your tasks|time to study)\b/i;
+
+function assertNoChasing(copy: SlotCopy | { title: string; body: string } | null, where: string) {
+  if (!copy) return;
+  expect(copy.title, `${where} title chases: ${copy.title}`).not.toMatch(TEACHER_WORDS);
+  expect(copy.body, `${where} body chases: ${copy.body}`).not.toMatch(TEACHER_WORDS);
+}
+
+describe('notifications report work done — they never chase', () => {
+  it('holds for every fixed-argument slot', () => {
+    assertNoChasing(morningCopy('QA', 3), 'morningCopy');
+    assertNoChasing(openCopy('Percentages', 'QA', 3), 'openCopy');
+    assertNoChasing(progressCopy(4, 7), 'progressCopy');
+    assertNoChasing(logCopy('IIM A'), 'logCopy');
+    assertNoChasing(closeCopy(23, 'QA'), 'closeCopy');
+    assertNoChasing(closeCopy(0, 'QA'), 'closeCopy(no streak)');
+    assertNoChasing(planMorningCopy('Riya', 'Percentages', 'RC', 3, 2), 'planMorningCopy');
+    assertNoChasing(planOpenCopy('RC', '3 passages', 2), 'planOpenCopy');
+    assertNoChasing(planProgressCopy(2, 3, 'RC'), 'planProgressCopy');
+    assertNoChasing(planLogCopy('RC', 'IIM A'), 'planLogCopy');
+    assertNoChasing(planLogCopy(null, 'IIM A'), 'planLogCopy(done)');
+    assertNoChasing(kickoffCopy(23, 'QA', 'IIM A'), 'kickoffCopy');
+    assertNoChasing(kickoffCopy(0, 'QA', 'IIM A'), 'kickoffCopy(fresh)');
+    assertNoChasing(missedCheckInKickoffCopy('yesterday', 'QA'), 'missedCheckInKickoffCopy');
+    assertNoChasing(windCopy('QA'), 'windCopy');
+  });
+
+  it('keeps the streak as a fact, never as a threat', () => {
+    // The number is the student's identity — it is the one thing in the app
+    // they would screenshot. What died on 8 Aug is the threat around it.
+    const streaky = closeCopy(23, 'QA');
+    expect(`${streaky.title} ${streaky.body}`).toContain('23');
+    expect(`${streaky.title} ${streaky.body}`).toMatch(/safe/i);
+  });
+
+  it("says what we already handled, not what the student still owes", () => {
+    // Each of these names a job WE did — promises 1, 3 and 6 on the app's
+    // first screen, kept out loud.
+    expect(morningCopy('QA', 3).title).toMatch(/ready/i);
+    expect(closeCopy(5, 'QA').body).toMatch(/tomorrow is ready/i);
+    expect(progressCopy(4, 7).body).toMatch(/so you don'?t have to/i);
+  });
+});
