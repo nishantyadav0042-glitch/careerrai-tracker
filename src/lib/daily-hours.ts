@@ -205,18 +205,56 @@ export function badDayFloorMinutes(p: FloorProfile | null | undefined): number |
 }
 
 /**
- * The minutes today's plan is built to. Floor when the student has one;
- * their hours otherwise (legacy behaviour, unchanged); null when neither —
- * the routine engine's archetype fallbacks remain the only substitutes.
+ * The minutes today's plan is built to — the student's NORMAL day.
+ *
+ * REVERSED 8 Aug, and the reversal matters. For half a day the floor sized
+ * the plan, which produced a measured contradiction: a student who answered
+ * "6 hours of self-study" was handed a 30-minute plan and 330 unplanned
+ * minutes. Founder: "अगर student six hours opt कर रहा है… study plan भी six
+ * hours के साथ aligned होना चाहिए. Zero inconsistency."
+ *
+ * He is right, and the two numbers were never rivals — they answer different
+ * questions and I had them fighting over the same job:
+ *
+ *   HOURS  the normal day  -> how big the plan is, and the finish date
+ *   FLOOR  the bad day     -> coreMinutes below: how much of that plan has to
+ *                            survive for the day to count as kept
+ *
+ * So the plan is the full 6 hours, and the first ~30 minutes of it are marked
+ * as the core. A bad day means doing the core and keeping the day — which is
+ * the promise the floor was introduced for, without under-planning a student
+ * who told us they study six hours.
+ *
+ * This does NOT rebuild the 750-minute monument that churned Kashika. That
+ * came from a number nobody was ever asked to justify: the question now names
+ * self-study only, is anchored AFTER the bad-day question so the anchor is
+ * low, says "honestly, not ambitiously" on the screen, and is corrected every
+ * Sunday against what was actually logged.
  */
 export function planMinutesForDay(
   p: (HoursProfile & FloorProfile) | null | undefined,
   isWeekend: boolean
 ): number | null {
-  const floor = badDayFloorMinutes(p);
-  if (floor != null) return floor;
   const h = hoursForDay(p, isWeekend);
-  return h == null ? null : Math.round(h * 60);
+  if (h != null) return Math.round(h * 60);
+  // No hours on record (an account from before the question came back): the
+  // floor is a better plan than nothing, and far better than a guess.
+  return badDayFloorMinutes(p);
+}
+
+/**
+ * The part of today's plan that has to survive a bad day for the day to count.
+ * Null when the student never set a floor, and never larger than the plan
+ * itself — a core bigger than the day would make every day a failed one.
+ */
+export function coreMinutesForDay(
+  p: (HoursProfile & FloorProfile) | null | undefined,
+  isWeekend: boolean
+): number | null {
+  const floor = badDayFloorMinutes(p);
+  if (floor == null) return null;
+  const plan = planMinutesForDay(p, isWeekend);
+  return plan == null ? floor : Math.min(floor, plan);
 }
 
 /** The profile patch that sets the floor. THE only writer, same as hours. */

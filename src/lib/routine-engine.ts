@@ -323,11 +323,17 @@ export function generateRoutine(
     ?? (weekend
       ? (profile.isWorkingProfessional ? 4 : 3)
       : (profile.isWorkingProfessional ? 1.5 : 2.5));
-  // The floor sizes the day when the student has one (Stage A). A 15-minute
-  // floor is a REAL 15-minute day — that smallness is the whole point, so no
-  // 30-minute clamp is applied to it.
-  const floorPlanned = profile.floorMinutes != null && profile.floorMinutes > 0;
-  const totalMinutes = floorPlanned
+  // The plan is the student's NORMAL day. The floor no longer sizes it —
+  // that rule produced a 30-minute plan for a student who said six hours, and
+  // 330 unplanned minutes is not a plan (founder, 8 Aug: "zero
+  // inconsistency"). The floor is now carried as coreMinutes: the part of the
+  // day that has to survive for the day to count. See lib/daily-hours.
+  //
+  // Hours are still absent for accounts that predate the question coming
+  // back; those fall to the floor, and only then to the archetype default.
+  const hasHours = (weekend ? profile.weekendHours : profile.weekdayHours) != null;
+  const floorOnly = !hasHours && profile.floorMinutes != null && profile.floorMinutes > 0;
+  const totalMinutes = floorOnly
     ? Math.round(profile.floorMinutes!)
     : Math.max(30, Math.round(hours * 60));
 
@@ -467,8 +473,10 @@ export function generateRoutine(
   }
 
   const estMinutes = tasks.reduce((s, t) => s + t.estMinutes, 0);
-  // On floor days the honest size is the floor, not the stored hours.
-  const shownHours = floorPlanned ? Math.round((totalMinutes / 60) * 10) / 10 : hours;
+  // The size we SAY must be the size we BUILT. Deriving it from totalMinutes
+  // rather than the stored hours keeps the sentence honest on every path —
+  // floor-only accounts, archetype fallbacks, and rounding alike.
+  const shownHours = Math.round((totalMinutes / 60) * 10) / 10;
   const whySummary = personalizationSummary(profile, weekend, shownHours, weakChoice.topic);
   return { phase, tasks, estMinutes, whySummary };
 }

@@ -245,17 +245,48 @@ describe('nothing writes the number except the one writer', () => {
 
 // ── Stage A: the bad-day floor (founder, 8 Aug) ─────────────────────────────
 
-import { badDayFloorMinutes, planMinutesForDay, setBadDayFloor, FLOOR_OPTIONS_MINUTES } from './daily-hours';
+import { badDayFloorMinutes, planMinutesForDay, coreMinutesForDay, setBadDayFloor, FLOOR_OPTIONS_MINUTES } from './daily-hours';
 
-describe('the bad-day floor sizes the plan; hours stay for pace', () => {
+// REVERSED 8 Aug. For half a day the floor sized the plan, and it produced a
+// measured contradiction: a student who answered "6 hours of self-study" was
+// handed a 30-minute plan — 330 unplanned minutes. Founder: "study plan भी six
+// hours के साथ aligned होना चाहिए. Zero inconsistency."
+//
+// The two numbers were never rivals. Hours = the normal day, so hours size the
+// plan. Floor = the bad day, so the floor marks the CORE inside that plan: the
+// part that has to survive for the day to count as kept.
+describe('hours size the plan; the floor marks the core inside it', () => {
   it('offers exactly the four small choices', () => {
     expect([...FLOOR_OPTIONS_MINUTES]).toEqual([15, 30, 60, 120]);
   });
 
-  it('a set floor wins over hours for plan size', () => {
-    const p = { study_target_hours: 8, bad_day_floor_minutes: 30 };
+  it('THE FIX: a 6-hour student is planned 6 hours, not 30 minutes', () => {
+    const p = { study_target_hours: 6, bad_day_floor_minutes: 30 };
+    expect(planMinutesForDay(p, false)).toBe(360);
+    expect(planMinutesForDay(p, true)).toBe(360);
+    // ...and the 30 minutes still mean something: they are the core.
+    expect(coreMinutesForDay(p, false)).toBe(30);
+  });
+
+  it('the core can never exceed the plan it sits inside', () => {
+    // A 2-hour floor with a 1-hour normal day would otherwise make every
+    // single day a failed one.
+    const p = { study_target_hours: 1, bad_day_floor_minutes: 120 };
+    expect(planMinutesForDay(p, false)).toBe(60);
+    expect(coreMinutesForDay(p, false)).toBe(60);
+  });
+
+  it('no floor set = no core, and the plan is still the normal day', () => {
+    expect(coreMinutesForDay({ study_target_hours: 4 }, false)).toBeNull();
+    expect(planMinutesForDay({ study_target_hours: 4 }, false)).toBe(240);
+  });
+
+  it('an account with a floor but no hours still gets a plan', () => {
+    // Signed up in the window where hours were not asked. The floor is a far
+    // better plan than a guess, and better than nothing.
+    const p = { bad_day_floor_minutes: 30 };
     expect(planMinutesForDay(p, false)).toBe(30);
-    expect(planMinutesForDay(p, true)).toBe(30);
+    expect(coreMinutesForDay(p, false)).toBe(30);
   });
 
   it('no floor = exactly the old behaviour, so 257 existing students feel nothing', () => {
@@ -323,33 +354,38 @@ describe('one owner covers the floor too', () => {
   });
 });
 
-describe('floor days are small, few-task, and exactly the size promised', () => {
+describe('small days are small, few-task, and exactly the size promised', () => {
+  // The engine's small-day shaping is unchanged and still worth pinning — it
+  // just triggers on a small NORMAL DAY now, not on the floor. Three tasks in
+  // thirty minutes is three ways to feel behind; one finishable task is a won
+  // day, and that is true however the day got to thirty minutes.
   const NO_HIST = { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null } as Record<Section, number | null> };
   const CHOICES: Record<Section, TopicChoice> = {
     VARC: { topic: 'Reading Comprehension', score: 1, reasons: [], coverageStatus: null },
     DILR: { topic: 'Arrangements', score: 1, reasons: [], coverageStatus: null },
     QA: { topic: 'Percentages', score: 1, reasons: [], coverageStatus: null },
   };
-  const P = (floorMinutes: number, over: Partial<RoutineProfile> = {}): RoutineProfile => ({
+  // Sized by HOURS, the way a real profile now is.
+  const P = (minutes: number, over: Partial<RoutineProfile> = {}): RoutineProfile => ({
     isWorkingProfessional: false, isRepeater: false, targetPercentile: 95,
-    weekdayHours: 8, weekendHours: 8, floorMinutes, weakestSection: 'QA',
-    strongestSection: 'VARC', weakTopic: null, currentStage: 'not_started',
-    attemptYear: 2026, ...over,
+    weekdayHours: minutes / 60, weekendHours: minutes / 60, floorMinutes: 30,
+    weakestSection: 'QA', strongestSection: 'VARC', weakTopic: null,
+    currentStage: 'not_started', attemptYear: 2026, ...over,
   });
   const MON = new Date('2026-08-10T06:00:00');
 
-  it('a 15-minute floor is ONE task of exactly 15 minutes', () => {
-    const r = generateRoutine(P(15), MON, NO_HIST, CHOICES);
+  it('a 30-minute day is ONE task of exactly 30 minutes', () => {
+    const r = generateRoutine(P(30), MON, NO_HIST, CHOICES);
     expect(r.tasks).toHaveLength(1);
-    expect(r.estMinutes).toBe(15);
+    expect(r.estMinutes).toBe(30);
     expect(r.tasks[0].section).toBe('QA'); // the weak section still leads
   });
 
   it('30 min = one task; 60 min = two; 120 min = three — all exact', () => {
-    for (const [floor, count] of [[30, 1], [60, 2], [120, 3]] as const) {
-      const r = generateRoutine(P(floor), MON, NO_HIST, CHOICES);
+    for (const [minutes, count] of [[30, 1], [60, 2], [120, 3]] as const) {
+      const r = generateRoutine(P(minutes), MON, NO_HIST, CHOICES);
       expect(r.tasks.length).toBe(count);
-      expect(r.estMinutes).toBe(floor);
+      expect(r.estMinutes).toBe(minutes);
     }
   });
 
@@ -359,16 +395,26 @@ describe('floor days are small, few-task, and exactly the size promised', () => 
     expect(r.estMinutes).toBe(30);
   });
 
-  it('the floor wins over 8 chosen hours — the fantasy no longer sizes the day', () => {
-    // Kashika chose 12.5h and was built a 720-minute monument. With a floor,
-    // the same student gets a winnable day regardless of the stored hours.
-    const r = generateRoutine(P(30), MON, NO_HIST, CHOICES);
-    expect(r.estMinutes).toBe(30);
+  it('THE REVERSAL: 6 chosen hours build a 6-hour day, not a 30-minute one', () => {
+    // The measured contradiction that forced this change: floor 30, hours 6,
+    // plan 30 — 330 minutes the student was never given anything to do with.
+    const r = generateRoutine(P(360), MON, NO_HIST, CHOICES);
+    expect(r.estMinutes).toBe(360);
+    expect(r.tasks.length).toBeGreaterThan(1);
   });
 
-  it('no floor = the old behaviour, to the minute', () => {
-    const r = generateRoutine(P(0, { floorMinutes: null }), MON, NO_HIST, CHOICES);
-    expect(r.estMinutes).toBe(480);
-    expect(r.tasks).toHaveLength(3);
+  it('a floor-only account (no hours on record) is still planned', () => {
+    const r = generateRoutine(
+      P(0, { weekdayHours: null, weekendHours: null, floorMinutes: 30 }),
+      MON, NO_HIST, CHOICES);
+    expect(r.estMinutes).toBe(30);
+    expect(r.tasks).toHaveLength(1);
+  });
+
+  it('neither hours nor floor falls to the archetype default, not to zero', () => {
+    const r = generateRoutine(
+      P(0, { weekdayHours: null, weekendHours: null, floorMinutes: null }),
+      MON, NO_HIST, CHOICES);
+    expect(r.estMinutes).toBe(150); // 2.5h, the stated non-working default
   });
 });
