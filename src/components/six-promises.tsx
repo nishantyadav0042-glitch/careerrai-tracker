@@ -18,12 +18,18 @@ import { cn } from '@/lib/utils';
 // student for commitment, before we had shown them a single thing we do for
 // them, was backwards.
 
+// Only promises we can keep from day one. #5 said "we handle your mocks —
+// what went wrong in it", and the cross-mock engine that finds repeat
+// mistakes does not exist yet (founder caught this, 8 Aug). A promise the
+// product can't keep on day 2 costs more than the promise wins on day 1 —
+// same rule as the AI caller: say only what we can prove. Mock intelligence
+// gets introduced at the moment a student uploads their first scorecard.
 export const SIX_PROMISES: { n: string; head: string; sub: string }[] = [
   { n: '1', head: 'We make your plan', sub: 'From your coaching, your syllabus, your time.' },
   { n: '2', head: 'We tell you what to do today', sub: 'No deciding. Ever.' },
-  { n: '3', head: 'We track everything', sub: "What's done, what's left, what's weak." },
+  { n: '3', head: 'We remember everything', sub: "Topics, weak areas, what's done, what's left." },
   { n: '4', head: 'We remind you to revise', sub: 'Before you forget it — not after.' },
-  { n: '5', head: 'We handle your mocks', sub: 'When to take one, and what went wrong in it.' },
+  { n: '5', head: 'We fix the plan when life happens', sub: 'Miss a day and nothing breaks.' },
   { n: '6', head: 'We keep you on track', sub: 'Even after a bad week.' },
 ];
 
@@ -32,13 +38,15 @@ export function SixPromises({ onNext, ctaLabel = 'Turn on my reminders →' }: {
     <div className="space-y-5">
       <div className="text-center">
         <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">You&apos;re in</p>
-        <h1 className="mt-1 text-[26px] font-bold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          You do one thing.<br />
-          <span className="text-orange-600">Study.</span>
+        <h1 className="mt-1 text-[25px] font-bold leading-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+          Stop managing your<br />CAT preparation.
         </h1>
-        <p className="mt-2 text-[15px] font-semibold text-stone-700">
-          We do the other six —{' '}
-          <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-700">FREE</span>
+        <p className="mt-2 text-[17px] font-bold text-stone-900">
+          You do one thing. <span className="text-orange-600">STUDY.</span>
+        </p>
+        <p className="mt-1 text-[15px] font-semibold text-stone-700">
+          We&apos;ll handle the rest —{' '}
+          <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-700">100% FREE</span>
         </p>
       </div>
 
@@ -82,6 +90,10 @@ export function SixPromises({ onNext, ctaLabel = 'Turn on my reminders →' }: {
         </button>
         <p className="px-2 text-center text-[11px] leading-snug text-stone-400">
           Reminders are how we keep #4 and #6 — revision on time, and a nudge when you go quiet.
+        </p>
+        <p className="px-2 pt-1 text-center text-[11.5px] leading-snug text-stone-500">
+          In coaching? <b className="text-stone-700">Send a photo of your timetable</b> in the app and we&apos;ll
+          plan around your classes — saves you hours every week. Or do it later.
         </p>
       </div>
     </div>

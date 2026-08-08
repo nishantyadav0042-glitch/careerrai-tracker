@@ -225,11 +225,12 @@ export default function PostSignupSequence() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-3xl shadow-lg shadow-orange-200">🔔</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                One tap so we can keep our word.
+                Let us remember things for you.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                We said we&apos;d remind you to revise before you forget, and get you back after a bad week.
-                Reminders are how. Nothing else — we never spam.
+                We&apos;ll tell you when revision is due. When your coaching plan is running out.
+                When you&apos;re drifting. <b>Never spam, never marketing</b> — only things about your own
+                preparation.
               </p>
             </div>
 
