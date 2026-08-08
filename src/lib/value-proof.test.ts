@@ -85,34 +85,32 @@ describe('it never counts to zero, and never flatters', () => {
 
 describe('one list of six worries, everywhere', () => {
   it('is six short lines in a student\'s own vocabulary', () => {
-    // Two founder corrections live here. First: name the WORRY, not the
-    // feature — "we make your plan" reads as another planner. Second: say it
-    // the way a coaching class says it, and say it short. "Don't worry about"
-    // on all six rows is what made the screen long, so it is said once in the
-    // heading and the rows are nouns.
+    // Founder corrections, in order: name the WORRY not the feature; say it
+    // the way a coaching class says it; keep it loud but not verbose. The
+    // sub-lines are gone — "All 46 topics, tracked" is a proof point, and
+    // proof belongs after conviction rather than inside it.
     expect(SIX_PROMISES).toHaveLength(6);
     for (const p of SIX_PROMISES) {
-      expect(p.head.split(' ').length, `"${p.head}" is too long for a glance`).toBeLessThanOrEqual(5);
-      expect(p.sub.split(' ').length, `"${p.sub}" is too long for a glance`).toBeLessThanOrEqual(8);
-      // The relief phrase belongs to the RENDERING, not the data — so the
-      // landing-page chips can use the bare noun without it.
-      expect(p.head.toLowerCase().startsWith("now don't worry"), 'the prefix is rendered, not stored').toBe(false);
+      expect(p.head.split(' ').length, `"${p.head}" is too long to be loud`).toBeLessThanOrEqual(4);
+      expect(p.head.toLowerCase().startsWith("don't worry"), 'the prefix is rendered, not stored').toBe(false);
     }
     // The words students actually use in class, not our product language.
-    const all = SIX_PROMISES.map((p) => `${p.head} ${p.sub}`).join(' ').toLowerCase();
+    const all = SIX_PROMISES.map((p) => p.head).join(' ').toLowerCase();
     for (const word of ['backlog', 'revision', 'mock', 'syllabus', 'off day']) {
       expect(all, `"${word}" is missing — that is the word they say`).toContain(word);
     }
   });
 
-  it('every row says "now don\'t worry about" — the phrase IS the product', () => {
-    // Founder, 8 Aug: "add 'now don't worry about' to these lines — it gives
-    // them a feeling of freedom." Six bare nouns are a feature list; the
-    // phrase repeated six times is a weight being lifted six times, which is
-    // the whole positioning. Rendered small and muted above each noun, so it
-    // repeats without the screen growing.
+  it('every row is one loud sentence: Don\'t worry about X', () => {
+    // Six bare nouns are a feature list, and a feature list reads as work
+    // someone else is doing. The phrase repeated six times is six weights
+    // being lifted. It sits on the SAME line as the noun — split across two
+    // lines it became a label above a heading, which is two quiet things
+    // instead of one loud sentence. No "now": that invites a comparison with
+    // a past they have not stopped living in yet.
     const screen = readFileSync('src/components/six-promises.tsx', 'utf8');
-    expect(RELIEF_PREFIX.toLowerCase()).toBe("now don't worry about");
+    expect(RELIEF_PREFIX).toBe("Don't worry about");
+    expect(RELIEF_PREFIX.toLowerCase()).not.toContain('now');
     expect(screen).toContain('{RELIEF_PREFIX}');
   });
 

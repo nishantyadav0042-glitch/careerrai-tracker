@@ -29,24 +29,31 @@ import { cn } from '@/lib/utils';
 //   1 daily plan · 2 topic coverage · 3 revision cadence
 //   4 mock calendar + analysis slot · 5 feasibility verdict · 6 busy day
 /**
- * The phrase that turns a list into a release. Founder, 8 Aug: "add 'now
- * don't worry about' to these lines — it gives them a feeling of freedom."
+ * One line per worry, and the worry itself is the loud part.
  *
- * He is right, and it survives his earlier "too long" note because it is
- * rendered SMALL and MUTED above each noun rather than bolted onto it. The
- * phrase repeats six times, which is what creates the feeling; the eye still
- * scans six bold nouns, which is what kept it short. The data below stays as
- * plain nouns so the landing-page chips can use them without the prefix.
+ * Founder, 8 Aug: highlight "don't worry about revision", "don't worry about
+ * syllabus completion", like we did earlier — less verbose but loud, drop the
+ * "now", and it should feel like we are giving them a lot for free.
+ *
+ * Three things changed and each one earns its place. The phrase and the noun
+ * are back on ONE line, because splitting them across two lines made the
+ * phrase a label and the noun a heading — two quiet things instead of one loud
+ * sentence. The sub-lines are gone: "All 46 topics, tracked" is a proof point,
+ * and proof belongs after conviction, not inside it. And "now" went, because
+ * "Don't worry about revision" is an instruction while "Now don't worry about
+ * revision" is a comparison with a past they have not stopped living in yet.
+ *
+ * Six sentences, one screen, nothing to read twice.
  */
-export const RELIEF_PREFIX = "Now don't worry about";
+export const RELIEF_PREFIX = "Don't worry about";
 
-export const SIX_PROMISES: { n: string; head: string; sub: string }[] = [
-  { n: '1', head: 'What to study today', sub: 'Ready before you wake up' },
-  { n: '2', head: 'Your backlog', sub: 'All 46 topics, tracked' },
-  { n: '3', head: 'Revision', sub: 'What to revise, and when' },
-  { n: '4', head: 'Mocks', sub: 'When to give one. When to analyse it.' },
-  { n: '5', head: 'Syllabus finishing in time', sub: 'Checked every week' },
-  { n: '6', head: 'Off days', sub: 'Plan shifts. Nothing lost.' },
+export const SIX_PROMISES: { n: string; head: string }[] = [
+  { n: '1', head: 'what to study today' },
+  { n: '2', head: 'your backlog' },
+  { n: '3', head: 'revision' },
+  { n: '4', head: 'mocks' },
+  { n: '5', head: 'syllabus completion' },
+  { n: '6', head: 'off days' },
 ];
 
 export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' }: { onNext: () => void; ctaLabel?: string }) {
@@ -77,25 +84,16 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
         </div>
       </div>
 
-      <div>
-        <p className="mb-1.5 px-0.5 text-[10.5px] font-bold uppercase tracking-widest text-stone-400">
-          Ours — never your problem again
-        </p>
-        <ol className="space-y-2">
-          {SIX_PROMISES.map((p) => (
-            <li key={p.n} className="flex gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5">
-              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-stone-900 text-[10px] font-bold text-white">
-                {p.n}
-              </span>
-              <div className="min-w-0">
-                <p className="text-[10.5px] font-semibold leading-none text-stone-400">{RELIEF_PREFIX}</p>
-                <p className="mt-0.5 text-[13.5px] font-bold leading-snug text-stone-900">{p.head}</p>
-                <p className="text-[12px] leading-snug text-stone-500">{p.sub}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
+      <ul className="space-y-1.5">
+        {SIX_PROMISES.map((p) => (
+          <li key={p.n} className="rounded-xl bg-stone-50 px-3.5 py-2.5">
+            <p className="text-[15px] leading-snug text-stone-500">
+              {RELIEF_PREFIX}{' '}
+              <b className="text-stone-900">{p.head}</b>
+            </p>
+          </li>
+        ))}
+      </ul>
 
       {/* The one job, given the same weight as the six. This is the trade, and
           it is the whole positioning: six to one. */}
@@ -106,8 +104,8 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
           That&apos;s it. The hard part was never the <b className="text-white">padhai</b> — it&apos;s the{' '}
           <b className="text-white">not knowing</b>. Am I on track, what did I forget, will I finish.
         </p>
-        <p className="mt-2 inline-block rounded-md bg-emerald-500/15 px-2.5 py-1 text-[12px] font-bold text-emerald-300">
-          All six, 100% free
+        <p className="mt-3 inline-block rounded-lg bg-emerald-500 px-3.5 py-1.5 text-[14px] font-extrabold uppercase tracking-wide text-white">
+          All six · 100% free
         </p>
       </div>
 

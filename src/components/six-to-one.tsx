@@ -29,14 +29,16 @@ export function SixToOne() {
             key={p.n}
             className="rounded-md bg-white px-2 py-[3px] text-[10.5px] font-semibold text-stone-600 ring-1 ring-stone-200"
           >
-            {p.head}
+            {p.head.charAt(0).toUpperCase() + p.head.slice(1)}
           </span>
         ))}
       </div>
 
       <p className="mt-2.5 text-center text-[11px] leading-snug text-stone-500">
-        You just <b className="text-stone-800">study</b>. All six are{' '}
-        <b className="text-emerald-700">free</b>.
+        You just <b className="text-stone-800">study</b>.{' '}
+        <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wide text-white">
+          All six free
+        </span>
       </p>
     </div>
   );
