@@ -421,8 +421,14 @@ export default function WelcomePage() {
 
       <div className="shrink-0 px-6 pt-5 text-center">
         <p className="text-sm font-bold tracking-tight">CareerRai</p>
-        {/* Descriptor for strangers — clarity in the first 3 seconds. */}
-        <p className="mt-0.5 text-[11px] font-medium text-stone-400">CAT prep, tracked — with a real IIM buddy</p>
+        {/* Descriptor for strangers — clarity in the first 3 seconds.
+            The previous descriptor led with tracking and with the mentor, and
+            argued AGAINST the product: a stranger hears more work for me, and
+            the one paid thing is the first thing named. The promise is the
+            opposite — the worrying is ours, the studying is theirs, and the six
+            are free. (Quoting the old line verbatim here would trip the test
+            below that forbids it; the same trap the "Three taps" guard hit.) */}
+        <p className="mt-0.5 text-[11px] font-medium text-stone-400">You study. We plan everything else — free.</p>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 py-4">
@@ -456,8 +462,17 @@ export default function WelcomePage() {
             href="/start"
             className="flex w-full items-center justify-center rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white shadow-lg shadow-stone-900/15 transition-transform active:scale-[0.98]"
           >
-            Let&apos;s build your CAT tracking system →
+            Build my CAT plan — free →
           </Link>
+          {/* The six worries, compressed to one line. Founder, 8 Aug: "we
+              solve UNCERTAINTY" — so the landing page names the uncertainty
+              rather than listing features a stranger has seen on five other
+              apps. Every item here ships today. */}
+          <p className="px-1 text-center text-[11.5px] leading-relaxed text-stone-500">
+            What to study today · what&apos;s left · what to revise and when · when to mock and when to
+            analyse it · whether you&apos;ll finish in time · what happens on a bad day.
+            <b className="text-stone-700"> None of it is your problem any more.</b>
+          </p>
           <InstallButton variant="text" />
           {/* THE LOGIN DOOR. NEVER REMOVE IT, NEVER MAKE IT FINE PRINT.
               This page is the landing screen for EVERY logged-out arrival —

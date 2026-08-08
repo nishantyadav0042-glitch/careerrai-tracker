@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { SIX_PROMISES } from '@/components/six-promises';
 import {
   buildValueProof, shouldShowValueProof, hoursGivenBack, VALUE_PROOF_INTERVAL_DAYS,
 } from './value-proof';
@@ -78,6 +80,39 @@ describe('it never counts to zero, and never flatters', () => {
       plansBuilt: 3,
     });
     expect(v.body).toContain('tracked');
+  });
+});
+
+describe('one list of six worries, everywhere', () => {
+  it('every promise is phrased as a worry removed, not a feature shipped', () => {
+    // Founder, 8 Aug: "you are claiming different pain points, or ones students
+    // don't even really care about. We solve UNCERTAINTY." A feature list reads
+    // as another planner; naming the worry names the thing they lie awake about.
+    for (const p of SIX_PROMISES) {
+      expect(p.head.startsWith("Don't worry about"), `"${p.head}" is phrased as a feature`).toBe(true);
+    }
+    expect(SIX_PROMISES).toHaveLength(6);
+  });
+
+  it('the landing page and the AI caller carry the same six', () => {
+    // Three surfaces stated the pitch in three different ways, and the landing
+    // page argued against it outright: "CAT prep, tracked" tells a stranger
+    // there is MORE work for them, and leads with the one paid thing.
+    const welcome = readFileSync('src/app/welcome/page.tsx', 'utf8');
+    const riya = readFileSync('docs/EXPEDIFY-RIYA-PROMPT.txt', 'utf8');
+    for (const surface of [welcome, riya]) {
+      expect(surface).toMatch(/what to revise and when/i);
+      expect(surface).toMatch(/when to (take a )?mock/i);
+      expect(surface).toMatch(/finish/i);
+    }
+    expect(welcome).not.toContain('CAT prep, tracked');
+  });
+
+  it('free is never claimed without the mentor boundary nearby', () => {
+    // Say "free" loosely, let them meet the mentor price later, and every other
+    // true thing we said stops being believed.
+    const riya = readFileSync('docs/EXPEDIFY-RIYA-PROMPT.txt', 'utf8');
+    expect(riya).toMatch(/MENTOR IS THE ONLY PAID THING/);
   });
 });
 

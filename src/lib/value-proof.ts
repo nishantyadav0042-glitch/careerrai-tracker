@@ -74,8 +74,8 @@ export function buildValueProof(input: ValueProofInput): ValueProof {
   if (nothingMeasured || input.daysSinceSignup < 2) {
     return {
       kind: 'promise',
-      headline: 'Six things we do. One thing you do.',
-      body: `${SIX_PROMISES.length} jobs are ours — your plan, what to study today, remembering everything, revision timing, fixing the plan when life happens, and keeping you on track. All free.`,
+      headline: 'Six things you never have to worry about',
+      body: `What to study today, what is left, what to revise and when, when to take a mock and when to analyse it, whether you will finish in time, and what happens on a bad day. ${SIX_PROMISES.length} worries, all ours. Free.`,
       ask,
     };
   }
@@ -112,8 +112,8 @@ export function buildValueProof(input: ValueProofInput): ValueProof {
 
   return {
     kind: 'promise',
-    headline: 'Still free. Still six jobs to one.',
-    body: 'Your plan, today\'s work, your whole syllabus in memory, revision timing, the fix when life happens, and staying on track. We do those. You study.',
+    headline: 'Still nothing for you to work out',
+    body: 'What to study, what is left, what to revise and when, when to mock and when to analyse, whether you finish in time, and what happens on a bad day. All of it data-backed, all of it free.',
     ask,
   };
 }
