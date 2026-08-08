@@ -179,6 +179,7 @@ export type EventName =
   | 'coverage_review_shown' | 'coverage_reviewed'
   | 'timetable_upload_start' | 'timetable_saved' | 'timetable_parse_failed'
   | 'timetable_dismissed'
+  | 'busy_day_used'
   | 'next_action_started' | 'next_action_done' | 'next_action_expanded'
   | 'prep_index_expanded' | 'evidence_logged'
   | 'evidence_announce_shown' | 'evidence_announce_dismissed'

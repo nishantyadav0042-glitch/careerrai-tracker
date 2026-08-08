@@ -10,6 +10,7 @@
 
 import { TOPIC_METADATA } from './topics-constants';
 import { topicsTaught, type TimetableBlock, type CoachingTarget, type TimetableKind } from './timetable';
+import { anchorToMonth, detectShape, summariseMonth, type MonthSummary } from './timetable-month';
 
 export interface ApplyInput {
   blocks: TimetableBlock[];
@@ -25,6 +26,10 @@ export interface ApplyResult {
   aligned: number;
   planRebuilt: boolean;
   planSource: 'coaching' | 'careerrai';
+  /** What we read, counted from the anchored month — shown straight back. */
+  month: MonthSummary;
+  /** Dates written to the permanent coaching_sessions record. */
+  sessionsRecorded: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +50,38 @@ export async function applyCoachingTimetable(admin: any, studentId: string, inpu
 
   const taught = topicsTaught(input.blocks);
   let aligned = 0;
+
+  // ── The permanent record ───────────────────────────────────────────────────
+  // student_timetables is ONE row per student and its `blocks` array is
+  // replaced above, so month 2 used to erase month 1 — deleting the only
+  // evidence of what this student's coaching had already covered. The anchored
+  // month is written to coaching_sessions instead, keyed on (student, date), so
+  // a new upload refines the dates it covers and leaves every earlier date
+  // standing.
+  const today = new Date().toISOString().slice(0, 10);
+  const calendar = anchorToMonth(input.blocks, today);
+  const month = summariseMonth(calendar, detectShape(input.blocks));
+  const busy = calendar.filter((d) => d.topics.length > 0 || d.sections.length > 0);
+  let sessionsRecorded = 0;
+  if (busy.length > 0) {
+    const { error: sessErr } = await admin.from('coaching_sessions').upsert(
+      busy.map((d) => ({
+        student_id: studentId,
+        session_date: d.date,
+        topics: d.topics,
+        sections: d.sections,
+        labels: d.labels.slice(0, 20),
+        minutes: d.minutes,
+        source: (input.source ?? 'photo').slice(0, 20),
+        updated_at: nowIso,
+      })),
+      { onConflict: 'student_id,session_date' },
+    );
+    // A failed history write must NOT fail the upload — the student's plan is
+    // already aligned and telling them the save broke would be a lie.
+    if (sessErr) console.error('[timetable] coaching_sessions write failed', sessErr.message);
+    else sessionsRecorded = busy.length;
+  }
 
   const planSource = input.followCoaching ? 'coaching' as const : 'careerrai' as const;
   const profileUpdate: Record<string, unknown> = { plan_source: planSource };
@@ -87,7 +124,6 @@ export async function applyCoachingTimetable(admin: any, studentId: string, inpu
   // the next open rebuilds with today's class topics — never over ticked work.
   let planRebuilt = false;
   if (input.followCoaching) {
-    const today = new Date().toISOString().slice(0, 10);
     const { data: done } = await admin
       .from('routine_task_completions')
       .select('task_id').eq('student_id', studentId).eq('routine_date', today).limit(1);
@@ -97,5 +133,5 @@ export async function applyCoachingTimetable(admin: any, studentId: string, inpu
     }
   }
 
-  return { aligned, planRebuilt, planSource };
+  return { aligned, planRebuilt, planSource, month, sessionsRecorded };
 }

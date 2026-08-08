@@ -138,9 +138,9 @@ export function sheetsToPromptText(sheets: SheetText[]): string {
 // cannot overrun dates it never sees.
 
 /** Keep a dated sheet's header + only the rows inside [today, today+spanDays]. */
-export const DATED_WINDOW_DAYS = 21;
+export const DATED_WINDOW_DAYS = 31;
 /** Sheets with fewer dated rows than this are left whole — no need to cut. */
-export const DATED_WINDOW_THRESHOLD = 30;
+export const DATED_WINDOW_THRESHOLD = 40;
 
 const ISO_LINE = /^(\d{4}-\d{2}-\d{2})/;
 

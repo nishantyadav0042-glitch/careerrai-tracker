@@ -135,6 +135,20 @@ export function closeCopy(streak: number, weakest: string): SlotCopy {
 // fall back to the section-level copy above when it doesn't.
 
 // 09:30 — the day's plan preview, named. "Start with Geometry, then RC."
+// The coaching student's morning line. It says something they can CHECK —
+// their own class was on Percentages today — which is the difference between a
+// reminder ("come back to the app") and a manager's update ("this is handled").
+// Only sent when today's lead topic genuinely came from their timetable; if it
+// did not, the ordinary plan copy is the honest one.
+export function classMorningCopy(firstName: string, classTopic: string, estHours: number): SlotCopy {
+  const hrs = estHours >= 1 ? ` ~${estHours}h` : '';
+  return {
+    title: `${firstName}, today follows your class`,
+    body: `Your coaching does ${classTopic} today, so that leads your plan.${hrs} Already sorted.`,
+    expectedAction: 'log_today',
+  };
+}
+
 export function planMorningCopy(firstName: string, firstTopic: string, secondTopic: string | null, blocks: number, estHours: number): SlotCopy {
   const hrs = estHours >= 1 ? `~${estHours}h` : '';
   return {

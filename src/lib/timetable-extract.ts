@@ -20,7 +20,7 @@ export const spreadsheetPreface = (todayIso: string) => `You are reading the TEX
 SPREADSHEET-SPECIFIC RULES (these OVERRIDE anything below that conflicts):
 - A DAY-PLAN GRID — dated or Day-N rows where each row describes study tasks (often one column per section: "VARC task", "QA task", "DILR task") — IS a timetable. Set "is_timetable": true even when no clock times appear anywhere.
 - For such rows output one block PER SECTION TASK: the row's date (or dayIndex), that column's section, "start"/"end" null, "topic" matched from the allowed list when the cell names one, "label" a SHORT version of the cell text (max ~10 words).
-- TODAY is ${todayIso}. If the plan spans MORE than 30 dated days, output blocks ONLY for dates from ${todayIso} through 21 days later — earlier rows are the past and later rows will still be here next week. Weekly/phase sheets and targets are NOT windowed: read those whole.
+- TODAY is ${todayIso}. WE PLAN ONE MONTH AT A TIME. If the plan spans MORE than 40 dated days, output blocks ONLY for dates from ${todayIso} through 31 days later — earlier rows are the past, and later rows will still be in the sheet when the student uploads next month's. Weekly/phase sheets and targets are NOT windowed: read those whole.
 - Rows marked OFF / blackout / rest / holiday are days off — skip them entirely, exactly as the skip rule below says.
 - A week-level phase sheet ("Week 5 | 07 Sep-13 Sep | Algebra I | ... | 1 full mock + 2 sectionals") does not produce class blocks, but its tests/mocks column often states real targets — extract those, and a printed syllabus-completion week ("Syllabus closure") may state syllabus_end_date only if an actual end date is printed.`;
 

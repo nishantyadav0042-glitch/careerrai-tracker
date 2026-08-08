@@ -8,7 +8,7 @@ import {
   morningCopy, factCopy, openCopy, progressCopy, logCopy, closeCopy,
   kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
   missedCheckInKickoffCopy,
-  planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy,
+  planMorningCopy, planOpenCopy, planProgressCopy, planLogCopy, classMorningCopy,
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
@@ -202,8 +202,16 @@ export async function POST(request: NextRequest) {
         if (plan && plan.topicTasks.length > 0) {
           const firstTopic = plan.topicTasks[0].topic!;
           const secondTopic = plan.topicTasks[1]?.topic ?? null;
-          copy = planMorningCopy(firstName, firstTopic, secondTopic, plan.totalCount, planEstHours);
-          reason = `Companion 09:30 — plan preview (topic: ${firstTopic}${secondTopic ? ` → ${secondTopic}` : ''})`;
+          // If today's lead topic is one their coaching actually teaches today,
+          // say so. It is the same plan either way — this only changes whether
+          // the student is told the reason, and the reason is checkable.
+          if (plan.classTopics.includes(firstTopic)) {
+            copy = classMorningCopy(firstName, firstTopic, planEstHours);
+            reason = `Companion 09:30 — coaching class today (${firstTopic})`;
+          } else {
+            copy = planMorningCopy(firstName, firstTopic, secondTopic, plan.totalCount, planEstHours);
+            reason = `Companion 09:30 — plan preview (topic: ${firstTopic}${secondTopic ? ` → ${secondTopic}` : ''})`;
+          }
         } else {
           copy = morningCopy(weakest, hoursToday);
           reason = `Companion 09:30 — plan preview (${weakest} weakest, ${hoursToday}h committed)`;

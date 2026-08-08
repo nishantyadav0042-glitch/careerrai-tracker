@@ -189,10 +189,15 @@ describe('windowing long day-plans (the MAX_TOKENS fix)', () => {
     const buf = readFileSync(join(__dirname, '__fixtures__', 'buddy-weekly-plan.xlsx'));
     const sheets = windowDatedSheets(await workbookToSheets(buf), '2026-08-06');
     const daily = sheets.find((s) => s.name === 'Daily Schedule')!;
-    expect(daily.rows).toBeLessThan(30);          // 117 before
+    // 117 rows before. The window is ONE MONTH now (founder, 8 Aug: "limit it
+    // to a month and say so"), up from 21 days, so more survives — but the cut
+    // still has to do its job, which is keeping the file inside the model's
+    // output budget. 33 rows is ~99 blocks, comfortably under the ~160 that
+    // 8192 output tokens can hold.
+    expect(daily.rows).toBeLessThan(40);          // 117 before
     expect(daily.text).toContain('2026-08-06');   // today stays
     expect(daily.text).toContain('Date | Day');   // header stays
-    expect(daily.text).not.toContain('2026-09-26'); // far future cut
+    expect(daily.text).not.toContain('2026-09-26'); // still past the month, still cut
     // Undated sheets are untouched.
     expect(sheets.find((s) => s.name === 'Weekly Plan')!.rows).toBe(17);
     expect(sheets.find((s) => s.name === 'Topic Tracker')!.rows).toBe(47);

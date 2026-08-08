@@ -16,6 +16,7 @@ import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
+import { BusyDayButton } from '@/components/busy-day-button';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
@@ -344,7 +345,17 @@ export default async function DailyTrackerPage() {
       firstLogNudge={(logs ?? []).length === 0}
     />
   );
-  const planBlock = <TodaysRoutineCard />;
+  // The plan, and directly under it the one honest way out of it. Placed
+  // together on purpose: a student looking at a day they cannot do should find
+  // the answer in the same glance, not in a settings screen.
+  const planBlock = (
+    <>
+      <TodaysRoutineCard />
+      <div className="mt-2">
+        <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
+      </div>
+    </>
+  );
 
   // ── Day-1 insight (founder, 21 July): the FIRST thing shown in the
   // installed app is VALUE — "where you lack as of today", straight from the

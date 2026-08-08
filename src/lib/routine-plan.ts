@@ -58,6 +58,15 @@ export interface TodaysPlan {
   doneCount: number;
   totalCount: number;
   allDone: boolean;
+  /**
+   * Topics the student's coaching teaches TODAY, from the anchored month.
+   * Empty for everyone not following a coaching plan. Carried on the plan so a
+   * notification can say WHY today leads where it does — a coaching student
+   * reading "Percentages, because that is today's class" is being told
+   * something they can verify, which is the whole difference between a
+   * reminder and a manager's update.
+   */
+  classTopics: string[];
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -328,6 +337,7 @@ export async function computeTodaysPlan(
       doneCount,
       totalCount: tasks.length,
       allDone: doneCount >= tasks.length,
+      classTopics: todayClassTopics,
     };
   } catch {
     // Never let a plan-computation failure break the notification send — the

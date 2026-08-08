@@ -37,7 +37,13 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-type Stage = 'ask' | 'reading' | 'review' | 'choose' | 'saving' | 'hours';
+type Stage = 'ask' | 'reading' | 'review' | 'choose' | 'saving' | 'hours' | 'month';
+
+/** "Mon 11" — short enough for a narrow row, unambiguous against a paper sheet. */
+function fmtDay(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
+}
 
 export type CloseReason = 'saved' | 'declined' | 'closed';
 
@@ -55,6 +61,15 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
   // the student's own setting. The founder's rule: we CHECK, the student
   // decides — one tap adopts the timetable's number through the one writer.
   const [hoursMismatch, setHoursMismatch] = useState<{ timetableHours: number; currentHours: number } | null>(null);
+  // What we read back, counted from the anchored month. This is the whole
+  // point of the confirmation: a student holding their own sheet can check
+  // "24 days, 18 topics" against it in three seconds. "We understood your
+  // timetable" is not checkable and therefore not worth saying.
+  const [month, setMonth] = useState<{
+    daysCovered: number; totalDays: number; topics: number; sections: string[];
+    firstDate: string | null; lastDate: string | null;
+  } | null>(null);
+  const [days, setDays] = useState<{ date: string; topics: string[]; sections: string[] }[]>([]);
   const [hoursBusy, setHoursBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -187,6 +202,10 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
         alignedTopics: json.alignedTopics ?? 0, planSource: json.planSource, kind,
         planRebuilt: json.planRebuilt ?? false,
       });
+      if (json.month && (json.month.daysCovered ?? 0) > 0) {
+        setMonth(json.month);
+        setDays(Array.isArray(json.days) ? json.days : []);
+      }
       if (json.hoursMismatch) {
         // Saved fine — but the timetable plans different hours than the
         // student's setting. Ask before closing; skipping keeps their number.
@@ -194,6 +213,10 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
         setStage('hours');
         return;
       }
+      // Show the month back before closing. A student who has just handed us a
+      // photo has no way of knowing whether it worked; the plan changing
+      // tomorrow morning is too late to build any trust today.
+      if (json.month && (json.month.daysCovered ?? 0) > 0) { setStage('month'); return; }
       onClose('saved');
     } catch {
       setError('Could not save. Please try again.');
@@ -360,6 +383,63 @@ export function TimetableUpload({ onClose, kind = 'weekly' }: {
               Upload a different photo
             </button>
           </>
+        )}
+
+        {stage === 'month' && month && (
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-3xl">\u2705</p>
+              <h2 className="mt-2 text-xl font-bold text-stone-900">Got it — here is your month</h2>
+              <p className="mt-1 text-[13px] leading-snug text-stone-600">
+                Check it against your own sheet. If a day looks wrong, upload again and we&apos;ll re-read it.
+              </p>
+            </div>
+
+            {/* Counted, not claimed. Every number here can be verified by eye
+                against the paper in the student's hand. */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { n: month.daysCovered, label: month.daysCovered === 1 ? 'day with classes' : 'days with classes' },
+                { n: month.topics, label: month.topics === 1 ? 'topic' : 'topics' },
+                { n: month.sections.length, label: month.sections.length === 1 ? 'section' : 'sections' },
+              ].map((x) => (
+                <div key={x.label} className="rounded-xl border border-stone-200 bg-white p-3 text-center">
+                  <p className="text-2xl font-bold text-stone-900">{x.n}</p>
+                  <p className="text-[11px] leading-tight text-stone-500">{x.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {month.firstDate && month.lastDate && (
+              <p className="text-center text-[12px] text-stone-500">
+                {fmtDay(month.firstDate)} to {fmtDay(month.lastDate)} · planned across {month.totalDays} days
+              </p>
+            )}
+
+            <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-xl border border-stone-200 bg-stone-50 p-2">
+              {days.map((d) => (
+                <div key={d.date} className="flex gap-2 rounded-lg bg-white px-2.5 py-2">
+                  <span className="w-16 shrink-0 text-[11px] font-semibold text-stone-500">{fmtDay(d.date)}</span>
+                  <span className="min-w-0 flex-1 text-[12px] leading-snug text-stone-800">
+                    {d.topics.length > 0 ? d.topics.join(', ') : d.sections.join(', ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="px-1 text-center text-[11.5px] leading-snug text-stone-500">
+              Your daily plan now leads with whatever your class covers that day. When this month runs out we&apos;ll
+              ask for the next sheet.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => onClose('saved')}
+              className="w-full rounded-xl bg-stone-900 py-3 text-sm font-semibold text-white"
+            >
+              Looks right \u2192
+            </button>
+          </div>
         )}
 
         {stage === 'hours' && hoursMismatch && (

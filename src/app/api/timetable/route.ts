@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sanitizeBlocks, sanitizeSyllabusEndDate, sanitizeTargets, isTimetableKind, type TimetableBlock } from '@/lib/timetable';
-import { timetableDailyHours, horizonDaysLeft } from '@/lib/timetable-align';
+import { timetableDailyHours } from '@/lib/timetable-align';
+import { anchorToMonth, monthDaysLeft } from '@/lib/timetable-month';
 import { applyCoachingTimetable } from '@/lib/timetable-apply';
 import { dailyHours } from '@/lib/daily-hours';
 
@@ -110,10 +111,22 @@ export async function POST(request: NextRequest) {
       ? { timetableHours: impliedHours, currentHours }
       : null;
 
+  // The month we read, played straight back so the student can check it
+  // against the sheet in their hand. Every figure is COUNTED from the anchored
+  // calendar rather than described — "31 days, 24 with classes, 18 topics" is
+  // checkable; "we understood your timetable" is not.
+  const today = new Date().toISOString().slice(0, 10);
+  const calendar = anchorToMonth(blocks, today);
   return NextResponse.json({
     ok: true, blocks: blocks.length, targets: targets.length, alignedTopics: aligned,
     planRebuilt, hoursMismatch,
-    horizonDaysLeft: horizonDaysLeft(blocks, new Date().toISOString().slice(0, 10)),
+    month: applied.month,
+    sessionsRecorded: applied.sessionsRecorded,
+    // Only the days that carry something — an empty day needs no row on screen.
+    days: calendar
+      .filter((d) => d.topics.length > 0 || d.sections.length > 0)
+      .map((d) => ({ date: d.date, topics: d.topics, sections: d.sections })),
+    monthDaysLeft: monthDaysLeft(calendar, today),
     planSource, syllabusEndDate: followCoaching ? syllabusEndDate : null,
   });
 }
