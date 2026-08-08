@@ -104,6 +104,8 @@ export function TodaysRoutineCard() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [budget] = useState<TimeBudget>('planned');
   const [fullyDone, setFullyDone] = useState(false);
+  const [addingBlock, setAddingBlock] = useState(false);
+  const [addBlockError, setAddBlockError] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -236,6 +238,26 @@ export function TodaysRoutineCard() {
 
   // Swap one of today's topics for a same-section alternative — the plan's
   // section balance stays; which topic within it is the student's call.
+  // One more block on a finished day — the same engine picks it, the card
+  // re-pulls, and the day reopens with exactly one new task to do.
+  async function addBlock() {
+    if (addingBlock) return;
+    setAddingBlock(true);
+    setAddBlockError(null);
+    try {
+      const res = await fetch('/api/routine/add-block', { method: 'POST' });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setAddBlockError(json.error ?? 'Could not add — try again.'); return; }
+      routineTodayCache = null;
+      setFullyDone(false);
+      await load();
+    } catch {
+      setAddBlockError('Could not add — check your connection.');
+    } finally {
+      setAddingBlock(false);
+    }
+  }
+
   async function swapTopic(task: RoutineTask, topic: string) {
     if (swapBusy) return;
     setSwapBusy(true);
@@ -387,6 +409,19 @@ export function TodaysRoutineCard() {
             )}
             <p className="text-sm text-stone-600">Your next step is already being built — open tomorrow and go</p>
           </div>
+
+          {/* Stage A: the door a finished floor-day opens. The plan is small
+              on purpose; a good day grows one block at a time — each finished
+              before the next appears, never a wall of tasks up front. */}
+          <button
+            type="button"
+            disabled={addingBlock}
+            onClick={() => void addBlock()}
+            className="mx-auto mt-3 block rounded-xl border border-stone-300 bg-white px-5 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:border-stone-900 disabled:opacity-60"
+          >
+            {addingBlock ? 'Adding…' : 'One more? +30 min'}
+          </button>
+          {addBlockError && <p className="mt-2 text-center text-xs text-stone-500">{addBlockError}</p>}
           {(calibrated || data.routine.calibration) ? (
             <p className="mt-4 text-center text-xs font-medium text-teal-700">✓ Noted — this tunes tomorrow&apos;s plan.</p>
           ) : (
