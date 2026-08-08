@@ -293,9 +293,18 @@ Twenty non-negotiable principles.
 2. **The planner plans backwards from the exam, not forwards from today.**
    Mock dates, the revision lock, and the scope commitment are placed first;
    learning fills the space that remains.
-3. **Scope is a commitment, made once, in writing.** At plan creation the
-   system names exactly which topics it will teach, sized to fit real
-   capacity, and shows what it excluded and why.
+3. **Scope is a commitment that ratchets, never drifts.** At plan creation the
+   system names exactly which topics it will teach, sized to real capacity,
+   and shows what it excluded and why. It may then change — but only at
+   **named review points** (the Sunday reconcile, a completed mock, a change
+   of hours, a change of deadline), never mid-week and never silently. Every
+   change carries a reason, a magnitude and a date, and lands in a visible
+   scope history. *Founder, 8 Aug: a static scope is a printed timetable with
+   better manners; the intelligence is in the reassessment.*
+   **Anti-thrash rules, because adaptive scope's failure mode is churn:** a
+   topic that leaves scope cannot return for 14 days; no more than three
+   topics may move in one review; and a topic already taught is never removed
+   (it moves to maintenance — we do not un-teach).
 4. **Completion must be mathematically guaranteed.** If the student follows
    the plan, the committed scope finishes before the deadline. If that cannot
    be true, the scope is wrong and must be cut before the plan is shown.
@@ -338,8 +347,15 @@ Twenty non-negotiable principles.
     self-report through the working stages, but the final rung is earned only
     through demonstrated accuracy at difficulty. Self-assessment is weakest
     exactly where it matters most.
-16. **The progress number must be able to reach 100%, and must mean one
-    thing.** A ring that cannot close is a promise the product cannot keep.
+16. **The metric is exam-ready scope, never topic count.** 15 of 46 can be
+    brilliant or catastrophic; the difference is mastery, retention and mock
+    performance, so those are what completion must mean. The ring measures
+    *committed scope that is exam-ready by evidence* — reachable, because
+    scope is finite, and honest, because it cannot be tapped into existence.
+    **It must never be shown as a single composite**, which would move too
+    slowly in week two to be motivating and would hide which of its parts is
+    failing. Three plain numbers instead: *taught · exam-ready · due for
+    revision*, against a named scope.
 17. **Mocks are the exam clock and own their days.** The cadence escalates —
     fortnightly, then weekly, then twice weekly — is placed before any
     learning is scheduled, and every mock is followed by a scheduled analysis
@@ -409,6 +425,34 @@ a day and 60 days, here are the 15 topics that will earn you the most. These
 
 That conversation is the product. It is also the most honest thing we could
 say to a student, and no coaching institute says it.
+
+## The four preparation states (founder, 8 Aug)
+
+The plan is always in exactly one named state, and the student can see which.
+Naming the state is the most honest label in the product — and a state change
+is a notable event, delivered like the Sunday date warning: once, with the
+arithmetic attached.
+
+| State | Meaning | What the student is told |
+|---|---|---|
+| **Full Coverage** | Capacity ≥ demand for the whole planned syllabus | "You have time for all of it. Here's the calendar." |
+| **Strategic Coverage** | Capacity < full demand; scope selected by marks per hour | "You can't finish everything by 31 Oct. These 15 topics earn you the most. These 18 are out — and here's what would bring them back." |
+| **Recovery** | Behind the committed plan; buffer spent, date extended | "You're behind. I'm protecting your most valuable preparation and rebuilding the rest of the calendar." |
+| **Expansion** | Ahead of pace in Strategic Coverage | "You've earned Logarithms back." |
+
+**Expansion matters more than it looks.** A student who speeds up must get
+topics *returned*, by name — it is the only moment in the product where extra
+effort visibly buys extra scope, and it converts our most painful message
+("these 18 are out") into a lever the student controls.
+
+**The scope floor — the safeguard against silent erosion.** Adaptive scope
+plus Recovery has an ugly failure mode: every bad week cuts a little, and a
+chronically inconsistent student ends with four topics and a "100% complete"
+ring. So there is a floor — a core scope below which the planner will not cut.
+At the floor it stops trimming and tells the truth instead: *"I can't cut
+further without this stopping being a CAT plan. From here it's about damage
+limitation — and one extra hour a day would buy back six topics."* A planner
+that can shrink to fit anything is a planner that promises nothing.
 
 ## What a day looks like
 
@@ -497,21 +541,88 @@ will.**
 
 ---
 
-## What I need from you before any of this is built
+---
 
-Three product decisions only you can make:
+# PART 9 — DECISIONS TAKEN, AND THE GATE BEFORE CODE
 
-1. **Is deliberate scope reduction acceptable as a product behaviour?** The
-   research says it is how people actually crack CAT in limited time. It
-   means the app will sometimes say "you cannot do all of it — here is what to
-   drop." I believe this is our most trustworthy possible moment. It is also
-   the biggest departure from what coaching sells.
-2. **Where is the revision lock?** The date after which no new topic is ever
-   introduced. I'd argue ~60% of the calendar, or 1 October for a November
-   exam, whichever is earlier.
-3. **How visible should the full calendar be?** Showing the whole journey is
-   the strongest trust artefact we could build — and the strongest commitment
-   device. It also means a student can see us fail.
+## The three decisions (founder, 8 Aug — settled)
+
+1. **Deliberate scope reduction is approved product behaviour.** With the
+   condition that it is never silent and never lets the planner decide on its
+   own that thirteen topics are enough.
+2. **The revision lock is 1 October.** No topic gets first contact after that
+   date. Everything from 1 Oct is consolidation, revision and mocks.
+3. **The full calendar is visible to the student.** Every week from today to
+   the exam, readable in advance. Maximum commitment device, maximum trust —
+   and it means a student can watch us fail, which is the price of the
+   promise.
+
+## The product philosophy (founder's words, adopted verbatim)
+
+> **CareerRai doesn't promise to teach every topic. It promises never to waste
+> the student's available preparation time.**
+
+This replaces "finish the syllabus" as the headline promise throughout the
+product. It is a better promise because it is one we can actually keep for
+every student — the 1.5-hour student and the 12-hour student alike — and
+because it makes the planner's real job legible: *not coverage, but
+allocation.*
+
+Restated as the planner's objective:
+
+> Given this student's time, starting point, deadline and evidence, determine
+> the highest-value preparation scope they can realistically complete — then
+> guarantee that scope gets completed, revised and tested before CAT.
+
+## The gate: simulation before implementation
+
+No planner code is written until the model is proven in simulation against
+every scenario below, using the same discipline as the audit harness (drive
+the real model, print what the student would actually see).
+
+**Capacity and starting-point matrix (founder's list):**
+1.5h × 60d · 3h × 120d · 5h × 180d · 8h × 250d · 12h × 84d · 80% already
+covered · 30% already covered · strong QA/weak VARC · weak DILR · repeater ·
+massive missed-study period.
+
+**Adversarial scenarios (added — these are what would actually break it):**
+- **Scope thrash:** a student whose pace oscillates week to week. Does scope
+  churn? The anti-thrash rules must hold.
+- **Evidence contradicts self-report:** claims strong QA; mocks say otherwise.
+  Does scope reassess, and does it say why?
+- **Hours changed in both directions** mid-flight.
+- **Returns after 30 days with the exam wall close** — does it degrade in the
+  published order, or panic?
+- **Floor test:** a chronically inconsistent student. Does the planner stop
+  cutting at the floor and tell the truth, or shrink to four topics and
+  declare victory?
+- **Expansion test:** a Strategic Coverage student who speeds up. Do topics
+  come back, by name, without thrashing?
+
+**The killer test — every simulated student, four questions:**
+1. What did the planner choose to teach?
+2. What did it choose **not** to teach, and why?
+3. Can the chosen scope actually be completed, revised and tested before CAT?
+4. **What would have to change for the dropped topics to come back?** *(Added:
+   this is the one that converts a limitation into a lever the student
+   controls — and it is the honest Buddy conversation.)*
+
+If the model cannot answer all four for every student, the planner is not
+built yet.
+
+## Parameters that are product decisions, not engineering ones
+
+The simulation needs defaults for these. I'll pick defensible ones and flag
+each so you can overrule with real numbers:
+
+- The **allocation curve** — how the syllabus/memory/exam split shifts from
+  August to November.
+- The **scope floor** — how small scope may get before we stop cutting.
+- The **exam-ready bar** — what evidence earns the final rung.
+- The **revision ladder** — the interval sequence after each successful
+  retrieval.
+- The **buffer** — how much of capacity is reserved for real life (I've
+  assumed 15%).
 
 ---
 
