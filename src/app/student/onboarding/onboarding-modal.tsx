@@ -141,6 +141,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const preview = computeBlueprintPreview({
     attempt_year: onboardingData.attempt_year as number | undefined,
     is_repeater: onboardingData.is_repeater as boolean | undefined,
+    last_year_percentile: onboardingData.last_year_percentile as number | undefined,
     is_working_professional: onboardingData.is_working_professional as boolean | undefined,
     course_year: onboardingData.course_year as number | undefined,
     weakest_section: onboardingData.weakest_section as string | undefined,
@@ -235,6 +236,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         coverageLearning: (onboardingData.coverage_learning as number | undefined) ?? null,
         coverageTotal: (onboardingData.coverage_total as number | undefined) ?? null,
         attemptYear: (onboardingData.attempt_year as number | undefined) ?? null,
+        isRepeater: (onboardingData.is_repeater as boolean | undefined) ?? null,
+        lastYearPercentile: (onboardingData.last_year_percentile as number | undefined) ?? null,
         ambitionDate: (onboardingData.ambition_date as string | undefined) ?? null,
       },
     },

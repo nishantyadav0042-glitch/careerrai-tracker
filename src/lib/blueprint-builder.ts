@@ -4,7 +4,7 @@
 // topic-selector, or prep-memory (see the field-by-field mapping in each
 // section below) — this computes what's already true about the Blueprint
 // being built, not a decorative progress indicator.
-import { totalSyllabusHours, REMAINING_FRACTION } from './study-pace';
+import { totalSyllabusHours, REMAINING_FRACTION, studentEffortMultiplier } from './study-pace';
 //
 // Pure and parse-free like every other engine in this codebase — the caller
 // passes in whatever's been answered so far, this derives what's now knowable.
@@ -46,6 +46,8 @@ export const BLUEPRINT_SECTIONS: BlueprintSection[] = [
 export interface BlueprintPreviewInput {
   attempt_year?: number | null;
   is_repeater?: boolean | null;
+  /** Last year's percentile — with is_repeater, this sets the effort multiplier. */
+  last_year_percentile?: number | null;
   is_working_professional?: boolean | null;
   course_year?: number | null;
   weakest_section?: string | null;
@@ -136,7 +138,18 @@ export function remainingPrepHours(input: BlueprintPreviewInput): number {
   const practicing = declared ? (input.coverage_practicing ?? 0) : 0;
   const learning = declared ? (input.coverage_learning ?? 0) : 0;
   const untouched = Math.max(0, total - practicing - learning);
-  return untouched * HOURS_PER_UNTOUCHED_UNIT + learning * HOURS_PER_LEARNING_UNIT + practicing * HOURS_PER_PRACTICING_UNIT;
+  const raw = untouched * HOURS_PER_UNTOUCHED_UNIT + learning * HOURS_PER_LEARNING_UNIT + practicing * HOURS_PER_PRACTICING_UNIT;
+  // The SAME per-student effort scaling the tracker's pace card applies
+  // (study-pace.studentEffortMultiplier). Without this line the finish-date
+  // chooser quotes a repeater the full 397-hour syllabus, they pick a date
+  // against it, and their Home screen then prices the identical syllabus at
+  // 258 hours the next morning. Two numbers for one student is the exact
+  // failure this file's header was written about — it just described the
+  // count-vs-per-topic split and not this one.
+  return raw * studentEffortMultiplier({
+    isRepeater: input.is_repeater,
+    lastYearPercentile: input.last_year_percentile,
+  });
 }
 
 export function projectCoverageWeeks(input: BlueprintPreviewInput): CoverageProjection | null {

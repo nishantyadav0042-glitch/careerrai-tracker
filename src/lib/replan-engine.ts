@@ -102,7 +102,10 @@ export function daysBetween(from: Date, to: Date): number {
  * one). Only not_started / learning topics are considered — a topic already
  * being revised is sunk effort and dropping it wastes what the student did.
  */
-export function droppableTopics(rows: TopicStatusRow[]): { topic: string; hours: number; weightage: number }[] {
+// `effort` is required for the same reason the totals scale: these are the
+// hours a student SAVES by dropping a topic, and a saving quoted from the
+// unscaled model would not add up against a scaled total.
+export function droppableTopics(rows: TopicStatusRow[], effort: number): { topic: string; hours: number; weightage: number }[] {
   const statusByTopic = new Map<string, string>();
   for (const r of rows) if (r.status) statusByTopic.set(r.topic, r.status);
 
@@ -112,7 +115,7 @@ export function droppableTopics(rows: TopicStatusRow[]): { topic: string; hours:
     const status = statusByTopic.get(topic) ?? 'not_started';
     if (status !== 'not_started' && status !== 'learning') continue;
     const frac = status === 'learning' ? 0.65 : 1.0;
-    out.push({ topic, hours: Math.round(meta.estimatedHours * frac), weightage: meta.weightage });
+    out.push({ topic, hours: Math.round(meta.estimatedHours * frac * effort), weightage: meta.weightage });
   }
   return out.sort((a, b) => (a.weightage - b.weightage) || (b.hours - a.hours));
 }
@@ -262,7 +265,7 @@ export function computeReplan(input: ReplanInput): ReplanResult {
   const dropped: string[] = [];
   let droppedHours = 0;
   if (gap > 0) {
-    for (const t of droppableTopics(coverage)) {
+    for (const t of droppableTopics(coverage, input.effortMultiplier)) {
       if (droppedHours >= gap) break;
       dropped.push(t.topic);
       droppedHours += t.hours;

@@ -128,7 +128,7 @@ describe('the guards that make this trustworthy', () => {
 
   it('will not sacrifice work already in progress (revising/practicing topics)', () => {
     const rows: TopicStatusRow[] = ALL_TOPICS.map((t) => ({ topic: t, status: 'revising' }));
-    expect(droppableTopics(rows)).toHaveLength(0);
+    expect(droppableTopics(rows, 1)).toHaveLength(0);
   });
 });
 

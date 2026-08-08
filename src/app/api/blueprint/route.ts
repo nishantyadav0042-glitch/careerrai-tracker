@@ -257,6 +257,12 @@ export async function GET() {
       coverage ?? [],
       (profile.study_target_hours as number | null) ?? null,
       today,
+      // The same multiplier syllabusLeft above was computed with — the week
+      // schedule and the pace ring price the identical syllabus.
+      studentEffortMultiplier({
+        isRepeater: profile.is_repeater as boolean | null,
+        lastYearPercentile: profile.last_year_percentile as number | null,
+      }),
       7,
       weekPace?.requiredPerDay ?? null,
     ),

@@ -37,6 +37,13 @@ export function buildWeekPlan(
   rows: { topic: string; status: string | null }[],
   committedDaily: number | null,
   today: Date,
+  /**
+   * Per-student effort scaling (study-pace.studentEffortMultiplier). Required,
+   * and placed ahead of the optional arguments so it cannot be forgotten:
+   * this lays REAL hours into REAL days, so a repeater whose syllabus is
+   * priced at 258h everywhere else must not be handed 397h of week.
+   */
+  effort: number,
   days = 7,
   /**
    * Hours per day the student ACTUALLY needs to finish on time (the pace
@@ -52,7 +59,7 @@ export function buildWeekPlan(
   const queue = Object.entries(TOPIC_METADATA)
     .map(([topic, meta]) => {
       const status = (statusByTopic.get(topic) as CoverageStatus) ?? 'not_started';
-      const remaining = meta.estimatedHours * (REMAINING_FRACTION[status] ?? 1);
+      const remaining = meta.estimatedHours * (REMAINING_FRACTION[status] ?? 1) * effort;
       let prereqPenalty = 0;
       if (meta.prerequisites?.length) {
         const unmet = meta.prerequisites.some((p) => {

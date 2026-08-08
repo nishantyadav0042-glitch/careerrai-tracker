@@ -29,9 +29,13 @@ function fullSyllabusHours(): number {
 // own copy (`catApprox`), which happened to agree; the day the real one
 // changed, this one silently wouldn't have.
 
-export function computeFeasibility(ambitionDateIso: string | null | undefined, hoursPerDay: number | null | undefined, now: Date = new Date()): Feasibility | null {
+// `effort` is required and has no default even though this function currently
+// has no callers — that is exactly why. A revived helper that silently prices
+// every student at 1.0 would reintroduce the split this module's own header
+// warns about, and nothing would fail to compile. See studentEffortMultiplier.
+export function computeFeasibility(ambitionDateIso: string | null | undefined, hoursPerDay: number | null | undefined, effort: number, now: Date = new Date()): Feasibility | null {
   if (!ambitionDateIso || !hoursPerDay || hoursPerDay <= 0) return null;
-  const syllabus = fullSyllabusHours();
+  const syllabus = fullSyllabusHours() * effort;
   const totalHours = Math.round(syllabus + remainingMockHours(syllabus));
 
   const target = new Date(ambitionDateIso + 'T00:00:00');

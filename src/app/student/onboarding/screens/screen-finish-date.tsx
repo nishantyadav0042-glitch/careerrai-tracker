@@ -17,6 +17,10 @@ interface Props {
   // The date the student picked at the very start (screen 2) — this screen
   // now reconciles that ambition against the real per-day cost.
   ambitionDate: string | null;
+  // Effort inputs. A repeater's syllabus is genuinely smaller, so their date
+  // options must be priced with the same multiplier Home uses.
+  isRepeater: boolean | null;
+  lastYearPercentile: number | null;
 }
 
 // The finish-date chooser — the commitment, not a setting (founder
@@ -47,14 +51,20 @@ function toIsoDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, attemptYear, ambitionDate }: Props) {
+export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, attemptYear, ambitionDate, isRepeater, lastYearPercentile }: Props) {
   const [selected, setSelected] = useState<number | 'custom' | null>(null);
   const [customDate, setCustomDate] = useState<string>('');
 
+  // is_repeater + last_year_percentile are NOT decoration here: they set the
+  // effort multiplier, so a repeater's date options are priced against their
+  // real syllabus. Leave them out and this screen offers dates computed from
+  // 397 hours while Home prices the same syllabus at 258 the next morning.
   const input: BlueprintPreviewInput = {
     coverage_practicing: coveragePracticing,
     coverage_learning: coverageLearning,
     coverage_total: coverageTotal,
+    is_repeater: isRepeater,
+    last_year_percentile: lastYearPercentile,
   };
   const syllabusLeft = remainingPrepHours(input);
   // Syllabus + mock budget (a full mock ≈ 4h incl. analysis) — the same
