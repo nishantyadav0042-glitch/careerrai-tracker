@@ -238,16 +238,56 @@ Content · lectures · question banks · doubt chatbot · leaderboards ·
 public comparison · any second thing to maintain · any notification without
 new information about *them* · any feature that adds a decision.
 
+## Review merge — 8 Aug (Gemini × ChatGPT × founder × our data)
+
+**Build order changed by evidence: 2 → 1 → 4 → 3 → 5.** Gemini argued a new
+user experiences overwhelm on day 0, not shame — and our funnel proves it:
+of 257 students, 226 finished onboarding and only **77 ever logged one day**.
+The first-hour loss (~149 students) is 3× the day-2 shame loss (48). So the
+first hour is Stage A; shame is Stage B. The bad-day-floor *question* moves
+into the new first-run (it replaces the hours question there anyway).
+
+**Settled verdicts (all three reviewers + data):**
+- **A20/A21 Daily Pick & Challenge — demoted, not deleted.** Founder's call:
+  keep a daily tip. Shape it ChatGPT's way: ONE execution tip a day, one
+  sentence, 5-second read ("Skip long RCs first today"), folded into
+  "Today's one thing" (A15). Voting/submissions move off the main path to
+  their own tab; nothing pushed. Engagement data is thin (~2–5 votes/item),
+  so the pilot continues quietly without occupying the home screen.
+- **Manual mapping — kept, two paths (founder + ChatGPT overrule Gemini).**
+  Onboarding asks one question: *"Have a coaching timetable?"* → photo, zero
+  typing. *"Self-study?"* → build together. One refinement: build-together
+  asks 8 coarse area chips at signup, not all 46 topics — fine-grained
+  mapping lives in the map (A11) for later. Fewest lifetime hours, not
+  fewest clicks — but day-1 length is what kills day-1.
+- **A9 Confidence taps — one-tap default.** Tick = done, full stop. The
+  🟢🔵🟡🔴 question appears once at day close (in the log), not per task.
+  Same signal for the memory engine, no clerical feel.
+- **A10 Streak — quieter flame.** Weekly 5/7 scoreboard leads; flame
+  shrinks; already decided, all reviewers agree.
+- **A16 Study history — merges into the map** (A11), one progress place.
+- **A4 First-run — cut to almost nothing.** Tour and buddy intro move to
+  after the first plan is seen.
+- **"Protect energy" (ChatGPT's addition) — adopted as budgets, not a
+  bucket:** max 3 tasks, one number per screen, notification budget stays
+  hard, no new metrics or colours without removing one.
+- **Gemini's "Sheet Triage"** (photo of a practice sheet, circled stuck
+  questions → error backlog) — strong idea, goes on Stage 3's candidate
+  list behind the mock→week loop, because messy handwritten sheets are a
+  much harder parse than scorecards and we prove the loop on the easy input
+  first.
+
 ## Sequencing logic, in one paragraph
 
-Stage 1 before everything because shame is measurably killing day-2 (six of
-six zero-loggers gone). Stage 2 next because setup is our cheapest unclaimed
-win — the machinery exists, only the order is wrong. Stage 3–4 deepen the
-product for students who now survive week one. Stage 5 runs partly in
-parallel from Stage 1 (the human routing is shared) and is where the moat —
-memory, initiative, judgment — becomes something a student can feel. Each
-stage is small, ships whole, and is judged by one retention number, not by
-feature count.
+**First the first hour** (timetable-first onboarding with the floor
+question — the funnel loses 149 students before a single log), **then
+shame** (the 48-once cohort: zero-day response, human on the bad day,
+overshoot fix, am-I-okay line), **then one clear feed** (merge the two
+competing "next" surfaces + planner fixes), **then memory** (revision line,
+mock→week, evening chips), **then comebacks** (silence protocol, patterns,
+history). Human routing from the shame stage runs in parallel early — it's
+cheap and our churn data says it's what students actually went looking for.
+Each stage ships whole, judged by one retention number, not feature count.
 
 ## The standing test (print this)
 
