@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { parseSignupDevice } from '@/lib/device-detect';
-import { setDailyHours } from '@/lib/daily-hours';
+import { setBadDayFloor, setDailyHours } from '@/lib/daily-hours';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
@@ -21,6 +21,7 @@ interface OnboardingPayload {
   dream_colleges?: unknown;
   target_percentile?: unknown;
   hours_available?: unknown;
+  bad_day_floor?: unknown;
   coaching_enrolled?: unknown;
   is_repeater?: unknown;
   last_year_percentile?: unknown;
@@ -219,7 +220,13 @@ export async function POST(request: NextRequest) {
       }
       if (typeof onboarding.hours_available === 'number') {
         // Replaying what they entered pre-signup. Still their own number.
+        // (Legacy clients mid-funnel may still send hours; accepted as before.)
         Object.assign(profileUpdate, setDailyHours(onboarding.hours_available, 'signup'));
+      }
+      if (typeof onboarding.bad_day_floor === 'number') {
+        // Stage A: the bad-day floor — the size the daily plan is built to.
+        // Written only through the one-owner module, same as the hours.
+        Object.assign(profileUpdate, setBadDayFloor(onboarding.bad_day_floor));
       }
       if (typeof onboarding.coaching_enrolled === 'boolean') profileUpdate.coaching_enrolled = onboarding.coaching_enrolled;
       if (typeof onboarding.is_repeater === 'boolean') profileUpdate.is_repeater = onboarding.is_repeater;

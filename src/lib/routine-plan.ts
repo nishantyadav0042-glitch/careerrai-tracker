@@ -22,7 +22,7 @@ import {
   type HistoryInput,
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { dailyHours } from '@/lib/daily-hours';
+import { badDayFloorMinutes, dailyHours } from '@/lib/daily-hours';
 import { todaysTaughtTopics } from '@/lib/timetable-align';
 import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
@@ -246,6 +246,9 @@ export async function computeTodaysPlan(
       targetPercentile: profile.target_percentile as number | null,
       weekdayHours: dailyHours(profile).weekday,
       weekendHours: dailyHours(profile).weekend,
+      // Stage A floor — kept in lockstep with today/route.ts (the mirror rule:
+      // the 6am notification must name the same plan the student opens).
+      floorMinutes: badDayFloorMinutes(profile as Record<string, unknown>),
       weakestSection: weakest,
       strongestSection: strongest,
       weakTopic,

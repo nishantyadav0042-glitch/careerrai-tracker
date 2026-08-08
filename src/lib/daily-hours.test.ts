@@ -298,3 +298,53 @@ describe('one owner covers the floor too', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('floor days are small, few-task, and exactly the size promised', () => {
+  const NO_HIST = { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null } as Record<Section, number | null> };
+  const CHOICES: Record<Section, TopicChoice> = {
+    VARC: { topic: 'Reading Comprehension', score: 1, reasons: [], coverageStatus: null },
+    DILR: { topic: 'Arrangements', score: 1, reasons: [], coverageStatus: null },
+    QA: { topic: 'Percentages', score: 1, reasons: [], coverageStatus: null },
+  };
+  const P = (floorMinutes: number, over: Partial<RoutineProfile> = {}): RoutineProfile => ({
+    isWorkingProfessional: false, isRepeater: false, targetPercentile: 95,
+    weekdayHours: 8, weekendHours: 8, floorMinutes, weakestSection: 'QA',
+    strongestSection: 'VARC', weakTopic: null, currentStage: 'not_started',
+    coachingEnrolled: false, attemptYear: 2026, ...over,
+  });
+  const MON = new Date('2026-08-10T06:00:00');
+
+  it('a 15-minute floor is ONE task of exactly 15 minutes', () => {
+    const r = generateRoutine(P(15), MON, NO_HIST, CHOICES);
+    expect(r.tasks).toHaveLength(1);
+    expect(r.estMinutes).toBe(15);
+    expect(r.tasks[0].section).toBe('QA'); // the weak section still leads
+  });
+
+  it('30 min = one task; 60 min = two; 120 min = three — all exact', () => {
+    for (const [floor, count] of [[30, 1], [60, 2], [120, 3]] as const) {
+      const r = generateRoutine(P(floor), MON, NO_HIST, CHOICES);
+      expect(r.tasks.length).toBe(count);
+      expect(r.estMinutes).toBe(floor);
+    }
+  });
+
+  it('small days never get a closing task, even for repeaters in mocks stage', () => {
+    const r = generateRoutine(P(30, { isRepeater: true, currentStage: 'mocks' }), MON, NO_HIST, CHOICES);
+    expect(r.tasks).toHaveLength(1);
+    expect(r.estMinutes).toBe(30);
+  });
+
+  it('the floor wins over 8 chosen hours — the fantasy no longer sizes the day', () => {
+    // Kashika chose 12.5h and was built a 720-minute monument. With a floor,
+    // the same student gets a winnable day regardless of the stored hours.
+    const r = generateRoutine(P(30), MON, NO_HIST, CHOICES);
+    expect(r.estMinutes).toBe(30);
+  });
+
+  it('no floor = the old behaviour, to the minute', () => {
+    const r = generateRoutine(P(0, { floorMinutes: null }), MON, NO_HIST, CHOICES);
+    expect(r.estMinutes).toBe(480);
+    expect(r.tasks).toHaveLength(3);
+  });
+});

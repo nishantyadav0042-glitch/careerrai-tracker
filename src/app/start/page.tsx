@@ -66,7 +66,7 @@ const DEMO_STEPS: Record<string, { what: string; answer: string; patch: Record<s
   'quick-facts': {
     what: 'The facts the plan adapts to: attempt number, coaching, hours available per day.',
     answer: 'Aarav: first attempt · has coaching · 4 hrs/day.',
-    patch: { is_repeater: false, coaching_enrolled: true, hours_available: 4 },
+    patch: { is_repeater: false, coaching_enrolled: true, bad_day_floor: 30 },
   },
   'pain-points': {
     what: 'What has been going wrong so far — this feeds the first diagnosis and the sales brief.',

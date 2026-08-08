@@ -23,6 +23,14 @@ export interface RoutineProfile {
   targetPercentile: number | null;
   weekdayHours: number | null;
   weekendHours: number | null;
+  /**
+   * Stage A (founder, 8 Aug): the bad-day floor, in minutes. When set, the
+   * day is BUILT this size — small on purpose, winnable every day — and the
+   * hours above stop sizing the plan (they keep feeding pace/date math).
+   * null = pre-floor account: hours-based sizing, exactly as before.
+   * Callers read it via badDayFloorMinutes() (lib/daily-hours) — never raw.
+   */
+  floorMinutes?: number | null;
   weakestSection: Section | null;
   strongestSection: Section | null;
   // Self-reported toughest topic *within* weakestSection — now just ONE
@@ -316,7 +324,13 @@ export function generateRoutine(
     ?? (weekend
       ? (profile.isWorkingProfessional ? 4 : 3)
       : (profile.isWorkingProfessional ? 1.5 : 2.5));
-  const totalMinutes = Math.max(30, Math.round(hours * 60));
+  // The floor sizes the day when the student has one (Stage A). A 15-minute
+  // floor is a REAL 15-minute day — that smallness is the whole point, so no
+  // 30-minute clamp is applied to it.
+  const floorPlanned = profile.floorMinutes != null && profile.floorMinutes > 0;
+  const totalMinutes = floorPlanned
+    ? Math.round(profile.floorMinutes!)
+    : Math.max(30, Math.round(hours * 60));
 
   const weak = profile.weakestSection ?? 'DILR';
   const strong = profile.strongestSection;
@@ -325,6 +339,13 @@ export function generateRoutine(
 
   const tasks: RoutineTask[] = [];
 
+  // Small days get few tasks (Stage A). Three tasks in 30 minutes is three
+  // ways to feel behind; one finishable task is a won day. ≤45 min = the
+  // weak-section task alone; ≤75 min = weak + one other; above that, the
+  // full day. Closing tasks (mock/review) only exist on full days.
+  const smallDay = totalMinutes <= 75;
+  const maxOthers = totalMinutes <= 45 ? 0 : smallDay ? 1 : 2;
+
   // Identity fork (LIS L1→Planning): a working professional's weekday time is
   // scarce, so we don't spread it thin across all three sections — the plan
   // focuses on the weak area + ONE other (highest ROI), and the weekend gets
@@ -332,15 +353,29 @@ export function generateRoutine(
   // three. This is what makes the persona *feel* like a different coach, not a
   // coefficient.
   const leanWeekday = profile.isWorkingProfessional && !weekend && phase !== 'revision';
-  const activeNonWeak = leanWeekday ? nonWeak.slice(0, 1) : nonWeak;
+  const activeNonWeak = nonWeak.slice(0, Math.min(leanWeekday ? 1 : 2, maxOthers));
+
+  // Will a phase-closing task be added at the end? Decide NOW, because its
+  // minutes come OUT of the day's budget, not on top of it. Until 8 Aug the
+  // closer was appended after the topic tasks had already consumed 100% —
+  // every repeater and every intensive-phase student got 15% more than the
+  // hours they chose, daily (audit finding A-5).
+  const hasCloser = !smallDay
+    && (phase === 'intensive' || phase === 'revision' || (phase === 'foundation' && profile.isRepeater));
+  const closerMinutes = hasCloser
+    ? Math.max(phase === 'revision' ? 15 : 20, Math.round(totalMinutes * 0.15))
+    : 0;
+  const topicBudget = totalMinutes - closerMinutes;
 
   // Weakest section leads (bigger share when the day is lean), then the
-  // other(s), then a mock/revision task depending on phase.
-  const weakShare = leanWeekday ? 0.55 : 0.40;
-  const otherShare = (1 - weakShare) / activeNonWeak.length;
+  // other(s). Others are rounded; the priority task absorbs the rounding so
+  // the day's total is EXACTLY the budget — planned always equals committed.
+  const weakShare = activeNonWeak.length === 0 ? 1 : leanWeekday || smallDay ? 0.55 : 0.40;
 
   const weakChoice = topicChoices[weak];
-  const priorityMinutes = Math.round(totalMinutes * weakShare);
+  const otherMinutes = activeNonWeak.map(() =>
+    Math.round((topicBudget * (1 - weakShare)) / Math.max(1, activeNonWeak.length)));
+  const priorityMinutes = topicBudget - otherMinutes.reduce((s, m) => s + m, 0);
 
   tasks.push({
     id: `${weak.toLowerCase()}-priority`,
@@ -356,7 +391,7 @@ export function generateRoutine(
 
   activeNonWeak.forEach((section, i) => {
     const choice = topicChoices[section];
-    const minutes = Math.round(totalMinutes * otherShare);
+    const minutes = otherMinutes[i];
     tasks.push({
       id: `${section.toLowerCase()}-set`,
       section,
@@ -368,8 +403,10 @@ export function generateRoutine(
     });
   });
 
-  // Phase-specific closing task, in do-order (last).
-  if (phase === 'intensive') {
+  // Phase-specific closing task, in do-order (last). Sized from closerMinutes
+  // above — already carved out of the budget, never added on top. Small days
+  // never get one: hasCloser is false there by construction.
+  if (hasCloser && phase === 'intensive') {
     // Mock timing genuinely differs by archetype, not just the label on one
     // shared task: a repeater already has mocks on file, so reviewing one is
     // real signal-extraction work regardless of how little time today has —
@@ -384,7 +421,7 @@ export function generateRoutine(
         topic: null,
         label: 'Mock analysis',
         target: 'Re-open your last mock, note 3 mistakes',
-        estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
+        estMinutes: closerMinutes,
         reason: 'Mistakes > new topics',
       });
     } else if (profile.isWorkingProfessional && !weekend) {
@@ -394,7 +431,7 @@ export function generateRoutine(
         topic: null,
         label: `${weak} — timed sectional`,
         target: 'One timed set — accuracy over volume',
-        estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
+        estMinutes: closerMinutes,
         reason: 'Full mock waits for weekend',
       });
     } else {
@@ -404,34 +441,36 @@ export function generateRoutine(
         topic: null,
         label: 'Sectional mock',
         target: 'One timed sectional, exam conditions',
-        estMinutes: Math.max(20, Math.round(totalMinutes * 0.15)),
+        estMinutes: closerMinutes,
         reason: 'Mocks = #1 signal now',
       });
     }
-  } else if (phase === 'revision') {
+  } else if (hasCloser && phase === 'revision') {
     tasks.push({
       id: 'revision-block',
       section: strong ?? weak,
       topic: null,
       label: `${strong ?? weak} rapid recall`,
       target: '15-minute recall — formulas and set-ups from memory',
-      estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
+      estMinutes: closerMinutes,
       reason: 'Protect your strengths',
     });
-  } else if (profile.isRepeater) {
+  } else if (hasCloser && profile.isRepeater) {
     tasks.push({
       id: 'repeater-review',
       section: weak,
       topic: null,
       label: `Yesterday's ${weak} mistakes`,
       target: 'Rework each one until it cracks',
-      estMinutes: Math.max(15, Math.round(totalMinutes * 0.15)),
+      estMinutes: closerMinutes,
       reason: "Close yesterday's gaps first",
     });
   }
 
   const estMinutes = tasks.reduce((s, t) => s + t.estMinutes, 0);
-  const whySummary = personalizationSummary(profile, weekend, hours, weakChoice.topic);
+  // On floor days the honest size is the floor, not the stored hours.
+  const shownHours = floorPlanned ? Math.round((totalMinutes / 60) * 10) / 10 : hours;
+  const whySummary = personalizationSummary(profile, weekend, shownHours, weakChoice.topic);
   return { phase, tasks, estMinutes, whySummary };
 }
 

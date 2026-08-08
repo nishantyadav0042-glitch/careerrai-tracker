@@ -174,7 +174,11 @@ describe('AUDIT: does the day fit the hours the student chose?', () => {
     ['mocks-stage 5h', beginner({ weekdayHours: 5, weekendHours: 5, currentStage: 'mocks' })],
   ];
 
-  it('overshoots by exactly the closing task whenever one is added', () => {
+  it('planned always equals committed — the closer is carved out, never added (A-5 fixed 8 Aug)', () => {
+    // These four cases used to assert the BUG: 4-task days handed students
+    // 15% more than their chosen hours (repeater 6h got 414m, mocks-stage 5h
+    // got 345m). The closer's minutes now come out of the topic tasks, so
+    // every day sums to exactly the budget.
     const monday = new Date('2026-08-10T06:00:00');
     const results = cases.map(([name, p]) => {
       const state: SimState = { coverage: new Map(), lastPracticed: new Map() };
@@ -183,16 +187,10 @@ describe('AUDIT: does the day fit the hours the student chose?', () => {
       return { name, planned: r.estMinutes, committed, tasks: r.tasks.length, phase: r.phase };
     });
 
-    // Three-task days fit the hours exactly — the shares are 40/30/30.
     expect(results[0]).toMatchObject({ planned: 480, committed: 480, tasks: 3 });
     expect(results[1]).toMatchObject({ planned: 90, committed: 90, tasks: 3 });
-    // But a fourth (phase-closing) task is added ON TOP of a day already fully
-    // allocated, so those students are handed 15% more than they signed up for
-    // — every single day, forever.
-    expect(results[2]).toMatchObject({ planned: 414, committed: 360, tasks: 4 });
-    expect(results[3]).toMatchObject({ planned: 345, committed: 300, tasks: 4 });
-    for (const r of results.slice(2)) {
-      expect(Math.round(((r.planned - r.committed) / r.committed) * 100)).toBe(15);
-    }
+    expect(results[2]).toMatchObject({ planned: 360, committed: 360, tasks: 4 });
+    expect(results[3]).toMatchObject({ planned: 300, committed: 300, tasks: 4 });
+    for (const r of results) expect(r.planned).toBe(r.committed);
   });
 });

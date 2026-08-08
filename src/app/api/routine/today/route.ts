@@ -15,7 +15,7 @@ import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { todaysTaughtTopics } from '@/lib/timetable-align';
 import type { TimetableBlock } from '@/lib/timetable';
-import { dailyHours, hoursForDay } from '@/lib/daily-hours';
+import { badDayFloorMinutes, dailyHours, hoursForDay } from '@/lib/daily-hours';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
@@ -181,6 +181,10 @@ export async function GET() {
     // a week, with the arithmetic attached. See /api/cron/weekly-plan-reconcile.
     weekdayHours: claimedHours,
     weekendHours: dailyHours(profile).weekend,
+    // Stage A: the bad-day floor sizes the day when set. Reads null until the
+    // ship-time step adds bad_day_floor_minutes to this route's select (see
+    // STAGE-A-REQUIREMENTS ship checklist) — until then, behaviour unchanged.
+    floorMinutes: badDayFloorMinutes(profile as Record<string, unknown>),
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,
