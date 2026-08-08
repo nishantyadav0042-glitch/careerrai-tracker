@@ -51,7 +51,7 @@ export async function GET() {
       .from('profiles')
       .select(`
         is_working_professional, is_repeater, target_percentile,
-        hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
+        hours_available, study_target_hours, weekend_hours_available, bad_day_floor_minutes, syllabus_target_date,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
         baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with, plan_source
       `)
@@ -181,9 +181,8 @@ export async function GET() {
     // a week, with the arithmetic attached. See /api/cron/weekly-plan-reconcile.
     weekdayHours: claimedHours,
     weekendHours: dailyHours(profile).weekend,
-    // Stage A: the bad-day floor sizes the day when set. Reads null until the
-    // ship-time step adds bad_day_floor_minutes to this route's select (see
-    // STAGE-A-REQUIREMENTS ship checklist) — until then, behaviour unchanged.
+    // Stage A: the bad-day floor sizes the day when set. Null for accounts
+    // that predate it — those students keep hours-based planning, unchanged.
     floorMinutes: badDayFloorMinutes(profile as Record<string, unknown>),
     weakestSection: weakest,
     strongestSection: strongest,

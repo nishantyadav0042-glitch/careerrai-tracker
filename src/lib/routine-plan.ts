@@ -201,7 +201,7 @@ export async function computeTodaysPlan(
         .from('profiles')
         .select(`
           is_working_professional, is_repeater, target_percentile,
-          hours_available, study_target_hours, weekend_hours_available, syllabus_target_date, plan_source,
+          hours_available, study_target_hours, weekend_hours_available, bad_day_floor_minutes, syllabus_target_date, plan_source,
           self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
           baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, start_with
         `)
