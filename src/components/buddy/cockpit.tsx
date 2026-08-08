@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { AlertTriangle, Video, Lock } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeBreach } from '@/lib/plan-breach';
-import { computeRequiredPace, remainingSyllabusHours, remainingMockHours } from '@/lib/study-pace';
+import { computeRequiredPace, remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from '@/lib/study-pace';
 import { CallCloseout } from './call-closeout';
 import { QuickNote } from './quick-note';
 
@@ -50,6 +50,7 @@ export interface CockpitProps {
   coachingEnrolled: boolean | null;
   hoursAvailable: number | null;
   isRepeater: boolean | null;
+  lastYearPercentile: number | null;
   isWorkingProfessional: boolean | null;
   syllabusTargetDate: string | null;
   nextSession: { id: string; scheduled_at: string; google_meet_link: string | null } | null;
@@ -75,7 +76,11 @@ export async function BuddyCockpit(p: CockpitProps) {
 
   const rows = coverage ?? [];
   const done = rows.filter((r) => ['practicing', 'revising', 'exam_ready'].includes(r.status ?? '')).length;
-  const syllabusLeft = remainingSyllabusHours(rows);
+  // A repeater's remaining syllabus is genuinely smaller than a first-timer's;
+  // the mentor needs to see the same number the student's app shows.
+  const syllabusLeft = remainingSyllabusHours(rows, studentEffortMultiplier({
+    isRepeater: p.isRepeater, lastYearPercentile: p.lastYearPercentile,
+  }));
 
   // Observed pace over the window — the honest denominator, not "days they
   // chose to log". Same rule the replan engine learned the hard way.

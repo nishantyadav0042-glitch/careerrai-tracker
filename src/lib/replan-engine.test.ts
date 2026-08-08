@@ -18,7 +18,7 @@ describe('on-track students are left alone', () => {
     const r = computeReplan({
       coverage: coverageAll('exam_ready'),          // ~5% of each topic left
       targetDate: new Date('2026-11-20T00:00:00Z'), // plenty of runway
-      committedPerDay: 8, today: TODAY,
+      committedPerDay: 8, effortMultiplier: 1, today: TODAY,
     });
     expect(r.onTrack).toBe(true);
     expect(r.options).toHaveLength(0);
@@ -30,7 +30,7 @@ describe('a behind student gets exactly four honest options', () => {
   const behind = () => computeReplan({
     coverage: coverageAll('not_started'),
     targetDate: new Date('2026-09-17T00:00:00Z'),
-    committedPerDay: 4, today: TODAY,
+    committedPerDay: 4, effortMultiplier: 1, today: TODAY,
   });
 
   it('offers keep_date, keep_hours, balanced and cut_scope — always all four', () => {
@@ -78,7 +78,7 @@ describe('the guards that make this trustworthy', () => {
     const r = computeReplan({
       coverage: coverageAll('not_started'),
       targetDate: new Date('2026-08-20T00:00:00Z'), // 15 days for the whole syllabus
-      committedPerDay: 4, today: TODAY,
+      committedPerDay: 4, effortMultiplier: 1, today: TODAY,
     });
     const a = r.options.find((o) => o.kind === 'keep_date')!;
     expect(a.hoursPerDay).toBeGreaterThan(MAX_SUSTAINABLE_HOURS);
@@ -90,7 +90,7 @@ describe('the guards that make this trustworthy', () => {
     const r = computeReplan({
       coverage: coverageAll('not_started'),
       targetDate: new Date('2026-09-17T00:00:00Z'),
-      committedPerDay: 0.5, today: TODAY,   // absurdly low → date runs past CAT
+      committedPerDay: 0.5, effortMultiplier: 1, today: TODAY,   // absurdly low → date runs past CAT
     });
     const b = r.options.find((o) => o.kind === 'keep_hours')!;
     expect(b.feasible).toBe(false);
@@ -101,7 +101,7 @@ describe('the guards that make this trustworthy', () => {
     const r = computeReplan({
       coverage: coverageAll('not_started'),
       targetDate: new Date('2026-09-17T00:00:00Z'),
-      committedPerDay: 4, today: TODAY,
+      committedPerDay: 4, effortMultiplier: 1, today: TODAY,
     });
     const d = r.options.find((o) => o.kind === 'cut_scope')!;
     for (const t of d.droppedTopics) {
@@ -119,7 +119,7 @@ describe('the guards that make this trustworthy', () => {
     const r = computeReplan({
       coverage: coverageAll('not_started'),
       targetDate: new Date('2026-08-12T00:00:00Z'), // one week for everything
-      committedPerDay: 4, today: TODAY,
+      committedPerDay: 4, effortMultiplier: 1, today: TODAY,
     });
     const d = r.options.find((o) => o.kind === 'cut_scope')!;
     expect(d.feasible).toBe(false);
@@ -134,7 +134,7 @@ describe('the guards that make this trustworthy', () => {
 
 describe('paused days (exams, travel, illness) shrink the usable window', () => {
   it('a pause raises the hours the same date demands', () => {
-    const base = { coverage: coverageAll('not_started'), targetDate: new Date('2026-10-15T00:00:00Z'), committedPerDay: 4, today: TODAY };
+    const base = { coverage: coverageAll('not_started'), targetDate: new Date('2026-10-15T00:00:00Z'), committedPerDay: 4, effortMultiplier: 1, today: TODAY };
     const withoutPause = computeReplan(base);
     const withPause = computeReplan({ ...base, pausedDays: 10 });
     expect(withPause.daysToTarget).toBe(withoutPause.daysToTarget - 10);
@@ -142,7 +142,7 @@ describe('paused days (exams, travel, illness) shrink the usable window', () => 
   });
 
   it('a pause pushes the keep_hours finish date out by the paused days', () => {
-    const base = { coverage: coverageAll('not_started'), targetDate: new Date('2026-10-15T00:00:00Z'), committedPerDay: 5, today: TODAY };
+    const base = { coverage: coverageAll('not_started'), targetDate: new Date('2026-10-15T00:00:00Z'), committedPerDay: 5, effortMultiplier: 1, today: TODAY };
     const a = computeReplan(base).options.find((o) => o.kind === 'keep_hours')!;
     const b = computeReplan({ ...base, pausedDays: 7 }).options.find((o) => o.kind === 'keep_hours')!;
     const diff = (new Date(b.finishDate).getTime() - new Date(a.finishDate).getTime()) / 86_400_000;
@@ -155,7 +155,7 @@ describe('the maths is internally consistent', () => {
     const r = computeReplan({
       coverage: coverageAll('not_started'),
       targetDate: new Date('2026-09-17T00:00:00Z'),
-      committedPerDay: 4, today: TODAY,
+      committedPerDay: 4, effortMultiplier: 1, today: TODAY,
     });
     expect(r.totalHoursNeeded).toBe(r.remainingSyllabusHours + r.mockHours);
     expect(r.mockHours).toBeGreaterThan(0);
@@ -166,7 +166,7 @@ describe('the maths is internally consistent', () => {
     const r = computeReplan({
       coverage: coverageAll('learning'),
       targetDate: new Date('2026-09-17T00:00:00Z'),
-      committedPerDay: 3, today: TODAY,
+      committedPerDay: 3, effortMultiplier: 1, today: TODAY,
     });
     const b = r.options.find((o) => o.kind === 'keep_hours')!;
     const days = (new Date(b.finishDate).getTime() - TODAY.getTime()) / 86_400_000;
@@ -181,7 +181,7 @@ describe('evidence beats aspiration (found by running this on live data)', () =>
   const base = {
     coverage: coverageAll('learning'),
     targetDate: new Date('2026-09-02T00:00:00Z'),
-    committedPerDay: 12,
+    committedPerDay: 12, effortMultiplier: 1,
     today: TODAY,
   };
 

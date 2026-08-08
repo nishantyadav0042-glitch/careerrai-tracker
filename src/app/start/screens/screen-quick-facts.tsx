@@ -23,6 +23,23 @@ interface Props {
 
 const FLOOR_LABELS: Record<number, string> = { 15: '15 min', 30: '30 min', 60: '1 hour', 120: '2 hours' };
 
+// Self-study hours on a NORMAL day. Founder, 8 Aug: "self study hours तो
+// हमें पूछने ही पड़ेंगे ना, चाहे repeater हो चाहे fresher — इसके अलावा timed
+// study plan कैसे बना पाओगे? हो सकता है आप बिना पूछे दस घंटे का बना दोगे."
+//
+// This number was removed from signup this morning because it was fantasy:
+// students chose 11–15h and did 2–6h. What made it dangerous was that it
+// SIZED THE DAILY PLAN — the fantasy became a 750-minute list and daily proof
+// of failure. That link is now cut: the floor sizes the day. So this number
+// only drives pace and the finish date, where being wrong is corrected every
+// Sunday by logged evidence rather than shouted at the student every morning.
+//
+// Asked SECOND, after the floor, on purpose. "On a bad day, 30 minutes"
+// anchors low, and an honest anchor produces an honest normal-day answer.
+// The ceiling stays 16 (lib/daily-hours): a student who genuinely does 12
+// hours may say 12 — the app holds the number, it doesn't judge it.
+const HOURS_OPTIONS = [1, 2, 3, 4, 5, 6, 8, 10, 12] as const;
+
 function Chip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
@@ -42,6 +59,7 @@ type Situation = 'working' | 'college' | 'fulltime';
 
 export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading }: Props) {
   const [floor, setFloor] = useState<number | null>(null);
+  const [selfStudyHours, setSelfStudyHours] = useState<number | null>(null);
   const [coaching, setCoaching] = useState<boolean | null>(null);
   const [repeater, setRepeater] = useState<boolean | null>(null);
   const [situation, setSituation] = useState<Situation | null>(null);
@@ -58,8 +76,12 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
     parsedLastYearPercentile <= 99.99;
   const repeaterQuestionsValid = repeater !== true || (lastYearPercentileValid && hadBuddyLastYear !== null);
 
-  const canContinue = floor != null && coaching != null && repeater != null && situation != null && repeaterQuestionsValid;
+  const canContinue =
+    floor != null && selfStudyHours != null && coaching != null && repeater != null && situation != null && repeaterQuestionsValid;
   const payload = {
+    // The normal-day number. Drives pace, the finish date and the Sunday
+    // reconcile — NOT the size of today's plan, which the floor owns.
+    self_study_hours: selfStudyHours,
     // Pre-signup blob, not a profile write — verify-phone-otp replays it
     // through setBadDayFloor once the account actually exists. Named
     // bad_day_floor (not the column) so lib/daily-hours stays the only file
@@ -76,11 +98,12 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           A few quick facts.
         </h1>
-        {/* Was "Three taps" from the day this screen had exactly three
-            questions. It has had four since the situation question was added,
-            and now the floor replaces hours — a promise the screen breaks in
-            the first two seconds is a bad way to open. */}
-        <p className="mt-1.5 text-sm text-stone-500">Four taps — this is what shapes your daily plan.</p>
+        {/* This said "Three taps" for weeks after it started asking four
+            questions — true the day it was written, false ever since. A screen
+            that miscounts itself in the first two seconds is a bad opener, so
+            the number is now pinned by a test (screen-quick-facts.test.ts)
+            that counts the question headings and fails if they disagree. */}
+        <p className="mt-1.5 text-sm text-stone-500">Five taps — this is what shapes your daily plan.</p>
       </div>
 
       <div>
@@ -109,6 +132,32 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
             follows your classes — or we&apos;ll build it with you. You can do this any time.
           </p>
         )}
+      </div>
+
+      {/* Asked after coaching so the question can name the right thing. For a
+          coaching student "6 hours" is ambiguous — 6 including class, or 6 on
+          top of it? Plan the same day for both and one of them is wrong by
+          three hours (founder, 8 Aug: "जो हम घंटे पूछ रहे हैं वह self study
+          hours पूछ रहे हैं"). */}
+      <div>
+        <p className="mb-1 text-sm font-semibold text-stone-800">
+          {coaching === true ? 'Outside class, how much do you study on a normal day?' : 'On a normal day, how much do you study?'}
+        </p>
+        <p className="mb-2 text-xs text-stone-500">
+          {coaching === true
+            ? 'Self-study only — not counting your coaching hours. Answer honestly, not ambitiously: this sets your finish date, and we check it against what you actually log.'
+            : 'Answer honestly, not ambitiously. This sets your finish date, and we check it against what you actually log.'}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {HOURS_OPTIONS.map((h) => (
+            <Chip
+              key={h}
+              active={selfStudyHours === h}
+              label={h === 12 ? '12+ hrs' : h === 1 ? '1 hr' : `${h} hrs`}
+              onClick={() => setSelfStudyHours(h)}
+            />
+          ))}
+        </div>
       </div>
 
       <div>

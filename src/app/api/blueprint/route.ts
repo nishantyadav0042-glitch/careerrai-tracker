@@ -12,7 +12,7 @@ import { isPremium } from '@/lib/access';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { selectBuddyBanner } from '@/lib/buddy-banner';
 import { buildWeekPlan } from '@/lib/study-forecast';
-import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -44,7 +44,8 @@ export async function GET() {
       .select(`
         full_name, target_percentile, attempt_year, exam_target, is_working_professional, is_repeater,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        current_stage, biggest_blocker, created_at, buddy_id, is_premium, study_target_hours, syllabus_target_date
+        current_stage, biggest_blocker, created_at, buddy_id, is_premium, study_target_hours, syllabus_target_date,
+        last_year_percentile
       `)
       .eq('id', user.id).single(),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
@@ -206,7 +207,10 @@ export async function GET() {
   // The pace the ring reports — recomputed here so the 7-day plan is capped by
   // the same number the student sees on Home, not by their declared capacity.
   // Same helper the ring uses, fed the same per-topic coverage rows.
-  const syllabusLeft = remainingSyllabusHours(coverage ?? []);
+  const syllabusLeft = remainingSyllabusHours(coverage ?? [], studentEffortMultiplier({
+    isRepeater: profile.is_repeater as boolean | null,
+    lastYearPercentile: profile.last_year_percentile as number | null,
+  }));
   const weekPace = profile.syllabus_target_date
     ? computeRequiredPace({
         remainingHours: syllabusLeft,

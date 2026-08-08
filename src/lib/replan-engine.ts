@@ -137,6 +137,14 @@ export interface ReplanInput {
   pausedDays?: number;
   /** Exam year for the "past CAT" guard. Defaults from today. */
   examYear?: number;
+  /**
+   * How much of the standard syllabus effort this student needs — 1.0 for a
+   * first attempt, less for a repeater with a percentile on record. Required,
+   * not optional: a silent 1.0 default here would quote every repeater a
+   * first-timer's syllabus and then recommend cutting scope they don't need
+   * to cut. See studentEffortMultiplier in study-pace.
+   */
+  effortMultiplier: number;
 }
 
 export function computeReplan(input: ReplanInput): ReplanResult {
@@ -150,7 +158,7 @@ export function computeReplan(input: ReplanInput): ReplanResult {
     observedPerDay != null ? 'observed' : committedPerDay != null ? 'committed' : 'none';
   const pausedDays = Math.max(0, input.pausedDays ?? 0);
 
-  const syllabus = remainingSyllabusHours(coverage);
+  const syllabus = remainingSyllabusHours(coverage, input.effortMultiplier);
   const mockCount = recommendedMockCount(syllabus);
   const mockHours = remainingMockHours(syllabus);
   const totalHoursNeeded = syllabus + mockHours;

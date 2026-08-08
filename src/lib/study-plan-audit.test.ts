@@ -73,13 +73,13 @@ function simulate(profile: RoutineProfile, days: number, start = new Date('2026-
     }
   }
   const rows = [...state.coverage.entries()].map(([topic, status]) => ({ topic, status }));
-  return { state, touched, picksBySection, remaining: remainingSyllabusHours(rows) };
+  return { state, touched, picksBySection, remaining: remainingSyllabusHours(rows, 1) };
 }
 
 const beginner = (over: Partial<RoutineProfile> = {}): RoutineProfile => ({
   isWorkingProfessional: false, isRepeater: false, targetPercentile: 95,
   weekdayHours: 8, weekendHours: 8, weakestSection: 'QA', strongestSection: 'VARC',
-  weakTopic: null, currentStage: 'not_started', coachingEnrolled: false, attemptYear: 2026,
+  weakTopic: null, currentStage: 'not_started', attemptYear: 2026,
   ...over,
 });
 
@@ -140,7 +140,7 @@ describe('AUDIT: the completion ceiling', () => {
   it('can never show 100%, even with every topic maxed', () => {
     const total = totalSyllabusHours();
     const at = (status: CoverageStatus) =>
-      remainingSyllabusHours(ALL_TOPICS.map((topic) => ({ topic, status })));
+      remainingSyllabusHours(ALL_TOPICS.map((topic) => ({ topic, status })), 1);
 
     // The in-app loop (confidence taps) tops out at 'revising'.
     expect(at('revising')).toBe(60);

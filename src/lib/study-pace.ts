@@ -35,12 +35,64 @@ export const REMAINING_FRACTION: Record<CoverageStatus, number> = {
   exam_ready: 0.05, // earned; occasional upkeep
 };
 
+// ── Effort: the same syllabus costs different students different hours ──────
+//
+// Founder, 8 Aug: "जो बंदा first time है उसके लिए वह छह घंटे cover करेगा.
+// repeater है उसको maybe वह तीन घंटे ही लगेंगे cover करने में — इसलिए हमने
+// उससे percentile वगैरह पूछने का किया था, लेकिन वह तो हम use ही नहीं कर पा
+// रहे हैं."
+//
+// He is right, and it was the largest unused signal in the product. Until now
+// TOPIC_METADATA's 397 hours were quoted identically to a first-timer who has
+// never opened a CAT book and to a repeater who scored 88 last year. Coverage
+// status already scales effort per TOPIC (REMAINING_FRACTION above); this
+// scales it per STUDENT.
+//
+// Deliberately separate from REMAINING_FRACTION, and multiplied on top of it,
+// because they answer different questions: the fraction asks "how far into
+// this topic is this student", the multiplier asks "how fast does this student
+// move through anything". A repeater at 88th percentile who marks a topic
+// not_started still relearns it faster than a fresher does.
+//
+// Last year's percentile — collected since 23 July, used nowhere until today —
+// is the evidence. It beats self-assessment: it is a number an exam gave them.
+export interface EffortProfile {
+  isRepeater?: boolean | null;
+  lastYearPercentile?: number | null;
+}
+
+/**
+ * How much of the standard syllabus effort this student actually needs.
+ * 1.0 = the full curated estimate (a first attempt). Never above 1.0: the
+ * model's hours are already a full-effort estimate, so "slower than a
+ * first-timer" is a claim we have no evidence for and would only be used to
+ * push a date further away.
+ */
+export function studentEffortMultiplier(p: EffortProfile | null | undefined): number {
+  if (!p?.isRepeater) return 1.0;
+  const pct = typeof p.lastYearPercentile === 'number' && Number.isFinite(p.lastYearPercentile)
+    ? p.lastYearPercentile
+    : null;
+  // A repeater who never told us their score: the middle band, not the best
+  // one. Guessing generously here would quietly promise a date they can't hit.
+  if (pct == null) return 0.80;
+  if (pct >= 90) return 0.55;
+  if (pct >= 80) return 0.65;
+  if (pct >= 70) return 0.80;
+  return 0.90;
+}
+
 export interface TopicStatusRow { topic: string; status: string | null }
 
 // The single source of truth for "hours of syllabus left". Iterates ALL exam
 // topics in TOPIC_METADATA (not just those with a coverage row), defaulting an
 // unmapped/absent topic to not_started so nothing is silently treated as done.
-export function remainingSyllabusHours(rows: TopicStatusRow[]): number {
+//
+// `effort` has NO DEFAULT on purpose. A default of 1.0 would let a new call
+// site compile while silently ignoring the student's archetype — which is
+// exactly how coaching_enrolled ended up passed into the routine engine and
+// never read. Make the compiler ask the question at every call site.
+export function remainingSyllabusHours(rows: TopicStatusRow[], effort: number): number {
   const statusByTopic = new Map<string, string>();
   for (const r of rows) if (r.status) statusByTopic.set(r.topic, r.status);
 
@@ -50,7 +102,7 @@ export function remainingSyllabusHours(rows: TopicStatusRow[]): number {
     const frac = REMAINING_FRACTION[status] ?? 1.0;
     hours += meta.estimatedHours * frac;
   }
-  return Math.round(hours);
+  return Math.round(hours * effort);
 }
 
 // Total syllabus hours — computed ONCE, in prep-model (the file whose whole

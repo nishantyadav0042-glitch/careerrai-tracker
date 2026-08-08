@@ -157,7 +157,7 @@ const PROFILE = (hours: number): RoutineProfile => ({
   strongestSection: 'VARC',
   weakTopic: null,
   currentStage: null,
-  coachingEnrolled: false,
+ 
   attemptYear: 2026,
 });
 // A Wednesday, so the weekday number is the one in play.
@@ -334,7 +334,7 @@ describe('floor days are small, few-task, and exactly the size promised', () => 
     isWorkingProfessional: false, isRepeater: false, targetPercentile: 95,
     weekdayHours: 8, weekendHours: 8, floorMinutes, weakestSection: 'QA',
     strongestSection: 'VARC', weakTopic: null, currentStage: 'not_started',
-    coachingEnrolled: false, attemptYear: 2026, ...over,
+    attemptYear: 2026, ...over,
   });
   const MON = new Date('2026-08-10T06:00:00');
 

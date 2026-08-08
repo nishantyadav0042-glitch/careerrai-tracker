@@ -21,6 +21,7 @@ interface OnboardingPayload {
   dream_colleges?: unknown;
   target_percentile?: unknown;
   hours_available?: unknown;
+  self_study_hours?: unknown;
   bad_day_floor?: unknown;
   coaching_enrolled?: unknown;
   is_repeater?: unknown;
@@ -222,6 +223,14 @@ export async function POST(request: NextRequest) {
         // Replaying what they entered pre-signup. Still their own number.
         // (Legacy clients mid-funnel may still send hours; accepted as before.)
         Object.assign(profileUpdate, setDailyHours(onboarding.hours_available, 'signup'));
+      }
+      if (typeof onboarding.self_study_hours === 'number') {
+        // The normal-day self-study number, excluding coaching/college/work.
+        // Same one writer as every other hours write. It is asked at signup
+        // again (it was removed this morning) because the finish date cannot
+        // be computed without it — but it no longer sizes the daily plan, so
+        // an ambitious answer costs a date correction, not a broken day.
+        Object.assign(profileUpdate, setDailyHours(onboarding.self_study_hours, 'signup'));
       }
       if (typeof onboarding.bad_day_floor === 'number') {
         // Stage A: the bad-day floor — the size the daily plan is built to.

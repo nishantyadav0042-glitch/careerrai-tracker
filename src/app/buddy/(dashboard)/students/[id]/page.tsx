@@ -142,7 +142,7 @@ export default async function BuddyStudentDetailPage({
   // different facts and must never share one silent outcome again.
   const { data: student, error: studentError } = await admin
     .from('profiles')
-    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, pain_points, self_reported_weakest_section, syllabus_target_date')
+    .select('buddy_id, full_name, exam_target, email, cat_percentile, phone, college, course_year, is_working_professional, work_ex_months, coaching_enrolled, created_at, attempt_year, category, is_repeater, target_percentile, hours_available, study_target_hours, starting_percentile, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, pain_points, self_reported_weakest_section, syllabus_target_date, last_year_percentile')
     .eq('id', id)
     .single();
   if (studentError) {
@@ -290,6 +290,7 @@ export default async function BuddyStudentDetailPage({
         coachingEnrolled={student.coaching_enrolled ?? null}
         hoursAvailable={dailyHours(student).weekday}
         isRepeater={student.is_repeater ?? null}
+        lastYearPercentile={student.last_year_percentile ?? null}
         isWorkingProfessional={student.is_working_professional ?? null}
         syllabusTargetDate={(student.syllabus_target_date as string | null) ?? null}
         nextSession={(upcomingSessions ?? [])[0] ?? null}

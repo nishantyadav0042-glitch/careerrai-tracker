@@ -40,7 +40,6 @@ export interface RoutineProfile {
   // null = never asked. See getPhase() — this can only push the phase
   // forward relative to the calendar default, never pull it back.
   currentStage: Stage | null;
-  coachingEnrolled: boolean | null;
   attemptYear: number | null;
 }
 

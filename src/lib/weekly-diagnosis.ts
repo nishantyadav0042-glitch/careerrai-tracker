@@ -7,7 +7,7 @@
 
 import { TOPIC_METADATA } from './topics-constants';
 import { dailyHours } from './daily-hours';
-import { remainingSyllabusHours, remainingMockHours } from './study-pace';
+import { remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from './study-pace';
 
 export interface WeeklyDiagnosis {
   daysStudied: number;          // of last 7
@@ -33,7 +33,7 @@ export async function computeWeeklyDiagnosis(admin: any, studentId: string): Pro
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', studentId).gte('routine_date', weekAgo),
     admin.from('routine_task_completions').select('routine_date, task_id').eq('student_id', studentId).gte('routine_date', weekAgo),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
-    admin.from('profiles').select('syllabus_target_date, study_target_hours, hours_available').eq('id', studentId).maybeSingle(),
+    admin.from('profiles').select('syllabus_target_date, study_target_hours, hours_available, is_repeater, last_year_percentile').eq('id', studentId).maybeSingle(),
     admin.from('daily_reports').select('report_date').eq('student_id', studentId).eq('mock_taken', true).order('report_date', { ascending: false }).limit(1),
   ]);
 
@@ -103,7 +103,10 @@ export async function computeWeeklyDiagnosis(admin: any, studentId: string): Pro
   const committed = dailyHours(profile).weekday;
   let projectedFinish: string | null = null;
   if (committed && committed > 0) {
-    const rem = remainingSyllabusHours(coverage ?? []);
+    const rem = remainingSyllabusHours(coverage ?? [], studentEffortMultiplier({
+      isRepeater: profile?.is_repeater as boolean | null,
+      lastYearPercentile: profile?.last_year_percentile as number | null,
+    }));
     if (rem > 0) {
       const days = Math.ceil((rem + remainingMockHours(rem)) / committed);
       projectedFinish = new Date(now.getTime() + days * 86_400_000).toISOString().split('T')[0];

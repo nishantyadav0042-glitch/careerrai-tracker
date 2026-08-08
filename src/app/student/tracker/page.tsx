@@ -21,7 +21,7 @@ import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { TopicStats } from '@/components/home/topic-stats';
 import { ImportantDates } from '@/components/home/important-dates';
-import { remainingSyllabusHours, remainingMockHours, computeRequiredPace } from '@/lib/study-pace';
+import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
@@ -142,7 +142,12 @@ export default async function DailyTrackerPage() {
   // each topic's own estimatedHours + how far the student is on it) → the
   // daily-hours requirement to hit their date. Auto catch-up / roll-over.
   const targetIso = (profile?.syllabus_target_date as string | null) ?? null;
-  const paceRemainingHours = remainingSyllabusHours(topicMemory);
+  // Effort per student, not just per topic: a repeater who scored 88 last year
+  // is not facing the same 397 hours a first-timer is (founder, 8 Aug).
+  const paceRemainingHours = remainingSyllabusHours(topicMemory, studentEffortMultiplier({
+    isRepeater: profile?.is_repeater as boolean | null,
+    lastYearPercentile: profile?.last_year_percentile as number | null,
+  }));
   // Progress % is counted BY NUMBER OF TOPICS (founder decision, 23 Jul), the
   // same definition My CAT Plan uses (studiedOnceCount = practicing/revising/
   // exam_ready over all 46), so the Home ring and Blueprint can never show

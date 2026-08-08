@@ -188,7 +188,6 @@ export async function GET() {
     strongestSection: strongest,
     weakTopic,
     currentStage,
-    coachingEnrolled: profile.coaching_enrolled as boolean | null,
     attemptYear: profile.attempt_year as number | null,
   };
 
