@@ -9,9 +9,6 @@ import { getChatUnreadCount, getNotifUnreadCount } from '@/lib/chat-unread';
 import PostSignupSequence from '@/components/post-signup-sequence';
 import { InstallPing } from '@/components/install-ping';
 import { StandaloneNotifAsk } from '@/components/standalone-notif-ask';
-import { computeTopicMemory } from '@/lib/prep-memory-data';
-import { remainingPrepHours, EXAM_UNIT_COUNT } from '@/lib/blueprint-builder';
-import { remainingMockHours } from '@/lib/study-pace';
 import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
@@ -73,28 +70,12 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // ready") instead of a cold request. Decline that one too and it's over.
   const notifPrefs = (profile?.notif_prefs as Record<string, unknown> | null) ?? {};
   const pushEnabled = notifPrefs.push === true;
-  // Permission architecture (22 July): students are NEVER asked for push in a
-  // browser tab — only inside the installed app (StandaloneNotifAsk), after the
-  // first Career Insight. The browser PushGate asks are retired for students;
-  // the post-signup sequence no longer asks either. Only the hoursLeft compute
-  // below runs, and only when the sequence is actually about to render.
+  // The post-signup sequence now needs NO server data: it shows the six
+  // things we do, then asks for reminders. It used to recompute the finish
+  // date here and re-open that decision, which silently overwrote the date
+  // students had already picked in onboarding — that whole compute is gone
+  // (founder, 8 Aug: the first screen tells them what we do, nothing else).
   const showPostSignup = !showOnboarding && profile?.post_signup_done !== true && !isBuddyDemo;
-
-  let postSignupProps: { targetIso: string | null; hoursLeft: number } | null = null;
-  if (showPostSignup) {
-    const archetype = { isRepeater: !!profile?.is_repeater, isWorkingProfessional: !!profile?.is_working_professional };
-    const topicMemory = await computeTopicMemory(admin, user.id, archetype);
-    const practicing = topicMemory.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
-    const learning = topicMemory.filter((t) => t.status === 'learning').length;
-    const syllabusLeft = remainingPrepHours({ coverage_total: topicMemory.length || EXAM_UNIT_COUNT, coverage_practicing: practicing, coverage_learning: learning });
-    // Same formula as the ring: syllabus + mock budget, so the date the
-    // student confirms here is the same date the ring holds them to.
-    const hoursLeft = syllabusLeft + remainingMockHours(syllabusLeft);
-    postSignupProps = {
-      targetIso: (profile?.syllabus_target_date as string | null) ?? null,
-      hoursLeft,
-    };
-  }
 
   // Daily "try a buddy" nudge — only for students with no buddy yet and not
   // premium, and only once no higher-priority modal is up. The component itself
@@ -189,8 +170,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
           revives the repeater ₹999 pitch, which lives inside this modal. */}
       {showOnboarding ? (
         <OnboardingGate />
-      ) : showPostSignup && postSignupProps ? (
-        <PostSignupSequence {...postSignupProps} />
+      ) : showPostSignup ? (
+        <PostSignupSequence />
       ) : isBuddyDemo ? null : (!pushEnabled || !profile?.push_subscription) ? (
         // Permission architecture (22 July): the notification permission is
         // requested ONLY inside the installed app, right after the first Career

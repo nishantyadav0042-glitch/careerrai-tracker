@@ -95,6 +95,16 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
           <Chip active={coaching === true} label="Enrolled" onClick={() => setCoaching(true)} />
           <Chip active={coaching === false} label="Self-prep" onClick={() => setCoaching(false)} />
         </div>
+        {/* A hint, not a step (founder, 8 Aug): a coaching student should know
+            the photo shortcut exists from the moment they say "enrolled", but
+            uploading now would stall signup on finding a sheet they may not
+            have to hand. The ask comes properly on day 1 in the app. */}
+        {coaching === true && (
+          <p className="mt-2 rounded-lg bg-stone-50 px-3 py-2 text-[12.5px] leading-snug text-stone-600">
+            Got your coaching&apos;s weekly timetable? Send a photo inside the app and your daily plan
+            follows your classes — or we&apos;ll build it with you. You can do this any time.
+          </p>
+        )}
       </div>
 
       <div>
