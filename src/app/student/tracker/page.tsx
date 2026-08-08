@@ -28,7 +28,7 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
-import { Flame, CalendarCheck } from 'lucide-react';
+import { Flame, CalendarCheck, CalendarDays } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
@@ -351,7 +351,17 @@ export default async function DailyTrackerPage() {
   const planBlock = (
     <>
       <TodaysRoutineCard />
-      <div className="mt-2">
+      {/* The two things a student wants next to today's plan: the whole plan,
+          and the one honest way out of today. Founder, 8 Aug: "sometimes you
+          just want to see what your next fifteen days look like." */}
+      <div className="mt-2 space-y-2">
+        <Link
+          href="/student/plan"
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white py-2.5 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900"
+        >
+          <CalendarDays className="h-4 w-4" />
+          See my whole plan
+        </Link>
         <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
       </div>
     </>
