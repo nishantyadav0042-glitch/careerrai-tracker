@@ -84,26 +84,40 @@ describe('it never counts to zero, and never flatters', () => {
 });
 
 describe('one list of six worries, everywhere', () => {
-  it('every promise is phrased as a worry removed, not a feature shipped', () => {
-    // Founder, 8 Aug: "you are claiming different pain points, or ones students
-    // don't even really care about. We solve UNCERTAINTY." A feature list reads
-    // as another planner; naming the worry names the thing they lie awake about.
-    for (const p of SIX_PROMISES) {
-      expect(p.head.startsWith("Don't worry about"), `"${p.head}" is phrased as a feature`).toBe(true);
-    }
+  it('is six short lines in a student\'s own vocabulary', () => {
+    // Two founder corrections live here. First: name the WORRY, not the
+    // feature — "we make your plan" reads as another planner. Second: say it
+    // the way a coaching class says it, and say it short. "Don't worry about"
+    // on all six rows is what made the screen long, so it is said once in the
+    // heading and the rows are nouns.
     expect(SIX_PROMISES).toHaveLength(6);
+    for (const p of SIX_PROMISES) {
+      expect(p.head.split(' ').length, `"${p.head}" is too long for a glance`).toBeLessThanOrEqual(5);
+      expect(p.sub.split(' ').length, `"${p.sub}" is too long for a glance`).toBeLessThanOrEqual(8);
+      expect(p.head.startsWith("Don't worry"), 'the heading says it once, rows do not repeat it').toBe(false);
+    }
+    // The words students actually use in class, not our product language.
+    const all = SIX_PROMISES.map((p) => `${p.head} ${p.sub}`).join(' ').toLowerCase();
+    for (const word of ['backlog', 'revision', 'mock', 'syllabus', 'off day']) {
+      expect(all, `"${word}" is missing — that is the word they say`).toContain(word);
+    }
   });
 
   it('the landing page and the AI caller carry the same six', () => {
     // Three surfaces stated the pitch in three different ways, and the landing
     // page argued against it outright: "CAT prep, tracked" tells a stranger
     // there is MORE work for them, and leads with the one paid thing.
+    // Checked by VOCABULARY rather than by exact sentence: the landing page
+    // says it in six words and Riya says it in a spoken line, so pinning a
+    // phrase would force one surface to talk like the other. What must not
+    // drift is which six worries each of them names.
     const welcome = readFileSync('src/app/welcome/page.tsx', 'utf8');
     const riya = readFileSync('docs/EXPEDIFY-RIYA-PROMPT.txt', 'utf8');
     for (const surface of [welcome, riya]) {
-      expect(surface).toMatch(/what to revise and when/i);
-      expect(surface).toMatch(/when to (take a )?mock/i);
-      expect(surface).toMatch(/finish/i);
+      expect(surface).toMatch(/revis/i);       // revision
+      expect(surface).toMatch(/mock/i);        // mocks
+      expect(surface).toMatch(/syllabus/i);    // finishing in time
+      expect(surface).toMatch(/off day|bad day/i);
     }
     expect(welcome).not.toContain('CAT prep, tracked');
   });

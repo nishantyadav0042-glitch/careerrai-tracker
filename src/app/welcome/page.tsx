@@ -469,9 +469,8 @@ export default function WelcomePage() {
               rather than listing features a stranger has seen on five other
               apps. Every item here ships today. */}
           <p className="px-1 text-center text-[11.5px] leading-relaxed text-stone-500">
-            What to study today · what&apos;s left · what to revise and when · when to mock and when to
-            analyse it · whether you&apos;ll finish in time · what happens on a bad day.
-            <b className="text-stone-700"> None of it is your problem any more.</b>
+            Daily plan · backlog · revision · mocks · syllabus on time · off days.
+            <b className="text-stone-700"> None of it your problem.</b>
           </p>
           <InstallButton variant="text" />
           {/* THE LOGIN DOOR. NEVER REMOVE IT, NEVER MAKE IT FINE PRINT.
