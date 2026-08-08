@@ -4,19 +4,21 @@ import { useEffect, useState } from 'react';
 import { TimetableUpload, type CloseReason } from '@/components/timetable-upload';
 import { claimDailyModal } from '@/lib/daily-modal';
 import {
-  TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT,
-  tourDone, notifAskVisible, insightVisible, logModalOpen,
+  NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT,
+  notifAskVisible, insightVisible, logModalOpen, setTimetableAskVisible,
 } from '@/lib/first-run-events';
 
 // Shows the timetable offer during a student's first days, and only then —
 // a coaching timetable is worth most when it can shape the plan from the
 // start, and asking on day 30 is just noise.
 //
-// Same first-run discipline as the buddy nudge: it waits for the notification
-// ask, the tour and the day-1 insight to finish, never stacks on the log
-// modal, and claims the shared once-per-day modal slot so a student is never
-// hit with two popups in one day. A refusal is remembered locally, so
-// "I don't go to coaching" is not asked twice.
+// Stage A order (founder, 8 Aug): this ask now comes BEFORE the tour — for a
+// coaching student the photo-to-plan moment IS the first hour's wow, and a
+// tour of screens means little before the plan is theirs. It still waits for
+// the day-1 insight and the notification ask, never stacks on the log modal,
+// claims the shared once-per-day modal slot, and announces itself so the tour
+// stands down until it settles. A refusal is remembered locally, so "I don't
+// go to coaching" is not asked twice.
 const DECLINED_KEY = 'cr_timetable_declined';
 
 export function TimetablePrompt() {
@@ -32,18 +34,16 @@ export function TimetablePrompt() {
       if (shown) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        if (shown || !tourDone() || notifAskVisible() || insightVisible() || logModalOpen()) return;
-        if (claimDailyModal()) { shown = true; setShow(true); }
+        if (shown || notifAskVisible() || insightVisible() || logModalOpen()) return;
+        if (claimDailyModal()) { shown = true; setShow(true); setTimetableAskVisible(true); }
       }, 1600);
     };
 
     attempt();
-    window.addEventListener(TOUR_DONE_EVENT, attempt);
     window.addEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
     window.addEventListener(INSIGHT_DONE_EVENT, attempt);
     return () => {
       if (timer) clearTimeout(timer);
-      window.removeEventListener(TOUR_DONE_EVENT, attempt);
       window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, attempt);
       window.removeEventListener(INSIGHT_DONE_EVENT, attempt);
     };
@@ -62,6 +62,7 @@ export function TimetablePrompt() {
           try { localStorage.setItem(DECLINED_KEY, '1'); } catch { /* ignore */ }
         }
         setShow(false);
+        setTimetableAskVisible(false); // the tour may take the stage now
       }}
     />
   );

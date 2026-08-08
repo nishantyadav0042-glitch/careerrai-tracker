@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { NOTIF_ASK_SETTLED_EVENT, notifAskVisible, TOUR_KEY } from '@/lib/first-run-events';
+import { NOTIF_ASK_SETTLED_EVENT, notifAskVisible, TOUR_KEY, timetableAskVisible, TIMETABLE_ASK_SETTLED_EVENT } from '@/lib/first-run-events';
 
 // Spotlight coach-mark tour (founder: "we never gave a quick app tour").
 // Dims the screen and cuts a spotlight over one real element at a time, with a
@@ -68,14 +68,17 @@ export function AppTour({ enabled = false }: { enabled?: boolean }) {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tryStart = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { if (!notifAskVisible()) setIdx(0); }, 900);
+      timer = setTimeout(() => { if (!notifAskVisible() && !timetableAskVisible()) setIdx(0); }, 900);
     };
     tryStart();
     // Notification ask just settled (enabled → page reloads; "Later" → event).
     window.addEventListener(NOTIF_ASK_SETTLED_EVENT, tryStart);
+    // Stage A: the coaching-timetable ask outranks the tour in the first days.
+    window.addEventListener(TIMETABLE_ASK_SETTLED_EVENT, tryStart);
     return () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener(NOTIF_ASK_SETTLED_EVENT, tryStart);
+      window.removeEventListener(TIMETABLE_ASK_SETTLED_EVENT, tryStart);
     };
   }, [enabled]);
 

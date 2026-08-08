@@ -11,6 +11,12 @@
 export const INSIGHT_DONE_EVENT = 'cr-first-insight-done';
 export const NOTIF_ASK_SETTLED_EVENT = 'cr-notif-ask-settled';
 export const TOUR_DONE_EVENT = 'cr-app-tour-done';
+// Stage A (founder, 8 Aug): for a coaching student's first 2 days, the
+// timetable ask outranks the tour — the photo-to-plan moment is the wow the
+// first hour is for, and a tour of screens means little before the plan is
+// theirs. The tour waits for this to settle, exactly as it waits for the
+// notification ask.
+export const TIMETABLE_ASK_SETTLED_EVENT = 'cr-timetable-ask-settled';
 
 export const TOUR_KEY = 'cr_app_tour_v1';
 
@@ -18,6 +24,7 @@ type FirstRunWindow = Window & {
   __crInsightVisible?: boolean;
   __crNotifAskVisible?: boolean;
   __crLogModalOpen?: boolean;
+  __crTimetableAskVisible?: boolean;
 };
 
 export function insightVisible(): boolean {
@@ -52,4 +59,15 @@ export function setLogModalOpen(open: boolean): void {
 
 export function tourDone(): boolean {
   try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; }
+}
+
+export function timetableAskVisible(): boolean {
+  try { return (window as FirstRunWindow).__crTimetableAskVisible === true; } catch { return false; }
+}
+
+export function setTimetableAskVisible(visible: boolean): void {
+  try {
+    (window as FirstRunWindow).__crTimetableAskVisible = visible;
+    if (!visible) window.dispatchEvent(new Event(TIMETABLE_ASK_SETTLED_EVENT));
+  } catch { /* ignore */ }
 }

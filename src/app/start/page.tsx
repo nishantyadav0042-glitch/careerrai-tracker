@@ -10,11 +10,10 @@ import ScreenDreamPercentile from './screens/screen-dream-percentile';
 import ScreenQuickFacts from './screens/screen-quick-facts';
 import ScreenPainPoints from './screens/screen-pain-points';
 import ScreenRealityCheck from '@/app/student/onboarding/screens/screen-reality-check';
-import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
+import ScreenCoveredAreas from './screens/screen-covered-areas';
 import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
 import ScreenLoginBuild from './screens/screen-login-build';
-import type { CoverageSectionId } from '@/lib/topics-constants';
 import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS, MOCK_PREP_UNITS, READING_HABIT_UNITS } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
 import { START_STEP_KEYS } from '@/lib/funnel-steps';
@@ -131,13 +130,6 @@ const DRAFT_KEY = 'cr_preauth_draft_v7';
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
 
-const TOPIC_SECTION_ORDER: CoverageSectionId[] = ['DILR', 'VARC', 'QA', 'MOCKS', 'READING'];
-const TOPIC_SECTION_INTRO: Partial<Record<CoverageSectionId, string>> = {
-  DILR: 'Set selection wins DILR — let\'s see where you stand.',
-  VARC: 'Reading habits move VARC more than any drill.',
-  QA: 'The last core section — then it\'s just revision and mocks.',
-  MOCKS: 'Almost done — revision and mock readiness, one honest tap each.',
-};
 
 function loadDraft(): { stepIdx: number; data: Record<string, unknown> } | null {
   if (typeof window === 'undefined') return null;
@@ -234,13 +226,14 @@ function StartPageInner() {
       content = <ScreenRealityCheck onNext={advance} {...shared} />;
       break;
     case 'topic-coverage':
+      // Stage A (8 Aug): 7 area chips instead of the 46-topic tap-through.
+      // Same step key (analytics continuity) and same topic_matrix payload —
+      // instant-insight and the signup replay are untouched. The fine map
+      // lives in the app for later refinement.
       content = (
-        <ScreenTopicCoverage
+        <ScreenCoveredAreas
           onNext={advance}
           {...shared}
-          deferSave
-          sectionOrder={TOPIC_SECTION_ORDER}
-          sectionIntro={TOPIC_SECTION_INTRO}
           onMatrixReady={(matrix) => setData((prev) => ({ ...prev, topic_matrix: matrix }))}
         />
       );
