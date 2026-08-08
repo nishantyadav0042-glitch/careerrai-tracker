@@ -28,6 +28,18 @@ import { cn } from '@/lib/utils';
 // Every line maps to something that ships:
 //   1 daily plan · 2 topic coverage · 3 revision cadence
 //   4 mock calendar + analysis slot · 5 feasibility verdict · 6 busy day
+/**
+ * The phrase that turns a list into a release. Founder, 8 Aug: "add 'now
+ * don't worry about' to these lines — it gives them a feeling of freedom."
+ *
+ * He is right, and it survives his earlier "too long" note because it is
+ * rendered SMALL and MUTED above each noun rather than bolted onto it. The
+ * phrase repeats six times, which is what creates the feeling; the eye still
+ * scans six bold nouns, which is what kept it short. The data below stays as
+ * plain nouns so the landing-page chips can use them without the prefix.
+ */
+export const RELIEF_PREFIX = "Now don't worry about";
+
 export const SIX_PROMISES: { n: string; head: string; sub: string }[] = [
   { n: '1', head: 'What to study today', sub: 'Ready before you wake up' },
   { n: '2', head: 'Your backlog', sub: 'All 46 topics, tracked' },
@@ -76,7 +88,8 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
                 {p.n}
               </span>
               <div className="min-w-0">
-                <p className="text-[13.5px] font-bold leading-snug text-stone-900">{p.head}</p>
+                <p className="text-[10.5px] font-semibold leading-none text-stone-400">{RELIEF_PREFIX}</p>
+                <p className="mt-0.5 text-[13.5px] font-bold leading-snug text-stone-900">{p.head}</p>
                 <p className="text-[12px] leading-snug text-stone-500">{p.sub}</p>
               </div>
             </li>

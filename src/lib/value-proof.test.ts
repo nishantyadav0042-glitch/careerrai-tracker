@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { SIX_PROMISES } from '@/components/six-promises';
+import { SIX_PROMISES, RELIEF_PREFIX } from '@/components/six-promises';
 import {
   buildValueProof, shouldShowValueProof, hoursGivenBack, VALUE_PROOF_INTERVAL_DAYS,
 } from './value-proof';
@@ -94,13 +94,26 @@ describe('one list of six worries, everywhere', () => {
     for (const p of SIX_PROMISES) {
       expect(p.head.split(' ').length, `"${p.head}" is too long for a glance`).toBeLessThanOrEqual(5);
       expect(p.sub.split(' ').length, `"${p.sub}" is too long for a glance`).toBeLessThanOrEqual(8);
-      expect(p.head.startsWith("Don't worry"), 'the heading says it once, rows do not repeat it').toBe(false);
+      // The relief phrase belongs to the RENDERING, not the data — so the
+      // landing-page chips can use the bare noun without it.
+      expect(p.head.toLowerCase().startsWith("now don't worry"), 'the prefix is rendered, not stored').toBe(false);
     }
     // The words students actually use in class, not our product language.
     const all = SIX_PROMISES.map((p) => `${p.head} ${p.sub}`).join(' ').toLowerCase();
     for (const word of ['backlog', 'revision', 'mock', 'syllabus', 'off day']) {
       expect(all, `"${word}" is missing — that is the word they say`).toContain(word);
     }
+  });
+
+  it('every row says "now don\'t worry about" — the phrase IS the product', () => {
+    // Founder, 8 Aug: "add 'now don't worry about' to these lines — it gives
+    // them a feeling of freedom." Six bare nouns are a feature list; the
+    // phrase repeated six times is a weight being lifted six times, which is
+    // the whole positioning. Rendered small and muted above each noun, so it
+    // repeats without the screen growing.
+    const screen = readFileSync('src/components/six-promises.tsx', 'utf8');
+    expect(RELIEF_PREFIX.toLowerCase()).toBe("now don't worry about");
+    expect(screen).toContain('{RELIEF_PREFIX}');
   });
 
   it('the landing page and the AI caller carry the same six', () => {
