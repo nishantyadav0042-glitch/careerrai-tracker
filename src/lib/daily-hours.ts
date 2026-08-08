@@ -168,3 +168,65 @@ export function setDailyHours(
   }
   return patch;
 }
+
+// ── The bad-day floor (Stage A, founder 8 Aug) ──────────────────────────────
+//
+// A second number now lives beside the hours, and it means something
+// different. The FLOOR sizes the daily plan: "on a bad day, how much can you
+// still do?" — 15, 30, 60 or 120 minutes. The plan is BUILT at this size, so
+// finishing it is normal, not a miracle; a "want more?" tap adds the next
+// block. The TARGET (study_target_hours above) keeps feeding pace and the
+// Sunday finish-date arithmetic once the student sets it — it is no longer
+// asked at signup, because our churn data showed signup hours are fantasy
+// (students chose 11–15h, did 2–6h, and the oversized plan stood as daily
+// proof of failure until they left).
+//
+// Same ownership rules as the hours: the student's number, set only here,
+// never derived, never "improved". The guard test greps the tree for stray
+// writers of this column too.
+
+/** The four floor choices. Small on purpose — the day must be winnable. */
+export const FLOOR_OPTIONS_MINUTES = [15, 30, 60, 120] as const;
+
+export interface FloorProfile { bad_day_floor_minutes?: unknown }
+
+/**
+ * The floor in minutes, or null for accounts from before it existed.
+ * Null means: plan exactly as today (hours-based) — old students feel no
+ * change until they choose a floor themselves.
+ */
+export function badDayFloorMinutes(p: FloorProfile | null | undefined): number | null {
+  const n = num(p?.bad_day_floor_minutes);
+  if (n == null) return null;
+  // Snap to the nearest allowed option — anything storable is choosable, but
+  // the floor's whole point is smallness, so it stays within the four choices.
+  return FLOOR_OPTIONS_MINUTES.reduce((best, opt) =>
+    Math.abs(opt - n) < Math.abs(best - n) ? opt : best, FLOOR_OPTIONS_MINUTES[0] as number);
+}
+
+/**
+ * The minutes today's plan is built to. Floor when the student has one;
+ * their hours otherwise (legacy behaviour, unchanged); null when neither —
+ * the routine engine's archetype fallbacks remain the only substitutes.
+ */
+export function planMinutesForDay(
+  p: (HoursProfile & FloorProfile) | null | undefined,
+  isWeekend: boolean
+): number | null {
+  const floor = badDayFloorMinutes(p);
+  if (floor != null) return floor;
+  const h = hoursForDay(p, isWeekend);
+  return h == null ? null : Math.round(h * 60);
+}
+
+/** The profile patch that sets the floor. THE only writer, same as hours. */
+export function setBadDayFloor(minutes: number): Record<string, unknown> {
+  const n = num(minutes);
+  if (n == null) return {};
+  const snapped = FLOOR_OPTIONS_MINUTES.reduce((best, opt) =>
+    Math.abs(opt - n) < Math.abs(best - n) ? opt : best, FLOOR_OPTIONS_MINUTES[0] as number);
+  return {
+    bad_day_floor_minutes: snapped,
+    bad_day_floor_set_at: new Date().toISOString(),
+  };
+}

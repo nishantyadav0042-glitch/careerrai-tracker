@@ -242,3 +242,59 @@ describe('nothing writes the number except the one writer', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// ── Stage A: the bad-day floor (founder, 8 Aug) ─────────────────────────────
+
+import { badDayFloorMinutes, planMinutesForDay, setBadDayFloor, FLOOR_OPTIONS_MINUTES } from './daily-hours';
+
+describe('the bad-day floor sizes the plan; hours stay for pace', () => {
+  it('offers exactly the four small choices', () => {
+    expect([...FLOOR_OPTIONS_MINUTES]).toEqual([15, 30, 60, 120]);
+  });
+
+  it('a set floor wins over hours for plan size', () => {
+    const p = { study_target_hours: 8, bad_day_floor_minutes: 30 };
+    expect(planMinutesForDay(p, false)).toBe(30);
+    expect(planMinutesForDay(p, true)).toBe(30);
+  });
+
+  it('no floor = exactly the old behaviour, so 257 existing students feel nothing', () => {
+    const p = { study_target_hours: 4, weekend_hours_available: 6 };
+    expect(planMinutesForDay(p, false)).toBe(240);
+    expect(planMinutesForDay(p, true)).toBe(360);
+    expect(planMinutesForDay(null, false)).toBeNull();
+  });
+
+  it('snaps stray stored values to the nearest choice instead of trusting them', () => {
+    expect(badDayFloorMinutes({ bad_day_floor_minutes: 45 })).toBe(30);
+    expect(badDayFloorMinutes({ bad_day_floor_minutes: 500 })).toBe(120);
+    expect(badDayFloorMinutes({ bad_day_floor_minutes: 'junk' })).toBeNull();
+  });
+
+  it('setBadDayFloor is a patch like setDailyHours — snapped, stamped, nothing else', () => {
+    const patch = setBadDayFloor(30);
+    expect(patch.bad_day_floor_minutes).toBe(30);
+    expect(typeof patch.bad_day_floor_set_at).toBe('string');
+    expect(setBadDayFloor(NaN)).toEqual({});
+    expect(setBadDayFloor(20).bad_day_floor_minutes).toBe(15);
+  });
+});
+
+describe('one owner covers the floor too', () => {
+  it('no other site writes bad_day_floor_minutes', () => {
+    // Same rule, same enforcement as study_target_hours: the moment a second
+    // writer appears, two screens can disagree about the student's floor.
+    const offenders: string[] = [];
+    for (const file of sourceFiles('src')) {
+      if (file.endsWith('daily-hours.ts')) continue;
+      const text = readFileSync(file, 'utf8');
+      for (const [i, line] of text.split('\n').entries()) {
+        if (/^\s*(\/\/|\*)/.test(line)) continue;
+        if (/\bbad_day_floor_minutes\s*[:=]\s*(?!.*\bnumber\b)/.test(line) && !/select\(/.test(line)) {
+          offenders.push(`${file}:${i + 1}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
