@@ -37,70 +37,77 @@ export const SIX_PROMISES: { n: string; head: string; sub: string }[] = [
   { n: '6', head: 'Off days', sub: 'Plan shifts. Nothing lost.' },
 ];
 
-export function SixPromises({ onNext, ctaLabel = 'Turn on my reminders →' }: { onNext: () => void; ctaLabel?: string }) {
+export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' }: { onNext: () => void; ctaLabel?: string }) {
   return (
     <div className="space-y-5">
+      {/* This screen answers ONE question — what is CareerRai — and asks for
+          nothing. It used to end in "Turn on my reminders", which quietly made
+          the six a wrapper around a permission prompt; a student who senses
+          they are being softened up stops reading the six. Permission is the
+          NEXT step, with its own reason. Founder, 8 Aug: "not like this, as 6
+          things hidden as notifications permission. It should be next step." */}
       <div className="text-center">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">You&apos;re in</p>
-        <h1 className="mt-1 text-[26px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          Stop worrying about<br />your preparation.
+        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">What is CareerRai</p>
+        <h1 className="mt-2 text-[27px] font-bold leading-[1.12] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+          Six jobs are ours.<br />One job is yours.
         </h1>
-        <p className="mt-2.5 text-[17px] font-bold text-stone-900">
-          You do one thing. <span className="text-orange-600">STUDY.</span>
-        </p>
-        <p className="mt-1 text-[15px] font-semibold text-stone-700">
-          We plan all of it —{' '}
-          <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-700">100% FREE</span>
-        </p>
+
+        {/* THE claim. Founder: "we have to tell them we are giving you your one
+            hour back daily." Said before the list, because it is the reason
+            the list matters. */}
+        <div className="mx-auto mt-3.5 max-w-[19rem] rounded-2xl bg-orange-50 px-4 py-3">
+          <p className="text-[15px] font-bold leading-snug text-stone-900">
+            That&apos;s about <span className="text-orange-600">1 hour of your day</span>, back.
+          </p>
+          <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">
+            Every day. The planning, the remembering, the deciding — gone.
+          </p>
+        </div>
       </div>
 
-      {/* LOUD by choice (founder: "last one was better and loud") — numbered,
-          bordered, one worry per block, so six items land as six weights being
-          lifted rather than a quiet checklist. The LANGUAGE stays short and in
-          the student's own words; the two notes were about different things,
-          and the loud layout is what carries a claim on a first open. */}
-      <ol className="space-y-2.5">
-        {SIX_PROMISES.map((p) => (
-          <li key={p.n} className="flex gap-3 rounded-xl border border-stone-200 bg-white p-3">
-            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-stone-900 text-[11px] font-bold text-white">
-              {p.n}
-            </span>
-            <div className="min-w-0">
-              <p className="text-[14.5px] font-bold leading-snug text-stone-900">{p.head}</p>
-              <p className="text-[12.5px] leading-snug text-stone-500">{p.sub}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <div>
+        <p className="mb-2 px-0.5 text-[11px] font-bold uppercase tracking-widest text-stone-400">
+          Ours — never your problem again
+        </p>
+        <ol className="space-y-2.5">
+          {SIX_PROMISES.map((p) => (
+            <li key={p.n} className="flex gap-3 rounded-xl border border-stone-200 bg-white p-3">
+              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-stone-900 text-[11px] font-bold text-white">
+                {p.n}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[14.5px] font-bold leading-snug text-stone-900">{p.head}</p>
+                <p className="text-[12.5px] leading-snug text-stone-500">{p.sub}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
 
-      {/* Name the enemy, in their word for it. */}
+      {/* The one job, given the same weight as the six. This is the trade, and
+          it is the whole positioning: six to one. */}
       <div className="rounded-xl bg-stone-900 p-4 text-center">
-        <p className="text-[13.5px] leading-relaxed text-white/85">
-          The hard part was never the <b className="text-white">padhai</b>. It&apos;s the{' '}
-          <b className="text-white">not knowing</b> — am I on track, what did I forget, will I finish.
+        <p className="text-[11px] font-bold uppercase tracking-widest text-white/40">Yours</p>
+        <p className="mt-1.5 text-[22px] font-bold leading-none text-white">Study.</p>
+        <p className="mt-2.5 text-[13px] leading-relaxed text-white/75">
+          That&apos;s it. The hard part was never the <b className="text-white">padhai</b> — it&apos;s the{' '}
+          <b className="text-white">not knowing</b>. Am I on track, what did I forget, will I finish.
         </p>
-        <p className="mt-2 text-[13.5px] font-bold text-white">All six are ours now. You just study.</p>
+        <p className="mt-2.5 inline-block rounded-md bg-emerald-500/15 px-2.5 py-1 text-[12.5px] font-bold text-emerald-300">
+          All six, 100% free
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={onNext}
-          className={cn(
-            'w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white',
-            'transition-all hover:bg-stone-800 active:scale-[0.98]'
-          )}
-        >
-          {ctaLabel}
-        </button>
-        <p className="px-2 text-center text-[11.5px] leading-snug text-stone-400">
-          That&apos;s how revision reaches you on time, and your mock on the day it&apos;s due.
-        </p>
-        <p className="px-2 pt-1 text-center text-[12px] leading-snug text-stone-500">
-          In coaching? <b className="text-stone-700">Send your timetable photo</b>{' '}
-          — we&apos;ll plan around your classes. Later is fine.
-        </p>
-      </div>
+      <button
+        type="button"
+        onClick={onNext}
+        className={cn(
+          'w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white',
+          'transition-all hover:bg-stone-800 active:scale-[0.98]'
+        )}
+      >
+        {ctaLabel}
+      </button>
     </div>
   );
 }

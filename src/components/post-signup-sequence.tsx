@@ -225,12 +225,37 @@ export default function PostSignupSequence() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-3xl shadow-lg shadow-orange-200">🔔</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                Let us remember things for you.
+                Now let us do the six.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                We&apos;ll tell you when revision is due. When your coaching plan is running out.
-                When you&apos;re drifting. <b>Never spam, never marketing</b> — only things about your own
-                preparation.
+                A separate step on purpose — the six are yours whether you tap this or not. But this is
+                how they reach you.
+              </p>
+            </div>
+
+            {/* Three concrete jobs, in the founder's own order: what to do,
+                what you missed, what's done. A permission ask that lists what
+                the notification will SAY is answerable; "allow notifications"
+                is not. */}
+            <ul className="mx-auto max-w-xs space-y-2 text-left">
+              {[
+                { t: 'What to do today', s: 'Your plan, the moment it\u2019s ready' },
+                { t: 'What you missed', s: 'Revision due, mock day, plan running out' },
+                { t: 'What\u2019s done', s: 'Day closed, and what it means for your date' },
+              ].map((x) => (
+                <li key={x.t} className="flex gap-2.5 rounded-xl bg-stone-50 px-3 py-2.5">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500" />
+                  <div>
+                    <p className="text-[13.5px] font-bold leading-tight text-stone-900">{x.t}</p>
+                    <p className="text-[12px] leading-tight text-stone-500">{x.s}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div>
+              <p className="text-[12px] font-medium text-stone-400">
+                <b className="text-stone-600">Never spam, never marketing</b> — only your own preparation.
               </p>
             </div>
 
