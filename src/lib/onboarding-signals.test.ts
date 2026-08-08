@@ -5,9 +5,9 @@ import { totalSyllabusHours, topicsInSection, SECTIONS } from './prep-model';
 
 const ALL_EXAM_TOPICS = SECTIONS.flatMap((s) => topicsInSection(s));
 
-// Founder, 8 Aug: "onboarding में जो information ले रहे हैं, वह तो use ही नहीं
-// हो रही ना कहीं पर भी. To make sure कि जो भी onboarding के time में हम
-// information ले रहे हैं, उसका हम कहीं ना कहीं use करें."
+// Founder, 8 Aug: the information we collect during onboarding is not being
+// used anywhere. Make sure that whatever we ask a student at onboarding, we
+// actually use somewhere.
 //
 // He was right — an audit found coaching_enrolled handed to the routine engine
 // and never read, and last_year_percentile collected since 23 July and used

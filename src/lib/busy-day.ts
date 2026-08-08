@@ -4,9 +4,9 @@ import { catExamDate } from './routine-engine';
 // without a database and can never differ between the route and any surface
 // that wants to explain it before the student taps.
 //
-// Founder, 8 Aug: "Busy day (personal commitments). जिस दिन student चुने कि आज
-// busy था, उस दिन का plan और target date दोनों +1 shift कर दो. This won't
-// happen in coaching student case."
+// Founder, 8 Aug: "Busy day (personal commitments)." On a day the student says
+// they were busy, shift that day's plan and the target date forward by one.
+// "This won't happen in coaching student case."
 
 export interface BusyDayInput {
   planSource: string | null;   // 'coaching' | 'careerrai' | null

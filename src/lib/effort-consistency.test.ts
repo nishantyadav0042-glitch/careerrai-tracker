@@ -8,8 +8,8 @@ import { topicsInSection, SECTIONS } from './prep-model';
 
 const ALL = SECTIONS.flatMap((s) => topicsInSection(s));
 
-// Founder, 8 Aug: "जो change हम A point पर कर रहे हैं वह Z point तक भी पहुँच
-// रहा है या नहीं? पूरी app को aligned रहना है. Zero inconsistencies."
+// Founder, 8 Aug: is a change we make at point A actually reaching point Z?
+// The whole app has to stay aligned. Zero inconsistencies.
 //
 // The effort multiplier is set in ONE place and read by every surface that
 // prices the syllabus in hours or converts it to a date. This file is the

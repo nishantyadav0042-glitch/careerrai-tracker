@@ -7,8 +7,8 @@
 -- (330 unplanned minutes), and the signup screen promised "three taps" while
 -- asking five. Two numbers for one job is how a codebase lies.
 --
--- Founder: "floor का button हटा दो. Instead just put one simple thing — busy
--- day." A heavy day is now REPORTED when it happens rather than predicted at
+-- Founder: drop the floor button; put one simple thing in its place — a busy
+-- day. A heavy day is now REPORTED when it happens rather than predicted at
 -- signup: today's topics are postponed and the finish date moves one day, for
 -- CareerRai-plan students only. See api/routine/busy-day and lib/busy-day.
 --

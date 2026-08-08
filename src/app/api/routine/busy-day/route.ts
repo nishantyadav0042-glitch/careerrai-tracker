@@ -6,9 +6,9 @@ import { shiftIsoDay, busyDayOutcome, type BusyDayVerdict } from '@/lib/busy-day
 
 // POST /api/routine/busy-day — "Busy day (personal commitments)".
 //
-// Founder, 8 Aug: "जिस दिन student चुने कि आज busy था और पढ़ नहीं पाया, उस दिन
-// का पूरा plan और target syllabus date दोनों +1 day shift कर दो. आज जो पढ़ना
-// था वो कल पढ़ेगा."
+// Founder, 8 Aug: on a day the student says they were busy and could not
+// study, shift the whole plan AND the target syllabus date forward by one day.
+// What they were going to study today, they study tomorrow.
 //
 // This replaces the bad-day floor, which asked a student at signup to predict
 // how bad their worst day would be and then fought with their hours over which

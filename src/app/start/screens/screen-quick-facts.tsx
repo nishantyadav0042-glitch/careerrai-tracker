@@ -12,8 +12,8 @@ interface Props {
 }
 
 // Self-study hours on a NORMAL day — the one number this screen exists for.
-// Founder, 8 Aug: "self study hours तो हमें पूछने ही पड़ेंगे ना, चाहे repeater
-// हो चाहे fresher — इसके अलावा timed study plan कैसे बना पाओगे?"
+// Founder, 8 Aug: we have to ask for self-study hours, repeater or fresher —
+// without them, how would you ever build a timed study plan?
 //
 // A bad-day FLOOR question lived here for about six hours and is gone. It
 // asked a student to predict, three weeks ahead, how bad their worst day
@@ -113,8 +113,8 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
       {/* Asked after coaching so the question can name the right thing. For a
           coaching student "6 hours" is ambiguous — 6 including class, or 6 on
           top of it? Plan the same day for both and one of them is wrong by
-          three hours (founder, 8 Aug: "जो हम घंटे पूछ रहे हैं वह self study
-          hours पूछ रहे हैं"). */}
+          three hours. Founder, 8 Aug: the hours we ask for are SELF-STUDY
+          hours. */}
       <div>
         <p className="mb-1 text-sm font-semibold text-stone-800">
           {coaching === true ? 'Outside class, how much do you study on a normal day?' : 'On a normal day, how much do you study?'}

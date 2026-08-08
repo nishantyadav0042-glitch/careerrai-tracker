@@ -1,9 +1,9 @@
 # The coaching student's cycle — research before building
 
-Founder, 8 Aug: *"जिसने coaching ले रखी है और जिसके पास timetable है, वह upload
-करेगा तो उसकी पूरी cycle कैसी होगी? हर weekly plan कैसे change होगा? क्या वह एक
-महीने का दे सकता है? मैं try कर रहा था तब maximum दो week का बना पाए थे through
-Excel. इस पर research करो… founder की तरह."*
+Founder, 8 Aug: *"A student who has coaching and has a timetable — when they
+upload it, what does their whole cycle look like? How does each weekly plan
+change? Can they give us a month? When I was trying it, we could only build two
+weeks through Excel. Research this properly — like a founder."*
 
 No code was written for this document. Everything below is either read out of
 the repository or queried from the live database on 8 Aug 2026.
@@ -109,7 +109,7 @@ coaching student could give us, deleted on every upload.
 
 ## PART 3 — Can we take a month? A whole course?
 
-The founder's own experience: *"maximum दो week का बना पाए थे through Excel."*
+The founder's own experience: *"we could only build two weeks through Excel."*
 That was not a model limitation. **It was our own setting.**
 
 ```ts

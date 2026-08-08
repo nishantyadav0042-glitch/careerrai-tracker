@@ -171,9 +171,10 @@ export function setDailyHours(
 
 // ── The busy day ────────────────────────────────────────────────────────────
 //
-// Founder, 8 Aug: "floor का button हटा दो. Instead just put one simple thing —
-// BUSY DAY (personal commitments). जिस दिन student चुने कि आज busy था, उस दिन
-// का plan और target date दोनों एक दिन आगे खिसका दो."
+// Founder, 8 Aug: drop the floor button. Put one simple thing in its place —
+// BUSY DAY (personal commitments). On a day the student says they were busy
+// and could not study, shift both that day's plan and the target date forward
+// by one day.
 //
 // The bad-day FLOOR lived here for about six hours and is gone. It was a fifth
 // signup question that asked a student to predict, three weeks in advance, how

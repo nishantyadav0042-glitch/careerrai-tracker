@@ -2,10 +2,10 @@ import type { TimetableBlock, TimetableSection } from './timetable';
 
 // ── One month, anchored to real dates ───────────────────────────────────────
 //
-// Founder, 8 Aug: "अगर हम monthly ही timetable बना सकते हैं तो limit कर दो.
-// उसको बोलो एक month का ही upload करो… एक month का timetable proper aligned
-// होना चाहिए with zero errors… student को लगे कि इसने तो बिल्कुल exact same
-// मेरा timetable system में उठा लिया."
+// Founder, 8 Aug: if a month is all we can do properly, then limit it to a
+// month and say so. Tell the student to upload one month, and that month has
+// to be aligned with zero errors — so that they look at it and think "this
+// app has taken my exact timetable into its system."
 //
 // WHY THIS MODULE EXISTS. Extraction was never the problem. Both real uploads
 // in the live database extracted well — Riya's matched 47 of 48 topics — and

@@ -37,10 +37,9 @@ export const REMAINING_FRACTION: Record<CoverageStatus, number> = {
 
 // ── Effort: the same syllabus costs different students different hours ──────
 //
-// Founder, 8 Aug: "जो बंदा first time है उसके लिए वह छह घंटे cover करेगा.
-// repeater है उसको maybe वह तीन घंटे ही लगेंगे cover करने में — इसलिए हमने
-// उससे percentile वगैरह पूछने का किया था, लेकिन वह तो हम use ही नहीं कर पा
-// रहे हैं."
+// Founder, 8 Aug: a first-timer needs six hours to cover a topic; a repeater
+// may need only three. "That is exactly why we asked them for last year's
+// percentile — and we are not using it anywhere."
 //
 // He is right, and it was the largest unused signal in the product. Until now
 // TOPIC_METADATA's 397 hours were quoted identically to a first-timer who has
