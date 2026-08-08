@@ -23,7 +23,7 @@ import {
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { badDayFloorMinutes, dailyHours } from '@/lib/daily-hours';
-import { todaysTaughtTopics } from '@/lib/timetable-align';
+import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
@@ -215,7 +215,7 @@ export async function computeTodaysPlan(
         .eq('routine_date', today)
         .maybeSingle(),
       admin.from('routine_task_completions').select('task_id').eq('student_id', studentId).eq('routine_date', today),
-      admin.from('student_timetables').select('blocks').eq('student_id', studentId).maybeSingle(),
+      admin.from('student_timetables').select('blocks, confirmed_at').eq('student_id', studentId).maybeSingle(),
     ]);
 
     if (!profile) return null;
@@ -261,7 +261,11 @@ export async function computeTodaysPlan(
     // FIRST (6am cron), so if it didn't know about today's class, the morning
     // notification would freeze an unaligned plan before the student woke up.
     const todayClassTopics = (profile.plan_source === 'coaching')
-      ? todaysTaughtTopics((timetableRow?.blocks as TimetableBlock[] | null) ?? [], today)
+      ? coachingTopicsForDate(
+          (timetableRow?.blocks as TimetableBlock[] | null) ?? [],
+          timetableRow?.confirmed_at as string | null,
+          today,
+        )
       : [];
     const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics);
 

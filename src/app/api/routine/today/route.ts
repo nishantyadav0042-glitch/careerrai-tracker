@@ -13,7 +13,7 @@ import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } f
 import { getLogDateString } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
-import { todaysTaughtTopics } from '@/lib/timetable-align';
+import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
 import { badDayFloorMinutes, dailyHours, hoursForDay } from '@/lib/daily-hours';
 
@@ -97,7 +97,7 @@ export async function GET() {
     // Percentages, your plan here says Percentages too."
     admin
       .from('student_timetables')
-      .select('blocks')
+      .select('blocks, confirmed_at')
       .eq('student_id', user.id)
       .maybeSingle(),
   ]);
@@ -196,8 +196,16 @@ export async function GET() {
   // request, the same reasoning as whySummary already being recomputed
   // fresh rather than frozen at generation time. (history itself is fetched
   // in the parallel wave above.)
+  // The month, anchored to real dates at upload time — NOT a weekday lookup
+  // over raw blocks. Riya's 48-topic list all carried day 0, so the old read
+  // returned all 48 every Monday (a +45 on every candidate differentiates
+  // nothing) and none on the other six days. See lib/timetable-month.
   const todayClassTopics = (profile.plan_source === 'coaching')
-    ? todaysTaughtTopics((timetableRow?.blocks as TimetableBlock[] | null) ?? [], today)
+    ? coachingTopicsForDate(
+        (timetableRow?.blocks as TimetableBlock[] | null) ?? [],
+        timetableRow?.confirmed_at as string | null,
+        today,
+      )
     : [];
   const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics);
 

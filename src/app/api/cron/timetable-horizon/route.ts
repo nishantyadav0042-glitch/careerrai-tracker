@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { sendNotification } from '@/lib/notifications';
-import { horizonDaysLeft, HORIZON_NUDGE_DAYS } from '@/lib/timetable-align';
+import { HORIZON_NUDGE_DAYS } from '@/lib/timetable-align';
+import { anchorToMonth, monthDaysLeft } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
 
 export const dynamic = 'force-dynamic';
@@ -32,9 +33,14 @@ export async function POST(request: NextRequest) {
   let nudged = 0;
   for (const row of rows ?? []) {
     const blocks = (row.blocks as TimetableBlock[] | null) ?? [];
-    const daysLeft = horizonDaysLeft(blocks, today);
-    // null = undated (never expires); too-far = not yet; long-gone = the
-    // student has moved on and a nag about a stale sheet helps nobody.
+    if (blocks.length === 0) continue;
+    // Days left in the MONTH WE ANCHORED, not the max date found among raw
+    // blocks. That old read is what pushed "your timetable has run out" to
+    // Riya on 7 Aug: one stray "2023-10-16" sample row on a recurring weekly
+    // sheet put her horizon three years in the past. A sheet's own stray date
+    // can no longer reach this number.
+    const confirmed = typeof row.confirmed_at === 'string' ? String(row.confirmed_at).slice(0, 10) : today;
+    const daysLeft = monthDaysLeft(anchorToMonth(blocks, confirmed), today);
     if (daysLeft == null || daysLeft > HORIZON_NUDGE_DAYS) continue;
     const horizonPassedDaysAgo = daysLeft === 0;
     if (horizonPassedDaysAgo && row.confirmed_at && Date.parse(String(row.confirmed_at)) < Date.now() - 14 * 86_400_000) continue;
