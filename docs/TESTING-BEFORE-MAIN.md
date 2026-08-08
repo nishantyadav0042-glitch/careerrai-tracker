@@ -25,8 +25,15 @@ Two separate problems, two separate fixes. Keep them separate in your head.
 `exit 1` = build it, `exit 0` = skip it. `main` still builds and still deploys
 to careerrai.in exactly as before. Nothing else changed about production.
 
-Every push to the working branch now produces a preview URL of the form
-`careerrai-daily-<hash>-nishantyadav0042-5715s-projects.vercel.app`.
+Every push to the working branch now produces a preview. Use the **branch
+alias**, not the per-commit hash — it is stable and always points at the
+newest build of the branch:
+
+```
+careerrai-daily-git-clau-689162-nishantyadav0042-5715s-projects.vercel.app
+```
+
+First green build on this alias: `9cd0099`, 8 Aug.
 
 ### Reaching the preview from your phone
 
@@ -74,13 +81,12 @@ The rule the codebase already follows, and it is the right one:
   `compute-dna`, `push-recovery`, `buddy-evening` and — importantly —
   `expedify-flush`, so a test signup never triggers an AI call to yourself.
 
-To freeze an account after you sign up:
+To freeze an account after you sign up, there is already a button:
+**Admin → Leads → open the student → the test-account toggle**
+(`admin/leads/[id]/test-toggle.tsx` → `PATCH /api/admin/mark-test`).
 
-```sql
-update profiles set is_test_account = true where phone = '+91XXXXXXXXXX';
-```
-
-Do it **right after signup**, before the next cron tick. `is_demo` is a
+Do it **right after signup**, before the next cron tick — otherwise
+`expedify-flush` has a window in which it can queue an AI call to you. `is_demo` is a
 different thing (the shared `buddydemo@careerrai.in` login) — do not use it
 here; demo accounts are cut out of the experience crons too.
 
