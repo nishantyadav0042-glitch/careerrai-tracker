@@ -62,17 +62,16 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // PREMIUM FEATURE (founder, 7 Aug): the coaching timetable is curated with
-  // your mentor. The gate lives HERE, not only in the UI, because a gate that
-  // exists only in the interface is a suggestion.
-  const { data: gate } = await admin.from('profiles').select('is_premium').eq('id', user.id).single();
-  if (gate?.is_premium !== true) {
-    return NextResponse.json(
-      { error: 'The coaching timetable is part of mentorship — unlock your 1:1 mentor to use it.', premiumRequired: true },
-      { status: 403 },
-    );
-  }
-
+  // FREE FOR EVERY STUDENT (founder, 8 Aug). This was premium-gated for a day,
+  // and the evidence says that was backwards: 70–80% of serious aspirants
+  // already have a coaching timetable, so turning that sheet into an aligned
+  // daily plan is the fastest proof we can offer that we save them work — and
+  // we were charging for it before anyone had a reason to trust us.
+  //
+  // The line we hold instead: the MACHINE is free, the HUMAN is paid. Uploading,
+  // reading and aligning a timetable is automation and costs us cents. A mentor
+  // sitting with you to curate it (api/buddy/student-timetable) is a person's
+  // hours, and that stays premium.
   const kind = isTimetableKind(body.kind) ? body.kind : 'weekly';
   // Re-sanitized server-side: this date can move the student's whole target,
   // so a client is never trusted to supply it unchecked.

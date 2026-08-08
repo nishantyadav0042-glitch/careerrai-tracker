@@ -72,27 +72,27 @@ export async function POST(request: NextRequest) {
   // action, so 10/hour is generous. Fail-open if the counter errors.
   const admin = createAdminClient();
 
-  // Premium feature (founder, 7 Aug) — gated at the scanner too, not just the
-  // save: a free upload that scans beautifully and then dies at save is a
-  // crueller wall, and every scan burns shared AI quota.
-  const { data: gate } = await admin.from('profiles').select('is_premium').eq('id', user.id).single();
-  if (gate?.is_premium !== true) {
-    return NextResponse.json(
-      { error: 'The coaching timetable is part of mentorship — unlock your 1:1 mentor to use it.', premiumRequired: true },
-      { status: 403 },
-    );
-  }
-
+  // FREE FOR EVERY STUDENT (founder, 8 Aug) — see the note in ../route.ts.
+  // The scanner is the day-1 "wow": a student hands us the sheet their coaching
+  // gave them and gets an aligned plan back in thirty seconds. Charging for
+  // that was charging for the proof.
+  //
+  // What replaces the premium gate is a real quota, because the Gemini key is
+  // shared and free students are now on it. Two ceilings, both per-student:
+  // a burst limit so a retry loop can't run away, and a daily limit because
+  // this is a once-or-twice-a-week action for a real student and anything
+  // beyond that is either a bug or abuse.
   const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
-  const { count } = await admin
-    .from('student_events')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('event', 'timetable_parsed')
-    .gte('created_at', hourAgo);
-  if ((count ?? 0) >= 10) {
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+  const [{ count: lastHour }, { count: lastDay }] = await Promise.all([
+    admin.from('student_events').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('event', 'timetable_parsed').gte('created_at', hourAgo),
+    admin.from('student_events').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('event', 'timetable_parsed').gte('created_at', dayAgo),
+  ]);
+  if ((lastHour ?? 0) >= 6 || (lastDay ?? 0) >= 15) {
     return NextResponse.json(
-      { error: 'Too many uploads this hour — you can add your classes by hand instead.' },
+      { error: "That's a lot of uploads — take a break and try again later, or add your classes by hand." },
       { status: 429 },
     );
   }

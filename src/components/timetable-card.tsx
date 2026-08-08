@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarClock, Pencil, Lock } from 'lucide-react';
+import { CalendarClock, Pencil } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { TimetableUpload } from '@/components/timetable-upload';
 import { CoachingMirror } from '@/components/coaching-mirror';
@@ -54,23 +54,6 @@ export function TimetableCard() {
       <div className="rounded-xl border border-stone-200 bg-white p-4">
         {loading ? (
           <p className="text-sm text-stone-400">Loading…</p>
-        ) : isPremium === false && (!blocks || blocks.length === 0) ? (
-          // PREMIUM FEATURE (founder, 7 Aug): the timetable is curated with a
-          // mentor. Free students see what it does and the door to it — the
-          // server refuses the upload regardless, so this is honesty, not
-          // just paint. A legacy free student's already-saved timetable stays
-          // visible above; only new uploads are gated.
-          <div>
-            <div className="mb-2 flex items-center gap-2">
-              <Lock className="h-4 w-4 text-stone-400" />
-              <p className="text-sm font-semibold text-stone-800">Your mentor builds this with you</p>
-            </div>
-            <p className="mb-3 text-[13px] leading-relaxed text-stone-600">
-              Upload your coaching&apos;s timetable and your mentor curates it — then your daily plan here
-              follows your actual classes, day by day.
-            </p>
-            <UnlockBuddyButton className="w-full">Unlock with a mentor</UnlockBuddyButton>
-          </div>
         ) : blocks && blocks.length > 0 ? (
           <>
             <div className="mb-3 flex items-start justify-between gap-3">
@@ -100,6 +83,23 @@ export function TimetableCard() {
                 <p className="pt-1 text-[11px] text-stone-400">+{blocks.length - 6} more</p>
               )}
             </div>
+
+            {/* The mentor offer lives HERE — after the student has a working
+                timetable — not in front of it. Until 8 Aug this whole feature
+                was behind a paywall, which meant the one thing that proves we
+                save them work was invisible to everyone who hadn't already
+                paid. Reading a sheet is automation and it's free; a person
+                sitting with you to correct it is worth money, and now the
+                student can see exactly what they'd be buying. */}
+            {isPremium === false && (
+              <div className="mt-4 border-t border-stone-100 pt-3">
+                <p className="mb-2 text-[13px] leading-relaxed text-stone-600">
+                  Scanned automatically — some rows may need a human eye. A mentor can sit with you,
+                  fix what the scanner mis-read and shape the plan around your batch.
+                </p>
+                <UnlockBuddyButton className="w-full">Curate this with a mentor</UnlockBuddyButton>
+              </div>
+            )}
           </>
         ) : (
           <>
