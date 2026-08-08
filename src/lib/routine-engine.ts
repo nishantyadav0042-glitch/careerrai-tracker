@@ -23,14 +23,6 @@ export interface RoutineProfile {
   targetPercentile: number | null;
   weekdayHours: number | null;
   weekendHours: number | null;
-  /**
-   * Stage A (founder, 8 Aug): the bad-day floor, in minutes. When set, the
-   * day is BUILT this size — small on purpose, winnable every day — and the
-   * hours above stop sizing the plan (they keep feeding pace/date math).
-   * null = pre-floor account: hours-based sizing, exactly as before.
-   * Callers read it via badDayFloorMinutes() (lib/daily-hours) — never raw.
-   */
-  floorMinutes?: number | null;
   weakestSection: Section | null;
   strongestSection: Section | null;
   // Self-reported toughest topic *within* weakestSection — now just ONE
@@ -323,19 +315,11 @@ export function generateRoutine(
     ?? (weekend
       ? (profile.isWorkingProfessional ? 4 : 3)
       : (profile.isWorkingProfessional ? 1.5 : 2.5));
-  // The plan is the student's NORMAL day. The floor no longer sizes it —
-  // that rule produced a 30-minute plan for a student who said six hours, and
-  // 330 unplanned minutes is not a plan (founder, 8 Aug: "zero
-  // inconsistency"). The floor is now carried as coreMinutes: the part of the
-  // day that has to survive for the day to count. See lib/daily-hours.
-  //
-  // Hours are still absent for accounts that predate the question coming
-  // back; those fall to the floor, and only then to the archetype default.
-  const hasHours = (weekend ? profile.weekendHours : profile.weekdayHours) != null;
-  const floorOnly = !hasHours && profile.floorMinutes != null && profile.floorMinutes > 0;
-  const totalMinutes = floorOnly
-    ? Math.round(profile.floorMinutes!)
-    : Math.max(30, Math.round(hours * 60));
+  // The plan is the student's own hours, and nothing else sizes it. The
+  // bad-day floor briefly did, which produced a thirty-minute plan for a
+  // student who said six hours; it is gone. A heavy day is answered when it
+  // happens (api/routine/busy-day), not predicted at signup.
+  const totalMinutes = Math.max(30, Math.round(hours * 60));
 
   const weak = profile.weakestSection ?? 'DILR';
   const strong = profile.strongestSection;

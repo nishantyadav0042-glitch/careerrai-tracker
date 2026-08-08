@@ -15,7 +15,7 @@ import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
-import { badDayFloorMinutes, dailyHours, hoursForDay } from '@/lib/daily-hours';
+import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 
 const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
@@ -51,7 +51,7 @@ export async function GET() {
       .from('profiles')
       .select(`
         is_working_professional, is_repeater, target_percentile,
-        hours_available, study_target_hours, weekend_hours_available, bad_day_floor_minutes, syllabus_target_date,
+        hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
         baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with, plan_source
       `)
@@ -181,9 +181,6 @@ export async function GET() {
     // a week, with the arithmetic attached. See /api/cron/weekly-plan-reconcile.
     weekdayHours: claimedHours,
     weekendHours: dailyHours(profile).weekend,
-    // Stage A: the bad-day floor sizes the day when set. Null for accounts
-    // that predate it — those students keep hours-based planning, unchanged.
-    floorMinutes: badDayFloorMinutes(profile as Record<string, unknown>),
     weakestSection: weakest,
     strongestSection: strongest,
     weakTopic,

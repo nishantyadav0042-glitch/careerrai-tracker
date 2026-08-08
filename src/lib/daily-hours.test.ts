@@ -245,114 +245,8 @@ describe('nothing writes the number except the one writer', () => {
 
 // ── Stage A: the bad-day floor (founder, 8 Aug) ─────────────────────────────
 
-import { badDayFloorMinutes, planMinutesForDay, coreMinutesForDay, setBadDayFloor, FLOOR_OPTIONS_MINUTES } from './daily-hours';
 
-// REVERSED 8 Aug. For half a day the floor sized the plan, and it produced a
-// measured contradiction: a student who answered "6 hours of self-study" was
-// handed a 30-minute plan — 330 unplanned minutes. Founder: "study plan भी six
-// hours के साथ aligned होना चाहिए. Zero inconsistency."
-//
-// The two numbers were never rivals. Hours = the normal day, so hours size the
-// plan. Floor = the bad day, so the floor marks the CORE inside that plan: the
-// part that has to survive for the day to count as kept.
-describe('hours size the plan; the floor marks the core inside it', () => {
-  it('offers exactly the four small choices', () => {
-    expect([...FLOOR_OPTIONS_MINUTES]).toEqual([15, 30, 60, 120]);
-  });
 
-  it('THE FIX: a 6-hour student is planned 6 hours, not 30 minutes', () => {
-    const p = { study_target_hours: 6, bad_day_floor_minutes: 30 };
-    expect(planMinutesForDay(p, false)).toBe(360);
-    expect(planMinutesForDay(p, true)).toBe(360);
-    // ...and the 30 minutes still mean something: they are the core.
-    expect(coreMinutesForDay(p, false)).toBe(30);
-  });
-
-  it('the core can never exceed the plan it sits inside', () => {
-    // A 2-hour floor with a 1-hour normal day would otherwise make every
-    // single day a failed one.
-    const p = { study_target_hours: 1, bad_day_floor_minutes: 120 };
-    expect(planMinutesForDay(p, false)).toBe(60);
-    expect(coreMinutesForDay(p, false)).toBe(60);
-  });
-
-  it('no floor set = no core, and the plan is still the normal day', () => {
-    expect(coreMinutesForDay({ study_target_hours: 4 }, false)).toBeNull();
-    expect(planMinutesForDay({ study_target_hours: 4 }, false)).toBe(240);
-  });
-
-  it('an account with a floor but no hours still gets a plan', () => {
-    // Signed up in the window where hours were not asked. The floor is a far
-    // better plan than a guess, and better than nothing.
-    const p = { bad_day_floor_minutes: 30 };
-    expect(planMinutesForDay(p, false)).toBe(30);
-    expect(coreMinutesForDay(p, false)).toBe(30);
-  });
-
-  it('no floor = exactly the old behaviour, so 257 existing students feel nothing', () => {
-    const p = { study_target_hours: 4, weekend_hours_available: 6 };
-    expect(planMinutesForDay(p, false)).toBe(240);
-    expect(planMinutesForDay(p, true)).toBe(360);
-    expect(planMinutesForDay(null, false)).toBeNull();
-  });
-
-  it('snaps stray stored values to the nearest choice instead of trusting them', () => {
-    expect(badDayFloorMinutes({ bad_day_floor_minutes: 45 })).toBe(30);
-    expect(badDayFloorMinutes({ bad_day_floor_minutes: 500 })).toBe(120);
-    expect(badDayFloorMinutes({ bad_day_floor_minutes: 'junk' })).toBeNull();
-  });
-
-  it('setBadDayFloor is a patch like setDailyHours — snapped, stamped, nothing else', () => {
-    const patch = setBadDayFloor(30);
-    expect(patch.bad_day_floor_minutes).toBe(30);
-    expect(typeof patch.bad_day_floor_set_at).toBe('string');
-    expect(setBadDayFloor(NaN)).toEqual({});
-    expect(setBadDayFloor(20).bad_day_floor_minutes).toBe(15);
-  });
-});
-
-describe('one owner covers the floor too', () => {
-  it('no other site writes bad_day_floor_minutes', () => {
-    // Same rule, same enforcement as study_target_hours: the moment a second
-    // writer appears, two screens can disagree about the student's floor.
-    const offenders: string[] = [];
-    for (const file of sourceFiles('src')) {
-      if (file.endsWith('daily-hours.ts')) continue;
-      const text = readFileSync(file, 'utf8');
-      for (const [i, line] of text.split('\n').entries()) {
-        if (/^\s*(\/\/|\*)/.test(line)) continue;
-        if (/\bbad_day_floor_minutes\s*[:=]\s*(?!.*\bnumber\b)/.test(line) && !/select\(/.test(line)) {
-          offenders.push(`${file}:${i + 1}`);
-        }
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
-
-  // The floor crosses three files between the student's tap and their plan,
-  // and every crossing is a place it can be silently dropped. It already was:
-  // the column reached the profile and NEITHER plan caller selected it, so
-  // the answer was stored and ignored — the same shape as the phantom
-  // weakest_section column that 404'd every buddy. Each hop is asserted here
-  // because none of them fails loudly on its own.
-  it('the floor survives every hop: chip → signup payload → profile → plan', () => {
-    const screen = readFileSync('src/app/start/screens/screen-quick-facts.tsx', 'utf8');
-    const otp = readFileSync('src/app/api/auth/verify-phone-otp/route.ts', 'utf8');
-
-    // hop 1 — the screen emits the agreed key, not the column name
-    expect(screen).toMatch(/bad_day_floor:\s*floor/);
-    // hop 2 — signup replays it through the one writer, never a raw assignment
-    expect(otp).toMatch(/setBadDayFloor\(\s*onboarding\.bad_day_floor\s*\)/);
-    // hop 3 — both plan callers must SELECT the column, or the floor is
-    // written and then read as null on every single day
-    for (const f of ['src/app/api/routine/today/route.ts', 'src/lib/routine-plan.ts']) {
-      expect(readFileSync(f, 'utf8')).toContain('bad_day_floor_minutes');
-    }
-    // hop 4 — the fixture is what the schema guard compares the live table to
-    expect(readFileSync('src/lib/__fixtures__/profiles-columns.json', 'utf8'))
-      .toContain('bad_day_floor_minutes');
-  });
-});
 
 describe('small days are small, few-task, and exactly the size promised', () => {
   // The engine's small-day shaping is unchanged and still worth pinning — it
@@ -368,7 +262,7 @@ describe('small days are small, few-task, and exactly the size promised', () => 
   // Sized by HOURS, the way a real profile now is.
   const P = (minutes: number, over: Partial<RoutineProfile> = {}): RoutineProfile => ({
     isWorkingProfessional: false, isRepeater: false, targetPercentile: 95,
-    weekdayHours: minutes / 60, weekendHours: minutes / 60, floorMinutes: 30,
+    weekdayHours: minutes / 60, weekendHours: minutes / 60,
     weakestSection: 'QA', strongestSection: 'VARC', weakTopic: null,
     currentStage: 'not_started', attemptYear: 2026, ...over,
   });
@@ -403,17 +297,9 @@ describe('small days are small, few-task, and exactly the size promised', () => 
     expect(r.tasks.length).toBeGreaterThan(1);
   });
 
-  it('a floor-only account (no hours on record) is still planned', () => {
+  it('no hours at all falls to the archetype default, not to zero', () => {
     const r = generateRoutine(
-      P(0, { weekdayHours: null, weekendHours: null, floorMinutes: 30 }),
-      MON, NO_HIST, CHOICES);
-    expect(r.estMinutes).toBe(30);
-    expect(r.tasks).toHaveLength(1);
-  });
-
-  it('neither hours nor floor falls to the archetype default, not to zero', () => {
-    const r = generateRoutine(
-      P(0, { weekdayHours: null, weekendHours: null, floorMinutes: null }),
+      P(0, { weekdayHours: null, weekendHours: null }),
       MON, NO_HIST, CHOICES);
     expect(r.estMinutes).toBe(150); // 2.5h, the stated non-working default
   });

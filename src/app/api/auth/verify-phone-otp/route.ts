@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { parseSignupDevice } from '@/lib/device-detect';
-import { setBadDayFloor, setDailyHours } from '@/lib/daily-hours';
+import { setDailyHours } from '@/lib/daily-hours';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { isAdminPhoneE164 } from '@/lib/admin-config';
@@ -22,7 +22,6 @@ interface OnboardingPayload {
   target_percentile?: unknown;
   hours_available?: unknown;
   self_study_hours?: unknown;
-  bad_day_floor?: unknown;
   coaching_enrolled?: unknown;
   is_repeater?: unknown;
   last_year_percentile?: unknown;
@@ -231,11 +230,6 @@ export async function POST(request: NextRequest) {
         // be computed without it — but it no longer sizes the daily plan, so
         // an ambitious answer costs a date correction, not a broken day.
         Object.assign(profileUpdate, setDailyHours(onboarding.self_study_hours, 'signup'));
-      }
-      if (typeof onboarding.bad_day_floor === 'number') {
-        // Stage A: the bad-day floor — the size the daily plan is built to.
-        // Written only through the one-owner module, same as the hours.
-        Object.assign(profileUpdate, setBadDayFloor(onboarding.bad_day_floor));
       }
       if (typeof onboarding.coaching_enrolled === 'boolean') profileUpdate.coaching_enrolled = onboarding.coaching_enrolled;
       if (typeof onboarding.is_repeater === 'boolean') profileUpdate.is_repeater = onboarding.is_repeater;

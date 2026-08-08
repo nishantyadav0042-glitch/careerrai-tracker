@@ -22,7 +22,7 @@ import {
   type HistoryInput,
 } from '@/lib/routine-engine';
 import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { badDayFloorMinutes, dailyHours } from '@/lib/daily-hours';
+import { dailyHours } from '@/lib/daily-hours';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
@@ -201,7 +201,7 @@ export async function computeTodaysPlan(
         .from('profiles')
         .select(`
           is_working_professional, is_repeater, target_percentile,
-          hours_available, study_target_hours, weekend_hours_available, bad_day_floor_minutes, syllabus_target_date, plan_source,
+          hours_available, study_target_hours, weekend_hours_available, syllabus_target_date, plan_source,
           self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
           baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, start_with
         `)
@@ -248,7 +248,6 @@ export async function computeTodaysPlan(
       weekendHours: dailyHours(profile).weekend,
       // Stage A floor — kept in lockstep with today/route.ts (the mirror rule:
       // the 6am notification must name the same plan the student opens).
-      floorMinutes: badDayFloorMinutes(profile as Record<string, unknown>),
       weakestSection: weakest,
       strongestSection: strongest,
       weakTopic,

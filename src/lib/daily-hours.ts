@@ -169,102 +169,19 @@ export function setDailyHours(
   return patch;
 }
 
-// ── The bad-day floor (Stage A, founder 8 Aug) ──────────────────────────────
+// ── The busy day ────────────────────────────────────────────────────────────
 //
-// A second number now lives beside the hours, and it means something
-// different. The FLOOR sizes the daily plan: "on a bad day, how much can you
-// still do?" — 15, 30, 60 or 120 minutes. The plan is BUILT at this size, so
-// finishing it is normal, not a miracle; a "want more?" tap adds the next
-// block. The TARGET (study_target_hours above) keeps feeding pace and the
-// Sunday finish-date arithmetic once the student sets it — it is no longer
-// asked at signup, because our churn data showed signup hours are fantasy
-// (students chose 11–15h, did 2–6h, and the oversized plan stood as daily
-// proof of failure until they left).
+// Founder, 8 Aug: "floor का button हटा दो. Instead just put one simple thing —
+// BUSY DAY (personal commitments). जिस दिन student चुने कि आज busy था, उस दिन
+// का plan और target date दोनों एक दिन आगे खिसका दो."
 //
-// Same ownership rules as the hours: the student's number, set only here,
-// never derived, never "improved". The guard test greps the tree for stray
-// writers of this column too.
-
-/** The four floor choices. Small on purpose — the day must be winnable. */
-export const FLOOR_OPTIONS_MINUTES = [15, 30, 60, 120] as const;
-
-export interface FloorProfile { bad_day_floor_minutes?: unknown }
-
-/**
- * The floor in minutes, or null for accounts from before it existed.
- * Null means: plan exactly as today (hours-based) — old students feel no
- * change until they choose a floor themselves.
- */
-export function badDayFloorMinutes(p: FloorProfile | null | undefined): number | null {
-  const n = num(p?.bad_day_floor_minutes);
-  if (n == null) return null;
-  // Snap to the nearest allowed option — anything storable is choosable, but
-  // the floor's whole point is smallness, so it stays within the four choices.
-  return FLOOR_OPTIONS_MINUTES.reduce((best, opt) =>
-    Math.abs(opt - n) < Math.abs(best - n) ? opt : best, FLOOR_OPTIONS_MINUTES[0] as number);
-}
-
-/**
- * The minutes today's plan is built to — the student's NORMAL day.
- *
- * REVERSED 8 Aug, and the reversal matters. For half a day the floor sized
- * the plan, which produced a measured contradiction: a student who answered
- * "6 hours of self-study" was handed a 30-minute plan and 330 unplanned
- * minutes. Founder: "अगर student six hours opt कर रहा है… study plan भी six
- * hours के साथ aligned होना चाहिए. Zero inconsistency."
- *
- * He is right, and the two numbers were never rivals — they answer different
- * questions and I had them fighting over the same job:
- *
- *   HOURS  the normal day  -> how big the plan is, and the finish date
- *   FLOOR  the bad day     -> coreMinutes below: how much of that plan has to
- *                            survive for the day to count as kept
- *
- * So the plan is the full 6 hours, and the first ~30 minutes of it are marked
- * as the core. A bad day means doing the core and keeping the day — which is
- * the promise the floor was introduced for, without under-planning a student
- * who told us they study six hours.
- *
- * This does NOT rebuild the 750-minute monument that churned Kashika. That
- * came from a number nobody was ever asked to justify: the question now names
- * self-study only, is anchored AFTER the bad-day question so the anchor is
- * low, says "honestly, not ambitiously" on the screen, and is corrected every
- * Sunday against what was actually logged.
- */
-export function planMinutesForDay(
-  p: (HoursProfile & FloorProfile) | null | undefined,
-  isWeekend: boolean
-): number | null {
-  const h = hoursForDay(p, isWeekend);
-  if (h != null) return Math.round(h * 60);
-  // No hours on record (an account from before the question came back): the
-  // floor is a better plan than nothing, and far better than a guess.
-  return badDayFloorMinutes(p);
-}
-
-/**
- * The part of today's plan that has to survive a bad day for the day to count.
- * Null when the student never set a floor, and never larger than the plan
- * itself — a core bigger than the day would make every day a failed one.
- */
-export function coreMinutesForDay(
-  p: (HoursProfile & FloorProfile) | null | undefined,
-  isWeekend: boolean
-): number | null {
-  const floor = badDayFloorMinutes(p);
-  if (floor == null) return null;
-  const plan = planMinutesForDay(p, isWeekend);
-  return plan == null ? floor : Math.min(floor, plan);
-}
-
-/** The profile patch that sets the floor. THE only writer, same as hours. */
-export function setBadDayFloor(minutes: number): Record<string, unknown> {
-  const n = num(minutes);
-  if (n == null) return {};
-  const snapped = FLOOR_OPTIONS_MINUTES.reduce((best, opt) =>
-    Math.abs(opt - n) < Math.abs(best - n) ? opt : best, FLOOR_OPTIONS_MINUTES[0] as number);
-  return {
-    bad_day_floor_minutes: snapped,
-    bad_day_floor_set_at: new Date().toISOString(),
-  };
-}
+// The bad-day FLOOR lived here for about six hours and is gone. It was a fifth
+// signup question that asked a student to predict, three weeks in advance, how
+// bad their worst day would be — and then it fought with the hours number over
+// which one sized the plan. That fight produced both of today's real bugs: a
+// six-hour student handed a thirty-minute plan, and a screen that said "three
+// taps" while asking five. Two numbers for one job is how a codebase lies.
+//
+// A busy day is answered at the moment it happens instead, needs no stored
+// number, and reuses machinery that already exists — see api/routine/busy-day.
+// One number, one owner: the student's hours, and nothing else.
