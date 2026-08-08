@@ -144,9 +144,14 @@ describe('feasibility is computed, and said out loud', () => {
     expect(f.daysOver).toBeGreaterThan(0);
     expect(f.topicCapacityHours!).toBeLessThan(f.syllabusHours);
     const line = feasibilityLine(f);
-    expect(line).toContain('run out of days');
-    expect(line).toContain('fewer topics');
+    // "You run out of days 0 short" was the first version, on a plan that was
+    // 54 hours short: daysNeeded divided the syllabus by raw daily hours and
+    // ignored the hours the exam calendar had already claimed. Both numbers now
+    // come from the same currency.
+    expect(f.daysOver).toBeGreaterThan(0);
+    expect(line).toContain('h short');
     expect(line).toContain(`${f.topicDaysAvailable} free study days`);
+    expect(line).toContain(`${f.topicCapacityHours}h`);
   });
 
   it('6h a day fits, and the capacity genuinely holds the syllabus', () => {

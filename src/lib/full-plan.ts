@@ -1,5 +1,5 @@
 import { buildWeekPlan, type DayPlan } from './study-forecast';
-import { remainingSyllabusHours, MOCK_HOURS_EACH, type TopicStatusRow } from './study-pace';
+import { remainingSyllabusHours, MOCK_HOURS_EACH, totalSyllabusHours, type TopicStatusRow } from './study-pace';
 import { catExamDate } from './routine-engine';
 
 // ── The whole plan, today to CAT day ────────────────────────────────────────
@@ -58,6 +58,10 @@ export interface FullPlanDay {
 
 export interface Feasibility {
   syllabusHours: number;
+  /** The whole syllabus at this student's effort — the ring's denominator. */
+  syllabusTotalHours: number;
+  /** Share of the syllabus already behind them, 0-100. */
+  syllabusDonePct: number;
   mockHours: number;
   totalHours: number;
   daysToExam: number;
@@ -180,14 +184,29 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   const capacityByDate = new Map<string, number>();
   let topicCapacityTotal = 0;
   let topicDaysAvailable = 0;
+  // The reservation on each usable day, kept so the required-pace answer below
+  // can be solved against the same structure rather than estimated from it.
+  const reservations: number[] = [];
   for (let d = 0; d < span; d++) {
     const date = new Date(input.today.getTime() + d * DAY_MS);
-    const free = phaseOn(date, exam) === 'revision'
-      ? 0
-      : Math.max(0, committedDaily - reservedOn(date));
+    const isRevision = phaseOn(date, exam) === 'revision';
+    const free = isRevision ? 0 : Math.max(0, committedDaily - reservedOn(date));
+    if (!isRevision) reservations.push(reservedOn(date));
     capacityByDate.set(iso(date), free);
     topicCapacityTotal += free;
     if (free > 0) topicDaysAvailable++;
+  }
+
+  // The daily hours that would ACTUALLY clear the syllabus, solved against the
+  // real day structure. Dividing the syllabus by free days gave "3.9h a day
+  // would clear it" to a student already doing 4h and still 54 hours short —
+  // because that division ignored the hours mock days give up. Solved in half
+  // hours, which is the granularity the app stores anyway.
+  const capacityAt = (h: number) => reservations.reduce((sum, r) => sum + Math.max(0, h - r), 0);
+  let solvedPerDay = committedDaily;
+  for (let h = 0.5; h <= 16; h += 0.5) {
+    if (capacityAt(h) >= syllabusHours) { solvedPerDay = h; break; }
+    solvedPerDay = 16;
   }
 
   // buildWeekPlan is used for ORDER, not for day assignment: it decides which
@@ -279,8 +298,16 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   // they are not. That version said 4.5h/day was enough while the scheduler
   // was quietly dropping eighteen topics; the two now answer with one number.
   const topicCapacityHours = Math.round(topicCapacityTotal);
-  const daysNeeded = committed ? Math.ceil(syllabusHours / committed) : null;
-  const fits = committed == null ? true : syllabusHours <= topicCapacityHours;
+  // Days needed must be measured in the SAME currency as capacity. Dividing
+  // the syllabus by raw daily hours ignored the hours the exam calendar had
+  // already taken, which produced "you run out of days 0 short" on a plan that
+  // was 54 hours short — a sentence that is both wrong and meaningless.
+  const shortfallHours = Math.max(0, syllabusHours - topicCapacityHours);
+  const daysNeeded = committed
+    ? topicDaysAvailable + Math.ceil(shortfallHours / committed)
+    : null;
+  const fits = committed == null ? true : shortfallHours === 0;
+  const syllabusTotalHours = Math.round(totalSyllabusHours() * input.effort);
 
   return {
     days,
@@ -288,11 +315,14 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
     mockCount,
     feasibility: {
       syllabusHours,
+      syllabusTotalHours,
+      syllabusDonePct: syllabusTotalHours > 0
+        ? Math.max(0, Math.min(100, Math.round((1 - syllabusHours / syllabusTotalHours) * 100)))
+        : 0,
       mockHours,
       totalHours,
       daysToExam,
-      // The pace that would actually clear the syllabus in the free days.
-      requiredPerDay: Math.round((syllabusHours / Math.max(1, topicDaysAvailable)) * 10) / 10,
+      requiredPerDay: solvedPerDay,
       committedPerDay: committed,
       daysNeeded,
       topicDaysAvailable,
@@ -319,5 +349,6 @@ export function feasibilityLine(f: Feasibility): string {
     const spare = f.topicDaysAvailable - (f.daysNeeded ?? 0);
     return `At ${f.committedPerDay}h a day the whole syllabus fits, with ${spare} study day${spare === 1 ? '' : 's'} to spare — and that is after setting aside ${f.mockHours}h for mocks and all of November for revision.`;
   }
-  return `At ${f.committedPerDay}h a day you run out of days ${f.daysOver} short. You have ${f.topicDaysAvailable} free study days before revision starts (mocks and November are already set aside), which holds ${f.topicCapacityHours}h — the syllabus needs ${f.syllabusHours}h. It takes about ${f.requiredPerDay}h a day, or fewer topics.`;
+  const short = f.syllabusHours - (f.topicCapacityHours ?? 0);
+  return `You are ${short}h short. Your ${f.topicDaysAvailable} free study days hold ${f.topicCapacityHours}h at ${f.committedPerDay}h a day — mocks and November are already set aside — and the syllabus needs ${f.syllabusHours}h. About ${f.requiredPerDay}h a day would clear it, or ${f.daysOver} more days than you have.`;
 }
