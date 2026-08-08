@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { InstallButton } from '@/components/install/install-button';
+import { SixToOne } from '@/components/six-to-one';
 
 // Public landing at "/". Founder direction: the phone previews are SALES
 // ASSETS — colourful, dense, and convincing like Cal AI's, not flat
@@ -464,14 +465,10 @@ export default function WelcomePage() {
           >
             Build my CAT plan — free →
           </Link>
-          {/* The six worries, compressed to one line. Founder, 8 Aug: "we
-              solve UNCERTAINTY" — so the landing page names the uncertainty
-              rather than listing features a stranger has seen on five other
-              apps. Every item here ships today. */}
-          <p className="px-1 text-center text-[11.5px] leading-relaxed text-stone-500">
-            Daily plan · backlog · revision · mocks · syllabus on time · off days.
-            <b className="text-stone-700"> None of it your problem.</b>
-          </p>
+          {/* The same six-to-one a student meets after signup, compressed for
+              a stranger. Reads the one shared list, so the promise made here
+              and the promise made inside can never diverge. */}
+          <SixToOne />
           <InstallButton variant="text" />
           {/* THE LOGIN DOOR. NEVER REMOVE IT, NEVER MAKE IT FINE PRINT.
               This page is the landing screen for EVERY logged-out arrival —

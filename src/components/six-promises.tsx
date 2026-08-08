@@ -39,7 +39,7 @@ export const SIX_PROMISES: { n: string; head: string; sub: string }[] = [
 
 export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' }: { onNext: () => void; ctaLabel?: string }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* This screen answers ONE question — what is CareerRai — and asks for
           nothing. It used to end in "Turn on my reminders", which quietly made
           the six a wrapper around a permission prompt; a student who senses
@@ -48,36 +48,36 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
           things hidden as notifications permission. It should be next step." */}
       <div className="text-center">
         <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">What is CareerRai</p>
-        <h1 className="mt-2 text-[27px] font-bold leading-[1.12] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+        <h1 className="mt-2 text-[23px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Six jobs are ours.<br />One job is yours.
         </h1>
 
         {/* THE claim. Founder: "we have to tell them we are giving you your one
             hour back daily." Said before the list, because it is the reason
             the list matters. */}
-        <div className="mx-auto mt-3.5 max-w-[19rem] rounded-2xl bg-orange-50 px-4 py-3">
-          <p className="text-[15px] font-bold leading-snug text-stone-900">
+        <div className="mx-auto mt-3 max-w-[18rem] rounded-xl bg-orange-50 px-3.5 py-2.5">
+          <p className="text-[13.5px] font-bold leading-snug text-stone-900">
             That&apos;s about <span className="text-orange-600">1 hour of your day</span>, back.
           </p>
-          <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">
+          <p className="mt-0.5 text-[11.5px] leading-snug text-stone-600">
             Every day. The planning, the remembering, the deciding — gone.
           </p>
         </div>
       </div>
 
       <div>
-        <p className="mb-2 px-0.5 text-[11px] font-bold uppercase tracking-widest text-stone-400">
+        <p className="mb-1.5 px-0.5 text-[10.5px] font-bold uppercase tracking-widest text-stone-400">
           Ours — never your problem again
         </p>
-        <ol className="space-y-2.5">
+        <ol className="space-y-2">
           {SIX_PROMISES.map((p) => (
-            <li key={p.n} className="flex gap-3 rounded-xl border border-stone-200 bg-white p-3">
-              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-stone-900 text-[11px] font-bold text-white">
+            <li key={p.n} className="flex gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5">
+              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-stone-900 text-[10px] font-bold text-white">
                 {p.n}
               </span>
               <div className="min-w-0">
-                <p className="text-[14.5px] font-bold leading-snug text-stone-900">{p.head}</p>
-                <p className="text-[12.5px] leading-snug text-stone-500">{p.sub}</p>
+                <p className="text-[13.5px] font-bold leading-snug text-stone-900">{p.head}</p>
+                <p className="text-[12px] leading-snug text-stone-500">{p.sub}</p>
               </div>
             </li>
           ))}
@@ -86,14 +86,14 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
 
       {/* The one job, given the same weight as the six. This is the trade, and
           it is the whole positioning: six to one. */}
-      <div className="rounded-xl bg-stone-900 p-4 text-center">
+      <div className="rounded-xl bg-stone-900 px-4 py-3.5 text-center">
         <p className="text-[11px] font-bold uppercase tracking-widest text-white/40">Yours</p>
-        <p className="mt-1.5 text-[22px] font-bold leading-none text-white">Study.</p>
-        <p className="mt-2.5 text-[13px] leading-relaxed text-white/75">
+        <p className="mt-1 text-[20px] font-bold leading-none text-white">Study.</p>
+        <p className="mt-2 text-[12px] leading-relaxed text-white/75">
           That&apos;s it. The hard part was never the <b className="text-white">padhai</b> — it&apos;s the{' '}
           <b className="text-white">not knowing</b>. Am I on track, what did I forget, will I finish.
         </p>
-        <p className="mt-2.5 inline-block rounded-md bg-emerald-500/15 px-2.5 py-1 text-[12.5px] font-bold text-emerald-300">
+        <p className="mt-2 inline-block rounded-md bg-emerald-500/15 px-2.5 py-1 text-[12px] font-bold text-emerald-300">
           All six, 100% free
         </p>
       </div>
@@ -102,7 +102,7 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
         type="button"
         onClick={onNext}
         className={cn(
-          'w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white',
+          'w-full rounded-2xl bg-stone-900 py-3.5 text-[13.5px] font-semibold text-white',
           'transition-all hover:bg-stone-800 active:scale-[0.98]'
         )}
       >

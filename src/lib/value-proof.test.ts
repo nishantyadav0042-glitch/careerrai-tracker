@@ -107,19 +107,23 @@ describe('one list of six worries, everywhere', () => {
     // Three surfaces stated the pitch in three different ways, and the landing
     // page argued against it outright: "CAT prep, tracked" tells a stranger
     // there is MORE work for them, and leads with the one paid thing.
-    // Checked by VOCABULARY rather than by exact sentence: the landing page
-    // says it in six words and Riya says it in a spoken line, so pinning a
-    // phrase would force one surface to talk like the other. What must not
-    // drift is which six worries each of them names.
+    // The landing page no longer restates the six — it RENDERS them, from the
+    // same SIX_PROMISES the post-signup screen uses. That is stronger than
+    // matching words: a stranger who signs up on one promise and meets a
+    // different one after signup was sold something we did not deliver, and
+    // two hand-written lists drift within a week.
     const welcome = readFileSync('src/app/welcome/page.tsx', 'utf8');
-    const riya = readFileSync('docs/EXPEDIFY-RIYA-PROMPT.txt', 'utf8');
-    for (const surface of [welcome, riya]) {
-      expect(surface).toMatch(/revis/i);       // revision
-      expect(surface).toMatch(/mock/i);        // mocks
-      expect(surface).toMatch(/syllabus/i);    // finishing in time
-      expect(surface).toMatch(/off day|bad day/i);
-    }
+    expect(welcome).toContain('<SixToOne />');
+    const compact = readFileSync('src/components/six-to-one.tsx', 'utf8');
+    expect(compact).toContain("from '@/components/six-promises'");
+    expect(compact).toContain('SIX_PROMISES.map');
     expect(welcome).not.toContain('CAT prep, tracked');
+
+    // Riya speaks hers aloud, so she is checked by vocabulary instead.
+    const riya = readFileSync('docs/EXPEDIFY-RIYA-PROMPT.txt', 'utf8');
+    for (const word of [/revis/i, /mock/i, /syllabus/i, /off day/i]) {
+      expect(riya).toMatch(word);
+    }
   });
 
   it('free is never claimed without the mentor boundary nearby', () => {
