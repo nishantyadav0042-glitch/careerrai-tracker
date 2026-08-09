@@ -1,0 +1,12 @@
+-- Drop the dead compute_momentum_streak function (10 Aug 2026 cleanup).
+--
+-- It was the shield-AWARDING streak engine from the manual-restore era
+-- (20260723). The live writer is now upsert_log_and_streak (20260810,
+-- logged-days basis), which contains no shield logic, and NOTHING calls
+-- compute_momentum_streak via .rpc() anywhere in the codebase — only a stale
+-- code comment references it. Per the architecture-cleanup mandate (one system
+-- per job, delete the superseded), it is removed rather than left dormant.
+--
+-- Safe: DROP ... IF EXISTS, no dependents (it was never wired into a trigger or
+-- another function).
+DROP FUNCTION IF EXISTS public.compute_momentum_streak(uuid);
