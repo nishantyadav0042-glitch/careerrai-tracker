@@ -6,6 +6,7 @@ import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
 import { remainingMockHours } from '@/lib/study-pace';
 import type { PaceResult } from '@/lib/study-pace';
+import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
 // steady-pace headline, three at-a-glance pace facts, a weekly study sparkline,
@@ -71,6 +72,11 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
+  // The golden rule: the plan is built around the student's OWN daily hours, and
+  // the date is theirs. So the reschedule sheet lets them change BOTH here — set
+  // a date, and if it needs more, set the hours it needs, in one place. null =
+  // "unchanged from what they committed".
+  const [hoursOverride, setHoursOverride] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   // Their own finish date has already gone. Three students were sitting in this
@@ -99,19 +105,34 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   // here would have this warning compare a new date against a number the
   // student never chose.
   const committedPerDay = pace.committedPerDay;
+  // The hours in play right now — their override if they've bumped it, else what
+  // they committed. The date warning is measured against THIS, so raising the
+  // hours in place turns the warning green without leaving the sheet.
+  const effectiveHours = hoursOverride ?? committedPerDay ?? null;
   const daysToNew = date ? Math.max(1, Math.ceil((new Date(date + 'T00:00:00').getTime() - new Date(todayIso + 'T00:00:00').getTime()) / 86_400_000)) : null;
   const remainingWithMocks = pace.remainingHours + remainingMockHours(pace.remainingHours);
   const requiredForNew = daysToNew ? Math.round((remainingWithMocks / daysToNew) * 2) / 2 : null;
-  const tooDemanding = requiredForNew != null && committedPerDay != null && requiredForNew > committedPerDay + 0.5;
+  const tooDemanding = requiredForNew != null && effectiveHours != null && requiredForNew > effectiveHours + 0.5;
+  // The hours this date actually needs — the number to raise to, bounded.
+  const hoursForDate = requiredForNew != null ? Math.min(MAX_DAILY_HOURS, Math.max(MIN_DAILY_HOURS, Math.ceil(requiredForNew))) : null;
+  const hoursChanged = hoursOverride != null && hoursOverride !== committedPerDay;
 
-  async function saveDate() {
-    if (!date) return;
+  function stepHours(delta: number) {
+    const cur = effectiveHours ?? MIN_DAILY_HOURS;
+    setHoursOverride(Math.min(MAX_DAILY_HOURS, Math.max(MIN_DAILY_HOURS, cur + delta)));
+  }
+
+  async function save() {
+    if (!date && !hoursChanged) return;
     setBusy(true); setErr(null);
     try {
+      const payload: Record<string, unknown> = {};
+      if (date) payload.syllabus_target_date = date;
+      if (hoursChanged) payload.daily_hours = hoursOverride;
       const res = await fetch('/api/student/post-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syllabus_target_date: date }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       setEditing(false);
@@ -218,37 +239,58 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           {/* Founder principle: never fake precision. Students forgive an
               estimate that says it is one. */}
           <p className="text-[11px] leading-relaxed text-stone-400">{HOURS_ARE_ESTIMATES}</p>
-          <div className="flex flex-wrap items-center gap-2">
+
+          {/* Golden rule, made visible: the plan is built around YOUR hours. The
+              date is yours; if it needs more, set the hours it needs — here. */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Finish by</span>
             <input type="date" value={date} min={todayIso} onChange={(e) => setDate(e.target.value)}
               className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-sm text-stone-900" />
           </div>
 
-          {/* The truth about the date they just picked — before they commit. */}
-          {requiredForNew != null && committedPerDay != null && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Daily hours</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => stepHours(-1)} disabled={effectiveHours != null && effectiveHours <= MIN_DAILY_HOURS}
+                className="grid h-8 w-8 place-items-center rounded-lg border border-stone-300 text-lg font-bold text-stone-700 disabled:opacity-40">−</button>
+              <span className="w-14 text-center text-sm font-bold text-stone-900">{effectiveHours != null ? `${effectiveHours}h` : '—'}</span>
+              <button type="button" onClick={() => stepHours(1)} disabled={effectiveHours != null && effectiveHours >= MAX_DAILY_HOURS}
+                className="grid h-8 w-8 place-items-center rounded-lg border border-stone-300 text-lg font-bold text-stone-700 disabled:opacity-40">+</button>
+            </div>
+          </div>
+
+          {/* The truth about the date they just picked — before they commit. Now
+              with the fix in-place: raise the hours to what the date needs. */}
+          {requiredForNew != null && effectiveHours != null && (
             tooDemanding ? (
               <div className="rounded-xl border-2 border-rose-400 bg-rose-50 p-3">
                 <p className="text-[12px] font-bold text-rose-700">⚠ That date needs more than you study.</p>
                 <p className="mt-0.5 text-[12.5px] leading-relaxed text-stone-700">
-                  Finishing by <b>{fmt(date)}</b> would take <b className="text-rose-700">{requiredForNew}h a day</b>, and you study <b>{committedPerDay}h</b>.
-                  {' '}Setting it does <b>not</b> change your hours — you&apos;d just miss the date. If you want that date, raise your daily hours in{' '}
-                  <b>Your Goal</b> first.
+                  Finishing by <b>{fmt(date)}</b> takes <b className="text-rose-700">{requiredForNew}h a day</b>, and you&apos;re set to <b>{effectiveHours}h</b>.
+                  {' '}Your plan is built around your hours — so to hit this date, raise them.
                 </p>
+                {hoursForDate != null && (
+                  <button type="button" onClick={() => setHoursOverride(hoursForDate)}
+                    className="mt-2 w-full rounded-lg bg-rose-600 py-2 text-[12.5px] font-bold text-white active:scale-[0.99]">
+                    Set my hours to {hoursForDate}h/day — hit this date
+                  </button>
+                )}
               </div>
             ) : (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-[12.5px] leading-relaxed text-stone-700">
-                  Finishing by <b>{fmt(date)}</b> takes about <b className="text-emerald-700">{requiredForNew}h a day</b> — your <b>{committedPerDay}h</b> covers it.
+                  Finishing by <b>{fmt(date)}</b> takes about <b className="text-emerald-700">{requiredForNew}h a day</b> — your <b>{effectiveHours}h</b> covers it.
                 </p>
               </div>
             )
           )}
 
           <div className="flex items-center gap-2">
-            <button type="button" disabled={busy || !date} onClick={saveDate}
+            <button type="button" disabled={busy || (!date && !hoursChanged)} onClick={save}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${tooDemanding ? 'bg-rose-600' : 'bg-stone-900'}`}>
-              {busy ? 'Saving…' : tooDemanding ? 'Set it anyway' : 'Set this date'}
+              {busy ? 'Saving…' : tooDemanding ? 'Set it anyway' : 'Save'}
             </button>
-            <button type="button" onClick={() => { setEditing(false); setDate(''); setErr(null); }}
+            <button type="button" onClick={() => { setEditing(false); setDate(''); setHoursOverride(null); setErr(null); }}
               className="text-xs font-medium text-stone-500 hover:text-stone-700">Cancel</button>
             {err && <span className="text-[11px] text-rose-600">{err}</span>}
           </div>
