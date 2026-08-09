@@ -184,7 +184,14 @@ export default async function DailyTrackerPage() {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  const latestExtension = latestExtensionRow
+  // Only show the "date moved" card while that move is STILL in effect — i.e.
+  // the live finish date still equals what the reconcile set. If the move was
+  // reverted (e.g. the 9 Aug mass-restore after the hours-capture bug), the
+  // audit row survives but the scary card must not, or 215 students would keep
+  // seeing a move that no longer exists.
+  const extensionStillInEffect = latestExtensionRow
+    && (latestExtensionRow.new_date as string) === targetIso;
+  const latestExtension = latestExtensionRow && extensionStillInEffect
     ? {
         weekStart: latestExtensionRow.week_start as string,
         expectedHours: Number(latestExtensionRow.expected_hours),
