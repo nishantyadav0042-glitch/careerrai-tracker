@@ -195,3 +195,31 @@ describe('feasibility is computed, and said out loud', () => {
     expect(feasibilityLine(f)).toContain('Set your study hours');
   });
 });
+
+describe('every study day is a mix of sections — never one subject (10 Aug redesign)', () => {
+  const effort = studentEffortMultiplier({ isRepeater: false, lastYearPercentile: null });
+  const sectionsOn = (items: { kind: string; section: string | null }[]) =>
+    new Set(items.filter((i) => i.kind === 'topic' && i.section).map((i) => i.section));
+
+  it('a 6h/day plan touches multiple sections on every early study day', () => {
+    const plan = buildFullPlan({ coverage: UNTOUCHED, effort, weekdayHours: 6, today: TODAY, attemptYear: 2026, weakestSection: 'DILR' });
+    const studyDays = plan.days.filter((d) => d.phase !== 'revision' && d.items.some((i) => i.kind === 'topic')).slice(0, 12);
+    expect(studyDays.length).toBeGreaterThan(5);
+    for (const d of studyDays) expect(sectionsOn(d.items).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a low 2h/day plan still spreads across sections, not one subject for days', () => {
+    const plan = buildFullPlan({ coverage: UNTOUCHED, effort, weekdayHours: 2, today: TODAY, attemptYear: 2026, weakestSection: 'QA' });
+    const studyDays = plan.days.filter((d) => d.phase !== 'revision' && d.items.some((i) => i.kind === 'topic')).slice(0, 8);
+    const across = new Set(studyDays.flatMap((d) => [...sectionsOn(d.items)]));
+    expect(across.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the weakest section leads the mix', () => {
+    const plan = buildFullPlan({ coverage: UNTOUCHED, effort, weekdayHours: 6, today: TODAY, attemptYear: 2026, weakestSection: 'VARC' });
+    const firstStudy = plan.days.find((d) => d.phase !== 'revision' && d.items.some((i) => i.kind === 'topic'));
+    const varcHours = firstStudy!.items.filter((i) => i.section === 'VARC').reduce((s, i) => s + i.hours, 0);
+    const otherHours = firstStudy!.items.filter((i) => i.kind === 'topic' && i.section && i.section !== 'VARC').reduce((s, i) => s + i.hours, 0) / 2;
+    expect(varcHours).toBeGreaterThanOrEqual(otherHours);
+  });
+});

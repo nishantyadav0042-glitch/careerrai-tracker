@@ -8,6 +8,8 @@ import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-da
 import { PLAN_WINDOW_DAYS, anchorToMonth } from '@/lib/timetable-month';
 import { checkPlanIntegrity } from '@/lib/plan-integrity';
 import type { TimetableBlock } from '@/lib/timetable';
+import { weakestFromCoverage } from '@/lib/section-weakness';
+import type { Section } from '@/lib/prep-model';
 
 // GET /api/plan/full — the student's whole plan.
 //
@@ -29,9 +31,9 @@ export async function GET() {
   const [{ data: profile }, { data: coverageRows }, completionRecords, { data: timetable }] =
     await Promise.all([
       admin.from('profiles')
-        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name')
+        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name, self_reported_weakest_section')
         .eq('id', user.id).maybeSingle(),
-      admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
+      admin.from('topic_coverage').select('section, topic, status, updated_at').eq('student_id', user.id),
       buildCompletionRecords(admin, user.id, '2000-01-01'),
       admin.from('student_timetables').select('confirmed_at, blocks').eq('student_id', user.id).maybeSingle(),
     ]);
@@ -95,6 +97,14 @@ export async function GET() {
     revisionDue,
     horizonDays,
     coachingByDate,
+    // Same weakest-section the daily plan leans on, so the mix tilts the same
+    // way on both surfaces — the self-report if given, else derived from the
+    // coverage grid, else the app-wide DILR default.
+    weakestSection: ((profile.self_reported_weakest_section as Section | null)
+      ?? weakestFromCoverage((coverageRows ?? [])
+        .filter((r) => !!r.section && !!r.status)
+        .map((r) => ({ section: String(r.section), status: String(r.status) })))
+      ?? 'DILR'),
   });
 
   const integrity = checkPlanIntegrity({

@@ -1,6 +1,10 @@
 import { buildWeekPlan, type DayPlan } from './study-forecast';
 import { remainingSyllabusHours, MOCK_HOURS_EACH, totalSyllabusHours, type TopicStatusRow } from './study-pace';
 import { catExamDate } from './routine-engine';
+import type { Section } from './prep-model';
+import {
+  sectionsForDay, splitDayHours, drawFromSection, MIN_BLOCK_HOURS, type QueueTopic,
+} from './plan-mix';
 
 // ── The whole plan, today to CAT day ────────────────────────────────────────
 //
@@ -98,6 +102,12 @@ export interface FullPlanInput {
   attemptYear: number | null;
   /** Revision-overdue topics, most overdue first. Surfaced, not recomputed. */
   revisionDue?: string[];
+  /**
+   * The student's weakest section — the same value the daily plan uses, so the
+   * mix leans the same way on both. Optional: derived from remaining hours when
+   * absent, but the caller SHOULD pass it to keep the two views identical.
+   */
+  weakestSection?: Section;
   /** Cap the horizon (a coaching student's month). Null = run to exam day. */
   horizonDays?: number | null;
   /**
@@ -288,23 +298,54 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   // never scheduled twice under two different dates.
   const queue = anchored.size ? ordered.filter((i) => !anchored.has(i.label)) : ordered;
 
-  let qi = 0;
-  let leftOnItem = queue.length ? queue[0].hours : 0;
-  for (let d = 0; d < span && qi < queue.length; d++) {
-    const key = iso(new Date(input.today.getTime() + d * DAY_MS));
-    let left = capacityByDate.get(key) ?? 0;
-    const items: PlanItem[] = [...(topicsByDate.get(key) ?? [])];
-    while (qi < queue.length && left >= 0.5) {
-      const take = Math.min(leftOnItem, left);
-      if (take >= 0.5) {
-        items.push({ ...queue[qi], hours: Math.round(take * 2) / 2 });
-        left -= take;
-        leftOnItem -= take;
-      }
-      if (leftOnItem < 0.5) { qi++; leftOnItem = qi < queue.length ? queue[qi].hours : 0; }
-      if (take < 0.5) break;
+  // ── The mixed day (10 Aug redesign) ─────────────────────────────────────────
+  //
+  // The old code poured this ONE priority queue into days topic-by-topic, so a
+  // 30-hour topic ate three days whole — RC-only, then Mensuration-only. Toppers
+  // don't study like that. Bucket the queue by section, then build EACH day as a
+  // mix: the weakest section plus one or two others (scaled by hours), time-split
+  // toward the weaker/bigger section, each section's topics progressing across
+  // days but always alongside the rest. Coaching-anchored class topics already
+  // sit in topicsByDate; the mix fills the OTHER sections around them.
+  const queues: Record<Section, QueueTopic[]> = { QA: [], DILR: [], VARC: [] };
+  for (const it of queue) {
+    const sec = it.section as Section;
+    if (sec === 'QA' || sec === 'DILR' || sec === 'VARC') {
+      queues[sec].push({ topic: it.label, section: sec, hours: it.hours, mode: 'learn' });
     }
-    if (items.length) topicsByDate.set(key, items);
+  }
+  const remainingIn = (s: Section) => queues[s].reduce((sum, t) => sum + t.hours, 0);
+  // Weakest = the caller's value (matches the daily plan) or, failing that, the
+  // section with the most work left.
+  const weakest: Section = input.weakestSection
+    ?? (['QA', 'DILR', 'VARC'] as Section[]).sort((a, b) => remainingIn(b) - remainingIn(a))[0];
+
+  let topicDayIdx = 0; // counts only days that place topics — keeps rotation steady
+  for (let d = 0; d < span; d++) {
+    const date = new Date(input.today.getTime() + d * DAY_MS);
+    if (phaseOn(date, exam) === 'revision') continue; // revision days are built later
+    const key = iso(date);
+    const free = capacityByDate.get(key) ?? 0;
+    if (free < MIN_BLOCK_HOURS) continue;
+
+    const anchoredItems = topicsByDate.get(key) ?? [];
+    const anchoredHours = anchoredItems.reduce((s, i) => s + i.hours, 0);
+    const freeForMix = Math.round((free - anchoredHours) * 2) / 2;
+
+    if (freeForMix >= MIN_BLOCK_HOURS && (remainingIn('QA') + remainingIn('DILR') + remainingIn('VARC')) > 0) {
+      const secs = sectionsForDay(freeForMix, weakest, topicDayIdx).filter((s) => queues[s].length > 0);
+      // If the weakest is out of topics, still mix whatever sections have work.
+      const usable = secs.length ? secs : (['QA', 'DILR', 'VARC'] as Section[]).filter((s) => queues[s].length > 0);
+      const split = splitDayHours(usable, freeForMix, weakest);
+      const mixItems: PlanItem[] = [];
+      for (const s of usable) {
+        for (const m of drawFromSection(queues[s], split.get(s) ?? 0)) {
+          mixItems.push({ kind: 'topic', label: m.topic, section: m.section, hours: m.hours });
+        }
+      }
+      if (mixItems.length) topicsByDate.set(key, [...anchoredItems, ...mixItems]);
+    }
+    topicDayIdx++;
   }
 
   const revisionQueue = [...(input.revisionDue ?? [])];
