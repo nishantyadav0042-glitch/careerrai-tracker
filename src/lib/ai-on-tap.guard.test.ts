@@ -124,7 +124,6 @@ describe('no AI response is produced without a human tap', () => {
       'src/app/api/weekly-signal/route.ts': 'buddy taps "Read this week with AI"',
       'src/app/api/feedback-draft/route.ts': 'buddy taps "AI facts"',
       'src/app/api/chat/draft/route.ts': 'buddy taps "Get reply facts"',
-      'src/app/api/coach-line/route.ts': 'DEAD — no component renders CoachLine; scheduled for deletion after merge',
       'src/lib/gemini.ts': 'the client itself',
     };
     const actual = FILES.filter((f) => code(f).includes('callGemini')).sort();
