@@ -66,6 +66,21 @@ export async function POST(request: NextRequest) {
     if (!(VALID_ENERGY as readonly string[]).includes(body.energy)) {
       return NextResponse.json({ error: 'Invalid energy' }, { status: 400 });
     }
+    // Coherence guard (9 Aug — the Abhishek incident): a day marked "studied"
+    // with topics but ZERO hours is an impossible record — you cannot study
+    // three topics in no time. Yet hours were optional in the sheet while the
+    // weekly finish-date engine prices the whole week on exactly this number, so
+    // a student who skipped the optional hours logged a "studied" day worth 0h
+    // and had their date pushed a week — while showing up daily on a 12-day
+    // streak. Reject the incoherent record at the source: if they studied, the
+    // hours must be real. An honest rest day (not_studied/skipped, or 0h with no
+    // topics) is untouched — that path stays open.
+    if (body.hours === 0 && body.day_outcome === 'studied' && Array.isArray(body.sections) && body.sections.length > 0) {
+      return NextResponse.json(
+        { error: 'You marked today as studied — add your study hours so your finish date stays accurate.' },
+        { status: 400 },
+      );
+    }
     if (body.emotional_chips) {
       if (!body.emotional_chips.every((c) => (VALID_EMOTIONAL_CHIPS as readonly string[]).includes(c))) {
         return NextResponse.json({ error: 'Invalid emotional chip' }, { status: 400 });

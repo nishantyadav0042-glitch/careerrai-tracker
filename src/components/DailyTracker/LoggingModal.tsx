@@ -160,8 +160,20 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   // with nothing in it has nothing further to describe, and making someone
   // justify a bad day is how you stop hearing about bad days.
   const outcomeIsTerminal = outcome != null && NO_DETAIL_NEEDED.includes(outcome);
-  const isValid = outcomeIsTerminal
-    || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0;
+
+  // A day that shows any sign of study — outcome "studied"/"partial", a plan
+  // topic touched, off-plan work, or a mock — MUST carry its hours, because the
+  // weekly finish-date engine reads exactly this number. Making hours optional
+  // let a real study day be recorded as 0h and silently pushed the student's
+  // date (the Abhishek incident, 9 Aug). An honest empty day still needs nothing.
+  const studyingSignal = !outcomeIsTerminal
+    && (outcome === 'studied' || outcome === 'partial' || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true);
+  const hoursEntered = hours != null && hours > 0;
+  const hoursOk = !studyingSignal || hoursEntered;
+
+  const isValid = (outcomeIsTerminal
+    || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0)
+    && hoursOk;
 
   // The hint must name what is ACTUALLY missing. It used to say "Start by
   // tapping how today went" whenever the outcome was unanswered — but the
@@ -171,7 +183,9 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   // Not done / Half / Done chips already say how the day went, and when the
   // student skips the question we derive it from those instead of losing it.
   const missingHint = (): string =>
-    'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
+    studyingSignal && !hoursEntered
+      ? 'Add your hours — that’s the number your finish date depends on.'
+      : 'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
 
   // Derived outcome, used only when the student didn't tap one. Every branch is
   // checkable against what they actually marked — we never guess 'studied'.
@@ -418,9 +432,10 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
             )}
           </div>
 
-          {/* 4 — Hours (optional) */}
+          {/* 4 — Hours. Required once the day shows any study signal, because the
+              finish-date engine reads this number; optional only on an empty day. */}
           <div>
-            {label('Hours studied · optional')}
+            {label(studyingSignal ? 'Hours studied' : 'Hours studied · optional')}
             <div className="grid grid-cols-6 gap-1.5">
               {HOURS_OPTIONS.map((h) => (
                 <button key={h} onClick={() => setHours((prev) => (prev === h ? null : h))}
@@ -429,6 +444,11 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
                 </button>
               ))}
             </div>
+            {studyingSignal && !hoursEntered && (
+              <p className="mt-2 text-[11px] leading-relaxed text-amber-400">
+                You studied today — pick your hours. This is the number your finish date is calculated from.
+              </p>
+            )}
           </div>
 
           {/* 5 — Mock (folded in, no second screen) */}
