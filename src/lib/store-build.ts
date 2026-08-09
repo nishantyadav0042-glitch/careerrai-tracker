@@ -1,3 +1,5 @@
+import type { PaymentSurfaceSignals } from '@/lib/payment-surface';
+
 // Store-build detection + external-browser payment escape.
 //
 // The Play (Android TWA) and iOS (WKWebView) STORE builds launch with a
@@ -152,6 +154,42 @@ export function hasStoreBuildFlag(): boolean {
 /** Mark THIS tab as the real-browser payment tab (called by /go). */
 export function markPaymentTab(): void {
   try { sessionStorage.setItem(ESCAPED, '1'); } catch { /* storage blocked */ }
+}
+
+/**
+ * Read the five browser facts that decide where checkout may open, so
+ * `lib/payment-surface` can stay pure and testable without a phone.
+ *
+ * This is the ONLY place a checkout surface should learn about its environment.
+ * The iOS home-screen PWA went unpaid for weeks precisely because each surface
+ * asked its own question — `isStoreBuild()` with an iOS branch nested inside —
+ * and a home-screen PWA answers no to both, so it fell through to the inline
+ * modal that cannot complete a payment there.
+ */
+export function readPaymentSurfaceSignals(): PaymentSurfaceSignals {
+  const nav = typeof navigator === 'undefined' ? null : navigator;
+  let escapedTab = false;
+  try { escapedTab = sessionStorage.getItem(ESCAPED) === '1'; } catch { /* storage blocked */ }
+
+  const ios = !!nav && (
+    /iPad|iPhone|iPod/.test(nav.userAgent)
+    // iPadOS 13+ reports itself as a Mac; the touch-point count is what still
+    // separates an iPad from a desktop Safari that pays perfectly well inline.
+    || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1)
+  );
+
+  const standalone = typeof window !== 'undefined' && (
+    !!window.matchMedia?.('(display-mode: standalone)').matches
+    || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
+  );
+
+  return {
+    escapedTab,
+    iosStoreBuild: isIosStoreBuild(),
+    androidStoreBuild: isStoreBuild() && !isIosStoreBuild(),
+    ios,
+    standalone,
+  };
 }
 
 /**

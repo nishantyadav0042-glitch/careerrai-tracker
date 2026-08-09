@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
-import { isStoreBuild, isIosStoreBuild, escapeToBrowserForPayment, paymentHandoffUrl } from '@/lib/store-build';
+import { escapeToBrowserForPayment, paymentHandoffUrl, readPaymentSurfaceSignals } from '@/lib/store-build';
+import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
@@ -38,26 +39,29 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
   const [coupon, setCoupon] = useState('');
 
   async function upgrade(planId: PlanId) {
-    // Store builds ONLY (Apple/Play): pay in the real browser (see
-    // store-build.ts). Web + browser-PWA keep the inline Razorpay below.
-    if (isStoreBuild()) {
-      // iOS (WKWebView): a scripted popup never opens but the wrapper paints a
-      // blank view over the app, so the student sees only white. Hand them a
-      // real link instead — see store-build.ts. Android/TWA unchanged.
-      if (isIosStoreBuild()) {
-        const url = await paymentHandoffUrl('/student/profile');
-        setPayUrl(url ?? 'https://careerrai.in/student/profile');
-        setMessage(url
-          ? 'One more tap — payment opens securely in your browser:'
-          : 'To finish, open careerrai.in in your browser to complete payment:');
-        return;
-      }
+    // Where checkout is allowed to open is ONE decision, in lib/payment-surface,
+    // measured rather than assumed. This used to read `if (isStoreBuild())` with
+    // an iOS branch nested inside, and an installed iOS PWA is neither store
+    // build — so it fell through to the inline modal below and could not
+    // complete a payment. 7 opens, 7 dismissals, 0 payments.
+    const surface = paymentSurface(readPaymentSurfaceSignals());
+
+    if (surface === 'ios_link_handoff') {
+      const url = await paymentHandoffUrl('/student/profile');
+      track('pay_escape_browser', { plan: planId, surface: 'membership', mode: 'ios_link', linkReady: url != null });
+      setPayUrl(url ?? 'https://careerrai.in/student/profile');
+      setMessage(url ? HANDOFF_COPY.ready : HANDOFF_COPY.noLink);
+      return;
+    }
+
+    if (surface === 'popup_handoff') {
       const opened = await escapeToBrowserForPayment('/student/profile');
+      track('pay_escape_browser', { plan: planId, surface: 'membership', mode: 'popup', opened });
       if (!opened) {
-        // This card had no link at all — only a sentence telling the student to
-        // go and find the site themselves, which is a dead end on a phone.
+        // A sentence telling the student to go and find the site themselves is
+        // a dead end on a phone. Always leave a tappable link behind.
         setPayUrl('https://careerrai.in/student/profile');
-        setMessage('To finish, open careerrai.in in your browser to complete payment:');
+        setMessage(HANDOFF_COPY.noLink);
       }
       return;
     }

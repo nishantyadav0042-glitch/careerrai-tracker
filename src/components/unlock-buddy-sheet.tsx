@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
-import { isStoreBuild, isIosStoreBuild, escapeToBrowserForPayment, paymentHandoffUrl } from '@/lib/store-build';
+import { escapeToBrowserForPayment, paymentHandoffUrl, readPaymentSurfaceSignals } from '@/lib/store-build';
+import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 
@@ -53,9 +54,13 @@ function useIosPayUrl(dest: string): string | null {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Non-iOS store builds and the plain web never mint anything: Android's
-    // window.open escape works, and the web pays inline.
-    if (!isStoreBuild() || !isIosStoreBuild()) return;
+    // Mint only where the link IS the payment path. Android's window.open
+    // escape works and the web pays inline, so neither needs one.
+    //
+    // This asked `isStoreBuild() && isIosStoreBuild()` and therefore skipped
+    // the installed iOS PWA — the surface that most needs a ready link, since
+    // it cannot complete a payment inline at all.
+    if (paymentSurface(readPaymentSurfaceSignals()) !== 'ios_link_handoff') return;
 
     let alive = true;
     const mint = () => {
@@ -149,29 +154,29 @@ function useBuddyCheckout() {
     // live 1:1 mentorship service — an in-app card sheet would be rejected. Web
     // and browser-installed PWA fall straight through to inline Razorpay below.
     logCtaClick();
-    if (isStoreBuild()) {
+    // ONE decision about where checkout may open — see lib/payment-surface.
+    // The old shape tested isStoreBuild() with an iOS branch inside it, and an
+    // installed iOS PWA is neither store build, so it "fell straight through to
+    // inline Razorpay" (the comment above used to say exactly that). Measured
+    // result of falling through: 0 payments in 21 attempts.
+    const surface = paymentSurface(readPaymentSurfaceSignals());
+
+    if (surface !== 'inline') {
       setBusy(planId);
       try {
-        // iOS (WKWebView) never opens a scripted popup, but the wrapper still
-        // paints a blank view over the app — a white screen with the fallback
-        // stranded underneath it. So on iOS we skip window.open entirely and
-        // hand them a real link, which the navigation delegate does honour.
-        // Android/TWA keeps the working escape below, unchanged.
-        if (isIosStoreBuild()) {
+        if (surface === 'ios_link_handoff') {
           const url = await paymentHandoffUrl('/student/buddy');
-          track('pay_escape_browser', { plan: planId, opened: false, ios: true, linkReady: url != null });
-          setMessage(url
-            ? 'One more tap — payment opens securely in your browser:'
-            : 'We couldn’t open your browser automatically. Tap below to finish there:');
+          track('pay_escape_browser', { plan: planId, opened: false, ios: true, mode: 'ios_link', linkReady: url != null });
+          setMessage(url ? HANDOFF_COPY.ready : HANDOFF_COPY.noLink);
           // Signed-in hand-off when we have it; the bare paywall (which will
           // ask them to log in) only as a last resort, never a dead end.
           setManualUrl(url ?? 'https://careerrai.in/student/buddy');
           return;
         }
         const opened = await escapeToBrowserForPayment('/student/buddy');
-        track('pay_escape_browser', { plan: planId, opened });
+        track('pay_escape_browser', { plan: planId, opened, mode: 'popup' });
         if (!opened) {
-          setMessage('We couldn’t open your browser automatically. Tap below to finish there:');
+          setMessage(HANDOFF_COPY.noLink);
           setManualUrl('https://careerrai.in/student/buddy');
         }
       } finally {
