@@ -5,6 +5,10 @@
   "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in main|claude/*) exit 1;; *) exit 0;; esac",
   "crons": [
     {
+      "path": "/api/cron/log-yesterday-reminder",
+      "schedule": "30 2 * * *"
+    },
+    {
       "path": "/api/cron/compute-dna",
       "schedule": "0 */3 * * *"
     },

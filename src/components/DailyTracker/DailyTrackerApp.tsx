@@ -150,6 +150,30 @@ export function DailyTrackerApp({
     return () => clearTimeout(timer);
   }, [hasLoggedToday]);
 
+  // Deep link into YESTERDAY's log — the 8 AM "you forgot yesterday" reminder
+  // lands here (/student/tracker?log=yesterday). It opens the sheet pre-set to
+  // backdate yesterday, reusing the same override the "Add yesterday too" button
+  // uses, so a morning log rejoins the streak run and keeps it alive. Guarded on
+  // yesterday NOT already logged, so it never reopens a day that's done.
+  useEffect(() => {
+    if (hasLoggedYesterday || !yesterdayStr) return;
+    let params: URLSearchParams;
+    try { params = new URLSearchParams(window.location.search); } catch { return; }
+    if (params.get('log') !== 'yesterday') return;
+    const timer = setTimeout(() => {
+      if (insightVisible()) return;
+      track('log_open', { via: 'deeplink_yesterday' });
+      setLogDateOverride(yesterdayStr);
+      setIsLogOpen(true);
+      try {
+        params.delete('log');
+        const qs = params.toString();
+        window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      } catch { /* cosmetic only */ }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [hasLoggedYesterday, yesterdayStr]);
+
   // First-log moment (20 July zero-log fix): the journey funnels install →
   // tour → notifications and then just… ends — the first log was outsourced to
   // an evening push most new students can't receive. This auto-opens the real
