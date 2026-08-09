@@ -56,7 +56,8 @@ export async function assembleMentorOps(admin: Admin, nowMs: number): Promise<Me
     admin.from('profiles')
       .select('id, full_name, phone, buddy_meet_url, buddy_onboarding_completed')
       .eq('role', 'buddy').not('is_test_account', 'is', true),
-    admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null),
+    admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null)
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('video_sessions')
       .select('buddy_id, session_status, scheduled_at')
       .eq('session_status', 'expired')

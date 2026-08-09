@@ -126,7 +126,10 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
     .from('profiles')
     .select('id, full_name, phone, premium_since')
     .eq('role', 'student').eq('is_premium', true).is('buddy_id', null)
-    .not('is_test_account', 'is', true);
+    // Exclude BOTH test and demo — demo accounts are shared logins, not real
+    // paying students, and this count is drilled into via the People list which
+    // also excludes both. Aligning the two keeps count == list exactly.
+    .not('is_test_account', 'is', true).not('is_demo', 'is', true);
 
   const slaDeadline = nowMs - BUDDY_SLA_HOURS * 3_600_000;
   for (const s of premiumNoBuddy ?? []) {

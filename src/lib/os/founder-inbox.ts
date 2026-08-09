@@ -105,7 +105,8 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
     admin.from('profiles')
       .select('id')
       .eq('role', 'student').eq('is_premium', true).is('buddy_id', null)
-      .not('is_test_account', 'is', true),
+      // Exclude test AND demo, matching the People list this count drills into.
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
     // Sessions expired in the last 3 days — nobody joined a booked call.
     admin.from('video_sessions')
       .select('id, scheduled_at, session_status')
@@ -127,7 +128,8 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
     // derived from a type that does not have the field.
     admin.from('profiles')
       .select('buddy_id')
-      .eq('role', 'student').not('buddy_id', 'is', null),
+      .eq('role', 'student').not('buddy_id', 'is', null)
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
   ]);
 
   const paidNoBuddyN = (paidNoBuddy.data ?? []).length;

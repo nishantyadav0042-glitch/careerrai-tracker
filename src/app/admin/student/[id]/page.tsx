@@ -50,7 +50,8 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
     resolveEntity(admin, 'student', id),
     findSacredFailures(admin, Date.now()),
     admin.from('profiles').select('id, full_name, buddy_meet_url').eq('role', 'buddy').not('is_test_account', 'is', true),
-    admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null),
+    admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null)
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('profiles').select('buddy_id').eq('id', id).single(),
   ]);
   if (!s) {

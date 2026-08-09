@@ -69,20 +69,21 @@ export async function assembleRevenueOps(admin: Admin, nowMs: number): Promise<R
       .gte('created_at', new Date(nowMs - 14 * 86_400_000).toISOString()),
     admin.from('profiles')
       .select('id, full_name, phone')
-      .eq('subscription_status', 'refund_requested').not('is_test_account', 'is', true),
+      .eq('subscription_status', 'refund_requested')
+      .not('is_test_account', 'is', true).not('is_demo', 'is', true),
   ]);
 
   const studentIds = [
     ...new Set([...(failed ?? []), ...(abandoned ?? [])].map((r: any) => r.student_id)),
   ].filter(Boolean) as string[];
   const { data: profs } = studentIds.length
-    ? await admin.from('profiles').select('id, full_name, phone, is_test_account').in('id', studentIds)
+    ? await admin.from('profiles').select('id, full_name, phone, is_test_account, is_demo').in('id', studentIds)
     : { data: [] as any[] };
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
 
   for (const r of failed ?? []) {
     const p: any = profById.get(r.student_id);
-    if (!p || p.is_test_account) continue;
+    if (!p || p.is_test_account || p.is_demo) continue;
     items.push({
       id: `failed:${r.id}`, state: 'payment_failed',
       studentId: r.student_id, studentName: p.full_name ?? 'Student', phone: p.phone ?? null,
@@ -93,7 +94,7 @@ export async function assembleRevenueOps(admin: Admin, nowMs: number): Promise<R
   }
   for (const r of abandoned ?? []) {
     const p: any = profById.get(r.student_id);
-    if (!p || p.is_test_account) continue;
+    if (!p || p.is_test_account || p.is_demo) continue;
     items.push({
       id: `abandoned:${r.id}`, state: 'abandoned',
       studentId: r.student_id, studentName: p.full_name ?? 'Student', phone: p.phone ?? null,
