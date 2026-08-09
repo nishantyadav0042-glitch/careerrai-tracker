@@ -92,7 +92,7 @@ export const ENTITY_GRAPH: Record<EntityKind, EntityNode> = {
     table: 'profiles',
     idColumn: 'id',
     labelColumn: 'full_name',
-    route: '/admin/buddies',
+    route: '/admin/buddy/:id',
     edges: [
       { to: 'student', label: 'Students assigned', direction: 'inbound', via: 'buddy_id', cardinality: 'many' },
       { to: 'session', label: 'Sessions', direction: 'inbound', via: 'buddy_id', cardinality: 'many' },
@@ -103,7 +103,7 @@ export const ENTITY_GRAPH: Record<EntityKind, EntityNode> = {
     table: 'student_payments',
     idColumn: 'id',
     labelColumn: 'razorpay_order_id',
-    route: '/admin/payments',
+    route: '/admin/payment/:id',
     edges: [
       { to: 'student', label: 'Student', direction: 'outbound', via: 'student_id', cardinality: 'one' },
       { to: 'coupon', label: 'Coupon', direction: 'outbound', via: 'coupon_code', cardinality: 'one' },

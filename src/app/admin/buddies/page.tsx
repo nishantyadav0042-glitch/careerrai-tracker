@@ -125,7 +125,7 @@ export default async function BuddiesPage() {
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
-            <div key={r.id} className="rounded-2xl border border-stone-200 bg-white p-3.5">
+            <Link key={r.id} href={`/admin/buddy/${r.id}`} className="block rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-bold text-stone-900">{r.name}</p>
@@ -154,7 +154,7 @@ export default async function BuddiesPage() {
                   <b>{r.sessionsExpired}</b> expired
                 </span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
