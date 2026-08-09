@@ -10,6 +10,7 @@ import { MembershipCard } from '@/components/membership-card';
 import { EditProfileTrigger } from './edit-profile-trigger';
 import { RefundCard } from './refund-card';
 import { paymentsEnabled } from '@/lib/feature-flags';
+import { pushHealth, daysSinceReminderStopped } from '@/lib/push-state';
 import { scholarshipDisplay } from '@/lib/pricing';
 import { RecommendedBuddies, type RecommendedBuddy } from '@/components/recommended-buddies';
 
@@ -22,7 +23,7 @@ export function ProfileOverview({
   displayName, email, examTarget, initials, profile, buddy, buddyInitials, buddyId,
   responseHours, daysLogged, bestStreak, latestPercentile, targetPercentile, progressPct,
   recommendedBuddies, isInFirstMonth, refundDaysLogged, refundEligible, existingRefundReq, REFUND_DAYS_REQUIRED,
-  scholarship, prefs,
+  scholarship, prefs, hasPushSubscription, pushDiedAt,
 }: {
   displayName: string;
   email: string | null;
@@ -46,7 +47,16 @@ export function ProfileOverview({
   REFUND_DAYS_REQUIRED: number;
   scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null;
   prefs: NotifPrefs;
+  /** `profiles.push_subscription is not null` — what can actually be delivered to. */
+  hasPushSubscription: boolean;
+  /** `profiles.push_died_at` — set when a send returned a terminal 410/404. */
+  pushDiedAt: string | null;
 }) {
+  const pushState = pushHealth({
+    prefWantsPush: prefs.push === true,
+    hasSubscription: hasPushSubscription,
+    diedAt: pushDiedAt,
+  });
   return (
     <div className="space-y-5">
       <Card className="p-6">
@@ -161,10 +171,22 @@ export function ProfileOverview({
 
       <NotifPrefsPanel initial={prefs} label1="Daily reminder" label2="Email notifications" />
 
+      {/* The toggle reflects what the student RECEIVES, not what they asked for.
+          It used to read `prefs.push`, so 42 students whose subscription had
+          died opened this screen, saw the switch ON, and got nothing for an
+          average of 18 days. A settings screen that reports a wish as a fact is
+          worse than no settings screen. */}
       <Card className="p-5">
         <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-4">Push notifications</div>
-        <PushToggle initialEnabled={prefs.push ?? false} vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
-        <p className="text-xs text-stone-400 mt-2">Get instant alerts on your device even when the app is closed.</p>
+        <PushToggle
+          initialEnabled={pushState === 'healthy'}
+          broken={pushState === 'broken'}
+          daysStopped={daysSinceReminderStopped(pushDiedAt, new Date().toISOString())}
+          vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+        />
+        {pushState !== 'broken' && (
+          <p className="text-xs text-stone-400 mt-2">Get instant alerts on your device even when the app is closed.</p>
+        )}
       </Card>
 
       <Card className="p-5">

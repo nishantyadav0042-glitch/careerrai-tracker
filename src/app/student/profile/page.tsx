@@ -20,7 +20,7 @@ export default async function StudentProfilePage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at, baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater')
+    .select('full_name, email, exam_target, buddy_id, notif_prefs, created_at, dream_colleges, subscription_status, subscription_plan, subscription_renews_at, baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater, push_subscription, push_died_at')
     .eq('id', user.id)
     .single();
   if (!profile) redirect('/login');
@@ -140,6 +140,8 @@ export default async function StudentProfilePage() {
             REFUND_DAYS_REQUIRED={REFUND_DAYS_REQUIRED}
             scholarship={scholarship}
             prefs={prefs}
+            hasPushSubscription={!!profile.push_subscription}
+            pushDiedAt={(profile.push_died_at as string | null) ?? null}
           />
         }
         history={<HistorySection />}

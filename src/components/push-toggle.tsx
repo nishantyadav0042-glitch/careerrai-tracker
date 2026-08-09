@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { track, detectDisplayMode } from '@/lib/journey';
 import { Bell, BellOff, Check, X, Loader2 } from 'lucide-react';
 import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
+import { PUSH_REPAIR_COPY } from '@/lib/push-state';
 
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -23,7 +24,18 @@ function isStandalone(): boolean {
 type StepStatus = 'running' | 'ok' | 'fail';
 interface DiagStep { label: string; status: StepStatus; detail?: string }
 
-export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidKey?: string }) {
+// `broken` = the student asked for reminders and the server holds no live
+// subscription. Before this existed, that student saw the switch ON, because
+// `initialEnabled` was fed the PREFERENCE. Measured 9 Aug: 42 students in that
+// state, average 18 days, every one of them told their reminders were working.
+//
+// The repair is the same code path as enabling for the first time — that is the
+// point. PushHealer cannot fix these students silently, because it deliberately
+// never prompts and their OS permission is often the thing that lapsed. Only a
+// tap can call requestPermission(), so the tap has to be asked for.
+export function PushToggle({
+  initialEnabled, broken = false, daysStopped = null,
+}: { initialEnabled: boolean; broken?: boolean; daysStopped?: number | null; vapidKey?: string }) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [loading, setLoading] = useState(false);
   const [supported, setSupported] = useState(true);
@@ -168,8 +180,33 @@ export function PushToggle({ initialEnabled }: { initialEnabled: boolean; vapidK
     }
   }
 
+  // Broken and not yet repaired in this session: lead with the truth, and make
+  // the fix the obvious thing to touch. Stated as a loss ("your reminders have
+  // stopped"), never as a setting, and never as something they did wrong.
+  const showRepair = broken && !enabled;
+
   return (
     <div className="space-y-2">
+      {showRepair && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5">
+          <p className="text-sm font-bold text-amber-900">{PUSH_REPAIR_COPY.title}</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800">
+            {daysStopped !== null
+              ? `You haven't had a reminder in ${daysStopped} day${daysStopped === 1 ? '' : 's'}. `
+              : ''}
+            {PUSH_REPAIR_COPY.body}
+          </p>
+          <button
+            type="button"
+            onClick={toggle}
+            disabled={loading || denied}
+            className="mt-2.5 w-full rounded-lg bg-amber-600 py-2.5 text-xs font-bold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+            style={{ minHeight: 44 }}
+          >
+            {loading ? 'Turning them back on…' : PUSH_REPAIR_COPY.cta}
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           {enabled ? <Bell className="w-4 h-4 text-teal-700 shrink-0" /> : <BellOff className="w-4 h-4 text-stone-400 shrink-0" />}

@@ -13,6 +13,7 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
+import { pushHealth } from '@/lib/push-state';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
@@ -70,6 +71,18 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // ready") instead of a cold request. Decline that one too and it's over.
   const notifPrefs = (profile?.notif_prefs as Record<string, unknown> | null) ?? {};
   const pushEnabled = notifPrefs.push === true;
+  // One vocabulary for "is this student actually receiving reminders".
+  //
+  // This used to be open-coded here as `!pushEnabled || !push_subscription`,
+  // and the profile screen spelled the same rule a different (wrong) way — it
+  // read the PREFERENCE and showed 42 students an ON toggle while they received
+  // nothing for an average of 18 days. Same rule, two spellings, one of them
+  // silently false. Both now ask lib/push-state.
+  const push = pushHealth({
+    prefWantsPush: pushEnabled,
+    hasSubscription: !!profile?.push_subscription,
+    diedAt: (profile?.push_died_at as string | null) ?? null,
+  });
   // The post-signup sequence now needs NO server data: it shows the six
   // things we do, then asks for reminders. It used to recompute the finish
   // date here and re-open that decision, which silently overwrote the date
@@ -172,7 +185,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <OnboardingGate />
       ) : showPostSignup ? (
         <PostSignupSequence />
-      ) : isBuddyDemo ? null : (!pushEnabled || !profile?.push_subscription) ? (
+      ) : isBuddyDemo ? null : push !== 'healthy' ? (
         // Permission architecture (22 July): the notification permission is
         // requested ONLY inside the installed app, right after the first Career
         // Insight — StandaloneNotifAsk renders solely in standalone mode and
