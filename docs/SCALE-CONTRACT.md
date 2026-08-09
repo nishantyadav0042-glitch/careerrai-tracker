@@ -142,3 +142,46 @@ Not: "100,000 students, 18 dashboards, 42 filters, 600 alerts."
 
 **Don't scale the number of things the founder sees. Scale the intelligence that
 decides what the founder doesn't need to see.**
+
+---
+
+## 11. Scale has TWO dimensions (added 10 Aug, founder)
+
+- **System scale** — how many students/events the infrastructure can process.
+- **Human scale** — how many decisions ONE operator can reasonably handle.
+
+The second matters as much as the first. At 100,000 students the system may be
+processing millions of events, but if the founder opens Admin and sees **24
+things requiring action** (4 critical, a handful of prospects/issues), that is
+success. A system that scales its infrastructure but not the operator's decision
+load has failed the only test that matters.
+
+## 12. Exceptions-first, NOT exceptions-only (added 10 Aug, founder)
+
+Work must dominate the interface — but a small amount of **health information may
+exist** even when nothing is wrong, so the operator can confirm the machine is
+alive in ten seconds. The morning Command Center, when all-clear, may show:
+
+> 🟢 CareerRai is healthy — 142 studied today · 27 new · 9 hot prospects ·
+> ₹X today · 0 payment failures · 0 mentors blocked · OCR & notifications
+> healthy · no critical incidents. **Nothing requires you right now.**
+
+Health information can exist; **work dominates**. Never let exceptions-first
+degrade into a blank screen that hides whether the system is even running.
+
+## 13. The operating loop is the unit of done (added 10 Aug, founder)
+
+Every major operational problem should become: **Detect → Investigate → Act →
+Verify → Disappear.** A red alert that opens a 360 which *cannot fix it* is a
+false action path (the Buddy-360 "cannot run a session" → "set room" fix is the
+template). An exception isn't "handled" until the operator can resolve it from
+where it surfaced and watch it disappear.
+
+## 14. The metric that matters (added 10 Aug, founder)
+
+Do NOT measure this project by pages, tests, workspaces, or commits. Measure it
+by: **how many student/customer problems the system can detect, explain, route,
+and — where safe — resolve, without the founder manually searching for them.**
+And every such flow must still drill all the way down to the actual student
+record. **100,000 is the architectural destination; today's student is the
+product; neither is sacrificed for the other.**
