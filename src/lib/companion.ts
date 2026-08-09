@@ -260,50 +260,6 @@ export function windCopy(weakest: string): SlotCopy {
 //   ❌ "mock analysed, 3 changes"  — the cross-mock engine does not exist yet
 // Each stays out until the thing behind it is true.
 
-/** A missed day that a shield absorbed. The app worked; the student didn't. */
-export function shieldUsedCopy(streak: number): SlotCopy {
-  return {
-    title: 'Yesterday is covered',
-    body: `A streak save took it — your ${streak} days are safe. Today's plan is ready.`,
-    expectedAction: 'open_plan',
-  };
-}
-
-/** The Sunday reconcile moved the finish date. Protection, not punishment. */
-export function dateMovedCopy(daysAdded: number, newDateLabel: string): SlotCopy {
-  return {
-    title: 'Week adjusted for you',
-    body: `Finish date moved ${daysAdded} day${daysAdded === 1 ? '' : 's'} to ${newDateLabel}. Your hours stay the same — you're still on track.`,
-    expectedAction: 'open_plan',
-  };
-}
-
-/** A revision-due topic, framed as the one thing we caught for them. */
-export function revisionDueCopy(topic: string, daysSince: number): SlotCopy {
-  return {
-    title: `${topic} needs 20 minutes`,
-    body: `Last done ${daysSince} days ago — we caught it before it slipped. Nothing else changed.`,
-    expectedAction: 'open_plan',
-  };
-}
-
-/** Their coaching timetable is running out; we need the next sheet to keep #1. */
-export function timetableEndingCopy(daysLeft: number): SlotCopy {
-  return {
-    title: `Your coaching plan ends in ${daysLeft} days`,
-    body: 'Send a photo of the next timetable and we\'ll keep planning around your classes.',
-    expectedAction: 'open_plan',
-  };
-}
-
-/** Back after silence. Never a backlog, never a count of missed days. */
-export function comebackCopy(weakest: string): SlotCopy {
-  return {
-    title: 'Nothing broke',
-    body: `Your week is already adjusted. Today: 15 minutes of ${weakest}, that's all.`,
-    expectedAction: 'log_today',
-  };
-}
 
 const HOOK_LINES: string[] = [
   'Time is money — a 5-second log is the cheapest investment in your rank.',

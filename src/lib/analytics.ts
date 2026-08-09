@@ -67,35 +67,3 @@ export function computeSummary(reports: DailyReport[], period: number): Analytic
     redFlags,
   };
 }
-
-export function computeStreak(reports: DailyReport[]): number {
-  if (!reports.length) return 0;
-  const sorted = [...reports].sort((a, b) => b.report_date.localeCompare(a.report_date));
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  let streak = 0;
-  let cursor = new Date(today + 'T00:00:00');
-  for (const r of sorted) {
-    const rDate = new Date(r.report_date + 'T00:00:00');
-    const diff = Math.round((cursor.getTime() - rDate.getTime()) / 86400000);
-    if (diff === 0 || diff === 1) {
-      streak++;
-      cursor = rDate;
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
-
-export function getHeatmapData(reports: DailyReport[], days = 14) {
-  const byDate = new Map(reports.map(r => [r.report_date, r]));
-  const result = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const ds = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const found = byDate.get(ds);
-    result.push({ date: ds, hours: found?.study_duration ?? 0, submitted: !!found });
-  }
-  return result;
-}
