@@ -90,6 +90,7 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'The CRM. Every lead, hottest first, with the message ready.',
     tabs: [
       { label: 'Leads', href: '/admin/leads', status: 'live' },
+      { label: 'Buddy interest', href: '/admin/buddy-interest', status: 'live' },
       { label: 'Call queue', href: '/admin/sales-queue', status: 'moved' },
       { label: 'Remind to log', href: '/admin/reminders', status: 'moved' },
       { label: 'Workspace', href: '/admin/sales', status: 'moved' },
