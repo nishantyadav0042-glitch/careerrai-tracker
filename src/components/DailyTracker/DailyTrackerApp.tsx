@@ -12,14 +12,22 @@ import { getLogDateString } from '@/lib/streak-utils';
 import { track } from '@/lib/journey';
 import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
+import { joinState, canJoinNow, shouldShowLink, countdownLabel } from '@/lib/session-link';
+
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
 const PlanRebuildPayoff = dynamic(() => import('@/components/plan-rebuild-payoff').then((m) => m.PlanRebuildPayoff), { ssr: false });
 
 function SessionStrip({ session }: { session: TodaySession }) {
   const startsAt = new Date(session.scheduled_at);
-  // eslint-disable-next-line react-hooks/purity
-  const minsAway = Math.round((startsAt.getTime() - Date.now()) / 60_000);
-  const joinable = minsAway <= 15 && !!session.google_meet_link;
+  // eslint-disable-next-line react-hooks/purity -- live countdown; a fresh now() each render is the point
+  const nowMs = Date.now();
+  const state = joinState({
+    scheduledAtIso: session.scheduled_at,
+    nowMs,
+    hasLink: !!session.google_meet_link,
+  });
+  const joinable = canJoinNow(state);
+  const showLink = shouldShowLink(state);
 
   return (
     <div className="flex items-center justify-between gap-3 bg-stone-100 border border-stone-200 rounded-2xl px-4 py-3">
@@ -36,9 +44,25 @@ function SessionStrip({ session }: { session: TodaySession }) {
         <a href={session.google_meet_link!} target="_blank" rel="noopener noreferrer" className="shrink-0 px-3 py-1.5 bg-stone-900 hover:bg-stone-900 text-white text-xs font-bold rounded-lg transition-colors">
           Join →
         </a>
+      ) : showLink ? (
+        // Booked but not yet open. The countdown AND the room, so they can put
+        // it in their own calendar instead of having to come back here at 10pm.
+        <div className="shrink-0 text-right">
+          <span className="block text-[11px] font-medium text-stone-500">
+            {countdownLabel({ scheduledAtIso: session.scheduled_at, nowMs })}
+          </span>
+          <a
+            href={session.google_meet_link!}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] font-semibold text-stone-500 underline underline-offset-2 hover:text-stone-900"
+          >
+            meeting link
+          </a>
+        </div>
       ) : (
         <span className="shrink-0 text-[11px] font-medium text-stone-500">
-          {minsAway > 60 ? `in ${Math.round(minsAway / 60)}h` : `in ${Math.max(0, minsAway)}m`}
+          {countdownLabel({ scheduledAtIso: session.scheduled_at, nowMs })}
         </span>
       )}
     </div>

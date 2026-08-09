@@ -6,6 +6,7 @@ import { Settings, Video } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NotifPrefsPanel } from '@/components/notif-prefs-panel';
+import { MeetingRoomCard } from '@/components/buddy/meeting-room-card';
 import { LogoutButton } from '@/components/logout-button';
 import type { NotifPrefs } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
@@ -16,7 +17,7 @@ export default async function BuddyProfilePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('full_name, email, notif_prefs').eq('id', user.id).single();
+  const { data: profile } = await admin.from('profiles').select('full_name, email, notif_prefs, buddy_meet_url').eq('id', user.id).single();
   if (!profile) redirect('/login');
 
   const [{ count: studentCount }, { data: upcomingSessions }] = await Promise.all([
@@ -89,6 +90,11 @@ export default async function BuddyProfilePage() {
           <div className="text-2xl font-bold text-stone-900 font-mono">{upcomingSessions?.length ?? 0}</div>
         </Card>
       </div>
+
+      {/* Her own room, above the sessions that use it. Shown ALWAYS — including
+          when it is missing, because "you cannot book until you set this" is
+          the single most useful thing an unset mentor can be told. */}
+      <MeetingRoomCard meetUrl={(profile as { buddy_meet_url?: string | null }).buddy_meet_url ?? null} />
 
       {/* Upcoming sessions */}
       {(upcomingSessions?.length ?? 0) > 0 && (

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
 import { authorizedCron } from '@/lib/cron-auth';
+import { reminderNotificationBody, sessionNotificationUrl } from '@/lib/session-link';
 
 // Runs at 06:00 UTC (11:30 AM IST) — catches sessions scheduled for tomorrow IST.
 export async function POST(request: NextRequest) {
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const { data: sessions } = await admin
     .from('video_sessions')
-    .select('id, student_id, buddy_id, scheduled_at, title')
+    .select('id, student_id, buddy_id, scheduled_at, title, google_meet_link')
     .eq('session_status', 'scheduled')
     .gte('scheduled_at', tomorrowStart.toISOString())
     .lt('scheduled_at', tomorrowEnd.toISOString());
@@ -53,17 +54,25 @@ export async function POST(request: NextRequest) {
       timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true,
     });
     const title = `Session tomorrow at ${time} — be ready.`;
-    const body = session.title ?? 'CareerRai buddy session';
+    const meetLink = (session as { google_meet_link?: string | null }).google_meet_link ?? null;
+    const body = reminderNotificationBody({ istTime: time, title: session.title, meetLink });
 
-    // Notify student
-    if (session.student_id) {
+    // BOTH sides get reminded. Only the student did, which is half a reminder
+    // for a meeting that needs two people — and the mentor is the one being
+    // paid to be there. Shreya's two sessions both expired with nobody joining.
+    for (const [role, userId] of [
+      ['student', session.student_id],
+      ['buddy', session.buddy_id],
+    ] as const) {
+      if (!userId) continue;
+      const url = sessionNotificationUrl(role);
       await admin.from('notifications').insert({
-        user_id: session.student_id, type: 'session_reminder',
-        title, body, data: { url: '/student/tracker', session_id: session.id }, read: false, channel: 'in_app',
+        user_id: userId, type: 'session_reminder',
+        title, body, data: { url, session_id: session.id, meetLink }, read: false, channel: 'in_app',
       });
-      const { data: sp } = await admin.from('profiles').select('notif_prefs').eq('id', session.student_id).single();
-      if ((sp?.notif_prefs as Record<string, unknown>)?.push === true) {
-        await sendPushToUser(session.student_id, { title, body, url: '/student/tracker' });
+      const { data: p } = await admin.from('profiles').select('notif_prefs').eq('id', userId).single();
+      if ((p?.notif_prefs as Record<string, unknown>)?.push === true) {
+        await sendPushToUser(userId, { title, body, url });
       }
     }
 

@@ -5,6 +5,7 @@ import { computeBreach } from '@/lib/plan-breach';
 import { computeRequiredPace, remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from '@/lib/study-pace';
 import { CallCloseout } from './call-closeout';
 import { QuickNote } from './quick-note';
+import { joinState, canJoinNow, countdownLabel } from '@/lib/session-link';
 
 // ── The Buddy Cockpit ───────────────────────────────────────────────────────
 //
@@ -127,6 +128,13 @@ export async function BuddyCockpit(p: CockpitProps) {
 
   const sessionAt = p.nextSession ? new Date(p.nextSession.scheduled_at) : null;
   const minsAway = sessionAt ? Math.round((sessionAt.getTime() - now.getTime()) / 60_000) : null;
+  // eslint-disable-next-line react-hooks/purity -- live countdown; a fresh now() each render is the point
+  const sessionNowMs = Date.now();
+  const sessionJoinState = joinState({
+    scheduledAtIso: p.nextSession?.scheduled_at ?? '',
+    nowMs: sessionNowMs,
+    hasLink: !!p.nextSession?.google_meet_link,
+  });
 
   const critical = breach?.level === 'critical';
 
@@ -144,16 +152,19 @@ export async function BuddyCockpit(p: CockpitProps) {
               })}
             </p>
           </div>
-          {p.nextSession?.google_meet_link && minsAway !== null && minsAway <= 15 ? (
+          {/* Both sides open on the SAME rule (lib/session-link). Two different
+              gates is how one person ends up alone in a room wondering whether
+              the other is coming. */}
+          {canJoinNow(sessionJoinState) && p.nextSession?.google_meet_link ? (
             <a href={p.nextSession.google_meet_link} target="_blank" rel="noopener noreferrer"
                className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-[14px] font-extrabold text-teal-700">
               Join →
             </a>
           ) : (
             <span className="shrink-0 rounded-lg bg-teal-800 px-2.5 py-1 text-[12px] font-semibold">
-              {minsAway !== null && minsAway > 1440 ? `in ${Math.round(minsAway / 1440)}d`
-                : minsAway !== null && minsAway > 60 ? `in ${Math.round(minsAway / 60)}h`
-                : `in ${Math.max(0, minsAway ?? 0)}m`}
+              {p.nextSession
+                ? countdownLabel({ scheduledAtIso: p.nextSession.scheduled_at, nowMs: sessionNowMs })
+                : ''}
             </span>
           )}
         </div>

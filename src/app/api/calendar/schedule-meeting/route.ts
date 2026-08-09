@@ -6,6 +6,7 @@ import { statusFor } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
 import { constraintFailure } from '@/lib/booking-constraints';
 import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
+import { bookedNotificationBody, sessionNotificationUrl } from '@/lib/session-link';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -237,10 +238,18 @@ export async function POST(request: NextRequest) {
         title: isOrientation
           ? `🎯 Free Orientation with ${buddy.full_name.split(' ')[0]}`
           : `📅 Session with ${buddy.full_name.split(' ')[0]}`,
-        body: isOrientation
-          ? `${istTime} IST — your free orientation is booked. Join from your dashboard.`
-          : `${istTime} IST — your buddy booked a 1:1. Join from your dashboard.`,
-        data: { sessionId: session.id, meetLink, sessionType: isOrientation ? 'onboarding' : 'guidance' },
+        // The LINK goes in the message, and the notification lands somewhere
+        // they can act. It shipped saying "join from your dashboard" with no
+        // `url` at all, so a tap opened whatever the app happened to show —
+        // and the student had to remember a place and a time instead of
+        // tapping a link. Both of the only two sessions ever booked expired.
+        body: bookedNotificationBody({ istTime, isOrientation, meetLink }),
+        data: {
+          sessionId: session.id,
+          meetLink,
+          sessionType: isOrientation ? 'onboarding' : 'guidance',
+          url: sessionNotificationUrl('student'),
+        },
       })
       .then(({ error: e }) => {
         if (e) console.error('Notification insert failed:', e.message);
