@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { track } from '@/lib/journey';
 import { setLogModalOpen } from '@/lib/first-run-events';
 import type { MockDebriefData } from './MockDebriefModal';
-import { OUTCOME_OPTIONS, type DayOutcome } from '@/lib/check-in';
+import type { DayOutcome } from '@/lib/check-in';
 import { creditedHours } from '@/lib/study-credit';
 
 // Today's plan tasks, pulled into the log so "what did you cover" IS the plan.
@@ -23,88 +23,33 @@ export interface LoggingData {
   hours: number;
   sections: string[];
   energy: string; // kept for the log RPC contract; defaulted, not asked
-  plan_fit?: string;        // 'easy' | 'right' | 'too_much' | 'couldnt_finish'
-  blocker_reason?: string;  // only when plan_fit = 'couldnt_finish'
-  confidence?: number;      // 1-5, one tap
+  plan_fit?: string;        // legacy field on the API; no longer collected
+  blocker_reason?: string;  // legacy field on the API; no longer collected
+  confidence?: number;      // legacy; no longer collected
   // Plan tasks to complete, with how far they got: 'green' = fully done,
   // 'blue' = half done. Absent = uncover a previously-done task.
   completedTasks?: { id: string; confidence?: 'green' | 'blue' }[];
   // Mock debrief captured INLINE on this same sheet (null when no mock today).
   mock?: MockDebriefData | null;
-  // How the day actually went — the first question on the sheet.
+  // Derived silently from plan completion for the coach-facing signals; the
+  // student is no longer asked to pick it.
   day_outcome?: DayOutcome;
 }
 
-// Founder redesign (24 Jul): one sheet, all taps, completion-first. A student
-// should never enter data unless it changes tomorrow's plan — so no energy, no
-// mood, no notes. Order: what got done → what happened off-plan → how the plan
-// felt (+ why, if unfinished) → hours (optional) → mock (folded in, no second
-// screen) → one confidence tap.
-// Hours are NO LONGER asked — derived from coverage (lib/study-credit), because
-// the plan already knows the day's hours and a self-reported field only let a
-// real study day be recorded as 0 and silently push the finish date.
-const OFF_PLAN_SECTIONS = ['QA', 'VARC', 'DILR', 'Revision', 'Other'];
-
-const PLAN_FIT = [
-  { value: 'easy', label: 'Easy', hint: '😌' },
-  { value: 'right', label: 'Right', hint: '👍' },
-  { value: 'too_much', label: 'Too much', hint: '😮‍💨' },
-  { value: 'couldnt_finish', label: "Couldn't finish", hint: '🚧' },
-];
-const BLOCKER_REASONS = [
-  { value: 'college', label: 'College' },
-  { value: 'office', label: 'Office' },
-  { value: 'travel', label: 'Travel' },
-  { value: 'health', label: 'Health' },
-  { value: 'family', label: 'Family' },
-  { value: 'procrastination', label: 'Procrastination' },
-  { value: 'mock_ran_long', label: 'Mock ran long' },
-  { value: 'plan_too_heavy', label: 'Plan too heavy' },
-  { value: 'other', label: 'Other' },
-];
+// Founder redesign (10 Aug): make the log SIMPLE and straightforward — two
+// things only. "Today's plan" (mark your topics) and "did you give a mock". No
+// day-outcome buttons, no plan-felt, no off-plan picker. Not logging a day just
+// means you rested — a student who logs ten days and skips one took a break,
+// and we don't need a button to say so. Hours are derived from plan coverage
+// (lib/study-credit), never typed.
+export type { DayOutcome };
 
 type TaskState = 'half' | 'full';
 
-// ── The day's shape, asked FIRST ────────────────────────────────────────────
-//
-// Before this, a student who hadn't studied had to scroll past the plan, past
-// the off-plan picker, past the mock question, and tap "0" in the hours row —
-// because hours === 0 was the only thing that made the form valid for them.
-// The honest path was the hidden one. That is how a log ends up filled only by
-// students who studied, and a dataset that says everybody is doing fine.
-//
-// Four states because real days have four states. 'partial' matters as much as
-// the rest: "I sat down and didn't finish" is the most common honest day, and
-// the one a two-option form silently pushes into a lie.
-// Re-exported for any existing importer; the definition lives in lib/check-in,
-// which is also where the server's allow-list reads it from. Declaring it here
-// as well is how the two surfaces drifted in the first place.
-export type { DayOutcome };
-
-// The four answers come from lib/check-in — the same array the check-in gate
-// renders. This file used to declare its own copy, and the two had drifted in
-// three of four sub-lines, so the gate and this sheet asked one question in two
-// voices. Only the COLOUR is local: tone is presentation, and the leaf
-// vocabulary module has no business knowing Tailwind.
-const OUTCOME_TONE: Record<DayOutcome, string> = {
-  studied: 'emerald',
-  partial: 'amber',
-  not_studied: 'zinc',
-  skipped: 'zinc',
-};
-const OUTCOMES = OUTCOME_OPTIONS.map((o) => ({ ...o, tone: OUTCOME_TONE[o.id] }));
-
-/** The two answers that need nothing else — one tap and the day is recorded. */
-const NO_DETAIL_NEEDED: DayOutcome[] = ['not_studied', 'skipped'];
-
 export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }: LoggingModalProps) {
-  const [outcome, setOutcome] = useState<DayOutcome | null>(null);
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
-  const [offSections, setOffSections] = useState<string[]>([]);
-  const [planFit, setPlanFit] = useState<string | null>(null);
-  const [blockerReason, setBlockerReason] = useState<string | null>(null);
   // The hours the day's plan was built to — derived credit is a fraction of it.
   const [generatedHours, setGeneratedHours] = useState<number>(0);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
@@ -116,9 +61,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   const [mockNote, setMockNote] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [blockedHint, setBlockedHint] = useState<string | null>(null);
-  // When this open began, and whether it ended in a save. Used to measure
-  // abandonment — half the students who open this never finish it, and until
-  // now nothing recorded what they had filled in when they walked away.
   const openedAt = useRef<number>(0);
   const savedRef = useRef(false);
 
@@ -159,42 +101,20 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     return n;
   });
 
-  // Completion-first: the log is valid the moment there's a real signal of the
-  // day — a plan topic marked, something studied off-plan, a mock, or an honest
-  // rest day (0 hours). Hours are optional; completion is the source of truth.
-  // "Didn't study" and "Rest / away" are complete answers on their own — a day
-  // with nothing in it has nothing further to describe, and making someone
-  // justify a bad day is how you stop hearing about bad days.
-  const outcomeIsTerminal = outcome != null && NO_DETAIL_NEEDED.includes(outcome);
+  // Valid the moment there's a real signal: a plan topic marked, or a mock. A
+  // day with neither is a rest day — you simply don't log it (not logging = rest).
+  const isValid = taskChoice.size > 0 || mockTaken === true;
 
-  // Completion IS the log now. A day is valid the moment there's a real signal —
-  // a plan topic marked, off-plan work, a mock, or an honest empty day (a
-  // terminal outcome). Hours are no longer asked; they are derived on submit
-  // from what was covered, so there is nothing to require here.
-  const isValid = outcomeIsTerminal
-    || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true;
-
-  // The hint must name what is ACTUALLY missing. It used to say "Start by
-  // tapping how today went" whenever the outcome was unanswered — but the
-  // outcome has never been required (isValid above doesn't test it), so the hint
-  // was inventing a mandatory first step and adding a tap to every save.
-  // Founder call, 29 Jul (option A): don't block on the summary; the per-task
-  // Not done / Half / Done chips already say how the day went, and when the
-  // student skips the question we derive it from those instead of losing it.
   const missingHint = (): string =>
-    'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
+    'Mark how far you got on a plan topic — or tell us you gave a mock.';
 
-  // Derived outcome, used only when the student didn't tap one. Every branch is
-  // checkable against what they actually marked — we never guess 'studied'.
+  // Derived outcome for the coach-facing signals (plan-reason, adaptation). Not
+  // shown to the student; inferred from what they marked, never guessed.
   const deriveOutcome = (): DayOutcome | null => {
     const marks = [...taskChoice.values()];
-    if (marks.length > 0 && marks.length >= planTasks.length && marks.every((m) => m === 'full')) {
-      return 'studied';                                  // every plan topic finished
-    }
-    if (marks.length > 0 || offSections.length > 0 || mockTaken === true) {
-      return 'partial';                                  // real work, not the whole plan
-    }
-    return null;                                         // nothing to infer from — stay silent
+    if (marks.length > 0 && marks.length >= planTasks.length && marks.every((m) => m === 'full')) return 'studied';
+    if (marks.length > 0 || mockTaken === true) return 'partial';
+    return null;
   };
 
   const handleSubmit = async () => {
@@ -209,10 +129,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     try {
       setError(null);
       const coveredTasks = planTasks.filter((t) => taskChoice.has(t.id));
-      const derived = [...new Set([
-        ...coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)),
-        ...offSections.filter((s) => s !== 'Other'), // 'Other' isn't a plan section — kept only as a signal
-      ])];
+      const derived = [...new Set(coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
 
       const completedTasks: { id: string; confidence?: 'green' | 'blue' }[] = [];
@@ -237,38 +154,29 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
           }
         : null;
 
-      // Hours are DERIVED from coverage, not asked. Completing the plan earns
-      // the plan's hours; off-plan topics count too; capped at the day's plan.
+      // Hours DERIVED from plan coverage — completing the plan earns the plan's
+      // hours, proportionally; capped at the day's plan.
       const marks = [...taskChoice.values()];
       const derivedHours = creditedHours({
         generatedHours,
         plannedTasks: planTasks.length,
         fullDone: marks.filter((m) => m === 'full').length,
         halfDone: marks.filter((m) => m === 'half').length,
-        offPlanCount: offSections.length,
+        offPlanCount: 0,
       });
 
       await onSubmit({
         hours: derivedHours,
         sections: finalSections,
         energy: '💪', // defaulted — no longer asked
-        plan_fit: planFit ?? undefined,
-        blocker_reason: planFit === 'couldnt_finish' && blockerReason ? blockerReason : undefined,
         completedTasks,
         mock,
-        // Their own answer wins; otherwise inferred from what they marked, so
-        // skipping the summary question never costs us the signal that
-        // plan-reason.ts and the adaptation engine read.
-        day_outcome: outcome ?? deriveOutcome() ?? undefined,
+        day_outcome: deriveOutcome() ?? undefined,
       });
 
       // Reset
-      setOutcome(null);
       setTaskChoice(new Map());
       setInitialDoneIds(new Set());
-      setOffSections([]);
-      setPlanFit(null);
-      setBlockerReason(null);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
       savedRef.current = true;
@@ -280,19 +188,15 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     }
   };
 
-  // Closing without saving. Records how far they actually got, so the
-  // drop-off has a reason attached instead of being a silent exit.
   const handleClose = () => {
     if (!savedRef.current) {
       track('log_dismissed', {
         secondsOpen: openedAt.current ? Math.round((Date.now() - openedAt.current) / 1000) : null,
         planTasksOffered: planTasks.length,
         tasksMarked: taskChoice.size,
-        offSections: offSections.length,
-        planFitSet: planFit !== null,
         mockAnswered: mockTaken !== null,
         wasSubmittable: isValid,
-        touchedAnything: taskChoice.size > 0 || offSections.length > 0 || planFit !== null || mockTaken !== null,
+        touchedAnything: taskChoice.size > 0 || mockTaken !== null,
       });
     }
     onClose();
@@ -306,7 +210,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-end sm:items-center sm:justify-center">
       <div className={cn('w-full max-w-md bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-800', 'max-h-[92vh] overflow-y-auto flex flex-col')}>
         <div className="sticky top-0 bg-zinc-950 border-b border-zinc-800 px-6 py-5 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Topics Studied Today</h2>
+          <h2 className="text-xl font-bold text-white">Log today</h2>
           <button onClick={handleClose} disabled={isSubmitting} className="text-zinc-500 hover:text-zinc-300 transition disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
@@ -314,53 +218,11 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
 
         <div className="flex-1 px-6 py-5 space-y-7">
 
-          {/* 0 — How did today go? Asked first, answerable in one tap. */}
-          <div>
-            {label('How did today go?  ·  optional')}
-            <div className="grid grid-cols-2 gap-2">
-              {OUTCOMES.map((o) => {
-                const on = outcome === o.id;
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => { setOutcome(o.id); setBlockedHint(null); }}
-                    className={cn(
-                      'rounded-xl px-3 py-3 text-left transition-all active:scale-95',
-                      on && o.tone === 'emerald' && 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25',
-                      on && o.tone === 'amber' && 'bg-amber-500 text-white shadow-lg shadow-amber-500/25',
-                      on && o.tone === 'zinc' && 'bg-zinc-500 text-white',
-                      !on && 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
-                    )}
-                  >
-                    <span className="block text-sm font-bold">{o.emoji} {o.label}</span>
-                    <span className={cn('mt-0.5 block text-[11px] leading-snug', on ? 'text-white/80' : 'text-zinc-500')}>
-                      {o.sub}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {outcomeIsTerminal && (
-              <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-                That&apos;s all we need — tap save. An honest empty day is worth more to your
-                plan than a blank one, and your streak survives it.
-              </p>
-            )}
-          </div>
-
-          {/* Everything below is only relevant if something actually happened.
-              A student who tapped "Didn't study" is done — asking them to
-              scroll through a plan they didn't touch is how you teach someone
-              to stop opening the log at all. */}
-          {!outcomeIsTerminal && (
-          <>
-
-          {/* 1 — Today's plan (the source of truth) */}
+          {/* 1 — Today's plan (mark what you covered — the whole log) */}
           <div>
             {label("Today's plan")}
             {planTasks.length === 0 ? (
-              <p className="text-xs text-zinc-500">No plan topics today — pick what you studied below.</p>
+              <p className="text-xs text-zinc-500">No plan topics today. If you gave a mock, tell us below.</p>
             ) : (
               <div className="space-y-2">
                 {planTasks.map((t) => {
@@ -392,53 +254,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
             )}
           </div>
 
-          {/* 2 — Anything off today's plan? (prevents coverage drift) */}
-          <div>
-            {label("Anything off today’s plan?")}
-            <div className="grid grid-cols-5 gap-2">
-              {OFF_PLAN_SECTIONS.map((s) => {
-                const on = offSections.includes(s);
-                return (
-                  <button key={s} type="button"
-                    onClick={() => setOffSections((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))}
-                    className={cn('py-2.5 rounded-xl font-semibold text-xs transition-all active:scale-95', on ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
-                    {s}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 3 — How did today's plan feel? (+ why, if unfinished) */}
-          <div>
-            {label("Today’s plan felt")}
-            <div className="grid grid-cols-4 gap-2">
-              {PLAN_FIT.map((o) => (
-                <button key={o.value} type="button"
-                  onClick={() => { setPlanFit((prev) => (prev === o.value ? null : o.value)); if (o.value !== 'couldnt_finish') setBlockerReason(null); }}
-                  className={cn('flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all active:scale-95', planFit === o.value ? 'bg-zinc-700 ring-2 ring-orange-500' : 'bg-zinc-800 hover:bg-zinc-700')}>
-                  <span className="text-lg">{o.hint}</span>
-                  <span className="text-[10px] font-semibold text-zinc-300 text-center leading-tight">{o.label}</span>
-                </button>
-              ))}
-            </div>
-            {planFit === 'couldnt_finish' && (
-              <div className="mt-3">
-                <p className="mb-2 text-[11px] font-medium text-zinc-500">What got in the way?</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {BLOCKER_REASONS.map((r) => (
-                    <button key={r.value} type="button"
-                      onClick={() => setBlockerReason((prev) => (prev === r.value ? null : r.value))}
-                      className={cn('rounded-full px-3 py-1.5 text-xs font-semibold transition-all active:scale-95', blockerReason === r.value ? 'bg-orange-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Mock (folded in, no second screen) */}
+          {/* 2 — Mock (folded in, no second screen) */}
           <div className="rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
             <label className="block text-sm font-bold text-white mb-3">Did you take a mock today?</label>
             <div className="grid grid-cols-2 gap-2">
@@ -476,18 +292,12 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
             )}
           </div>
 
-          </>
-          )}
-
           {error && (
             <div className="p-3 bg-rose-950 border border-rose-700 rounded-xl text-sm text-rose-300">{error}</div>
           )}
         </div>
 
         <div className="sticky bottom-0 bg-zinc-950 border-t border-zinc-800 px-6 py-4">
-          {/* Say what's needed BEFORE they tap, not after. The button renders
-              grey until the log is valid, which reads as disabled — students
-              had to tap a dead-looking button to find out what was missing. */}
           {!isValid && (
             <p className={cn('mb-2 rounded-xl px-3 py-2 text-xs',
               blockedHint ? 'border border-amber-700/40 bg-amber-950/40 text-amber-300' : 'text-zinc-500')}>
@@ -498,7 +308,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
             className={cn('w-full py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-2',
               isValid && !isSubmitting ? 'bg-orange-500 text-white hover:bg-orange-400 active:scale-[0.98] shadow-lg shadow-orange-500/20' : 'bg-zinc-800 text-zinc-400')}>
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Saving…' : mockTaken ? "Update topics + mock" : "Update topics studied today"}
+            {isSubmitting ? 'Saving…' : mockTaken ? 'Save log + mock' : 'Save log'}
           </button>
         </div>
       </div>
