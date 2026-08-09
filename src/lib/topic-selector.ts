@@ -84,6 +84,29 @@ const COVERAGE_POINTS: Record<CoverageStatus | 'unknown', number> = {
   exam_ready: 2,
 };
 
+// ── The ONE topic-priority score (10 Aug consolidation) ─────────────────────
+//
+// Founder's ruling: "finish what you started." There used to be TWO rankers —
+// this one (learning > not_started) and study-forecast.buildWeekPlan (the
+// OPPOSITE, not_started > learning) — so the daily card and the whole plan
+// ordered topics against each other. This is now the single authority for the
+// coverage + weightage + sequence + prerequisite part of the score. The daily
+// card (chooseTopicForSection) layers per-day signals — revision-due, the
+// student's own priority/focus/postpone taps, today's class — on top of THIS;
+// the whole plan (buildWeekPlan) uses THIS alone for ordering. One philosophy,
+// two surfaces that can no longer disagree about which topic comes next.
+export function baseCoverageScore(input: {
+  status: CoverageStatus | 'unknown';
+  weightage: number;      // TOPIC_METADATA.weightage
+  sequenceRank: number;   // TOPIC_METADATA.sequenceRank
+  prereqUnmet: boolean;   // a prerequisite still not_started/unknown
+}): number {
+  return COVERAGE_POINTS[input.status]
+    + input.weightage * 8                              // weightage is the primary driver (8–40)
+    + Math.max(0, 30 - input.sequenceRank) * 0.5       // pedagogical order nudge
+    + (input.prereqUnmet ? -18 : 0);                   // deprioritise (never exclude) unmet prereqs
+}
+
 // Keywords, not sentences — the card shows "Why?" + a 2-4 word fact.
 // Every number is still real.
 function coverageReason(topic: string, status: CoverageStatus | null): string | null {
@@ -199,7 +222,17 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
     const todayClassPoints = c.todayClassBonus ? 45 : 0;
     if (c.todayClassBonus) reasons.unshift('On your coaching timetable today');
 
-    const score = coveragePoints + weightagePoints + sequencePoints + revisionPoints + prereqPenalty + selfReportPoints + priorityPoints + focusPoints + postponedPoints + todayClassPoints;
+    // Coverage + weightage + sequence + prereq now come from the ONE shared
+    // scorer (identical value to before); the daily card layers its per-day
+    // signals on top. The whole plan uses the same base, so they agree.
+    void coveragePoints; void weightagePoints; void sequencePoints; // read into baseCoverageScore below
+    const base = baseCoverageScore({
+      status: c.coverageStatus ?? 'unknown',
+      weightage: meta?.weightage ?? 3,
+      sequenceRank: meta?.sequenceRank ?? 30,
+      prereqUnmet: prereqPenalty < 0,
+    });
+    const score = base + revisionPoints + selfReportPoints + priorityPoints + focusPoints + postponedPoints + todayClassPoints;
     return { topic: c.topic, score, reasons };
   });
 

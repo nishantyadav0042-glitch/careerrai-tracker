@@ -7,17 +7,18 @@
 
 import { TOPIC_METADATA } from './topics-constants';
 import { REMAINING_FRACTION, type CoverageStatus } from './study-pace';
+import { baseCoverageScore } from './topic-selector';
 
 export type StudyMode = 'learn' | 'practice' | 'revise';
 
 export interface DayPlanItem { topic: string; section: string; hours: number; mode: StudyMode }
 export interface DayPlan { iso: string; label: string; items: DayPlanItem[]; totalHours: number }
 
-// How much a topic at each status "wants" to be scheduled next. Mirrors the
-// Topic Selector's ordering: untouched/foundational first, revision last.
-const COVERAGE_PRIORITY: Record<CoverageStatus, number> = {
-  not_started: 30, learning: 22, practicing: 12, revising: 8, exam_ready: 0,
-};
+// Topic ordering now comes from the ONE shared scorer (topic-selector
+// baseCoverageScore) — "finish what you started" (learning > not_started),
+// weightage-primary. The old COVERAGE_PRIORITY table here ranked the OPPOSITE
+// way (not_started first) and is gone: the daily card and the whole plan can no
+// longer disagree about which topic is next.
 
 function modeFor(status: CoverageStatus): StudyMode {
   if (status === 'not_started' || status === 'learning') return 'learn';
@@ -60,15 +61,14 @@ export function buildWeekPlan(
     .map(([topic, meta]) => {
       const status = (statusByTopic.get(topic) as CoverageStatus) ?? 'not_started';
       const remaining = meta.estimatedHours * (REMAINING_FRACTION[status] ?? 1) * effort;
-      let prereqPenalty = 0;
-      if (meta.prerequisites?.length) {
-        const unmet = meta.prerequisites.some((p) => {
-          const s = statusByTopic.get(p);
-          return !s || s === 'not_started';
-        });
-        if (unmet) prereqPenalty = 15;
-      }
-      const score = (COVERAGE_PRIORITY[status] ?? 0) + meta.weightage * 3 - prereqPenalty - meta.sequenceRank * 0.1;
+      const prereqUnmet = !!meta.prerequisites?.length && meta.prerequisites.some((p) => {
+        const s = statusByTopic.get(p);
+        return !s || s === 'not_started';
+      });
+      // The ONE shared scorer — same coverage + weightage + sequence + prereq
+      // philosophy the daily card uses. (Per-day signals like revision-due and
+      // the student's own taps are the daily card's job, not the whole plan's.)
+      const score = baseCoverageScore({ status, weightage: meta.weightage, sequenceRank: meta.sequenceRank, prereqUnmet });
       return { topic, section: meta.section, status, remaining, score };
     })
     .filter((t) => t.remaining > 0.5 && t.status !== 'exam_ready')
