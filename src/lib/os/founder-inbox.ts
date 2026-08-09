@@ -40,11 +40,39 @@ export interface InboxItem {
   severity: Severity;
 }
 
+export interface FounderWorkload {
+  /** Distinct things needing action — clearing an item is one motion. */
+  actions: number;
+  /** Estimated minutes to clear the whole inbox. An estimate, labelled so. */
+  estMinutes: number;
+  critical: number;
+  high: number;
+  normal: number;
+}
+
 export interface FounderInbox {
   items: InboxItem[];
   /** 0-100. 100 = nothing open. Clicking reveals `items` as the reasons. */
   score: number;
+  /** The operational number: how much work is on the founder's plate today. */
+  workload: FounderWorkload;
   generatedAtMs: number;
+}
+
+// Estimated minutes to HANDLE one open item, by severity. Founder, 9 Aug wanted
+// "23 actions · 31 min" — a solo founder's real question. A queue is one motion
+// (send a broadcast, work a call list), so this is per-ITEM not per-student.
+// Deliberately rounded and clearly an estimate, not a measured figure.
+const EST_MIN: Record<Severity, number> = { critical: 6, high: 4, normal: 2 };
+
+function computeWorkload(items: InboxItem[]): FounderWorkload {
+  const by = (sev: Severity) => items.filter((i) => i.severity === sev).length;
+  const critical = by('critical'), high = by('high'), normal = by('normal');
+  return {
+    actions: items.length,
+    estMinutes: critical * EST_MIN.critical + high * EST_MIN.high + normal * EST_MIN.normal,
+    critical, high, normal,
+  };
 }
 
 // How much each open item drags the Founder Score down, per unit, capped. The
@@ -199,5 +227,5 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
   }
   const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
 
-  return { items, score, generatedAtMs: nowMs };
+  return { items, score, workload: computeWorkload(items), generatedAtMs: nowMs };
 }

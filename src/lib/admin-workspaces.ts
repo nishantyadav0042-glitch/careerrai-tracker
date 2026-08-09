@@ -147,12 +147,13 @@ export const WORKSPACES: AdminWorkspace[] = [
   },
   {
     id: 'finance',
-    label: 'Finance',
+    label: 'Revenue',
     icon: 'IndianRupee',
-    href: '/admin/payments',
-    purpose: 'Revenue in, payouts out, and everything that failed in between.',
+    href: '/admin/revenue',
+    purpose: 'Money requiring attention — healthy payments disappear.',
     tabs: [
-      { label: 'Payments', href: '/admin/payments', status: 'live' },
+      { label: 'Operations', href: '/admin/revenue', status: 'live' },
+      { label: 'All payments', href: '/admin/payments', status: 'live' },
       { label: 'Coupons', href: '/admin/coupons', status: 'live' },
       { label: 'Scholarships', href: '/admin/scholarships', status: 'live' },
       { label: 'MRR & cashflow', href: null, status: 'planned', blockedOn: 'Needs a subscription-ledger view; today only one-off payment rows exist.' },

@@ -101,18 +101,34 @@ export default async function CommandCenterPage() {
         </div>
       )}
 
-      {/* THE SCORE — one number, and the reasons are the list below it. */}
-      <div className={`mb-4 flex items-center justify-between rounded-2xl border border-stone-200 ${tone.bg} p-4`}>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-500">Founder score</p>
-          <p className="mt-1 text-xs text-stone-600">
-            {cleared ? 'Inbox clear — nothing needs you right now.' : `${inbox.items.length} thing${inbox.items.length === 1 ? '' : 's'} need you`}
-          </p>
+      {/* FOUNDER WORKLOAD — the operational number. "100,000 students don't
+          matter if only 23 things need me today." Lead with the work, keep the
+          health score as a secondary glance. */}
+      <div className={`mb-4 rounded-2xl border border-stone-200 ${tone.bg} p-4`}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-500">Your workload today</p>
+            {cleared ? (
+              <p className="mt-1 text-[22px] font-bold text-emerald-700">All clear</p>
+            ) : (
+              <p className="mt-1 text-[22px] font-bold text-stone-900">
+                {inbox.workload.actions} action{inbox.workload.actions === 1 ? '' : 's'}
+                <span className="ml-2 text-[13px] font-semibold text-stone-500">≈ {inbox.workload.estMinutes} min</span>
+              </p>
+            )}
+          </div>
+          <div className={`text-right ${tone.text}`}>
+            <p className="text-[26px] font-bold leading-none">{inbox.score}</p>
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide">{tone.word}</p>
+          </div>
         </div>
-        <div className={`text-right ${tone.text}`}>
-          <p className="text-[34px] font-bold leading-none">{inbox.score}</p>
-          <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide">{tone.word}</p>
-        </div>
+        {!cleared && (
+          <div className="mt-2.5 flex gap-3 text-[12px] font-semibold">
+            {inbox.workload.critical > 0 && <span className="text-red-600">🔴 {inbox.workload.critical} critical</span>}
+            {inbox.workload.high > 0 && <span className="text-amber-600">🟠 {inbox.workload.high} high</span>}
+            {inbox.workload.normal > 0 && <span className="text-stone-500">🟡 {inbox.workload.normal} normal</span>}
+          </div>
+        )}
       </div>
 
       {/* THE INBOX — open work, most severe first, each ending in an action. */}
