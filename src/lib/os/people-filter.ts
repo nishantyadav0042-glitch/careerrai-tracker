@@ -56,11 +56,19 @@ export function deriveBuddy(f: PersonFacts): BuddyState {
   return 'none';
 }
 
+/**
+ * The ONE going-cold threshold (10 Aug: founder said "unify"). Days of silence
+ * after which a student is a churn risk. Used by BOTH this derivation and
+ * admin-filters.getGoingCold, which used to disagree (4 days vs 7). 4 = the
+ * earlier warning, so we catch a cooling student before they're gone.
+ */
+export const GOING_COLD_DAYS = 4;
+
 export function deriveActivity(daysSinceLog: number | null): ActivityState {
   if (daysSinceLog == null) return 'inactive';
   if (daysSinceLog <= 0) return 'today';
   if (daysSinceLog === 1) return 'yesterday';
-  if (daysSinceLog <= 6) return 'this_week';
+  if (daysSinceLog < GOING_COLD_DAYS) return 'this_week';
   return 'going_cold';
 }
 

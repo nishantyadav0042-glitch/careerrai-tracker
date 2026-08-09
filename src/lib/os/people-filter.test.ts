@@ -43,7 +43,8 @@ describe('activity states from days since last log', () => {
   it('maps the day distance to a founder word', () => {
     expect(deriveActivity(0)).toBe('today');
     expect(deriveActivity(1)).toBe('yesterday');
-    expect(deriveActivity(4)).toBe('this_week');
+    expect(deriveActivity(3)).toBe('this_week');       // 2-3 days: recent
+    expect(deriveActivity(4)).toBe('going_cold');       // unified threshold (GOING_COLD_DAYS = 4)
     expect(deriveActivity(9)).toBe('going_cold');
     expect(deriveActivity(null)).toBe('inactive');
   });

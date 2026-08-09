@@ -1,4 +1,5 @@
 import { getLogDateString, liveStreak, momentumStreak, daysSinceLastLog, MS_PER_DAY } from '@/lib/streak-utils';
+import { GOING_COLD_DAYS } from '@/lib/os/people-filter';
 
 // ── The dashboard's single source of truth ───────────────────────────────────
 //
@@ -136,7 +137,7 @@ export async function getGoingCold(admin: any, students?: RealStudent[]): Promis
     const s = byId.get(st.student_id as string);
     if (!s || !st.last_log_date) continue;
     const days = daysSinceLastLog(st.last_log_date as string);
-    if (days != null && days >= 4) rows.push({ ...s, lastLogDate: st.last_log_date as string, daysSince: days });
+    if (days != null && days >= GOING_COLD_DAYS) rows.push({ ...s, lastLogDate: st.last_log_date as string, daysSince: days });
   }
   return rows.sort((a, b) => a.daysSince - b.daysSince);
 }
