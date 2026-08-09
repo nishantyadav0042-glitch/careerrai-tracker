@@ -4,6 +4,7 @@ import { resolveEntity } from '@/lib/os/resolve-entity';
 import { getEntityTimeline } from '@/lib/os/timeline';
 import { EntityNeighbours } from '@/components/admin/entity-neighbours';
 import { ArrowLeft, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { RetryUnlock } from './retry-unlock';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,7 @@ export default async function Payment360Page({ params }: { params: Promise<{ id:
             ₹{(pay.amount ?? 0) / 100} was paid, but {student?.full_name ?? 'this student'} is still{' '}
             {student?.subscription_status ?? 'not premium'}. Retry the unlock, and call them if it keeps failing.
           </p>
+          <RetryUnlock paymentId={pay.id as string} />
         </div>
       )}
 
