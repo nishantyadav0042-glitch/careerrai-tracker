@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   // This is the field that finally distinguishes the two — the root cause of
   // "permission on, notifications never arrive".
   const rawCtx = typeof body?.context === 'string' ? body.context : null;
-  const pushContext = rawCtx && ['standalone', 'twa', 'browser', 'unknown'].includes(rawCtx) ? rawCtx : null;
+  const pushContext = rawCtx && ['standalone', 'twa', 'ios_app', 'browser', 'unknown'].includes(rawCtx) ? rawCtx : null;
 
   const admin = createAdminClient();
   // Merge push:true into existing prefs — never clobber daily_reminder/email/time.

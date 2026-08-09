@@ -19,7 +19,7 @@ import { clientIp } from '@/lib/request-ip';
 const MAX_EVENTS = 60;          // per request (autocapture batches are larger)
 const MAX_EVENT_LEN = 60;
 const MAX_PROPS_BYTES = 2500;
-const KNOWN_MODES = new Set(['standalone', 'twa', 'browser', 'unknown']);
+const KNOWN_MODES = new Set(['standalone', 'twa', 'ios_app', 'browser', 'unknown']);
 
 interface InEvent { event?: unknown; props?: unknown; path?: unknown; ts?: unknown }
 

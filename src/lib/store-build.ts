@@ -131,9 +131,32 @@ function hasStoreCookie(): boolean {
  * navigation of a TWA. Definitive proof we're inside the Play wrapper, and it
  * needs no param, cookie or storage to survive.
  */
+/**
+ * Did this navigation come from OUR Android wrapper?
+ *
+ * The referrer alone is not evidence, and treating it as evidence was a real
+ * conversion bug. `android-app://` is set when a link is opened from ANY
+ * Android app — WhatsApp, Instagram, Gmail — and WhatsApp is our main outreach
+ * channel. `isStoreBuild()` called this branch "Definitive", so every Android
+ * student who tapped a careerrai.in link in WhatsApp was treated as a Play
+ * Store wrapper user and pushed out of inline checkout into the browser-escape
+ * flow, which they never needed and which lands 4% of the time.
+ *
+ * Verified 9 Aug: all three Android students who ever consumed a hand-off token
+ * had ZERO `twa` sessions — they were browser + standalone only. They were
+ * WhatsApp arrivals, escaped for no reason. And the Android app was not even on
+ * the Play Store on any of those dates.
+ *
+ * The `cr_store` cookie is the signal that means something: the server stamps
+ * it from `?source=twa` on the wrapper's start URL and it survives the
+ * logged-out redirect that eats the query param. The referrer now only
+ * CORROBORATES it, so a stray WhatsApp click can never stand in for a launch.
+ */
 export function launchedFromAndroidApp(): boolean {
-  try { return document.referrer.startsWith('android-app://'); }
-  catch { return false; }
+  try {
+    if (!document.referrer.startsWith('android-app://')) return false;
+    return storeCookieValue() === 'twa';
+  } catch { return false; }
 }
 
 /** Call once on app load: if launched from a store wrapper, remember it. */

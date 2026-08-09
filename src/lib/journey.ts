@@ -7,7 +7,39 @@
 // keepalive/sendBeacon, and every failure is swallowed. Tracking must never
 // slow down or break the app.
 
-export type DisplayMode = 'standalone' | 'twa' | 'browser' | 'unknown';
+export type DisplayMode = 'standalone' | 'twa' | 'ios_app' | 'browser' | 'unknown';
+
+/**
+ * Decide the display mode from explicit signals. Pure, so it can be tested.
+ *
+ * The bug this replaces, found 9 Aug: `twa` was decided by
+ * `document.referrer.startsWith('android-app://')` ALONE. That referrer is set
+ * when a link is opened from ANY Android app — WhatsApp, Instagram, Gmail —
+ * and WhatsApp is our main outreach channel. So every Android student who
+ * tapped a careerrai.in link in WhatsApp was recorded as a Play Store wrapper
+ * user, on a day when the Android app was not on the Play Store at all.
+ *
+ * Eleven "TWA" people were counted that way. Their sessions start at /welcome,
+ * /start, /login and /set-password; a genuine wrapper launch always begins at
+ * its start URL, `/student/tracker?source=twa`.
+ *
+ * The `cr_store` cookie is the reliable signal: the server stamps it from
+ * `?source=twa|ios` and it survives the logged-out redirect that eats the query
+ * param. Only that cookie proves a wrapper.
+ *
+ * `ios_app` is new. The iOS App Store build went live and was invisible here —
+ * a WKWebView never matches `display-mode: standalone`, so every App Store
+ * session was being filed as a plain browser tab, and there was no way to
+ * measure the app at all.
+ */
+export function displayModeFrom(s: {
+  storeSource: 'twa' | 'ios' | null;
+  standalone: boolean;
+}): DisplayMode {
+  if (s.storeSource === 'twa') return 'twa';
+  if (s.storeSource === 'ios') return 'ios_app';
+  return s.standalone ? 'standalone' : 'browser';
+}
 
 // Reuse the same anon cookie the /start funnel already sets, so a visitor's
 // pre-signup clicks and their post-signup student events share one identity.
@@ -45,10 +77,12 @@ function getSessionId(): string {
 export function detectDisplayMode(): DisplayMode {
   if (typeof window === 'undefined') return 'unknown';
   try {
-    if (document.referrer.startsWith('android-app://')) return 'twa';
+    // The `cr_store` cookie, never document.referrer — see displayModeFrom.
+    const raw = document.cookie.match(/(?:^|;\s*)cr_store=([^;]+)/)?.[1] ?? null;
+    const storeSource = raw === 'twa' || raw === 'ios' ? raw : null;
     const standalone = window.matchMedia?.('(display-mode: standalone)').matches
       || ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
-    return standalone ? 'standalone' : 'browser';
+    return displayModeFrom({ storeSource, standalone });
   } catch {
     return 'unknown';
   }
