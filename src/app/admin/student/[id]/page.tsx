@@ -6,6 +6,10 @@ import { ArrowLeft, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStudent360 } from '@/lib/student-360';
 import { bandMeta } from '@/lib/momentum';
+import { resolveEntity } from '@/lib/os/resolve-entity';
+import { findSacredFailures } from '@/lib/os/sacred-guard';
+import { EntityNeighbours } from '@/components/admin/entity-neighbours';
+import { ShieldAlert } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Student 360 · CareerRai' };
@@ -40,7 +44,11 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  const s = await getStudent360(admin, id);
+  const [s, entity, allAlerts] = await Promise.all([
+    getStudent360(admin, id),
+    resolveEntity(admin, 'student', id),
+    findSacredFailures(admin, Date.now()),
+  ]);
   if (!s) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-10 text-center text-sm text-stone-500">
@@ -48,6 +56,10 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
       </div>
     );
   }
+
+  // Only this student's sacred alerts — a paying student in a broken state,
+  // shown at the top of their own profile so it is impossible to miss.
+  const alerts = allAlerts.filter((a) => a.student.id === id);
 
   const bm = bandMeta(s.momentum.band);
   const wa = waNumber(s.profile.phone);
@@ -62,6 +74,23 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
         <Link href="/admin" className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-800">
           <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
         </Link>
+
+        {/* Sacred alert — a paying student the system could not fix itself,
+            pinned above their own profile. */}
+        {alerts.map((a) => (
+          <div key={a.id} className={`mb-3 rounded-2xl border-2 p-3.5 ${a.severity === 'critical' ? 'border-red-400 bg-red-50' : 'border-amber-300 bg-amber-50'}`}>
+            <div className="flex items-start gap-2.5">
+              <ShieldAlert className={`mt-0.5 h-4 w-4 shrink-0 ${a.severity === 'critical' ? 'text-red-600' : 'text-amber-600'}`} />
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold leading-snug text-stone-900">{a.title}</p>
+                <p className="mt-0.5 text-[12px] leading-snug text-stone-600">{a.rootCause}</p>
+                <Link href={a.actionRoute} className="mt-2 inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-1.5 text-[12px] font-bold text-white">
+                  {a.actionLabel} →
+                </Link>
+              </div>
+            </div>
+          </div>
+        ))}
 
         {/* Header: who + momentum + one action */}
         <div className="rounded-2xl border border-stone-200 bg-white p-4">
@@ -186,6 +215,11 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
             </div>
           )}
         </div>
+
+        {/* Connected objects — every neighbour the graph declares. Reverse
+            integration: open the student, see the buddy, payments, sessions,
+            timetables, plans and notifications, without leaving. */}
+        {entity && <EntityNeighbours entity={entity} />}
 
         {/* The timeline — the story */}
         <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
