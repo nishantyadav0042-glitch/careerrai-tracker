@@ -25,6 +25,20 @@ describe('honest subscription states — never "Free beta"', () => {
   });
 });
 
+describe('buddy state — "wants" is a free-tier signal only', () => {
+  it('a free student who wants a mentor is "wants"', () => {
+    expect(deriveBuddy({ ...base, wantsBuddy: true })).toBe('wants');
+  });
+  it('a premium student with no buddy is "none" (an unassigned fault, not a lead)', () => {
+    // This is what makes sub=premium&buddy=none reproduce the sacred/inbox set
+    // exactly — a premium student who once tapped the CTA must not hide here.
+    expect(deriveBuddy({ ...base, isPremium: true, wantsBuddy: true })).toBe('none');
+  });
+  it('any student with a buddy is "assigned"', () => {
+    expect(deriveBuddy({ ...base, hasBuddy: true, wantsBuddy: true })).toBe('assigned');
+  });
+});
+
 describe('activity states from days since last log', () => {
   it('maps the day distance to a founder word', () => {
     expect(deriveActivity(0)).toBe('today');
@@ -87,10 +101,17 @@ describe('the Command Center never shows a dead door', () => {
     expect(page).toContain('.filter((t) => t.value > 0)');
     expect(page).toContain('if (tiles.length === 0) return null');
   });
-  it('revenue tiles route into real People filters', () => {
+  it('revenue tiles route into the EXACT set behind each count', () => {
     const page = readFileSync('src/app/admin/page.tsx', 'utf8');
-    expect(page).toContain('/admin/people?buddy=wants&sub=free');
+    // buddy=wants (no extra sub filter) matches the getWantsBuddy count exactly.
+    expect(page).toContain('/admin/people?buddy=wants');
+    // premium+no-buddy is a real People filter that reproduces the sacred set.
     expect(page).toContain('/admin/people?sub=premium&buddy=none');
+    // Captured-not-unlocked students derive as sub=free, so the tile must NOT
+    // send the founder to payment_failed (a different population); it opens the
+    // Revenue Operations captured-not-unlocked list, the exact set + the fix.
+    expect(page).toContain('/admin/revenue?state=captured_not_unlocked');
+    expect(page).not.toContain('/admin/people?sub=payment_failed');
   });
 });
 import { readFileSync } from 'node:fs';

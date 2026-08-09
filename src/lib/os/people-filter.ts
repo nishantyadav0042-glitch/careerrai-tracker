@@ -47,7 +47,12 @@ export function deriveSubscription(f: PersonFacts): SubState {
 
 export function deriveBuddy(f: PersonFacts): BuddyState {
   if (f.hasBuddy) return 'assigned';
-  if (f.wantsBuddy) return 'wants';
+  // "wants" is a FREE-tier sales signal only. A premium student with no buddy is
+  // not a lead — they are an unassigned fault, and must classify as 'none' so
+  // that sub=premium & buddy=none reproduces EXACTLY the sacred/inbox definition
+  // (premium AND buddy_id null). Otherwise a premium student who once tapped the
+  // buddy CTA would be counted by "paying, no mentor" but hidden from its link.
+  if (f.wantsBuddy && !f.isPremium) return 'wants';
   return 'none';
 }
 

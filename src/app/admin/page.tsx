@@ -176,9 +176,16 @@ export default async function CommandCenterPage() {
         const paymentsToVerify = alerts.filter((a) => a.id.startsWith('unlock:')).length;
         const premiumNoMentor = alerts.filter((a) => a.id.startsWith('buddy:')).length;
         const tiles = [
-          { emoji: '🔥', label: 'Want a buddy, not subscribed', value: wantsBuddy.length, href: '/admin/people?buddy=wants&sub=free' },
+          // buddy=wants already excludes premium, so this lists EXACTLY the
+          // getWantsBuddy set the count comes from — no extra sub filter that
+          // would drop wanting students still stuck in a payment state.
+          { emoji: '🔥', label: 'Want a buddy, not subscribed', value: wantsBuddy.length, href: '/admin/people?buddy=wants' },
           { emoji: '📞', label: 'Sales-ready to call', value: salesReady.length, href: '/admin/sales-queue' },
-          { emoji: '💳', label: 'Payments to verify', value: paymentsToVerify, href: '/admin/people?sub=payment_failed' },
+          // These are CAPTURED-but-not-unlocked payments (money paid, premium
+          // never granted). Such a student derives as sub=free, NOT payment_failed
+          // — so this must open Revenue Operations' captured-not-unlocked list,
+          // the exact set behind the count, where the one-click retry lives.
+          { emoji: '💳', label: 'Captured, not unlocked', value: paymentsToVerify, href: '/admin/revenue?state=captured_not_unlocked' },
           { emoji: '🤝', label: 'Premium without a mentor', value: premiumNoMentor, href: '/admin/people?sub=premium&buddy=none' },
         ].filter((t) => t.value > 0); // hide-when-zero: no fake work
         if (tiles.length === 0) return null;

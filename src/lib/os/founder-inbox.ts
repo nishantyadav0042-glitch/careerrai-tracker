@@ -185,7 +185,7 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
       key: 'wants_buddy', id: 'wants_buddy',
       title: `${wantsBuddy.length} student${wantsBuddy.length === 1 ? '' : 's'} asked for a mentor`,
       why: 'Said yes to a mentor at signup, still free and unassigned — the hottest sales list you have.',
-      action: 'Call them', route: '/admin/people?buddy=wants&sub=free', count: wantsBuddy.length, severity: 'high',
+      action: 'Call them', route: '/admin/people?buddy=wants', count: wantsBuddy.length, severity: 'high',
     },
     {
       key: 'sales_ready', id: 'sales_ready',

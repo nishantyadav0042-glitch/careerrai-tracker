@@ -39,14 +39,13 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const now = Date.now();
   const filter = parseFilter(await searchParams);
 
-  const [{ data: students }, { data: paidRows }, { data: pendRows }, { data: failRows }, { data: wantRows }, { data: recentLogs }, { data: planRows }] = await Promise.all([
+  const [{ data: students }, { data: paidRows }, { data: pendRows }, { data: failRows }, { data: recentLogs }, { data: planRows }] = await Promise.all([
     admin.from('profiles')
-      .select('id, full_name, phone, is_premium, buddy_id, subscription_status')
+      .select('id, full_name, phone, is_premium, buddy_id, subscription_status, wants_mentor')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('student_payments').select('student_id').eq('status', 'paid'),
     admin.from('student_payments').select('student_id').eq('status', 'created').gte('created_at', new Date(now - 14 * 86_400_000).toISOString()),
     admin.from('student_payments').select('student_id').eq('status', 'failed').gte('created_at', new Date(now - 30 * 86_400_000).toISOString()),
-    admin.from('student_engagement').select('student_id, buddy_cta_last_at'),
     admin.from('daily_reports').select('student_id, report_date').gte('report_date', new Date(now - 30 * 86_400_000).toISOString().slice(0, 10)),
     admin.from('daily_routines').select('student_id').limit(20000),
   ]);
@@ -54,7 +53,6 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const paidBy = new Set((paidRows ?? []).map((r: any) => r.student_id));
   const pendBy = new Set((pendRows ?? []).map((r: any) => r.student_id));
   const failBy = new Set((failRows ?? []).map((r: any) => r.student_id));
-  const wantsBy = new Set((wantRows ?? []).filter((r: any) => r.buddy_cta_last_at).map((r: any) => r.student_id));
   const hasPlanBy = new Set((planRows ?? []).map((r: any) => r.student_id));
 
   const lastLog = new Map<string, string>();
@@ -73,7 +71,9 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
       hasPaymentPending: !isPremium && pendBy.has(s.id),
       hasPaymentFailed: !isPremium && failBy.has(s.id),
       hasBuddy: !!s.buddy_id,
-      wantsBuddy: wantsBy.has(s.id),
+      // Same signal the Inbox and Command Center count from (profiles.wants_mentor),
+      // so buddy=wants lists EXACTLY the students behind "N asked for a mentor".
+      wantsBuddy: s.wants_mentor === true,
       paymentStuck: paidBy.has(s.id) && !isPremium,
       hasPlan: hasPlanBy.has(s.id),
       daysSinceLog: daysSince(lastLog.get(s.id)),
