@@ -64,6 +64,25 @@ export async function GET() {
     horizonDays = Math.max(1, PLAN_WINDOW_DAYS - elapsed);
   }
 
+  // The coaching calendar is resolved BEFORE the plan is built, because the
+  // plan has to be built AROUND it.
+  //
+  // This used to be computed after buildFullPlan and handed only to the
+  // integrity checker — so the plan was laid out from our own ordering and then
+  // graded against the student's sheet. That is a check designed to fail, and
+  // it failed for every coaching student: "20 topics are not on the date your
+  // coaching teaches them", on the very screen the founder built so a student
+  // could hold their photo next to our plan and see them agree.
+  let coachingByDate: Record<string, string[]> | undefined;
+  if (profile.plan_source === 'coaching' && timetable?.blocks && timetable?.confirmed_at) {
+    const cal = anchorToMonth(
+      (timetable.blocks as TimetableBlock[] | null) ?? [],
+      String(timetable.confirmed_at).slice(0, 10),
+    );
+    coachingByDate = {};
+    for (const d of cal) if (d.topics.length) coachingByDate[d.date] = d.topics;
+  }
+
   const plan = buildFullPlan({
     coverage: (coverageRows ?? []).map((r: { topic: string; status: string | null }) => ({ topic: r.topic, status: r.status })),
     effort: studentEffortMultiplier({
@@ -75,21 +94,9 @@ export async function GET() {
     attemptYear: profile.attempt_year as number | null,
     revisionDue,
     horizonDays,
+    coachingByDate,
   });
 
-  // The checklist door. Founder, 8 Aug: a student WILL check whether the plan
-  // covers everything and how it was built, so the answer is computed and
-  // shown rather than asserted. For a coaching student it also cross-checks
-  // their own sheet: every topic on the date their photo gives.
-  let coachingByDate: Record<string, string[]> | undefined;
-  if (profile.plan_source === 'coaching' && timetable?.blocks && timetable?.confirmed_at) {
-    const cal = anchorToMonth(
-      (timetable.blocks as TimetableBlock[] | null) ?? [],
-      String(timetable.confirmed_at).slice(0, 10),
-    );
-    coachingByDate = {};
-    for (const d of cal) if (d.topics.length) coachingByDate[d.date] = d.topics;
-  }
   const integrity = checkPlanIntegrity({
     plan,
     committedHours: dailyHours(profile).weekday,

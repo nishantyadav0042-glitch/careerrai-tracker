@@ -39,6 +39,17 @@ export { MOCK_HOURS_EACH };
 /** Analysis is scheduled as its own block the NEXT day, never bundled in. */
 export const MOCK_ANALYSIS_HOURS = 2;
 
+/** A full revision block when the day has room for it. */
+export const REVISION_HOURS = 1.5;
+
+/**
+ * Below this, the block is dropped instead of shrunk.
+ *
+ * A 15-minute "revise your weakest area" is not revision; it is a line on a
+ * screen that makes the day look fuller than it is.
+ */
+export const MIN_REVISION_HOURS = 0.5;
+
 export type PlanPhase = 'build' | 'intensive' | 'revision';
 
 export interface PlanItem {
@@ -89,6 +100,17 @@ export interface FullPlanInput {
   revisionDue?: string[];
   /** Cap the horizon (a coaching student's month). Null = run to exam day. */
   horizonDays?: number | null;
+  /**
+   * Coaching only: what their institute teaches, keyed by date.
+   *
+   * Founder's rule: the topics in the photo must appear on the SAME date the
+   * coaching teaches them, so the student can hold their sheet next to our plan
+   * and see them agree. Without this the plan was built from our own ordering
+   * and then checked against their sheet — which is a check designed to fail,
+   * and it did: every coaching student who opened their full plan saw
+   * "20 topics are not on the date your coaching teaches them."
+   */
+  coachingByDate?: Record<string, string[]>;
 }
 
 export interface FullPlan {
@@ -227,20 +249,59 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   // hours said it fitted. A plan whose own arithmetic disagrees with its own
   // calendar is exactly what this whole day has been about removing.
   const topicsByDate = new Map<string, PlanItem[]>();
+
+  // ── Coaching topics are ANCHORED to their own dates, before anything else ──
+  //
+  // The student's sheet is the fixed point, not our ordering: they sit in that
+  // class on that day, and a plan that teaches them something else that evening
+  // is a plan they stop trusting. So class topics claim their date first and
+  // our own queue pours into whatever is left.
+  //
+  // A class day whose capacity is already spent (a mock day) still gets its
+  // topic, at the minimum block. Being on the right DATE is the promise; the
+  // hours flex around it.
+  const anchored = new Set<string>();
+  if (input.coachingByDate) {
+    const hoursForTopic = new Map<string, number>();
+    for (const it of ordered) if (!hoursForTopic.has(it.label)) hoursForTopic.set(it.label, it.hours);
+
+    for (let d = 0; d < span; d++) {
+      const key = iso(new Date(input.today.getTime() + d * DAY_MS));
+      const classTopics = input.coachingByDate[key];
+      if (!classTopics?.length) continue;
+
+      let left = capacityByDate.get(key) ?? 0;
+      const items: PlanItem[] = [];
+      for (const label of classTopics) {
+        const want = hoursForTopic.get(label) ?? 1;
+        const take = Math.max(0.5, Math.min(want, Math.round(left * 2) / 2));
+        items.push({ kind: 'topic', label, section: null, hours: take });
+        anchored.add(label);
+        left = Math.max(0, left - take);
+      }
+      topicsByDate.set(key, items);
+      capacityByDate.set(key, left);
+    }
+  }
+
+  // Our own queue skips anything the coaching already claimed, so a topic is
+  // never scheduled twice under two different dates.
+  const queue = anchored.size ? ordered.filter((i) => !anchored.has(i.label)) : ordered;
+
   let qi = 0;
-  let leftOnItem = ordered.length ? ordered[0].hours : 0;
-  for (let d = 0; d < span && qi < ordered.length; d++) {
+  let leftOnItem = queue.length ? queue[0].hours : 0;
+  for (let d = 0; d < span && qi < queue.length; d++) {
     const key = iso(new Date(input.today.getTime() + d * DAY_MS));
     let left = capacityByDate.get(key) ?? 0;
-    const items: PlanItem[] = [];
-    while (qi < ordered.length && left >= 0.5) {
+    const items: PlanItem[] = [...(topicsByDate.get(key) ?? [])];
+    while (qi < queue.length && left >= 0.5) {
       const take = Math.min(leftOnItem, left);
       if (take >= 0.5) {
-        items.push({ ...ordered[qi], hours: Math.round(take * 2) / 2 });
+        items.push({ ...queue[qi], hours: Math.round(take * 2) / 2 });
         left -= take;
         leftOnItem -= take;
       }
-      if (leftOnItem < 0.5) { qi++; leftOnItem = qi < ordered.length ? ordered[qi].hours : 0; }
+      if (leftOnItem < 0.5) { qi++; leftOnItem = qi < queue.length ? queue[qi].hours : 0; }
       if (take < 0.5) break;
     }
     if (items.length) topicsByDate.set(key, items);
@@ -273,9 +334,33 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
     // From November, no new topics. Revision, mocks and strengthening only —
     // the one rule every source in the research states outright.
     if (phase === 'revision') {
-      const topic = revisionQueue.shift();
-      if (topic) items.push({ kind: 'revision', label: `Revise ${topic}`, section: null, hours: 1.5 });
-      else items.push({ kind: 'revision', label: 'Revise your weakest area', section: null, hours: 1.5 });
+      // Revision takes what is LEFT of the day, never a fixed 1.5h on top.
+      //
+      // The bug this fixes, measured 9 Aug: a mock is 2h and its analysis is
+      // 2h, and revision was appended at a flat 1.5h regardless. A student who
+      // committed 2h/day was handed 3.5h days — sixteen of them — and a 3h
+      // student the same. It was invisible at 4h/day and above, which is where
+      // every earlier check happened to look.
+      //
+      // A plan that quietly demands 75% more than the student agreed to breaks
+      // the exact promise the hours question exists to keep. Below the floor
+      // the block is dropped rather than shrunk into something useless:
+      // fifteen minutes of "revise your weakest area" is not revision, it is a
+      // line on a screen.
+      const committedToday = input.weekdayHours && input.weekdayHours > 0 ? input.weekdayHours : null;
+      const usedSoFar = items.reduce((s, i) => s + i.hours, 0);
+      const room = committedToday == null ? REVISION_HOURS : committedToday - usedSoFar;
+      const revisionHours = Math.min(REVISION_HOURS, Math.round(room * 2) / 2);
+
+      if (revisionHours >= MIN_REVISION_HOURS) {
+        const topic = revisionQueue.shift();
+        items.push({
+          kind: 'revision',
+          label: topic ? `Revise ${topic}` : 'Revise your weakest area',
+          section: null,
+          hours: revisionHours,
+        });
+      }
     } else {
       for (const it of topicsByDate.get(key) ?? []) items.push(it);
     }
