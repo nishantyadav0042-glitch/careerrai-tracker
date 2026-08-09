@@ -1,215 +1,124 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { PushGate } from '@/components/push-gate';
-import { TestPushButton } from '@/components/test-push-button';
-import { StreakRestoreBroadcastButton } from '@/components/streak-restore-broadcast-button';
-import { Users, GraduationCap, Crown, Sparkles, UserPlus, MoonStar, ArrowRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { getStreakBreakers } from '@/lib/streak-breakers';
-import { getRealStudents, getLoggedToday, getStreaksAlive, getRemindToLog, getSalesReadyToCall, getGoingCold, getWantsBuddy } from '@/lib/admin-filters';
+import { requireAdmin } from '@/lib/admin-auth';
+import { assembleFounderInbox, type Severity } from '@/lib/os/founder-inbox';
+import { getRealStudents, getLoggedToday } from '@/lib/admin-filters';
+import { CheckCircle2, ArrowRight, AlertOctagon, AlertTriangle, Circle } from 'lucide-react';
 
-// Always render live — the dashboard is a real-time ops panel; a cached copy
-// showing stale counts (a payment just made, a fresh log) reads as "broken".
+// Always render live — a cached inbox showing work that is already cleared, or
+// hiding work that just appeared, is worse than no inbox.
 export const dynamic = 'force-dynamic';
 
-function getTodayIST() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+// ── COMMAND CENTER = the Founder Inbox ──────────────────────────────────────
+//
+// Co-founder review, 9 Aug: "Forget dashboard, think inbox. Every widget ends
+// with 'what should Nishant do?' When I clear the inbox, CareerRai is healthy.
+// One score in the morning; click for the reasons."
+//
+// So this screen leads with the score and the open work, not with counts. The
+// old summary tiles ("127 students", "logged today") move BELOW the fold as
+// context — they answer "what is happening", which matters, but only after the
+// screen has answered "what should I do".
+//
+// Every item here comes from lib/os/founder-inbox, where every number is a real
+// query and every item carries the one action that clears it.
+
+const SEV: Record<Severity, { ring: string; chip: string; Icon: typeof AlertOctagon; label: string }> = {
+  critical: { ring: 'border-red-300', chip: 'bg-red-100 text-red-700', Icon: AlertOctagon, label: 'Critical' },
+  high:     { ring: 'border-amber-300', chip: 'bg-amber-100 text-amber-800', Icon: AlertTriangle, label: 'High' },
+  normal:   { ring: 'border-stone-200', chip: 'bg-stone-100 text-stone-600', Icon: Circle, label: 'Normal' },
+};
+
+function scoreTone(score: number): { text: string; bg: string; word: string } {
+  if (score >= 90) return { text: 'text-emerald-700', bg: 'bg-emerald-50', word: 'Healthy' };
+  if (score >= 70) return { text: 'text-teal-700', bg: 'bg-teal-50', word: 'Steady' };
+  if (score >= 50) return { text: 'text-amber-700', bg: 'bg-amber-50', word: 'Needs work' };
+  return { text: 'text-red-700', bg: 'bg-red-50', word: 'Under strain' };
 }
 
-// ADMIN HOME = SUMMARY ONLY (founder, 14 July v2): "give me numbers, not
-// direct access to profiles". Every tile is a count; tapping it opens the
-// page where the actual people live. No student lists on this screen, ever —
-// it must look identical at 87 leads and at 5,000.
-export default async function AdminTodayPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
+export default async function CommandCenterPage() {
+  const { admin } = await requireAdmin();
 
-  const admin = createAdminClient();
-  // One wave, not three. This page's measured TTFB was median 1.16s / p95
-  // 2.9s (perf_events, 82 samples), and the biggest self-inflicted share was
-  // sequencing: role check -> people -> real students ran as three serial
-  // round trips before the seven attention lists could even start. All three
-  // are independent service-role reads, so they run together; the role check
-  // still gates rendering — it just no longer gates the OTHER queries.
-  const [{ data: adminProfile }, { data: people }, real] = await Promise.all([
-    admin.from('profiles').select('role, notif_prefs').eq('id', user.id).single(),
-    admin
-      .from('profiles')
-      .select('id, role, created_at, is_premium, premium_since, last_seen_at, call_feedback, is_test_account')
-      .in('role', ['student', 'buddy']),
-    getRealStudents(admin),
-  ]);
-  if (adminProfile?.role !== 'admin') redirect('/login');
-  const adminPushEnabled = (adminProfile?.notif_prefs as { push?: boolean } | null)?.push === true;
+  const inbox = await assembleFounderInbox(admin, Date.now());
 
-  const today = getTodayIST();
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
-  const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  // Context counts, computed after the inbox so the decisions load first.
+  const students = await getRealStudents(admin);
+  const logged = await getLoggedToday(admin, students);
 
-  const rows = (people ?? []).filter((p) => !p.is_test_account);
-  const students = rows.filter((p) => p.role === 'student');
-  const buddies = rows.filter((p) => p.role === 'buddy');
-
-  const isToday = (iso: string | null | undefined) =>
-    !!iso && new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === today;
-
-  const upgraded = students.filter((s) => s.is_premium === true).length;
-  const upgradedToday = students.filter((s) => s.is_premium === true && isToday(s.premium_since as string | null)).length;
-  const newLeadsToday = students.filter((s) => isToday(s.created_at as string | null)).length;
-  const inactiveBuddies = buddies.filter((b) => !b.last_seen_at || (b.last_seen_at as string) < twoDaysAgo).length;
-
-  // Founder rule (20 July): every attention card's count is `list.length` of
-  // the SAME shared filter its page renders (lib/admin-filters.ts). No card
-  // computes its number one way and its list another — that's how the
-  // dashboard contradicted itself.
-  const totalStudents = real.length;
-  const [loggedList, aliveList, remindList, streakBreakers, salesList, coldList, wantsBuddyList] = await Promise.all([
-    getLoggedToday(admin, real),
-    getStreaksAlive(admin, real),
-    getRemindToLog(admin, real),
-    getStreakBreakers(admin),
-    getSalesReadyToCall(admin, real),
-    getGoingCold(admin, real),
-    getWantsBuddy(admin),
-  ]);
-  const loggedToday = loggedList.length;
-  const salesReadyToCall = salesList.length;
-
-  const tiles = [
-    { label: 'Total students', val: totalStudents, icon: Users, href: '/admin/students', accent: 'text-stone-900' },
-    { label: 'Upgraded students', val: upgraded, icon: Crown, href: '/admin/payments', accent: 'text-violet-700' },
-    { label: 'Total buddies', val: buddies.length, icon: GraduationCap, href: '/admin/students', accent: 'text-stone-900' },
-    { label: 'Upgraded today', val: upgradedToday, icon: Sparkles, href: '/admin/payments', accent: upgradedToday > 0 ? 'text-emerald-700' : 'text-stone-900' },
-    { label: 'New leads today', val: newLeadsToday, icon: UserPlus, href: '/admin/leads', accent: newLeadsToday > 0 ? 'text-teal-700' : 'text-stone-900' },
-    { label: 'Buddies silent 2+ days', val: inactiveBuddies, icon: MoonStar, href: '/admin/students', accent: inactiveBuddies > 0 ? 'text-rose-600' : 'text-emerald-700' },
-  ];
-
-  const attention = [
-    { label: 'Logged today', val: `${loggedToday}/${totalStudents}`, href: '/admin/logged-today', hot: false },
-    { label: 'Streaks alive (incl. 🛡️ shield-protected)', val: aliveList.length, href: '/admin/live-streaks', hot: false },
-    { label: 'Remind to log today', val: remindList.length, href: '/admin/reminders', hot: remindList.length > 0 },
-    { label: '🛡️ Shield used yesterday — win them back', val: streakBreakers.length, href: '/admin/streak-breakers', hot: streakBreakers.length > 0 },
-    { label: 'Sales-ready to call', val: salesReadyToCall, href: '/admin/sales-queue', hot: salesReadyToCall > 0 },
-    { label: '💛 Want a buddy — said yes at signup', val: wantsBuddyList.length, href: '/admin/wants-buddy', hot: wantsBuddyList.length > 0 },
-    { label: 'Going cold (4+ days)', val: coldList.length, href: '/admin/going-cold', hot: coldList.length > 0 },
-  ];
+  const tone = scoreTone(inbox.score);
+  const cleared = inbox.items.length === 0;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-5 pb-20">
-      <div className="mb-4 px-1">
-        <h1 className="text-xl font-bold tracking-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Dashboard</h1>
-        <p className="mt-0.5 text-xs text-stone-500">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' })} · tap any number to open the list behind it</p>
+      {/* THE SCORE — one number, and the reasons are the list below it. */}
+      <div className={`mb-4 flex items-center justify-between rounded-2xl border border-stone-200 ${tone.bg} p-4`}>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-500">Founder score</p>
+          <p className="mt-1 text-xs text-stone-600">
+            {cleared ? 'Inbox clear — nothing needs you right now.' : `${inbox.items.length} thing${inbox.items.length === 1 ? '' : 's'} need you`}
+          </p>
+        </div>
+        <div className={`text-right ${tone.text}`}>
+          <p className="text-[34px] font-bold leading-none">{inbox.score}</p>
+          <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide">{tone.word}</p>
+        </div>
       </div>
 
-      <Link href="/admin/launch" className="mb-2 flex items-center justify-between rounded-2xl border-2 border-stone-900 bg-stone-900 p-4 text-white transition-transform hover:scale-[1.01]">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Launch Dashboard</div>
-          <div className="mt-0.5 text-sm font-semibold">Crash-free · OTP · installs by source · peer learning · push</div>
+      {/* THE INBOX — open work, most severe first, each ending in an action. */}
+      {cleared ? (
+        <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+          <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
+          <p className="mt-2 text-[15px] font-bold text-emerald-800">All clear.</p>
+          <p className="mt-1 text-[12px] text-emerald-700">Every mentor has a room, every paying student has a buddy, nothing is going cold. Go build.</p>
         </div>
-        <span className="font-mono text-2xl">→</span>
-      </Link>
-
-      <Link href="/admin/mission" className="mb-2 flex items-center justify-between rounded-2xl border-2 border-orange-500 bg-gradient-to-r from-orange-500 to-orange-600 p-4 text-white transition-transform hover:scale-[1.01]">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-orange-100">Tonight&apos;s Mission</div>
-          <div className="mt-0.5 text-sm font-semibold">Who to message now · why · ready-to-send · one tap</div>
+      ) : (
+        <div className="mb-5 space-y-2">
+          {inbox.items.map((item) => {
+            const s = SEV[item.severity];
+            return (
+              <Link
+                key={item.id}
+                href={item.route}
+                className={`block rounded-2xl border ${s.ring} bg-white p-3.5 transition-colors hover:border-stone-400`}
+              >
+                <div className="flex items-start gap-2.5">
+                  <s.Icon className={`mt-0.5 h-4 w-4 shrink-0 ${item.severity === 'critical' ? 'text-red-600' : item.severity === 'high' ? 'text-amber-600' : 'text-stone-400'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-bold leading-snug text-stone-900">{item.title}</p>
+                    <p className="mt-0.5 text-[12px] leading-snug text-stone-500">{item.why}</p>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between pl-6.5">
+                  <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${s.chip}`}>
+                    {s.label}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-stone-700">
+                    {item.action} <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
-        <span className="font-mono text-2xl">→</span>
-      </Link>
+      )}
 
-      <Link href="/admin/sales" className="mb-2 flex items-center justify-between rounded-2xl border border-teal-700 bg-teal-700 p-4 text-white transition-transform hover:scale-[1.01]">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-teal-200">Sales — Today&apos;s Opportunities</div>
-          <div className="mt-0.5 text-sm font-semibold">Most likely to buy · ready script · follow-up tracking</div>
-        </div>
-        <span className="font-mono text-2xl">→</span>
-      </Link>
-
-      <Link href="/admin/mission-control" className="mb-2 flex items-center justify-between rounded-2xl border border-stone-900 bg-stone-900 p-4 text-white transition-transform hover:scale-[1.01]">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Mission Control</div>
-          <div className="mt-0.5 text-sm font-semibold">Reachability score · live health · momentum · leading indicators</div>
-        </div>
-        <span className="font-mono text-2xl">→</span>
-      </Link>
-
-      <Link href="/admin/challenges" className="mb-2 flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Daily Challenge</div>
-          <div className="mt-0.5 text-sm font-semibold text-stone-800">Review student submissions · question bank · schedule</div>
-        </div>
-        <span className="font-mono text-xl text-stone-400">→</span>
-      </Link>
-
-      <Link href="/admin/daily-pick" className="mb-2 flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Daily Pick — live or die</div>
-          <div className="mt-0.5 text-sm font-semibold text-stone-800">Open rate · votes · content quality · Help Score</div>
-        </div>
-        <span className="font-mono text-xl text-stone-400">→</span>
-      </Link>
-
-      <Link href="/admin/sales-performance" className="mb-3 flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Sales performance</div>
-          <div className="mt-0.5 text-sm font-semibold text-stone-800">Priya&apos;s calls · connect &amp; conversion rate · pipeline</div>
-        </div>
-        <span className="font-mono text-xl text-stone-400">→</span>
-      </Link>
-
+      {/* CONTEXT — what is happening, below what to do. */}
+      <div className="mb-2 px-1">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Today, for context</p>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {tiles.map(({ label, val, icon: Icon, href, accent }) => (
-          <Link key={label} href={href} className="group rounded-2xl border border-stone-200 bg-white p-4 transition-colors hover:border-stone-400">
-            <Icon className={cn('mb-2 h-4 w-4', accent)} />
-            <div className={cn('font-mono text-3xl font-bold leading-none', accent)}>{val}</div>
-            <div className="mt-1.5 flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{label}</span>
-              <ArrowRight className="h-3 w-3 text-stone-300 transition-transform group-hover:translate-x-0.5 group-hover:text-stone-500" />
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      <div className="mt-4 space-y-1.5">
-        {attention.map(({ label, val, href, hot }) => (
-          <Link
-            key={label}
-            href={href}
-            className={cn(
-              'flex items-center justify-between rounded-xl border p-3 text-sm font-semibold transition-colors',
-              hot ? 'border-orange-200 bg-orange-50 text-orange-800 hover:border-orange-400' : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
-            )}
-          >
-            <span>{label}</span>
-            <span className="flex items-center gap-1.5 font-mono">{val} <ArrowRight className="h-3.5 w-3.5 opacity-50" /></span>
-          </Link>
-        ))}
-      </div>
-
-      {!adminPushEnabled && <PushGate mode="staff" />}
-
-      {/* Momentum Shield announcement — tells every student their streak is
-          restored (loggers) or that 3 shields are waiting (never-logged), via
-          in-app bell + push where notifications are on. Idempotent. */}
-      <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
-        <p className="text-sm font-semibold text-stone-900">Momentum Shield announcement</p>
-        <p className="mb-3 mt-0.5 text-xs text-stone-500">
-          One tap: students who logged before hear “your streak is restored — start from today”; everyone else gets “3 shields waiting, start tonight”. Nobody is messaged twice.
-        </p>
-        <StreakRestoreBroadcastButton />
-      </div>
-
-      {/* One-tap end-to-end push verification (founder: "I didn't get a single
-          notification"). Confirms subscription → FCM → device on demand. */}
-      <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
-        <p className="text-sm font-semibold text-stone-900">Notification self-test</p>
-        <p className="mb-3 mt-0.5 text-xs text-stone-500">
-          Enable push above (in the installed app), then fire a test to confirm it reaches your phone.
-        </p>
-        <TestPushButton />
+        <ContextTile label="Students" value={students.length} href="/admin/students" />
+        <ContextTile label="Logged today" value={`${logged.length}/${students.length}`} href="/admin/logged-today" />
+        <ContextTile label="Press ⌘K" value="Search anything" href="/admin/students" />
       </div>
     </div>
+  );
+}
+
+function ContextTile({ label, value, href }: { label: string; value: string | number; href: string }) {
+  return (
+    <Link href={href} className="rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">{label}</p>
+      <p className="mt-1 text-[18px] font-bold leading-none text-stone-900">{value}</p>
+    </Link>
   );
 }

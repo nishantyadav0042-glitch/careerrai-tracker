@@ -102,7 +102,15 @@ export async function universalSearch(admin: Admin, rawQuery: string): Promise<S
     });
   }
 
-  return hits;
+  // Weighted order, per the co-founder review: the entities a founder acts on
+  // most appear first. A student or a payment is almost always what they came
+  // for; a coupon almost never. Without this, an alphabetical or insertion
+  // order buries the useful hit under the incidental one.
+  const RANK: Record<EntityKind, number> = {
+    student: 0, payment: 1, buddy: 2, lead: 3, session: 4,
+    plan: 5, timetable: 6, notification: 7, coupon: 8,
+  };
+  return hits.sort((a, b) => (RANK[a.kind] ?? 9) - (RANK[b.kind] ?? 9));
 }
 
 /**
