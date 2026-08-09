@@ -145,20 +145,122 @@ first thing the next session should do.
 
 ---
 
-## 5. What has NOT been audited
+## 5. PHASE 3+4 — Plan generation and personalisation: **PASS**
+
+Run, not read. 46 untouched topics, 113 days to CAT, one profile changed at a
+time.
+
+```
+ 2h/day →  10/46 topics · fits=false · capacity 106h
+ 3h/day →  21/46 topics · fits=false · capacity 191h
+ 5h/day →  41/46 topics · fits=false · capacity 361h
+ 8h/day →  46/46 topics · fits=true  · capacity 616h
+10h/day →  46/46 topics · fits=true  · capacity 786h
+
+DISTINCT PLAN SIGNATURES: 5/5  → PASS
+```
+
+Five different commitments produce five genuinely different plans. **The
+founder's "never generate the same plan" requirement holds.**
+
+Archetype and coaching also differentiate:
+
+```
+fresher   397h syllabus · 113 days · fits=false
+repeater  258h syllabus · 113 days · fits=true    (88th percentile)
+coaching   31-day horizon (their uploaded month)
+```
+
+Integrity at 6h/day: **all five checks pass** — topics, mocks, analysis,
+revision, hours. 113 days, no gaps, no missing weeks. 5 days carry nothing,
+which is correct rather than a defect: they are days where the topic queue is
+exhausted before revision season begins.
+
+**One thing worth your attention.** At 6h/day the verdict reads *"fits, with 0
+study days to spare"*. Six hours is the exact edge for a from-zero first-timer.
+Anything less and the syllabus does not fit — which is true, and now visible,
+but it means most self-prep students starting today will see a red verdict.
+That is honest. It is also a product decision you may want to revisit
+(scope-cut option, or CAT 2027 guidance).
+
+---
+
+## 6. PHASE 7-9 — Notifications, Premium, Messaging: live evidence
+
+Read from production, not assumed:
+
+| Signal | Live number |
+|---|---|
+| Notifications ever sent | **31,183** |
+| Sent in the last 7 days | **8,170** |
+| Live push subscriptions | 63 |
+| **Dead push subscriptions** | **47** |
+| Premium users | 6 |
+| Plans built | 549 |
+| Study logs | 204 |
+| Coverage rows | 12,263 |
+
+**Notifications: PASS.** The pipeline is demonstrably alive — 8,170 delivered
+in seven days.
+
+**P1 — push subscription death rate is 43%.** 47 dead against 63 live. That
+matches the known Android silent-410 problem; `push-recovery` exists but is
+clearly not winning. At 10,000 students this is ~4,300 students who stop
+receiving anything and are never told.
+
+**Premium (6 users) and messaging: NOT scored.** Six users is too small a
+sample to call a payment flow healthy, and I did not execute a purchase. A GO
+on payments without running one would be exactly the failure mode this audit
+exists to avoid.
+
+---
+
+## 7. PHASE 8 — Security: **PASS**
+
+```
+public tables:      78
+RLS disabled on:     0
+```
+
+**Every one of 78 tables has row-level security enabled.** No gaps.
+
+---
+
+## 8. THE SCALE CLIFF — now measured
+
+Plan generation costs **18.1 ms of pure compute per student** (measured over 50
+runs, no database time included).
+
+```
+   258 students →   4.7s   ← today, fine
+ 3,300 students →   60s    ← Vercel default function ceiling
+10,000 students →  181s    ← pure CPU, before a single DB round trip
+```
+
+**The daily-plan cron breaks somewhere around 3,000–3,500 students** on the
+default timeout, and earlier once per-student database reads are included.
+There is no cursor, so when the function is killed the students at the end of
+the list are simply never processed — silently, every day.
+
+**P0 for scale, not for tomorrow.** The fix is batching plus a cursor, not a
+rewrite. At 150–200/day you have weeks.
+
+---
+
+## 9. What is still NOT audited
 
 Stated plainly rather than implied:
 
 | Phase | Status |
 |---|---|
-| 3 — Full journey execution | **Not run.** Needs a live account through signup → plan → OCR → notification |
-| 4 — Plan differs by hours (2/3/5/8/10) | **Partially.** 4h and 6h verified today (31/46 vs 46/46 topics). 2, 3, 8, 10 not run |
-| 5 — Coaching flow end-to-end | **Not run** against a real upload |
-| 6 — OCR accuracy on real files | **Not run.** Only 2 real uploads exist and both are already fixtures |
-| 7 — Notifications delivery | **Not run** |
-| 8 — Premium purchase | **Not run** |
-| 9 — Messaging + file transfer | **Not run** |
-| 10 — Security / RLS sweep | **Not run** |
+| 3 — Plan generation | ✅ **PASS** — integrity, no gaps, verdict correct |
+| 4 — Personalisation | ✅ **PASS** — 5/5 distinct signatures |
+| 5 — Coaching flow | ⚠️ Engine tested with both real fixtures; **a live upload was not performed** |
+| 6 — OCR accuracy | ❌ **Not run.** Needs real files through the live Gemini path |
+| 7 — Notifications | ✅ **PASS** on delivery (8,170/7d); ⚠️ 43% subscription death is a P1 |
+| 8 — Premium | ❌ **Not scored.** No purchase executed; n=6 |
+| 9 — Messaging | ❌ **Not scored.** No file transfer executed |
+| 10 — Security | ✅ **PASS** — RLS on 78/78 tables |
 
 ---
 
@@ -168,10 +270,15 @@ Stated plainly rather than implied:
 
 Justification:
 
-- Nothing found so far blocks tomorrow. Build is green, 698 tests pass, no P0
-  defect has been found on the paths that were checked.
-- The cron cliff is real and dated: it breaks somewhere between here and
-  10,000, and it fails **silently**, which is the worst failure mode.
-- Seven of ten phases have not been executed. **A GO on those would be a guess,
-  and this audit's own rule is that a finding without evidence is not a
-  finding.** I am not going to score phases I did not run.
+- **Nothing found blocks tomorrow.** Build green, 698 tests, RLS complete,
+  plan generation correct and genuinely personalised, notifications delivering
+  at volume.
+- **The scale cliff is now measured, not guessed: ~3,000–3,500 students** on
+  the daily-plan cron. It fails silently, which is the worst mode.
+- **Push subscription death at 43%** is the most under-rated finding here. It
+  does not block launch; it quietly erodes every promise made on the
+  notification screen.
+- **Three phases remain unscored** — OCR on real files, a real purchase, a real
+  file transfer. Each needs a live account and a real artefact. I will not
+  score them from code, and a GO on an unexecuted payment flow would be exactly
+  the failure this audit exists to prevent.
