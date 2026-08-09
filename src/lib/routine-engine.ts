@@ -464,8 +464,3 @@ export function generateRoutine(
   const whySummary = personalizationSummary(profile, weekend, shownHours, weakChoice.topic);
   return { phase, tasks, estMinutes, whySummary };
 }
-
-// The single highest-priority task — what Emergency Mode collapses to.
-export function emergencyTask(routine: GeneratedRoutine): RoutineTask {
-  return routine.tasks[0];
-}
