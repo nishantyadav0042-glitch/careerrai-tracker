@@ -139,6 +139,10 @@
     {
       "path": "/api/cron/timetable-horizon",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/founder-alerts",
+      "schedule": "10,25,40,55 * * * *"
     }
   ]
 }
