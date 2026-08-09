@@ -30,6 +30,14 @@ Constitution, plus one Engineering Playbook that governs how anything ships.
 If a change would violate a Constitution, the change is wrong — escalate to the
 founder, don't ship the violation.
 
+**Before any operator-surface or "scale" change, read `docs/SCALE-CONTRACT.md`**
+— the binding rule that we build today's correct system with a 100,000-student
+path, never sacrificing today's student for tomorrow's scale. Student
+correctness (P0) outranks founder visibility (P1) outranks scale optimization
+(P2). Every count must drill down to the exact records behind it, and every
+operational problem is one Exception primitive (`src/lib/os/exception.ts`), not a
+new dashboard.
+
 **Before building in a subsystem, read `docs/ENGINEERING-MEMORY.md`** for the
 incidents that touched it — permanent record of what went wrong, why, and what
 now prevents it. Never repeat a logged mistake. When a new incident happens, add
