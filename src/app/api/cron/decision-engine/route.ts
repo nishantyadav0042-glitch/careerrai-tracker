@@ -9,6 +9,14 @@ import {
 } from '@/lib/decision-engine';
 import { computeStudentState, dispatch, BUDGET_ACTIVE, BUDGET_RECOVERY, type ExpectedAction } from '@/lib/notification-os';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // 14:30 UTC = 20:00 IST — the evening slot.
 //
 // Notification-OS rules (see lib/notification-os.ts): every student is in

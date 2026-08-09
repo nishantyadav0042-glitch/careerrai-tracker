@@ -4,6 +4,14 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { sendPushToUser } from '@/lib/push';
 import { rankBuddies, type MatchBuddy, type MatchStudent } from '@/lib/buddy-match';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // Evening buddy nudge (founder ask): every evening ~7:30pm IST, free students
 // (no buddy yet) get ONE extra push showcasing their best-matched IIM mentor,
 // deep-linking to the buddy profile. Deliberately an EXTRA nudge, not a

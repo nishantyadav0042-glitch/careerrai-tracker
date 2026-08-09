@@ -5,6 +5,14 @@ import { sendBuddyWeeklyDigest } from '@/lib/email';
 import { authorizedCron } from '@/lib/cron-auth';
 import type { DailyReport } from '@/types';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // Called by Vercel Cron at 04:00 UTC = 9:30 AM IST every Monday
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

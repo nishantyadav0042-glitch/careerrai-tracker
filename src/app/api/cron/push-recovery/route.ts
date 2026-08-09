@@ -4,6 +4,14 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { sendAdminAlert } from '@/lib/email';
 import { waMessages, waNumber } from '@/lib/wa-messages';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // PUSH RECOVERY DIGEST — the daily backstop for the gap identified in the push
 // reliability review (18 Jul 2026): a dead push subscription (push_died_at set)
 // used to be written to the database and NEVER READ AGAIN by anything. Push.ts

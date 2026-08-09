@@ -4,6 +4,14 @@ import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // 04:30 UTC = 10:00 IST. Morning touch of the Day 1-7 habit arc — but ONLY
 // for students who are actually inside it (state = onboarding_arc):
 //   - Builder incomplete → skipped. They can't log (the mandatory Builder

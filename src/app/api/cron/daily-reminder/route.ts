@@ -4,6 +4,16 @@ import { sendDailyReminder } from '@/lib/email';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
 import { ACTIVATION_DAYS, activationCopy, dispatch, BUDGET_ACTIVE, BUDGET_SETUP, dreamCollegeLabel } from '@/lib/notification-os';
+import { sweep, chunked, incompleteWarning } from '@/lib/cron-sweep';
+import { sendAdminAlert } from '@/lib/email';
+
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
 
 // 14:30 UTC = 20:00 IST. The evening touch for students in their first two
 // weeks — two distinct populations, one send each, both through dispatch()
@@ -39,77 +49,113 @@ export async function POST(request: NextRequest) {
 
   const studentIds = students.map((s) => s.id);
 
-  const [
-    { data: todayReports },
-    { data: allReports },
-    { data: todayNotifs },
-  ] = await Promise.all([
-    admin.from('daily_reports').select('student_id').in('student_id', studentIds).eq('report_date', today),
-    admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds),
-    admin.from('notifications').select('user_id').in('user_id', studentIds)
-      .in('type', ['onboarding_evening', 'activation']).gte('created_at', todayStart),
+  // Chunked because PostgREST puts `.in()` in the URL: at 10,000 students a
+  // single filter blows the request-line limit and fails as an unreadable HTTP
+  // error, nothing like "your list was too long".
+  const idChunks = chunked(studentIds);
+  const [todayReports, allReports, todayNotifs] = await Promise.all([
+    (async () => (await Promise.all(idChunks.map(async (ids) =>
+      (await admin.from('daily_reports').select('student_id').in('student_id', ids).eq('report_date', today)).data ?? []
+    ))).flat())(),
+    (async () => (await Promise.all(idChunks.map(async (ids) =>
+      (await admin.from('daily_reports').select('student_id, report_date').in('student_id', ids)).data ?? []
+    ))).flat())(),
+    (async () => (await Promise.all(idChunks.map(async (ids) =>
+      (await admin.from('notifications').select('user_id').in('user_id', ids)
+        .in('type', ['onboarding_evening', 'activation']).gte('created_at', todayStart)).data ?? []
+    ))).flat())(),
   ]);
 
-  const submittedIds = new Set((todayReports ?? []).map((r) => r.student_id));
-  const reminderSentToday = new Set((todayNotifs ?? []).map((n) => n.user_id));
+  const submittedIds = new Set(todayReports.map((r) => r.student_id));
+  const reminderSentToday = new Set(todayNotifs.map((n) => n.user_id));
 
   const loggedDaysByStudent = new Map<string, Set<string>>();
-  for (const r of allReports ?? []) {
+  for (const r of allReports) {
     if (!loggedDaysByStudent.has(r.student_id)) loggedDaysByStudent.set(r.student_id, new Set());
     loggedDaysByStudent.get(r.student_id)!.add(r.report_date);
   }
 
+  // The walk used to be `for (const s of students) { await dispatch(...) }` —
+  // one student at a time, each waiting on a database write and a push send.
+  // At roughly 150ms apiece a single invocation clears about 2,000 students
+  // inside the ceiling, and everyone after that was silently skipped. Same
+  // students, every evening, and the response still read "reminded: N" as
+  // though N were the whole roster.
+  //
+  // Bounded concurrency is the fix that moves the number by an order of
+  // magnitude; the deadline is what makes the shortfall a reported fact
+  // instead of a kill signal nobody sees.
   let reminded = 0;
-  for (const s of students) {
-    if (submittedIds.has(s.id) || reminderSentToday.has(s.id)) continue;
-    if (s.onboarding_completed !== true) continue; // builder-recovery owns them
-    const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
-    if (prefs.daily_reminder === false) continue;
+  const result = await sweep({
+    items: students,
+    budgetMs: maxDuration * 1000,
+    handler: async (s) => {
+      if (submittedIds.has(s.id) || reminderSentToday.has(s.id)) return;
+      if (s.onboarding_completed !== true) return; // builder-recovery owns them
+      const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
+      if (prefs.daily_reminder === false) return;
 
-    const firstName = s.full_name.split(' ')[0];
-    const loggedDays = loggedDaysByStudent.get(s.id) ?? new Set();
+      const firstName = s.full_name.split(' ')[0];
+      const loggedDays = loggedDaysByStudent.get(s.id) ?? new Set();
 
-    if (loggedDays.size === 0) {
-      // Activation ladder: plan built, never logged.
-      const anchorIso = (s.onboarding_last_activity_at as string | null) ?? (s.created_at as string);
-      const daysSinceBuilt = Math.floor((Date.now() - new Date(anchorIso).getTime()) / 86_400_000);
-      if (!ACTIVATION_DAYS.includes(daysSinceBuilt)) continue; // off-ladder days are silent
-      const copy = activationCopy(daysSinceBuilt, firstName, dreamCollegeLabel(s.dream_colleges));
+      if (loggedDays.size === 0) {
+        // Activation ladder: plan built, never logged.
+        const anchorIso = (s.onboarding_last_activity_at as string | null) ?? (s.created_at as string);
+        const daysSinceBuilt = Math.floor((Date.now() - new Date(anchorIso).getTime()) / 86_400_000);
+        if (!ACTIVATION_DAYS.includes(daysSinceBuilt)) return; // off-ladder days are silent
+        const copy = activationCopy(daysSinceBuilt, firstName, dreamCollegeLabel(s.dream_colleges));
+        const outcome = await dispatch({
+          userId: s.id,
+          type: 'activation',
+          title: copy.title,
+          body: copy.body,
+          url: '/student/tracker',
+          reason: `Plan built ${daysSinceBuilt === 0 ? 'today' : `${daysSinceBuilt}d ago`}, never logged — activation day ${daysSinceBuilt}`,
+          expectedAction: 'log_today',
+          prefs,
+          email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
+          dailyBudget: BUDGET_SETUP,
+        });
+        if (outcome === 'sent') reminded++;
+        return;
+      }
+
+      if (loggedDays.size >= 7) return; // graduated — decision-engine owns them
+
+      const onboarding = onboardingCopy(loggedDays.size + 1, 'pending', firstName)!;
       const outcome = await dispatch({
         userId: s.id,
-        type: 'activation',
-        title: copy.title,
-        body: copy.body,
+        type: 'onboarding_evening',
+        title: onboarding.title,
+        body: onboarding.body,
         url: '/student/tracker',
-        reason: `Plan built ${daysSinceBuilt === 0 ? 'today' : `${daysSinceBuilt}d ago`}, never logged — activation day ${daysSinceBuilt}`,
+        reason: `Day ${loggedDays.size + 1} of the 7-day habit arc, no log today — evening touch`,
         expectedAction: 'log_today',
         prefs,
         email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
-        dailyBudget: BUDGET_SETUP,
+        dailyBudget: BUDGET_ACTIVE, // arc students get the full companion cadence too
       });
       if (outcome === 'sent') reminded++;
-      continue;
-    }
+    },
+  });
 
-    if (loggedDays.size >= 7) continue; // graduated — decision-engine owns them
-
-    const onboarding = onboardingCopy(loggedDays.size + 1, 'pending', firstName)!;
-    const outcome = await dispatch({
-      userId: s.id,
-      type: 'onboarding_evening',
-      title: onboarding.title,
-      body: onboarding.body,
-      url: '/student/tracker',
-      reason: `Day ${loggedDays.size + 1} of the 7-day habit arc, no log today — evening touch`,
-      expectedAction: 'log_today',
-      prefs,
-      email: s.email ? { to: s.email as string, send: () => sendDailyReminder(s.email as string, firstName) } : null,
-      dailyBudget: BUDGET_ACTIVE, // arc students get the full companion cadence too
-    });
-    if (outcome === 'sent') reminded++;
+  // A partial sweep is an incident, not a footnote on a JSON blob nobody reads.
+  if (!result.complete) {
+    const warning = incompleteWarning('daily-reminder', result);
+    console.error(warning);
+    await sendAdminAlert(
+      `⚠️ daily-reminder skipped ${result.remaining} students`,
+      `<pre style="font-family:monospace;font-size:13px">${warning}</pre>`,
+    ).catch(() => {});
   }
 
-  return NextResponse.json({ reminded, total: students.length });
+  return NextResponse.json({
+    reminded,
+    total: students.length,
+    complete: result.complete,
+    skipped: result.remaining,
+    failed: result.failed,
+  });
 }
 
 export { POST as GET };

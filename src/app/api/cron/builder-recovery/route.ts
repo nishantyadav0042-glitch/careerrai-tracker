@@ -5,6 +5,14 @@ import { sendBuilderRecovery } from '@/lib/email';
 import { BUILDER_STEPS, stepLabel } from '@/lib/lead-intel';
 import { builderRecoveryCopy, dispatch, BUDGET_SETUP } from '@/lib/notification-os';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // Runs every 30 minutes inside the 09:30–20:30 IST window (see vercel.json —
 // the cron schedule IS the quiet-hours gate; a 2am drop gets its first touch
 // next morning). The speed-to-contact ladder for Builder drop-offs:

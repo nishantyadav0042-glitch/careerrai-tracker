@@ -13,6 +13,14 @@ import {
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // The Study Companion cadence (see lib/companion.ts for the philosophy).
 // One route, six Pro cron slots — vercel.json calls it with ?slot=…:
 //   morning  04:00 UTC (09:30 IST)  today's plan preview

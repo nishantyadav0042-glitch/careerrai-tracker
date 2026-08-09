@@ -3,6 +3,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
 import { authorizedCron } from '@/lib/cron-auth';
 
+// Every invocation of this route walks the whole student roster. Vercel's
+// default ceiling was never a decision anyone made here — it was simply
+// inherited, and when it is reached the invocation is killed mid-loop and the
+// students at the END of the ordering are silently never processed. Same
+// students, every day, invisibly. 300s is declared so the ceiling is a choice,
+// and lib/cron-sweep keeps the walk inside it.
+export const maxDuration = 300;
+
 // Founder weekly check-in — personal, from Nishant, not from "the system".
 // Runs every Sunday at 08:00 UTC (1:30 PM IST).
 // At 20 users, sends to all. Scale: move to random 10% once >50 students.
