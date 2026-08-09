@@ -10,6 +10,7 @@ import { resolveEntity } from '@/lib/os/resolve-entity';
 import { findSacredFailures } from '@/lib/os/sacred-guard';
 import { EntityNeighbours } from '@/components/admin/entity-neighbours';
 import { ShieldAlert } from 'lucide-react';
+import { StudentActions, type MentorOption } from './student-actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Student 360 · CareerRai' };
@@ -44,10 +45,13 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') redirect('/login');
 
-  const [s, entity, allAlerts] = await Promise.all([
+  const [s, entity, allAlerts, { data: mentorRows }, { data: assignmentRows }, { data: studentRow }] = await Promise.all([
     getStudent360(admin, id),
     resolveEntity(admin, 'student', id),
     findSacredFailures(admin, Date.now()),
+    admin.from('profiles').select('id, full_name, buddy_meet_url').eq('role', 'buddy').not('is_test_account', 'is', true),
+    admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null),
+    admin.from('profiles').select('buddy_id').eq('id', id).single(),
   ]);
   if (!s) {
     return (
@@ -60,6 +64,19 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
   // Only this student's sacred alerts — a paying student in a broken state,
   // shown at the top of their own profile so it is impossible to miss.
   const alerts = allAlerts.filter((a) => a.student.id === id);
+
+  // Mentor supply, for the inline assign action. Load is the count of students
+  // already pointing at each mentor, so the founder can pick the lightest one.
+  const load = new Map<string, number>();
+  for (const a of assignmentRows ?? []) load.set(a.buddy_id as string, (load.get(a.buddy_id as string) ?? 0) + 1);
+  const mentors: MentorOption[] = (mentorRows ?? []).map((m: { id: string; full_name: string | null; buddy_meet_url: string | null }) => ({
+    id: m.id,
+    name: m.full_name ?? 'Mentor',
+    students: load.get(m.id) ?? 0,
+    hasRoom: !!m.buddy_meet_url,
+  }));
+  const currentBuddyId = (studentRow?.buddy_id as string | null) ?? null;
+  const currentBuddyName = currentBuddyId ? (mentors.find((m) => m.id === currentBuddyId)?.name ?? 'Assigned') : null;
 
   const bm = bandMeta(s.momentum.band);
   const wa = waNumber(s.profile.phone);
@@ -117,6 +134,17 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
             {s.momentum.recommendedAction.urgency === 'now' ? '⚡ ' : ''}{s.momentum.recommendedAction.text}
           </div>
         </div>
+
+        {/* The one place the founder ACTS — assign / reassign / remove a mentor,
+            without leaving the profile. This is what makes the 360 the place
+            actions land, not just a place to read. */}
+        <StudentActions
+          studentId={id}
+          hasBuddy={!!currentBuddyId}
+          currentBuddyName={currentBuddyName}
+          mentors={mentors}
+          isPremium={s.profile.isPremium === true}
+        />
 
         {/* Momentum breakdown — WHY the score is what it is */}
         <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
