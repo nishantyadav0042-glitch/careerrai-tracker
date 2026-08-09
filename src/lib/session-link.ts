@@ -1,3 +1,5 @@
+import { JOIN_OPENS_MINS_BEFORE, SESSION_GRACE_MS } from './session-window';
+
 // ── The join link: one room, always reachable ───────────────────────────────
 //
 // A mentor session is thirty minutes of a paid person's time. Everything about
@@ -22,16 +24,14 @@
 // last moment. A link you can only reach in the final fifteen minutes is a link
 // you cannot plan around.
 
-/** How long before the start time the Join button goes live. */
-export const JOIN_OPENS_MINUTES_BEFORE = 30;
-
-/**
- * How long after the start time a session is still joinable.
- *
- * Generous on purpose. People run late, and a mentor sitting in an empty room
- * is worse than a student joining twenty minutes in.
- */
-export const JOIN_STAYS_OPEN_MINUTES_AFTER = 90;
+// The two timings live in lib/session-window, which already existed and is
+// already the shared rule for "is this session still live". Defining a second
+// pair here — which the first version of this file did — is precisely the
+// failure session-window was written to end: on 4 Aug the student's app and
+// the mentor's app disagreed about whether a call was happening, and she
+// joined an empty room while he had no button to press.
+export const JOIN_OPENS_MINUTES_BEFORE = JOIN_OPENS_MINS_BEFORE;
+export const JOIN_STAYS_OPEN_MINUTES_AFTER = SESSION_GRACE_MS / 60_000;
 
 export type JoinState =
   /** Booked, link visible and copyable, but the button is not live yet. */

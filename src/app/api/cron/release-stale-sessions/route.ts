@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { audit } from '@/lib/integration-audit';
+import { RELEASE_AFTER_MS } from '@/lib/session-window';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,20 @@ export const dynamic = 'force-dynamic';
 // afterwards.
 
 /** Long enough that a call running over, or a late close-out, is never touched. */
-const STALE_AFTER_HOURS = 6;
+// Founder, 9 Aug: a session leaves the schedule ONE HOUR after its start time,
+// so the mentor can immediately book another. Six hours was the old value, and
+// the cron ran every six hours on top of it — so a dead session could sit in
+// the schedule for up to TWELVE hours holding its slot.
+//
+// The slot really is held: `no_overlapping_buddy_sessions` is an EXCLUDE
+// constraint over sessions in scheduled/active, so a stale row makes a
+// same-slot rebooking fail outright. Arnav's first paid session was still
+// sitting there 73 minutes later, blocking the evening it was meant to fill.
+//
+// RELEASE_AFTER_MS is SESSION_GRACE_MS — the same hour that governs whether a
+// session is still joinable. The moment it stops being joinable is the moment
+// its slot should free up, or the two rules disagree and the mentor is looking
+// at a row they can neither join nor replace.
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -42,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   // Candidates: still live, and scheduled long enough ago that even a 60-minute
   // session plus the grace window is comfortably past.
-  const cutoff = new Date(now - STALE_AFTER_HOURS * 3_600_000).toISOString();
+  const cutoff = new Date(now - RELEASE_AFTER_MS).toISOString();
 
   const { data: candidates, error } = await admin
     .from('video_sessions')
@@ -60,10 +74,13 @@ export async function POST(request: NextRequest) {
   // Second filter in code, against each session's OWN end time — a 60-minute
   // session starting 6h ago is stale, but the cutoff above is a coarse index
   // scan and this is the precise question.
-  const stale = (candidates ?? []).filter((s) => {
-    const end = Date.parse(s.scheduled_at) + (s.duration_minutes ?? 30) * 60_000;
-    return now - end > STALE_AFTER_HOURS * 3_600_000;
-  });
+  // The SQL cutoff above is the coarse filter. This is the exact one, and it
+  // applies the same single rule rather than adding a second delay on top —
+  // the old code did `end + STALE_AFTER_HOURS` where `end` already included a
+  // duration, which is how "release after 6 hours" became "up to 12".
+  const stale = (candidates ?? []).filter(
+    (s) => now - Date.parse(s.scheduled_at) >= RELEASE_AFTER_MS,
+  );
 
   const released: string[] = [];
   for (const s of stale) {
@@ -88,7 +105,7 @@ export async function POST(request: NextRequest) {
       detail: {
         sessionId: s.id, studentId: s.student_id,
         scheduledAt: s.scheduled_at, wasStatus: s.session_status,
-        autoReleased: true, staleAfterHours: STALE_AFTER_HOURS,
+        autoReleased: true, releasedAfterMs: RELEASE_AFTER_MS,
       },
     });
   }

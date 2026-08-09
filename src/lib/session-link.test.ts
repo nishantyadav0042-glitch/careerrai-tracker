@@ -121,3 +121,56 @@ describe('every session surface uses this one decision', () => {
     expect(src).toContain('session-link');
   });
 });
+
+describe('a session leaves the schedule an hour after it starts', () => {
+  it('stops being joinable at exactly the release hour', () => {
+    // Founder, 9 Aug: one hour after the session time it is removed from the
+    // schedule so the mentor can book another. The joinable window and the
+    // release window are the SAME hour on purpose — a row you can neither
+    // join nor replace is the worst of both.
+    expect(JOIN_STAYS_OPEN_MINUTES_AFTER).toBe(60);
+    expect(at(59)).toBe('live');
+    expect(at(61)).toBe('ended');
+  });
+
+  it('derives its timings from session-window, never its own copy', () => {
+    // session-window exists because on 4 Aug the student's app and the
+    // mentor's app answered "is this happening" differently, and she joined an
+    // empty room. A second copy of these numbers recreates that exactly.
+    const src = readFileSync('src/lib/session-link.ts', 'utf8');
+    expect(src).toContain("from './session-window'");
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code, 'a hard-coded minute count is a second source of truth')
+      .not.toMatch(/JOIN_STAYS_OPEN_MINUTES_AFTER\s*=\s*\d/);
+    expect(code).not.toMatch(/JOIN_OPENS_MINUTES_BEFORE\s*=\s*\d/);
+  });
+
+  it('the release cron applies that one rule, with no extra delay stacked on', () => {
+    const cron = readFileSync('src/app/api/cron/release-stale-sessions/route.ts', 'utf8');
+    expect(cron).toContain('RELEASE_AFTER_MS');
+    const code = cron.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code, 'the old six-hour constant is gone').not.toContain('STALE_AFTER_HOURS');
+    // The bug being prevented: `end` already included the duration, and the
+    // filter then added the stale window on top — 6 hours became up to 12.
+    expect(code).not.toMatch(/duration_minutes[^\n]*RELEASE_AFTER_MS/);
+  });
+});
+
+describe('a mentor who hits a scheduling error is never stuck', () => {
+  const modal = readFileSync('src/components/schedule-session-modal.tsx', 'utf8');
+
+  it('offers them their own Meet room rather than a dead end', () => {
+    expect(modal).toContain('meet.google.com/new');
+    expect(modal).toContain('meetingLink');
+    expect(modal.toLowerCase()).toContain('new meeting');
+  });
+
+  it('the guidance appears WITH the error, not somewhere else', () => {
+    // A workaround the mentor has to go hunting for is a workaround that does
+    // not get used at 6:28pm with a student waiting.
+    const firstErrorBlock = modal.indexOf('{error && (');
+    const guidance = modal.indexOf('start your own Meet');
+    expect(guidance).toBeGreaterThan(-1);
+    expect(Math.abs(guidance - firstErrorBlock)).toBeLessThan(600);
+  });
+});

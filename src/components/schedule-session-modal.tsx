@@ -62,6 +62,7 @@ export function ScheduleSessionModal({
   const [sessionType, setSessionType] = useState<SessionType>('guidance');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ownLink, setOwnLink] = useState('');
   // Some failures have a one-tap fix. Knowing WHICH failure is what lets us
   // put the Connect button next to the message instead of sending a mentor
   // hunting through their profile for it.
@@ -119,6 +120,9 @@ export function ScheduleSessionModal({
           startTime: new Date(utcMs).toISOString(),
           durationMinutes: duration,
           sessionType,
+          // A mentor who hit an error and pasted their own room. The route has
+          // always accepted this; nothing ever offered it to them.
+          ...(ownLink.trim() ? { meetingLink: ownLink.trim() } : {}),
         }),
       });
       const data = await res.json();
@@ -349,6 +353,40 @@ export function ScheduleSessionModal({
                   </div>
                 </div>
 
+                {/* The mentor's escape hatch. Founder, 9 Aug: if scheduling
+                    errors, tell the mentor they can make a Meet themselves in
+                    two minutes and share the link — so nobody panics and the
+                    session still happens on time. The route already accepted a
+                    pasted room; it was simply never offered when it was most
+                    needed. */}
+                {error && (
+                  <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                    <p className="text-[12px] font-bold text-amber-900">
+                      Don&apos;t wait on this — start your own Meet instead.
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      Open <b>meet.google.com</b>, tap <b>New meeting</b>, copy the link and paste
+                      it below. The session still gets booked, your student still gets the link,
+                      and the call happens on time.
+                    </p>
+                    <input
+                      type="url"
+                      inputMode="url"
+                      value={ownLink}
+                      onChange={(e) => setOwnLink(e.target.value)}
+                      placeholder="https://meet.google.com/..."
+                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-[12px] outline-none focus:border-amber-500"
+                    />
+                    <a
+                      href="https://meet.google.com/new"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-[11px] font-semibold text-amber-900 underline underline-offset-2"
+                    >
+                      Open Google Meet →
+                    </a>
+                  </div>
+                )}
                 {error && (
                   <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5">
                     <p className="text-sm text-red-600">{error}</p>

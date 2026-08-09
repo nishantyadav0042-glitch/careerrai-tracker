@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sessionsVisibleFrom, isJoinOpen, SESSION_GRACE_MS } from './session-window';
+import { sessionsVisibleFrom, isJoinOpen, SESSION_GRACE_MS, JOIN_OPENS_MINS_BEFORE, RELEASE_AFTER_MS } from './session-window';
 
 // The exact expression proxy.ts uses to route a logged-out visitor who asked
 // for a protected path. Mirrored here (not imported) because proxy.ts needs a
@@ -69,6 +69,29 @@ describe('session visibility window (one rule, both sides of the meeting)', () =
     expect(isJoinOpen(15)).toBe(true);   // 15 min before
     expect(isJoinOpen(0)).toBe(true);    // exactly on time  <- used to fail
     expect(isJoinOpen(-4)).toBe(true);   // 4 min late       <- used to fail
-    expect(isJoinOpen(16)).toBe(false);  // too early
+  });
+
+  it('opens the door THIRTY minutes out, not fifteen', () => {
+    // Raised 9 Aug, from a live miss. Arnav opened the app 90 seconds before
+    // his first paid session, spent sixteen seconds on the buddy page, found
+    // nowhere obvious to click and left. The session existed; the door was
+    // simply narrow, and the notification that should have carried him
+    // straight in had no link in it.
+    //
+    // This assertion used to read `isJoinOpen(16) === false`. Widening the
+    // window is the deliberate change, so the test moves with it rather than
+    // being deleted — 31 minutes out is still too early, and that boundary is
+    // what actually needs holding.
+    expect(JOIN_OPENS_MINS_BEFORE).toBe(30);
+    expect(isJoinOpen(16)).toBe(true);
+    expect(isJoinOpen(30)).toBe(true);
+    expect(isJoinOpen(31)).toBe(false);
+  });
+
+  it('releases the slot on the same hour it stops being joinable', () => {
+    // Founder, 9 Aug: one hour after the session time the row leaves the
+    // schedule so the mentor can book again. Two different hours here would
+    // leave a session the mentor can neither join nor replace.
+    expect(RELEASE_AFTER_MS).toBe(SESSION_GRACE_MS);
   });
 });
