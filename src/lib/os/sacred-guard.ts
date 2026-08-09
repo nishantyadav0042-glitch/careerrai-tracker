@@ -1,3 +1,5 @@
+import { SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY_SLA_HOURS } from './scale-config';
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
 
@@ -25,11 +27,13 @@ type Admin = any;
 // means "automatic recovery failed", not "first attempt failed", exactly as
 // asked.
 
-/** reconcile-payments runs every 15 min; give it one full cycle plus slack. */
-export const SELF_HEAL_WINDOW_MIN = 20;
+/** reconcile-payments runs every 15 min; give it one full cycle plus slack.
+ *  Sourced from scale-config — business thresholds live in one place. */
+export const SELF_HEAL_WINDOW_MIN = CFG_SELF_HEAL_MIN;
 
-/** How long a paying student may wait for a mentor before it is an incident. */
-export const BUDDY_SLA_HOURS = 24;
+/** How long a paying student may wait for a mentor before it is an incident.
+ *  Sourced from scale-config — business thresholds live in one place. */
+export const BUDDY_SLA_HOURS = CFG_BUDDY_SLA_HOURS;
 
 export type AlertSeverity = 'critical' | 'high';
 

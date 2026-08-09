@@ -1,3 +1,5 @@
+import { MENTOR_OVERLOAD_THRESHOLD } from './scale-config';
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
 
@@ -28,8 +30,9 @@ export const MENTOR_META: Record<MentorState, { label: string; tone: 'red' | 'am
   available:        { label: 'Available', tone: 'green', priority: 3 },
 };
 
-/** One mentor should not carry more than this before it needs a look. */
-export const OVERLOAD_THRESHOLD = 8;
+/** One mentor should not carry more than this before it needs a look.
+ *  Sourced from scale-config so the comfort line is business config, not UI. */
+export const OVERLOAD_THRESHOLD = MENTOR_OVERLOAD_THRESHOLD;
 
 export interface MentorItem {
   id: string;
