@@ -91,29 +91,90 @@ they cost log volume at 10,000 students/day.
 
 ---
 
-## 3. AI cost inventory — the founder's instruction is actionable
+## 3. AI cost inventory — where every Gemini call lives, and who fires it
 
-Nine files call Gemini. The founder's rule: **one student-summary surface,
-remove the rest.**
+Ten files touch Gemini (`lib/gemini.ts` is the client itself). The question that
+matters is not "how many callers" but **who pulls the trigger** — a call fired
+by a human tap costs what it is worth, and a call fired by a page load or a cron
+costs the whole roster whether or not anyone reads the output.
 
-| Caller | Purpose | Keep? |
+| Caller | Where the student/buddy is | Fired by | Verdict |
+|---|---|---|---|
+| `api/timetable/parse` | Uploads coaching timetable photo | **Upload** | **KEEP.** Highest-value call in the product |
+| `api/parse-scorecard` | Uploads a mock scorecard | **Upload** | **KEEP.** Same reason |
+| `lib/community-safety` | Submits community content | **Submit** | **KEEP.** Moderation, not summary |
+| `lib/buddy-briefing` | Buddy's student page | **Tap "Refresh"** | **KEEP.** This is the ONE summary |
+| `api/weekly-signal` | Buddy's student page | ~~page load~~ → **tap** | **FIXED 9 Aug** |
+| `api/feedback-draft` | Buddy writes feedback | Tap "AI facts" | Already on tap |
+| `api/chat/draft` | Buddy replies in chat | Tap "Get reply facts" | Already on tap |
+| `lib/mentor-doors` | Founder opens a mentor grant | Founder, in admin | Once per grant, has a rule-built fallback |
+| `api/coach-line` | — | **nothing** | **DEAD — delete after merge** |
+
+### The three that fired without being asked — all now removed
+
+Founder, 9 Aug: *"don't automatically produce AI response — someone has to tap
+to get the response, don't make it auto ready."* Three paths violated that:
+
+1. **`weekly-signal-card.tsx` fired Gemini from a `useEffect` on mount.** Simply
+   opening a student's page spent a call. Now the four stats load with the page
+   (they are one table read and cost nothing) and the sentence is written only
+   when the buddy taps **"Read this week with AI"**. The route's `generate` flag
+   **defaults to false**, so an older bundle that never learns to send it gets
+   the cheap path, not the expensive one.
+2. **`log-daily` generated a buddy briefing on every mock log and every
+   non-"all good" mood log.** One Gemini call per log, forever. The buddy is
+   still notified — only the AI writing was removed.
+3. **The `buddy-brief` cron regenerated a briefing every morning for every
+   student who logged the day before.** This was the fastest-growing AI cost in
+   the product: it scales with the roster, not with usage, inside a cron that
+   already iterates every student in one invocation.
+
+`refreshBriefingIfStale` was deleted rather than left unused — a staleness
+helper exists only to serve a caller that generates without being asked.
+
+**Guard test: `src/lib/ai-on-tap.guard.test.ts`** (5 checks). It pins the full
+caller list, forbids any AI producer inside `api/cron/`, and asserts the
+`!generate` early-return sits *before* `callGemini` — a flag checked after the
+call would be decoration.
+
+### Also fixed while in there — a live defect
+
+`api/weekly-signal` returned early from its cache with `{ insight, cached: true }`
+and **no `stats`**. So the first buddy to open a student's page in a given week
+saw the 2×2 number grid, and every open after that saw an empty card until the
+following Sunday. The cache check now runs after the stats are computed and the
+stats ride along.
+
+### What removing them actually saves
+
+Honest numbers, not projections dressed as measurements:
+
+| Path | Calls at 258 students | Calls at 10,000 students |
 |---|---|---|
-| `api/timetable/parse` | OCR — coaching timetable → blocks | **KEEP.** Highest-value call in the product |
-| `api/parse-scorecard` | OCR — mock scorecard | **KEEP.** Same reason |
-| `lib/community-safety` | Moderation of student-submitted content | **KEEP.** Safety, not summary |
-| `lib/buddy-briefing` | Summary for the mentor | **This is the ONE summary** to keep |
-| `lib/mentor-doors` | AI copy | Candidate for removal |
-| `api/weekly-signal` | Generated narrative | Candidate for removal |
-| `api/feedback-draft` | Drafts feedback text | Candidate for removal |
-| `api/coach-line` | Generated one-liner | Candidate for removal |
-| `api/chat/draft` | Drafts a chat message | Candidate for removal |
+| `buddy-brief` cron | ~1/logging student/day | **~1/logging student/day — grows linearly, forever** |
+| `log-daily` briefing | 1 per mock/mood log | 1 per mock/mood log |
+| `weekly-signal` on open | 1 per student-page open | 1 per student-page open |
 
-**Five candidates for removal, ~55% of the AI surface.** I have NOT removed any
-of them — each needs its live call volume checked first, and two are premium-
-facing, so removal changes what a paying student sees. **That is a founder
-decision, not an audit decision.**
+Live volume today is small — `buddy_briefings` holds **3 rows total, 2 in the
+last 7 days** — because the buddy roster is small. That is precisely the point:
+these three paths are priced by roster size, and the roster is about to grow by
+150–200 a day. The saving is not on today's bill; it is that this line does not
+turn into the bill.
 
-**P1, blocked on your call: which of the five go?**
+The second benefit is not cost. **A summary generated in advance is a summary of
+whatever the data looked like when it was generated, shown as if it were
+current.** Tap-to-generate means what a buddy reads is what is true when they
+read it.
+
+### `api/coach-line` is dead
+
+`daily_coach_line` holds **76 rows, 0 in the last 7 days.** The `CoachLine`
+component is imported by nothing — it renders on no page. The route is only
+reachable from that component.
+
+It passes **all seven** pre-deletion checks, including check 6 (untouched in
+`main..HEAD`). **Not deleted yet**, for the same reason as the two files in §2:
+deletions do not get mixed into a branch under Play review. **P3, after merge.**
 
 ---
 

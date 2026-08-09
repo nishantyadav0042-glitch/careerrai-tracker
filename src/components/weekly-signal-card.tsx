@@ -20,14 +20,28 @@ interface WeeklySignalCardProps {
   onFeedback: () => void;
 }
 
+// Founder, 9 Aug: "don't automatically produce AI response — someone has to tap
+// to get the response, don't make it auto ready."
+//
+// The card is split along the line that instruction draws. The four numbers are
+// a table read and cost nothing, so they load with the page. The AI sentence
+// costs a Gemini call and is produced only when the buddy taps for it — opening
+// a student's page no longer spends anything, and a sentence nobody read is a
+// sentence we no longer paid to write.
+//
+// A sentence already generated this week comes back from cache with the stats,
+// so the tap is asked for once per student per week, not once per page view.
 export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklySignalCardProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [stats, setStats] = useState<WeeklyStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
   const [acted, setActed] = useState(false);
 
   const firstName = studentName.split(' ')[0];
 
+  // Stats only. `generate` is omitted, so the route never reaches Gemini here.
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/weekly-signal', {
@@ -37,8 +51,8 @@ export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklyS
       });
       if (res.ok) {
         const data = await res.json();
-        setInsight(data.insight);
-        setStats(data.stats);
+        setInsight(data.insight ?? null);
+        setStats(data.stats ?? null);
       }
     } catch (e) {
       console.error('weekly-signal load error', e);
@@ -48,6 +62,32 @@ export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklyS
   }, [studentId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // The tap. This is the only path in this component that can spend an AI call.
+  const generateInsight = useCallback(async () => {
+    if (generating) return;
+    setGenerating(true);
+    setAiError('');
+    try {
+      const res = await fetch('/api/weekly-signal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, generate: true }),
+      });
+      const data = await res.json();
+      if (res.ok && data.insight) {
+        setInsight(data.insight);
+        if (data.stats) setStats(data.stats);
+      } else {
+        setAiError('Could not read this week — try again.');
+      }
+    } catch (e) {
+      console.error('weekly-signal generate error', e);
+      setAiError('Could not reach AI — check your connection.');
+    } finally {
+      setGenerating(false);
+    }
+  }, [studentId, generating]);
 
   if (loading) {
     return (
@@ -113,11 +153,25 @@ export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklyS
         </div>
       )}
 
-      {/* AI Insight */}
-      {insight && (
+      {/* AI Observation — on tap, never on open. */}
+      {insight ? (
         <div className="bg-teal-100/60 rounded-xl p-3 mb-4">
           <p className="text-xs font-semibold text-teal-800 mb-1">AI Observation</p>
           <p className="text-sm text-teal-900 italic">&quot;{insight}&quot;</p>
+        </div>
+      ) : (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={generateInsight}
+            disabled={generating}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-teal-300 bg-white text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:opacity-50 transition-all"
+            style={{ minHeight: 44 }}
+          >
+            <Sparkles className={cn('w-3.5 h-3.5', generating && 'animate-pulse')} />
+            {generating ? 'Reading the week…' : 'Read this week with AI'}
+          </button>
+          {aiError && <p className="mt-1.5 text-[11px] text-red-600">{aiError}</p>}
         </div>
       )}
 

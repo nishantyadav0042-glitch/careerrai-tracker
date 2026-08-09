@@ -24,7 +24,18 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { studentId } = body as { studentId: string };
+    // `generate` defaults to FALSE, deliberately.
+    //
+    // Founder, 9 Aug: "don't automatically produce AI response — someone has to
+    // tap to get the response, don't make it auto ready." This card used to
+    // fire Gemini from a useEffect, so simply OPENING a student's page spent an
+    // AI call whether or not the buddy ever read the sentence. Now the stats
+    // (which are free — they are a single table read) always come back, and the
+    // AI sentence is produced only when a human asks for it.
+    //
+    // The default matters more than the flag: an older bundle that never learns
+    // to send `generate` gets the cheap path, not the expensive one.
+    const { studentId, generate } = body as { studentId: string; generate?: boolean };
     if (!studentId) return NextResponse.json({ error: 'studentId required' }, { status: 400 });
 
     const admin = createAdminClient();
@@ -46,28 +57,6 @@ export async function POST(request: NextRequest) {
     weekStart.setHours(0, 0, 0, 0);
     const weekStartISO = weekStart.toISOString();
     const weekKey = weekStart.toISOString().split('T')[0];
-
-    // Check DB cache first — survives cold starts across all serverless instances.
-    // Use limit(1) instead of maybeSingle() so concurrent inserts producing duplicate rows never break the cache.
-    const { data: cachedRows } = await admin
-      .from('analytics_events')
-      .select('metadata')
-      .eq('student_id', studentId)
-      .eq('event_type', 'weekly_signal_cache')
-      .gte('created_at', weekStartISO)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    const cachedMeta = cachedRows?.[0]?.metadata;
-    // Verify buddy_id matches — prevents stale insights surviving student reassignment.
-    if (
-      cachedMeta &&
-      typeof cachedMeta === 'object' &&
-      'insight' in cachedMeta &&
-      (cachedMeta as { buddy_id?: string }).buddy_id === user.id
-    ) {
-      return NextResponse.json({ insight: (cachedMeta as { insight: string }).insight, cached: true });
-    }
 
     // Fetch last 7 days of logs
     const sevenDaysAgo = new Date();
@@ -101,6 +90,55 @@ export async function POST(request: NextRequest) {
         : 'stable',
     };
 
+    const stats = {
+      daysLogged,
+      avgHours,
+      avgStress,
+      mockTaken: mockLogs.length,
+      latestMockScore: latestMock?.mock_score ?? null,
+    };
+
+    // Cache check happens AFTER the stats are computed, and the stats ride
+    // along with the cached insight.
+    //
+    // This was a live defect, not a refactor: the cache used to return early
+    // with `{ insight, cached: true }` and no `stats` at all, so the first
+    // buddy to open a student's page in a given week saw the 2×2 grid and
+    // every open after that saw an empty card. One student, one week, one
+    // cache row — and the numbers vanished for the rest of the week.
+    //
+    // Use limit(1) rather than maybeSingle() so concurrent inserts producing
+    // duplicate rows never break the cache.
+    const { data: cachedRows } = await admin
+      .from('analytics_events')
+      .select('metadata')
+      .eq('student_id', studentId)
+      .eq('event_type', 'weekly_signal_cache')
+      .gte('created_at', weekStartISO)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const cachedMeta = cachedRows?.[0]?.metadata;
+    // Verify buddy_id matches — prevents stale insights surviving student reassignment.
+    if (
+      cachedMeta &&
+      typeof cachedMeta === 'object' &&
+      'insight' in cachedMeta &&
+      (cachedMeta as { buddy_id?: string }).buddy_id === user.id
+    ) {
+      return NextResponse.json({
+        insight: (cachedMeta as { insight: string }).insight,
+        cached: true,
+        stats,
+      });
+    }
+
+    // No cached sentence, and nobody asked for one. Hand back the free half of
+    // the card and stop here — no Gemini call, no cache row, nothing spent.
+    if (!generate) {
+      return NextResponse.json({ insight: null, cached: false, stats });
+    }
+
     // Gemini (free tier, same key the timetable scanner uses), under the
     // product's governing rule: state the ONE most notable FACT of the week,
     // never a diagnosis or recommendation. Null (no key / quota / error)
@@ -131,17 +169,7 @@ export async function POST(request: NextRequest) {
     });
     if (cacheErr) console.error('weekly-signal cache save failed:', cacheErr.message);
 
-    return NextResponse.json({
-      insight,
-      cached: false,
-      stats: {
-        daysLogged,
-        avgHours,
-        avgStress,
-        mockTaken: mockLogs.length,
-        latestMockScore: latestMock?.mock_score ?? null,
-      },
-    });
+    return NextResponse.json({ insight, cached: false, stats });
   } catch (error) {
     console.error('weekly-signal error:', error);
     return NextResponse.json(

@@ -173,23 +173,15 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   return { summary_text: summaryText, source, generated_at };
 }
 
-// Regenerate only if the cached briefing is stale (or missing) — avoids burning
-// an LLM call when nothing new has happened since the last trigger fired.
-export async function refreshBriefingIfStale(studentId: string, buddyId: string, staleAfterHours = 18): Promise<void> {
-  const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from('buddy_briefings')
-    .select('generated_at')
-    .eq('student_id', studentId)
-    .eq('buddy_id', buddyId)
-    .maybeSingle();
-
-  if (existing?.generated_at) {
-    const ageHours = (Date.now() - new Date(existing.generated_at).getTime()) / 3_600_000;
-    if (ageHours < staleAfterHours) return;
-  }
-  await generateBuddyBriefing(studentId, buddyId);
-}
+// `refreshBriefingIfStale` used to live here — a staleness check the buddy-brief
+// cron called each morning for every student who logged the day before.
+//
+// It is gone, not disabled. Founder, 9 Aug: "don't automatically produce AI
+// response — someone has to tap to get the response, don't make it auto ready."
+// A staleness helper only exists to serve a caller that generates without being
+// asked, so leaving it here would be leaving the road back. There is now exactly
+// one producer of a briefing — `api/buddy/briefing/[studentId]` POST, behind the
+// Refresh button — and `generateBuddyBriefing` above is the only export it needs.
 
 function fallbackBriefing(
   daysLogged: number,

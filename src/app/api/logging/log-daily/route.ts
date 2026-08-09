@@ -11,7 +11,6 @@ import {
 import { MILESTONE_MESSAGES } from '@/lib/messages';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { sendPushToUser } from '@/lib/push';
-import { generateBuddyBriefing } from '@/lib/buddy-briefing';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 
 interface LoggingRequest {
@@ -216,15 +215,23 @@ export async function POST(request: NextRequest) {
     }
 
     notifyBuddy(user.id, profile.buddy_id, { hours: body.hours, energy: body.energy }).catch(console.error);
+    // The buddy is NOTIFIED here. The AI briefing is not written here.
+    //
+    // Founder, 9 Aug: "don't automatically produce AI response — someone has to
+    // tap to get the response, don't make it auto ready." Both branches below
+    // used to fire generateBuddyBriefing so the summary would be "already
+    // waiting". In practice it wrote a summary for every mock log and every
+    // non-"all good" mood log, whether or not a buddy ever opened the page —
+    // and at 150-200 signups a day that is a Gemini call per log, forever.
+    //
+    // The briefing now has exactly one producer: the Refresh button on the
+    // buddy's own student page (`api/buddy/briefing/[studentId]` POST), which a
+    // human presses when they are actually about to read it.
     if (body.sections.includes('Mock')) {
       notifyBuddyMock(user.id, profile.buddy_id, dateStr).catch(console.error);
-      // AI copilot: regenerate the buddy's facts-briefing NOW, so it's already
-      // waiting — the mock-debrief moment is the highest-leverage use of it.
-      if (profile.buddy_id) void generateBuddyBriefing(user.id, profile.buddy_id).catch(console.error);
     }
     if (body.emotional_chips && body.emotional_chips.length > 0 && !body.emotional_chips.includes('all_good')) {
       notifyBuddyEmotional(user.id, profile.buddy_id, body.emotional_chips).catch(console.error);
-      if (profile.buddy_id) void generateBuddyBriefing(user.id, profile.buddy_id).catch(console.error);
     }
     // #10 product analytics: hour_of_day + day_of_week drive retention heatmaps;
     // is_first_today distinguishes new logs from edits for funnel analysis.

@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
 import { buddyBriefCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
-import { refreshBriefingIfStale } from '@/lib/buddy-briefing';
 
 // 03:30 UTC = 09:00 IST. The buddy's ONE scheduled push of the day: who logged
 // yesterday, who's going quiet. Buddies get few notifications by design — this
@@ -48,21 +47,23 @@ export async function POST(request: NextRequest) {
   const buddyById = new Map((buddyProfiles ?? []).map((b) => [b.id, b]));
 
   let sent = 0;
-  let briefingsRefreshed = 0;
   for (const [buddyId, roster] of byBuddy) {
     const buddy = buddyById.get(buddyId);
     if (!buddy) continue;
 
-    // AI copilot freshness pass: any student who logged yesterday gets their
-    // facts-briefing refreshed BEFORE the buddy opens the app, not after —
-    // ambient, not opt-in. Runs regardless of the push-dedupe below.
-    for (const s of roster) {
-      if ((reportDates.get(s.id) ?? []).includes(yesterday)) {
-        await refreshBriefingIfStale(s.id, buddyId).catch(() => {});
-        briefingsRefreshed++;
-      }
-    }
-
+    // The AI freshness pass used to live here: every student who logged
+    // yesterday had their facts-briefing regenerated before their buddy opened
+    // the app — "ambient, not opt-in".
+    //
+    // Founder, 9 Aug: "don't automatically produce AI response — someone has to
+    // tap to get the response, don't make it auto ready." Ambient is exactly
+    // what he is ruling out, and the arithmetic agrees: this loop is one Gemini
+    // call per logging student per morning, inside a cron that already iterates
+    // every student in a single invocation. It is the fastest-growing AI cost
+    // in the product and the one nobody asked for.
+    //
+    // The push below still goes out, so the buddy still learns who logged and
+    // who is at risk. The summary is written when they tap Refresh.
     if (already.has(buddyId)) continue;
 
     const loggedYesterday = roster.filter((s) => (reportDates.get(s.id) ?? []).includes(yesterday)).length;
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
     sent++;
   }
 
-  return NextResponse.json({ sent, buddies: byBuddy.size, briefingsRefreshed });
+  return NextResponse.json({ sent, buddies: byBuddy.size });
 }
 
 export { POST as GET };
