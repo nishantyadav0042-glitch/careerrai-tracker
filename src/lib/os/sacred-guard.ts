@@ -88,7 +88,13 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
 
   const paidStudentIds = [...new Set((paidRows ?? []).map((r: any) => r.student_id))] as string[];
   const { data: paidProfiles } = paidStudentIds.length
-    ? await admin.from('profiles').select('id, full_name, phone, is_premium').in('id', paidStudentIds)
+    ? await admin.from('profiles')
+        .select('id, full_name, phone, is_premium')
+        .in('id', paidStudentIds)
+        // Exclude test/demo accounts — the Razorpay Review account is a `paid`
+        // row that will never be premium by design, and it was firing as a
+        // fake P0 at the very top of the Command Center.
+        .not('is_test_account', 'is', true).not('is_demo', 'is', true)
     : { data: [] as any[] };
   const profileById = new Map((paidProfiles ?? []).map((p: any) => [p.id, p]));
 
@@ -106,8 +112,8 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
         ? 'Razorpay confirmed the payment, but activation did not complete — webhook or activation failure. Automatic reconcile has already retried and not fixed it.'
         : 'Marked paid with no Razorpay payment id — a manual or malformed record. Verify before granting access.',
       retryAvailable: true,
-      actionLabel: 'Retry unlock',
-      actionRoute: '/admin/payments',
+      actionLabel: 'Open payment',
+      actionRoute: `/admin/payment/${pay.id}`,
     });
   }
 
@@ -133,8 +139,8 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
         ? `Paid, and past the ${BUDDY_SLA_HOURS}-hour assignment SLA with no buddy. The one thing they paid for, undelivered.`
         : 'Paid recently and not yet assigned a mentor — assign before the SLA lapses.',
       retryAvailable: false,
-      actionLabel: 'Assign a mentor',
-      actionRoute: '/admin/students',
+      actionLabel: 'Open student',
+      actionRoute: `/admin/student/${s.id}`,
     });
   }
 

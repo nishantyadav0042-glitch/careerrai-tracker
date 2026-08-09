@@ -23,9 +23,10 @@ const BADGE: Record<string, string> = {
 };
 const ORDER: Priority[] = ['P0', 'P1', 'P2', 'P3'];
 
-export default async function StudentPipelinePage() {
+export default async function StudentPipelinePage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const { admin } = await requireAdmin();
   const now = Date.now();
+  const { filter = 'all' } = await searchParams;
 
   // One wave of the facts the classifier needs.
   const [{ data: students }, { data: paidRows }, { data: wantRows }, { data: recentLogs }, { data: planRows }] = await Promise.all([
@@ -51,19 +52,36 @@ export default async function StudentPipelinePage() {
   const daysSince = (iso: string | undefined): number | null =>
     iso ? Math.floor((now - Date.parse(iso + 'T12:00:00+05:30')) / 86_400_000) : null;
 
-  const rows = (students ?? []).map((s: any) => {
+  const all = (students ?? []).map((s: any) => {
     const dsl = daysSince(lastLog.get(s.id));
+    const isPremium = s.is_premium === true;
+    const wantsBuddy = wantsBy.has(s.id);
     const verdict = classifyStudent({
-      isPremium: s.is_premium === true,
+      isPremium,
       hasBuddy: !!s.buddy_id,
-      paymentStuck: paidBy.has(s.id) && s.is_premium !== true,
-      wantsBuddy: wantsBy.has(s.id),
+      paymentStuck: paidBy.has(s.id) && !isPremium,
+      wantsBuddy,
       activeRecently: dsl != null && dsl <= 3,
       hasPlan: hasPlanBy.has(s.id),
       daysSinceLog: dsl,
     });
-    return { id: s.id, name: (s.full_name as string) ?? 'Student', phone: s.phone as string | null, ...verdict };
-  }).sort((a, b) => ORDER.indexOf(a.priority) - ORDER.indexOf(b.priority));
+    return {
+      id: s.id, name: (s.full_name as string) ?? 'Student', phone: s.phone as string | null,
+      isPremium, wantsBuddy, cold: dsl != null && dsl >= 4, ...verdict,
+    };
+  });
+
+  // The simple filter the founder asked for — subscribed / free / wants buddy /
+  // at risk. One chip, no nesting.
+  const FILTERS: { key: string; label: string; test: (r: typeof all[number]) => boolean }[] = [
+    { key: 'all', label: 'All', test: () => true },
+    { key: 'subscribed', label: 'Subscribed', test: (r) => r.isPremium },
+    { key: 'free', label: 'Free', test: (r) => !r.isPremium },
+    { key: 'wants_buddy', label: 'Wants a buddy', test: (r) => r.wantsBuddy && !r.isPremium },
+    { key: 'at_risk', label: 'At risk', test: (r) => r.cold },
+  ];
+  const active = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
+  const rows = all.filter(active.test).sort((a, b) => ORDER.indexOf(a.priority) - ORDER.indexOf(b.priority));
 
   const counts = ORDER.map((p) => ({ p, n: rows.filter((r) => r.priority === p).length }));
 
@@ -74,6 +92,20 @@ export default async function StudentPipelinePage() {
       title="Pipeline"
       subtitle="Every student, ranked by what they need — P0 first"
     >
+      <nav className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto pb-1">
+        {FILTERS.map((f) => (
+          <a
+            key={f.key}
+            href={`/admin/students/pipeline?filter=${f.key}`}
+            className={f.key === active.key
+              ? 'shrink-0 rounded-lg bg-stone-900 px-3 py-1.5 text-[12px] font-semibold text-white'
+              : 'shrink-0 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-stone-600 hover:border-stone-400'}
+          >
+            {f.label} <span className="opacity-60">{all.filter(f.test).length}</span>
+          </a>
+        ))}
+      </nav>
+
       <div className="mb-4 grid grid-cols-4 gap-2">
         {counts.map(({ p, n }) => {
           const m = priorityMeta(p);

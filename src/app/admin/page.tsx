@@ -50,11 +50,19 @@ export default async function CommandCenterPage() {
 
   // Context counts + the revenue-opportunity numbers, after the decisions.
   const students = await getRealStudents(admin);
-  const [logged, salesReady, wantsBuddy] = await Promise.all([
+  const istDay = (offset: number) =>
+    new Date(now - offset * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const [logged, salesReady, wantsBuddy, activeYesterday, activeWeek] = await Promise.all([
     getLoggedToday(admin, students),
     getSalesReadyToCall(admin, students),
     getWantsBuddy(admin),
+    // Distinct students who logged YESTERDAY — the "studied yesterday" number.
+    admin.from('daily_reports').select('student_id').eq('report_date', istDay(1)),
+    // Distinct students who logged in the last 7 days — active this week.
+    admin.from('daily_reports').select('student_id').gte('report_date', istDay(7)),
   ]);
+  const yesterdayCount = new Set((activeYesterday.data ?? []).map((r: any) => r.student_id)).size;
+  const weekCount = new Set((activeWeek.data ?? []).map((r: any) => r.student_id)).size;
 
   const tone = scoreTone(inbox.score);
   const cleared = inbox.items.length === 0;
@@ -145,27 +153,42 @@ export default async function CommandCenterPage() {
         </div>
       )}
 
-      {/* REVENUE OPPORTUNITY — the money on the table, each a click from the
-          people who represent it. Co-founder: "more valuable than generic
-          analytics because it converts admin into a daily revenue queue." */}
-      <div className="mb-2 px-1">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-600">Revenue opportunity</p>
-      </div>
-      <div className="mb-5 grid grid-cols-2 gap-2">
-        <RevenueTile emoji="🔥" label="Want a buddy, not subscribed" value={wantsBuddy.length} href="/admin/wants-buddy" hot={wantsBuddy.length > 0} />
-        <RevenueTile emoji="📞" label="Sales-ready to call" value={salesReady.length} href="/admin/sales-queue" hot={salesReady.length > 0} />
-        <RevenueTile emoji="💳" label="Payments to verify" value={alerts.filter((a) => a.id.startsWith('unlock:')).length} href="/admin/payments" hot={alerts.some((a) => a.id.startsWith('unlock:'))} />
-        <RevenueTile emoji="🤝" label="Premium without a mentor" value={alerts.filter((a) => a.id.startsWith('buddy:')).length} href="/admin/students" hot={alerts.some((a) => a.id.startsWith('buddy:'))} />
-      </div>
+      {/* REVENUE OPPORTUNITY — the money on the table. Every tile links to the
+          EXACT filtered list behind it, and a tile with zero work is not shown
+          at all. Founder rule, 9 Aug: never a dead door, never fake work. */}
+      {(() => {
+        const paymentsToVerify = alerts.filter((a) => a.id.startsWith('unlock:')).length;
+        const premiumNoMentor = alerts.filter((a) => a.id.startsWith('buddy:')).length;
+        const tiles = [
+          { emoji: '🔥', label: 'Want a buddy, not subscribed', value: wantsBuddy.length, href: '/admin/people?buddy=wants&sub=free' },
+          { emoji: '📞', label: 'Sales-ready to call', value: salesReady.length, href: '/admin/sales-queue' },
+          { emoji: '💳', label: 'Payments to verify', value: paymentsToVerify, href: '/admin/people?sub=payment_failed' },
+          { emoji: '🤝', label: 'Premium without a mentor', value: premiumNoMentor, href: '/admin/people?sub=premium&buddy=none' },
+        ].filter((t) => t.value > 0); // hide-when-zero: no fake work
+        if (tiles.length === 0) return null;
+        return (
+          <>
+            <div className="mb-2 px-1">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-600">Revenue opportunity</p>
+            </div>
+            <div className="mb-5 grid grid-cols-2 gap-2">
+              {tiles.map((t) => (
+                <RevenueTile key={t.label} emoji={t.emoji} label={t.label} value={t.value} href={t.href} hot />
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* CONTEXT — what is happening, below what to do. */}
       <div className="mb-2 px-1">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">Today, for context</p>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <ContextTile label="Students" value={students.length} href="/admin/students" />
-        <ContextTile label="Logged today" value={`${logged.length}/${students.length}`} href="/admin/logged-today" />
-        <ContextTile label="Press ⌘K" value="Search anything" href="/admin/students" />
+        <ContextTile label="Students" value={students.length} href="/admin/people" />
+        <ContextTile label="Studied today" value={`${logged.length}/${students.length}`} href="/admin/people?activity=today" />
+        <ContextTile label="Studied yesterday" value={yesterdayCount} href="/admin/people?activity=yesterday" />
+        <ContextTile label="Active this week" value={weekCount} href="/admin/people?activity=this_week" />
       </div>
     </div>
   );

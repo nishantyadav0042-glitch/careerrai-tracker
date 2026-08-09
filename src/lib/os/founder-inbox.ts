@@ -53,7 +53,7 @@ export interface FounderInbox {
 const WEIGHT: Record<string, { per: number; cap: number }> = {
   paid_no_buddy:    { per: 6, cap: 30 },
   expired_sessions: { per: 5, cap: 20 },
-  pending_payments: { per: 4, cap: 16 },
+  pending_payments: { per: 1, cap: 8 },
   ocr_unusable:     { per: 3, cap: 12 },
   mentor_no_room:   { per: 5, cap: 15 },
   wants_buddy:      { per: 2, cap: 16 },
@@ -127,7 +127,7 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
       key: 'paid_no_buddy', id: 'paid_no_buddy',
       title: `${paidNoBuddyN} paying student${paidNoBuddyN === 1 ? '' : 's'} with no mentor`,
       why: 'They paid for a 1:1 mentor and have none assigned — the worst possible first week.',
-      action: 'Assign a mentor', route: '/admin/students', count: paidNoBuddyN, severity: 'critical',
+      action: 'Assign a mentor', route: '/admin/people?sub=premium&buddy=none', count: paidNoBuddyN, severity: 'critical',
     },
     {
       key: 'mentor_no_room', id: 'mentor_no_room',
@@ -143,9 +143,9 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
     },
     {
       key: 'pending_payments', id: 'pending_payments',
-      title: `${pendingN} payment${pendingN === 1 ? '' : 's'} stuck at created — ₹${pendingValue}`,
-      why: 'Checkout opened but never confirmed. Some may have paid and not been unlocked.',
-      action: 'Verify payments', route: '/admin/payments', count: pendingN, severity: 'high',
+      title: `${pendingN} abandoned checkout${pendingN === 1 ? '' : 's'} — ₹${pendingValue} in carts`,
+      why: 'Opened checkout and left without paying. A real payment would have been auto-confirmed by reconcile, so these are sales follow-ups, not stuck money.',
+      action: 'Follow up', route: '/admin/sales-queue', count: pendingN, severity: 'normal',
     },
     {
       key: 'ocr_unusable', id: 'ocr_unusable',
@@ -157,7 +157,7 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
       key: 'wants_buddy', id: 'wants_buddy',
       title: `${wantsBuddy.length} student${wantsBuddy.length === 1 ? '' : 's'} asked for a mentor`,
       why: 'Said yes to a mentor at signup, still free and unassigned — the hottest sales list you have.',
-      action: 'Call them', route: '/admin/wants-buddy', count: wantsBuddy.length, severity: 'high',
+      action: 'Call them', route: '/admin/people?buddy=wants&sub=free', count: wantsBuddy.length, severity: 'high',
     },
     {
       key: 'sales_ready', id: 'sales_ready',
@@ -169,7 +169,7 @@ export async function assembleFounderInbox(admin: Admin, nowMs: number): Promise
       key: 'going_cold', id: 'going_cold',
       title: `${goingCold.length} student${goingCold.length === 1 ? '' : 's'} going cold`,
       why: 'No log in 4+ days — the strongest churn signal we can see today.',
-      action: 'Send a nudge', route: '/admin/going-cold', count: goingCold.length, severity: 'normal',
+      action: 'Send a nudge', route: '/admin/people?activity=going_cold', count: goingCold.length, severity: 'normal',
     },
     {
       key: 'streak_breakers', id: 'streak_breakers',

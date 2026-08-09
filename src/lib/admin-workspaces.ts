@@ -66,13 +66,14 @@ export const WORKSPACES: AdminWorkspace[] = [
   },
   {
     id: 'students',
-    label: 'Students',
+    label: 'People',
     icon: 'Users',
-    href: '/admin/students',
-    purpose: 'Every student, by the segment you would act on.',
+    href: '/admin/people',
+    purpose: 'Filter to any audience — subscription, buddy, activity — priority-sorted.',
     tabs: [
-      { label: 'All', href: '/admin/students', status: 'live' },
+      { label: 'People', href: '/admin/people', status: 'live' },
       { label: 'Pipeline', href: '/admin/students/pipeline', status: 'live' },
+      { label: 'Full list', href: '/admin/students', status: 'live' },
       { label: 'Logged today', href: '/admin/logged-today', status: 'moved' },
       { label: 'Streaks alive', href: '/admin/live-streaks', status: 'moved' },
       { label: 'Need buddy', href: '/admin/wants-buddy', status: 'moved' },
