@@ -147,7 +147,7 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-bold text-stone-900">{hours} hours / day</p>
+                <p className="text-sm font-bold text-stone-900">{hours} self-study hours / day</p>
                 <p className="text-xs font-semibold text-stone-500">{label}</p>
               </div>
               <p className={cn('mt-0.5 text-sm font-semibold', afterCutoff ? 'text-rose-600' : 'text-stone-700')}>

@@ -249,7 +249,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Daily hours</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Daily self-study hours</span>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => stepHours(-1)} disabled={effectiveHours != null && effectiveHours <= MIN_DAILY_HOURS}
                 className="grid h-8 w-8 place-items-center rounded-lg border border-stone-300 text-lg font-bold text-stone-700 disabled:opacity-40">−</button>
@@ -286,9 +286,13 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
           )}
 
           <div className="flex items-center gap-2">
-            <button type="button" disabled={busy || (!date && !hoursChanged)} onClick={save}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${tooDemanding ? 'bg-rose-600' : 'bg-stone-900'}`}>
-              {busy ? 'Saving…' : tooDemanding ? 'Set it anyway' : 'Save'}
+            {/* No "set it anyway": a date your hours cannot reach is not a plan,
+                it's a broken promise. The only way to a sooner date is more
+                self-study hours — so Save stays disabled until the date is
+                reachable at the hours in play. */}
+            <button type="button" disabled={busy || (!date && !hoursChanged) || tooDemanding} onClick={save}
+              className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+              {busy ? 'Saving…' : 'Save'}
             </button>
             <button type="button" onClick={() => { setEditing(false); setDate(''); setHoursOverride(null); setErr(null); }}
               className="text-xs font-medium text-stone-500 hover:text-stone-700">Cancel</button>

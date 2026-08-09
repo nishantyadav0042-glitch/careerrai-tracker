@@ -57,7 +57,7 @@ export function ConfirmHoursCard({ hours }: { hours: number }) {
             One quick check
           </p>
           <p className="mt-1 text-[15px] font-bold leading-snug text-stone-900">
-            Your plan is built to {hours} hours a day. Still right?
+            Your plan is built to {hours} self-study hours a day. Still right?
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-stone-700">
             We&apos;re asking because this number used to change on its own when you moved your finish date. It
@@ -82,7 +82,7 @@ export function ConfirmHoursCard({ hours }: { hours: number }) {
             </div>
           ) : (
             <div className="mt-3">
-              <p className="mb-2 text-[12px] font-semibold text-stone-600">How many hours a day can you actually study?</p>
+              <p className="mb-2 text-[12px] font-semibold text-stone-600">How many hours a day can you actually self-study?</p>
               <div className="flex flex-wrap gap-1.5">
                 {hourOptions(hours).map((h) => (
                   <button

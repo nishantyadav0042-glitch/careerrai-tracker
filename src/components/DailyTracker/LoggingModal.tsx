@@ -50,6 +50,9 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
+  // The third thing: an honest rest day. It's a real log — showing up counts,
+  // and the streak now counts logged days — so it never breaks a streak.
+  const [rest, setRest] = useState(false);
   // The hours the day's plan was built to — derived credit is a fraction of it.
   const [generatedHours, setGeneratedHours] = useState<number>(0);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
@@ -94,16 +97,19 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  // Three-state tap: Not done (clear) / Half / Done.
-  const setChoice = (id: string, choice: TaskState | null) => setTaskChoice((prev) => {
+  // Three-state tap: Not done (clear) / Half / Done. Marking study clears rest.
+  const setChoice = (id: string, choice: TaskState | null) => { setRest(false); setTaskChoice((prev) => {
     const n = new Map(prev);
     if (choice === null) n.delete(id); else n.set(id, choice);
     return n;
-  });
+  }); };
 
-  // Valid the moment there's a real signal: a plan topic marked, or a mock. A
-  // day with neither is a rest day — you simply don't log it (not logging = rest).
-  const isValid = taskChoice.size > 0 || mockTaken === true;
+  // Toggling a rest day clears any study marks — it's one or the other.
+  const toggleRest = () => setRest((r) => { const next = !r; if (next) { setTaskChoice(new Map()); setMockTaken(null); } return next; });
+
+  // Valid the moment there's a real signal: a plan topic marked, a mock, or an
+  // honest rest day. All three are a log — showing up.
+  const isValid = taskChoice.size > 0 || mockTaken === true || rest;
 
   const missingHint = (): string =>
     'Mark how far you got on a plan topic — or tell us you gave a mock.';
@@ -128,6 +134,17 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
     navigator.vibrate?.(50);
     try {
       setError(null);
+
+      // An honest rest day: 0 hours, no topics, marked not-studied. Still a log,
+      // so the streak (which now counts logged days) survives it.
+      if (rest) {
+        await onSubmit({ hours: 0, sections: [], energy: '💪', completedTasks: [], mock: null, day_outcome: 'not_studied' });
+        setRest(false);
+        savedRef.current = true;
+        onClose();
+        return;
+      }
+
       const coveredTasks = planTasks.filter((t) => taskChoice.has(t.id));
       const derived = [...new Set(coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
@@ -177,6 +194,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
       // Reset
       setTaskChoice(new Map());
       setInitialDoneIds(new Set());
+      setRest(false);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
       savedRef.current = true;
@@ -291,6 +309,19 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
               </div>
             )}
           </div>
+
+          {/* 3 — Rest day (personal commitments). An honest break still counts as
+              showing up — it's a log, and it keeps your streak alive. */}
+          <button type="button" onClick={toggleRest}
+            className={cn('w-full rounded-2xl border p-3.5 text-left transition-all active:scale-[0.99]',
+              rest ? 'border-amber-500 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700')}>
+            <span className={cn('text-sm font-bold', rest ? 'text-amber-300' : 'text-white')}>
+              {rest ? '✓ Rest day — personal commitments' : 'Rest day — personal commitments'}
+            </span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-zinc-500">
+              Taking today off. It still counts as showing up — your streak stays alive.
+            </span>
+          </button>
 
           {error && (
             <div className="p-3 bg-rose-950 border border-rose-700 rounded-xl text-sm text-rose-300">{error}</div>
