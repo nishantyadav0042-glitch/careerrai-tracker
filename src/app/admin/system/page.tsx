@@ -1,67 +1,95 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
+import { WorkspaceShell, AdminEmpty } from '@/components/admin/workspace-shell';
+import { assembleSystemHealth, type HealthSeverity } from '@/lib/os/system-health';
 import { AdminBroadcast } from '../admin-broadcast';
 import { AdminDataImport } from '../admin-data-import';
 import { AdminAllowlist, type AllowlistRow } from '../admin-allowlist';
-import { BellRing, BarChart2, PhoneCall, ArrowRight, Brain } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, CircleDot } from 'lucide-react';
 
-// SYSTEM — the toolbox (reorg, 14 July): everything operational that isn't
-// day-to-day lead work. Health dashboards link out; broadcast, allowlist,
-// and data import live here so the Today page stays an action center.
+export const dynamic = 'force-dynamic';
+
+// SYSTEM HEALTH — broken things surface, a healthy machine disappears.
+//
+// The ops workspace landing. Same law as People/Revenue/Mentor, applied to the
+// machine: it leads with what is actually broken right now — failing invariants
+// (the database's own contract self-test) and the proven live-incident class
+// (money captured but not unlocked, a paid student past SLA with no mentor). If
+// nothing is broken, it says so and gets out of the way. The operational tools
+// — broadcast, access, data import — sit below, because a toolbox is not a
+// health check and should never masquerade as one.
+const TONE: Record<HealthSeverity, string> = {
+  critical: 'bg-red-100 text-red-700', high: 'bg-amber-100 text-amber-800', normal: 'bg-stone-100 text-stone-600',
+};
+const LABEL: Record<HealthSeverity, string> = { critical: 'Critical', high: 'High', normal: 'Watch' };
+
 export default async function AdminSystemPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
+  const { admin } = await requireAdmin();
 
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
-
-  const [{ data: allowlistRows }, { data: people }] = await Promise.all([
+  const [health, { data: allowlistRows }, { data: people }] = await Promise.all([
+    assembleSystemHealth(admin, Date.now()),
     admin.from('student_allowlist').select('id, phone, email, full_name, status, assigned_buddy_id, person_type').order('created_at', { ascending: false }),
     admin.from('profiles').select('id, role, full_name').in('role', ['student', 'buddy']),
   ]);
-  const students = (people ?? []).filter((p) => p.role === 'student');
-  const buddies = (people ?? []).filter((p) => p.role === 'buddy');
+  const students = (people ?? []).filter((p: any) => p.role === 'student');
+  const buddies = (people ?? []).filter((p: any) => p.role === 'buddy');
 
-  const tools = [
-    { href: '/admin/brain', icon: Brain, label: 'Brain approvals', sub: 'Recommended messages waiting for your go-ahead' },
-    { href: '/admin/notification-health', icon: BellRing, label: 'Notification health', sub: 'Delivery rates, per-device status' },
-    { href: '/admin/perf', icon: BarChart2, label: 'Speed', sub: 'Page load + API timings' },
-    { href: '/admin/sales-queue', icon: PhoneCall, label: 'Sales queue', sub: 'Call follow-up worklist' },
-  ];
+  const criticalN = health.items.filter((i) => i.severity === 'critical').length;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-5 pb-20">
-      <div className="mb-4 px-1">
-        <h1 className="text-xl font-bold tracking-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>System</h1>
-        <p className="mt-0.5 text-xs text-stone-500">Health dashboards, broadcast, access, and data tools.</p>
-      </div>
+    <WorkspaceShell
+      workspaceId="ops"
+      activeHref="/admin/system"
+      title="System health"
+      subtitle={health.allClear
+        ? `Nothing is broken · ${health.invariantsChecked} invariant${health.invariantsChecked === 1 ? '' : 's'} green`
+        : `${health.items.length} thing${health.items.length === 1 ? '' : 's'} broken${criticalN ? ` · ${criticalN} critical` : ''}`}
+    >
+      {/* ── What is broken, right now ── */}
+      {health.allClear ? (
+        <AdminEmpty>
+          The machine is healthy — every one of the {health.invariantsChecked} contracts holds and no sacred fault is open. Go build.
+        </AdminEmpty>
+      ) : (
+        <div className="mb-6 space-y-2">
+          {health.items.map((i) => {
+            const critical = i.severity === 'critical';
+            return (
+              <div key={i.id} className={`rounded-2xl border p-3.5 ${critical ? 'border-red-300 bg-red-50' : 'border-stone-200 bg-white'}`}>
+                <div className="flex items-start gap-2.5">
+                  {critical
+                    ? <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    : i.severity === 'high'
+                      ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      : <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-bold text-stone-900">{i.title}</p>
+                    <p className="mt-0.5 text-[11.5px] leading-snug text-stone-500">{i.detail}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${TONE[i.severity]}`}>{LABEL[i.severity]}</span>
+                </div>
+                <div className="mt-2.5 pl-6.5">
+                  <Link href={i.route} className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-1.5 text-[12px] font-bold text-white">
+                    Inspect →
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-      <div className="mb-6 space-y-2">
-        {tools.map(({ href, icon: Icon, label, sub }) => (
-          <Link key={href} href={href} className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4 transition-colors hover:border-stone-400">
-            <Icon className="h-4 w-4 shrink-0 text-stone-500" />
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-stone-900">{label}</div>
-              <div className="text-xs text-stone-500">{sub}</div>
-            </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-stone-400" />
-          </Link>
-        ))}
-      </div>
-
+      {/* ── The toolbox — operational, not a health signal ── */}
       <div className="space-y-6">
         <div>
           <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-stone-500">Broadcast notification</h2>
-          <AdminBroadcast recipientIds={[...students.map((s) => s.id), ...buddies.map((b) => b.id)]} />
+          <AdminBroadcast recipientIds={[...students.map((s: any) => s.id), ...buddies.map((b: any) => b.id)]} />
         </div>
         <div>
           <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-stone-500">People access</h2>
           <AdminAllowlist
             rows={(allowlistRows ?? []) as AllowlistRow[]}
-            buddies={buddies.map((b) => ({ id: b.id, full_name: b.full_name }))}
+            buddies={buddies.map((b: any) => ({ id: b.id, full_name: b.full_name }))}
           />
         </div>
         <div>
@@ -69,6 +97,6 @@ export default async function AdminSystemPage() {
           <AdminDataImport />
         </div>
       </div>
-    </div>
+    </WorkspaceShell>
   );
 }

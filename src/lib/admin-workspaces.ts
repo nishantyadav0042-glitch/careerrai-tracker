@@ -188,9 +188,9 @@ export const WORKSPACES: AdminWorkspace[] = [
     label: 'Operations',
     icon: 'Wrench',
     href: '/admin/system',
-    purpose: 'Engineering surface: health, access, jobs, integrity.',
+    purpose: 'System health — broken things surface, plus the operational toolbox.',
     tabs: [
-      { label: 'System', href: '/admin/system', status: 'live' },
+      { label: 'System health', href: '/admin/system', status: 'live' },
       { label: 'Health', href: '/admin/health', status: 'moved' },
       { label: 'Sessions & video', href: '/admin/ops/video', status: 'live' },
       { label: 'Integrity', href: '/admin/ops/integrity', status: 'live' },
