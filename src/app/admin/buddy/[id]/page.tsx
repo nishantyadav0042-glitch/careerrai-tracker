@@ -4,6 +4,7 @@ import { resolveEntity } from '@/lib/os/resolve-entity';
 import { getEntityTimeline } from '@/lib/os/timeline';
 import { EntityNeighbours } from '@/components/admin/entity-neighbours';
 import { ArrowLeft, Video, VideoOff, Phone, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { SetRoom } from './set-room';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,9 @@ export default async function Buddy360Page({ params }: { params: Promise<{ id: s
             <a href={profile.buddy_meet_url as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-[11px] font-bold text-teal-700 underline">open</a>
           </div>
         )}
+        {/* Set/replace the meeting room from here — the fix for "cannot run a
+            session", on the surface that reports it. */}
+        <SetRoom buddyId={id} hasRoom={hasRoom} />
       </div>
 
       {/* Delivery — the numbers that say whether the mentoring is happening */}
