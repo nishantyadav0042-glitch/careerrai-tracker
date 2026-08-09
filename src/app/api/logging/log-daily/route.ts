@@ -48,12 +48,13 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as LoggingRequest;
 
-    // Zero-log bug (20 July): the modal has offered 8/10-hour options since
-    // 15 July, but this cap still said 6 — every 8h/10h log bounced with a 400
-    // and the student saw "Failed to log". The serious day-1 students are
-    // exactly the ones picking 8-10h.
-    if (!Number.isInteger(body.hours) || body.hours < 0 || body.hours > 10) {
-      return NextResponse.json({ error: 'Invalid hours (0-10)' }, { status: 400 });
+    // Hours are DERIVED from coverage now (lib/study-credit), not typed by the
+    // student — so the value is a fraction of the day's planned hours (e.g. 5.5)
+    // and can exceed the old 0-10 manual cap when a plan is built to 11h. Accept
+    // any finite non-negative figure up to a full day; the client is the only
+    // caller and it computes this from what was covered.
+    if (typeof body.hours !== 'number' || !Number.isFinite(body.hours) || body.hours < 0 || body.hours > 24) {
+      return NextResponse.json({ error: 'Invalid hours' }, { status: 400 });
     }
     // An honest "didn't study today" log (0 hours, no mock) carries no
     // sections — allowed. Any log with real hours must say what was studied.
@@ -65,21 +66,6 @@ export async function POST(request: NextRequest) {
     }
     if (!(VALID_ENERGY as readonly string[]).includes(body.energy)) {
       return NextResponse.json({ error: 'Invalid energy' }, { status: 400 });
-    }
-    // Coherence guard (9 Aug — the Abhishek incident): a day marked "studied"
-    // with topics but ZERO hours is an impossible record — you cannot study
-    // three topics in no time. Yet hours were optional in the sheet while the
-    // weekly finish-date engine prices the whole week on exactly this number, so
-    // a student who skipped the optional hours logged a "studied" day worth 0h
-    // and had their date pushed a week — while showing up daily on a 12-day
-    // streak. Reject the incoherent record at the source: if they studied, the
-    // hours must be real. An honest rest day (not_studied/skipped, or 0h with no
-    // topics) is untouched — that path stays open.
-    if (body.hours === 0 && body.day_outcome === 'studied' && Array.isArray(body.sections) && body.sections.length > 0) {
-      return NextResponse.json(
-        { error: 'You marked today as studied — add your study hours so your finish date stays accurate.' },
-        { status: 400 },
-      );
     }
     if (body.emotional_chips) {
       if (!body.emotional_chips.every((c) => (VALID_EMOTIONAL_CHIPS as readonly string[]).includes(c))) {

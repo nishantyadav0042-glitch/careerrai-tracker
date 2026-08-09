@@ -7,6 +7,7 @@ import { track } from '@/lib/journey';
 import { setLogModalOpen } from '@/lib/first-run-events';
 import type { MockDebriefData } from './MockDebriefModal';
 import { OUTCOME_OPTIONS, type DayOutcome } from '@/lib/check-in';
+import { creditedHours } from '@/lib/study-credit';
 
 // Today's plan tasks, pulled into the log so "what did you cover" IS the plan.
 interface PlanTask { id: string; section: string; topic: string | null; label: string; target: string | null; }
@@ -39,7 +40,9 @@ export interface LoggingData {
 // mood, no notes. Order: what got done → what happened off-plan → how the plan
 // felt (+ why, if unfinished) → hours (optional) → mock (folded in, no second
 // screen) → one confidence tap.
-const HOURS_OPTIONS = [0, 2, 4, 6, 8, 10];
+// Hours are NO LONGER asked — derived from coverage (lib/study-credit), because
+// the plan already knows the day's hours and a self-reported field only let a
+// real study day be recorded as 0 and silently push the finish date.
 const OFF_PLAN_SECTIONS = ['QA', 'VARC', 'DILR', 'Revision', 'Other'];
 
 const PLAN_FIT = [
@@ -102,7 +105,8 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   const [offSections, setOffSections] = useState<string[]>([]);
   const [planFit, setPlanFit] = useState<string | null>(null);
   const [blockerReason, setBlockerReason] = useState<string | null>(null);
-  const [hours, setHours] = useState<number | null>(null);
+  // The hours the day's plan was built to — derived credit is a fraction of it.
+  const [generatedHours, setGeneratedHours] = useState<number>(0);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
   // Inline mock percentiles (only when mockTaken === true)
   const [mockOverall, setMockOverall] = useState<string>('');
@@ -137,6 +141,8 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const doneIds = new Set((json?.completions ?? []).map((c: any) => String(c.task_id)));
         if (cancelled) return;
+        // The day's planned hours — the ceiling that coverage is credited against.
+        setGeneratedHours(Number(json?.routine?.generated_hours ?? json?.todayBudget?.hours ?? 0) || 0);
         setPlanTasks(rawTasks.map((t) => ({ id: String(t.id), section: t.section, topic: t.topic ?? null, label: String(t.label ?? ''), target: t.target ?? null })));
         const done = new Set<string>(rawTasks.filter((t) => doneIds.has(String(t.id))).map((t) => String(t.id)));
         setInitialDoneIds(done);
@@ -161,19 +167,12 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   // justify a bad day is how you stop hearing about bad days.
   const outcomeIsTerminal = outcome != null && NO_DETAIL_NEEDED.includes(outcome);
 
-  // A day that shows any sign of study — outcome "studied"/"partial", a plan
-  // topic touched, off-plan work, or a mock — MUST carry its hours, because the
-  // weekly finish-date engine reads exactly this number. Making hours optional
-  // let a real study day be recorded as 0h and silently pushed the student's
-  // date (the Abhishek incident, 9 Aug). An honest empty day still needs nothing.
-  const studyingSignal = !outcomeIsTerminal
-    && (outcome === 'studied' || outcome === 'partial' || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true);
-  const hoursEntered = hours != null && hours > 0;
-  const hoursOk = !studyingSignal || hoursEntered;
-
-  const isValid = (outcomeIsTerminal
-    || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true || hours === 0)
-    && hoursOk;
+  // Completion IS the log now. A day is valid the moment there's a real signal —
+  // a plan topic marked, off-plan work, a mock, or an honest empty day (a
+  // terminal outcome). Hours are no longer asked; they are derived on submit
+  // from what was covered, so there is nothing to require here.
+  const isValid = outcomeIsTerminal
+    || taskChoice.size > 0 || offSections.length > 0 || mockTaken === true;
 
   // The hint must name what is ACTUALLY missing. It used to say "Start by
   // tapping how today went" whenever the outcome was unanswered — but the
@@ -183,9 +182,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
   // Not done / Half / Done chips already say how the day went, and when the
   // student skips the question we derive it from those instead of losing it.
   const missingHint = (): string =>
-    studyingSignal && !hoursEntered
-      ? 'Add your hours — that’s the number your finish date depends on.'
-      : 'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
+    'Tap how far you got on a plan topic, or pick what you studied under "Anything off today’s plan?"';
 
   // Derived outcome, used only when the student didn't tap one. Every branch is
   // checkable against what they actually marked — we never guess 'studied'.
@@ -240,8 +237,19 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
           }
         : null;
 
+      // Hours are DERIVED from coverage, not asked. Completing the plan earns
+      // the plan's hours; off-plan topics count too; capped at the day's plan.
+      const marks = [...taskChoice.values()];
+      const derivedHours = creditedHours({
+        generatedHours,
+        plannedTasks: planTasks.length,
+        fullDone: marks.filter((m) => m === 'full').length,
+        halfDone: marks.filter((m) => m === 'half').length,
+        offPlanCount: offSections.length,
+      });
+
       await onSubmit({
-        hours: hours ?? 0,
+        hours: derivedHours,
         sections: finalSections,
         energy: '💪', // defaulted — no longer asked
         plan_fit: planFit ?? undefined,
@@ -261,7 +269,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
       setOffSections([]);
       setPlanFit(null);
       setBlockerReason(null);
-      setHours(null);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
       savedRef.current = true;
@@ -283,10 +290,9 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
         tasksMarked: taskChoice.size,
         offSections: offSections.length,
         planFitSet: planFit !== null,
-        hoursSet: hours !== null,
         mockAnswered: mockTaken !== null,
         wasSubmittable: isValid,
-        touchedAnything: taskChoice.size > 0 || offSections.length > 0 || planFit !== null || hours !== null || mockTaken !== null,
+        touchedAnything: taskChoice.size > 0 || offSections.length > 0 || planFit !== null || mockTaken !== null,
       });
     }
     onClose();
@@ -432,26 +438,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
             )}
           </div>
 
-          {/* 4 — Hours. Required once the day shows any study signal, because the
-              finish-date engine reads this number; optional only on an empty day. */}
-          <div>
-            {label(studyingSignal ? 'Hours studied' : 'Hours studied · optional')}
-            <div className="grid grid-cols-6 gap-1.5">
-              {HOURS_OPTIONS.map((h) => (
-                <button key={h} onClick={() => setHours((prev) => (prev === h ? null : h))}
-                  className={cn('py-3 rounded-xl font-bold text-sm transition-all active:scale-95', hours === h ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
-                  {h === 10 ? '10+' : `${h}`}
-                </button>
-              ))}
-            </div>
-            {studyingSignal && !hoursEntered && (
-              <p className="mt-2 text-[11px] leading-relaxed text-amber-400">
-                You studied today — pick your hours. This is the number your finish date is calculated from.
-              </p>
-            )}
-          </div>
-
-          {/* 5 — Mock (folded in, no second screen) */}
+          {/* Mock (folded in, no second screen) */}
           <div className="rounded-2xl border border-teal-700/40 bg-teal-950/30 p-4">
             <label className="block text-sm font-bold text-white mb-3">Did you take a mock today?</label>
             <div className="grid grid-cols-2 gap-2">
