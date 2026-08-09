@@ -87,6 +87,33 @@ interface CallOpts {
 
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+}
+
+// Record one call's token usage to ai_usage_events. Best-effort — the whole
+// point is a truthful cost number, and a metering failure must never break the
+// call it is measuring. Token counts are EXACT; the rupee conversion lives in
+// lib/os/ai-cost.ts as a single published-rate constant, easy to correct.
+async function recordUsage(
+  model: string,
+  usage: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | undefined,
+): Promise<void> {
+  if (!usage) return;
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !svc) return;
+    const admin = createClient(url, svc, { auth: { autoRefreshToken: false, persistSession: false } });
+    await admin.from('ai_usage_events').insert({
+      model,
+      prompt_tokens: usage.promptTokenCount ?? 0,
+      output_tokens: usage.candidatesTokenCount ?? 0,
+      total_tokens: usage.totalTokenCount ?? 0,
+    });
+  } catch {
+    // swallow — a lost metering row is acceptable; a broken AI call is not.
+  }
 }
 
 // Returns the model's text, or null on any failure/limit — callers MUST have a
@@ -132,6 +159,13 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
       }
 
       const data = (await res.json()) as GeminiResponse;
+
+      // Record token usage — measured, not estimated. Gemini returns exact
+      // counts on every response and we discarded them until 9 Aug, which is
+      // why the AI cost tile could only ever say "planned". Fire-and-forget:
+      // a metering write must never fail a student-facing AI call.
+      void recordUsage(model, data.usageMetadata);
+
       const text = data.candidates?.[0]?.content?.parts
         ?.map((p) => p.text ?? '')
         .join('')

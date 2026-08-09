@@ -72,6 +72,7 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'Every student, by the segment you would act on.',
     tabs: [
       { label: 'All', href: '/admin/students', status: 'live' },
+      { label: 'Pipeline', href: '/admin/students/pipeline', status: 'live' },
       { label: 'Logged today', href: '/admin/logged-today', status: 'moved' },
       { label: 'Streaks alive', href: '/admin/live-streaks', status: 'moved' },
       { label: 'Need buddy', href: '/admin/wants-buddy', status: 'moved' },
@@ -176,7 +177,7 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'Every Gemini call: who fires it, how often, and what it cost.',
     tabs: [
       { label: 'Usage', href: '/admin/ai', status: 'live' },
-      { label: 'Cost per student', href: null, status: 'planned', blockedOn: 'Token counts are not returned or stored. Needs gemini.ts to record usage.' },
+      { label: 'Cost', href: '/admin/ai', status: 'live' },
       { label: 'Prompt testing', href: null, status: 'planned', blockedOn: 'No prompt-run store.' },
     ],
   },

@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/admin-auth';
 import { WorkspaceShell, AdminEmpty, AdminStat } from '@/components/admin/workspace-shell';
+import { getAiCost } from '@/lib/os/ai-cost';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,11 +15,11 @@ export const dynamic = 'force-dynamic';
 // from a useEffect on mount, a briefing regenerated on every mock log, and a
 // cron that rewrote a summary each morning for every student who had logged.
 //
-// COST IS DELIBERATELY ABSENT. Gemini returns token counts and we have never
-// stored them, so there is no honest cost number to show. The tab is marked
-// `planned` in lib/admin-workspaces with exactly that reason rather than being
-// filled with an estimate — an invented rupee figure is worse than a gap,
-// because a gap gets fixed and an estimate gets budgeted against.
+// COST IS NOW REAL (9 Aug). callGemini records usageMetadata into
+// ai_usage_events, so the rupee figures below are measured tokens at a single
+// published-rate constant — not an estimate wearing the clothes of a
+// measurement. The spike banner compares today against the trailing daily
+// average, which is the "Gemini cost doubled" alert the founder asked for.
 
 /** The AI event types recorded by recordAiCall / the OCR routes. */
 const AI_EVENTS: Record<string, { label: string; trigger: string }> = {
@@ -32,6 +33,7 @@ const AI_EVENTS: Record<string, { label: string; trigger: string }> = {
 export default async function AiCenterPage() {
   const { admin } = await requireAdmin();
 
+  const cost = await getAiCost(admin, Date.now());
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const { data: rows } = await admin
     .from('analytics_events')
@@ -76,6 +78,23 @@ export default async function AiCenterPage() {
         <AdminStat label="Last 30 days" value={all.length} />
       </div>
 
+      {/* Cost — tokens measured exactly, ₹ at the published flash-lite rate. */}
+      <div className="mb-4 grid grid-cols-3 gap-2">
+        <AdminStat label="Cost today" value={`₹${cost.today.rupees.toFixed(2)}`} hint={`${cost.today.totalTokens.toLocaleString()} tokens`} tone={cost.spikeRatio != null && cost.spikeRatio > 2 ? 'bad' : 'plain'} />
+        <AdminStat label="Cost, 7 days" value={`₹${cost.last7.rupees.toFixed(2)}`} />
+        <AdminStat label="Cost, 30 days" value={`₹${cost.last30.rupees.toFixed(2)}`} hint={`avg ₹${cost.dailyAvgRupees.toFixed(2)}/day`} />
+      </div>
+
+      {cost.spikeRatio != null && cost.spikeRatio > 2 && (
+        <div className="mb-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-3.5">
+          <p className="text-[13px] font-bold text-amber-900">AI cost is {cost.spikeRatio.toFixed(1)}× the daily average today</p>
+          <p className="mt-1 text-[11.5px] text-amber-800">
+            ₹{cost.today.rupees.toFixed(2)} today against a ₹{cost.dailyAvgRupees.toFixed(2)}/day norm. Check for a
+            retry loop or a caller firing more than expected.
+          </p>
+        </div>
+      )}
+
       <div className="mb-4 rounded-2xl border border-stone-200 bg-stone-50 p-3.5">
         <p className="text-[12px] font-bold text-stone-800">Every call below is fired by a human tap.</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-stone-600">
@@ -110,12 +129,12 @@ export default async function AiCenterPage() {
       )}
 
       <div className="mt-4 rounded-2xl border border-dashed border-stone-300 bg-white p-3.5">
-        <p className="text-[12px] font-bold text-stone-700">Why there is no cost figure here</p>
+        <p className="text-[12px] font-bold text-stone-700">How cost is computed</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-stone-500">
-          Gemini returns token counts on every response and we have never stored them, so any
-          rupee number on this page would be an estimate wearing the clothes of a measurement.
-          Recording <code className="text-[10.5px]">usageMetadata</code> in <code className="text-[10.5px]">lib/gemini.ts</code> is
-          the one change that makes cost real — until then this stays blank on purpose.
+          Token counts are exact — Gemini returns them on every response, now recorded in
+          <code className="text-[10.5px]"> ai_usage_events</code>. The only estimate is the price per
+          million tokens, one published-rate constant in
+          <code className="text-[10.5px]"> lib/os/ai-cost.ts</code>. Tokens measured; ₹ at the flash-lite rate.
         </p>
       </div>
     </WorkspaceShell>
