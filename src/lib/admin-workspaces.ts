@@ -167,6 +167,10 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'One analytics home. Growth folded in — never two funnels.',
     tabs: [
       { label: 'Behaviour', href: '/admin/analytics', status: 'live' },
+      // The Founder Funnel: where the 212 disappear — signup → onboarding →
+      // Blueprint → first tick → first log → return, every number drilling to
+      // the exact students. Distinct from /admin/growth (pre-signup wizard).
+      { label: 'Activation', href: '/admin/funnel', status: 'live' },
       { label: 'Growth funnel', href: '/admin/growth', status: 'moved' },
       { label: 'Speed', href: '/admin/perf', status: 'moved' },
     ],
