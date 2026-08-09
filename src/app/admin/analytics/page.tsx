@@ -110,7 +110,11 @@ export default async function AdminAnalyticsPage() {
   // shouldn't outrank a screen fifty people actually opened).
   const byPath = new Map<string, Set<string>>();
   for (const e of rows) {
-    if (e.event !== 'pageview' || !e.path) continue;
+    // The client tracker emits 'screen_view' (journey-tracker.tsx), not
+    // 'pageview' — this filter looked for a name the app never records, so the
+    // panel read empty forever despite ~2,700 screen views a fortnight. Accept
+    // both: 'screen_view' is today's event, 'pageview' a single legacy row.
+    if ((e.event !== 'screen_view' && e.event !== 'pageview') || !e.path) continue;
     if (!byPath.has(e.path)) byPath.set(e.path, new Set());
     byPath.get(e.path)!.add(e.user_id!);
   }
@@ -194,7 +198,7 @@ export default async function AdminAnalyticsPage() {
       <section className="mb-8 rounded-2xl border border-stone-200 bg-white p-5">
         <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-stone-400">Most-opened screens</h2>
         {topPaths.length === 0 ? (
-          <p className="text-sm text-stone-500">No pageviews recorded yet.</p>
+          <p className="text-sm text-stone-500">No screen views recorded yet.</p>
         ) : (
           <div className="space-y-1.5">
             {topPaths.map((p) => (
