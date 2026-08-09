@@ -61,7 +61,71 @@ two steps our whole funnel turns on. On a stable `test.careerrai.in` you can.
 | Supabase database | **Yes — same DB** | A signup on staging creates a real row. Flag it (below). |
 | Cron jobs | No — production only | Scheduled notifications will not fire from staging. Send them by hand from `/admin`. |
 | Push origin | No — per-origin | A staging push subscription replaces the production one **on that profile**. Use a test account only. |
-| Env vars / keys | Yes | Gemini, Razorpay, Expedify all live. Do not run a real payment. |
+| Env vars / keys | **No — scoped per environment** | See below. This row used to say "Yes". It was wrong, and it cost us a day. |
+
+### Env vars are NOT shared with Preview — this is what broke the first preview
+
+The first working preview returned a bare **"internal error"** on every page.
+The cause, from Vercel's runtime errors:
+
+```
+Error: Your project's URL and Key are required to create a Supabase client!
+routes=/middleware
+```
+
+Every Vercel variable is scoped to an environment. Ours were **Production only**,
+so a Preview build got an empty `NEXT_PUBLIC_SUPABASE_URL`, and `src/proxy.ts`
+(the middleware) threw before any page could render. Not a code bug — a build
+that was never given its keys.
+
+Fixed by adding a **Preview**-scoped row for each of:
+
+```
+NEXT_PUBLIC_SUPABASE_URL        NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY       CRON_SECRET
+VAPID_PUBLIC_KEY                VAPID_PRIVATE_KEY / VAPID_EMAIL
+```
+
+Three things that are easy to get wrong here, all of them learned the hard way:
+
+- **Leave the branch filter on "All Preview Branches."** Scoping a variable to
+  one branch name means the next branch hits this same wall and the diagnosis
+  gets repeated from scratch.
+- **Add Preview, never move Production.** A variable shows one row *per
+  environment* — seeing `NEXT_PUBLIC_SUPABASE_URL` listed twice is correct, not
+  a duplicate. Unticking Production on that variable takes careerrai.in down.
+- **A redeploy is required, and it must be a real rebuild.** `NEXT_PUBLIC_*`
+  values are inlined into the client bundle at build time, so a build that
+  finished before the variables were saved keeps the empty ones no matter how
+  many times you reload.
+
+### GEMINI_API_KEY and the VAPID keys are not in Vercel at all
+
+Do not go looking for them there — this cost time on 9 Aug. `lib/gemini.ts`
+and `lib/server-config.ts` both check the env var **first**, then fall back to
+the Supabase **`server_config`** table:
+
+```
+server_config: ADMIN_PHONES_E164 · DAILY_API_KEY · GEMINI_API_KEY
+               VAPID_EMAIL · VAPID_PRIVATE_KEY · VAPID_PUBLIC_KEY
+```
+
+Because that table lives in the same database Preview and Production share, the
+key reaches Preview **automatically** once `SUPABASE_SERVICE_ROLE_KEY` and
+`NEXT_PUBLIC_SUPABASE_URL` are scoped to Preview. Nothing else to add.
+
+`geminiEnabled()` awaits the same resolver, so it sees the DB key too.
+`geminiEnabledSync()` checks only the env var and would report "no AI" against a
+DB-only key — it currently has **zero callers**, and it must stay that way.
+
+### The other Vercel project is a decoy
+
+There are two projects on the account. **`careerrai-daily` is the live one** —
+careerrai.in and every branch preview build from it. **`careerrai-tracker` is
+dead.** It still holds an old `GEMINI_API_KEY` (Jun 15) and a full set of
+May-27 Supabase rows, which makes it look like the real thing when you are
+hunting for a key. Nothing deploys from it. Check the project name in the
+sidebar before editing anything.
 
 ---
 
