@@ -1,161 +1,101 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
-import { WorkspaceShell, AdminEmpty, AdminStat } from '@/components/admin/workspace-shell';
-import { Video, VideoOff, AlertTriangle } from 'lucide-react';
+import { WorkspaceShell, AdminEmpty } from '@/components/admin/workspace-shell';
+import { assembleMentorOps, MENTOR_META, type MentorState } from '@/lib/os/mentor-ops';
+import { VideoOff, AlertTriangle, Phone } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-// BUDDY OPERATIONS — mentor supply, separate from Students.
+// MENTOR OPERATIONS — mentors requiring action, nothing else.
 //
-// Founder, 9 Aug: "buddy management is a different operation." It is, and the
-// cost of not having this screen was paid the same day: Aarav Mehta had two
-// students and no meeting room, which means he could not book a session at
-// all, and nothing anywhere said so. Shreya had a room but her two sessions
-// with our only paying student both expired with nobody joining.
+// Founder, 9 Aug: "Don't build a Mentors page. Build Mentor Operations." The
+// same law as People and Revenue, applied to mentor supply: a mentor doing
+// their job — room set, no missed sessions, not overloaded, paid up — is
+// invisible. Only the ones needing a human surface: can't run a session (no
+// room), a missed session, an overload, a payout pending. The "available"
+// mentors sit at the bottom because at scale the founder's action there is
+// "who can take this premium student". Every row opens the buddy 360.
 //
-// So the first column here is not a vanity metric. It is "can this mentor
-// actually run a session", answered before a student is assigned to them.
+// The cost of not having this was paid the day it was built: Aarav Mehta had
+// two students and no meeting room — he could not book a session at all — and
+// nothing anywhere said so. This screen surfaces exactly that, first.
+const TONE: Record<string, string> = {
+  red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800',
+  stone: 'bg-stone-100 text-stone-600', green: 'bg-emerald-100 text-emerald-700',
+};
+const STATES: MentorState[] = ['cant_run_session', 'session_missed', 'overloaded', 'payout_pending', 'available'];
 
-interface Row {
-  id: string;
-  name: string;
-  phone: string | null;
-  hasRoom: boolean;
-  onboarded: boolean;
-  students: number;
-  sessionsTotal: number;
-  sessionsDone: number;
-  sessionsExpired: number;
-  upcoming: number;
-}
-
-export default async function BuddiesPage() {
+export default async function BuddiesPage({ searchParams }: { searchParams: Promise<{ state?: string }> }) {
   const { admin } = await requireAdmin();
+  const { state } = await searchParams;
+  const ops = await assembleMentorOps(admin, Date.now());
 
-  const [{ data: buddies }, { data: students }, { data: sessions }] = await Promise.all([
-    admin.from('profiles')
-      .select('id, full_name, phone, buddy_meet_url, buddy_onboarding_completed')
-      .eq('role', 'buddy')
-      .not('is_test_account', 'is', true),
-    admin.from('profiles').select('buddy_id').eq('role', 'student').not('buddy_id', 'is', null),
-    admin.from('video_sessions').select('buddy_id, session_status, scheduled_at'),
-  ]);
-
-  const load = new Map<string, number>();
-  for (const s of students ?? []) load.set(s.buddy_id as string, (load.get(s.buddy_id as string) ?? 0) + 1);
-
-  const now = Date.now();
-  const byBuddy = new Map<string, { total: number; done: number; expired: number; upcoming: number }>();
-  for (const s of sessions ?? []) {
-    const k = s.buddy_id as string;
-    const cur = byBuddy.get(k) ?? { total: 0, done: 0, expired: 0, upcoming: 0 };
-    cur.total++;
-    if (s.session_status === 'completed') cur.done++;
-    if (s.session_status === 'expired') cur.expired++;
-    if (s.session_status === 'scheduled' && Date.parse(s.scheduled_at as string) > now) cur.upcoming++;
-    byBuddy.set(k, cur);
-  }
-
-  const rows: Row[] = (buddies ?? []).map((b) => {
-    const s = byBuddy.get(b.id) ?? { total: 0, done: 0, expired: 0, upcoming: 0 };
-    return {
-      id: b.id,
-      name: (b.full_name as string) ?? 'Buddy',
-      phone: b.phone as string | null,
-      hasRoom: !!b.buddy_meet_url,
-      onboarded: b.buddy_onboarding_completed === true,
-      students: load.get(b.id) ?? 0,
-      sessionsTotal: s.total,
-      sessionsDone: s.done,
-      sessionsExpired: s.expired,
-      upcoming: s.upcoming,
-    };
-  })
-    // Blocked mentors first: students assigned but unable to run a session.
-    .sort((a, b) => {
-      const aBlocked = a.students > 0 && !a.hasRoom ? 1 : 0;
-      const bBlocked = b.students > 0 && !b.hasRoom ? 1 : 0;
-      if (aBlocked !== bBlocked) return bBlocked - aBlocked;
-      return b.students - a.students;
-    });
-
-  const blocked = rows.filter((r) => r.students > 0 && !r.hasRoom);
-  const totalExpired = rows.reduce((n, r) => n + r.sessionsExpired, 0);
-  const totalDone = rows.reduce((n, r) => n + r.sessionsDone, 0);
+  const active = STATES.find((s) => s === state) ?? null;
+  const rows = active ? ops.items.filter((i) => i.state === active) : ops.items;
+  const countOf = (s: MentorState) => ops.items.filter((i) => i.state === s).length;
+  // "Requiring action" excludes the available set — those are for assignment,
+  // not a task on the founder's plate.
+  const needAction = ops.items.filter((i) => i.state !== 'available').length;
 
   return (
     <WorkspaceShell
       workspaceId="buddies"
       activeHref="/admin/buddies"
-      title="Mentor roster"
-      subtitle={`${rows.length} mentors · ${rows.reduce((n, r) => n + r.students, 0)} students assigned`}
+      title="Mentor operations"
+      subtitle={needAction === 0
+        ? `No mentor needs attention — all clear · ${ops.totalMentors} mentor${ops.totalMentors === 1 ? '' : 's'}`
+        : `${needAction} mentor${needAction === 1 ? '' : 's'} need you · ${ops.totalMentors} total`}
     >
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <AdminStat label="Mentors" value={rows.length} />
-        <AdminStat
-          label="Can't run a session"
-          value={blocked.length}
-          tone={blocked.length ? 'bad' : 'good'}
-          hint={blocked.length ? 'Students assigned, no meeting room set' : 'Every loaded mentor has a room'}
-        />
-        <AdminStat label="Sessions completed" value={totalDone} tone={totalDone ? 'good' : 'plain'} />
-        <AdminStat
-          label="Sessions expired"
-          value={totalExpired}
-          tone={totalExpired > totalDone ? 'bad' : 'warn'}
-          hint="Nobody joined before the window closed"
-        />
-      </div>
-
-      {blocked.length > 0 && (
-        <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3.5">
-          <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-800">
-            <AlertTriangle className="h-4 w-4" />
-            {blocked.length} mentor{blocked.length === 1 ? '' : 's'} cannot book a session
-          </p>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-red-700">
-            {blocked.map((b) => `${b.name} (${b.students} student${b.students === 1 ? '' : 's'})`).join(', ')}
-            {' '}— booking is refused until a meeting room is set on their profile.
-          </p>
+      {ops.items.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          <Link href="/admin/buddies" className={!active ? 'rounded-lg bg-stone-900 px-2.5 py-1 text-[11.5px] font-semibold text-white' : 'rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-stone-600'}>
+            All <span className="opacity-60">{ops.items.length}</span>
+          </Link>
+          {STATES.map((s) => {
+            const n = countOf(s);
+            return (
+              <Link key={s} href={`/admin/buddies?state=${s}`} className={active === s ? 'rounded-lg bg-stone-900 px-2.5 py-1 text-[11.5px] font-semibold text-white' : `rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-stone-600 ${n === 0 ? 'opacity-40' : ''}`}>
+                {MENTOR_META[s].label} <span className="opacity-60">{n}</span>
+              </Link>
+            );
+          })}
         </div>
       )}
 
       {rows.length === 0 ? (
-        <AdminEmpty>No mentors yet.</AdminEmpty>
+        <AdminEmpty>Nothing to do here — every mentor is set up and delivering. Go build.</AdminEmpty>
       ) : (
         <div className="space-y-2">
-          {rows.map((r) => (
-            <Link key={r.id} href={`/admin/buddy/${r.id}`} className="block rounded-2xl border border-stone-200 bg-white p-3.5 transition-colors hover:border-stone-400">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[15px] font-bold text-stone-900">{r.name}</p>
-                  <p className="mt-0.5 text-[11px] text-stone-400">
-                    {r.phone ?? 'no phone'} · {r.onboarded ? 'onboarded' : 'setup incomplete'}
-                  </p>
+          {rows.map((r) => {
+            const m = MENTOR_META[r.state];
+            const blocking = r.state === 'cant_run_session';
+            return (
+              <div key={r.id} className={`rounded-2xl border p-3.5 ${blocking ? 'border-red-300 bg-red-50' : 'border-stone-200 bg-white'}`}>
+                <div className="flex items-start gap-2.5">
+                  {blocking && <VideoOff className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />}
+                  {r.state === 'session_missed' && <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[14px] font-bold text-stone-900">{r.name}</p>
+                      <span className="shrink-0 text-[11px] text-stone-400">{r.students} student{r.students === 1 ? '' : 's'}</span>
+                    </div>
+                    <p className="mt-0.5 text-[11.5px] leading-snug text-stone-500">{r.detail}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${TONE[m.tone]}`}>{m.label}</span>
                 </div>
-                {r.hasRoom ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                    <Video className="h-3 w-3" /> room set
-                  </span>
-                ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700">
-                    <VideoOff className="h-3 w-3" /> no room
-                  </span>
-                )}
+                <div className="mt-2.5 flex items-center gap-2 pl-6.5">
+                  <Link href={r.route} className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-1.5 text-[12px] font-bold text-white">
+                    Open →
+                  </Link>
+                  {r.phone && (
+                    <a href={`https://wa.me/${r.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold text-teal-700">
+                      <Phone className="h-3 w-3" /> Message
+                    </a>
+                  )}
+                </div>
               </div>
-
-              <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-stone-600">
-                <span><b className="text-stone-900">{r.students}</b> students</span>
-                <span><b className="text-stone-900">{r.upcoming}</b> upcoming</span>
-                <span className={r.sessionsDone ? 'text-emerald-700' : ''}>
-                  <b>{r.sessionsDone}</b> completed
-                </span>
-                <span className={r.sessionsExpired ? 'text-red-600' : ''}>
-                  <b>{r.sessionsExpired}</b> expired
-                </span>
-              </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 

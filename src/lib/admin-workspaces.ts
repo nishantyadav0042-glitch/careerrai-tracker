@@ -103,9 +103,9 @@ export const WORKSPACES: AdminWorkspace[] = [
     label: 'Buddies',
     icon: 'HeartHandshake',
     href: '/admin/buddies',
-    purpose: 'Mentor supply: who is free, who is loaded, who is delivering.',
+    purpose: 'Mentors requiring attention — healthy mentors disappear.',
     tabs: [
-      { label: 'Roster & matching', href: '/admin/buddies', status: 'live' },
+      { label: 'Operations', href: '/admin/buddies', status: 'live' },
       { label: 'Sessions', href: '/admin/buddies/sessions', status: 'live' },
     ],
   },
