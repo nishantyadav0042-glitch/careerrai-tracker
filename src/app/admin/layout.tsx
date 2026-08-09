@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AdminNav } from './admin-nav';
+import { CommandPalette } from '@/components/admin/command-palette';
 
 // One shell for every admin screen: auth gate + the shared nav bar. Pages
 // keep their own role checks (defense in depth for anything hit directly),
@@ -16,6 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-stone-50">
       <AdminNav />
+      <CommandPalette />
       {children}
     </div>
   );
