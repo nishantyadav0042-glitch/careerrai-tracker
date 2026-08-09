@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 import { rankBuddies, type MatchBuddy, type MatchStudent } from '@/lib/buddy-match';
 
 // Every invocation of this route walks the whole student roster. Vercel's
@@ -14,10 +14,10 @@ export const maxDuration = 300;
 
 // Evening buddy nudge (founder ask): every evening ~7:30pm IST, free students
 // (no buddy yet) get ONE extra push showcasing their best-matched IIM mentor,
-// deep-linking to the buddy profile. Deliberately an EXTRA nudge, not a
-// replacement — and kept OUT of the study-companion budget (type
-// 'buddy_evening' is not a STUDENT_BUDGET_TYPE) so it never starves the daily
-// log reminder. Idempotent per IST day.
+// deep-linking to the buddy profile. Since 10 Aug it rides dispatch() — the
+// founder sanctioned selling the mentor, but INSIDE the shared daily budget
+// ('buddy_evening' IS a STUDENT_BUDGET_TYPE now), so the sell is counted,
+// capped and measured like every other nudge. Idempotent per IST day.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -91,22 +91,19 @@ export async function POST(request: NextRequest) {
       : `${firstName} tells you exactly what to study, skip & fix — tap to see how.`;
     const url = '/student/buddy';
 
-    const { data: row } = await admin
-      .from('notifications')
-      .insert({
-        user_id: s.id, type: 'buddy_evening', title, body,
-        data: { url }, read: false, channel: 'in_app',
-        reason: 'Evening buddy nudge — free student, best-matched mentor',
-        expected_action: 'open_buddy',
-      })
-      .select('id')
-      .single();
-
-    const res = await sendPushToUser(s.id, { title, body, url, notifId: row?.id as string | undefined });
-    if (res.ok && row?.id) {
-      await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
-    }
-    sent++;
+    // Through dispatch() (founder, 10 Aug): selling the mentor is sanctioned,
+    // but it sells INSIDE the shared daily budget — counted, capped, and
+    // measured like every other nudge, never a bypass around them.
+    const outcome = await dispatch({
+      userId: s.id,
+      type: 'buddy_evening',
+      title, body, url,
+      reason: 'Evening buddy nudge — free student, best-matched mentor',
+      expectedAction: 'open_buddy',
+      prefs,
+      dailyBudget: BUDGET_ACTIVE,
+    });
+    if (outcome === 'sent') sent++;
   }
 
   return NextResponse.json({ ok: true, sent });

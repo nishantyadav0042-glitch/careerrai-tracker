@@ -61,20 +61,24 @@ export function MomentumShieldIntro({ streak, shields, enabled }: { streak: numb
         <h2 className="text-center text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Your streak just got safer
         </h2>
-        <p className="mt-1 text-center text-sm text-stone-500">Streaks never reset to zero anymore.</p>
+        <p className="mt-1 text-center text-sm text-stone-500">A missed day no longer has to end your streak.</p>
 
+        {/* Copy matches the LIVE model (manual restore, 10 Aug): showing up —
+            even a rest-day log — keeps the streak alive; a fully missed day
+            breaks it, and a shield RESTORES it with one tap. Earning is +1 per
+            21 logged days, cap 3, exactly what upsert_log_and_streak awards. */}
         <div className="mt-4 space-y-2.5 text-sm text-stone-700">
           <div className="flex items-start gap-2.5 rounded-xl bg-stone-50 p-3">
-            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-stone-900" />
-            <p>You hold <b>{shields}/3 Momentum Shields</b>. Miss a day — a shield covers it, and your streak stays untouched.</p>
+            <Flame className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+            <p>Any log keeps your streak alive — even an honest <b>rest day</b> counts as showing up.</p>
           </div>
           <div className="flex items-start gap-2.5 rounded-xl bg-stone-50 p-3">
-            <Flame className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
-            <p>Out of shields? Your streak slips by just <b>1 per missed day</b> — it never breaks to zero.</p>
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-stone-900" />
+            <p>You hold <b>{shields}/3 Momentum Shields</b>. Fully miss a day? One tap spends a shield and <b>restores your streak</b>.</p>
           </div>
           <div className="flex items-start gap-2.5 rounded-xl bg-stone-50 p-3">
             <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-            <p>Study <b>21 days in a row</b> to earn a shield back (max 3). Consistency builds your safety net.</p>
+            <p>Log <b>21 days in a row</b> to earn a shield back (max 3). Consistency builds your safety net.</p>
           </div>
           {streak >= 1 && (
             <div className="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-3">

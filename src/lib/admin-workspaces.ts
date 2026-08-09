@@ -74,10 +74,9 @@ export const WORKSPACES: AdminWorkspace[] = [
       { label: 'People', href: '/admin/people', status: 'live' },
       { label: 'Pipeline', href: '/admin/students/pipeline', status: 'live' },
       { label: 'Full list', href: '/admin/students', status: 'live' },
-      { label: 'Logged today', href: '/admin/logged-today', status: 'moved' },
-      { label: 'Streaks alive', href: '/admin/live-streaks', status: 'moved' },
-      { label: 'Need buddy', href: '/admin/wants-buddy', status: 'moved' },
-      { label: 'At risk', href: '/admin/going-cold', status: 'moved' },
+      // logged-today, live-streaks, wants-buddy and going-cold were retired
+      // (10 Aug): pure duplicates of People filters — ?activity=today,
+      // ?activity=going_cold, ?buddy=wants. Pages with bespoke ACTIONS stayed.
       { label: 'Streak breakers', href: '/admin/streak-breakers', status: 'moved' },
       { label: 'Momentum', href: '/admin/momentum', status: 'moved' },
     ],

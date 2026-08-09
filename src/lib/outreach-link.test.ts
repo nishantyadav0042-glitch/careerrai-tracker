@@ -35,8 +35,8 @@ describe('every inline outreach builder interpolates SITE_URL', () => {
     { file: 'src/lib/mission-queue.ts',               marker: 'Nishant' }, // the daily-45 queue
     { file: 'src/lib/sales-conversion.ts',            marker: 'Exam Buddy' },
     { file: 'src/app/admin/reminders/page.tsx',       marker: 'Nishant' },
-    { file: 'src/app/admin/wants-buddy/page.tsx',     marker: 'Nishant' },
-    { file: 'src/app/admin/going-cold/page.tsx',      marker: 'Nishant' },
+    // wants-buddy and going-cold pages retired 10 Aug (duplicates of People
+    // filters); their inline outreach builders went with them.
     { file: 'src/app/admin/streak-breakers/page.tsx', marker: 'Nishant' },
   ];
 

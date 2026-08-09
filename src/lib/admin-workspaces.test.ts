@@ -131,7 +131,7 @@ describe('the nav highlights the right workspace', () => {
     // Command on every single screen.
     expect(workspaceForPath('/admin')?.id).toBe('command');
     expect(workspaceForPath('/admin/students')?.id).toBe('students');
-    expect(workspaceForPath('/admin/going-cold')?.id).toBe('students');
+    expect(workspaceForPath('/admin/streak-breakers')?.id).toBe('students');
     expect(workspaceForPath('/admin/coupons')?.id).toBe('finance');
     expect(workspaceForPath('/admin/growth')?.id).toBe('analytics');
   });

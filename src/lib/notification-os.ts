@@ -51,9 +51,12 @@ export const STUDENT_BUDGET_TYPES = [
   'companion_kickoff', 'companion_morning', 'companion_spark', 'companion_fact', 'companion_open',
   'companion_wind', 'companion_progress', 'companion_log', 'companion_close',
   'daily_heartbeat', 'log_recovery',
+  // The evening mentor-sell push (founder, 10 Aug: "we should sell mentor" —
+  // sanctioned, but it sells INSIDE the budget, not around it).
+  'buddy_evening',
 ];
 
-export type ExpectedAction = 'log_today' | 'finish_builder' | 'open_plan';
+export type ExpectedAction = 'log_today' | 'finish_builder' | 'open_plan' | 'open_buddy';
 
 export type StudentState =
   | 'building_plan'   // Builder unfinished — blocked from the tracker; only builder-recovery may speak
