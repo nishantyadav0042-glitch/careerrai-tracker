@@ -90,6 +90,40 @@ export function needsBrowserHandoff(s: PaymentSurfaceSignals): boolean {
 }
 
 /**
+ * Did the hand-off actually reach a browser, or are we still inside the app?
+ *
+ * `/go` used to assume the answer was always yes and call `markPaymentTab()`
+ * unconditionally. On iOS that assumption is false and it is self-destructive:
+ * a `target="_blank"` link opened from a home-screen PWA loads in the SAME PWA
+ * window, so `/go` ran inside the app, marked it "the real browser payment
+ * tab", and thereby switched that window to inline Razorpay — the one context
+ * on iOS that cannot complete a payment. The escape hatch disabled itself and
+ * then handed the student the broken path.
+ *
+ * The evidence, from the live database on 9 Aug:
+ *
+ *   160 hand-off tokens minted · 7 ever consumed          (4.4%)
+ *   4 of those 7 are one student, Ujjwal, on iOS
+ *   his token consumed 21:06:10 → order created INLINE 21:06:20 → dismissed 8s
+ *   every event he ever produced reports display_mode 'standalone'
+ *
+ * If `/go` had genuinely opened Safari, the events after it would say
+ * 'browser'. Not one ever did.
+ *
+ * `navigator.standalone === true` is the precise test. It is an iOS-only
+ * property, set only for a home-screen web app window: a real Safari tab and an
+ * SFSafariViewController both report false or undefined. It must NOT be
+ * confused with the `display-mode: standalone` media query, which an Android
+ * Chrome Custom Tab also matches — a Custom Tab IS a real browser where
+ * Razorpay works, and refusing to mark it would break the Android path that
+ * currently converts.
+ */
+export function handoffReachedBrowser(nav: unknown): boolean {
+  if (!nav || typeof nav !== 'object') return true;
+  return (nav as { standalone?: unknown }).standalone !== true;
+}
+
+/**
  * What the student reads while being sent to their browser.
  *
  * It must not read like a failure. Nothing has gone wrong from where they are

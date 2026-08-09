@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { paymentSurface, needsBrowserHandoff, HANDOFF_COPY, type PaymentSurfaceSignals } from './payment-surface';
+import { paymentSurface, needsBrowserHandoff, handoffReachedBrowser, HANDOFF_COPY, type PaymentSurfaceSignals } from './payment-surface';
 
 const base: PaymentSurfaceSignals = {
   escapedTab: false, iosStoreBuild: false, androidStoreBuild: false, ios: false, standalone: false,
@@ -104,5 +104,52 @@ describe('both checkout surfaces route through this one decision', () => {
       expect(code, `${f} still hand-rolls a display-mode check`)
         .not.toMatch(/display-mode:\s*standalone/);
     }
+  });
+});
+
+describe('the hand-off must prove it reached a browser before acting like one', () => {
+  it('knows an iOS home-screen window is NOT the browser', () => {
+    // navigator.standalone === true is iOS-only and means "home-screen web
+    // app". /go running here has not escaped anything.
+    expect(handoffReachedBrowser({ standalone: true })).toBe(false);
+  });
+
+  it('treats a real Safari tab and an in-app Safari view as the browser', () => {
+    expect(handoffReachedBrowser({ standalone: false })).toBe(true);
+    expect(handoffReachedBrowser({})).toBe(true);
+  });
+
+  it('does NOT use the display-mode media query, which would break Android', () => {
+    // An Android Chrome Custom Tab matches `display-mode: standalone` and IS a
+    // real browser where Razorpay works. Only the iOS-specific
+    // navigator.standalone flag distinguishes the two, and 3 of the 7 tokens
+    // ever consumed were Android students on exactly that path.
+    const androidCustomTab = { /* no `standalone` property at all */ };
+    expect(handoffReachedBrowser(androidCustomTab)).toBe(true);
+  });
+
+  it('fails open — an unknown environment is treated as a browser', () => {
+    // Refusing to hand off on an environment we cannot read would strand a
+    // student who might have been fine. The inline path still has the
+    // paymentSurface guard in front of it.
+    expect(handoffReachedBrowser(null)).toBe(true);
+    expect(handoffReachedBrowser(undefined)).toBe(true);
+  });
+
+  it('/go only marks the payment tab after that check passes', () => {
+    const go = readFileSync('src/app/go/page.tsx', 'utf8');
+    expect(go).toContain('handoffReachedBrowser');
+    // The guard must precede the marker, or it is decoration.
+    expect(go.indexOf('handoffReachedBrowser')).toBeLessThan(go.indexOf('markPaymentTab()'));
+  });
+
+  it('/go does not spend the token when it did not reach a browser', () => {
+    // The token stays valid so the SAME link still works once they open it in
+    // Safari. Burning it here is what left 153 of 160 minted links unusable.
+    const go = readFileSync('src/app/go/page.tsx', 'utf8');
+    const guard = go.indexOf('handoffReachedBrowser');
+    const exchange = go.indexOf('/api/install/exchange');
+    expect(guard).toBeLessThan(exchange);
+    expect(go).toMatch(/setStuckInApp\(true\);\s*\n\s*return;/);
   });
 });
