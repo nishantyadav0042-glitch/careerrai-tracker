@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logAdminAction } from '@/lib/audit';
+import { emitTimeline } from '@/lib/os/timeline';
 import { NextRequest, NextResponse } from 'next/server';
 
 function anonClient(request: NextRequest) {
@@ -136,6 +137,12 @@ export async function POST(request: NextRequest) {
     final_price_paise,
     reason: reasonText,
     expires_at: expiresAt,
+  });
+
+  await emitTimeline(admin, {
+    entity: 'student', entityId: student_id, kind: 'scholarship_granted',
+    summary: `Scholarship granted — ${discount_percent}% off`, actor: 'admin',
+    metadata: { kind, final_price_paise },
   });
 
   return NextResponse.json({ ok: true });

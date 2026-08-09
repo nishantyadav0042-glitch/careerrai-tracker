@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
+import { emitTimeline } from '@/lib/os/timeline';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
 
 // The ONE path that turns a real Razorpay capture into a paid, premium student.
@@ -57,6 +58,13 @@ export async function activatePaidOrder(
   await logSecurityEvent(admin, {
     type: 'payment_activated', severity: 'info', userId: row.student_id,
     metadata: { plan: row.plan, orderId, paymentId, coupon: row.coupon_code ?? null, source },
+  });
+
+  // Timeline: the single most important decision in a student's story.
+  await emitTimeline(admin, {
+    entity: 'student', entityId: row.student_id, kind: 'subscribed',
+    summary: `Subscribed — ₹${(row.amount ?? 0) / 100}, ${row.plan}`,
+    actor: 'student', metadata: { orderId, plan: row.plan },
   });
 
   const { data: prof } = await admin.from('profiles').select('email, phone').eq('id', row.student_id).maybeSingle();

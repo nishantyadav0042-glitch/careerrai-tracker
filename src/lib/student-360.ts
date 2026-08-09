@@ -6,6 +6,7 @@ import { assembleIntelligence, type StudentIntelligence } from '@/lib/intelligen
 import { getPhase } from '@/lib/routine-engine';
 import { weeksToExam } from '@/lib/study-plan';
 import type { Blocker } from '@/lib/mission-engine';
+import { getEntityTimeline } from '@/lib/os/timeline';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -43,7 +44,7 @@ const daysAgo = (iso: string | null | undefined, now: number) =>
 export async function getStudent360(admin: any, id: string): Promise<Student360 | null> {
   const now = Date.now();
   const windowStart = new Date(now - ADAPTATION_WINDOW_DAYS * DAY).toISOString().slice(0, 10);
-  const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }, { data: winRoutines }, { data: winCompletions }, { data: coverageRows }, { data: debriefs }] = await Promise.all([
+  const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }, { data: winRoutines }, { data: winCompletions }, { data: coverageRows }, { data: debriefs }, decisions] = await Promise.all([
     admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at, study_target_hours, hours_available, baseline_varc, baseline_dilr, baseline_qa, target_percentile, biggest_blocker, attempt_year, current_stage, is_repeater, is_working_professional').eq('id', id).single(),
     getStudentMomentum(admin, id),
     admin.from('daily_reports').select('report_date, created_at, study_duration, plan_fit, mock_taken').eq('student_id', id).order('report_date', { ascending: false }),
@@ -57,6 +58,9 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
     admin.from('topic_coverage').select('section, topic, status').eq('student_id', id),
     // Mock-pending signal: mocks analysed (debriefs) vs mocks logged.
     admin.from('mock_debriefs').select('taken_on').eq('student_id', id).order('taken_on', { ascending: false }).limit(10),
+    // Decision timeline — subscribed, refunded, buddy assigned, session
+    // expired, OCR failed — the moments the synthesized events above miss.
+    getEntityTimeline(admin, 'student', id, 40),
   ]);
   if (!p || !momentum) return null;
 
@@ -77,6 +81,21 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
   for (const r of (reports ?? []).slice(0, 25)) add(r.created_at ?? `${r.report_date}T12:00:00+05:30`, '✅', `Logged study (${r.report_date})`, 'study');
   // Opened pushes are the real engagement signal; ignore the sent-but-unopened noise here.
   for (const n of (notifs ?? []).filter((x: any) => x.clicked_at).slice(0, 20)) add(n.clicked_at, '🔔', `Opened: ${n.title ?? n.type}`, 'notif');
+
+  // Merge the decision timeline in. These are the "so what" moments —
+  // subscribed, refunded, session expired — recorded on emit rather than
+  // synthesized, so they are exact.
+  const DECISION_ICON: Record<string, string> = {
+    subscribed: '💳', refunded: '↩️', payment_stuck: '⚠️', buddy_assigned: '🤝',
+    buddy_unassigned: '🔻', session_expired: '📵', ocr_failed: '📷', scholarship_granted: '🎁',
+  };
+  const DECISION_KIND: Record<string, TimelineEvent['kind']> = {
+    subscribed: 'money', refunded: 'money', payment_stuck: 'money', scholarship_granted: 'money',
+    buddy_assigned: 'mentor', buddy_unassigned: 'mentor', session_expired: 'mentor', ocr_failed: 'study',
+  };
+  for (const d of (decisions ?? [])) {
+    add(d.createdAt, DECISION_ICON[d.kind] ?? '•', d.summary, DECISION_KIND[d.kind] ?? 'study');
+  }
 
   events.sort((a, b) => b.ts - a.ts);
 

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logAdminAction } from '@/lib/audit';
+import { emitTimeline } from '@/lib/os/timeline';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -46,6 +47,14 @@ export async function POST(request: NextRequest) {
   }
 
   logAdminAction(user.id, 'assign_buddy', 'student', student_id, { buddy_id: buddy_id || null });
+
+  // Timeline: a mentor assignment (or removal) is a decision worth replaying.
+  await emitTimeline(admin, {
+    entity: 'student', entityId: student_id,
+    kind: buddy_id ? 'buddy_assigned' : 'buddy_unassigned',
+    summary: buddy_id ? 'Mentor assigned' : 'Mentor removed',
+    actor: 'admin', metadata: { buddy_id: buddy_id || null },
+  });
 
   return NextResponse.json({ ok: true, student_id, buddy_id });
 }

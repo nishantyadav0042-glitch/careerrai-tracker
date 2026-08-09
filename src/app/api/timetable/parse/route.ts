@@ -5,6 +5,7 @@ import { callGemini, extractJson, type GeminiPart } from '@/lib/gemini';
 import { sanitizeBlocks, sanitizeSyllabusEndDate, sanitizeTargets } from '@/lib/timetable';
 import { EXTRACT_PROMPT, spreadsheetPrompt, salvageTruncatedJson } from '@/lib/timetable-extract';
 import { workbookToSheets, csvToSheet, sheetsToPromptText, windowDatedSheets, type SheetText } from '@/lib/workbook-text';
+import { emitTimeline } from '@/lib/os/timeline';
 
 export const maxDuration = 60;
 
@@ -162,6 +163,14 @@ export async function POST(request: NextRequest) {
   // every target-style message outright — which is what most coachings
   // actually send.
   if (blocks.length === 0 && targets.length === 0) {
+    // Timeline: a real OCR failure — the photo was uploaded and nothing could
+    // be read. This is the one OCR event that is not stored anywhere else, and
+    // the one the founder alert system needs to see a failure trend.
+    await emitTimeline(admin, {
+      entity: 'student', entityId: user.id, kind: 'ocr_failed',
+      summary: 'Timetable OCR failed — nothing readable in the photo', actor: 'student',
+      metadata: { mediaType },
+    });
     return NextResponse.json(
       { error: "Couldn't read any classes or targets from that. Try a clearer photo." },
       { status: 422 },

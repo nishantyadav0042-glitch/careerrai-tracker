@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { audit } from '@/lib/integration-audit';
 import { RELEASE_AFTER_MS } from '@/lib/session-window';
+import { emitTimeline } from '@/lib/os/timeline';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +99,13 @@ export async function POST(request: NextRequest) {
     if (!updated?.length) continue;
 
     released.push(s.id);
+    // Timeline: a booked session nobody joined — a missed promise, on the
+    // student's story and the mentor's both.
+    if (s.student_id) await emitTimeline(admin, {
+      entity: 'student', entityId: s.student_id, kind: 'session_expired',
+      summary: 'Session expired — nobody joined', actor: 'system',
+      metadata: { sessionId: s.id, buddyId: s.buddy_id },
+    });
     await audit({
       subjectId: s.buddy_id,
       actorId: null, // the system did this, not the mentor

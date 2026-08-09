@@ -4,6 +4,7 @@ import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
 import { activatePaidOrder } from '@/lib/activate-payment';
+import { emitTimeline } from '@/lib/os/timeline';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
 // Client-side "payment success" callbacks are never trusted.
@@ -65,6 +66,11 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
         if (row?.student_id) {
           await revokePremium(admin, row.student_id);
+          await emitTimeline(admin, {
+            entity: 'student', entityId: row.student_id, kind: 'refunded',
+            summary: 'Refunded — premium revoked', actor: 'system',
+            metadata: { paymentId: refundedPaymentId },
+          });
           await logSecurityEvent(admin, {
             type: 'payment_refunded', severity: 'warning', userId: row.student_id,
             metadata: { paymentId: refundedPaymentId },
