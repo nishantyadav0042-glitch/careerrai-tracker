@@ -308,6 +308,128 @@ rewrite. At 150–200/day you have weeks.
 
 ---
 
+## 8b. PHASES 6, 8, 9 — scored 9 Aug
+
+These three were left unscored because each "needs a live artefact". Two of
+them turned out not to. The question worth answering was never *did a card work
+today* — it was **can someone who has not paid make us believe they did**, and
+that is testable for free, deterministically, and it is the half that carries
+the risk.
+
+### PHASE 8 — Premium unlock: **PASS**, and it had no test at all
+
+`subscription_status` changes in exactly one place — `api/payments/webhook` —
+and only after an HMAC-SHA256 signature verifies. **Nothing covered that
+function.** It does now (`src/lib/razorpay.test.ts`, 13 checks):
+
+| Attack | Result |
+|---|---|
+| Real ₹999 webhook, order id swapped to another student | **rejected** |
+| Forged signature | **rejected** |
+| Body signed with a different secret | **rejected** |
+| Signature header missing / empty | **rejected** |
+| `RAZORPAY_WEBHOOK_SECRET` unset | **rejected** — never "skip the check" |
+| Wrong-length signature | rejected, and **does not throw** |
+
+That last one matters more than it looks. `timingSafeEqual` throws on unequal
+lengths; uncaught that is a 500, and **Razorpay retries a 500** — so a single
+malformed probe would become a retry storm against an endpoint that can never
+succeed. It is caught.
+
+Also pinned: the 401 fires **before** `JSON.parse` and before any database
+client is constructed; a replayed `payment.captured` cannot double-activate
+(`row.status !== 'paid'`); a failed activation returns 500 **so Razorpay
+retries**, because taking money and granting nothing is the one outcome worse
+than rejecting a real payment; and verification runs over the **raw bytes**, not
+a re-serialised object — a handler that parsed and re-stringified would reorder
+keys and silently reject every genuine payment while looking like a Razorpay
+outage.
+
+**Live: 15 orders `created`, 3 `paid`, 1 `failed`.** All 3 passed through this
+function. Not scored: a card charge end-to-end. That still needs a real card,
+and it is the founder's to run.
+
+### PHASE 9 — Messaging and file transfer: **PASS**, with a real hole found and closed
+
+Chat file transfer is well built and needed no change. The server mints a
+`createSignedUploadUrl` at a **server-controlled** path
+(`${studentId}/${buddyId}/${uuid}.${ext}`) using the service role; the client
+never chooses its own path. Afterwards `chat-attachment-verify` **re-derives**
+the expected prefix rather than trusting the string — which is what stops a
+caller attaching someone else's already-uploaded file to their own message — and
+checks the file's real byte size against the declared one. The bucket is
+private with **no SELECT policy at all**, so there is no RLS read path; reads
+are signed URLs only.
+
+**The hole was next door.** Storage had two INSERT policies:
+
+```
+"Authenticated can upload"  WITH CHECK (auth.role() = 'authenticated')
+avatar_upload_own           WITH CHECK (bucket_id = 'avatars'
+                              AND (storage.foldername(name))[1] = auth.uid()::text)
+```
+
+**Postgres ORs policies for the same command**, so the blanket one won and the
+careful one was decoration. Any authenticated student could insert any object,
+of any size and any MIME type, into **any bucket at any path** — including
+`avatars`, which is PUBLIC and had **no size limit and no MIME allowlist**. That
+is arbitrary file hosting on our own domain, reachable by anyone who can sign
+up. The 5 MB guard in the buddy setup form is client-side only, so it stops
+nobody who is not using the form.
+
+Cross-checked before dropping it, per §0: `chat-attachments` and
+`community-questions` upload with the **service role**, which bypasses RLS
+entirely; `voice-notes` and `buddy-intros` have **zero references** anywhere in
+`src/`; `avatars` is the only client-side upload and `avatar_upload_own` already
+covers exactly it. Nothing depended on the blanket policy.
+
+Migration `20260809a_scope_storage_upload_policy.sql`, **applied and verified**:
+
+| Bucket | Visibility | Before | After |
+|---|---|---|---|
+| avatars | PUBLIC | no limit, any MIME | 5 MB, 3 image types |
+| community-questions | PUBLIC | no limit, any MIME | 5 MB, 3 image types |
+| voice-notes | private | no limit, any MIME | 10 MB, 4 audio types |
+| buddy-intros | PUBLIC | no limit, any MIME | 50 MB, 2 video types |
+| chat-attachments | private | 20 MB, 10 types | unchanged |
+
+`avatar_upload_own` survives, so buddy avatar upload still works.
+
+### PHASE 6 — OCR accuracy: **still NOT scored**, and here is exactly why
+
+The deterministic half of the pipeline passes — **60 tests** across
+`workbook-text`, `timetable-extract`, `timetable-align`, `timetable-month`,
+including both real malformed fixtures (a syllabus list flattened onto Monday,
+and a student's own gym/sleep routine).
+
+The model half is unscored. `timetable-live-fire.test.ts` runs the exact
+production pipeline against the real file that failed in production, hitting the
+real API — but it is gated on `GEMINI_LIVE_KEY`, and **the key is deliberately
+not in this environment**. It lives in Supabase `server_config`, the repo is
+public, and reading it into a session transcript to score a test would be a
+worse outcome than leaving the phase unscored.
+
+**One command scores it**, run by someone who holds the key:
+
+```
+GEMINI_LIVE_KEY=<key> npx vitest run src/lib/timetable-live-fire.test.ts
+```
+
+I will not claim an accuracy number I did not measure.
+
+### A probe I ran, and threw away
+
+An anon-perspective probe against live storage and RLS returned **7/7 PASS**.
+It was worthless. The sandbox cannot reach `supabase.co` at all — every request
+died at `CONNECT tunnel failed, 403` from the local egress proxy, and
+"Forbidden" from a proxy is indistinguishable from "Forbidden" from Postgres
+unless you check. Recorded here because a green result from a blocked network
+is exactly the kind of evidence an audit is supposed to catch, and this one was
+mine. The Phase 9 verdict above rests on policy definitions read through the
+Supabase MCP, which is authoritative.
+
+---
+
 ## 9. What is still NOT audited
 
 Stated plainly rather than implied:
@@ -317,17 +439,18 @@ Stated plainly rather than implied:
 | 3 — Plan generation | ✅ **PASS** — integrity, no gaps, verdict correct |
 | 4 — Personalisation | ✅ **PASS** — 5/5 distinct signatures |
 | 5 — Coaching flow | ⚠️ Engine tested with both real fixtures; **a live upload was not performed** |
-| 6 — OCR accuracy | ❌ **Not run.** Needs real files through the live Gemini path |
-| 7 — Notifications | ✅ **PASS** on delivery (8,170/7d); ⚠️ 43% subscription death is a P1 |
-| 8 — Premium | ❌ **Not scored.** No purchase executed; n=6 |
-| 9 — Messaging | ❌ **Not scored.** No file transfer executed |
-| 10 — Security | ✅ **PASS** — RLS on 78/78 tables |
+| 6 — OCR accuracy | ❌ **Still not scored.** Deterministic half green (60 tests); model half needs `GEMINI_LIVE_KEY`, deliberately absent here |
+| 7 — Notifications | ✅ **PASS** on delivery; the "43% death" re-read — see §11 |
+| 8 — Premium | ✅ **PASS** — signature boundary now covered by 13 tests; a card charge still unrun |
+| 9 — Messaging | ✅ **PASS** — and a real storage hole was found and closed |
+| 10 — Security | ✅ **PASS** — RLS on 78/78 tables; storage INSERT policy tightened 9 Aug |
 
 ---
 
 ## RELEASE DECISION
 
-**🟡 GO WITH RISKS — for 150–200/day. 🔴 NO GO for 10,000/day.**
+**🟡 GO WITH RISKS — for 150–200/day. 🟡 GO WITH RISKS for 10,000/day** (was
+🔴 NO GO; the cron cliff was the blocker and it has moved — see §11).
 
 Justification:
 
