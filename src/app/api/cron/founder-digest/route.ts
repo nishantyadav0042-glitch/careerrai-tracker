@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { sendAdminAlert } from '@/lib/email';
 import { SITE_URL } from '@/lib/site';
+import { buildFounderDigest, digestToHtml } from '@/lib/os/founder-digest';
 
 export const maxDuration = 60;
 
@@ -119,8 +120,15 @@ export async function GET(request: NextRequest) {
 
   if (lines.length === 0) lines.push('No significant movement in the last 24 hours.');
 
+  // The state-of-the-business block, so the founder knows where things stand
+  // before opening any screen (co-founder ask, 9 Aug). Built from the OS: the
+  // same Founder Score the Command Center shows, the sacred-guard criticals,
+  // AI cost, and the last-24h new students / premium / revenue.
+  const state = await buildFounderDigest(admin, Date.now());
+
   const html = `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+      ${digestToHtml(state)}
       <h2 style="font-size:20px;color:#1c1917">CareerRai Daily Intelligence</h2>
       <p style="color:#78716c;font-size:12px">${new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' })} · last 24 hours</p>
       <ul style="color:#292524;line-height:1.8;padding-left:20px">
