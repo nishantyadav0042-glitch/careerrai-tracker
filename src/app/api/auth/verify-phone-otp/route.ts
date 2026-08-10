@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         email: entry?.email ?? null,
         phone: e164,
         buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
-        subscription_status: role === 'student' ? 'free_beta' : null,
+        subscription_status: role === 'student' ? 'free' : null,
         is_premium: false,
         signup_source: role === 'student' ? signupSource : null,
         signup_device: signupDevice.device,
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
           buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
           signup_device: signupDevice.device,
           signup_browser: signupDevice.browser,
-          ...(role === 'student' ? { subscription_status: 'free_beta', signup_source: signupSource } : {}),
+          ...(role === 'student' ? { subscription_status: 'free', signup_source: signupSource } : {}),
         })
         .eq('id', data.user.id);
     } else {

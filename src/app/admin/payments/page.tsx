@@ -42,7 +42,7 @@ export default async function AdminPaymentsPage() {
     return {
       id: s.id,
       name: s.full_name,
-      status: (s.subscription_status as IncomingRow['status']) ?? 'free_beta',
+      status: (s.subscription_status as IncomingRow['status']) ?? 'free',
       plan: (s.subscription_plan as string | null) ?? null,
       renewsAt: (s.subscription_renews_at as string | null) ?? null,
       lastPaidAt: lp?.paid_at ?? null,

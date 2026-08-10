@@ -9,7 +9,7 @@ import { PLANS, isPlanId } from '@/lib/plans';
 export interface IncomingRow {
   id: string;
   name: string;
-  status: 'free_beta' | 'active' | 'expired' | 'refund_requested';
+  status: 'free' | 'active' | 'expired' | 'refund_requested';
   plan: string | null;
   renewsAt: string | null;
   lastPaidAt: string | null;
@@ -36,10 +36,10 @@ export interface RefundRow {
   adminNotes: string | null;
 }
 
-type IncomingFilter = 'all' | 'active' | 'expired' | 'free_beta' | 'refund_requested';
+type IncomingFilter = 'all' | 'active' | 'expired' | 'free' | 'refund_requested';
 
 const STATUS_BADGE: Record<IncomingRow['status'], { label: string; color: 'green' | 'amber' | 'stone' | 'orange' }> = {
-  free_beta: { label: 'Free beta', color: 'stone' },
+  free: { label: 'Free', color: 'stone' },
   active: { label: 'Active', color: 'green' },
   expired: { label: 'Expired', color: 'amber' },
   refund_requested: { label: 'Refund req.', color: 'orange' },
@@ -107,7 +107,7 @@ export function AdminPaymentsClient({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {(['all', 'active', 'expired', 'free_beta', 'refund_requested'] as IncomingFilter[]).map((f) => (
+            {(['all', 'active', 'expired', 'free', 'refund_requested'] as IncomingFilter[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -115,7 +115,7 @@ export function AdminPaymentsClient({
                   filter === f ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                 }`}
               >
-                {f === 'all' ? 'All' : f === 'free_beta' ? 'Free beta' : f === 'refund_requested' ? 'Refund req.' : f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === 'all' ? 'All' : f === 'refund_requested' ? 'Refund req.' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>
