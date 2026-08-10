@@ -7,7 +7,6 @@ import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
 import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
-import { CoachingMirror } from '@/components/coaching-mirror';
 import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
 import { PlanResetButton } from '@/components/home/plan-reset-button';
@@ -530,11 +529,11 @@ export default async function DailyTrackerPage() {
         {/* 3 · LOG + MENTOR — the streak hero, the log, the buddy insight. */}
         {logBlock}
 
-        {/* Coaching students: their class-share mirror (self-gating). */}
-        <CoachingMirror />
-
-        {/* 4 · ADD MY TIMETABLE — dismissible forever via the ✕ (still lives in
-            Profile → Settings). TimetableCard self-hides for non-coaching. */}
+        {/* 4 · TIMETABLE — ONE surface (10 Aug fix: a standalone CoachingMirror
+            plus TimetableCard-which-contains-its-own-CoachingMirror rendered
+            THREE upload prompts at once). HomeTimetableCard is now the single
+            owner: the mirror when a timetable exists, one dismissible prompt
+            when it doesn't. */}
         <HomeTimetableCard />
 
         {/* The daily insight, as a passing 7-second cloud. */}
