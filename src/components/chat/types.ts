@@ -11,4 +11,6 @@ export interface ChatMessage {
   attachment_mime?: string | null;
   attachment_size?: number | null;
   attachment_kind?: 'image' | 'document' | null;
+  /** Soft delete: set when the sender deleted this message for everyone. */
+  deleted_at?: string | null;
 }

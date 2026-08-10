@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Sparkles, X, Paperclip } from 'lucide-react';
+import { Send, Sparkles, X, Paperclip, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -113,6 +113,23 @@ export function ChatThread({
           setMessages((prev) => [...prev, msg]);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `student_id=eq.${studentId}`,
+        },
+        // A delete-for-everyone arrives as an UPDATE (soft delete) — swap the
+        // row in place so the other side sees the tombstone live, not on the
+        // next reload.
+        (payload) => {
+          const msg = payload.new as ChatMessage;
+          if (msg.buddy_id !== buddyId) return;
+          setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+        }
+      )
       .subscribe();
 
     return () => {
@@ -204,6 +221,32 @@ export function ChatThread({
     }
   }, [draft, sending, aiBullets, studentId, buddyId, meId, sendStudentId, upload]);
 
+  // Delete-for-everyone — own messages only (Shreya's ask, 10 Aug). Optimistic
+  // tombstone, rolled back if the server refuses.
+  const deleteMessage = useCallback(async (id: string) => {
+    if (id.startsWith('temp-')) return; // still sending — nothing to delete yet
+    if (!window.confirm('Delete this message for everyone?')) return;
+    const prev = messages;
+    setMessages((cur) => cur.map((m) => (m.id === id
+      ? { ...m, deleted_at: new Date().toISOString(), body: '', attachment_kind: null, attachment_name: null }
+      : m)));
+    try {
+      const res = await fetch('/api/chat/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: id }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setMessages(prev);
+        setSendError(json.error ?? 'Could not delete — try again.');
+      }
+    } catch {
+      setMessages(prev);
+      setSendError('Network problem — try again.');
+    }
+  }, [messages]);
+
   const generateDraft = useCallback(async () => {
     if (!sendStudentId || generatingDraft) return;
     setGeneratingDraft(true);
@@ -260,8 +303,35 @@ export function ChatThread({
         ) : (
           messages.map((m) => {
             const mine = m.sender_id === meId;
+            // Deleted-for-everyone tombstone: the thread keeps its shape, the
+            // content is gone for both sides.
+            if (m.deleted_at) {
+              return (
+                <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+                  <div className={cn(
+                    'max-w-[78%] rounded-2xl px-3.5 py-2 text-[13px] italic',
+                    'border border-dashed',
+                    mine ? 'border-stone-300 text-stone-400 rounded-br-sm' : 'border-stone-200 text-stone-400 rounded-bl-sm',
+                  )}>
+                    🚫 {mine ? 'You deleted this message' : 'This message was deleted'}
+                  </div>
+                </div>
+              );
+            }
             return (
-              <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+              <div key={m.id} className={cn('group flex items-end gap-1', mine ? 'justify-end' : 'justify-start')}>
+                {/* Delete — own messages only, WhatsApp-style delete for everyone. */}
+                {mine && !m.id.startsWith('temp-') && (
+                  <button
+                    type="button"
+                    onClick={() => void deleteMessage(m.id)}
+                    aria-label="Delete this message"
+                    title="Delete for everyone"
+                    className="mb-1 shrink-0 rounded-lg p-1.5 text-stone-300 opacity-60 transition-opacity hover:bg-stone-100 hover:text-red-600 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <div
                   className={cn(
                     'max-w-[78%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap',

@@ -60,7 +60,7 @@ export async function fetchPairMessages(
     .from('chat_messages')
     // attachment_path is deliberately NOT selected — it never leaves the
     // server. Clients fetch a short-lived signed URL by message id instead.
-    .select('id, student_id, buddy_id, sender_id, body, created_at, read_at, attachment_name, attachment_mime, attachment_size, attachment_kind')
+    .select('id, student_id, buddy_id, sender_id, body, created_at, read_at, attachment_name, attachment_mime, attachment_size, attachment_kind, deleted_at')
     .eq('student_id', pair.studentId)
     .eq('buddy_id', pair.buddyId)
     .order('created_at', { ascending: false })

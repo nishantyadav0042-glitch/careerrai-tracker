@@ -221,6 +221,18 @@ describe('magic bytes must match the claimed type', () => {
     expect(sniffMatchesMime(zipHead('xl/worksheets/sheet1.xml'), XLSX_MIME)).toBe(true);
   });
 
+  it('accepts UNTYPED xml first entries (WPS / Google Sheets orderings) for either type', () => {
+    // 10 Aug widening — the second real-world refusal (Shreya, 6 Aug). Office
+    // generators our users actually have don't all lead with [Content_Types]
+    // or a typed folder; any ASCII xml/rels part is an OOXML tell, while a
+    // renamed media/exe archive leads with its payload and still fails.
+    expect(sniffMatchesMime(zipHead('customXml/item1.xml'), XLSX_MIME)).toBe(true);
+    expect(sniffMatchesMime(zipHead('customXml/item1.xml'), DOCX_MIME)).toBe(true);
+    expect(sniffMatchesMime(zipHead('theme/theme1.xml'), XLSX_MIME)).toBe(true);
+    expect(sniffMatchesMime(zipHead('movie.mp4'), XLSX_MIME)).toBe(false);
+    expect(sniffMatchesMime(zipHead('setup.exe'), DOCX_MIME)).toBe(false);
+  });
+
   it('rejects an empty or truncated header instead of guessing', () => {
     expect(sniffMatchesMime(new Uint8Array(0), 'application/pdf')).toBe(false);
     expect(sniffMatchesMime(bytes(0xff), 'image/jpeg')).toBe(false);

@@ -191,7 +191,20 @@ export function sniffMatchesMime(head: Uint8Array, mime: string): boolean {
       const typed = mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         ? name.startsWith('xl/')
         : name.startsWith('word/');
-      return generic || typed;
+      // Widened 10 Aug (Shreya's real spreadsheet was refused on 6 Aug): the
+      // office generators our users actually have — WPS, Google Sheets export,
+      // LibreOffice, Office mobile — order zip entries differently, so pinning
+      // exact first-entry names keeps refusing genuine files. Rules, in order:
+      //   · a TYPED first entry (xl/ vs word/) must match the claimed type —
+      //     an .xlsx renamed .docx still fails, interiors differ;
+      //   · otherwise any ASCII xml/rels part passes — every OOXML internal is
+      //     one, while renamed media/exe archives start with their payload.
+      const wrongType = mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ? name.startsWith('word/')
+        : name.startsWith('xl/');
+      if (wrongType) return false;
+      const ooxmlPart = /^[\x20-\x7e]+\.(xml|rels)$/i.test(name);
+      return generic || typed || ooxmlPart;
     }
     default:
       return false;
