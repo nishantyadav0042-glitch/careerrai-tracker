@@ -129,33 +129,6 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
 
       </div>
 
-      {/* The deal, said loudly (founder, 10 Aug): we carry six jobs, the
-          student carries one. Every line is a real live system, not a promise. */}
-      <div className="rounded-2xl border-2 border-stone-900 bg-white p-5">
-        <p className="text-center text-[11px] font-bold uppercase tracking-widest text-stone-500">
-          From today, CareerRai does <span className="text-orange-600">6 things</span> for you
-        </p>
-        <div className="mt-3 space-y-2">
-          {([
-            'Builds your day — all 3 sections, sized to your hours',
-            'Tracks your syllabus, topic by topic',
-            'Schedules your mocks + all-November revision',
-            'Guards your finish date — honestly, every week',
-            'Reminds you, recovers missed days, protects your streak',
-            'Re-plans tomorrow from what you actually did today',
-          ] as const).map((job, i) => (
-            <div key={job} className="flex items-start gap-2.5">
-              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-stone-900 text-[10px] font-bold text-white">{i + 1}</span>
-              <p className="text-[13px] leading-snug text-stone-700">{job}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 rounded-xl bg-orange-500 px-4 py-3 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-orange-100">You do 1 thing</p>
-          <p className="text-xl font-extrabold text-white" style={{ fontFamily: 'Georgia, serif' }}>Study.</p>
-        </div>
-      </div>
-
       {/* Not an ending — a journey that has already started. Every line is
           real: today's mission exists (routine generates on first homepage
           load), tomorrow regenerates from tonight's state, the weekly

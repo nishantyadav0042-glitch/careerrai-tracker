@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 interface ScreenMeetBuddyProps {
   onNext: (data?: Record<string, unknown>) => Promise<void>;
@@ -9,112 +10,79 @@ interface ScreenMeetBuddyProps {
   isLoading: boolean;
 }
 
-interface MentorPreview {
-  firstName: string;
-  fullName: string;
+interface RealBuddy {
+  full_name: string;
   college: string | null;
-  avatarUrl: string | null;
-  journey: string | null;
-  bio: string | null;
-  matchedOn: string[];
+  cat_percentile: number | null;
+  buddy_bio: string | null;
 }
 
-// The trust screen, honest by construction (founder S2, 10 Aug): show a REAL
-// mentor — the assigned one if it exists, else the student's actual best match
-// from the same rankBuddies engine the evening nudge uses. Real name, real
-// journey, real match reasons. If they aren't assigned yet, the copy says so
-// plainly; we never simulate a relationship that doesn't exist. (The old
-// generic "IIM Alumni Buddy" persona and the dead "listen 10s" audio gate are
-// gone for good.)
+// Honest by construction: buddy assignment happens later (an admin match,
+// not an automatic onboarding step), so almost every student reaches this
+// screen with no buddy_id yet. This used to fabricate a generic "IIM Alumni
+// Buddy" persona and a "coming soon" audio player nobody had ever recorded
+// (0 of 5 real buddies have ever set intro_audio_url) — exactly the wrong
+// screen to feel synthetic on. Now: show the real buddy if one is already
+// assigned, otherwise say plainly that matching happens next.
 export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }: ScreenMeetBuddyProps) {
-  const [state, setState] = useState<{ mentor: MentorPreview | null; assigned: boolean } | undefined>(undefined);
+  const supabase = createClient();
+  const [buddy, setBuddy] = useState<RealBuddy | null | undefined>(undefined); // undefined = loading, null = none assigned
 
   useEffect(() => {
     (async () => {
-      try {
-        const res = await fetch('/api/student/mentor-match');
-        if (!res.ok) { setState({ mentor: null, assigned: false }); return; }
-        setState(await res.json());
-      } catch {
-        setState({ mentor: null, assigned: false });
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setBuddy(null); return; }
+      const { data: profile } = await supabase.from('profiles').select('buddy_id').eq('id', user.id).single();
+      if (!profile?.buddy_id) { setBuddy(null); return; }
+      const { data: buddyData } = await supabase
+        .from('profiles')
+        .select('full_name, college, cat_percentile, buddy_bio')
+        .eq('id', profile.buddy_id)
+        .single();
+      setBuddy((buddyData as RealBuddy) ?? null);
     })();
-  }, []);
+  }, [supabase]);
 
-  if (state === undefined) {
+  if (buddy === undefined) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="w-12 h-12 bg-orange-100 rounded-full mx-auto mb-3 animate-pulse" />
-          <p className="text-sm text-stone-600">Finding your IIM mentor…</p>
+          <p className="text-sm text-stone-600">Finding your IIM buddy…</p>
         </div>
       </div>
     );
   }
 
-  const m = state.mentor;
-
   return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-sm text-orange-600 font-semibold uppercase tracking-wider">
-          {state.assigned ? 'Your mentor' : 'Matched for you'}
-        </p>
+    <div className="space-y-6">
+      <div>
+        <p className="text-sm text-orange-600 font-semibold uppercase tracking-wider">Not coaching. 1-on-1.</p>
       </div>
 
-      {m ? (
-        <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-6">
-          <div className="flex flex-col items-center">
-            {m.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-teal-700 text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>
-                {m.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <h3 className="mt-3 text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>{m.fullName}</h3>
-            {m.college && <p className="text-xs text-stone-500">{m.college}</p>}
-            {m.journey && (
-              <span className="mt-3 rounded-full bg-stone-900 px-4 py-1.5 text-[13px] font-extrabold text-white">{m.journey}</span>
-            )}
-          </div>
-
-          {m.bio && (
-            <p className="mt-4 border-t border-orange-100 pt-4 text-center text-sm italic leading-relaxed text-stone-700">
-              &quot;{m.bio}&quot;
-            </p>
-          )}
-
-          {m.matchedOn.length > 0 && (
-            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-              {m.matchedOn.map((r) => (
-                <span key={r} className="rounded-full bg-teal-100 px-2.5 py-1 text-[10.5px] font-bold text-teal-700">{r}</span>
-              ))}
+      {buddy ? (
+        <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl p-6 border border-orange-100">
+          <div className="flex flex-col items-center mb-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3">
+              {buddy.full_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
-          )}
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {([['1-on-1', 'only yours'], ['Weekly', 'live call'], ['Daily', 'chat replies']] as const).map(([big, small]) => (
-              <div key={big} className="rounded-xl bg-stone-100 py-2 text-center">
-                <p className="text-[14px] font-extrabold text-stone-900">{big}</p>
-                <p className="text-[9.5px] font-semibold uppercase tracking-wide text-stone-500">{small}</p>
-              </div>
-            ))}
+            <h3 className="text-xl font-bold text-stone-900">{buddy.full_name}</h3>
+            <div className="flex gap-2 mt-3 flex-wrap justify-center">
+              {buddy.college && (
+                <div className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">{buddy.college}</div>
+              )}
+              {buddy.cat_percentile != null && (
+                <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">{buddy.cat_percentile.toFixed(1)}%ile CAT</div>
+              )}
+            </div>
           </div>
+          {buddy.buddy_bio && (
+            <p className="text-sm text-stone-700 text-center italic border-t border-orange-100 pt-4">&quot;{buddy.buddy_bio}&quot;</p>
+          )}
         </div>
       ) : (
-        <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-6 text-center">
-          <p className="text-sm font-semibold text-stone-900">We match you with a real IIM senior after this.</p>
-        </div>
-      )}
-
-      {/* Honest state: a real person, and exactly when the relationship starts. */}
-      {m && !state.assigned && (
-        <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-          <p className="text-[12.5px] leading-snug text-stone-700">
-            <b>{m.firstName} is a real mentor, already guiding students like you.</b> Upgrade any time and your match is confirmed the same day.
-          </p>
+        <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl p-6 border border-orange-100 text-center">
+          <p className="text-sm font-semibold text-stone-900">You&apos;ll be matched with your buddy right after this.</p>
         </div>
       )}
 
