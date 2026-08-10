@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, Share, Globe, MoreVertical } from 'lucide-react';
+import { Download, Globe, MoreVertical } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { useInstall } from '@/lib/install/use-install';
 import { AppStoreCard } from '@/components/install/app-store-card';
@@ -42,7 +42,7 @@ interface InstallJourneyProps {
 }
 
 export function InstallJourney({ appInstalled = false, planReady = false }: InstallJourneyProps) {
-  const { ui, strategy, env, install, addToHomeScreenInstead, busy, ready, installed } = useInstall();
+  const { ui, strategy, env, install, busy, ready, installed } = useInstall();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -63,29 +63,22 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
   // Copy + icon per engine decision — the button always calls install().
   const isEscape = ui === 'escape-sheet';
   const isAppStore = ui === 'ios-app-store';
-  const isIOS = ui === 'ios-coachmark';
   const heading = isEscape
     ? `Get the app in ${env.platform === 'android' ? 'Chrome' : 'Safari'}`
     : isAppStore
       ? (planReady ? 'Your plan is ready — get the app' : 'CareerRai for iPhone')
-      : isIOS
-        ? 'Add to your Home Screen'
-        : planReady ? 'Install to start Day 1' : 'Get the CareerRai app';
+      : planReady ? 'Install to start Day 1' : 'Get the CareerRai app';
   const sub = isEscape
     ? `This browser can’t install it cleanly. One tap opens ${env.platform === 'android' ? 'Chrome' : 'Safari'} on this same page.`
     : isAppStore
     ? 'Download it from the App Store — your reminders, streak and daily insight only reach you through the app.'
-    : isIOS
-      ? '2 quick taps in Safari — then it opens like a real app, and you’re already signed in.'
-      : planReady
+    : planReady
         ? 'Put your plan on your Home Screen — one tap · ~3 MB · daily reminders so you never lose the streak.'
         : 'One tap · ~3 MB · opens like a normal app, with your reminders.';
   const cta = isEscape
-    ? `Open in ${env.platform === 'android' ? 'Chrome' : 'Safari'}`
-    : isIOS
-      ? 'Show me the 2 taps'
-      : ui === 'android-guide' ? 'Show me how' : 'Install app';
-  const Icon = isEscape ? Globe : isIOS ? Share : ui === 'android-guide' ? MoreVertical : Download;
+    ? 'Open in Chrome'
+    : ui === 'android-guide' ? 'Show me how' : 'Install app';
+  const Icon = isEscape ? Globe : ui === 'android-guide' ? MoreVertical : Download;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-900/50 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true">
@@ -103,11 +96,7 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
             lookalike. One control for one action, everywhere in the product. */}
         {isAppStore ? (
           <div className="mt-5">
-            <AppStoreCard
-              onInstall={() => void install()}
-              onFallback={() => void addToHomeScreenInstead()}
-              busy={busy}
-            />
+            <AppStoreCard onInstall={() => void install()} busy={busy} />
           </div>
         ) : (
           <button

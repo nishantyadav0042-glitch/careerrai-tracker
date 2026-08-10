@@ -3,16 +3,20 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, MessageCircle } from 'lucide-react';
 import { supportWhatsappUrl } from '@/lib/whatsapp';
-import { InstallLiveGuide } from '@/components/install/install-live-guide';
+import { AndroidInstallGuide } from '@/components/install/android-install-guide';
+import { InstallButton } from '@/components/install/install-button';
+import { useInstall } from '@/lib/install/use-install';
 
 // The installed-PWA entry point. Two jobs, decided by display mode:
 //  • Standalone (opened from Home Screen): exchange the one-time hand-off token
 //    for a real session, so the installed app lands logged in.
-//  • Browser: the "Add to Home Screen" guide — the same live, red-ring visual
-//    walkthrough used in the post-signup sequence (InstallLiveGuide), for one
-//    consistent guide everywhere. We don't consume the token here — leaving
-//    it in the URL means Add-to-Home-Screen saves it, so the first launch
-//    auto-logs-in.
+//  • Browser: the install route for THIS platform. Android sees the red-ring
+//    Add-to-Home-Screen walkthrough (the same one the post-signup sequence
+//    uses); iPhone sees the one black App Store button and nothing else — it
+//    has a real native app, so a home-screen guide here would be a second,
+//    worse way to install the same thing. We don't consume the token in the
+//    Android case: leaving it in the URL means Add-to-Home-Screen saves it, so
+//    the first launch auto-logs-in.
 //
 // Dead-end fix (founder, 23 Jul): a student landing here in a plain browser
 // tab — nothing installed yet, or just re-visiting — had NO way to go back or
@@ -28,6 +32,9 @@ function isStandalone(): boolean {
 
 export default function AppEntry() {
   const [state, setState] = useState<'checking' | 'exchanging' | 'guide'>('checking');
+  // One source of truth for "which install route is this device on".
+  const { ui } = useInstall();
+  const isIphone = ui === 'ios-app-store';
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- entry routing runs client-side */
@@ -83,7 +90,7 @@ export default function AppEntry() {
         <p className="mt-2 text-sm text-stone-500">2 quick taps — then it opens like a real app, and you&apos;re signed in.</p>
 
         <div className="mt-6 w-full">
-          <InstallLiveGuide />
+          {isIphone ? <InstallButton /> : <AndroidInstallGuide />}
         </div>
 
         <button

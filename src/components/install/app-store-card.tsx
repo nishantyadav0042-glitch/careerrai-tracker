@@ -31,15 +31,7 @@ export function AppleGlyph({ className }: { className?: string }) {
 
 const PROOF = ['Free to install', '~10 MB', 'No ads, ever'];
 
-export function AppStoreCard({
-  onInstall,
-  onFallback,
-  busy,
-}: {
-  onInstall: () => void;
-  onFallback?: () => void;
-  busy?: boolean;
-}) {
+export function AppStoreCard({ onInstall, busy }: { onInstall: () => void; busy?: boolean }) {
   return (
     <div className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.14)]">
       {/* App identity — icon, name, seller. The same three things the App Store
@@ -89,19 +81,6 @@ export function AppStoreCard({
             {busy ? 'Opening the App Store…' : 'Download on the App Store'}
           </span>
         </button>
-
-        {onFallback && (
-          // Deliberately quiet. Almost nobody needs it — but a student whose
-          // App Store is signed out or out of storage would otherwise have no
-          // way to install at all, and would simply leave.
-          <button
-            type="button"
-            onClick={onFallback}
-            className="mx-auto mt-2.5 block text-[11.5px] font-medium text-stone-400 underline-offset-2 transition-colors hover:text-stone-600 hover:underline"
-          >
-            App Store not opening? Add to Home Screen instead
-          </button>
-        )}
       </div>
     </div>
   );

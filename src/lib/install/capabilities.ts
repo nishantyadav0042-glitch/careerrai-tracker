@@ -49,13 +49,10 @@ export function resolveStrategy(env: InstallEnvironment, facts: RuntimeInstallFa
   // 5. Chromium that SHOULD fire a prompt but hasn't yet → wait-then-prompt.
   if (capabilities.mayFireBeforeInstallPrompt) return 'native-prompt-pending';
 
-  // The iOS Add-to-Home-Screen branch used to live here. It is gone from the
-  // RESOLVER because rule 2 now catches every Apple device before this point —
-  // leaving it would have been a branch that can never be taken. The A2HS
-  // strategies still exist and are still reachable, but only by explicit
-  // student choice: useInstall().addToHomeScreenInstead(), offered as the quiet
-  // second option under the App Store card for anyone whose App Store won't
-  // cooperate.
+  // The iOS Add-to-Home-Screen branch used to live here, and is deleted rather
+  // than kept "just in case": rule 2 catches every Apple device above, so it
+  // could never be reached, and a second way to install on iOS is exactly the
+  // duplication we are removing.
 
   // 6. Android browser with no prompt (Firefox; Opera when it misbehaves) →
   //    manual menu guide.
@@ -75,11 +72,7 @@ export function explainStrategy(strategy: InstallStrategy): string {
     case 'native-prompt': return 'Chromium install prompt ready — one tap.';
     case 'native-prompt-pending': return 'Chromium — waiting for the install prompt to arm.';
     case 'ios-app-store': return 'iPhone/iPad — the real native app on the App Store, one tap.';
-    case 'ios-safari-a2hs': return 'iOS Safari — no API; animated Add-to-Home-Screen guide (Share at bottom).';
-    case 'ios-browser-a2hs': return 'iOS Chrome/Edge/Firefox — Add to Home Screen via the share menu (16.4+).';
-    case 'ios-browser-to-safari': return 'iOS non-Safari (old iOS) — reopen in Safari to install.';
     case 'android-open-in-chrome': return 'Android in-app browser — escape to Chrome to install.';
-    case 'ios-open-in-safari': return 'iOS in-app browser — open in Safari to install.';
     case 'android-manual-a2hs': return 'Android browser without a prompt — manual menu guide.';
     case 'desktop-install': return 'Desktop Chromium — install from the address bar.';
     case 'unsupported': return 'No install path available here — offer bookmark / help.';

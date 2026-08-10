@@ -48,9 +48,8 @@ export type InstallUiKind =
   | 'hidden'          // already installed / running standalone — show nothing
   | 'button'          // a plain Install button that does the right thing on tap
   | 'ios-app-store'   // iPhone/iPad — the real App Store card, one tap
-  | 'ios-coachmark'   // show the animated Add-to-Home-Screen sheet
   | 'android-guide'   // show the manual Android menu guide
-  | 'escape-sheet'    // in-app browser — show "open in Chrome/Safari" CTA
+  | 'escape-sheet'    // Android in-app browser — show "open in Chrome" CTA
   | 'unsupported';    // offer bookmark / WhatsApp help
 
 export interface InstallState {
@@ -71,12 +70,8 @@ function uiFor(strategy: InstallStrategy): InstallUiKind {
     case 'native-prompt':
     case 'native-prompt-pending':
     case 'desktop-install': return 'button';
-    case 'ios-safari-a2hs':
-    case 'ios-browser-a2hs':
-    case 'ios-browser-to-safari': return 'ios-coachmark';
     case 'android-manual-a2hs': return 'android-guide';
-    case 'android-open-in-chrome':
-    case 'ios-open-in-safari': return 'escape-sheet';
+    case 'android-open-in-chrome': return 'escape-sheet';
     case 'unsupported': return 'unsupported';
   }
 }
@@ -114,17 +109,6 @@ function waitForArmedPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent
 export interface UseInstallResult extends InstallState {
   /** The single action the one button calls. Does the right thing per strategy. */
   install: () => Promise<void>;
-  /**
-   * The iOS escape hatch: install as a Home Screen web app instead of via the
-   * App Store.
-   *
-   * This exists so the Add-to-Home-Screen path stays REACHABLE rather than
-   * becoming dead code the day the App Store became the default — and because
-   * a student whose App Store is signed out, region-locked, or simply out of
-   * storage would otherwise have no way to install at all. It is a deliberate
-   * second choice offered quietly, never the headline.
-   */
-  addToHomeScreenInstead: () => Promise<void>;
   /** True after the environment has been read on the client (avoids SSR flash). */
   ready: boolean;
 }
@@ -203,15 +187,11 @@ export function useInstall(): UseInstallResult {
           openAppStore();
           break;
         }
-        case 'android-open-in-chrome':
-        case 'ios-open-in-safari': {
+        case 'android-open-in-chrome': {
           track('install_escape', { inApp: env.inApp, platform: env.platform });
           escapeInAppBrowser(env);
           break;
         }
-        case 'ios-safari-a2hs':
-        case 'ios-browser-a2hs':
-        case 'ios-browser-to-safari':
         case 'android-manual-a2hs': {
           // These are UI-driven (coachmark/guide). Mint a logged-in hand-off so
           // the installed icon opens signed in, and let the caller render the
@@ -233,19 +213,6 @@ export function useInstall(): UseInstallResult {
     }
   }, [state, recompute]);
 
-  const addToHomeScreenInstead = useCallback(async () => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    try {
-      track('install_a2hs_fallback', { platform: state?.env.platform, browser: state?.env.browser });
-      // Same hand-off the guide uses: /app carries a login token, so the icon
-      // they add opens already signed in.
-      window.location.href = await mintHandoffUrl();
-    } finally {
-      busyRef.current = false;
-    }
-  }, [state]);
-
   // Neutral SSR/first-paint state until the client read completes.
   const base: InstallState =
     state ?? {
@@ -258,5 +225,5 @@ export function useInstall(): UseInstallResult {
       busy: false,
     };
 
-  return { ...base, install, addToHomeScreenInstead, ready };
+  return { ...base, install, ready };
 }

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { InstallButton } from '@/components/install/install-button';
-import { InstallLiveGuide } from '@/components/install/install-live-guide';
+import { AndroidInstallGuide } from '@/components/install/android-install-guide';
+import { useInstall } from '@/lib/install/use-install';
 import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 import { SixPromises } from '@/components/six-promises';
@@ -12,13 +13,18 @@ import { SixPromises } from '@/components/six-promises';
 // on"). Five stations, always on screen: what's done gets a tick, the current
 // one pulses, and the unfinished ones PULL — the student can see exactly how
 // close the finish line is, and the finish line is reminders ON in the app.
+// iPhone has one fewer station than Android, and that is the point (10 Aug):
+// the App Store hands the app over in one tap, so there is no "here is how to
+// add it to your Home Screen" step to walk through. Showing a station we then
+// skip would leave a visible gap in the rail on the smoothest journey we have.
 const JOURNEY = ['Install', 'Open app', 'What we do', 'Ready'] as const;
+const JOURNEY_IPHONE = ['Install', 'What we do', 'Ready'] as const;
 
-function JourneyRail({ current }: { current: number }) {
+function JourneyRail({ current, stations }: { current: number; stations: readonly string[] }) {
   return (
     <div className="mb-5">
       <div className="flex items-center">
-        {JOURNEY.map((label, i) => (
+        {stations.map((label, i) => (
           <div key={label} className={i === 0 ? 'flex items-center' : 'flex flex-1 items-center'}>
             {i > 0 && <div className={`h-0.5 flex-1 ${i <= current ? 'bg-stone-900' : 'bg-stone-200'}`} />}
             <div
@@ -37,8 +43,8 @@ function JourneyRail({ current }: { current: number }) {
         ))}
       </div>
       <div className="mt-1.5 flex justify-between">
-        <span className="text-[9px] font-semibold text-stone-400">{JOURNEY[0]}</span>
-        <span className={`text-[9px] font-bold ${current >= JOURNEY.length - 1 ? 'text-orange-600' : 'text-stone-400'}`}>{JOURNEY[JOURNEY.length - 1]}</span>
+        <span className="text-[9px] font-semibold text-stone-400">{stations[0]}</span>
+        <span className={`text-[9px] font-bold ${current >= stations.length - 1 ? 'text-orange-600' : 'text-stone-400'}`}>{stations[stations.length - 1]}</span>
       </div>
     </div>
   );
@@ -70,6 +76,12 @@ function isStandalone(): boolean {
 // Builder, never invented.
 export default function PostSignupSequence() {
   const [visible, setVisible] = useState(true);
+  // iPhone's whole install is one tap on the App Store card, so the "here's how
+  // to add it" screen that follows is not just unnecessary — it is a step that
+  // asks a student who has already finished to keep going.
+  const { ui: installUi } = useInstall();
+  const isIphone = installUi === 'ios-app-store';
+  const stations = isIphone ? JOURNEY_IPHONE : JOURNEY;
   const [pushBusy, setPushBusy] = useState(false);
   const [pushState, setPushState] = useState<EnablePushResult | null>(null);
 
@@ -113,6 +125,8 @@ export default function PostSignupSequence() {
   // manual step (no page-level signal ever confirms an iOS Add-to-Home-Screen
   // completed), and we already saw that exact dead-end fail tonight.
   // Flow: installFirst → openApp → commit → thanks → share.
+  // On iPhone the openApp station is skipped entirely (10 Aug) — the App Store
+  // installs the app itself, so there is nothing left to walk anyone through.
   const [step, setStep] = useState<Step>('installFirst');
 
   // Already running standalone (e.g. the ceremony re-mounted after an iOS
@@ -163,7 +177,7 @@ export default function PostSignupSequence() {
 
         {step === 'installFirst' && (
           <div className="space-y-6 text-center">
-            <JourneyRail current={0} />
+            <JourneyRail current={0} stations={stations} />
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
@@ -180,7 +194,7 @@ export default function PostSignupSequence() {
               <InstallButton variant="banner" />
               <button
                 type="button"
-                onClick={() => setStep('openApp')}
+                onClick={() => setStep(isIphone ? 'promises' : 'openApp')}
                 className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
               >
                 Continue →
@@ -191,7 +205,7 @@ export default function PostSignupSequence() {
 
         {step === 'openApp' && (
           <div className="space-y-5 text-center">
-            <JourneyRail current={1} />
+            <JourneyRail current={1} stations={stations} />
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
                 App downloaded? Open CareerRai in the app now.
@@ -200,7 +214,7 @@ export default function PostSignupSequence() {
                 Not there yet? The 10-second route:
               </p>
             </div>
-            <InstallLiveGuide />
+            <AndroidInstallGuide />
             <button
               type="button"
               onClick={() => setStep('promises')}
@@ -213,7 +227,7 @@ export default function PostSignupSequence() {
 
         {step === 'promises' && (
           <div className="space-y-5">
-            <JourneyRail current={2} />
+            <JourneyRail current={isIphone ? 1 : 2} stations={stations} />
             {/* The hold-to-commit ceremony used to live here — a ritual that
                 asked the student for a promise before we had named a single
                 thing we do for them. Backwards. The app commits first, out
@@ -224,7 +238,7 @@ export default function PostSignupSequence() {
 
         {step === 'reminders' && (
           <div className="space-y-6 text-center">
-            <JourneyRail current={3} />
+            <JourneyRail current={isIphone ? 2 : 3} stations={stations} />
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-3xl shadow-lg shadow-orange-200">🔔</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
