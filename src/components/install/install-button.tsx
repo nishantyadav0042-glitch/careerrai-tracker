@@ -12,6 +12,7 @@
 import { Download, Share, Globe, Smartphone } from 'lucide-react';
 import { useInstall } from '@/lib/install/use-install';
 import type { InstallUiKind } from '@/lib/install/use-install';
+import { AppStoreCard } from './app-store-card';
 
 type Variant = 'card' | 'banner' | 'text';
 
@@ -22,11 +23,26 @@ const UI_ICON: Partial<Record<InstallUiKind, typeof Download>> = {
 };
 
 export function InstallButton({ variant = 'card' }: { variant?: Variant }) {
-  const { ui, install, busy, ready, env } = useInstall();
+  const { ui, install, addToHomeScreenInstead, busy, ready, env } = useInstall();
 
   // Nothing to show once it's installed, or before the client read settles
   // (prevents an SSR flash of the wrong label).
   if (!ready || ui === 'hidden') return null;
+
+  // iPhone/iPad: the real app exists, so the generic orange install button is
+  // replaced entirely by the App Store card — in EVERY variant, including the
+  // inline `text` one. A student who has seen the black App Store button once
+  // should never be shown a different, weaker control for the same action
+  // somewhere else in the product.
+  if (ui === 'ios-app-store') {
+    return (
+      <AppStoreCard
+        onInstall={() => void install()}
+        onFallback={() => void addToHomeScreenInstead()}
+        busy={busy}
+      />
+    );
+  }
 
   const label = labelFor(ui, env.platform);
   const Icon = UI_ICON[ui] ?? Download;

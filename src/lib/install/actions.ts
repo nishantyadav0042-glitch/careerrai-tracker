@@ -3,6 +3,7 @@
 // in isolation. All are best-effort and SSR-safe.
 
 import type { InAppBrowser, InstallEnvironment } from './types';
+import { APP_STORE_URL } from './store-links';
 
 function loc(): Location | null {
   return typeof window !== 'undefined' ? window.location : null;
@@ -101,4 +102,22 @@ export function escapeInAppBrowser(env: InstallEnvironment, url = currentUrl()):
     openInSafari(url);
   }
   // Other platforms: nothing to do — the manual instruction UI handles it.
+}
+
+// ---------------------------------------------------------------------------
+// iOS: the real app. One tap, from anywhere.
+// ---------------------------------------------------------------------------
+
+/**
+ * Send an iPhone/iPad to CareerRai on the App Store.
+ *
+ * `location.href` rather than `window.open`: apps.apple.com is a universal
+ * link, so a same-tab navigation is what makes iOS hand off to the App Store
+ * app — and unlike `window.open` it is never eaten by a popup blocker or by
+ * the Instagram/WhatsApp webviews, which are exactly the contexts where the
+ * old Add-to-Home-Screen route was hopeless.
+ */
+export function openAppStore(url: string = APP_STORE_URL): void {
+  if (!loc()) return;
+  window.location.href = url;
 }

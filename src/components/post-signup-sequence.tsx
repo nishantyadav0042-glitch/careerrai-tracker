@@ -169,8 +169,11 @@ export default function PostSignupSequence() {
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
                 First, let&apos;s get your app ready.
               </h1>
+              {/* "~3 MB" was a PWA fact and stopped being true for iPhone the
+                  day the App Store build shipped — the card states the real
+                  size per platform now, so this line no longer guesses. */}
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                We remind you <b>what to study</b> and <b>when</b>, and send a <b>daily insight every evening</b> — all of it reaches you only through the installed app. ~3 MB, once.
+                We remind you <b>what to study</b> and <b>when</b>, and send a <b>daily insight every evening</b> — all of it reaches you only through the app. One download, once.
               </p>
             </div>
             <div className="space-y-2 pt-2">
@@ -194,7 +197,7 @@ export default function PostSignupSequence() {
                 App downloaded? Open CareerRai in the app now.
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                Didn&apos;t get the install popup? The 10-second route:
+                Not there yet? The 10-second route:
               </p>
             </div>
             <InstallLiveGuide />

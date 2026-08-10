@@ -128,6 +128,21 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
   `buddy-checkin-premium.guard.test.ts`. This is the paid side of "the machine
   is free, the human is paid": `buddy_id` alone is NOT proof of paying.
 
+### Install (getting the app onto the phone)
+- **`lib/install/capabilities.ts`** — `resolveStrategy()` turns a detected
+  environment into exactly ONE strategy. Read the rule order before changing
+  it: iPhone/iPad returns `ios-app-store` BEFORE the in-app-browser escape, and
+  that ordering is what makes Instagram/WhatsApp traffic a one-tap install.
+- **`lib/install/store-links.ts`** — `APP_STORE_URL`, the one place the listing
+  lives. `apps.apple.com` over https is deliberate: that is what makes iOS treat
+  it as a universal link and hand off to the App Store app.
+- `components/install/app-store-card.tsx` — the iPhone surface (black button,
+  inline Apple glyph, quiet A2HS fallback). `InstallButton` swaps to it for
+  every variant on iOS, so there is only ever one control per action.
+- Add-to-Home-Screen still exists but is no longer resolved automatically on
+  iOS — it is reachable only via `addToHomeScreenInstead()`, offered under the
+  card for anyone the App Store fails.
+
 ### Money
 - `lib/razorpay.ts` + `api/webhooks` — **the webhook is the source of truth**
   for `is_premium`. UI never flips it.

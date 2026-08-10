@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Download, Share, Globe, MoreVertical } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { useInstall } from '@/lib/install/use-install';
+import { AppStoreCard } from '@/components/install/app-store-card';
 
 // ONE clean install screen, forked by platform — now a thin UI over the
 // unified install engine (src/lib/install). No overlays, no arrows, no
@@ -41,7 +42,7 @@ interface InstallJourneyProps {
 }
 
 export function InstallJourney({ appInstalled = false, planReady = false }: InstallJourneyProps) {
-  const { ui, strategy, env, install, busy, ready, installed } = useInstall();
+  const { ui, strategy, env, install, addToHomeScreenInstead, busy, ready, installed } = useInstall();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -61,14 +62,19 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
 
   // Copy + icon per engine decision — the button always calls install().
   const isEscape = ui === 'escape-sheet';
+  const isAppStore = ui === 'ios-app-store';
   const isIOS = ui === 'ios-coachmark';
   const heading = isEscape
     ? `Get the app in ${env.platform === 'android' ? 'Chrome' : 'Safari'}`
-    : isIOS
-      ? 'Add to your Home Screen'
-      : planReady ? 'Install to start Day 1' : 'Get the CareerRai app';
+    : isAppStore
+      ? (planReady ? 'Your plan is ready — get the app' : 'CareerRai for iPhone')
+      : isIOS
+        ? 'Add to your Home Screen'
+        : planReady ? 'Install to start Day 1' : 'Get the CareerRai app';
   const sub = isEscape
     ? `This browser can’t install it cleanly. One tap opens ${env.platform === 'android' ? 'Chrome' : 'Safari'} on this same page.`
+    : isAppStore
+    ? 'Download it from the App Store — your reminders, streak and daily insight only reach you through the app.'
     : isIOS
       ? '2 quick taps in Safari — then it opens like a real app, and you’re already signed in.'
       : planReady
@@ -93,14 +99,26 @@ export function InstallJourney({ appInstalled = false, planReady = false }: Inst
         <h2 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>{heading}</h2>
         <p className="mx-auto mt-1.5 max-w-xs text-sm text-stone-500">{sub}</p>
 
-        <button
-          type="button"
-          onClick={install}
-          disabled={busy}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-900 py-3.5 text-[15px] font-bold text-white active:scale-[0.98] disabled:opacity-60"
-        >
-          <Icon className="h-5 w-5" /> {busy ? 'Opening…' : cta}
-        </button>
+        {/* iPhone gets the real App Store card here too, not a stone-black
+            lookalike. One control for one action, everywhere in the product. */}
+        {isAppStore ? (
+          <div className="mt-5">
+            <AppStoreCard
+              onInstall={() => void install()}
+              onFallback={() => void addToHomeScreenInstead()}
+              busy={busy}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={install}
+            disabled={busy}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-900 py-3.5 text-[15px] font-bold text-white active:scale-[0.98] disabled:opacity-60"
+          >
+            <Icon className="h-5 w-5" /> {busy ? 'Opening…' : cta}
+          </button>
+        )}
 
         <button
           type="button"

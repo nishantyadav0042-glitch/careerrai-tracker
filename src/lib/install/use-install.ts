@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { track } from '@/lib/journey';
 import { getEnvironment } from './detect';
 import { resolveStrategy, explainStrategy } from './capabilities';
-import { escapeInAppBrowser, mintHandoffUrl } from './actions';
+import { escapeInAppBrowser, mintHandoffUrl, openAppStore } from './actions';
 import type { InstallEnvironment, InstallStrategy } from './types';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -47,6 +47,7 @@ if (typeof window !== 'undefined') {
 export type InstallUiKind =
   | 'hidden'          // already installed / running standalone — show nothing
   | 'button'          // a plain Install button that does the right thing on tap
+  | 'ios-app-store'   // iPhone/iPad — the real App Store card, one tap
   | 'ios-coachmark'   // show the animated Add-to-Home-Screen sheet
   | 'android-guide'   // show the manual Android menu guide
   | 'escape-sheet'    // in-app browser — show "open in Chrome/Safari" CTA
@@ -66,6 +67,7 @@ export interface InstallState {
 function uiFor(strategy: InstallStrategy): InstallUiKind {
   switch (strategy) {
     case 'already-installed': return 'hidden';
+    case 'ios-app-store': return 'ios-app-store';
     case 'native-prompt':
     case 'native-prompt-pending':
     case 'desktop-install': return 'button';
@@ -112,6 +114,17 @@ function waitForArmedPrompt(timeoutMs: number): Promise<BeforeInstallPromptEvent
 export interface UseInstallResult extends InstallState {
   /** The single action the one button calls. Does the right thing per strategy. */
   install: () => Promise<void>;
+  /**
+   * The iOS escape hatch: install as a Home Screen web app instead of via the
+   * App Store.
+   *
+   * This exists so the Add-to-Home-Screen path stays REACHABLE rather than
+   * becoming dead code the day the App Store became the default — and because
+   * a student whose App Store is signed out, region-locked, or simply out of
+   * storage would otherwise have no way to install at all. It is a deliberate
+   * second choice offered quietly, never the headline.
+   */
+  addToHomeScreenInstead: () => Promise<void>;
   /** True after the environment has been read on the client (avoids SSR flash). */
   ready: boolean;
 }
@@ -185,6 +198,11 @@ export function useInstall(): UseInstallResult {
           deferredPrompt = null;
           break;
         }
+        case 'ios-app-store': {
+          track('install_app_store', { platform: env.platform, browser: env.browser, inApp: env.inApp });
+          openAppStore();
+          break;
+        }
         case 'android-open-in-chrome':
         case 'ios-open-in-safari': {
           track('install_escape', { inApp: env.inApp, platform: env.platform });
@@ -215,6 +233,19 @@ export function useInstall(): UseInstallResult {
     }
   }, [state, recompute]);
 
+  const addToHomeScreenInstead = useCallback(async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      track('install_a2hs_fallback', { platform: state?.env.platform, browser: state?.env.browser });
+      // Same hand-off the guide uses: /app carries a login token, so the icon
+      // they add opens already signed in.
+      window.location.href = await mintHandoffUrl();
+    } finally {
+      busyRef.current = false;
+    }
+  }, [state]);
+
   // Neutral SSR/first-paint state until the client read completes.
   const base: InstallState =
     state ?? {
@@ -227,5 +258,5 @@ export function useInstall(): UseInstallResult {
       busy: false,
     };
 
-  return { ...base, install, ready };
+  return { ...base, install, addToHomeScreenInstead, ready };
 }

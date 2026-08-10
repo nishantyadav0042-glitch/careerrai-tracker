@@ -50,6 +50,7 @@ export type InstallStrategy =
   | 'already-installed'      // running standalone, or getInstalledRelatedApps says installed → hide/΄open app΄
   | 'native-prompt'          // Chromium beforeinstallprompt available → one tap
   | 'native-prompt-pending'  // Chromium, prompt not fired yet → wait, then one tap
+  | 'ios-app-store'          // iPhone/iPad → the real native app on the App Store (one tap)
   | 'ios-safari-a2hs'        // iOS Safari → animated Add-to-Home-Screen coachmark (Share at bottom)
   | 'ios-browser-a2hs'       // iOS Chrome/Edge/Firefox → A2HS via THEIR share menu (works since iOS 16.4/17)
   | 'ios-browser-to-safari'  // fallback for pre-16.4 iOS or a browser missing A2HS → reopen in Safari
