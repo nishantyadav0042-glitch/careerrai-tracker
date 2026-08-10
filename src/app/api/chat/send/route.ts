@@ -1,11 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendNotification } from '@/lib/notifications';
 import { resolvePair } from '@/lib/chat';
 import { resolveGrantAccess, MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 import { serverError } from '@/lib/api-error';
-import { isBlockedPair } from '@/lib/chat-safety';
+import { pairIsBlocked, deliverPairMessage } from '@/lib/chat-deliver';
 import { verifyUploadedAttachment, discardAttachment } from '@/lib/chat-attachment-verify';
 import { audit } from '@/lib/integration-audit';
 
@@ -64,17 +63,9 @@ export async function POST(request: NextRequest) {
     pair = { studentId: grantAccess.studentId, buddyId: grantAccess.buddyId };
   }
 
-  // A block stops messages in BOTH directions (App Store 1.2 / Play UGC). A
-  // block that only silences the person who filed it is not a block — the
-  // abusive party would keep talking, which is the exact thing the guideline
-  // exists to prevent. Enforced HERE, on the server: a UI-only block is a
-  // gesture, not a protection.
-  const { data: blockRows } = await admin
-    .from('chat_blocks')
-    .select('blocker_id, blocked_id')
-    .in('blocker_id', [pair.studentId, pair.buddyId])
-    .in('blocked_id', [pair.studentId, pair.buddyId]);
-  if (isBlockedPair(blockRows, pair.studentId, pair.buddyId)) {
+  // Blocks are enforced HERE, before the attachment bytes are touched, so a
+  // blocked sender never gets as far as storing a file. (lib/chat-deliver)
+  if (await pairIsBlocked(admin, pair)) {
     return NextResponse.json(
       { error: 'blocked', message: 'This conversation is blocked. Email business@careerrai.com if you need it reopened.' },
       { status: 403 }
@@ -116,17 +107,9 @@ export async function POST(request: NextRequest) {
     };
   }
 
-  const { data: message, error } = await admin
-    .from('chat_messages')
-    .insert({
-      student_id: pair.studentId,
-      buddy_id: pair.buddyId,
-      sender_id: user.id,
-      body,
-      ...attachmentColumns,
-    })
-    .select('id, student_id, buddy_id, sender_id, body, created_at, read_at, attachment_name, attachment_mime, attachment_size, attachment_kind')
-    .single();
+  const { message, error } = await deliverPairMessage({
+    admin, pair, senderId: user.id, body, attachmentColumns,
+  });
 
   if (error || !message) {
     // No message row means nothing will ever point at the file.
@@ -150,35 +133,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Best-effort notification to the recipient (the other member of the pair).
-  const recipientId = user.id === pair.studentId ? pair.buddyId : pair.studentId;
-  void (async () => {
-    try {
-      const { data: sender } = await admin
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-      const senderName = sender?.full_name?.split(' ')[0] ?? 'your buddy';
-      const preview = body.length > 80 ? `${body.slice(0, 80)}…` : (body || (hasAttachment ? '📎 Sent you a file' : ''));
-      // Deep-link each side to THEIR chat screen — a buddy tapping the push
-      // must land on the buddy chat, not the student page.
-      const recipientIsBuddy = recipientId === pair.buddyId;
-      await sendNotification({
-        userId: recipientId,
-        type: 'chat',
-        title: `${senderName} sent you a message 💬`,
-        body: preview,
-        channels: ['in_app', 'push'],
-        data: {
-          url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy?tab=chat',
-          student_id: pair.studentId, buddy_id: pair.buddyId,
-        },
-      });
-    } catch {
-      // non-blocking
-    }
-  })();
-
+  // The push to the other side already went out from deliverPairMessage.
   return NextResponse.json({ message });
 }

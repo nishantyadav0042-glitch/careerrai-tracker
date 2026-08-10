@@ -33,6 +33,37 @@ export const ABANDONED_CHECKOUT_LOOKBACK_DAYS = 14;
 /** How far back an expired (nobody-joined) session still counts as a fresh miss (days). */
 export const EXPIRED_SESSION_LOOKBACK_DAYS = 3;
 
+// ── Buddy check-in (founder, 10 Aug) ────────────────────────────────────────
+// "Agar mere paas 5 student assigned hain aur unme se kisi ek ne bhi kal log
+// nahi bhara, to agle din buddy ki ID se message jaayega." The numbers that
+// decide WHEN that happens live here, not inside the cron.
+
+/** Consecutive logless days before a mentor check-in is drafted. One missed day
+ *  is life (travel, dead phone, exam); two in a row is a pattern. Rest-day logs
+ *  count as showing up, so this only ever counts days with no log at all. */
+export const CHECKIN_MISSED_DAYS_TRIGGER = 2;
+
+/** Past this many silent days it is not a check-in case any more (days).
+ *  "Do din se log nahi dikha, sab theek hai?" is a mentor noticing. The same
+ *  message at day 31 is a stranger noticing a month late — that student has
+ *  churned, and churn is a founder/win-back problem, not a nudge problem. */
+export const CHECKIN_MAX_MISSED_DAYS = 14;
+
+/** A student may not be check-in'd more often than this (days). Protects the
+ *  personal feel: a "message from your mentor" that arrives every other day
+ *  reads as a robot within a week. */
+export const CHECKIN_COOLDOWN_DAYS = 5;
+
+/** After this many check-ins with no reply, stop drafting. Someone who ignores
+ *  two personal messages does not need a third — that is a human problem for
+ *  the mentor and the founder, not a nudge problem. */
+export const CHECKIN_MAX_UNANSWERED = 2;
+
+/** How long a drafted check-in stays sendable (hours). "You missed 2 days" is
+ *  false by Thursday if it was written on Monday, and sending stale facts from
+ *  the mentor's ID is worse than sending nothing. */
+export const CHECKIN_DRAFT_TTL_HOURS = 36;
+
 /**
  * When a pile of identical exceptions stops being a list and becomes one
  * incident. Presentation only — never changes correctness or the underlying
