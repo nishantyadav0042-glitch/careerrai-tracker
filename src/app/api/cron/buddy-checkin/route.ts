@@ -53,6 +53,16 @@ export async function GET(request: NextRequest) {
     .select('id, full_name, buddy_id, current_streak')
     .eq('role', 'student')
     .not('buddy_id', 'is', null)
+    // PAID ONLY (founder, 10 Aug: "this is only our premium feature, don't
+    // build this for free"). A mentor personally noticing you went quiet is
+    // the product — it is a person's attention, not automation, and it is the
+    // thing the subscription buys.
+    //
+    // Not redundant with buddy_id: measured 10 Aug, one assigned student had
+    // is_premium = false, so "has a buddy" does NOT imply "is paying". Free
+    // students reachable through Mentor Doors grants are excluded too — they
+    // hold a capped 3-message trial, not a mentor.
+    .eq('is_premium', true)
     // Demo AND test accounts are excluded here, which is a deliberate break
     // from log-yesterday-reminder (that one keeps test accounts in, because the
     // founder tests as a student and the push lands on his own phone).

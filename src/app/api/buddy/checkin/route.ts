@@ -72,6 +72,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Message must be 1–2000 characters' }, { status: 400 });
   }
 
+  // Re-verify PAID status at send time, not just at draft time. A draft lives
+  // for 36h and expire-subscriptions runs daily, so a student can lapse in
+  // between — and this is a premium feature (founder, 10 Aug). Sending anyway
+  // would hand a paying feature to someone who stopped paying, from the
+  // mentor's own id, which is the most expensive way to give it away.
+  const { data: student } = await admin
+    .from('profiles')
+    .select('is_premium')
+    .eq('id', draft.student_id)
+    .single();
+  if (student?.is_premium !== true) {
+    await admin
+      .from('buddy_checkin_drafts')
+      .update({ dismissed_at: new Date().toISOString() })
+      .eq('id', draft.id);
+    return NextResponse.json(
+      {
+        error: 'not_premium',
+        message: 'Their subscription is no longer active — this check-in is a paid feature.',
+      },
+      { status: 403 }
+    );
+  }
+
   // Re-verify the pairing at send time: a student may have been reassigned
   // between the 9:30 AM draft and this tap, and a message from the wrong
   // mentor is worse than no message.

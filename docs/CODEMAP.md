@@ -118,12 +118,15 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
   through this. `lib/push.ts` + `push-client.ts` for web push mechanics.
 - `api/cron/study-companion` — six daily slots, one route. The state ladders
   (activation / reactivation / active) live in `lib/companion.ts`.
-- **`lib/os/buddy-checkin.ts`** — the mentor check-in: when a student goes two
-  days without any log, the cron DRAFTS a message from that student's real data
-  and the mentor sends it with one tap from their own id. Pure logic (trigger,
-  cooldown, unanswered-stop, wording); the cron writes rows, `api/buddy/checkin`
-  sends. It never auto-sends — a message from a mentor's id that the mentor has
-  not seen means the student replies into silence.
+- **`lib/os/buddy-checkin.ts`** — the mentor check-in: when a PAYING student
+  goes two days without any log, the cron DRAFTS a message from that student's
+  real data and the mentor sends it with one tap from their own id. Pure logic
+  (trigger, cooldown, unanswered-stop, wording); the cron writes rows,
+  `api/buddy/checkin` sends. It never auto-sends — a message from a mentor's id
+  that the mentor has not seen means the student replies into silence.
+  **Premium only**, gated twice (cron + send-time re-check) and guarded by
+  `buddy-checkin-premium.guard.test.ts`. This is the paid side of "the machine
+  is free, the human is paid": `buddy_id` alone is NOT proof of paying.
 
 ### Money
 - `lib/razorpay.ts` + `api/webhooks` — **the webhook is the source of truth**
