@@ -21,7 +21,9 @@ import {
   type Stage,
   type HistoryInput,
 } from '@/lib/routine-engine';
-import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { chooseTopicsForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { syllabusPace } from '@/lib/syllabus-pace';
+import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
 import { dailyHours } from '@/lib/daily-hours';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
@@ -75,7 +77,11 @@ export interface TodaysPlan {
 // completions to derive per-topic recency (feeds the Topic Selector) and the
 // most recent day's swapped-out topics ("never delete, always postpone").
 async function buildHistory(admin: any, studentId: string): Promise<
-  HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; postponedTopics: string[] }
+  HistoryInput & {
+    daysSinceLastPracticedByTopic: Record<string, number | null>;
+    daysSincePlannedByTopic: Record<string, number | null>;
+    postponedTopics: string[];
+  }
 > {
   const [{ data: pastRoutines }, { data: pastCompletions }] = await Promise.all([
     admin
@@ -106,8 +112,18 @@ async function buildHistory(admin: any, studentId: string): Promise<
 
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
   const daysSinceByTopic: Record<string, number | null> = {};
+  // When a topic was last SHOWN, whether or not the student did it. Abhishek's
+  // plan served Percentages seven times in twelve days because only the
+  // completed-task map above existed: skip the task and the engine believed it
+  // had never been offered.
+  const plannedByTopic: Record<string, number | null> = {};
   for (const r of pastRoutines ?? []) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
+    const dayGap = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
+    for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
+      const tp = t.topic as string | null | undefined;
+      if (tp && plannedByTopic[tp] == null) plannedByTopic[tp] = dayGap;
+    }
     // Guard against legacy/corrupt rows where tasks is null or not an array —
     // an unguarded for-of throws and rejects the whole plan computation.
     for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
@@ -119,17 +135,28 @@ async function buildHistory(admin: any, studentId: string): Promise<
       if (topic && daysSinceByTopic[topic] == null) daysSinceByTopic[topic] = daysAgo;
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, postponedTopics };
+  return {
+    daysSinceLastPracticed: daysSince,
+    daysSinceLastPracticedByTopic: daysSinceByTopic,
+    daysSincePlannedByTopic: plannedByTopic,
+    postponedTopics,
+  };
 }
 
 // Mirrors buildTopicChoices in today/route.ts.
 function buildTopicChoices(
   coverageRows: { topic: string; status: string; is_priority?: boolean | null }[],
   profile: RoutineProfile,
-  history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; postponedTopics: string[] },
+  history: HistoryInput & {
+    daysSinceLastPracticedByTopic: Record<string, number | null>;
+    daysSincePlannedByTopic?: Record<string, number | null>;
+    postponedTopics: string[];
+  },
   startWith?: string | null,
-  todayClassTopics: string[] = []
-): Record<Section, TopicChoice> {
+  todayClassTopics: string[] = [],
+  /** Days until the student's chosen syllabus-finish date; null = not set. */
+  daysToSyllabusTarget: number | null = null
+): { choices: Record<Section, TopicChoice>; extras: Partial<Record<Section, TopicChoice[]>> } {
   const coverageByTopic = new Map<string, CoverageStatus>();
   const prioritySet = new Set<string>();
   for (const row of coverageRows) {
@@ -151,6 +178,7 @@ function buildTopicChoices(
   const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
   const result = {} as Record<Section, TopicChoice>;
+  const extras: Partial<Record<Section, TopicChoice[]>> = {};
 
   for (const section of sections) {
     const isWeakSection = section === profile.weakestSection;
@@ -163,10 +191,22 @@ function buildTopicChoices(
       focusBonus: focusUnits.has(topic),
       postponedBonus: postponed.has(topic),
       todayClassBonus: todayClass.has(topic),
+      daysSincePlanned: history.daysSincePlannedByTopic?.[topic] ?? null,
     }));
-    result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason);
+    // Does this plan finish? Measured per section against the student's own
+    // date, so a section they have barely opened pushes new topics harder than
+    // one they have nearly finished (syllabus-pace.ts).
+    const untouched = candidates.filter(
+      (c) => c.coverageStatus == null || c.coverageStatus === 'not_started'
+    ).length;
+    const pace = daysToSyllabusTarget == null
+      ? { pressure: 0 }
+      : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
+    const picks = chooseTopicsForSection(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, revisionMultiplier, revisionSeason, pace.pressure);
+    result[section] = picks[0];
+    extras[section] = picks;
   }
-  return result;
+  return { choices: result, extras };
 }
 
 
@@ -275,7 +315,12 @@ export async function computeTodaysPlan(
           today,
         )
       : [];
-    const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics);
+    // The student's own finish date is what makes the plan urgent or relaxed.
+    const targetIso = profile.syllabus_target_date as string | null;
+    const daysToTarget = targetIso
+      ? Math.round((Date.parse(targetIso) - Date.parse(getLogDateString(now))) / 86_400_000)
+      : null;
+    const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics, daysToTarget);
 
     // Read-or-generate, through the SAME staleness rule the tracker uses —
     // literally the same function now, rather than a hand-copied version of it
@@ -298,7 +343,7 @@ export async function computeTodaysPlan(
       routine = null;
     }
     if (!routine) {
-      const generated = generateRoutine(routineProfile, now, history, topicChoices);
+      const generated = generateRoutine(routineProfile, now, history, topicChoices.choices, topicChoices.extras);
       const { data: inserted } = await admin
         .from('daily_routines')
         .upsert(

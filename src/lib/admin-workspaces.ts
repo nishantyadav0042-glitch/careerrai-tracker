@@ -117,6 +117,12 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'The engine room. Verify a plan before a student ever sees it.',
     tabs: [
       { label: 'Integrity', href: '/admin/plan-engine', status: 'live' },
+      // The screen that would have caught the Percentages loop on day two
+      // instead of day eighteen (founder, 11 Aug). Every other measure —
+      // streaks, logs, hours, tasks completed — read HEALTHY while a student
+      // was being shown the same five topics. Only distinct-topic counting
+      // sees it, and nothing counted it until now.
+      { label: 'Coverage', href: '/admin/plan-coverage', status: 'live' },
       { label: 'Daily pick', href: '/admin/daily-pick', status: 'moved' },
       { label: 'Challenges', href: '/admin/challenges', status: 'moved' },
     ],
