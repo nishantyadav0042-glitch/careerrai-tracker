@@ -321,6 +321,115 @@ export function chooseTopicsForSection(
   return picks;
 }
 
+/**
+ * ── The syllabus clock and the memory clock, separated ──────────────────────
+ *
+ * Founder, 11 Aug: "syllabus clock alag karo aur sabke liye 46/46 karo."
+ *
+ * Everything before this made first-contact COMPETE with revision inside one
+ * score. That is why the guarantee was only ever as strong as the weight
+ * holding it up: proven on real profiles, 46/46 held at +28 for exactly one
+ * student and collapsed to 43/46 for him at +20, while seven other profiles
+ * failed even at the shipped weight. A 90-day student had 540 slots for 46
+ * topics and still left 7 unopened — starvation with a half-empty calendar,
+ * because pressure is a function of RATE and a distant deadline reads as
+ * "relaxed" right up until the endgame.
+ *
+ * So the day's blocks are now DIVIDED between two clocks before any ranking
+ * happens, instead of being contested by one:
+ *
+ *   SYLLABUS CLOCK — marches through committed scope. Gets at least one block
+ *     a day per section while any topic remains unopened, and more when the
+ *     remaining topics per remaining day demand it.
+ *   MEMORY CLOCK   — revision of what is already open. Gets whatever the
+ *     syllabus clock does not need, and is silent while it needs everything.
+ *
+ * The guarantee is now arithmetic, not tuning: reserve ≥1 first-contact block
+ * per section per day and every topic is opened in `untouched` days, which is
+ * why it survives at any weight. Scores still decide WHICH topic each clock
+ * picks — that part was never the problem.
+ */
+export interface SectionDayInput {
+  /** Topics never opened (coverage 'not_started' or unmapped). */
+  untouchedCount: number;
+  /** Days until the student's chosen syllabus-finish date; null = not set. */
+  daysToTarget: number | null;
+  revisionMultiplier?: number;
+  revisionSeason?: boolean;
+  /** Pressure still shapes ordering WITHIN each clock; it no longer gates novelty. */
+  newTopicPressure?: number;
+}
+
+export function chooseSectionDay(
+  candidates: TopicCandidateInput[],
+  blocks: number,
+  input: SectionDayInput
+): TopicChoice[] {
+  const capacity = Math.max(1, blocks);
+  const { untouchedCount, daysToTarget } = input;
+  const mult = input.revisionMultiplier ?? 1;
+  const season = input.revisionSeason ?? false;
+  const pressure = input.newTopicPressure ?? 0;
+
+  // How many of today's blocks the syllabus clock needs.
+  let syllabusBlocks = 0;
+  if (untouchedCount > 0) {
+    // At least one a day — the floor that makes the guarantee structural.
+    // More when the remaining topics will not fit one-a-day in the days left.
+    const perDay = daysToTarget != null && daysToTarget > 0
+      ? Math.ceil(untouchedCount / daysToTarget)
+      : untouchedCount;
+    syllabusBlocks = Math.min(capacity, Math.max(1, perDay));
+  }
+
+  const isUntouched = (c: TopicCandidateInput) =>
+    c.coverageStatus == null || c.coverageStatus === 'not_started';
+
+  // A student action outranks the split itself: a postponed topic was promised
+  // back "tomorrow" in words, and today's coaching class is a fixed appointment.
+  // Those keep their claim on a block whichever clock they belong to.
+  const claimed = candidates.filter((c) => c.postponedBonus || c.todayClassBonus);
+  const picks: TopicChoice[] = [];
+  const taken = new Set<string>();
+  for (const c of claimed.slice(0, capacity)) {
+    const one = chooseTopicForSection([c], mult, season, pressure);
+    picks.push(one);
+    taken.add(one.topic);
+  }
+
+  const remaining = () => capacity - picks.length;
+  const pool = (want: 'new' | 'revision') =>
+    candidates.filter((c) => !taken.has(c.topic) && (want === 'new' ? isUntouched(c) : !isUntouched(c)));
+
+  // Syllabus clock first — it is the one with a deadline.
+  const wantNew = Math.max(0, Math.min(remaining(), syllabusBlocks - picks.filter((p) => {
+    const c = candidates.find((x) => x.topic === p.topic);
+    return c ? isUntouched(c) : false;
+  }).length));
+  for (const p of chooseTopicsForSection(pool('new'), wantNew, mult, season, pressure)) {
+    if (picks.length >= capacity) break;
+    picks.push(p); taken.add(p.topic);
+  }
+
+  // Memory clock takes what is left.
+  for (const p of chooseTopicsForSection(pool('revision'), remaining(), mult, season, pressure)) {
+    if (picks.length >= capacity) break;
+    picks.push(p); taken.add(p.topic);
+  }
+
+  // A short section (everything already open, or nothing left to revise) simply
+  // fills from whatever remains rather than returning fewer tasks than the
+  // student has time for.
+  if (picks.length < capacity) {
+    const rest = candidates.filter((c) => !taken.has(c.topic));
+    for (const p of chooseTopicsForSection(rest, capacity - picks.length, mult, season, pressure)) {
+      picks.push(p); taken.add(p.topic);
+    }
+  }
+
+  return picks.slice(0, capacity);
+}
+
 export type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
 
 const PRACTICING_RANK = STATUS_ORDER.indexOf('practicing');

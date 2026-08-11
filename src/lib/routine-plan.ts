@@ -21,7 +21,7 @@ import {
   type Stage,
   type HistoryInput,
 } from '@/lib/routine-engine';
-import { chooseTopicsForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { chooseSectionDay, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { syllabusPace } from '@/lib/syllabus-pace';
 import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
 import { dailyHours } from '@/lib/daily-hours';
@@ -202,7 +202,14 @@ function buildTopicChoices(
     const pace = daysToSyllabusTarget == null
       ? { pressure: 0 }
       : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
-    const picks = chooseTopicsForSection(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, revisionMultiplier, revisionSeason, pace.pressure);
+    // Two clocks, split before ranking: the syllabus clock reserves the
+    // first-contact blocks it needs to finish on time, the memory clock gets
+    // the rest. See topic-selector.chooseSectionDay.
+    const picks = chooseSectionDay(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, {
+      untouchedCount: untouched,
+      daysToTarget: daysToSyllabusTarget,
+      revisionMultiplier, revisionSeason, newTopicPressure: pace.pressure,
+    });
     result[section] = picks[0];
     extras[section] = picks;
   }

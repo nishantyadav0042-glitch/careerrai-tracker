@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
-import { chooseTopicsForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { chooseSectionDay, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { syllabusPace } from '@/lib/syllabus-pace';
 import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
@@ -670,7 +670,14 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
     const pace = daysToSyllabusTarget == null
       ? { pressure: 0 }
       : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
-    const picks = chooseTopicsForSection(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, revisionMultiplier, revisionSeason, pace.pressure);
+    // Two clocks, split before ranking: the syllabus clock reserves the
+    // first-contact blocks it needs to finish on time, the memory clock gets
+    // the rest. See topic-selector.chooseSectionDay.
+    const picks = chooseSectionDay(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, {
+      untouchedCount: untouched,
+      daysToTarget: daysToSyllabusTarget,
+      revisionMultiplier, revisionSeason, newTopicPressure: pace.pressure,
+    });
     result[section] = picks[0];
     extras[section] = picks;
   }
