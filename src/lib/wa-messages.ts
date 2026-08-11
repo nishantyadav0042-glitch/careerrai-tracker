@@ -42,6 +42,27 @@ export function waMessages(v: WaVars): WaMessage[] {
   return [
     // Founder rule (21 July): one short block, no emojis, no long paragraphs —
     // "nobody sees that". State the problem bluntly, ask for feedback.
+    // ── The two the roster actually needed, 11 Aug ────────────────────────
+    //
+    // Both come straight out of what the data showed that morning, not from
+    // imagination: five BLACKI mentors sitting well under the 5-student cap
+    // (two on zero), and 32 students whose verified number we recovered from
+    // auth.users but whose NAME the signup race threw away for good.
+    {
+      key: 'buddy_slots',
+      label: 'Buddy slots open (BLACKI)',
+      suggestedFor: 'engaged',
+      text: `Hi ${firstName}, Nishant from CareerRai. We have 1:1 buddy slots open right now — every mentor is from IIM Bangalore, Lucknow, Calcutta, Kozhikode or Indore. One buddy takes a maximum of 5 students, so they know you personally: your plan, your mocks, where you're stuck. Want one till CAT? Reply and I'll hold a slot. Your plan: ${site}`,
+    },
+    {
+      // The name was never in auth.users, so it cannot be backfilled — it has
+      // to be asked. Folded into a message worth sending anyway, so the ask
+      // rides along instead of arriving as a bare form-filling request.
+      key: 'buddy_slots_ask_name',
+      label: 'Buddy slots + ask name',
+      suggestedFor: 'engaged',
+      text: `Hi! Nishant from CareerRai — you built your study plan with us. We have 1:1 buddy slots open: every mentor is from IIM Bangalore, Lucknow, Calcutta, Kozhikode or Indore, max 5 students each, so the guidance stays properly personal. Want one till CAT? Reply — and do send your name too, only your number saved on our side. Your plan: ${site}`,
+    },
     {
       key: 'install_full',
       label: 'Install nudge',
