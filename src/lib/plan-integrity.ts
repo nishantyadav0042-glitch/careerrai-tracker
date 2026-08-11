@@ -23,6 +23,19 @@ import { topicsInSection, SECTIONS } from './prep-model';
 // with the arithmetic that explains it. A student who can see "these 18 need
 // 1.5 more hours a day" can act. A student shown 28 topics and told it is
 // their full plan cannot.
+//
+// ── 11 Aug: where the shortfall moved ───────────────────────────────────────
+//
+// The planner is now one authority (plan-projection), and its syllabus clock
+// reserves first-contact blocks structurally — so EVERY topic is opened at
+// every commitment, 46/46, exactly as the founder required. A 3h student is
+// still short of hours; they are just no longer short of CHAPTERS.
+//
+// That means the topics check above is now a regression guard rather than the
+// place a real shortfall shows up, and the shortfall needed somewhere honest to
+// live — otherwise this door would go all-green for a student 230 hours short.
+// That is the `depth` check below. Coverage and depth are different promises,
+// and the door now keeps them apart instead of collapsing them into one.
 
 export type CheckStatus = 'pass' | 'fail' | 'warn' | 'na';
 
@@ -92,6 +105,39 @@ export function checkPlanIntegrity(input: IntegrityInput): IntegrityReport {
         ? `${unscheduled.length} of ${ALL_TOPICS.length} topics do not fit before CAT. About ${extraPerDay}h more a day would place them — or drop them deliberately.`
         : `${unscheduled.length} of ${ALL_TOPICS.length} topics do not fit. Set your study hours and we will tell you what it takes.`,
       items: unscheduled,
+    });
+  }
+
+  // ── 1b. Depth: enough hours to actually finish each of them ───────────────
+  //
+  // Opening all 46 is the coverage promise. This is the other one: the hours
+  // those 46 need at this student's own effort. Splitting them is what lets the
+  // door say the true thing to a 3h student — "you will touch every chapter,
+  // and you are 230h short of finishing them" — instead of either lie.
+  const f = plan.feasibility;
+  const shortfall = Math.max(0, f.syllabusHours - (f.topicCapacityHours ?? 0));
+  if (input.isCoachingMonth) {
+    checks.push({
+      id: 'depth',
+      label: 'Enough hours for each topic',
+      status: 'na',
+      detail: 'Your month plan is checked against your coaching sheet, not the full syllabus.',
+    });
+  } else if (f.committedPerDay == null) {
+    checks.push({
+      id: 'depth',
+      label: 'Enough hours for each topic',
+      status: 'warn',
+      detail: 'You have not set your study hours yet, so we cannot check this.',
+    });
+  } else {
+    checks.push({
+      id: 'depth',
+      label: 'Enough hours for each topic',
+      status: shortfall === 0 ? 'pass' : 'fail',
+      detail: shortfall === 0
+        ? `Your ${f.topicDaysAvailable} free study days hold ${f.topicCapacityHours}h — enough for all ${ALL_TOPICS.length} topics at your pace.`
+        : `Every topic is on your plan, but you are ${shortfall}h short of finishing them all. About ${f.requiredPerDay}h a day would clear it, against the ${f.committedPerDay}h you set.`,
     });
   }
 

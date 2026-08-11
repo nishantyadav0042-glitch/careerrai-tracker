@@ -8,31 +8,29 @@
 // SAME plan the student sees when they open the app minutes later — same
 // topics, same order, no flicker. The pure engine (generateRoutine,
 // chooseTopicForSection, the topic constants) is imported and shared; only the
-// thin DB-wiring helpers (buildHistory / buildTopicChoices / weakest
-// derivation) are duplicated here, kept in lockstep with the route by this
-// comment. today/route.ts is intentionally left untouched to keep the hot
-// tracker path regression-free.
+// thin DB-wiring helper buildHistory is duplicated here.
+//
+// buildTopicChoices is NOT duplicated any more. It used to be, "kept in lockstep
+// by this comment", and the comment lost: this copy had silently dropped
+// revisionSeason, so from 1 September the notification would have named
+// different topics than the plan it had just written. Both callers now import
+// lib/day-topics — one implementation, no lockstep to maintain.
 
 import {
   generateRoutine,
-  archetypeRevisionMultiplier,
   type RoutineProfile,
   type Section,
   type Stage,
   type HistoryInput,
 } from '@/lib/routine-engine';
-import { chooseSectionDay, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { syllabusPace } from '@/lib/syllabus-pace';
-import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
+import { buildTopicChoices } from '@/lib/day-topics';
+import { plannerRecency } from '@/lib/plan-history';
 import { dailyHours } from '@/lib/daily-hours';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
-import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 import { weakestFromCoverage } from '@/lib/section-weakness';
-
-const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
 // One studyable step in the day's plan, with completion state merged in.
 export interface PlanTask {
@@ -98,124 +96,30 @@ async function buildHistory(admin: any, studentId: string): Promise<
       .limit(200),
   ]);
 
+  // The three planner signals come from the ONE implementation (plan-history),
+  // so Home, the notification cron and the Whole Plan are fed identically.
+  const recency = plannerRecency(pastRoutines ?? [], pastCompletions ?? [], getLogDateString());
+
+  // The per-SECTION recency below is a coarser signal, used by the Mission
+  // Engine rather than the Topic Selector, so it stays here.
+  const today = getLogDateString();
   const completedByDate = new Map<string, Set<string>>();
   for (const c of pastCompletions ?? []) {
     if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
     completedByDate.get(c.routine_date)!.add(c.task_id);
   }
-
-  const today = getLogDateString();
-  const lastPastDay = (pastRoutines ?? []).find((r: { routine_date: string }) => r.routine_date < today);
-  const postponedTopics: string[] = Array.isArray(lastPastDay?.swapped_out)
-    ? (lastPastDay.swapped_out as unknown[]).filter((t): t is string => typeof t === 'string')
-    : [];
-
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
-  const daysSinceByTopic: Record<string, number | null> = {};
-  // When a topic was last SHOWN, whether or not the student did it. Abhishek's
-  // plan served Percentages seven times in twelve days because only the
-  // completed-task map above existed: skip the task and the engine believed it
-  // had never been offered.
-  const plannedByTopic: Record<string, number | null> = {};
   for (const r of pastRoutines ?? []) {
     const completedTaskIds = completedByDate.get(r.routine_date) ?? new Set();
-    const dayGap = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
-    for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
-      const tp = t.topic as string | null | undefined;
-      if (tp && plannedByTopic[tp] == null) plannedByTopic[tp] = dayGap;
-    }
-    // Guard against legacy/corrupt rows where tasks is null or not an array —
-    // an unguarded for-of throws and rejects the whole plan computation.
+    const daysAgo = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
     for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
       if (!completedTaskIds.has(t.id)) continue;
       const section = t.section as Section;
-      const daysAgo = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
       if (['VARC', 'DILR', 'QA'].includes(section) && daysSince[section] == null) daysSince[section] = daysAgo;
-      const topic = t.topic as string | null | undefined;
-      if (topic && daysSinceByTopic[topic] == null) daysSinceByTopic[topic] = daysAgo;
     }
   }
-  return {
-    daysSinceLastPracticed: daysSince,
-    daysSinceLastPracticedByTopic: daysSinceByTopic,
-    daysSincePlannedByTopic: plannedByTopic,
-    postponedTopics,
-  };
+  return { daysSinceLastPracticed: daysSince, ...recency };
 }
-
-// Mirrors buildTopicChoices in today/route.ts.
-function buildTopicChoices(
-  coverageRows: { topic: string; status: string; is_priority?: boolean | null }[],
-  profile: RoutineProfile,
-  history: HistoryInput & {
-    daysSinceLastPracticedByTopic: Record<string, number | null>;
-    daysSincePlannedByTopic?: Record<string, number | null>;
-    postponedTopics: string[];
-  },
-  startWith?: string | null,
-  todayClassTopics: string[] = [],
-  /** Days until the student's chosen syllabus-finish date; null = not set. */
-  daysToSyllabusTarget: number | null = null
-): { choices: Record<Section, TopicChoice>; extras: Partial<Record<Section, TopicChoice[]>> } {
-  const coverageByTopic = new Map<string, CoverageStatus>();
-  const prioritySet = new Set<string>();
-  for (const row of coverageRows) {
-    coverageByTopic.set(row.topic, row.status as CoverageStatus);
-    if (row.is_priority === true) prioritySet.add(row.topic);
-  }
-  const focusUnits = new Set<string>(
-    startWith ? (QA_GROUPS.find((g) => g.label === startWith)?.units ?? []) : []
-  );
-  const postponed = new Set(history.postponedTopics);
-  const todayClass = new Set(todayClassTopics);
-  const revisionMultiplier = archetypeRevisionMultiplier(profile);
-  // Revision season — MUST match today/route.ts exactly (this module exists so
-  // the notification names the same plan the student opens). The mirror had
-  // silently dropped this third argument, so from 1 September the cron copy
-  // would have named different topics than the real plan. Found in the
-  // 26 Jul architecture audit before it ever fired.
-  const seasonYear = profile.attemptYear ?? new Date().getFullYear();
-  const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
-  const sections: Section[] = ['VARC', 'DILR', 'QA'];
-  const result = {} as Record<Section, TopicChoice>;
-  const extras: Partial<Record<Section, TopicChoice[]>> = {};
-
-  for (const section of sections) {
-    const isWeakSection = section === profile.weakestSection;
-    const candidates = TOPICS_BY_SECTION[section].map((topic) => ({
-      topic,
-      coverageStatus: coverageByTopic.get(topic) ?? null,
-      daysSinceLastPracticed: history.daysSinceLastPracticedByTopic[topic] ?? null,
-      selfReportedBonus: isWeakSection && topic === profile.weakTopic,
-      priorityBonus: prioritySet.has(topic),
-      focusBonus: focusUnits.has(topic),
-      postponedBonus: postponed.has(topic),
-      todayClassBonus: todayClass.has(topic),
-      daysSincePlanned: history.daysSincePlannedByTopic?.[topic] ?? null,
-    }));
-    // Does this plan finish? Measured per section against the student's own
-    // date, so a section they have barely opened pushes new topics harder than
-    // one they have nearly finished (syllabus-pace.ts).
-    const untouched = candidates.filter(
-      (c) => c.coverageStatus == null || c.coverageStatus === 'not_started'
-    ).length;
-    const pace = daysToSyllabusTarget == null
-      ? { pressure: 0 }
-      : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
-    // Two clocks, split before ranking: the syllabus clock reserves the
-    // first-contact blocks it needs to finish on time, the memory clock gets
-    // the rest. See topic-selector.chooseSectionDay.
-    const picks = chooseSectionDay(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, {
-      untouchedCount: untouched,
-      daysToTarget: daysToSyllabusTarget,
-      revisionMultiplier, revisionSeason, newTopicPressure: pace.pressure,
-    });
-    result[section] = picks[0];
-    extras[section] = picks;
-  }
-  return { choices: result, extras };
-}
-
 
 function weakestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
   const scores = [

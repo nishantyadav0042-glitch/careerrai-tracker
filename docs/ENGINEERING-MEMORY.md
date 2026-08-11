@@ -923,6 +923,71 @@ reintroducing the model fails CI by name.
 
 ---
 
+## Incident #26 — three planners, one Tuesday (2026-08-11)
+
+**Symptom.** The founder put Home and the Whole Plan side by side, same
+student, same date — 11 August:
+
+```
+Home        3 tasks   Editorial Reading 264m · Arrangements 198m · Percentages 198m
+Whole Plan  5 tasks   RC 4h · Percentages 1h · Inequalities 2.5h · Arrangements 2h · Caselets 1.5h
+```
+
+*"There is exactly one planning authority in CareerRai. Home, today's API, and
+Whole Plan are different views/materializations of that authority — not
+different planners."*
+
+**What happened.** There were three. Home and the 6am notification cron ran
+`chooseSectionDay` — the two-clock authority built that morning to end the
+Percentages loop. The Whole Plan ran `study-forecast.buildWeekPlan`, a wholly
+separate scorer that sorted every remaining topic once and bin-packed the list
+into days. The Blueprint's 7-day strip ran that second planner again. The day
+SHAPE was doubled too: `generateRoutine` split its day inline (weak 40%, others
+30% each), `plan-mix` split it by its own weights (weak ×1.6, VARC 0.8). And
+`buildTopicChoices` existed twice, byte for byte, in `today/route.ts` and
+`routine-plan.ts` — "kept in lockstep" by a comment that had already lost once,
+having silently dropped `revisionSeason` from the cron's copy.
+
+`full-plan.ts` even carried a comment saying `buildWeekPlan` was used "for
+ORDER, not for day assignment… a second scoring model here would be the
+two-models trap." The trap had already sprung; the comment described the wall
+it was standing inside.
+
+**The lesson.** Two planners cannot be kept "roughly in sync", and a comment
+asking the next engineer to remember is not a mechanism. The only stable shape
+is ONE authority plus VIEWS of it: today is day 0 of the projection, the
+Blueprint strip is days 0-6, the Whole Plan is day 0 to CAT. Anything that
+computes its own answer is a planner, however small — including a second
+weights table for how a day splits.
+
+The corollary the founder had already stated separately: a plan for 15 August
+seen today must be the plan that arrives on 15 August. That is only possible
+when the future is a PROJECTION of the same authority — pure, deterministic,
+advancing exactly the state the live engine will advance — not a second
+model's guess.
+
+**What also changed, deliberately.** `checkPlanIntegrity` used to fail a 3h
+student with "18 of 46 topics do not fit". Since the syllabus clock reserves
+first contact structurally, every student now opens all 46 at every
+commitment. The shortfall did not vanish — it moved to where it was always
+true, and got its own check: `depth` says "every topic is on your plan, and you
+are 230h short of finishing them". Coverage and depth are different promises;
+collapsing them into one check had been hiding one of them.
+
+**Teeth.** `lib/plan-projection.ts` is the one forward planner; `lib/day-topics.ts`
+is the one today-planner; `routine-engine.dayShape` is the one day splitter;
+`plan-mix.ts` is deleted. `planner-unification.test.ts` asserts the property,
+not the implementation: Home's today equals the Whole Plan's day 0 (topics,
+sections and block count, across three syllabus-target settings and both
+archetypes); the Blueprint strip equals the Whole Plan day for day; five reads
+of 15 August return one answer; the whole plan is byte-identical across calls;
+46/46 holds through the whole-plan path for seven student profiles; and a
+source-tree guard fails CI if any file outside the authority calls
+`chooseSectionDay` / `chooseTopicForSection`, or if a second day-shape model
+reappears.
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a

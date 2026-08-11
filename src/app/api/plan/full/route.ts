@@ -9,6 +9,8 @@ import { PLAN_WINDOW_DAYS, anchorToMonth } from '@/lib/timetable-month';
 import { checkPlanIntegrity } from '@/lib/plan-integrity';
 import type { TimetableBlock } from '@/lib/timetable';
 import { weakestFromCoverage } from '@/lib/section-weakness';
+import { plannerRecency } from '@/lib/plan-history';
+import { getLogDateString } from '@/lib/streak-utils';
 import type { Section } from '@/lib/prep-model';
 
 // GET /api/plan/full — the student's whole plan.
@@ -28,14 +30,20 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const [{ data: profile }, { data: coverageRows }, completionRecords, { data: timetable }] =
+  const [{ data: profile }, { data: coverageRows }, completionRecords, { data: timetable }, { data: pastRoutines }, { data: pastCompletions }] =
     await Promise.all([
       admin.from('profiles')
-        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name, self_reported_weakest_section')
+        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name, self_reported_weakest_section, syllabus_target_date')
         .eq('id', user.id).maybeSingle(),
-      admin.from('topic_coverage').select('section, topic, status, updated_at').eq('student_id', user.id),
+      admin.from('topic_coverage').select('section, topic, status, updated_at, is_priority').eq('student_id', user.id),
       buildCompletionRecords(admin, user.id, '2000-01-01'),
       admin.from('student_timetables').select('confirmed_at, blocks').eq('student_id', user.id).maybeSingle(),
+      // The planner's memory — the same window Home reads, so the Whole Plan's
+      // day 0 is Home's today and not a lookalike of it.
+      admin.from('daily_routines').select('routine_date, tasks, swapped_out')
+        .eq('student_id', user.id).order('routine_date', { ascending: false }).limit(14),
+      admin.from('routine_task_completions').select('routine_date, task_id')
+        .eq('student_id', user.id).order('routine_date', { ascending: false }).limit(200),
     ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
@@ -97,6 +105,17 @@ export async function GET() {
     revisionDue,
     horizonDays,
     coachingByDate,
+    // The two signals that make this the SAME plan Home builds, not a
+    // lookalike: the date the syllabus clock is paced against, and the topics
+    // the student starred themselves. Without them the Whole Plan would run the
+    // one authority on different inputs — a subtler version of the same bug.
+    daysToSyllabusTarget: profile.syllabus_target_date
+      ? Math.round((Date.parse(String(profile.syllabus_target_date).slice(0, 10)) - Date.parse(new Date().toISOString().slice(0, 10))) / 86_400_000)
+      : null,
+    priorityTopics: (coverageRows ?? [])
+      .filter((r: { is_priority?: boolean | null }) => r.is_priority === true)
+      .map((r: { topic: string }) => r.topic),
+    ...plannerRecency(pastRoutines ?? [], pastCompletions ?? [], getLogDateString()),
     // Same weakest-section the daily plan leans on, so the mix tilts the same
     // way on both surfaces — the self-report if given, else derived from the
     // coverage grid, else the app-wide DILR default.

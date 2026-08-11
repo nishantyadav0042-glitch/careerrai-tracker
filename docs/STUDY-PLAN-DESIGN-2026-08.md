@@ -54,7 +54,7 @@ percentile → 0.80. Never above 1.0.
 Additive score; highest wins; the contributors ARE the explanation. **This is
 where the duplication lives — see §5.**
 
-### 3.4 The mixed day (`plan-mix.ts`, the new shared engine)
+### 3.4 The mixed day (`plan-mix.ts` — SUPERSEDED 11 Aug by `routine-engine.dayShape`)
 ```
 sectionsForDay(hours, weakest, dayIndex):
   hours ≥ 3  → all three sections, weakest first
@@ -109,7 +109,7 @@ different topics for the same section on the same day. This is the blunder.
 ### 5.2 TWO day-assemblers
 - `routine-engine.generateRoutine` — builds the DAILY plan (one topic per section,
   always 3, not hours-scaled, not weighted).
-- `full-plan.buildFullPlan` — builds the WHOLE plan (now via `plan-mix`, hours-scaled + weighted).
+- `full-plan.buildFullPlan` — builds the WHOLE plan (now via `plan-projection`, the one authority) plus the exam calendar.
 
 So "today" is assembled twice, by different rules.
 
@@ -120,39 +120,48 @@ So "today" is assembled twice, by different rules.
 
 ---
 
-## 6. The target: ONE engine, one output
+## 6. SHIPPED, 11 Aug: ONE engine, one output
 
 ```
-                    ┌─────────────────────────────────────────┐
-   coverage,        │  topicPriority(section)   ← ONE ranker   │
-   hours, weakest,  │        │                                 │
-   effort, exam,    │        ▼                                 │
-   coaching   ───▶  │  per-section topic queues                │
-                    │        │                                 │
-                    │        ▼                                 │
-                    │  plan-mix (sections/day, split, draw)     │  ← ONE day-assembler
-                    │        │                                 │
-                    │        ▼                                 │
-                    │  day 0 ─────────────▶ homepage "today"    │
-                    │  days 0..N ─────────▶ "see my whole plan" │  (day 0 identical by construction)
-                    └─────────────────────────────────────────┘
+                    ┌────────────────────────────────────────────────┐
+   coverage,        │  topic-selector.chooseSectionDay  ← ONE ranker  │
+   hours, weakest,  │    syllabus clock │ memory clock               │
+   effort, exam,    │        │                                       │
+   coaching,        │        ▼                                       │
+   target date ──▶  │  routine-engine.dayShape       ← ONE splitter   │
+                    │        │  (sections · minutes · blocks)         │
+                    │        ▼                                       │
+                    │  day-topics ────────▶ Home "today"              │
+                    │                  └──▶ 6am notification cron     │
+                    │  plan-projection ──▶ Blueprint 7-day strip      │
+                    │                  └──▶ Whole Plan (→ CAT day)    │
+                    └────────────────────────────────────────────────┘
+                       day 0 identical by construction, not resemblance
 ```
 
-**Consolidation steps (each removes a duplicate):**
-1. **One topic-priority.** Extract `chooseTopicForSection`'s scoring into a single
-   `topicPriority` used by BOTH the daily plan and `buildWeekPlan`. Kill the
-   opposite-ordering (§5.1). *(Result: both views rank topics identically.)*
-2. **One day-assembler.** `generateRoutine` builds today by calling `plan-mix`
-   (the same engine the whole plan uses), so the daily plan is also hours-scaled
-   and weighted, and day 0 === whole-plan day 0. *(Removes §5.2.)*
-3. **One hours model.** Collapse `remainingPrepHours` into
-   `remainingSyllabusHours`; retire the parts of `study-forecast` the one engine
-   replaces. *(Removes §5.3.)*
+**The three consolidation steps, all done:**
+1. **One topic ranker.** `chooseSectionDay` is the only scorer. `buildWeekPlan`'s
+   independent queue is gone; `study-forecast.ts` is now a 7-day window onto the
+   projection. The opposite-ordering bug (§5.1) went with it.
+2. **One day-assembler.** `dayShape` was extracted OUT of `generateRoutine` — so
+   Home and the whole plan split a day by the same arithmetic, not by two weight
+   tables that happened to look alike. `plan-mix.ts` is deleted (§5.2).
+3. **One hours model.** The projection prices topics with the same
+   `REMAINING_FRACTION × effort` that `remainingSyllabusHours` uses, so the plan
+   and the feasibility verdict on the same screen can no longer be two
+   arithmetics (§5.3).
 
-**Done so far (10 Aug):** the whole plan uses the shared `plan-mix` engine and the
-same weakest-section as the homepage, so both now show mixed-section days. **Not
-yet done:** steps 1–3 above — held for this review, because the fix must be one
-engine, not a third.
+**What the unification also settled.** Every student now opens all 46 topics at
+every commitment — coverage stopped depending on hours. The hours shortfall did
+not disappear; it became its own integrity check (`depth`), so a 3h student is
+told the true thing: every topic is on your plan, and you are 230h short of
+finishing them.
+
+**Guarded by** `planner-unification.test.ts` — Home's today equals the Whole
+Plan's day 0 (topics, sections, block count); the Blueprint strip equals the
+Whole Plan day for day; a future date does not drift between reads; 46/46 holds
+across seven student profiles; and a source-tree grep fails CI if a fourth
+planner or a second day-shape appears.
 
 ---
 

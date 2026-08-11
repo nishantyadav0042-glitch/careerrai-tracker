@@ -161,20 +161,35 @@ describe('feasibility is computed, and said out loud', () => {
     expect(feasibilityLine(f)).toContain('fits');
   });
 
-  it('THE INVARIANT: fits === every topic actually scheduled', () => {
-    // The whole point of the checklist door. If these two ever disagree, the
-    // plan is either promising a syllabus it will not schedule, or hiding one
-    // it could have.
-    for (const h of [4, 6, 8, 10]) {
+  it('THE INVARIANT: every topic is scheduled at EVERY commitment', () => {
+    // This test used to assert `scheduled === ALL` if and only if `fits`, and
+    // it was right about the planner it was written for: buildWeekPlan filled
+    // days to capacity and stopped, so a 4h student was quietly handed 28 of 46
+    // chapters. The founder's ruling, 11 Aug, ended that — every student covers
+    // all 46 — and the syllabus clock now reserves first contact structurally.
+    //
+    // So coverage and depth are now separate promises, and this asserts both:
+    // the chapter list never depends on the hours; the HOURS do.
+    const results: string[] = [];
+    for (const h of [2, 3, 4, 6, 8, 10]) {
       const plan = buildFullPlan({
         coverage: UNTOUCHED, effort: 1, weekdayHours: h, today: TODAY, attemptYear: 2026,
       });
       const scheduled = new Set(
         plan.days.flatMap((d) => d.items.filter((i) => i.kind === 'topic').map((i) => i.label)),
       );
-      expect(scheduled.size === ALL.length, `${h}h: fits=${plan.feasibility.fits} but ${scheduled.size}/${ALL.length} scheduled`)
-        .toBe(plan.feasibility.fits);
+      if (scheduled.size !== ALL.length) results.push(`${h}h: ${scheduled.size}/${ALL.length} topics`);
+      // And the hours verdict stays honest in both directions: a plan that
+      // "fits" must place essentially the whole syllabus, not just name it.
+      const placed = plan.days.flatMap((d) => d.items.filter((i) => i.kind === 'topic')).reduce((s, i) => s + i.hours, 0);
+      if (plan.feasibility.fits && placed < plan.feasibility.syllabusHours * 0.85) {
+        results.push(`${h}h: fits=true but only ${placed}h of ${plan.feasibility.syllabusHours}h placed`);
+      }
+      if (!plan.feasibility.fits && placed >= plan.feasibility.syllabusHours) {
+        results.push(`${h}h: fits=false but the whole syllabus was placed`);
+      }
     }
+    expect(results, 'coverage or depth disagreed with the verdict').toEqual([]);
   });
 
   it('a strong repeater fits at 4h where a first-timer does not', () => {

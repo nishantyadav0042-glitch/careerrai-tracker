@@ -1,10 +1,7 @@
-import { buildWeekPlan, type DayPlan } from './study-forecast';
 import { remainingSyllabusHours, MOCK_HOURS_EACH, totalSyllabusHours, type TopicStatusRow } from './study-pace';
-import { catExamDate } from './routine-engine';
+import { catExamDate, type Phase } from './routine-engine';
 import type { Section } from './prep-model';
-import {
-  sectionsForDay, splitDayHours, drawFromSection, MIN_BLOCK_HOURS, type QueueTopic,
-} from './plan-mix';
+import { projectPlan, type ProjectionDay } from './plan-projection';
 
 // ── The whole plan, today to CAT day ────────────────────────────────────────
 //
@@ -15,11 +12,17 @@ import {
 // complete mock every week without a second thought.
 //
 // THIS FILE SCHEDULES NOTHING ITSELF. Topics are laid into days by
-// buildWeekPlan, which is the same function the Blueprint's 7-day view already
-// uses — extended from 7 days to the full runway. Writing a second topic
-// scheduler here is exactly the two-models trap that produced the 230h/397h
-// split this codebase has already paid for once. What this file adds is the
-// EXAM CALENDAR on top: mock slots, their analysis, and the phase rules.
+// plan-projection.projectPlan, which is the SAME authority Home and the
+// notification cron run — chooseSectionDay for the choice, dayShape for the
+// split — walked forward one day at a time. What this file adds is the EXAM
+// CALENDAR on top: mock slots, their analysis, and the phase rules.
+//
+// Until 11 Aug this file ordered its topics with study-forecast.buildWeekPlan
+// instead: a second scorer, with its own queue and its own bin-packing. The
+// comment here said it was "used for ORDER, not for day assignment" and warned
+// about the two-models trap — and the trap had already sprung. The same
+// Tuesday rendered as three tasks on Home and five, with different topics, on
+// the Whole Plan. There is now one planner and three views of it.
 //
 // The research behind the numbers is in docs/SELFPREP-PLAN-RESEARCH-2026-08.md.
 // Six sources agree that mocks start 3-4 months out and ramp as the exam nears;
@@ -121,6 +124,27 @@ export interface FullPlanInput {
    * "20 topics are not on the date your coaching teaches them."
    */
   coachingByDate?: Record<string, string[]>;
+  /**
+   * Calendar days from today to the student's chosen syllabus-finish date.
+   *
+   * The same number Home's plan is paced against (profiles.syllabus_target_date),
+   * so the syllabus clock runs at the same speed on both surfaces. Null when
+   * they never set one — the clock then holds its one-block-a-day floor.
+   */
+  daysToSyllabusTarget?: number | null;
+  /** Topics the student starred in the Preparation Map, as Home sees them. */
+  priorityTopics?: string[];
+  /**
+   * The planner's memory — the same three signals Home is fed (plan-history).
+   *
+   * Without them the Whole Plan ran the right authority on the wrong inputs:
+   * on 11 Aug, for the same student on the same morning, Home's second QA block
+   * was Inequalities and the Whole Plan's was Percentages, purely because the
+   * Whole Plan did not know Percentages had been on yesterday's plan.
+   */
+  daysSincePlannedByTopic?: Record<string, number | null>;
+  daysSinceLastPracticedByTopic?: Record<string, number | null>;
+  postponedTopics?: string[];
 }
 
 export interface FullPlan {
@@ -241,111 +265,49 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
     solvedPerDay = 16;
   }
 
-  // buildWeekPlan is used for ORDER, not for day assignment: it decides which
-  // topic comes next (coverage, weightage, prerequisites, effort) and how many
-  // hours each needs. The re-flow below then pours that queue into the real
-  // capacity above. A second scoring model here would be the two-models trap.
-  const ordered: PlanItem[] = buildWeekPlan(
-    input.coverage, committedDaily, input.today, input.effort,
-    Math.max(1, Math.ceil(topicCapacityTotal / committedDaily)), null,
-  ).flatMap((d: DayPlan) => d.items.map((i) => ({
-    kind: 'topic' as const, label: i.topic, section: i.section, hours: i.hours,
-  })));
-
-  // A topic may SPAN days, which is both realistic (Reading Comprehension is
-  // 30 hours; nobody does it in one sitting) and necessary. The first version
-  // refused to start a 3-hour topic with 2 hours left, wasting the remainder —
-  // over 85 days that fragmentation alone dropped five topics off a plan whose
-  // hours said it fitted. A plan whose own arithmetic disagrees with its own
-  // calendar is exactly what this whole day has been about removing.
-  const topicsByDate = new Map<string, PlanItem[]>();
-
-  // ── Coaching topics are ANCHORED to their own dates, before anything else ──
+  // ── THE ONE PLANNER, walked forward ─────────────────────────────────────────
   //
-  // The student's sheet is the fixed point, not our ordering: they sit in that
-  // class on that day, and a plan that teaches them something else that evening
-  // is a plan they stop trusting. So class topics claim their date first and
-  // our own queue pours into whatever is left.
+  // Every topic block below comes from projectPlan — the same chooseSectionDay
+  // (syllabus clock + memory clock) and the same dayShape that build Home. This
+  // file hands it the capacity the exam calendar left, and the coaching dates
+  // that must be honoured, and gets back the days.
   //
-  // A class day whose capacity is already spent (a mock day) still gets its
-  // topic, at the minimum block. Being on the right DATE is the promise; the
-  // hours flex around it.
-  const anchored = new Set<string>();
-  if (input.coachingByDate) {
-    const hoursForTopic = new Map<string, number>();
-    for (const it of ordered) if (!hoursForTopic.has(it.label)) hoursForTopic.set(it.label, it.hours);
-
-    for (let d = 0; d < span; d++) {
-      const key = iso(new Date(input.today.getTime() + d * DAY_MS));
-      const classTopics = input.coachingByDate[key];
-      if (!classTopics?.length) continue;
-
-      let left = capacityByDate.get(key) ?? 0;
-      const items: PlanItem[] = [];
-      for (const label of classTopics) {
-        const want = hoursForTopic.get(label) ?? 1;
-        const take = Math.max(0.5, Math.min(want, Math.round(left * 2) / 2));
-        items.push({ kind: 'topic', label, section: null, hours: take });
-        anchored.add(label);
-        left = Math.max(0, left - take);
-      }
-      topicsByDate.set(key, items);
-      capacityByDate.set(key, left);
-    }
-  }
-
-  // Our own queue skips anything the coaching already claimed, so a topic is
-  // never scheduled twice under two different dates.
-  const queue = anchored.size ? ordered.filter((i) => !anchored.has(i.label)) : ordered;
-
-  // ── The mixed day (10 Aug redesign) ─────────────────────────────────────────
-  //
-  // The old code poured this ONE priority queue into days topic-by-topic, so a
-  // 30-hour topic ate three days whole — RC-only, then Mensuration-only. Toppers
-  // don't study like that. Bucket the queue by section, then build EACH day as a
-  // mix: the weakest section plus one or two others (scaled by hours), time-split
-  // toward the weaker/bigger section, each section's topics progressing across
-  // days but always alongside the rest. Coaching-anchored class topics already
-  // sit in topicsByDate; the mix fills the OTHER sections around them.
-  const queues: Record<Section, QueueTopic[]> = { QA: [], DILR: [], VARC: [] };
-  for (const it of queue) {
-    const sec = it.section as Section;
-    if (sec === 'QA' || sec === 'DILR' || sec === 'VARC') {
-      queues[sec].push({ topic: it.label, section: sec, hours: it.hours, mode: 'learn' });
-    }
-  }
-  const remainingIn = (s: Section) => queues[s].reduce((sum, t) => sum + t.hours, 0);
-  // Weakest = the caller's value (matches the daily plan) or, failing that, the
-  // section with the most work left.
-  const weakest: Section = input.weakestSection
-    ?? (['QA', 'DILR', 'VARC'] as Section[]).sort((a, b) => remainingIn(b) - remainingIn(a))[0];
-
-  let topicDayIdx = 0; // counts only days that place topics — keeps rotation steady
+  // Coaching class topics are no longer anchored by a separate pass here: they
+  // travel into the projection as `classTopics`, where they become the same
+  // `todayClassBonus` claim Home already honours. One mechanism, both surfaces.
+  const projectionDays: ProjectionDay[] = [];
   for (let d = 0; d < span; d++) {
     const date = new Date(input.today.getTime() + d * DAY_MS);
-    if (phaseOn(date, exam) === 'revision') continue; // revision days are built later
     const key = iso(date);
-    const free = capacityByDate.get(key) ?? 0;
-    if (free < MIN_BLOCK_HOURS) continue;
+    const planPhase = phaseOn(date, exam);
+    projectionDays.push({
+      date: key,
+      // November places no new topics at all — the one rule every source states.
+      capacityHours: planPhase === 'revision' ? 0 : (capacityByDate.get(key) ?? 0),
+      classTopics: input.coachingByDate?.[key],
+      weekend: date.getUTCDay() === 0 || date.getUTCDay() === 6,
+      phase: (planPhase === 'build' ? 'foundation' : planPhase) as Phase,
+    });
+  }
 
-    const anchoredItems = topicsByDate.get(key) ?? [];
-    const anchoredHours = anchoredItems.reduce((s, i) => s + i.hours, 0);
-    const freeForMix = Math.round((free - anchoredHours) * 2) / 2;
+  const projected = projectPlan({
+    days: projectionDays,
+    coverage: input.coverage,
+    effort: input.effort,
+    weakestSection: input.weakestSection ?? null,
+    daysToSyllabusTarget: input.daysToSyllabusTarget ?? null,
+    priorityTopics: input.priorityTopics,
+    daysSincePlannedByTopic: input.daysSincePlannedByTopic,
+    daysSinceLastPracticedByTopic: input.daysSinceLastPracticedByTopic,
+    postponedTopics: input.postponedTopics,
+  });
 
-    if (freeForMix >= MIN_BLOCK_HOURS && (remainingIn('QA') + remainingIn('DILR') + remainingIn('VARC')) > 0) {
-      const secs = sectionsForDay(freeForMix, weakest, topicDayIdx).filter((s) => queues[s].length > 0);
-      // If the weakest is out of topics, still mix whatever sections have work.
-      const usable = secs.length ? secs : (['QA', 'DILR', 'VARC'] as Section[]).filter((s) => queues[s].length > 0);
-      const split = splitDayHours(usable, freeForMix, weakest);
-      const mixItems: PlanItem[] = [];
-      for (const s of usable) {
-        for (const m of drawFromSection(queues[s], split.get(s) ?? 0)) {
-          mixItems.push({ kind: 'topic', label: m.topic, section: m.section, hours: m.hours });
-        }
-      }
-      if (mixItems.length) topicsByDate.set(key, [...anchoredItems, ...mixItems]);
-    }
-    topicDayIdx++;
+  const topicsByDate = new Map<string, PlanItem[]>();
+  for (const day of projected) {
+    if (!day.items.length) continue;
+    topicsByDate.set(day.date, day.items.map((i) => ({
+      kind: 'topic' as const, label: i.topic, section: i.section, hours: i.hours,
+    })));
   }
 
   const revisionQueue = [...(input.revisionDue ?? [])];

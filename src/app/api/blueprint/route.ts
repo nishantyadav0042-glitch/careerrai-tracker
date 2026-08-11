@@ -48,7 +48,7 @@ export async function GET() {
         last_year_percentile
       `)
       .eq('id', user.id).single(),
-    admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', user.id),
+    admin.from('topic_coverage').select('topic, status, updated_at, is_priority').eq('student_id', user.id),
     admin.from('streak_data').select('current_streak, last_log_date').eq('student_id', user.id).maybeSingle(),
     buildCompletionRecords(admin, user.id, '2000-01-01'),
   ]);
@@ -265,6 +265,21 @@ export async function GET() {
       }),
       7,
       weekPace?.requiredPerDay ?? null,
+      // The same inputs Home's plan is built from, so this strip is a WINDOW on
+      // the one planner rather than a lookalike of it: the weakest section it
+      // leans on, the date its syllabus clock is paced against, the archetype
+      // that shapes the day, and the topics the student starred themselves.
+      {
+        weakestSection: weak,
+        daysToSyllabusTarget: targetDateIso
+          ? Math.round((Date.parse(targetDateIso.slice(0, 10)) - Date.parse(today.toISOString().slice(0, 10))) / 86_400_000)
+          : null,
+        isWorkingProfessional: !!profile.is_working_professional,
+        isRepeater: !!profile.is_repeater,
+        priorityTopics: (coverage ?? [])
+          .filter((r: { is_priority?: boolean | null }) => r.is_priority === true)
+          .map((r: { topic: string }) => r.topic),
+      },
     ),
     dueForRevisionCount: dueForRevision.length,
     mocksCompleted: prepMemory.mockTrend.count,

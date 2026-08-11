@@ -53,26 +53,47 @@ contains an `if` about the product, that `if` is in the wrong file.
 
 ## 3. The load-bearing modules (where to make which change)
 
-### The daily plan pipeline (the core loop)
+### The planner — ONE authority, three views (Incident #26)
 ```
+                    THE AUTHORITY
+  lib/topic-selector.ts  chooseSectionDay — WHICH topics (syllabus clock + memory clock)
+  lib/routine-engine.ts  dayShape         — HOW the day splits (sections, minutes, blocks)
+
+                    THE VIEWS
+  lib/day-topics.ts       today's picks, for both of today's callers
+    ├─ app/api/routine/today/route.ts  ← the app's hot path (student opens tracker)
+    └─ lib/routine-plan.ts             ← the 6am notification cron (runs FIRST — it wins mornings)
+  lib/plan-projection.ts  the same authority walked forward, day by day
+    ├─ lib/full-plan.ts        Whole Plan (today → CAT day) + the EXAM CALENDAR on top
+    └─ lib/study-forecast.ts   the Blueprint's 7-day strip
+
 profiles.study_target_hours ──▶ lib/daily-hours.ts ──▶ routine profile
-topic_coverage + timetable  ──▶ lib/topic-selector.ts (scored choice per section)
-                            ──▶ lib/routine-engine.ts (generateRoutine: tasks, volumes, phases)
-Two callers, kept in lockstep:
-  app/api/routine/today/route.ts   ← the app's hot path (student opens tracker)
-  lib/routine-plan.ts              ← the 6am notification cron (runs FIRST — it wins mornings)
 Staleness (may today's plan rebuild?): lib/plan-freshness.ts — ONLY on the
 student changing their own hours, or a check-in arriving after the build.
 ```
+
+**Do not add a fourth planner.** `planner-unification.test.ts` greps the tree:
+any file outside the authority that calls `chooseSectionDay` /
+`chooseTopicForSection`, or reintroduces a second day-shape model, fails CI. It
+also asserts Home's today equals the Whole Plan's day 0 — topics, sections and
+block count — and that a future date does not drift between reads.
 
 - **`lib/daily-hours.ts`** — THE student's daily hours. One number, one owner,
   one writer (`setDailyHours`). A guard test greps the whole tree for any other
   writer. Do not add one. (Incident #22.)
 - **`lib/routine-engine.ts`** — pure plan generator. Same inputs → same day,
   deterministic; the behavioural `volumeFactor` was removed on founder order.
-- **`lib/topic-selector.ts`** — one scored choice per section. Bonus ladder
+- **`lib/topic-selector.ts`** — the scored choice. Bonus ladder
   (postponed 50 > today's-class 45 > priority 25 > focus 22 > self-report 12);
   the ordering is a product decision — a promise beats a schedule.
+  `chooseSectionDay` splits the day's blocks between the SYLLABUS clock (first
+  contact, ≥1 block a day while anything is unopened — this is what makes 46/46
+  structural rather than weight-dependent) and the MEMORY clock (revision).
+- **`lib/plan-projection.ts`** — the one forward planner. Pure and
+  deterministic: same state in, same plan out, so a future date is a promise
+  rather than a re-roll. Advances exactly what the live engine advances.
+- **`lib/syllabus-pace.ts`** — "at this rate, do we finish?" Shapes ordering
+  WITHIN each clock; it no longer gates novelty.
 - **`lib/plan-extension.ts` + `api/cron/weekly-plan-reconcile`** — falling
   behind moves the FINISH DATE, weekly, with arithmetic. Hours never move.
 - **`lib/study-pace.ts`** — remaining-hours model + `computeRequiredPace`. It

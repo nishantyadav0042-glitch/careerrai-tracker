@@ -124,7 +124,23 @@ describe('the 7-day schedule spends the same hours but clears more topics', () =
     const topics = (p: { items: { topic: string }[] }[]) => new Set(p.flatMap((d) => d.items.map((i) => i.topic))).size;
 
     expect(hours(repeater)).toBe(hours(fresher));       // same time on the desk
-    expect(topics(repeater)).toBeGreaterThan(topics(fresher)); // more ground covered
+
+    // "More ground covered" is measured in SYLLABUS, not in headings.
+    //
+    // It used to be measured in distinct topic names, and that worked while the
+    // strip bin-packed a queue: cheaper topics finished sooner, so more names
+    // fitted in a week. Since 11 Aug both students run the one planner, whose
+    // syllabus clock opens a fixed number of chapters a day — so the week names
+    // the same 21 for both, by design, and counting names now measures the
+    // calendar rather than the effort.
+    //
+    // What effort actually buys is how much of THEIR OWN syllabus those
+    // identical hours clear. Same numerator, smaller denominator, more ground.
+    const share = (p: { totalHours: number }[], e: number) =>
+      hours(p) / remainingSyllabusHours(rows, e);
+    expect(topics(repeater)).toBe(topics(fresher)); // same chapters opened...
+    expect(share(repeater, studentEffortMultiplier({ isRepeater: true, lastYearPercentile: 88 })))
+      .toBeGreaterThan(share(fresher, 1));          // ...a bigger bite of the syllabus
   });
 });
 

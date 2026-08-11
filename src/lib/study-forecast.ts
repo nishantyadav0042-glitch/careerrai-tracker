@@ -1,30 +1,25 @@
-// ── The 7-day forward plan ──────────────────────────────────────────────────
-// Turns the same per-topic hours model the pace ring uses into a real
-// look-ahead schedule: the highest-priority remaining topics, bin-packed into
-// the next N days at the student's daily capacity. A big topic (RC = 30h)
-// naturally spans several days; a small one shares a day with others. This is
-// what makes the plan feel like a road ahead, not just "today".
+// ── The 7-day forward strip (Blueprint) ─────────────────────────────────────
+//
+// A WINDOW ONTO THE ONE PLANNER, nothing more. This file used to hold a second
+// scheduler: it sorted every remaining topic once by baseCoverageScore and
+// bin-packed that queue into days. The whole plan called it too. So on 11 Aug
+// the same Tuesday rendered three ways — Home's chooseSectionDay, the Blueprint
+// strip, and the Whole Plan — and the founder saw two of them side by side and
+// disagreeing about which topics the day held.
+//
+// It now delegates to plan-projection.projectPlan, which is the same authority
+// Home runs (chooseSectionDay for the choice, dayShape for the split), walked
+// forward. The only thing this file still decides is CAPACITY: how many hours a
+// day of this strip is allowed to hold.
 
-import { TOPIC_METADATA } from './topics-constants';
-import { REMAINING_FRACTION, type CoverageStatus } from './study-pace';
-import { baseCoverageScore } from './topic-selector';
+import type { CoverageStatus } from './study-pace';
+import { projectPlan, type StudyMode } from './plan-projection';
+import type { Section } from './prep-model';
 
-export type StudyMode = 'learn' | 'practice' | 'revise';
+export type { StudyMode };
 
 export interface DayPlanItem { topic: string; section: string; hours: number; mode: StudyMode }
 export interface DayPlan { iso: string; label: string; items: DayPlanItem[]; totalHours: number }
-
-// Topic ordering now comes from the ONE shared scorer (topic-selector
-// baseCoverageScore) — "finish what you started" (learning > not_started),
-// weightage-primary. The old COVERAGE_PRIORITY table here ranked the OPPOSITE
-// way (not_started first) and is gone: the daily card and the whole plan can no
-// longer disagree about which topic is next.
-
-function modeFor(status: CoverageStatus): StudyMode {
-  if (status === 'not_started' || status === 'learning') return 'learn';
-  if (status === 'practicing') return 'practice';
-  return 'revise';
-}
 
 function dayLabel(date: Date, offset: number): string {
   if (offset === 0) return 'Today';
@@ -33,6 +28,18 @@ function dayLabel(date: Date, offset: number): string {
 }
 
 const half = (h: number) => Math.round(h * 2) / 2;
+const DAY_MS = 86_400_000;
+
+export interface WeekPlanOptions {
+  /** The same weakest section Home leans on, so the mix tilts the same way. */
+  weakestSection?: Section | null;
+  /** Days to the student's chosen syllabus-finish date; null = not set. */
+  daysToSyllabusTarget?: number | null;
+  isWorkingProfessional?: boolean;
+  isRepeater?: boolean;
+  /** Topics the student starred in the Preparation Map. */
+  priorityTopics?: string[];
+}
 
 export function buildWeekPlan(
   rows: { topic: string; status: string | null }[],
@@ -51,29 +58,8 @@ export function buildWeekPlan(
    * ring's requiredPerDay). Optional so existing callers keep working.
    */
   requiredDaily?: number | null,
+  options?: WeekPlanOptions,
 ): DayPlan[] {
-  const statusByTopic = new Map<string, string>();
-  for (const r of rows) if (r.status) statusByTopic.set(r.topic, r.status);
-
-  // Remaining topics with hours-left + a scheduling score. Prerequisite still
-  // unstarted → deprioritised (never scheduled ahead of its own foundation).
-  const queue = Object.entries(TOPIC_METADATA)
-    .map(([topic, meta]) => {
-      const status = (statusByTopic.get(topic) as CoverageStatus) ?? 'not_started';
-      const remaining = meta.estimatedHours * (REMAINING_FRACTION[status] ?? 1) * effort;
-      const prereqUnmet = !!meta.prerequisites?.length && meta.prerequisites.some((p) => {
-        const s = statusByTopic.get(p);
-        return !s || s === 'not_started';
-      });
-      // The ONE shared scorer — same coverage + weightage + sequence + prereq
-      // philosophy the daily card uses. (Per-day signals like revision-due and
-      // the student's own taps are the daily card's job, not the whole plan's.)
-      const score = baseCoverageScore({ status, weightage: meta.weightage, sequenceRank: meta.sequenceRank, prereqUnmet });
-      return { topic, section: meta.section, status, remaining, score };
-    })
-    .filter((t) => t.remaining > 0.5 && t.status !== 'exam_ready')
-    .sort((a, b) => b.score - a.score);
-
   // Capacity for a day's schedule.
   //
   // This used to be committedDaily alone, which meant a student who said they
@@ -91,23 +77,31 @@ export function buildWeekPlan(
   // A floor of 1h: a nearly-finished student should still get a real block
   // rather than a 15-minute stub.
   const cap = need != null ? Math.max(1, Math.min(committed, need)) : committed;
-  const plan: DayPlan[] = [];
-  let idx = 0;
-  let leftOnCurrent = queue.length ? queue[0].remaining : 0;
 
-  for (let d = 0; d < days && idx < queue.length; d++) {
-    const date = new Date(today.getTime() + d * 86_400_000);
-    const items: DayPlanItem[] = [];
-    let capacity = cap;
-    while (capacity > 0.25 && idx < queue.length) {
-      const t = queue[idx];
-      const alloc = Math.min(leftOnCurrent, capacity);
-      if (alloc >= 0.5) items.push({ topic: t.topic, section: t.section, hours: half(alloc), mode: modeFor(t.status) });
-      leftOnCurrent -= alloc;
-      capacity -= alloc;
-      if (leftOnCurrent <= 0.25) { idx++; leftOnCurrent = idx < queue.length ? queue[idx].remaining : 0; }
-    }
-    plan.push({ iso: date.toISOString().split('T')[0], label: dayLabel(date, d), items, totalHours: half(items.reduce((s, i) => s + i.hours, 0)) });
-  }
-  return plan;
+  const dates = Array.from({ length: days }, (_, d) => new Date(today.getTime() + d * DAY_MS));
+
+  const projected = projectPlan({
+    days: dates.map((date) => ({
+      date: date.toISOString().split('T')[0],
+      capacityHours: cap,
+      weekend: date.getDay() === 0 || date.getDay() === 6,
+    })),
+    coverage: rows,
+    effort,
+    weakestSection: options?.weakestSection ?? null,
+    daysToSyllabusTarget: options?.daysToSyllabusTarget ?? null,
+    isWorkingProfessional: options?.isWorkingProfessional,
+    isRepeater: options?.isRepeater,
+    priorityTopics: options?.priorityTopics,
+  });
+
+  return projected.map((p, d) => ({
+    iso: p.date,
+    label: dayLabel(dates[d], d),
+    items: p.items.map((i) => ({ topic: i.topic, section: i.section, hours: i.hours, mode: i.mode })),
+    totalHours: half(p.items.reduce((s, i) => s + i.hours, 0)),
+  }));
 }
+
+/** Re-exported so callers that only need the status→verb map keep one import. */
+export type { CoverageStatus };
