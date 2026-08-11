@@ -61,8 +61,8 @@ export default async function CommandCenterPage() {
     // Distinct students who logged in the last 7 days — active this week.
     admin.from('daily_reports').select('student_id').gte('report_date', istDay(7)),
   ]);
-  const yesterdayCount = new Set((activeYesterday.data ?? []).map((r: any) => r.student_id)).size;
-  const weekCount = new Set((activeWeek.data ?? []).map((r: any) => r.student_id)).size;
+  const yesterdayCount = new Set((activeYesterday.data ?? []).map((r: { student_id: string }) => r.student_id)).size;
+  const weekCount = new Set((activeWeek.data ?? []).map((r: { student_id: string }) => r.student_id)).size;
 
   const tone = scoreTone(inbox.score);
   const cleared = inbox.items.length === 0;

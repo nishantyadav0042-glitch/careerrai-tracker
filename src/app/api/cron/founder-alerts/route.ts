@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     .select('body')
     .eq('type', 'founder_alert_sent')
     .in('body', ids);
-  const seen = new Set((alreadySent ?? []).map((r: any) => r.body));
+  const seen = new Set((alreadySent ?? []).map((r: { body: string }) => r.body));
 
   const fresh = critical.filter((a) => !seen.has(a.id));
   if (fresh.length === 0) {

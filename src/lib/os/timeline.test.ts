@@ -30,7 +30,7 @@ describe('only decisions are allowed on the timeline', () => {
     // If someone adds `app_open` to TIMELINE_KINDS, the first test fails; this
     // asserts the guard itself still covers the obvious offenders.
     for (const noise of ['app_open', 'screen_view', 'tap', 'click']) {
-      expect(FORBIDDEN_KINDS).toContain(noise as any);
+      expect(FORBIDDEN_KINDS as readonly string[]).toContain(noise);
     }
   });
 });
