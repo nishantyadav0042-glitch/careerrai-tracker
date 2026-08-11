@@ -1,12 +1,20 @@
 # STORE FREEZE — active until Play AND Apple both approve
 
-> ## 🟠 STATUS 5 Aug 2026: PLAY REJECTED THE LISTING — METADATA ONLY, NOT THE APP.
-> Three store screenshots (the PWA-manifest trio `public/screenshots/*` that
-> PLAY-STORE-UPLOAD-GUIDE §5 warned against uploading) were flagged as
-> "Unclear Visuals". The binary, product, login flow and review account were
-> NOT flagged. Fix + resubmission: **`docs/PLAY-RESUBMISSION.md`**.
+> ## 🟠 STATUS 12 Aug 2026: PLAY REJECTED AGAIN — "IMPERSONATION", TITLE ONLY.
+> Play flagged the title "CareerRai" as a third-party brand. The "third party"
+> is OUR OWN earlier upload of the same app from the founder's other developer
+> account, months old — a self-collision, not a real conflict. The binary,
+> product and login flow were NOT flagged; the brand needs no rename (Apple
+> approved it 30 Jul). Resolution in flight (Fork A): the old app is REMOVED
+> from the old account; appeal submitted from the shanti account stating common
+> ownership; trademark filing for "CareerRai" recommended in parallel.
 > **No review is in flight right now**, so the mid-review deploy hazard is
-> suspended — it RESUMES the moment "Send for review" is clicked. Incident #19.
+> suspended — it RESUMES the moment the appeal is granted and "Send for
+> review" is clicked. Founder must announce that moment; main merges then halt
+> until the verdict.
+>
+> (Prior: 5 Aug rejection — metadata "Unclear Visuals", the PWA-manifest
+> screenshot trio. Fixed per `docs/PLAY-RESUBMISSION.md`. Incident #19.)
 
 **Founder instruction, 30 Jul 2026:** *"no changes need to be done until we get
 our app passed from playstore and apple store."*
