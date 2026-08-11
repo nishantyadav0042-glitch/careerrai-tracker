@@ -21,8 +21,9 @@ import {
   type Stage,
   type HistoryInput,
 } from '@/lib/routine-engine';
-import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { chooseTopicsForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { syllabusPace } from '@/lib/syllabus-pace';
+import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
 import { dailyHours } from '@/lib/daily-hours';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
@@ -155,7 +156,7 @@ function buildTopicChoices(
   todayClassTopics: string[] = [],
   /** Days until the student's chosen syllabus-finish date; null = not set. */
   daysToSyllabusTarget: number | null = null
-): Record<Section, TopicChoice> {
+): { choices: Record<Section, TopicChoice>; extras: Partial<Record<Section, TopicChoice[]>> } {
   const coverageByTopic = new Map<string, CoverageStatus>();
   const prioritySet = new Set<string>();
   for (const row of coverageRows) {
@@ -177,6 +178,7 @@ function buildTopicChoices(
   const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
   const result = {} as Record<Section, TopicChoice>;
+  const extras: Partial<Record<Section, TopicChoice[]>> = {};
 
   for (const section of sections) {
     const isWeakSection = section === profile.weakestSection;
@@ -200,9 +202,11 @@ function buildTopicChoices(
     const pace = daysToSyllabusTarget == null
       ? { pressure: 0 }
       : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
-    result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason, pace.pressure);
+    const picks = chooseTopicsForSection(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, revisionMultiplier, revisionSeason, pace.pressure);
+    result[section] = picks[0];
+    extras[section] = picks;
   }
-  return result;
+  return { choices: result, extras };
 }
 
 
@@ -339,7 +343,7 @@ export async function computeTodaysPlan(
       routine = null;
     }
     if (!routine) {
-      const generated = generateRoutine(routineProfile, now, history, topicChoices);
+      const generated = generateRoutine(routineProfile, now, history, topicChoices.choices, topicChoices.extras);
       const { data: inserted } = await admin
         .from('daily_routines')
         .upsert(

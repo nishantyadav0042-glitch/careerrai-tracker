@@ -28,6 +28,13 @@
 /** Below this, a plan is comfortably ahead and revision should lead. */
 export const PACE_RELAXED = 0.5;
 
+/**
+ * The last stretch, where an unopened topic stops being a scheduling
+ * preference and becomes a hole in the syllabus the student will sit the exam
+ * with. Only inside this window does the last-mile floor apply.
+ */
+export const ENDGAME_DAYS = 14;
+
 export interface SyllabusPaceInput {
   /** Topics the student has never started (coverage 'not_started' or unmapped). */
   untouchedTopics: number;
@@ -93,7 +100,26 @@ export function syllabusPace(input: SyllabusPaceInput): SyllabusPace {
   // Pressure is "how much of the honest daily capacity this demands".
   // requiredPerDay ≥ capacity ⇒ 1. Below PACE_RELAXED of capacity ⇒ 0.
   const demand = requiredPerDay / perDayCeiling;
-  const pressure = demand >= 1 ? 1 : Math.max(0, (demand - PACE_RELAXED) / (1 - PACE_RELAXED));
+  let pressure = demand >= 1 ? 1 : Math.max(0, (demand - PACE_RELAXED) / (1 - PACE_RELAXED));
+
+  // THE LAST MILE. Rate alone is not enough, and the simulation proved it:
+  // Abhishek finished at 45/46 because the final untouched topic sat behind a
+  // rate of 1-topic-in-5-days, which reads as "relaxed", so revision took the
+  // slot every time and that one chapter was never opened at all.
+  //
+  // Founder, 11 Aug: "saare 46 ke 46 topics cover hone chahiye." A topic that
+  // has NEVER been opened is not a low-rate problem, it is a hole in the
+  // syllabus — so as the runway per remaining topic shrinks, pressure is
+  // floored regardless of how gentle the average rate looks.
+  // Scoped to the ENDGAME only. A student with 23 topics and 120 days has a
+  // gentle runway per topic too, and pushing them is simply wrong — they should
+  // be revising. The hole-in-the-syllabus logic applies when the date is close
+  // enough that an unopened chapter will not get studied at all.
+  if (input.daysToTarget <= ENDGAME_DAYS) {
+    const runwayPerTopic = input.daysToTarget / untouched;
+    const floor = runwayPerTopic <= 3 ? 1 : runwayPerTopic <= 6 ? 0.6 : 0;
+    pressure = Math.max(pressure, floor);
+  }
 
   const behind = demand > 1;
   const rounded = Math.round(requiredPerDay * 10) / 10;
