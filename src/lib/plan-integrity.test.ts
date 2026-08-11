@@ -19,14 +19,30 @@ const planAt = (hours: number | null, over: Partial<Parameters<typeof buildFullP
 // at 3h/day the plan scheduled 28 of 46 topics and silently dropped eighteen.
 
 describe('the topic check catches what was actually happening', () => {
-  it('3h a day leaves topics unplanned, and NAMES them', () => {
+  // 11 Aug — WHAT CHANGED, and why this test now asserts the opposite.
+  //
+  // It used to assert that 3h/day left 18 chapters off the plan entirely, and
+  // that was the correct assertion for the planner of the day: buildWeekPlan
+  // filled days to capacity and stopped when the days ran out. The founder's
+  // ruling ended that — "all forty-six of the forty-six topics must be covered
+  // for every student, according to their timetable" — and the syllabus clock
+  // in plan-projection now reserves first contact structurally, so a 3h student
+  // opens all 46 too.
+  //
+  // The shortfall did not vanish; it moved to where it was always true. A 3h
+  // student is short of HOURS, not of chapters, and the door says so.
+  it('3h a day still opens all 46 — and the door names the hours it costs', () => {
     const r = checkPlanIntegrity({ plan: planAt(3), committedHours: 3 });
-    const topics = r.checks.find((c) => c.id === 'topics')!;
-    expect(topics.status).toBe('fail');
-    expect(r.unscheduledTopics.length).toBeGreaterThan(10);
-    // Named, not counted. A student can only act on a list.
-    expect(topics.items!.length).toBe(r.unscheduledTopics.length);
-    expect(topics.detail).toMatch(/more a day/);
+    expect(r.unscheduledTopics).toEqual([]);
+    expect(r.checks.find((c) => c.id === 'topics')!.status).toBe('pass');
+
+    const depth = r.checks.find((c) => c.id === 'depth')!;
+    expect(depth.status).toBe('fail');
+    expect(depth.detail).toMatch(/Every topic is on your plan/);
+    expect(depth.detail).toMatch(/h short of finishing/);
+    expect(depth.detail).toMatch(/against the 3h you set/);
+    // The door must still fail overall. A student 230h short who is shown all
+    // green has been told the most expensive lie in the product.
     expect(r.passed).toBe(false);
   });
 
@@ -43,8 +59,15 @@ describe('the topic check catches what was actually happening', () => {
       plan: planAt(4, { effort: studentEffortMultiplier({ isRepeater: true, lastYearPercentile: 88 }) }),
       committedHours: 4,
     });
-    expect(fresher.unscheduledTopics.length).toBeGreaterThan(0);
+    // Both see every chapter — coverage is no longer what separates them.
+    expect(fresher.unscheduledTopics).toEqual([]);
     expect(repeater.unscheduledTopics).toEqual([]);
+    // DEPTH is. The repeater's syllabus is priced lower, so 4h genuinely holds
+    // it; the first-timer's does not, and that is the whole reason effort is a
+    // per-student number rather than a printed constant.
+    expect(fresher.checks.find((c) => c.id === 'depth')!.status).toBe('fail');
+    expect(repeater.checks.find((c) => c.id === 'depth')!.status).toBe('pass');
+    expect(repeater.passed).toBe(true);
   });
 
   it('a coaching month is not judged against the whole syllabus', () => {

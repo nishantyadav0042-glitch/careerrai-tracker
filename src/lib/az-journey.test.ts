@@ -118,8 +118,14 @@ describe('JOURNEY A — the plan genuinely changes with the hours given', () => 
       // syllabus is what actually differs, and it is what the student feels.
       const lastTopicDay = [...p.days].reverse()
         .find((d) => d.items.some((i) => i.kind === 'topic'))?.date ?? 'none';
-      rows.push(`  ${String(h).padStart(2)}h/day → ${String(topics).padStart(2)}/46 topics · fits=${String(p.feasibility.fits).padEnd(5)} · syllabus done ${lastTopicDay}`);
-      signatures.add(`${topics}|${p.feasibility.fits}|${lastTopicDay}`);
+      // Since 11 Aug every commitment covers all 46 topics, and a student who
+      // cannot finish simply studies to the end of October — so topic count AND
+      // the last topic date both stop discriminating at the low end. What
+      // genuinely separates a 2h student from a 5h one is the DEPTH they get:
+      // the hours actually placed against the hours the syllabus needs.
+      const placed = p.days.flatMap((d) => d.items.filter((i) => i.kind === 'topic')).reduce((s, i) => s + i.hours, 0);
+      rows.push(`  ${String(h).padStart(2)}h/day → ${String(topics).padStart(2)}/46 topics · ${String(placed).padStart(5)}h placed · fits=${String(p.feasibility.fits).padEnd(5)} · syllabus done ${lastTopicDay}`);
+      signatures.add(`${topics}|${p.feasibility.fits}|${lastTopicDay}|${placed}`);
       // The hours cap must hold at EVERY commitment, not just the one we test above.
       expect(p.days.filter((d) => d.totalHours > h + 0.01).length, `${h}h plan overloads a day`).toBe(0);
     }

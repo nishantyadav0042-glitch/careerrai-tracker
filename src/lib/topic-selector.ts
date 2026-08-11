@@ -376,9 +376,17 @@ export function chooseSectionDay(
   if (untouchedCount > 0) {
     // At least one a day — the floor that makes the guarantee structural.
     // More when the remaining topics will not fit one-a-day in the days left.
+    //
+    // NO DATE SET is the floor, not the ceiling. It used to mean `untouchedCount`,
+    // which saturated the day: a student who never picked a syllabus-finish date
+    // got every block in every section spent on first contact and no revision at
+    // all — the exact mirror of Abhishek's all-revision loop, and live for 47 of
+    // 280 students on 11 Aug. Without a date there is no deadline to be behind,
+    // so the syllabus clock takes its one block and the memory clock keeps the
+    // rest. One block a day per section still opens all 46 inside three weeks.
     const perDay = daysToTarget != null && daysToTarget > 0
       ? Math.ceil(untouchedCount / daysToTarget)
-      : untouchedCount;
+      : 1;
     syllabusBlocks = Math.min(capacity, Math.max(1, perDay));
   }
 

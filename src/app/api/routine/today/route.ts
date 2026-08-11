@@ -4,22 +4,20 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
-import { chooseSectionDay, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
-import { syllabusPace } from '@/lib/syllabus-pace';
-import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
+import { type CoverageStatus } from '@/lib/topic-selector';
+import { buildTopicChoices } from '@/lib/day-topics';
+import { plannerRecency } from '@/lib/plan-history';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
-import { TOPIC_METADATA, QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS, QA_GROUPS } from '@/lib/topics-constants';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
-
-const TOPICS_BY_SECTION: Record<Section, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -539,12 +537,10 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   }
 
   // Topics swapped OUT of the most recent past day — "never delete, always
-  // postpone": these get a decisive bonus today so nothing is ever lost.
+  // postpone" — come from plannerRecency below, with the rest of the planner's
+  // memory. lastPastDay is still needed here for yesterday's score.
   const today = getLogDateString();
   const lastPastDay = (pastRoutines ?? []).find((r: { routine_date: string }) => r.routine_date < today);
-  const postponedTopics: string[] = Array.isArray(lastPastDay?.swapped_out)
-    ? (lastPastDay.swapped_out as unknown[]).filter((t): t is string => typeof t === 'string')
-    : [];
   // Yesterday's score — powers the "1 of 3 done -> today's plan already
   // adjusted" narration that makes the daily auto-adjustment VISIBLE.
   const yesterday = lastPastDay
@@ -565,14 +561,14 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
         .map((t) => t.topic as string)
     : [];
 
+  // The three PLANNER signals come from the ONE implementation (plan-history),
+  // so this route, the 6am cron and the Whole Plan are fed identically. What
+  // stays here is the fuel nothing else needs: per-SECTION recency for the
+  // Mission Engine, practice counts, and the Adaptation Engine's completion
+  // ratio.
+  const recency = plannerRecency(pastRoutines ?? [], pastCompletions ?? [], today);
+
   const daysSince: Record<Section, number | null> = { VARC: null, DILR: null, QA: null };
-  // Per-topic recency, keyed by topic name — only populated going forward,
-  // since it reads the `topic` field routine-engine.ts now stores on every
-  // task (older rows generated before this shipped won't have it, and
-  // simply won't match here, which is the correct honest behavior for data
-  // that didn't exist yet).
-  const daysSinceByTopic: Record<string, number | null> = {};
-  const daysSincePlannedByTopic: Record<string, number | null> = {};
   const timesPracticedByTopic: Record<string, number> = {};
   // Adaptation Engine fuel: how much of each past day's plan the student
   // actually finished. Today is excluded (still in progress); completions are
@@ -591,16 +587,6 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
     // (bug audit, 14 July) — an unguarded for-of here throws, rejecting the
     // top-level Promise.all and 500ing the ENTIRE plan for any student with
     // even one such row: the same failure class as the earlier TDZ crash.
-    // When each topic was last SHOWN, done or not. Without this the engine
-    // could serve a topic, watch it be skipped, and serve it again the next
-    // day forever — Percentages seven times in twelve days (Abhishek, 11 Aug).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
-      const tp = t.topic as string | null | undefined;
-      if (tp && daysSincePlannedByTopic[tp] == null) {
-        daysSincePlannedByTopic[tp] = Math.round((Date.parse(today) - Date.parse(r.routine_date)) / 86_400_000);
-      }
-    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
       if (!completedTaskIds.has(t.id)) continue;
@@ -610,13 +596,10 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
         daysSince[section] = daysAgo;
       }
       const topic = t.topic as string | null | undefined;
-      if (topic) {
-        if (daysSinceByTopic[topic] == null) daysSinceByTopic[topic] = daysAgo;
-        timesPracticedByTopic[topic] = (timesPracticedByTopic[topic] ?? 0) + 1;
-      }
+      if (topic) timesPracticedByTopic[topic] = (timesPracticedByTopic[topic] ?? 0) + 1;
     }
   }
-  return { daysSinceLastPracticed: daysSince, daysSinceLastPracticedByTopic: daysSinceByTopic, daysSincePlannedByTopic, timesPracticedByTopic, postponedTopics, yesterday, yesterdayUnfinishedTopics, completedTasks, plannedTasks, planDays };
+  return { daysSinceLastPracticed: daysSince, ...recency, timesPracticedByTopic, yesterday, yesterdayUnfinishedTopics, completedTasks, plannedTasks, planDays };
 }
 
 // The Topic Selector's DB-facing wiring: fetches Coverage Matrix status for
@@ -625,65 +608,6 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 // revision-due + (weak section only) the self-reported bonus. This is what
 // replaced the old behavior where the two non-weakest sections used the
 // exact same static topic for every student in the product.
-function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; daysSincePlannedByTopic?: Record<string, number | null>; postponedTopics: string[] }, startWith?: string | null, todayClassTopics: string[] = [], daysToSyllabusTarget: number | null = null): { choices: Record<Section, TopicChoice>; extras: Partial<Record<Section, TopicChoice[]>> } {
-  const coverageByTopic = new Map<string, CoverageStatus>();
-  const prioritySet = new Set<string>();
-  for (const row of coverageRows) {
-    coverageByTopic.set(row.topic, row.status as CoverageStatus);
-    if (row.is_priority === true) prioritySet.add(row.topic);
-  }
-
-  // "Start my preparation with <cluster>" → every topic in that QA cluster
-  // gets the focus bonus. Null/unknown = "Let CareerRai decide" (no bias).
-  const focusUnits = new Set<string>(
-    startWith ? (QA_GROUPS.find((g) => g.label === startWith)?.units ?? []) : []
-  );
-  const postponed = new Set(history.postponedTopics);
-  const todayClass = new Set(todayClassTopics);
-
-  const revisionMultiplier = archetypeRevisionMultiplier(profile);
-  // Revision season: from 1 September of the exam year, overdue revision of
-  // high-weightage topics outranks starting new material (topic-selector.ts).
-  const seasonYear = profile.attemptYear ?? new Date().getFullYear();
-  const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
-  const sections: Section[] = ['VARC', 'DILR', 'QA'];
-  const result = {} as Record<Section, TopicChoice>;
-  const extras: Partial<Record<Section, TopicChoice[]>> = {};
-
-  for (const section of sections) {
-    const isWeakSection = section === profile.weakestSection;
-    const candidates = TOPICS_BY_SECTION[section].map((topic) => ({
-      topic,
-      coverageStatus: coverageByTopic.get(topic) ?? null,
-      daysSinceLastPracticed: history.daysSinceLastPracticedByTopic[topic] ?? null,
-      selfReportedBonus: isWeakSection && topic === profile.weakTopic,
-      priorityBonus: prioritySet.has(topic),
-      focusBonus: focusUnits.has(topic),
-      postponedBonus: postponed.has(topic),
-      todayClassBonus: todayClass.has(topic),
-      daysSincePlanned: history.daysSincePlannedByTopic?.[topic] ?? null,
-    }));
-    // Does this plan finish? Per section, against the student's own date.
-    const untouched = candidates.filter(
-      (c) => c.coverageStatus == null || c.coverageStatus === 'not_started'
-    ).length;
-    const pace = daysToSyllabusTarget == null
-      ? { pressure: 0 }
-      : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
-    // Two clocks, split before ranking: the syllabus clock reserves the
-    // first-contact blocks it needs to finish on time, the memory clock gets
-    // the rest. See topic-selector.chooseSectionDay.
-    const picks = chooseSectionDay(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, {
-      untouchedCount: untouched,
-      daysToTarget: daysToSyllabusTarget,
-      revisionMultiplier, revisionSeason, newTopicPressure: pace.pressure,
-    });
-    result[section] = picks[0];
-    extras[section] = picks;
-  }
-  return { choices: result, extras };
-}
-
 // "Mock pending analysis" — a mock was logged (daily_reports.mock_taken)
 // but no matching mock_debriefs row exists for that date yet. Mirrors the
 // same taken_on/log_date correlation the mock-debrief route itself writes

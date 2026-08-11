@@ -301,6 +301,119 @@ export interface HistoryInput {
   daysSinceLastPracticed: Record<Section, number | null>;
 }
 
+// ── The day's SHAPE — one authority, used by today and by the whole plan ────
+//
+// Founder, 11 Aug: "There is exactly one planning authority in CareerRai. Home,
+// today's API, and Whole Plan are different views/materializations of that
+// authority — not different planners."
+//
+// Topic CHOICE was unified first (topic-selector.chooseSectionDay). This is the
+// other half: how a day's hours become sections and blocks. It used to live
+// inline in generateRoutine for Home, and separately in plan-mix's weights for
+// the whole plan — so on 11 Aug the same Tuesday rendered as three tasks on
+// Home (Editorial Reading 264m · Arrangements 198m · Percentages 198m) and five
+// on Whole Plan (RC 4h · Percentages 1h · Inequalities 2.5h · Arrangements 2h ·
+// Caselets 1.5h). Two shapes, one day, both labelled "your plan".
+//
+// Extracted verbatim from generateRoutine — same arithmetic, one caller more.
+export interface DayShapeInput {
+  /** The day's study hours, as the student gave them. */
+  hours: number;
+  weakestSection: Section | null;
+  isWorkingProfessional: boolean;
+  isRepeater: boolean;
+  weekend: boolean;
+  phase: Phase;
+}
+
+export interface DayShapeSection {
+  section: Section;
+  minutes: number;
+  /** Distinct topics this slice holds — never more than MAX_TOPIC_BLOCKS_PER_SECTION. */
+  blocks: number;
+  /** True for the weakest section, which leads the day and absorbs rounding. */
+  isPriority: boolean;
+}
+
+export interface DayShape {
+  totalMinutes: number;
+  /** Minutes reserved for the phase-closing task. Already out of the budget. */
+  closerMinutes: number;
+  hasCloser: boolean;
+  smallDay: boolean;
+  /** Weakest section first, then the others, in do-order. */
+  sections: DayShapeSection[];
+}
+
+/**
+ * A section's slice is divided into blocks of at most MAX_TOPIC_MINUTES, and
+ * the selector returns that many DISTINCT topics for it.
+ *
+ * Abhishek studies eleven hours a day and was handed three topics — 264
+ * minutes, four and a half hours, on Percentages alone. Nobody solves one
+ * chapter for four hours; and at three topics a day, 46 topics cannot be
+ * covered before his date however well the ranking works.
+ */
+export function blocksForMinutes(minutes: number): number {
+  return Math.max(1, Math.min(MAX_TOPIC_BLOCKS_PER_SECTION, Math.round(minutes / MAX_TOPIC_MINUTES)));
+}
+
+export function dayShape(input: DayShapeInput): DayShape {
+  const totalMinutes = Math.max(30, Math.round(input.hours * 60));
+  const weak = input.weakestSection ?? 'DILR';
+  const allSections: Section[] = ['VARC', 'DILR', 'QA'];
+  const nonWeak = allSections.filter((s) => s !== weak);
+
+  // Small days get few tasks (Stage A). Three tasks in 30 minutes is three
+  // ways to feel behind; one finishable task is a won day. ≤45 min = the
+  // weak-section task alone; ≤75 min = weak + one other; above that, the
+  // full day. Closing tasks (mock/review) only exist on full days.
+  const smallDay = totalMinutes <= 75;
+  const maxOthers = totalMinutes <= 45 ? 0 : smallDay ? 1 : 2;
+
+  // Identity fork (LIS L1→Planning): a working professional's weekday time is
+  // scarce, so we don't spread it thin across all three sections — the plan
+  // focuses on the weak area + ONE other (highest ROI), and the weekend gets
+  // the full spread + a real mock. Freshers / full-time aspirants keep all
+  // three. This is what makes the persona *feel* like a different coach, not a
+  // coefficient.
+  const leanWeekday = input.isWorkingProfessional && !input.weekend && input.phase !== 'revision';
+  const activeNonWeak = nonWeak.slice(0, Math.min(leanWeekday ? 1 : 2, maxOthers));
+
+  // Will a phase-closing task be added at the end? Decide NOW, because its
+  // minutes come OUT of the day's budget, not on top of it. Until 8 Aug the
+  // closer was appended after the topic tasks had already consumed 100% —
+  // every repeater and every intensive-phase student got 15% more than the
+  // hours they chose, daily (audit finding A-5).
+  const hasCloser = !smallDay
+    && (input.phase === 'intensive' || input.phase === 'revision'
+      || (input.phase === 'foundation' && input.isRepeater));
+  const closerMinutes = hasCloser
+    ? Math.max(input.phase === 'revision' ? 15 : 20, Math.round(totalMinutes * 0.15))
+    : 0;
+  const topicBudget = totalMinutes - closerMinutes;
+
+  // Weakest section leads (bigger share when the day is lean), then the
+  // other(s). Others are rounded; the priority task absorbs the rounding so
+  // the day's total is EXACTLY the budget — planned always equals committed.
+  const weakShare = activeNonWeak.length === 0 ? 1 : leanWeekday || smallDay ? 0.55 : 0.40;
+  const otherMinutes = activeNonWeak.map(() =>
+    Math.round((topicBudget * (1 - weakShare)) / Math.max(1, activeNonWeak.length)));
+  const priorityMinutes = topicBudget - otherMinutes.reduce((s, m) => s + m, 0);
+
+  const sections: DayShapeSection[] = [
+    { section: weak, minutes: priorityMinutes, blocks: blocksForMinutes(priorityMinutes), isPriority: true },
+    ...activeNonWeak.map((section, i) => ({
+      section,
+      minutes: otherMinutes[i],
+      blocks: blocksForMinutes(otherMinutes[i]),
+      isPriority: false,
+    })),
+  ];
+
+  return { totalMinutes, closerMinutes, hasCloser, smallDay, sections };
+}
+
 export function generateRoutine(
   profile: RoutineProfile,
   now: Date,
@@ -333,69 +446,32 @@ export function generateRoutine(
   // bad-day floor briefly did, which produced a thirty-minute plan for a
   // student who said six hours; it is gone. A heavy day is answered when it
   // happens (api/routine/busy-day), not predicted at signup.
-  const totalMinutes = Math.max(30, Math.round(hours * 60));
+  // The day's shape — sections, minutes, blocks — from the ONE authority both
+  // Home and the whole plan read (dayShape above). Nothing about the split is
+  // decided here any more; this function turns that shape into tasks.
+  const shape = dayShape({
+    hours,
+    weakestSection: profile.weakestSection ?? null,
+    isWorkingProfessional: !!profile.isWorkingProfessional,
+    isRepeater: !!profile.isRepeater,
+    weekend,
+    phase,
+  });
+  const { totalMinutes, closerMinutes, hasCloser } = shape;
 
   const weak = profile.weakestSection ?? 'DILR';
   const strong = profile.strongestSection;
-  const allSections: Section[] = ['VARC', 'DILR', 'QA'];
-  const nonWeak = allSections.filter((s) => s !== weak);
 
   const tasks: RoutineTask[] = [];
 
-  // Small days get few tasks (Stage A). Three tasks in 30 minutes is three
-  // ways to feel behind; one finishable task is a won day. ≤45 min = the
-  // weak-section task alone; ≤75 min = weak + one other; above that, the
-  // full day. Closing tasks (mock/review) only exist on full days.
-  const smallDay = totalMinutes <= 75;
-  const maxOthers = totalMinutes <= 45 ? 0 : smallDay ? 1 : 2;
-
-  // Identity fork (LIS L1→Planning): a working professional's weekday time is
-  // scarce, so we don't spread it thin across all three sections — the plan
-  // focuses on the weak area + ONE other (highest ROI), and the weekend gets
-  // the full spread + a real mock. Freshers / full-time aspirants keep all
-  // three. This is what makes the persona *feel* like a different coach, not a
-  // coefficient.
-  const leanWeekday = profile.isWorkingProfessional && !weekend && phase !== 'revision';
-  const activeNonWeak = nonWeak.slice(0, Math.min(leanWeekday ? 1 : 2, maxOthers));
-
-  // Will a phase-closing task be added at the end? Decide NOW, because its
-  // minutes come OUT of the day's budget, not on top of it. Until 8 Aug the
-  // closer was appended after the topic tasks had already consumed 100% —
-  // every repeater and every intensive-phase student got 15% more than the
-  // hours they chose, daily (audit finding A-5).
-  const hasCloser = !smallDay
-    && (phase === 'intensive' || phase === 'revision' || (phase === 'foundation' && profile.isRepeater));
-  const closerMinutes = hasCloser
-    ? Math.max(phase === 'revision' ? 15 : 20, Math.round(totalMinutes * 0.15))
-    : 0;
-  const topicBudget = totalMinutes - closerMinutes;
-
-  // Weakest section leads (bigger share when the day is lean), then the
-  // other(s). Others are rounded; the priority task absorbs the rounding so
-  // the day's total is EXACTLY the budget — planned always equals committed.
-  const weakShare = activeNonWeak.length === 0 ? 1 : leanWeekday || smallDay ? 0.55 : 0.40;
+  const prioritySlice = shape.sections[0];
+  const otherSlices = shape.sections.slice(1);
+  const activeNonWeak = otherSlices.map((s) => s.section);
+  const otherMinutes = otherSlices.map((s) => s.minutes);
+  const priorityMinutes = prioritySlice.minutes;
 
   const weakChoice = topicChoices[weak];
-  const otherMinutes = activeNonWeak.map(() =>
-    Math.round((topicBudget * (1 - weakShare)) / Math.max(1, activeNonWeak.length)));
-  const priorityMinutes = topicBudget - otherMinutes.reduce((s, m) => s + m, 0);
-
-  // ── How many topics does a day actually hold? (founder, 11 Aug) ────────────
-  //
-  // It used to be exactly one per section, whatever the hours. Abhishek studies
-  // ELEVEN hours a day and was handed three topics — 264 minutes, four and a
-  // half hours, on Percentages alone. Nobody solves one chapter for four hours;
-  // and at three topics a day, 46 topics simply cannot be covered before his
-  // date, however well the ranking works.
-  //
-  // So a long day is split into more topics rather than longer blocks. Each
-  // section's slice is divided into blocks of at most MAX_TOPIC_MINUTES, and
-  // the selector returns that many DISTINCT topics for it.
-  const blocksFor = (minutes: number) =>
-    Math.max(1, Math.min(MAX_TOPIC_BLOCKS_PER_SECTION, Math.round(minutes / MAX_TOPIC_MINUTES)));
-
-  const weakBlocks = blocksFor(priorityMinutes);
-  const weakPicks = extraChoices?.[weak]?.slice(0, weakBlocks) ?? [weakChoice];
+  const weakPicks = extraChoices?.[weak]?.slice(0, prioritySlice.blocks) ?? [weakChoice];
   const weakEach = Math.round(priorityMinutes / weakPicks.length);
 
   weakPicks.forEach((choice, i) => {
@@ -418,7 +494,7 @@ export function generateRoutine(
 
   activeNonWeak.forEach((section, i) => {
     const sectionMinutes = otherMinutes[i];
-    const picks = extraChoices?.[section]?.slice(0, blocksFor(sectionMinutes)) ?? [topicChoices[section]];
+    const picks = extraChoices?.[section]?.slice(0, otherSlices[i].blocks) ?? [topicChoices[section]];
     const each = Math.round(sectionMinutes / picks.length);
     picks.forEach((choice, j) => {
       const minutes = j === 0 ? sectionMinutes - each * (picks.length - 1) : each;
