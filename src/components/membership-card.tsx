@@ -12,7 +12,7 @@ import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
-type SubStatus = 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested';
+type SubStatus = 'free' | 'active' | 'expired' | 'paused' | 'refund_requested';
 
 interface MembershipCardProps {
   status: SubStatus;
@@ -24,7 +24,7 @@ interface MembershipCardProps {
 }
 
 const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' | 'stone' | 'amber' }> = {
-  free_beta: { text: 'Free beta', color: 'green' },
+  free: { text: 'Free plan', color: 'green' },
   active: { text: 'Active', color: 'green' },
   expired: { text: 'Paused', color: 'amber' },
   paused: { text: 'Paused', color: 'amber' },
@@ -135,7 +135,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
 
   const badge = STATUS_LABEL[status];
   const isPaused = status === 'paused' || status === 'expired';
-  const showPlans = status === 'free_beta' || isPaused;
+  const showPlans = status === 'free' || isPaused;
   const verb = isPaused ? 'Reactivate' : 'Start';
 
   // Journey-length plans are the heroes; monthly is the quiet fallback.
@@ -153,7 +153,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         <Badge color={badge.color}>{badge.text}</Badge>
       </div>
 
-      {status === 'free_beta' && (
+      {status === 'free' && (
         <p className="text-sm text-stone-600 mb-4">
           You&apos;re on the free beta — full access, no charge. CAT is a season, not a subscription:
           commit to the journey when you&apos;re ready.

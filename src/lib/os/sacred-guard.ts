@@ -13,7 +13,7 @@ type Admin = any;
 // one-click fix."
 //
 // This is the detector. The crown-jewel case is proven to exist in the live
-// data: a payment marked `paid` while the student is still `free_beta` — money
+// data: a payment marked `paid` while the student is still `free` — money
 // captured, premium never granted. On 9 Aug one such row had sat undiscovered
 // for TWENTY-FIVE DAYS. It was the benign Razorpay test account, but the state
 // is real and nothing was watching it.

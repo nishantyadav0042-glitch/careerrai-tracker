@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
         email: entry?.email ?? null,
         phone: e164,
         buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
-        subscription_status: role === 'student' ? 'free_beta' : null,
+        subscription_status: role === 'student' ? 'free' : null,
         is_premium: false,
         signup_source: role === 'student' ? signupSource : null,
         signup_device: signupDevice.device,
@@ -197,7 +197,14 @@ export async function POST(request: NextRequest) {
       // Trigger-created stub: apply the real registration from the allowlist —
       // name, email, role, and (for students) the assigned buddy. This is what
       // keeps the admin Students tab consistent with People & Data.
-      await admin
+      //
+      // The error is CHECKED, same as the upsert branch above. This exact
+      // update failed silently for every signup between 10 Aug 21:00 and 11
+      // Aug 20:00 IST — the DB's subscription_status constraint had dropped
+      // 'free_beta' while this code still wrote it, so the whole row (name,
+      // phone, source) bounced, and nothing said so. The student sailed on
+      // with a working session and a nameless profile.
+      const { error: stubErr } = await admin
         .from('profiles')
         .update({
           role,
@@ -207,19 +214,33 @@ export async function POST(request: NextRequest) {
           buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
           signup_device: signupDevice.device,
           signup_browser: signupDevice.browser,
-          ...(role === 'student' ? { subscription_status: 'free_beta', signup_source: signupSource } : {}),
+          ...(role === 'student' ? { subscription_status: 'free', signup_source: signupSource } : {}),
         })
         .eq('id', data.user.id);
+      if (stubErr) {
+        console.error('[verify-phone-otp] stub registration update failed:', stubErr.message);
+        return NextResponse.json(
+          { error: 'Could not finish creating your account. Please try once more.' },
+          { status: 500 }
+        );
+      }
     } else {
       // Returning user with a real profile — only refresh phone and (if the
       // admin reassigned them) their buddy. Never clobber their real name.
-      await admin
+      // Checked for the same reason as the branches above: a phone that fails
+      // to refresh is a student sales can no longer call.
+      const { error: refreshErr } = await admin
         .from('profiles')
         .update({
           phone: e164,
           ...(role === 'student' && entry?.assigned_buddy_id ? { buddy_id: entry.assigned_buddy_id } : {}),
         })
         .eq('id', data.user.id);
+      if (refreshErr) {
+        // Returning user: their profile already has its real data — log loudly
+        // but do not block a working login over a failed phone refresh.
+        console.error('[verify-phone-otp] returning-user phone refresh failed:', refreshErr.message);
+      }
     }
 
     // Pre-auth funnel (/start): a brand-new student answered a full set of

@@ -25,7 +25,7 @@ export type ActivityState = 'today' | 'yesterday' | 'this_week' | 'going_cold' |
 
 export interface PersonFacts {
   isPremium: boolean;
-  subscriptionStatus: string | null;   // free_beta | active | expired | refund_requested
+  subscriptionStatus: string | null;   // free | active | expired | paused | refund_requested
   hasPaymentPending: boolean;           // a `created` order, not premium
   hasPaymentFailed: boolean;            // a `failed` order, not premium
   hasBuddy: boolean;

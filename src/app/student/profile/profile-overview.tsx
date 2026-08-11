@@ -110,7 +110,7 @@ export function ProfileOverview({
 
       {paymentsEnabled() && (
         <MembershipCard
-          status={(profile.subscription_status as 'free_beta' | 'active' | 'expired' | 'paused' | 'refund_requested') ?? 'free_beta'}
+          status={(profile.subscription_status as 'free' | 'active' | 'expired' | 'paused' | 'refund_requested') ?? 'free'}
           plan={profile.subscription_plan}
           renewsAt={profile.subscription_renews_at}
           fullName={profile.full_name ?? displayName}

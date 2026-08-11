@@ -42,7 +42,7 @@ export default async function AdminPaymentsPage() {
     return {
       id: s.id,
       name: s.full_name,
-      status: (s.subscription_status as IncomingRow['status']) ?? 'free_beta',
+      status: (s.subscription_status as IncomingRow['status']) ?? 'free',
       plan: (s.subscription_plan as string | null) ?? null,
       renewsAt: (s.subscription_renews_at as string | null) ?? null,
       lastPaidAt: lp?.paid_at ?? null,
@@ -57,7 +57,7 @@ export default async function AdminPaymentsPage() {
     const p = PLANS[r.plan];
     return sum + p.amountPaise / 100 / p.months;
   }, 0);
-  // eslint-disable-next-line react-hooks/purity
+   
   const weekFromNow = Date.now() + 7 * 24 * 3600 * 1000;
   const expiringThisWeek = incoming.filter(
     (r) => r.status === 'active' && r.renewsAt && new Date(r.renewsAt).getTime() <= weekFromNow

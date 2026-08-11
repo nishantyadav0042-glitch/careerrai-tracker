@@ -5,7 +5,7 @@ import {
 } from './people-filter';
 
 const base: PersonFacts = {
-  isPremium: false, subscriptionStatus: 'free_beta', hasPaymentPending: false,
+  isPremium: false, subscriptionStatus: 'free', hasPaymentPending: false,
   hasPaymentFailed: false, hasBuddy: false, wantsBuddy: false, paymentStuck: false,
   hasPlan: false, daysSinceLog: null,
 };

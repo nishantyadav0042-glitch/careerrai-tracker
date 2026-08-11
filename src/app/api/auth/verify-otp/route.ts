@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         full_name: entry?.full_name ?? (role === 'buddy' ? 'Buddy' : 'Student'),
         email,
         buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
-        subscription_status: role === 'student' ? 'free_beta' : null,
+        subscription_status: role === 'student' ? 'free' : null,
         password_set: false,
       });
     } else {
