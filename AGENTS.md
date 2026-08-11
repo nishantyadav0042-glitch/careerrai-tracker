@@ -38,10 +38,18 @@ correctness (P0) outranks founder visibility (P1) outranks scale optimization
 operational problem is one Exception primitive (`src/lib/os/exception.ts`), not a
 new dashboard.
 
-**Before building in a subsystem, read `docs/ENGINEERING-MEMORY.md`** for the
-incidents that touched it — permanent record of what went wrong, why, and what
-now prevents it. Never repeat a logged mistake. When a new incident happens, add
-an entry.
+**Before building in a subsystem, read `docs/ENGINEERING-MEMORY.md`** — the
+one-page incident INDEX. Scan its table for incidents touching your area, then
+grep `docs/ENGINEERING-MEMORY-ARCHIVE.md` for `## Incident #<n>` and read only
+those full entries — never the whole archive. Never repeat a logged mistake.
+When a new incident happens: full entry in the archive, index row in the same
+commit.
+
+**Keep the conversation lean (session hygiene, 12 Aug):** summarize tool
+results into the conversation at ≤20 lines — never paste full JSON, HTML, SQL
+dumps, or whole large files. Route big outputs to a file and reference the
+path. Read files in targeted ranges, not whole. A bloated session compacts,
+loses precision, and slows every later task.
 
 **Code orientation:** `docs/CODEMAP.md` — where everything lives, the
 load-bearing modules, and the invariants with guard tests. Read it before your
