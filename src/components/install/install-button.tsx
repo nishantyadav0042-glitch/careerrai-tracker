@@ -9,16 +9,16 @@
 // additive: drop it in anywhere an install CTA is wanted. Existing components
 // keep working until they are migrated to it.
 
-import { Download, Share, Globe, Smartphone } from 'lucide-react';
+import { Download, Globe, Smartphone } from 'lucide-react';
 import { useInstall } from '@/lib/install/use-install';
 import type { InstallUiKind } from '@/lib/install/use-install';
+import { AppStoreCard } from './app-store-card';
 
 type Variant = 'card' | 'banner' | 'text';
 
 // Module-level lookups — components must never be created during render.
 const UI_ICON: Partial<Record<InstallUiKind, typeof Download>> = {
   'escape-sheet': Globe,
-  'ios-coachmark': Share,
 };
 
 export function InstallButton({ variant = 'card' }: { variant?: Variant }) {
@@ -27,6 +27,15 @@ export function InstallButton({ variant = 'card' }: { variant?: Variant }) {
   // Nothing to show once it's installed, or before the client read settles
   // (prevents an SSR flash of the wrong label).
   if (!ready || ui === 'hidden') return null;
+
+  // iPhone/iPad: the real app exists, so the generic orange install button is
+  // replaced entirely by the App Store card — in EVERY variant, including the
+  // inline `text` one. A student who has seen the black App Store button once
+  // should never be shown a different, weaker control for the same action
+  // somewhere else in the product.
+  if (ui === 'ios-app-store') {
+    return <AppStoreCard onInstall={() => void install()} busy={busy} />;
+  }
 
   const label = labelFor(ui, env.platform);
   const Icon = UI_ICON[ui] ?? Download;
@@ -91,14 +100,13 @@ export function InstallButton({ variant = 'card' }: { variant?: Variant }) {
 }
 
 function labelFor(ui: ReturnType<typeof useInstall>['ui'], platform: string): string {
-  if (ui === 'escape-sheet') return platform === 'android' ? 'Open in Chrome to install' : 'Open in Safari to install';
+  if (ui === 'escape-sheet') return platform === 'android' ? 'Open in Chrome to install' : 'Open in your browser to install';
   return 'Install the CareerRai app';
 }
 
 function subFor(ui: ReturnType<typeof useInstall>['ui']): string {
   switch (ui) {
     case 'escape-sheet': return 'This browser can’t install it — we’ll switch you over.';
-    case 'ios-coachmark': return 'Two quick taps · ~3 MB · opens like a real app.';
     case 'android-guide': return 'From your browser menu · ~3 MB · one-tap access.';
     default: return 'Just ~3 MB · add it to your Home Screen for one-tap access.';
   }

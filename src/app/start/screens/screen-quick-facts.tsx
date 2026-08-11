@@ -78,7 +78,7 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
   };
 
   return (
-    <div className="space-y-6 pt-1">
+    <div className="space-y-5 pt-1">
       <div>
         <h1 className="text-xl font-bold text-stone-900 leading-snug" style={{ fontFamily: 'Georgia, serif' }}>
           A few quick facts.
@@ -88,7 +88,7 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
             that miscounts itself in the first two seconds is a bad opener, so
             the number is now pinned by a test (screen-quick-facts.test.ts)
             that counts the question headings and fails if they disagree. */}
-        <p className="mt-1.5 text-sm text-stone-500">Four taps — this is what shapes your daily plan.</p>
+        <p className="mt-1 text-sm text-stone-500">Four taps — this is what shapes your daily plan.</p>
       </div>
 
 
@@ -104,8 +104,8 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
             have to hand. The ask comes properly on day 1 in the app. */}
         {coaching === true && (
           <p className="mt-2 rounded-lg bg-stone-50 px-3 py-2 text-[12.5px] leading-snug text-stone-600">
-            Got your coaching&apos;s weekly timetable? Send a photo inside the app and your daily plan
-            follows your classes — or we&apos;ll build it with you. You can do this any time.
+            Got your coaching timetable? Photograph it in the app later and your daily plan will
+            follow your classes.
           </p>
         )}
       </div>
@@ -116,20 +116,24 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
           three hours. Founder, 8 Aug: the hours we ask for are SELF-STUDY
           hours. */}
       <div>
-        <p className="mb-1 text-sm font-semibold text-stone-800">
+        <p className="mb-1 text-sm font-semibold leading-snug text-stone-800">
           {coaching === true ? 'Outside class, how much do you study on a normal day?' : 'On a normal day, how much do you study?'}
         </p>
-        <p className="mb-2 text-xs text-stone-500">
+        <p className="mb-2 text-xs leading-snug text-stone-500">
           {coaching === true
-            ? 'Self-study only — not counting your coaching hours. Answer honestly, not ambitiously: this sets your finish date, and we check it against what you actually log.'
-            : 'Answer honestly, not ambitiously. This sets your finish date, and we check it against what you actually log.'}
+            ? 'Self-study only, not counting your coaching hours. Answer honestly — this sets your finish date.'
+            : 'Answer honestly, not ambitiously — this sets your finish date.'}
         </p>
-        <div className="flex flex-wrap gap-2">
+        {/* A fixed 5-up grid, not flex-wrap. Nine "3 hrs"-width chips wrapped
+            to three ragged rows on a 360px phone and were most of the reason
+            Continue sat below the fold here. Same nine choices, two tidy rows,
+            and the unit is already in the question above. */}
+        <div className="grid grid-cols-5 gap-2">
           {HOURS_OPTIONS.map((h) => (
             <Chip
               key={h}
               active={selfStudyHours === h}
-              label={h === 12 ? '12+ hrs' : h === 1 ? '1 hr' : `${h} hrs`}
+              label={h === 12 ? '12+h' : `${h}h`}
               onClick={() => setSelfStudyHours(h)}
             />
           ))}
@@ -177,10 +181,15 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
 
       <div>
         <p className="mb-2 text-sm font-semibold text-stone-800">Right now you&apos;re a…</p>
-        <div className="flex flex-wrap gap-2">
-          <Chip active={situation === 'working'} label="Working professional" onClick={() => setSituation('working')} />
-          <Chip active={situation === 'college'} label="College student" onClick={() => setSituation('college')} />
-          <Chip active={situation === 'fulltime'} label="Full-time aspirant" onClick={() => setSituation('fulltime')} />
+        {/* Short labels in a 3-up grid. "Working professional / College student
+            / Full-time aspirant" each took a full row on a 360px phone — three
+            rows for one question. The stored values are unchanged; only the
+            words on the chip are shorter, and the question above already
+            supplies the noun. */}
+        <div className="grid grid-cols-3 gap-2">
+          <Chip active={situation === 'working'} label="Working" onClick={() => setSituation('working')} />
+          <Chip active={situation === 'college'} label="College" onClick={() => setSituation('college')} />
+          <Chip active={situation === 'fulltime'} label="Full-time" onClick={() => setSituation('fulltime')} />
         </div>
       </div>
 

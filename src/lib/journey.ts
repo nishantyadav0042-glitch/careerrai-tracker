@@ -202,6 +202,9 @@ export type EventName =
   | 'first_log_prompt'
   | 'install_click' | 'install_already' | 'install_dismissed' | 'install_escape'
   | 'install_guide_shown' | 'install_prompt_result' | 'install_prompt_shown'
+  // iOS since the native app shipped: the App Store hand-off, and the quiet
+  // Add-to-Home-Screen fallback for anyone the App Store fails.
+  | 'install_app_store' | 'install_a2hs_fallback'
   | 'install_prompt_unavailable' | 'install_unsupported'
   | 'meta_escape_click' | 'meta_escape_dismissed' | 'meta_escape_shown'
   | 'pay_blocked_flag_off' | 'pay_checkout_opened' | 'pay_dismissed'

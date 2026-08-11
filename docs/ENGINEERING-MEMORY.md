@@ -1030,9 +1030,10 @@ constraint becomes a silent kill-switch for whatever writes the old shape.
 And an unchecked `.update()` error converts that kill-switch into weeks of
 quiet data loss — the SAME lesson as #86, one branch further down.
 
-**Teeth.** `subscription-status.guard.test.ts` pins the exact allow-list of
-the live CHECK constraint; any source write of a status outside it — or any
-return of `free_beta` to executable code — fails CI.
+**Teeth.** `subscription-states.guard.test.ts` (shipped with the account-types
+work, extended here) pins the exact allow-list of the live CHECK constraint;
+any source write of a status outside it — or any return of `free_beta` to
+executable code — fails CI.
 
 ---
 

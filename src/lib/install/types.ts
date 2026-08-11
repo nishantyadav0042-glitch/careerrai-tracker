@@ -50,11 +50,15 @@ export type InstallStrategy =
   | 'already-installed'      // running standalone, or getInstalledRelatedApps says installed → hide/΄open app΄
   | 'native-prompt'          // Chromium beforeinstallprompt available → one tap
   | 'native-prompt-pending'  // Chromium, prompt not fired yet → wait, then one tap
-  | 'ios-safari-a2hs'        // iOS Safari → animated Add-to-Home-Screen coachmark (Share at bottom)
-  | 'ios-browser-a2hs'       // iOS Chrome/Edge/Firefox → A2HS via THEIR share menu (works since iOS 16.4/17)
-  | 'ios-browser-to-safari'  // fallback for pre-16.4 iOS or a browser missing A2HS → reopen in Safari
+  // iOS has exactly ONE install answer: the App Store. The four Add-to-Home-
+  // Screen / open-in-Safari strategies that used to live here were deleted on
+  // 10 Aug — a native app makes every one of them a worse route to the same
+  // place, and keeping them meant two ways to install on one platform.
+  // The in-app-browser escape (InAppBrowserEscape) no longer sends iPhones to
+  // Safari either — it hands them the App Store card, because a universal link
+  // opens straight out of a webview.
+  | 'ios-app-store'          // iPhone/iPad → the real native app on the App Store (one tap)
   | 'android-open-in-chrome' // Android in-app/OEM browser → intent:// escape to Chrome
-  | 'ios-open-in-safari'     // iOS in-app browser → guide to open in Safari
   | 'android-manual-a2hs'    // Android browser without a prompt (Firefox) → manual menu guide
   | 'desktop-install'        // desktop Chromium → address-bar / prompt install
   | 'unsupported';           // genuinely nowhere to go (rare) → offer bookmark / WhatsApp help

@@ -12,6 +12,9 @@ import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
+// Two kinds of student, and nothing else (founder, 10 Aug): PREMIUM has paid
+// for the subscription and therefore has a mentor; FREE is using the app and
+// has not subscribed. The other three values are transitions between them.
 type SubStatus = 'free' | 'active' | 'expired' | 'paused' | 'refund_requested';
 
 interface MembershipCardProps {
@@ -24,7 +27,7 @@ interface MembershipCardProps {
 }
 
 const STATUS_LABEL: Record<SubStatus, { text: string; color: 'green' | 'orange' | 'stone' | 'amber' }> = {
-  free: { text: 'Free plan', color: 'green' },
+  free: { text: 'Free', color: 'stone' },
   active: { text: 'Active', color: 'green' },
   expired: { text: 'Paused', color: 'amber' },
   paused: { text: 'Paused', color: 'amber' },
@@ -153,10 +156,17 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         <Badge color={badge.color}>{badge.text}</Badge>
       </div>
 
+      {/* This used to read "You're on the free beta — full access, no charge",
+          written when the app genuinely had no paywall. Under freemium it was
+          simply false: a free student does not have a mentor, which is the
+          part that costs money. Telling 258 students they already had
+          everything is the worst possible thing to say on the one screen where
+          they decide whether to pay. */}
       {status === 'free' && (
         <p className="text-sm text-stone-600 mb-4">
-          You&apos;re on the free beta — full access, no charge. CAT is a season, not a subscription:
-          commit to the journey when you&apos;re ready.
+          The app is free — your study plan, daily log, streak and mocks stay yours, always.
+          A mentor is the paid part: one person, never more than 5 students, who knows your
+          numbers and checks in on you by name.
         </p>
       )}
       {status === 'active' && (

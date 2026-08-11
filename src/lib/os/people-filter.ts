@@ -25,7 +25,7 @@ export type ActivityState = 'today' | 'yesterday' | 'this_week' | 'going_cold' |
 
 export interface PersonFacts {
   isPremium: boolean;
-  subscriptionStatus: string | null;   // free | active | expired | paused | refund_requested
+  subscriptionStatus: string | null;   // free | active | expired | refund_requested
   hasPaymentPending: boolean;           // a `created` order, not premium
   hasPaymentFailed: boolean;            // a `failed` order, not premium
   hasBuddy: boolean;
@@ -72,8 +72,10 @@ export function deriveActivity(daysSinceLog: number | null): ActivityState {
   return 'going_cold';
 }
 
-// Honest labels — never "Free beta". A student is Premium, or Free, or in a
-// specific payment state. Each has a colour so the eye sorts them at a glance.
+// Honest labels. A student is Premium (paid, has a mentor) or Free (using the
+// app, has not subscribed) — or in one of the specific states between the two.
+// Each has a colour so the eye sorts them at a glance. This file refused to
+// print "Free beta" before the DB stopped storing it (20260810g).
 export const SUB_META: Record<SubState, { label: string; tone: 'green' | 'stone' | 'amber' | 'red' | 'orange' }> = {
   premium:         { label: 'Premium', tone: 'green' },
   payment_pending: { label: 'Payment pending', tone: 'amber' },

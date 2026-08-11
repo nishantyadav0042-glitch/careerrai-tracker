@@ -6,6 +6,8 @@ import { MeetingWidget } from '@/components/meeting-widget';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
 import { MeetingRoomSetup } from '@/components/buddy/meeting-room-setup';
 import { UrgentRequestsPanel } from './urgent-requests-panel';
+import { CheckInDrafts } from './checkin-drafts';
+import { checkInBecause, type CheckInSignal } from '@/lib/os/buddy-checkin';
 import { Settings, LogOut, Plus } from 'lucide-react';
 import Link from 'next/link';
 
@@ -25,7 +27,7 @@ export default async function BuddyHomePage({
   // profile/role gate, so they ride in the same wave as the profile fetch rather
   // than waiting behind it. On the rare non-buddy redirect path the two extra
   // reads are wasted; on every real buddy load we save a serial round-trip.
-  const [{ data: profile }, { data: students }, { data: pendingRequests }, readiness] = await Promise.all([
+  const [{ data: profile }, { data: students }, { data: pendingRequests }, { data: checkinDrafts }, readiness] = await Promise.all([
     admin
       .from('profiles')
       .select('role, full_name, avatar_url, linkedin_url, iim_converted, strongest_section, how_i_work, biggest_mistake, current_company')
@@ -42,6 +44,18 @@ export default async function BuddyHomePage({
       .eq('buddy_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
+    // Check-in drafts waiting on this mentor. Expired ones are filtered HERE
+    // rather than cleaned up by a cron: a draft whose facts have gone stale
+    // must stop being sendable the moment it goes stale, not whenever a sweep
+    // next runs.
+    admin
+      .from('buddy_checkin_drafts')
+      .select('id, student_id, draft_body, signal, evidence, missed_days, profiles!buddy_checkin_drafts_student_id_fkey(full_name)')
+      .eq('buddy_id', user.id)
+      .is('sent_at', null)
+      .is('dismissed_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('missed_days', { ascending: false }),
     // Same readiness the booking API enforces with, so the Schedule button and
     // the server never disagree about whether this mentor can book.
     buddyBookingReadiness(user.id),
@@ -150,6 +164,23 @@ export default async function BuddyHomePage({
       )}
 
 
+
+      {/* Students who went quiet — one tap sends the message as the mentor */}
+      {(checkinDrafts?.length ?? 0) > 0 && (
+        <CheckInDrafts
+          drafts={(checkinDrafts ?? []).map((d) => ({
+            id: d.id,
+            studentId: d.student_id,
+            studentName: ((d.profiles as { full_name?: string } | null)?.full_name ?? 'Student').split(' ')[0],
+            body: d.draft_body,
+            missedDays: d.missed_days,
+            because: checkInBecause(
+              d.signal as CheckInSignal,
+              (d.evidence ?? {}) as Record<string, unknown>
+            ),
+          }))}
+        />
+      )}
 
       {/* Student overview — stat tiles + urgency-ranked cards */}
       <section>
