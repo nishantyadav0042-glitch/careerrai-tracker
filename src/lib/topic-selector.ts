@@ -13,6 +13,7 @@
 
 import { TOPIC_METADATA, qaCluster } from './topics-constants';
 import { STATUS_ORDER, type CoverageStatus } from './coverage-status';
+import { newTopicUrgencyPoints, repeatPenaltyPoints, revisionWeight } from './syllabus-pace';
 
 // Student-controlled states (declared in the Blueprint Builder):
 //   not_started (⚪ Haven't Started) · learning (🟡 Learning Concepts) ·
@@ -53,6 +54,16 @@ export interface TopicCandidateInput {
   // never delete, always postpone — +40 makes its return tomorrow all but
   // guaranteed, so a swap can never quietly lose work.
   postponedBonus?: boolean;
+  /**
+   * Days since this topic was last PUT ON THE PLAN — which is not the same as
+   * when it was last practised.
+   *
+   * Abhishek's plan served Percentages seven times in twelve days. The score
+   * only knew `daysSinceLastPracticed`, which a student who skips a task never
+   * updates — so a topic could be served, ignored, and served again the next
+   * day, forever. This is the signal that stops that.
+   */
+  daysSincePlanned?: number | null;
 }
 
 export interface TopicChoice {
@@ -151,7 +162,17 @@ function expertWhy(c: TopicCandidateInput, revisionMultiplier: number): string {
 // how toppers actually prep: syllabus + weekly mocks through August, then
 // September onwards the marks come from revising what you know, weightage
 // first — not from chasing low-yield new topics.
-export function chooseTopicForSection(candidates: TopicCandidateInput[], revisionMultiplier = 1, revisionSeason = false): TopicChoice {
+export function chooseTopicForSection(
+  candidates: TopicCandidateInput[],
+  revisionMultiplier = 1,
+  revisionSeason = false,
+  /**
+   * How urgently the calendar needs NEW topics opened (0–1, from
+   * syllabus-pace.syllabusPace). Defaults to 0 so every existing caller keeps
+   * its exact previous behaviour until it passes real pace in.
+   */
+  newTopicPressure = 0
+): TopicChoice {
   const scored = candidates.map((c) => {
     const meta = TOPIC_METADATA[c.topic];
     const reasons: string[] = [];
@@ -179,7 +200,9 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
       // Revision season doubles the pull of overdue topics, and overdue
       // HIGH-weightage topics get a further jump — September onwards the
       // plan revises where the marks are before it opens anything new.
-      revisionPoints = overdue * (revisionSeason ? 6 : 3);
+      // Damped by syllabus pressure: full pull when on pace, 40% when the
+      // student cannot finish. See syllabus-pace.revisionWeight.
+      revisionPoints = overdue * (revisionSeason ? 6 : 3) * revisionWeight(newTopicPressure);
       if (revisionSeason && overdue > 0 && (meta.weightage ?? 3) >= 4) {
         revisionPoints += 15;
         reasons.push('Revision season — high-weightage first');
@@ -232,7 +255,26 @@ export function chooseTopicForSection(candidates: TopicCandidateInput[], revisio
       sequenceRank: meta?.sequenceRank ?? 30,
       prereqUnmet: prereqPenalty < 0,
     });
-    const score = base + revisionPoints + selfReportPoints + priorityPoints + focusPoints + postponedPoints + todayClassPoints;
+    // ── The two terms that broke the Percentages loop (11 Aug) ──────────────
+    //
+    // Untouched topics earn from the CALENDAR. Revision tops out at +30, so
+    // without this a topic already practised permanently outranked one never
+    // seen, and 23 of Abhishek's QA topics were never scheduled once in 18
+    // days. At zero pressure this is 0 — a student who is ahead of schedule
+    // still gets a revision-led plan, exactly as before.
+    const untouched = c.coverageStatus == null || c.coverageStatus === 'not_started';
+    const newTopicPoints = untouched ? newTopicUrgencyPoints(newTopicPressure) : 0;
+    if (newTopicPoints > 0) reasons.push('New topic — syllabus needs it');
+
+    // And a topic the plan showed in the last couple of days is pushed down,
+    // whether or not the student actually did it. Serving the same topic every
+    // second day is how "finish what you started" turned into "never start
+    // anything else".
+    const repeatPenalty = repeatPenaltyPoints(c.daysSincePlanned ?? null, newTopicPressure);
+
+    const score =
+      base + revisionPoints + selfReportPoints + priorityPoints + focusPoints +
+      postponedPoints + todayClassPoints + newTopicPoints + repeatPenalty;
     return { topic: c.topic, score, reasons };
   });
 
