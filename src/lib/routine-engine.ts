@@ -158,6 +158,14 @@ export function archetypeRevisionMultiplier(profile: { isRepeater: boolean; isWo
   return 1.0;
 }
 
+/**
+ * No single topic block runs longer than this. Four and a half hours on
+ * Percentages is not a study plan, it is a way to lose a day (Abhishek, 11 Aug).
+ */
+export const MAX_TOPIC_MINUTES = 120;
+/** Even an all-day session gets a sane number of topics per section. */
+export const MAX_TOPIC_BLOCKS_PER_SECTION = 3;
+
 // The ONE explicit if-then implementation intention per day — see the
 // isImplementationIntention doc comment above for why only the priority task
 // gets this treatment. "If you open the app today" is the honest trigger a
@@ -302,7 +310,13 @@ export function generateRoutine(
   // revision-due + (for the weak section only) the self-report bonus. This
   // is what replaced the old static "same topic for every student" default
   // for the two non-weakest sections.
-  topicChoices: Record<Section, TopicChoice>
+  topicChoices: Record<Section, TopicChoice>,
+  /**
+   * Additional distinct topics per section, best-first, for days long enough to
+   * hold more than one block. Optional: every existing caller that passes only
+   * `topicChoices` keeps exactly its old one-topic-per-section behaviour.
+   */
+  extraChoices?: Partial<Record<Section, TopicChoice[]>>
 ): GeneratedRoutine {
   const phase = getPhase(now, profile.attemptYear, profile.currentStage, profile.isRepeater);
   const weekend = isWeekend(now);
@@ -366,29 +380,57 @@ export function generateRoutine(
     Math.round((topicBudget * (1 - weakShare)) / Math.max(1, activeNonWeak.length)));
   const priorityMinutes = topicBudget - otherMinutes.reduce((s, m) => s + m, 0);
 
-  tasks.push({
-    id: `${weak.toLowerCase()}-priority`,
-    section: weak,
-    topic: weakChoice.topic,
-    label: `${weak} — ${weakChoice.topic}`,
-    // Verb from the TOPIC's status; volume still priced by the day's phase.
-    target: targetPhrase(weak, weakChoice.topic, priorityMinutes, phaseForTopic(weakChoice.coverageStatus, phase)),
-    estMinutes: priorityMinutes,
-    reason: implementationIntention(weak, weakChoice.topic, weakChoice.reasons, phase),
-    isImplementationIntention: true,
+  // ── How many topics does a day actually hold? (founder, 11 Aug) ────────────
+  //
+  // It used to be exactly one per section, whatever the hours. Abhishek studies
+  // ELEVEN hours a day and was handed three topics — 264 minutes, four and a
+  // half hours, on Percentages alone. Nobody solves one chapter for four hours;
+  // and at three topics a day, 46 topics simply cannot be covered before his
+  // date, however well the ranking works.
+  //
+  // So a long day is split into more topics rather than longer blocks. Each
+  // section's slice is divided into blocks of at most MAX_TOPIC_MINUTES, and
+  // the selector returns that many DISTINCT topics for it.
+  const blocksFor = (minutes: number) =>
+    Math.max(1, Math.min(MAX_TOPIC_BLOCKS_PER_SECTION, Math.round(minutes / MAX_TOPIC_MINUTES)));
+
+  const weakBlocks = blocksFor(priorityMinutes);
+  const weakPicks = extraChoices?.[weak]?.slice(0, weakBlocks) ?? [weakChoice];
+  const weakEach = Math.round(priorityMinutes / weakPicks.length);
+
+  weakPicks.forEach((choice, i) => {
+    // The first block absorbs the rounding so the day totals EXACTLY the budget.
+    const minutes = i === 0 ? priorityMinutes - weakEach * (weakPicks.length - 1) : weakEach;
+    tasks.push({
+      id: i === 0 ? `${weak.toLowerCase()}-priority` : `${weak.toLowerCase()}-priority-${i + 1}`,
+      section: weak,
+      topic: choice.topic,
+      label: `${weak} — ${choice.topic}`,
+      // Verb from the TOPIC's status; volume still priced by the day's phase.
+      target: targetPhrase(weak, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
+      estMinutes: minutes,
+      reason: i === 0
+        ? implementationIntention(weak, choice.topic, choice.reasons, phase)
+        : sectionReason(weak, choice.topic, choice.reasons, 'second'),
+      isImplementationIntention: i === 0,
+    });
   });
 
   activeNonWeak.forEach((section, i) => {
-    const choice = topicChoices[section];
-    const minutes = otherMinutes[i];
-    tasks.push({
-      id: `${section.toLowerCase()}-set`,
-      section,
-      topic: choice.topic,
-      label: `${section} — ${choice.topic}`,
-      target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
-      estMinutes: minutes,
-      reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
+    const sectionMinutes = otherMinutes[i];
+    const picks = extraChoices?.[section]?.slice(0, blocksFor(sectionMinutes)) ?? [topicChoices[section]];
+    const each = Math.round(sectionMinutes / picks.length);
+    picks.forEach((choice, j) => {
+      const minutes = j === 0 ? sectionMinutes - each * (picks.length - 1) : each;
+      tasks.push({
+        id: j === 0 ? `${section.toLowerCase()}-set` : `${section.toLowerCase()}-set-${j + 1}`,
+        section,
+        topic: choice.topic,
+        label: `${section} — ${choice.topic}`,
+        target: targetPhrase(section, choice.topic, minutes, phaseForTopic(choice.coverageStatus, phase)),
+        estMinutes: minutes,
+        reason: sectionReason(section, choice.topic, choice.reasons, i === 0 ? 'second' : 'third'),
+      });
     });
   });
 

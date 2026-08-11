@@ -4,8 +4,9 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
-import { chooseTopicForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
+import { chooseTopicsForSection, type TopicChoice, type CoverageStatus } from '@/lib/topic-selector';
 import { syllabusPace } from '@/lib/syllabus-pace';
+import { MAX_TOPIC_BLOCKS_PER_SECTION } from '@/lib/routine-engine';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
@@ -257,7 +258,7 @@ export async function GET() {
   if (staleReason) routine = null;
 
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices);
+    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices.choices, topicChoices.extras);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
@@ -287,7 +288,7 @@ export async function GET() {
   // CURRENT setup (and Coverage Matrix / revision state) even if today's task
   // list was already frozen. hoursToday was decided above, before generation.
   const weak = routineProfile.weakestSection ?? 'DILR';
-  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday, topicChoices[weak].topic);
+  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday, topicChoices.choices[weak].topic);
 
   // Today's Mission — a small, explainable scoring layer (same additive
   // pattern as buddy-match.ts's rankBuddies) on top of data that already
@@ -298,7 +299,7 @@ export async function GET() {
   // differ from the raw self-report once Coverage Matrix data matters), and
   // is adjusted by the same archetype multiplier the selector itself used —
   // a repeater's topic is flagged overdue sooner, a working professional's later.
-  const weakTopicChosen = topicChoices[weak].topic;
+  const weakTopicChosen = topicChoices.choices[weak].topic;
   const revisionMultiplier = archetypeRevisionMultiplier(routineProfile);
   const weakRevisionFrequency = TOPIC_METADATA[weakTopicChosen]
     ? TOPIC_METADATA[weakTopicChosen].revisionFrequencyDays * revisionMultiplier
@@ -624,7 +625,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
 // revision-due + (weak section only) the self-reported bonus. This is what
 // replaced the old behavior where the two non-weakest sections used the
 // exact same static topic for every student in the product.
-function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; daysSincePlannedByTopic?: Record<string, number | null>; postponedTopics: string[] }, startWith?: string | null, todayClassTopics: string[] = [], daysToSyllabusTarget: number | null = null): Record<Section, TopicChoice> {
+function buildTopicChoices(coverageRows: { topic: string; status: string; is_priority?: boolean | null }[], profile: RoutineProfile, history: HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; daysSincePlannedByTopic?: Record<string, number | null>; postponedTopics: string[] }, startWith?: string | null, todayClassTopics: string[] = [], daysToSyllabusTarget: number | null = null): { choices: Record<Section, TopicChoice>; extras: Partial<Record<Section, TopicChoice[]>> } {
   const coverageByTopic = new Map<string, CoverageStatus>();
   const prioritySet = new Set<string>();
   for (const row of coverageRows) {
@@ -647,6 +648,7 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
   const revisionSeason = new Date() >= new Date(seasonYear, 8, 1);
   const sections: Section[] = ['VARC', 'DILR', 'QA'];
   const result = {} as Record<Section, TopicChoice>;
+  const extras: Partial<Record<Section, TopicChoice[]>> = {};
 
   for (const section of sections) {
     const isWeakSection = section === profile.weakestSection;
@@ -668,9 +670,11 @@ function buildTopicChoices(coverageRows: { topic: string; status: string; is_pri
     const pace = daysToSyllabusTarget == null
       ? { pressure: 0 }
       : syllabusPace({ untouchedTopics: untouched, daysToTarget: daysToSyllabusTarget });
-    result[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason, pace.pressure);
+    const picks = chooseTopicsForSection(candidates, MAX_TOPIC_BLOCKS_PER_SECTION, revisionMultiplier, revisionSeason, pace.pressure);
+    result[section] = picks[0];
+    extras[section] = picks;
   }
-  return result;
+  return { choices: result, extras };
 }
 
 // "Mock pending analysis" — a mock was logged (daily_reports.mock_taken)

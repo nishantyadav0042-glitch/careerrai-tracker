@@ -290,6 +290,37 @@ export function chooseTopicForSection(
   };
 }
 
+/**
+ * The top N topics for a section, all distinct.
+ *
+ * Founder, 11 Aug: "unke timetable ke according saare 46 ke 46 topics cover
+ * hone chahiye." That is impossible one-topic-per-section-per-day: Abhishek
+ * studies ELEVEN HOURS and the plan gave him three topics — 4.4 hours on
+ * Percentages alone. Twenty-five days x one QA slot cannot open 28 QA topics
+ * while also revising, no matter how the ranking is tuned.
+ *
+ * So a day's topic count now follows the student's hours (routine-engine), and
+ * this returns as many DISTINCT winners as that day can hold. Each pick is
+ * scored by the same rules; picking one simply removes it from the running so
+ * the second-best genuinely differs.
+ */
+export function chooseTopicsForSection(
+  candidates: TopicCandidateInput[],
+  count: number,
+  revisionMultiplier = 1,
+  revisionSeason = false,
+  newTopicPressure = 0
+): TopicChoice[] {
+  const picks: TopicChoice[] = [];
+  let pool = candidates;
+  for (let i = 0; i < Math.max(1, count) && pool.length > 0; i++) {
+    const choice = chooseTopicForSection(pool, revisionMultiplier, revisionSeason, newTopicPressure);
+    picks.push(choice);
+    pool = pool.filter((c) => c.topic !== choice.topic);
+  }
+  return picks;
+}
+
 export type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
 
 const PRACTICING_RANK = STATUS_ORDER.indexOf('practicing');
