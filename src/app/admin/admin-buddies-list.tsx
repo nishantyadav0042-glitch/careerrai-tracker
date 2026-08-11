@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, ChevronDown, ChevronUp, Trophy, Calendar, Briefcase, Target, MessageCircle, ExternalLink } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 // Everything a buddy fills in storefront setup, so the admin can match on
 // expertise — not just see activity stats. Mirrors the student dossier.
@@ -108,6 +108,14 @@ export function AdminBuddiesList({ rows }: { rows: BuddyRow[] }) {
               >
                 Full profile {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
+              {/* The drill-down: from the roster into everything operational —
+                  sessions, room, timeline (Scale Contract §4). */}
+              <Link
+                href={`/admin/buddy/${buddy.id}`}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:underline"
+              >
+                Open 360 →
+              </Link>
               {buddy.linkedin_url && (
                 <a
                   href={buddy.linkedin_url}

@@ -106,6 +106,11 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'Mentors requiring attention — healthy mentors disappear.',
     tabs: [
       { label: 'Operations', href: '/admin/buddies', status: 'live' },
+      // The whole roster — every mentor with their full profile. Operations
+      // answers "who needs me"; this answers "who do I have". It used to hide
+      // as a tab inside /admin/students, where the founder could not find it
+      // (11 Aug: "there is no option where I can see all the buddies").
+      { label: 'All mentors', href: '/admin/buddies/roster', status: 'live' },
       { label: 'Sessions', href: '/admin/buddies/sessions', status: 'live' },
     ],
   },
