@@ -5,6 +5,7 @@ import { PerfBeacon } from '@/components/perf-beacon';
 import { MetaPixel } from '@/components/meta-pixel';
 import { JourneyTracker } from '@/components/journey-tracker';
 import { InAppBrowserEscape } from '@/components/install/in-app-escape';
+import { DeployFreshness } from '@/components/deploy-freshness';
 
 // Supabase is in ap-southeast-1 (Singapore). Running server functions in the
 // same region eliminates ~250ms round-trip latency per DB query.
@@ -48,6 +49,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <PerfBeacon />
           <JourneyTracker />
+          {/* The server bakes ITS deployment id into this page; the client
+              compares it against /api/version on foreground + heartbeat and
+              reloads itself when a newer build is live. Born 11 Aug, when ten
+              builds shipped and an app open since morning showed none of them. */}
+          <DeployFreshness current={process.env.VERCEL_DEPLOYMENT_ID ?? 'dev'} />
         </Providers>
         {/* Paid traffic lands in Meta's in-app browser (install + push dead end).
             Self-gates: renders only inside FB/IG/Messenger webviews. */}
