@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chooseTopicsForSection, type TopicCandidateInput } from './topic-selector';
+import { chooseSectionDay, type TopicCandidateInput } from './topic-selector';
 import { syllabusPace, MAX_NEW_TOPIC_URGENCY } from './syllabus-pace';
 import { TOPICS_BY_SECTION } from './coverage-validate';
 import { MAX_TOPIC_BLOCKS_PER_SECTION } from './routine-engine';
@@ -49,9 +49,11 @@ function walk(p: Profile, urgencyScale = 1) {
     for (const s of SECTIONS) {
       const untouched = pool[s].filter((c) => c.coverageStatus === 'not_started').length;
       const pace = syllabusPace({ untouchedTopics: untouched, daysToTarget: p.days - day });
-      const picks = chooseTopicsForSection(
-        pool[s], p.blocks, 1, false, Math.min(1, pace.pressure * urgencyScale)
-      );
+      const picks = chooseSectionDay(pool[s], p.blocks, {
+        untouchedCount: untouched,
+        daysToTarget: p.days - day,
+        newTopicPressure: Math.min(1, pace.pressure * urgencyScale),
+      });
       const chosen = new Set(picks.map((x) => x.topic));
       for (const x of picks) served[x.topic] = (served[x.topic] ?? 0) + 1;
       for (const c of pool[s]) {
