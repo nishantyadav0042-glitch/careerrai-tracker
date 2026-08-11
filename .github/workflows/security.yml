@@ -55,10 +55,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          exit-code: '1'
-          ignore-unfixed: true
+      # Was `aquasecurity/trivy-action@0.28.0`, which stopped resolving —
+      # "unable to find version 0.28.0" — so this job failed at its SETUP step
+      # and the scan had not actually run for some time. A security check that
+      # cannot start is worse than no check: it shows red for a reason nobody
+      # reads, and the finding it exists to catch never surfaces at all.
+      #
+      # Now the official Trivy image, pinned BY DIGEST. A tag can be moved or
+      # deleted — which is precisely what broke this — and for the one job
+      # whose whole purpose is supply-chain safety, depending on something
+      # mutable was the wrong trade. The digest is aquasec/trivy:0.73.0
+      # (published 2026-08-03); bump both together.
+      - name: Trivy filesystem scan
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/repo" \
+            aquasec/trivy@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c \
+            fs \
+              --scanners vuln,secret,misconfig \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --ignore-unfixed \
+              --no-progress \
+              /repo 
