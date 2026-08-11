@@ -150,8 +150,26 @@ export async function POST(request: NextRequest) {
     const signupDevice = parseSignupDevice(request.headers.get('user-agent'));
 
     if (!existing) {
-      // No profile at all (trigger disabled / edge case) — create from allowlist.
-      await admin.from('profiles').insert({
+      // ── The race that lost 32 students their name and number ──────────────
+      //
+      // verifyOtp() above creates the auth user, which fires the
+      // handle_new_user trigger, which inserts a stub profile ('New User', no
+      // phone). Whether that stub is VISIBLE to the SELECT a few lines up is a
+      // matter of milliseconds. Lose the race and we land in this "no profile
+      // yet" branch and INSERT — onto the primary key the trigger just took.
+      //
+      // The failure was silent, because this insert's result was never read.
+      // The trigger's stub survived untouched and the student was saved with
+      // full_name 'New User', phone null, signup_source null. All three empty
+      // TOGETHER — the fingerprint of one write that never landed, not three
+      // fields nobody thought to collect.
+      //
+      // Same code, decided by timing alone: of six signups on 11 Aug, five lost
+      // their name and number and the sixth came through clean.
+      //
+      // upsert makes the branch irrelevant — whichever of us writes second wins
+      // with the real data — and the error is read rather than swallowed.
+      const { error: upsertErr } = await admin.from('profiles').upsert({
         id: data.user.id,
         role,
         full_name: entry?.full_name ?? selfName ?? (role === 'buddy' ? 'Buddy' : 'Student'),
@@ -164,7 +182,17 @@ export async function POST(request: NextRequest) {
         signup_device: signupDevice.device,
         signup_browser: signupDevice.browser,
         password_set: false,
-      });
+      }, { onConflict: 'id' });
+      if (upsertErr) {
+        // A profile row is not optional: without it the student has no plan, no
+        // buddy, and nobody can reach them. Fail loudly rather than hand back a
+        // session that looks fine while the student is quietly lost.
+        console.error('[verify-phone-otp] profile upsert failed:', upsertErr.message);
+        return NextResponse.json(
+          { error: 'Could not finish creating your account. Please try once more.' },
+          { status: 500 }
+        );
+      }
     } else if (isStub) {
       // Trigger-created stub: apply the real registration from the allowlist —
       // name, email, role, and (for students) the assigned buddy. This is what
