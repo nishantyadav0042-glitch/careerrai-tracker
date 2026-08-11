@@ -50,10 +50,10 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
     admin.from('daily_routines').select('student_id').limit(20000),
   ]);
 
-  const paidBy = new Set((paidRows ?? []).map((r: any) => r.student_id));
-  const pendBy = new Set((pendRows ?? []).map((r: any) => r.student_id));
-  const failBy = new Set((failRows ?? []).map((r: any) => r.student_id));
-  const hasPlanBy = new Set((planRows ?? []).map((r: any) => r.student_id));
+  const paidBy = new Set((paidRows ?? []).map((r: { student_id: string }) => r.student_id));
+  const pendBy = new Set((pendRows ?? []).map((r: { student_id: string }) => r.student_id));
+  const failBy = new Set((failRows ?? []).map((r: { student_id: string }) => r.student_id));
+  const hasPlanBy = new Set((planRows ?? []).map((r: { student_id: string }) => r.student_id));
 
   const lastLog = new Map<string, string>();
   for (const r of recentLogs ?? []) {
@@ -63,7 +63,15 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const daysSince = (iso: string | undefined): number | null =>
     iso ? Math.floor((now - Date.parse(iso + 'T12:00:00+05:30')) / 86_400_000) : null;
 
-  const everyone: PersonRow[] = (students ?? []).map((s: any) => {
+  // Typed to exactly the columns selected above. `any` here meant a renamed
+  // column produced `undefined` rows on a live operator screen instead of a
+  // build error.
+  type StudentRow = {
+    id: string; full_name: string | null; phone: string | null;
+    is_premium: boolean | null; buddy_id: string | null;
+    subscription_status: string | null; wants_mentor: boolean | null;
+  };
+  const everyone: PersonRow[] = ((students ?? []) as StudentRow[]).map((s) => {
     const isPremium = s.is_premium === true;
     return toPersonRow(s.id, (s.full_name as string) ?? 'Student', s.phone as string | null, {
       isPremium,

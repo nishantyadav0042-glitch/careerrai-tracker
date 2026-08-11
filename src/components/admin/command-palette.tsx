@@ -48,11 +48,17 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
+    /* Clear the last search when the palette OPENS. Keyed on `open`, so it
+       cannot cascade: none of these three setters change `open`. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) { setQ(''); setHits([]); setActive(0); setTimeout(() => inputRef.current?.focus(), 20); }
   }, [open]);
 
   // Debounced live search. Static commands never wait on this.
   useEffect(() => {
+    /* Too short to search: drop stale results and stop. Depends on `q`,
+       never sets it. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (q.trim().length < 2) { setHits([]); return; }
     const t = setTimeout(async () => {
       try {
@@ -79,6 +85,9 @@ export function CommandPalette() {
     router.push(item.type === 'hit' ? item.hit.route : item.cmd.route);
   }, [router]);
 
+  /* Move the highlight back to the first row whenever the result set changes.
+     `active` is not in the dependency list, so this settles in one pass. */
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setActive(0); }, [q, hits.length]);
 
   if (!open) return null;

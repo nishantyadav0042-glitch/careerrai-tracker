@@ -39,9 +39,9 @@ export default async function StudentPipelinePage({ searchParams }: { searchPara
     admin.from('daily_routines').select('student_id').limit(20000),
   ]);
 
-  const paidBy = new Set((paidRows ?? []).map((r: any) => r.student_id));
-  const wantsBy = new Set((wantRows ?? []).filter((r: any) => r.buddy_cta_last_at).map((r: any) => r.student_id));
-  const hasPlanBy = new Set((planRows ?? []).map((r: any) => r.student_id));
+  const paidBy = new Set((paidRows ?? []).map((r: { student_id: string }) => r.student_id));
+  const wantsBy = new Set((wantRows ?? []).filter((r: { buddy_cta_last_at: string | null }) => r.buddy_cta_last_at).map((r: { student_id: string }) => r.student_id));
+  const hasPlanBy = new Set((planRows ?? []).map((r: { student_id: string }) => r.student_id));
 
   // Most recent log per student.
   const lastLog = new Map<string, string>();
@@ -52,7 +52,12 @@ export default async function StudentPipelinePage({ searchParams }: { searchPara
   const daysSince = (iso: string | undefined): number | null =>
     iso ? Math.floor((now - Date.parse(iso + 'T12:00:00+05:30')) / 86_400_000) : null;
 
-  const all = (students ?? []).map((s: any) => {
+  // Typed to exactly the columns selected above — see people/page.tsx.
+  type StudentRow = {
+    id: string; full_name: string | null; phone: string | null;
+    is_premium: boolean | null; buddy_id: string | null;
+  };
+  const all = ((students ?? []) as StudentRow[]).map((s) => {
     const dsl = daysSince(lastLog.get(s.id));
     const isPremium = s.is_premium === true;
     const wantsBuddy = wantsBy.has(s.id);

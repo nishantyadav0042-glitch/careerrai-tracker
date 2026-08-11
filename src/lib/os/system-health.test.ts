@@ -5,22 +5,25 @@ import { assembleSystemHealth } from './system-health';
 // data. business_invariants is an RPC; the sacred guard reads a couple of
 // tables. Both sacred sources are left empty here so the tests isolate the
 // invariant/engine behaviour — the sacred guard has its own tests.
-function fakeAdmin(invariants: { data: any[] | null; error: { message: string } | null }) {
+type InvariantRow = Record<string, unknown>;
+function fakeAdmin(invariants: { data: InvariantRow[] | null; error: { message: string } | null }) {
   return {
     rpc: async (name: string) => (name === 'business_invariants' ? invariants : { data: [], error: null }),
     from() {
-      const builder: any = {
+      // A self-returning query builder: every chained method hands back the
+      // same object, and awaiting it resolves to an empty result set.
+      const builder: Record<string, unknown> & { then: (r: (v: { data: InvariantRow[] }) => void) => void } = {
         select() { return builder; },
         eq() { return builder; },
         is() { return builder; },
         not() { return builder; },
         lt() { return builder; },
         in() { return builder; },
-        then(resolve: (v: { data: any[] }) => void) { resolve({ data: [] }); },
+        then(resolve: (v: { data: InvariantRow[] }) => void) { resolve({ data: [] }); },
       };
       return builder;
     },
-  } as any;
+  } as unknown as Parameters<typeof assembleSystemHealth>[0];
 }
 
 describe('System Health surfaces only what is broken', () => {

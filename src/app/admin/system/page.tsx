@@ -31,8 +31,13 @@ export default async function AdminSystemPage() {
     admin.from('student_allowlist').select('id, phone, email, full_name, status, assigned_buddy_id, person_type').order('created_at', { ascending: false }),
     admin.from('profiles').select('id, role, full_name').in('role', ['student', 'buddy']),
   ]);
-  const students = (people ?? []).filter((p: any) => p.role === 'student');
-  const buddies = (people ?? []).filter((p: any) => p.role === 'buddy');
+  // The two roles this screen broadcasts to. Typed to the columns actually
+  // selected above rather than `any`, so a renamed column fails the build
+  // instead of silently producing an empty recipient list.
+  type Person = { id: string; role: string; full_name: string | null };
+  const people_ = (people ?? []) as Person[];
+  const students = people_.filter((p) => p.role === 'student');
+  const buddies = people_.filter((p) => p.role === 'buddy');
 
   const criticalN = health.items.filter((i) => i.severity === 'critical').length;
 
@@ -83,13 +88,13 @@ export default async function AdminSystemPage() {
       <div className="space-y-6">
         <div>
           <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-stone-500">Broadcast notification</h2>
-          <AdminBroadcast recipientIds={[...students.map((s: any) => s.id), ...buddies.map((b: any) => b.id)]} />
+          <AdminBroadcast recipientIds={[...students.map((s) => s.id), ...buddies.map((b) => b.id)]} />
         </div>
         <div>
           <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-stone-500">People access</h2>
           <AdminAllowlist
             rows={(allowlistRows ?? []) as AllowlistRow[]}
-            buddies={buddies.map((b: any) => ({ id: b.id, full_name: b.full_name }))}
+            buddies={buddies.map((b) => ({ id: b.id, full_name: b.full_name ?? '' }))}
           />
         </div>
         <div>

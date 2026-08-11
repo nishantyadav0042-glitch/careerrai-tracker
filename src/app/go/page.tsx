@@ -27,6 +27,9 @@ function GoInner() {
     if (!handoffReachedBrowser(typeof navigator === 'undefined' ? null : navigator)) {
       // Do NOT mark, and do NOT spend the token — it stays valid so the same
       // link still works when they open it in Safari.
+      /* A one-shot branch on a client-only UA read: it runs once on mount and
+         cannot loop, since this setter is followed by an immediate return. */
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStuckInApp(true);
       return;
     }

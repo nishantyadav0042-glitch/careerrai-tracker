@@ -31,7 +31,12 @@ export function ValueProofCard({ stats }: { stats: Omit<ValueProofInput, 'rotati
       const today = studyDayString();
       if (!shouldShowValueProof(localStorage.getItem(KEY), today)) return;
       const rot = Number(localStorage.getItem(ROTATION_KEY) ?? '0') || 0;
+      /* Seeded from localStorage, which exists only on the client, so there is
+         no server value to render from. Guarded by shouldShowValueProof above
+         and the day's key is written straight after, so this fires once a day. */
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRotation(rot);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShow(true);
       localStorage.setItem(KEY, today);
       localStorage.setItem(ROTATION_KEY, String(rot + 1));
