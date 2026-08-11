@@ -184,7 +184,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
       {showOnboarding ? (
         <OnboardingGate />
       ) : showPostSignup ? (
-        <PostSignupSequence />
+        <PostSignupSequence regEventId={user.id} />
       ) : isBuddyDemo ? null : push !== 'healthy' ? (
         // Permission architecture (22 July): the notification permission is
         // requested ONLY inside the installed app, right after the first Career

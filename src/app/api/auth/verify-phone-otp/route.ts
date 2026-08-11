@@ -12,6 +12,7 @@ import { sendNotification } from '@/lib/notifications';
 import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validate';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isValidPushEndpoint } from '@/lib/push-validate';
+import { sendMetaCapiEvent } from '@/lib/meta-capi';
 
 // Whitelisted answers from the pre-auth /start funnel — collected before
 // an account existed, handed over here in one shot on first signup only.
@@ -241,6 +242,39 @@ export async function POST(request: NextRequest) {
         // but do not block a working login over a failed phone refresh.
         console.error('[verify-phone-otp] returning-user phone refresh failed:', refreshErr.message);
       }
+    }
+
+    // ── The signup conversion, fired from the SERVER (12 Aug) ───────────────
+    //
+    // Meta's Ads Manager counted 7 of 11 Aug's 20 signups. Two stacked losses:
+    // the browser pixel's CompleteRegistration fires only when the post-signup
+    // screen mounts (7 students never reached it), and ad-blockers, iOS and
+    // in-app browsers ate roughly half of what did fire. THIS request is the
+    // moment a lead actually exists, and nothing client-side can block it — so
+    // the Conversions API event fires here with the verified phone as the
+    // match key, plus IP, user-agent and the _fbp/_fbc cookies when the pixel
+    // managed to set them. The browser still fires CompleteRegistration with
+    // the SAME event id (the user id, passed via student/layout), so Meta
+    // dedups the pair instead of counting twice — the exact mistake the
+    // localStorage guard in post-signup-sequence exists to prevent.
+    //
+    // Inert without META_CAPI_TOKEN (meta-capi.ts no-ops), best-effort via
+    // after(): a Meta outage can never slow a student's signup.
+    if (role === 'student' && (isStub || !existing)) {
+      const newUserId = data.user.id;
+      const capiBase = {
+        phone: e164,
+        clientIp: ip,
+        userAgent: request.headers.get('user-agent'),
+        fbp: request.cookies.get('_fbp')?.value ?? null,
+        fbc: request.cookies.get('_fbc')?.value ?? null,
+      };
+      after(async () => {
+        // Lead is what the campaigns optimize for; CompleteRegistration keeps
+        // parity with the browser event so the two dedup into one.
+        await sendMetaCapiEvent({ eventName: 'Lead', eventId: `lead-${newUserId}`, ...capiBase });
+        await sendMetaCapiEvent({ eventName: 'CompleteRegistration', eventId: newUserId, ...capiBase });
+      });
     }
 
     // Pre-auth funnel (/start): a brand-new student answered a full set of

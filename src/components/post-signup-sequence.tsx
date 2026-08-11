@@ -74,7 +74,7 @@ function isStandalone(): boolean {
 // navigation away can never re-trigger the ceremony. Gentle violet accents;
 // every number is deterministic — the same remainingPrepHours model as the
 // Builder, never invented.
-export default function PostSignupSequence() {
+export default function PostSignupSequence({ regEventId }: { regEventId?: string }) {
   const [visible, setVisible] = useState(true);
   // iPhone's whole install is one tap on the App Store card, so the "here's how
   // to add it" screen that follows is not just unnecessary — it is a step that
@@ -96,8 +96,12 @@ export default function PostSignupSequence() {
       if (localStorage.getItem('cr_meta_reg_fired') === '1') return;
       localStorage.setItem('cr_meta_reg_fired', '1');
     } catch { /* storage blocked — fire anyway, better one dupe than zero signal */ }
-    trackMeta('CompleteRegistration');
-  }, []);
+    // Same event id as the server's Conversions API event (the user id, from
+    // student/layout) — Meta dedups the pair into ONE registration. The server
+    // event is the reliable one; this browser copy adds the pixel's own
+    // signals when it survives ad-blockers.
+    trackMeta('CompleteRegistration', undefined, regEventId);
+  }, [regEventId]);
 
 
   // Permission architecture (22 July, evidence-backed): NO notification
