@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { track } from '@/lib/journey';
 import { getEnvironment } from './detect';
 import { resolveStrategy, explainStrategy } from './capabilities';
-import { escapeInAppBrowser, mintHandoffUrl } from './actions';
+import { escapeInAppBrowser, mintHandoffUrl, openAppStore } from './actions';
 import type { InstallEnvironment, InstallStrategy } from './types';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -47,9 +47,9 @@ if (typeof window !== 'undefined') {
 export type InstallUiKind =
   | 'hidden'          // already installed / running standalone — show nothing
   | 'button'          // a plain Install button that does the right thing on tap
-  | 'ios-coachmark'   // show the animated Add-to-Home-Screen sheet
+  | 'ios-app-store'   // iPhone/iPad — the real App Store card, one tap
   | 'android-guide'   // show the manual Android menu guide
-  | 'escape-sheet'    // in-app browser — show "open in Chrome/Safari" CTA
+  | 'escape-sheet'    // Android in-app browser — show "open in Chrome" CTA
   | 'unsupported';    // offer bookmark / WhatsApp help
 
 export interface InstallState {
@@ -66,15 +66,12 @@ export interface InstallState {
 function uiFor(strategy: InstallStrategy): InstallUiKind {
   switch (strategy) {
     case 'already-installed': return 'hidden';
+    case 'ios-app-store': return 'ios-app-store';
     case 'native-prompt':
     case 'native-prompt-pending':
     case 'desktop-install': return 'button';
-    case 'ios-safari-a2hs':
-    case 'ios-browser-a2hs':
-    case 'ios-browser-to-safari': return 'ios-coachmark';
     case 'android-manual-a2hs': return 'android-guide';
-    case 'android-open-in-chrome':
-    case 'ios-open-in-safari': return 'escape-sheet';
+    case 'android-open-in-chrome': return 'escape-sheet';
     case 'unsupported': return 'unsupported';
   }
 }
@@ -185,15 +182,16 @@ export function useInstall(): UseInstallResult {
           deferredPrompt = null;
           break;
         }
-        case 'android-open-in-chrome':
-        case 'ios-open-in-safari': {
+        case 'ios-app-store': {
+          track('install_app_store', { platform: env.platform, browser: env.browser, inApp: env.inApp });
+          openAppStore();
+          break;
+        }
+        case 'android-open-in-chrome': {
           track('install_escape', { inApp: env.inApp, platform: env.platform });
           escapeInAppBrowser(env);
           break;
         }
-        case 'ios-safari-a2hs':
-        case 'ios-browser-a2hs':
-        case 'ios-browser-to-safari':
         case 'android-manual-a2hs': {
           // These are UI-driven (coachmark/guide). Mint a logged-in hand-off so
           // the installed icon opens signed in, and let the caller render the

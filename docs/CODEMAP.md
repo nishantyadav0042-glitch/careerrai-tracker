@@ -119,6 +119,10 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
 - **`lib/chat-attachment-verify.ts`** — post-upload verification, the boundary
   the client cannot lie to. On failure the object is DISCARDED and the client
   is told `attachmentGone` so it re-uploads instead of resending a dead path.
+- **`lib/chat-deliver.ts`** — the ONE way a message enters `chat_messages`:
+  block check, insert, push to the other side, and the stamp that marks a
+  mentor check-in as answered. Both `api/chat/send` and `api/buddy/checkin`
+  go through it, so a check-in is byte-for-byte a normal message.
 - `components/chat/` — thread, composer, upload hook.
 
 ### Sessions + Google
@@ -135,6 +139,30 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
   through this. `lib/push.ts` + `push-client.ts` for web push mechanics.
 - `api/cron/study-companion` — six daily slots, one route. The state ladders
   (activation / reactivation / active) live in `lib/companion.ts`.
+- **`lib/os/buddy-checkin.ts`** — the mentor check-in: when a PAYING student
+  goes two days without any log, the cron DRAFTS a message from that student's
+  real data and the mentor sends it with one tap from their own id. Pure logic
+  (trigger, cooldown, unanswered-stop, wording); the cron writes rows,
+  `api/buddy/checkin` sends. It never auto-sends — a message from a mentor's id
+  that the mentor has not seen means the student replies into silence.
+  **Premium only**, gated twice (cron + send-time re-check) and guarded by
+  `buddy-checkin-premium.guard.test.ts`. This is the paid side of "the machine
+  is free, the human is paid": `buddy_id` alone is NOT proof of paying.
+
+### Install (getting the app onto the phone)
+- **`lib/install/capabilities.ts`** — `resolveStrategy()` turns a detected
+  environment into exactly ONE strategy. Read the rule order before changing
+  it: iPhone/iPad returns `ios-app-store` BEFORE the in-app-browser escape, and
+  that ordering is what makes Instagram/WhatsApp traffic a one-tap install.
+- **`lib/install/store-links.ts`** — `APP_STORE_URL`, the one place the listing
+  lives. `apps.apple.com` over https is deliberate: that is what makes iOS treat
+  it as a universal link and hand off to the App Store app.
+- `components/install/app-store-card.tsx` — the iPhone surface (black button,
+  inline Apple glyph, quiet A2HS fallback). `InstallButton` swaps to it for
+  every variant on iOS, so there is only ever one control per action.
+- Add-to-Home-Screen still exists but is no longer resolved automatically on
+  iOS — it is reachable only via `addToHomeScreenInstead()`, offered under the
+  card for anyone the App Store fails.
 
 ### Money
 - `lib/razorpay.ts` + `api/webhooks` — **the webhook is the source of truth**
@@ -152,7 +180,7 @@ real Gemini API (set `GEMINI_LIVE_KEY`; skipped otherwise).
 
 ## 4. The crons (vercel.json is the schedule of record)
 
-32 jobs. The ones that shape a student's day: `study-companion` (6 slots —
+33 jobs. The ones that shape a student's day: `study-companion` (6 slots —
 builds plans at 6am IST before anyone wakes), `weekly-plan-reconcile` (Sunday
 19:00 IST — the ONLY thing that moves a finish date), `daily-insight` (5pm),
 `daily-heartbeat` (9pm guarantee push), `timetable-horizon` (9am — "upload
@@ -162,6 +190,18 @@ a cron that cannot be safely re-run is a bug.
 Test accounts (`is_test_account`) are INCLUDED in student-experience crons and
 EXCLUDED from metrics/CRM/outreach — the founder tests as a student; the
 dashboards must not count him.
+
+`buddy-checkin` (04:00 UTC, 30 min after `buddy-brief`) is on the OUTREACH side
+of that line even though it looks like a student-experience cron: its output is
+a card on a real mentor's home screen. Two of the five assigned students on
+10 Aug were test accounts, so including them would have made the mentor's first
+experience of the feature entirely fake students.
+
+The two "you didn't log" jobs are sequenced, not duplicated:
+`log-yesterday-reminder` (08:00 IST) fires on ONE missed day, from the app, only
+to students who opened it. `buddy-checkin` drafts on TWO consecutive missed
+days, from a human. The app asks first; the mentor follows only when the app
+failed. Nobody gets both for the same miss.
 
 ---
 

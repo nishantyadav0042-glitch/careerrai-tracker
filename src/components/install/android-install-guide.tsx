@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { MoreVertical, Share, Plus, SquarePlus } from 'lucide-react';
+import { MoreVertical, Plus } from 'lucide-react';
 
-// Live install walkthrough (founder, 20 July): instead of describing the
-// steps in words, DRAW the screens the student is looking at — browser bar,
-// menu sheet, home screen — with a pulsing red circle on exactly the thing to
-// tap. Platform-aware: Android gets the ⋮ → "Add to Home screen" route,
-// iPhone gets Share → "Add to Home Screen". Pure CSS mock screens — crisp at
-// any size, nothing to screenshot or maintain.
+// The Android Add-to-Home-Screen walkthrough (founder, 20 July): instead of
+// describing the steps in words, DRAW the screens the student is looking at —
+// browser bar, menu sheet, home screen — with a pulsing red circle on exactly
+// the thing to tap. Pure CSS mock screens; crisp at any size, nothing to
+// screenshot or maintain.
+//
+// ANDROID ONLY, and named for it (10 Aug). This was `InstallLiveGuide`, a
+// single component with `ios ? … : …` on nearly every line. iPhone no longer
+// has a guide at all — it has one black App Store button — so the iOS half was
+// deleted rather than left as a second, worse way to install on a platform that
+// already has a real app. A file called "install guide" that only serves one
+// platform should say so in its name.
 
 function RedRing({ children }: { children: React.ReactNode }) {
   return (
@@ -31,45 +36,33 @@ function StepShell({ n, title, children }: { n: number; title: string; children:
   );
 }
 
-export function InstallLiveGuide() {
-  const [ios, setIos] = useState(false);
-  /* eslint-disable react-hooks/set-state-in-effect -- platform detection must run client-side after mount */
-  useEffect(() => {
-    const ua = navigator.userAgent || '';
-    setIos(/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1));
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
+export function AndroidInstallGuide() {
   return (
     <div className="space-y-4 rounded-2xl border border-stone-200 bg-white p-4 text-left">
       {/* Step 1 — where to tap in the browser bar */}
-      <StepShell n={1} title={ios ? 'In Safari, tap the Share button' : 'Tap the ⋮ menu (top-right)'}>
+      <StepShell n={1} title="Tap the ⋮ menu (top-right)">
         <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-100 px-2.5 py-1.5">
           <span className="rounded-full bg-white px-2.5 py-1 font-mono text-[10px] text-stone-500">careerrai.in</span>
-          {ios ? (
-            <RedRing><Share className="h-4 w-4 text-sky-600" /></RedRing>
-          ) : (
-            <RedRing><MoreVertical className="h-4 w-4 text-stone-700" /></RedRing>
-          )}
+          <RedRing><MoreVertical className="h-4 w-4 text-stone-700" /></RedRing>
         </div>
       </StepShell>
 
       {/* Step 2 — the menu row to tap */}
-      <StepShell n={2} title={ios ? "Tap 'Add to Home Screen'" : "Tap 'Add to Home screen'"}>
+      <StepShell n={2} title="Tap 'Add to Home screen'">
         <div className="overflow-hidden rounded-lg border border-stone-200">
-          <div className="border-b border-stone-100 bg-white px-3 py-1.5 text-[11px] text-stone-400">{ios ? 'Copy · Add to Reading List' : 'New tab · Bookmarks'}</div>
+          <div className="border-b border-stone-100 bg-white px-3 py-1.5 text-[11px] text-stone-400">New tab · Bookmarks</div>
           <div className="flex items-center gap-2 bg-white px-3 py-2">
             <RedRing>
               <span className="inline-flex items-center gap-1.5 rounded-md bg-stone-50 px-2 py-1">
-                {ios ? <SquarePlus className="h-3.5 w-3.5 text-stone-700" /> : <Plus className="h-3.5 w-3.5 text-stone-700" />}
-                <span className="text-[11.5px] font-semibold text-stone-800">{ios ? 'Add to Home Screen' : 'Add to Home screen'}</span>
+                <Plus className="h-3.5 w-3.5 text-stone-700" />
+                <span className="text-[11.5px] font-semibold text-stone-800">Add to Home screen</span>
               </span>
             </RedRing>
           </div>
         </div>
       </StepShell>
 
-      {/* Step 3 — open it from the Home Screen */}
+      {/* Step 3 — open it from the home screen */}
       <StepShell n={3} title="Open CareerRai from your Home Screen">
         <div className="flex items-end gap-3 rounded-lg border border-stone-200 bg-gradient-to-b from-sky-50 to-stone-100 px-3 py-2.5">
           <RedRing>

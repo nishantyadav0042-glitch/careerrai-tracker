@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
 import { InstallButton } from '@/components/install/install-button';
-import { OpenInBrowser } from '@/components/open-in-browser';
 import { detectNativeShell } from '@/lib/install/detect';
 
 // Inside the App Store / Play Store build this page must never pitch an
@@ -47,9 +46,9 @@ export default function GetAppPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white flex flex-col items-center justify-center px-4 py-10">
-      {/* Instagram/Facebook in-app browser can't install PWAs — prompt the
-          user to open in real Safari/Chrome first. */}
-      <OpenInBrowser />
+      {/* The in-app-browser escape lives in the root layout now
+          (InAppBrowserEscape) and covers every webview, so this page no longer
+          mounts its own copy — an Instagram visitor used to get both, stacked. */}
       <div className="w-full max-w-sm text-center">
         <div className="flex justify-center mb-6"><Logo /></div>
 

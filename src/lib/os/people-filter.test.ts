@@ -5,12 +5,12 @@ import {
 } from './people-filter';
 
 const base: PersonFacts = {
-  isPremium: false, subscriptionStatus: 'free_beta', hasPaymentPending: false,
+  isPremium: false, subscriptionStatus: 'free', hasPaymentPending: false,
   hasPaymentFailed: false, hasBuddy: false, wantsBuddy: false, paymentStuck: false,
   hasPlan: false, daysSinceLog: null,
 };
 
-describe('honest subscription states — never "Free beta"', () => {
+describe('honest subscription states — premium or free, nothing else', () => {
   it('derives the right state from clear rules', () => {
     expect(deriveSubscription({ ...base, isPremium: true })).toBe('premium');
     expect(deriveSubscription({ ...base, hasPaymentPending: true })).toBe('payment_pending');
@@ -18,7 +18,9 @@ describe('honest subscription states — never "Free beta"', () => {
     expect(deriveSubscription({ ...base, subscriptionStatus: 'expired' })).toBe('expired');
     expect(deriveSubscription(base)).toBe('free');
   });
-  it('never labels anything "Free beta"', () => {
+  // Founder, 10 Aug: "there is nothing like beta account on our app." Two
+  // states exist — paid, and not paid. The word must not come back in a label.
+  it('never says "beta" anywhere', () => {
     for (const m of Object.values(SUB_META)) {
       expect(m.label.toLowerCase()).not.toContain('beta');
     }

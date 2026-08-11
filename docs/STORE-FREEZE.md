@@ -199,7 +199,7 @@ reaches the feature, and it keeps an Apple reviewer away from a payment screen �
 the safer side of Guideline 3.1.1.
 
 **Checked, and safe:** `/api/cron/expire-subscriptions` filters
-`.eq('subscription_status', 'active')`; this account is `free_beta`, so the cron
+`.eq('subscription_status', 'active')`; this account is `free`, so the cron
 **cannot** flip its premium off. Do not change that filter during the freeze.
 
 **Use `appreview@careerrai.in`.** It is the seeded one (streak, coverage,
@@ -215,7 +215,7 @@ in this file could not stop that, because the trap was in the data.
 
 Defused 1 Aug, both halves:
 - `is_premium` set **true**, mirroring appreview (`subscription_status` stays
-  `free_beta`, so `/api/cron/expire-subscriptions` — which filters on
+  `free`, so `/api/cron/expire-subscriptions` — which filters on
   `active` — still cannot touch it). Wrong credentials now still get in.
 - renamed to **"SUPERSEDED - use appreview@careerrai.in"**, so it cannot be
   picked by name again.

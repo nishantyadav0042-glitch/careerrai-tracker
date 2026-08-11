@@ -35,6 +35,10 @@ test('funnel: reaches signup, non-topic screens fit one screen', async ({ page }
   await page.getByText('3h', { exact: true }).click();
   await page.getByText('Self-prep', { exact: true }).click();
   await page.getByText('First attempt', { exact: true }).click();
+  // The fourth question. This spec answered only three, so Continue stayed
+  // disabled — nobody noticed because the screen overflowed a 360px phone and
+  // the test failed one line earlier, at noScroll, for two months.
+  await page.getByText('Full-time', { exact: true }).click();
   await page.getByText('Continue →').click();
 
   // Screen 5 — pain points (pick 2)
@@ -44,10 +48,17 @@ test('funnel: reaches signup, non-topic screens fit one screen', async ({ page }
   await page.getByText("I'm scared I won't finish the syllabus before CAT").click();
   await page.getByText('Continue →').click();
 
-  // Screen 6 — reassurance
-  await expect(page.getByText(/map it/i)).toBeVisible();
-  await noScroll(page, 'reassurance');
-  await page.getByText("Let's map it →").click();
+  // Screen 6 — reality check (3 gut-check questions).
+  // This spec still tested a "reassurance / Let's map it" screen that was
+  // deleted in the v4 funnel rebuild ("removed the standalone reassurance
+  // screen — redundant with reality-check", start/page.tsx). It never failed
+  // out loud because the run died two screens earlier.
+  await expect(page.getByText(/a gut check/i)).toBeVisible();
+  await noScroll(page, 'reality-check');
+  for (const row of await page.locator('div.rounded-2xl.border').all()) {
+    await row.getByText('No', { exact: true }).click();
+  }
+  await page.getByText(/^Map all \d+/).click();
 
   // Screen 7 — topic coverage (the long one; just confirm it renders + Rai trail)
   await expect(page.getByText(/one tap each|topics/i).first()).toBeVisible();

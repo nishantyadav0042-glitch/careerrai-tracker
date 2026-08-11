@@ -165,13 +165,23 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, targe
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onNext()}
-        className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
-      >
-        Build my plan around this →
-      </button>
+      {/* Sticky, like every other decision screen in this funnel.
+          Measured 10 Aug on Pixel 5, iPhone SE and iPhone 13: this screen runs
+          34–68px past the fold, and this was the ONE screen whose button sat in
+          the scroll instead of pinned to the bottom — so on all three devices
+          the student had to scroll to find it.
+          Of all the places to hide the button, this is the worst: it is the
+          diagnosis screen, the moment the pitch lands, and the last thing
+          between an ad click and the signup form. */}
+      <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={() => onNext()}
+          className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
+        >
+          Build my plan around this →
+        </button>
+      </div>
     </div>
   );
 }

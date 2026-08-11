@@ -119,7 +119,7 @@ Seed one student (add their number in Admin → Student access) and one buddy.
 - [ ] `POST /api/payments/create-order` → 403.
 
 ### Payments ON (`NEXT_PUBLIC_PAYMENTS_ENABLED=true`)
-- [ ] Membership card shows "Free beta"; plans render in Profile only (never at login).
+- [ ] Membership card shows "Free" for an unsubscribed student; plans render in Profile only (never at login).
 - [ ] Upgrade → Razorpay checkout opens; test payment → webhook flips status to
       "Active" with a renewal date; appears in Admin → Payments → Incoming.
 - [ ] "Request refund" → status "Refund requested" + admin gets a notification.

@@ -988,6 +988,55 @@ reappears.
 
 ---
 
+## Incident #27 — the database moved, the code didn't (2026-08-11)
+
+**Symptom.** Founder, 19:58: "still no name captured, what's the blunder" —
+the Sales screen full of "New User · no phone" AGAIN, hours after #86 fixed
+the signup race. Worse than before: the morning's nameless signups at least
+had phone numbers; the afternoon's had neither.
+
+**What happened.** Migration `20260810205901_subscription_free_not_beta` was
+applied to the production DATABASE on 10 Aug 20:59 UTC — it rewrote every
+`free_beta` row to `free` and tightened the CHECK constraint to reject
+`free_beta`. But the CODE that stops writing `free_beta` lived on a branch
+that never merged; main kept writing it on every new-student signup. From that
+minute, every profile registration UPDATE/UPSERT bounced off the constraint —
+and the whole row bounced with it: name, phone, email, signup_source, all in
+one rejected write.
+
+Two failures stacked. The `!existing` upsert branch DID check its error (the
+#86 fix) and returned 500 — so the student retried, by which time the trigger
+stub was visible, and the retry took the `isStub` branch instead. That branch
+did NOT check its error. Silent failure, working session, nameless profile,
+and onboarding answers saved fine by the later write that happens not to
+include subscription_status. The fingerprint that cracked it: pain_points
+saved + name/phone/source all empty = the registration write specifically
+failed while the route otherwise ran.
+
+Why the morning looked different: #86's one-time backfill (06:30 UTC) had
+recovered phones from auth.users for everything signed up before it ran.
+Everything after it had no backfill to hide behind.
+
+**The repair.** Code now writes `free` everywhere (`verify-phone-otp`,
+`verify-otp`, `auth/callback`) and every read surface expects `free`. The
+`isStub` branch checks its error and fails loudly, exactly like the upsert
+branch. Eight phones recovered from auth.users the same day. The eight names
+are unrecoverable — they existed only inside the rejected UPDATE — and go
+through the ask-name WhatsApp outreach.
+
+**The lesson.** A migration applied from an unmerged branch is a loaded gun
+pointed at main. Schema and code must move in the same deploy, or the DB
+constraint becomes a silent kill-switch for whatever writes the old shape.
+And an unchecked `.update()` error converts that kill-switch into weeks of
+quiet data loss — the SAME lesson as #86, one branch further down.
+
+**Teeth.** `subscription-states.guard.test.ts` (shipped with the account-types
+work, extended here) pins the exact allow-list of the live CHECK constraint;
+any source write of a status outside it — or any return of `free_beta` to
+executable code — fails CI.
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a

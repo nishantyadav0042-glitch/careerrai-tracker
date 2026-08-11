@@ -39,6 +39,10 @@ export type AuditAction =
   | 'chat.attachment_denied'    // someone asked for a conversation they are not in
   | 'chat.message_deleted'      // sender deleted their own message for everyone
   | 'chat.delete_denied'        // tried to delete someone else's message
+  // A message that went out under a mentor's own id, from a machine-written
+  // draft. This one is not optional: if a student ever asks "did you actually
+  // write this?", the honest answer has to be recoverable.
+  | 'buddy.checkin_sent'
   | 'admin.session_cancelled'
   | 'admin.room_regenerated';
 

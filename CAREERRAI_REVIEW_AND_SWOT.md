@@ -115,7 +115,7 @@ broadcast notifications, Payments/Renewals, Scholarships, Coupons, CAT leads.
 **Notifications:** Web Push (VAPID) + email (Resend) + in‑app bell; reminder engine
 with rotating copy; broadcast.
 
-**Payments:** Razorpay orders + webhook + refunds; subscriptions (`free_beta`,
+**Payments:** Razorpay orders + webhook + refunds; subscriptions (`free`,
 plans), scholarships, coupons, buddy payouts.
 
 ---

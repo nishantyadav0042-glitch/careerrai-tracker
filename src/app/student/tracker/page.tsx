@@ -7,11 +7,10 @@ import { getLogDateString, momentumStreak } from '@/lib/streak-utils';
 import { MomentumShieldIntro } from '@/components/momentum-shield-intro';
 import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
-import { CoachingMirror } from '@/components/coaching-mirror';
-import { homeOrder, daySlot, slotGreeting, type HomeBlock } from '@/lib/day-slot';
-import { DailyChallengeCard } from '@/components/daily-challenge-card';
-import { HomeTipCard } from '@/components/home/home-tip-card';
+import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
+import { PlanResetButton } from '@/components/home/plan-reset-button';
+import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { CheckInGate } from '@/components/check-in-gate';
@@ -21,7 +20,6 @@ import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
-import { TopicStats } from '@/components/home/topic-stats';
 import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
@@ -111,6 +109,10 @@ export default async function DailyTrackerPage() {
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const buddyId = profile?.buddy_id ?? null;
+  const daysSinceSignup = profile?.created_at
+    // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+    ? Math.max(0, Math.round((Date.now() - Date.parse(String(profile.created_at))) / 86_400_000))
+    : 0;
 
   // Syllabus finish window (founder ask: the date belongs on TOP of Home,
   // not one tab away). Same engine as My CAT Plan — projectSyllabusFinish
@@ -232,11 +234,6 @@ export default async function DailyTrackerPage() {
       : finish.status === 'done'
         ? { label: 'Syllabus complete — revision & mocks now', tone: 'done' }
         : { label: 'Set your finish date to size your plan', tone: 'tight' };
-  // Studied through (practicing+), not merely opened — matches My CAT Plan.
-  const startedOnceCount = topicMemory.filter(
-    (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
-  ).length;
-
   const existingDebrief = recentMock
     ? await admin.from('mock_debriefs').select('id').eq('student_id', user.id).eq('log_date', recentMock.report_date).maybeSingle().then((r) => r.data)
     : null;
@@ -291,15 +288,11 @@ export default async function DailyTrackerPage() {
   const revSeasonStart = new Date(examYear, 8, 1); // 1 Sep
   const revLabel = now >= revSeasonStart ? 'Daily · weighted' : `Starts ${fmtDM(revSeasonStart)}`;
 
-  // Topics still untouched (not started) — the third "where you stand" number.
-  const untouchedTopics = Math.max(0, totalTopics - startedOnceCount - learningCount);
-
   // Rotating home, four times a day (see lib/day-slot.ts). The student's
   // question changes with the clock — "what's today" at 7am, "did I log it" at
   // midnight — and a fixed layout answers the wrong one most of the time.
   const istHour = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }));
   const slot = daySlot(istHour);
-  const blockOrder = homeOrder(istHour);
 
   const nextSession = sessions?.[0] ?? null;
    
@@ -378,6 +371,7 @@ export default async function DailyTrackerPage() {
           See my whole plan
         </Link>
         <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
+        <PlanResetButton />
       </div>
     </>
   );
@@ -520,6 +514,33 @@ export default async function DailyTrackerPage() {
             8 Aug: "yeh sab cheezein baar baar highlight karni padengi... to
             keep the retention." Counts come from their own rows, so the
             repeat is proof rather than an advertisement. */}
+        {/* ── The 4-block home (founder S3, 10 Aug) ──────────────────────────
+            Position → Today's plan → Log/Mentor → Timetable, then context.
+            The rotating block-order, the daily challenge, the tip card and the
+            topic-stats grid are gone from Home: the plan is the product and it
+            now sits above the fold, not at the bottom of nine blocks. */}
+
+        {/* 1 · POSITION — % done, pace, finish date, reschedule (with hours). */}
+        {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
+
+        {/* 2 · TODAY'S PLAN — with whole-plan, busy-day and reset actions. */}
+        {planBlock}
+
+        {/* 3 · LOG + MENTOR — the streak hero, the log, the buddy insight. */}
+        {logBlock}
+
+        {/* 4 · TIMETABLE — ONE surface (10 Aug fix: a standalone CoachingMirror
+            plus TimetableCard-which-contains-its-own-CoachingMirror rendered
+            THREE upload prompts at once). HomeTimetableCard is now the single
+            owner: the mirror when a timetable exists, one dismissible prompt
+            when it doesn't. */}
+        <HomeTimetableCard />
+
+        {/* The daily insight, as a passing 7-second cloud. */}
+        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
+
+        {/* Context, below the work: important dates + what we do for them. */}
+        {targetIso && <ImportantDates syllabus={syllabusLabel} mocks={mockLabel} revision={revLabel} />}
         <ValueProofCard
           stats={{
             plansBuilt: plansBuiltCount ?? 0,
@@ -527,68 +548,9 @@ export default async function DailyTrackerPage() {
             revisionsFlagged: topicMemory.filter((t) => t.revisionOverdue).length,
             remindersSent: remindersSentCount ?? 0,
             daysLogged: (logs ?? []).length,
-            daysSinceSignup: profile?.created_at
-              ? Math.max(0, Math.round((Date.now() - Date.parse(String(profile.created_at))) / 86_400_000))
-              : 0,
+            daysSinceSignup,
           }}
         />
-        {blockOrder.map((b: HomeBlock) => {
-          if (b === 'action') return (
-            /* NextActionCard ("DO THIS NEXT") REMOVED 29 Jul, on the taps —
-               not on taste. Three home surfaces were answering "what do I do
-               now" and all three wrote to /api/routine/complete-task:
-               DO THIS NEXT, Today's Study Plan, and the update sheet.
-               /student/tracker tap counts decided which one goes:
-
-                 Today's Study Plan (header/expand)  194 taps · 14-17 people
-                 Swap, on the plan card               62 taps · 17 people
-                 "Next" task rows on the plan card    57 taps · 17 people
-                 Update-topics CTA                    51 taps · 26 people
-                 DO THIS NEXT "Start now"             21 taps · 13 people
-                 DO THIS NEXT "Done"                  13 taps ·  8 people
-                 DO THIS NEXT expanded                 7 taps ·  4 people
-                 DO THIS NEXT time-changed             7 taps ·  1 person
-
-               And its primary CTA had never once worked: hrefFor() in
-               api/next-action ignores the topic entirely and only routes to
-               /student/plan/<section> when that section's model flag is on.
-               All 251 students have every flag off, so all 21 "Start now" taps
-               landed on /student/plan/topics — a grid of every topic — from a
-               card naming one specific 40-minute task. A 0% success rate.
-
-               Nothing is lost: TodaysRoutineCard already badges its first task
-               "Start Here" and the rest "Next" (TodaysRoutineCard.tsx:415), so
-               the ranked "just tell me one thing" job is already done on the
-               surface with ~9x the engagement.
-
-               The component and /api/next-action are left in place, unmounted:
-               the reconcile-actions cron reads the recommendations table, and
-               an unmounted card simply stops adding rows. If this ever returns,
-               fix hrefFor to deep-link the topic FIRST. */
-            <div key="action" className="space-y-3">
-              <DailyChallengeCard />
-            </div>
-          );
-          if (b === 'log') return <div key="log">{logBlock}</div>;
-          if (b === 'coaching') return <CoachingMirror key="coaching" />;
-          /* The insight's old slot carries the community's ONE Home surface:
-             today's tip (glanceable, votable in a tap) plus the line that
-             sends question-filtering to the Daily Pick tab. The insight
-             itself floats by as a 7-second cloud below. */
-          return <HomeTipCard key="insight" />;
-        })}
-
-        {/* The daily insight, as a passing 7-second cloud. */}
-        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
-
-        {/* Progress card — % done, pace, weekly trend, reschedule. */}
-        {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
-
-        {/* Important dates — syllabus / mocks / revision */}
-        {targetIso && <ImportantDates syllabus={syllabusLabel} mocks={mockLabel} revision={revLabel} />}
-
-        {/* Where you stand — covered / in progress / untouched */}
-        <TopicStats covered={startedOnceCount} inProgress={learningCount} untouched={untouchedTopics} />
 
         {/* Fallback pace strip only when there's no ring (no target date yet). */}
         {!pace && finishStrip && (
@@ -612,11 +574,6 @@ export default async function DailyTrackerPage() {
 
         {/* Install card (browser only; hides itself in the installed app) */}
         <div className="empty:hidden"><InstallButton variant="card" /></div>
-
-        {/* Daily study plan (what to study, with swap) */}
-        {planBlock}
-
-        {/* During the day, the log sits under the plan. */}
       </div>
       {/* One-time spotlight tour of the home screen (Plan → Swap → Log → Buddy).
           Gated: installed app only, after onboarding + reminders are settled. */}

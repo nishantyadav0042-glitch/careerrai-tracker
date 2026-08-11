@@ -21,7 +21,7 @@ export async function POST() {
   if (profile?.role !== 'student') {
     return NextResponse.json({ error: 'Not a student account.' }, { status: 403 });
   }
-  // Refunds apply only to a genuinely PAID subscription. free_beta users never
+  // Refunds apply only to a genuinely PAID subscription. Free users never
   // paid, so they must not be able to open a refund request (it only pollutes
   // the admin queue and flips their own status).
   if (profile?.subscription_status !== 'active') {

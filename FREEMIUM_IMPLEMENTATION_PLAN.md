@@ -8,7 +8,7 @@
 
 The spec assumes the hard part is signup + the webhook. **It isn't.** Reading your actual code:
 
-> **Your app is not paywalled today.** A student with `subscription_status = 'free_beta'` already gets the *complete* buddy experience — `/student/buddy`, `/student/chat`, mock debriefs, everything. Payment currently changes a *status label*, not *access*.
+> **Your app is not paywalled today.** A student with `subscription_status = 'free'` already gets the *complete* buddy experience — `/student/buddy`, `/student/chat`, mock debriefs, everything. Payment currently changes a *status label*, not *access*.
 
 So the freemium model's real engineering centre of gravity is **Phase 3: building a paywall and the "buddy-taste" locked UI that does not currently exist.** Everything else (signup, schema, webhook) is comparatively small. Plan your time accordingly.
 
@@ -16,7 +16,7 @@ So the freemium model's real engineering centre of gravity is **Phase 3: buildin
 | Area | What's true in the code today | Implication |
 |---|---|---|
 | **Auth gate** | Allowlist-gated in 4 routes: `request-phone-otp`, `verify-phone-otp`, `request-otp`, `verify-otp` (+ `auth/callback`). Non-allowlisted phone is **rejected**. | Self-signup = invert this gate **for students only** (keep it for buddy/admin role assignment). |
-| **Premium** | No `is_premium`. `subscription_status ∈ {free_beta, active, expired, paused, refund_requested}` exists but **gates nothing in the student UI**. | Add a real gate. The buddy features must learn to hide themselves for free users. |
+| **Premium** | No `is_premium`. `subscription_status ∈ {free, active, expired, paused, refund_requested}` exists but **gates nothing in the student UI**. | Add a real gate. The buddy features must learn to hide themselves for free users. |
 | **Payments** | `webhook/route.ts` calls `activate_payment` RPC on a pre-created `student_payments` row → sets `subscription_status='active'`. `create-order` *optimistically* sets `active` too (line 43 — a bug for the new model). | Webhook becomes the **upgrade** (`is_premium=true` + queue buddy). Remove the optimistic activation. |
 | **Buddy assignment** | `buddy_id` set from the allowlist at signup; admin reassigns manually. | Free users get **no buddy** (`buddy_id=null`); premium users get **queued**, then assigned ≤24h. |
 | **OTP cost** | indiahost OTP, ~1000-OTP plan, single vendor (per SWOT). | **Self-signup is an open OTP tap** → abuse/cost risk. Must add throttling + abuse protection (Phase 2). |
@@ -49,7 +49,7 @@ These five choices change the build. My recommendation is in **bold**; correct a
   - `signup_source text` (e.g. `'self_serve'`, `'allowlist'`) — for funnel metrics
 - **New table `buddy_assignment_queue`** — `id, student_id, status ('pending'|'assigned'|'cancelled'), created_at, assigned_at, assigned_buddy_id`. RLS on (service-role only).
 - **New table `student_engagement`** (1 row/student) — `student_id pk, signed_up_at, first_log_at, tour_completed bool, mock_opened bool, sample_debrief_viewed bool, buddy_cta_clicks int default 0, sales_ready bool default false, sales_called_at`. (Streak already lives in `streak_data` — read from there, don't duplicate.)
-- **`handle_new_user` trigger** — confirm the auto-created stub defaults to `is_premium=false`, `subscription_status='free_beta'`, `buddy_id=null`. Adjust if it copies anything else.
+- **`handle_new_user` trigger** — confirm the auto-created stub defaults to `is_premium=false`, `subscription_status='free'`, `buddy_id=null`. Adjust if it copies anything else.
 - **Backfill** — set existing real students `is_premium = (subscription_status = 'active')` so current paying users aren't downgraded. **Demo account stays `is_demo=true` and untouched.**
 
 **Files:** new migration only. No app code. **Risk:** production migration — gate behind your approval.
@@ -60,7 +60,7 @@ These five choices change the build. My recommendation is in **bold**; correct a
 
 - **New page `src/app/start/page.tsx`** — 2-field form (Name + Phone), phone-OTP, no password. Hinglish copy from your spec. On success → straight into the free app. (Mirror the existing login OTP client logic; reuse `normalizeIndianPhone`.)
 - **`src/app/api/auth/request-phone-otp/route.ts`** — invert the gate (lines 21–34): if phone **not** in allowlist, allow OTP send **as a free-student signup** (don't reject). Keep allowlist lookup only to detect buddy/admin. **Add the abuse protections from Decision 5** (per-IP/device throttle + global daily OTP ceiling).
-- **`src/app/api/auth/verify-phone-otp/route.ts`** — the no-allowlist branch (lines 55–60) must **create a free student** instead of returning 403: `role='student'`, `is_premium=false`, `subscription_status='free_beta'`, `buddy_id=null`, `signup_source='self_serve'`, plus an `student_engagement` row with `signed_up_at`. Keep the existing allowlist branch for buddy/admin/pre-paid.
+- **`src/app/api/auth/verify-phone-otp/route.ts`** — the no-allowlist branch (lines 55–60) must **create a free student** instead of returning 403: `role='student'`, `is_premium=false`, `subscription_status='free'`, `buddy_id=null`, `signup_source='self_serve'`, plus an `student_engagement` row with `signed_up_at`. Keep the existing allowlist branch for buddy/admin/pre-paid.
 - **Lead → Expedify** — on first-time self-signup, POST name+phone+signup time to Expedify (new `src/lib/expedify.ts` + call from verify route). Fire-and-forget; never block signup.
 - **Meta ad CTA** → `careerrai-daily.vercel.app/start` (optionally preview `/demo` first — already live).
 
