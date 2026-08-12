@@ -1,47 +1,105 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { getLogDateString } from '@/lib/streak-utils';
+import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow } from '@/lib/os/insight-feed';
 
-export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+export const maxDuration = 20;
 
-// GET /api/community/insights?topics=A,B — verified student contributions for
-// specific topics. This is the curriculum-injection read: tips, mistakes and
-// shortcuts appear ONLY at the topic they belong to, only when a student is
-// looking at that topic. Never a feed — context is the entire distribution
-// model, and the reason a verified tip here beats the same tip lost in a
-// Telegram scroll.
+// GET /api/community/insights — Today's Top Pick + the Student Insights feed.
+//
+// The vote counts are stripped HERE, not in the component. A number that must
+// not be seen should never leave the server: a client-side hide survives
+// exactly until someone opens the network tab or a redesign forgets the rule,
+// and the whole point is that a student can never read our size off the screen.
+// So the payload carries `helpfulCount: number | null`, already decided.
 
-export async function GET(request: NextRequest) {
+interface SubmissionRow {
+  id: string;
+  kind: string;
+  payload: { text?: string; section?: string } | null;
+  image_path: string | null;
+  display_name: string | null;
+  student_id: string | null;
+  created_at: string;
+  featured_on: string | null;
+  status: string;
+}
+
+export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
-  const topics = (request.nextUrl.searchParams.get('topics') ?? '')
-    .split(',').map((t) => t.trim()).filter((t) => TOPIC_METADATA[t]).slice(0, 10);
-  if (topics.length === 0) return NextResponse.json({ insights: {} });
-
   const admin = createAdminClient();
-  const { data } = await admin
-    .from('student_submissions')
-    .select('topic, kind, payload, display_name, curated, published_at')
-    .in('topic', topics)
-    .eq('status', 'approved').in('kind', ['tip', 'mistake', 'shortcut'])
-    .not('published_at', 'is', null)
-    .order('published_at', { ascending: false });
+  const day = getLogDateString();
 
-  // Cap 2 per topic — the freshest verified items. More than that turns
-  // curriculum back into a feed.
-  const byTopic: Record<string, { kind: string; text: string; name: string | null; curated: boolean }[]> = {};
-  for (const row of data ?? []) {
-    const t = row.topic as string;
-    byTopic[t] ??= [];
-    if (byTopic[t].length >= 2) continue;
-    const text = (row.payload as { text?: string })?.text;
-    if (!text) continue;
-    // Anonymous by rule: the stored random display name, never a real one.
-    byTopic[t].push({ kind: row.kind as string, text, name: (row.display_name as string | null) ?? null, curated: row.curated === true });
+  const [{ data: subs }, { data: votes }, { data: myVotes }] = await Promise.all([
+    admin.from('student_submissions')
+      .select('id, kind, payload, image_path, display_name, student_id, created_at, featured_on, status')
+      .in('status', ['voting', 'featured', 'archived'])
+      .order('created_at', { ascending: false })
+      .limit(60),
+    admin.from('submission_votes').select('submission_id, helpful'),
+    admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
+  ]);
+
+  const tally = new Map<string, { helpful: number; total: number }>();
+  for (const v of (votes ?? []) as { submission_id: string; helpful: boolean }[]) {
+    const t = tally.get(v.submission_id) ?? { helpful: 0, total: 0 };
+    t.total += 1;
+    if (v.helpful) t.helpful += 1;
+    tally.set(v.submission_id, t);
   }
+  const mine = new Set((myVotes ?? []).map((v: { submission_id: string }) => v.submission_id));
 
-  return NextResponse.json({ insights: byTopic });
+  const toRow = (s: SubmissionRow): InsightRow => {
+    const t = tally.get(s.id) ?? { helpful: 0, total: 0 };
+    return {
+      id: s.id,
+      kind: s.kind === 'question' ? 'question' : 'tip',
+      text: s.payload?.text ?? '',
+      section: s.payload?.section ?? null,
+      displayName: s.display_name ?? 'a CareerRai student',
+      imageUrl: s.image_path
+        ? admin.storage.from('community-questions').getPublicUrl(s.image_path).data.publicUrl
+        : null,
+      helpfulVotes: t.helpful,
+      totalVotes: t.total,
+      createdAt: s.created_at,
+      isMine: s.student_id === user.id,
+      votedByMe: mine.has(s.id),
+    };
+  };
+
+  const all = ((subs ?? []) as SubmissionRow[]).map(toRow);
+  const byId = new Map(((subs ?? []) as SubmissionRow[]).map((s) => [s.id, s]));
+
+  // Today's Top Pick — chosen by promoteDailyPick, which already runs from the
+  // 07:30 cron and lazily from the ballot route. RANK, not count: "today's most
+  // helpful" says one thing beat the others and nothing at all about how many
+  // of us there are.
+  const featured = all.filter((r) => byId.get(r.id)?.featured_on === day);
+  const shape = (r: InsightRow | undefined) => {
+    if (!r) return null;
+    const d = voteDisplay(r);
+    return {
+      id: r.id, kind: r.kind, text: r.text, section: r.section,
+      displayName: r.displayName, imageUrl: r.imageUrl,
+      helpfulCount: d.count, canVote: d.canVote, isMine: r.isMine, votedByMe: r.votedByMe,
+    };
+  };
+
+  const feed = orderFeed(all.filter((r) => byId.get(r.id)?.featured_on !== day))
+    .slice(0, FEED_PAGE_SIZE)
+    .map(shape);
+
+  return NextResponse.json({
+    topPick: {
+      question: shape(featured.find((r) => r.kind === 'question')),
+      tip: shape(featured.find((r) => r.kind === 'tip')),
+    },
+    feed,
+  });
 }

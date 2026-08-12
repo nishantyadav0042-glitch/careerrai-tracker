@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { HeartHandshake } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { DailySlotCard } from '@/components/daily-slot-card';
+import { StudentInsights } from '@/components/student-insights';
 import { CommunitySubmit } from '@/components/community-submit';
 
 // The Daily Pick tab — the community's one home (founder, 25 Jul: bottom nav
@@ -40,6 +41,12 @@ export default function CommunityPage() {
           the vote button, it was that a single repeated ask cannot carry a
           daily habit. */}
       <DailySlotCard />
+
+      {/* Below the day's one curated thing: what other students have added.
+          This is the community loop — browse, find something useful, vote, and
+          eventually add your own. No counts anywhere on it (see
+          lib/os/insight-feed.ts); rank carries the signal instead. */}
+      <StudentInsights />
 
       {/* Share CTA is PINNED above the bottom nav (founder, 26 Jul: "scroll
           or not, it should be visible") — never buried under three questions.
