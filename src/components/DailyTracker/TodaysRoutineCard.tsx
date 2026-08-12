@@ -220,7 +220,12 @@ export function TodaysRoutineCard() {
       const res = await fetch('/api/routine/complete-task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, ...(confidence ? { confidence } : {}) }),
+        // close_day: finishing a real block IS studying today, and the manual
+        // log already accepts a single marked topic as a valid day. Without it
+        // a student who ticks one task still reads as "never logged", which is
+        // the exact 319 -> 59 leak this change exists to close. The route
+        // merges rather than overwrites, so an earlier manual log is safe.
+        body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, close_day: true, ...(confidence ? { confidence } : {}) }),
       });
       if (!res.ok) return;
       // Server state changed — the 30s GET cache must never serve
@@ -465,9 +470,22 @@ export function TodaysRoutineCard() {
                         (expanded || swapOpen) && 'rounded-b-none'
                       )}
                     >
-                      {/* Display only — you mark topics done when you fill the
-                          log, not here. The only action on the plan is swap. */}
-                      <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300" />
+                      {/* One tap = "I did this." Founder, 12 Aug: the tick IS
+                          the log, so a student never opens a separate sheet to
+                          record a block they just finished. Deliberately a
+                          SINGLE state — no half, no percentage, no partial —
+                          because the tick must mean exactly one truthful thing.
+                          The log sheet stays fully usable for off-plan study
+                          and rest days: this is additive, never the only path
+                          (Incident #2, where requiring a plan-tick made an
+                          honest day impossible and cost a whole cohort). */}
+                      <button
+                        type="button"
+                        aria-label={`Mark done: ${taskTitle(task)}`}
+                        disabled={busyTaskId === task.id}
+                        onClick={() => { reportStart(); void toggleTask(task); }}
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300 transition-colors hover:border-stone-900 active:scale-90 disabled:opacity-50"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-stone-900 text-white">
@@ -525,16 +543,20 @@ export function TodaysRoutineCard() {
               return (
                 <div key={task.id}>
                   <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', swapTaskId === task.id && !done && task.topic && 'rounded-b-none')}>
-                    {/* Display only — completion happens in the log. */}
-                    <span
-                      aria-hidden
+                    {/* Same single-state tick as the hero task. Tapping a done
+                        task un-does it — a mis-tap must never be permanent. */}
+                    <button
+                      type="button"
+                      aria-label={done ? `Undo: ${taskTitle(task)}` : `Mark done: ${taskTitle(task)}`}
+                      disabled={busyTaskId === task.id}
+                      onClick={() => { if (!done) reportStart(); void toggleTask(task); }}
                       className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
-                        done ? 'border-stone-900 bg-stone-900' : 'border-stone-300'
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors active:scale-90 disabled:opacity-50',
+                        done ? 'border-stone-900 bg-stone-900' : 'border-stone-300 hover:border-stone-900'
                       )}
                     >
                       {done && <Check className="w-3 h-3 text-white" />}
-                    </span>
+                    </button>
                     <div className="min-w-0 flex-1">
                       <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
                         {taskTitle(task)}

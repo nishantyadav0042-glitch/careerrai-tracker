@@ -40,8 +40,11 @@ interface Item {
 }
 
 interface Payload {
-  topPick: { question: Item | null; tip: Item | null };
+  /** ONE earned item, selected from the same contribution pool as the feed. */
+  topPick: Item | null;
   feed: Item[];
+  /** This student's position this month. Null until they qualify. */
+  myRank: number | null;
 }
 
 export function StudentInsights() {
@@ -83,18 +86,16 @@ export function StudentInsights() {
 
   if (!data) return null;
 
-  const { topPick, feed } = data;
-  const hasTop = !!(topPick.question || topPick.tip);
-  if (!hasTop && feed.length === 0) return <EmptyState />;
+  const { topPick, feed, myRank } = data;
+  if (!topPick && feed.length === 0) return <EmptyState />;
 
   return (
     <div className="space-y-5">
-      {hasTop && (
+      {topPick && (
         <section>
-          <SectionLabel>Today&apos;s Top Pick</SectionLabel>
-          <div className="mt-2 space-y-2">
-            {topPick.question && <Card item={topPick.question} featured voted={voted} onVote={vote} busy={busy} />}
-            {topPick.tip && <Card item={topPick.tip} featured voted={voted} onVote={vote} busy={busy} />}
+          <SectionLabel>Today&apos;s Pick</SectionLabel>
+          <div className="mt-2">
+            <Card item={topPick} featured voted={voted} onVote={vote} busy={busy} />
           </div>
         </section>
       )}
@@ -119,10 +120,19 @@ export function StudentInsights() {
           upvoted": the second phrasing is an instruction to go and collect
           votes from forty friends, and the moment that starts the ranking stops
           measuring anything worth rewarding. */}
-      <p className="rounded-xl bg-stone-100 px-3.5 py-3 text-[11.5px] leading-relaxed text-stone-500">
-        <span className="font-bold text-stone-700">Student Contributors</span> — each month, the ten
-        most helpful student contributions earn a free month of Buddy.
-      </p>
+      <div className="rounded-xl bg-stone-100 px-3.5 py-3">
+        {/* Rank is the reward. The student sees where they stand, never how
+            many votes it took — a raw count at our size reports our size. */}
+        {myRank != null && (
+          <p className="mb-1 text-[12.5px] font-bold text-stone-800">
+            {myRank === 1 ? "You're the #1 Student Contributor this month" : `You're #${myRank} this month`}
+          </p>
+        )}
+        <p className="text-[11.5px] leading-relaxed text-stone-500">
+          <span className="font-bold text-stone-700">Student Contributors</span> — each month, the ten
+          most helpful student contributions earn a free month of Buddy.
+        </p>
+      </div>
     </div>
   );
 }

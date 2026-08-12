@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
-import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow } from '@/lib/os/insight-feed';
+import { orderFeed, voteDisplay, myRank, FEED_PAGE_SIZE, type InsightRow, type ContributorScore } from '@/lib/os/insight-feed';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 20;
@@ -91,15 +91,37 @@ export async function GET() {
     };
   };
 
-  const feed = orderFeed(all.filter((r) => byId.get(r.id)?.featured_on !== day))
+  // ONE Today's Pick, not two (founder spec). promoteDailyPick stamps both a
+  // question and a tip; the screen shows a single earned item, so a question is
+  // preferred — it asks something of the reader — and the tip is the fallback.
+  // Deliberately NOT a second pipeline: this reads the same featured_on stamp
+  // the existing promoter already writes.
+  const pick = featured.find((r) => r.kind === 'question') ?? featured.find((r) => r.kind === 'tip');
+
+  const feed = orderFeed(all.filter((r) => r.id !== pick?.id))
     .slice(0, FEED_PAGE_SIZE)
     .map(shape);
 
+  // ── Contributor rank for the month ────────────────────────────────────────
+  // Votes are the mechanism; RANK is what the student sees. Computed over this
+  // calendar month's contributions only, so the board resets and a student who
+  // starts today is not permanently behind someone from June.
+  const monthStart = day.slice(0, 8) + '01';
+  const scores = new Map<string, ContributorScore>();
+  for (const s of (subs ?? []) as SubmissionRow[]) {
+    if (!s.student_id || s.created_at.slice(0, 10) < monthStart) continue;
+    const t = tally.get(s.id) ?? { helpful: 0, total: 0 };
+    const cur = scores.get(s.student_id) ?? { studentId: s.student_id, helpful: 0, total: 0, contributions: 0 };
+    cur.helpful += t.helpful;
+    cur.total += t.total;
+    cur.contributions += 1;
+    scores.set(s.student_id, cur);
+  }
+
   return NextResponse.json({
-    topPick: {
-      question: shape(featured.find((r) => r.kind === 'question')),
-      tip: shape(featured.find((r) => r.kind === 'tip')),
-    },
+    topPick: shape(pick),
     feed,
+    // null until they qualify — an unearned rank is worse than none.
+    myRank: myRank([...scores.values()], user.id),
   });
 }

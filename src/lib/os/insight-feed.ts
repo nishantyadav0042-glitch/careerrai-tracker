@@ -134,6 +134,12 @@ export interface ContributorScore {
  * want to reward and the opposite of what a volume-based ranking teaches.
  */
 export function rankContributors(scores: ContributorScore[], take = MONTHLY_WINNERS): ContributorScore[] {
+  return rankAll(scores).slice(0, take);
+}
+
+/** The full ordered board. Separate from rankContributors so a student's own
+ *  position can be found without also deciding who wins. */
+export function rankAll(scores: ContributorScore[]): ContributorScore[] {
   return [...scores]
     .filter((s) => s.total >= MIN_VOTES_FOR_ELIGIBILITY)
     .sort((a, b) => {
@@ -142,6 +148,20 @@ export function rankContributors(scores: ContributorScore[], take = MONTHLY_WINN
       if (netA !== netB) return netB - netA;
       if (a.contributions !== b.contributions) return a.contributions - b.contributions;
       return a.studentId.localeCompare(b.studentId);
-    })
-    .slice(0, take);
+    });
+}
+
+/**
+ * This student's position this month, or null if they have not qualified.
+ *
+ * Founder, 12 Aug: the votes are the MECHANISM, the rank is the REWARD. So the
+ * student sees "#6 this month" and never "14 votes" — rank is a status that
+ * reads the same at 300 students and at 300,000, while a raw count at our size
+ * tells them precisely how small the room is.
+ *
+ * 1-indexed, because "#0 this month" is not a thing anybody wants to be.
+ */
+export function myRank(scores: ContributorScore[], studentId: string): number | null {
+  const idx = rankAll(scores).findIndex((s) => s.studentId === studentId);
+  return idx === -1 ? null : idx + 1;
 }

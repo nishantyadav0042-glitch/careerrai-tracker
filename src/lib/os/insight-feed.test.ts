@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  mayShowVoteCount, voteDisplay, orderFeed, rankContributors,
+  mayShowVoteCount, voteDisplay, orderFeed, rankContributors, myRank,
   VOTE_COUNT_REVEAL_MIN, MIN_VOTES_FOR_ELIGIBILITY, MONTHLY_WINNERS,
   type InsightRow,
 } from './insight-feed';
@@ -114,5 +114,37 @@ describe('the monthly Buddy reward cannot be farmed', () => {
 
   it('returns nobody rather than padding the list when few qualify', () => {
     expect(rankContributors([c('a', 1, 2), c('b', 0, 1)])).toEqual([]);
+  });
+});
+
+describe('rank is the reward, the count is only the mechanism', () => {
+  const c = (id: string, helpful: number, total: number, contributions = 1) =>
+    ({ studentId: id, helpful, total, contributions });
+
+  it('gives a 1-indexed position — nobody is #0', () => {
+    const board = [c('a', 20, 20), c('b', 10, 10), c('c', 6, 6)];
+    expect(myRank(board, 'a')).toBe(1);
+    expect(myRank(board, 'c')).toBe(3);
+  });
+
+  it('returns null for a student who has not qualified yet', () => {
+    // An unearned rank is worse than no rank.
+    expect(myRank([c('a', 20, 20)], 'nobody')).toBeNull();
+    expect(myRank([c('new', 1, 1)], 'new')).toBeNull();
+  });
+
+  it('agrees with the winners list — one ordering, not two', () => {
+    const board = Array.from({ length: 15 }, (_, i) => c(`s${i}`, 30 - i, 30 - i));
+    const winners = rankContributors(board).map((x) => x.studentId);
+    for (let i = 0; i < winners.length; i++) {
+      expect(myRank(board, winners[i])).toBe(i + 1);
+    }
+  });
+
+  it('reveals no population size — rank alone cannot be reverse-engineered', () => {
+    // Two boards of very different sizes give the top student the same rank.
+    const small = [c('me', 20, 20), c('x', 5, 5)];
+    const large = Array.from({ length: 400 }, (_, i) => c(`p${i}`, 5, 5)).concat([c('me', 99, 99)]);
+    expect(myRank(small, 'me')).toBe(myRank(large, 'me'));
   });
 });
