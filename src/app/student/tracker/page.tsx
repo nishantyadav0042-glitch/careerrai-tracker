@@ -21,7 +21,6 @@ import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
-import { PeerPulseCard } from '@/components/home/peer-pulse-card';
 import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
@@ -375,15 +374,14 @@ export default async function DailyTrackerPage() {
         <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
         <PlanResetButton />
       </div>
-      {/* Directly under today's work, because that is where belonging lands:
-          the student has just seen what they have to do, and the next thing
-          they see is that other people are doing it too. Renders nothing at
-          all when there is no true, specific thing to say. */}
-      <div className="mt-2">
-        <PeerPulseCard />
-      </div>
     </>
   );
+  // Founder, 12 Aug: nothing may touch the daily study plan or the surfaces
+  // around it, at any cost. Engagement content lives on the engagement screen
+  // (Daily Pick) — Home answers exactly one question, "what do I do today?",
+  // and every extra card competing with that answer makes it worse. The peer
+  // card was mounted here for one evening and is removed; the engine it reads
+  // from is unchanged and still feeds Daily Pick's rotation.
 
   // ── Day-1 insight (founder, 21 July): the FIRST thing shown in the
   // installed app is VALUE — "where you lack as of today", straight from the

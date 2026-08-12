@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
+import { activeChallengeDate } from '@/lib/challenge';
 import { loadPeerRows } from '@/lib/os/peer-cohort-data';
 import { peerPulse, cohortInsights, populationProofAllowed } from '@/lib/os/peer-cohort';
 import { mirrorForDay } from '@/lib/os/mirror';
@@ -23,10 +24,16 @@ export const maxDuration = 20;
 // proved we can fill, so there is no path where it picks a kind and we then
 // have to invent content to satisfy it (Trust OS §2.1, Incident #7).
 //
-// `question` is deliberately reported UNAVAILABLE until a real question bank
-// exists. Its weight is the largest in the rotation, so the moment that bank
-// ships this route flips one boolean and the surface rebalances itself — no
-// engine change, no UI change.
+// ONE daily surface, not two (founder, 12 Aug: do not build a duplicate of
+// Daily Pick, and do not run both). The `question` slot therefore delegates to
+// the daily-challenge system that already exists — its own table, its own
+// active-date rule, its own attempt capture — rather than a second engine that
+// would drift from it. Daily Pick owns the surface; challenge owns the question
+// engine; the rotation only decides which day each one gets.
+//
+// `question` becomes available the moment a challenge is actually scheduled
+// live for today. It carries the largest weight in the rotation, so seeding the
+// bank rebalances the surface on its own with no code change at all.
 
 export async function GET() {
   const supabase = await createClient();
@@ -80,8 +87,23 @@ export async function GET() {
   // are built from the student alone.
   const densityOk = pulse != null && populationProofAllowed(pulse.studiedToday);
 
+  // Is there actually a question live today? Asked of the SAME table and the
+  // same active-date rule the challenge card itself uses, so the rotation can
+  // never offer a question slot the card would then render as empty.
+  let questionLive = false;
+  try {
+    const { count } = await admin
+      .from('daily_challenges')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'live')
+      .eq('live_date', activeChallengeDate(now));
+    questionLive = (count ?? 0) > 0;
+  } catch (e) {
+    console.error('[daily-slot] challenge availability failed', e);
+  }
+
   const available: PickAvailability = {
-    question: false, // no bank yet — see note above
+    question: questionLive,
     community: communityOpen,
     mirror: mirror != null,
     peer: densityOk && insights.length > 0,

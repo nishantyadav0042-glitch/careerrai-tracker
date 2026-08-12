@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { track } from '@/lib/journey';
 import { CommunityVoteCard } from '@/components/community-vote-card';
+import { DailyChallengeCard } from '@/components/daily-challenge-card';
 
 // ── Today's ONE thing on Daily Pick ─────────────────────────────────────────
 //
@@ -50,6 +51,15 @@ export function DailySlotCard() {
   if (failed) return <CommunityVoteCard />;
   if (!slot) return null;
   if (slot.kind === 'community' || slot.kind === null) return <CommunityVoteCard />;
+  // The question slot renders the challenge system that ALREADY EXISTS rather
+  // than a second implementation of "a question a day". Founder, 12 Aug: do not
+  // build a duplicate of Daily Pick, and do not run both — pick one and remove
+  // the other. Daily Pick wins the surface (it owns the nav slot and the
+  // student's mental model); the challenge stack wins the engine (it already
+  // captures choice, correctness and seconds-taken, and already refuses to show
+  // a community split below 20 attempts). Neither is rebuilt; the rotation just
+  // decides which day each one gets.
+  if (slot.kind === 'question') return <DailyChallengeCard />;
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4">
