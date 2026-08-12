@@ -21,6 +21,7 @@ import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
+import { PeerPulseCard } from '@/components/home/peer-pulse-card';
 import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
@@ -373,6 +374,13 @@ export default async function DailyTrackerPage() {
         </Link>
         <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
         <PlanResetButton />
+      </div>
+      {/* Directly under today's work, because that is where belonging lands:
+          the student has just seen what they have to do, and the next thing
+          they see is that other people are doing it too. Renders nothing at
+          all when there is no true, specific thing to say. */}
+      <div className="mt-2">
+        <PeerPulseCard />
       </div>
     </>
   );
