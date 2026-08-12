@@ -12,6 +12,10 @@ interface SendOptions {
   body: string;
   data?: Record<string, unknown>;
   channels?: Channel[];
+  /** Stable push tag: same tag = tray entries COLLAPSE (chat threads). */
+  pushTag?: string;
+  /** Sender's display name — the SW uses it for "N new messages" titles. */
+  pushSenderName?: string;
 }
 
 export async function sendNotification(opts: SendOptions): Promise<void> {
@@ -38,7 +42,10 @@ export async function sendNotification(opts: SendOptions): Promise<void> {
       .single();
     const p = (prefs?.notif_prefs ?? {}) as Record<string, unknown>;
     if (p.push === true) {
-      await sendPushToUser(userId, { title, body, url: (data.url as string) ?? '/' });
+      await sendPushToUser(userId, {
+        title, body, url: (data.url as string) ?? '/',
+        tag: opts.pushTag, senderName: opts.pushSenderName,
+      });
     }
   }
 }

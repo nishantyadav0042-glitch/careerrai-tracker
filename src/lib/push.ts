@@ -49,7 +49,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function sendPushToUser(
   userId: string,
-  payload: { title: string; body: string; url?: string; notifId?: string }
+  payload: { title: string; body: string; url?: string; notifId?: string; tag?: string; senderName?: string }
 ): Promise<PushResult> {
   if (!(await getVapidConfigured())) {
     console.warn(`[push] VAPID not configured — skipped push to ${userId}: ${payload.title}`);
@@ -98,7 +98,7 @@ async function attemptSend(
   admin: any,
   userId: string,
   subscription: webpush.PushSubscription,
-  payload: { title: string; body: string; url?: string; notifId?: string }
+  payload: { title: string; body: string; url?: string; notifId?: string; tag?: string; senderName?: string }
 ): Promise<PushResult & { terminal?: boolean }> {
   try {
     // Every push needs a UNIQUE tag. sw.js falls back to a single shared tag when
@@ -110,10 +110,19 @@ async function attemptSend(
     // target (the old top-level url was silently ignored by showNotification,
     // so every push click opened "/" instead of its deep link), notifId for
     // the click beacon that stamps clicked_at (see /api/push/click).
+    // A caller MAY pin a stable tag instead (chat does: one tag per
+    // conversation, so a burst of DMs collapses into ONE tray entry instead
+    // of a stack — Shreya, 12 Aug). Collapsing is safe because sw.js sets
+    // renotify: true, so every replacement still sounds/vibrates; the SW also
+    // rewrites the title to "N new messages" when it stacks (chat- tags only).
     const tagged = {
       ...payload,
-      tag: `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      data: { url: payload.url ?? '/', notifId: payload.notifId ?? null },
+      tag: payload.tag ?? `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      data: {
+        url: payload.url ?? '/',
+        notifId: payload.notifId ?? null,
+        ...(payload.senderName ? { senderName: payload.senderName } : {}),
+      },
     };
     // Urgency: 'high' is the fix for "notifications only show when I open the
     // app". The web-push default is NORMAL urgency, which Android's Doze /

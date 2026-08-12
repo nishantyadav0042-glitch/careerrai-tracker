@@ -103,6 +103,11 @@ export async function deliverPairMessage(input: DeliverInput) {
         title: `${senderName} sent you a message 💬`,
         body: preview,
         channels: ['in_app', 'push'],
+        // ONE tray notification per conversation: every DM in this pair shares
+        // a tag, so the device collapses them ("Shreya · 3 new messages")
+        // instead of stacking one entry per message (Shreya's ask, 12 Aug).
+        pushTag: `chat-${pair.studentId}-${pair.buddyId}`,
+        pushSenderName: senderName,
         data: {
           url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy?tab=chat',
           student_id: pair.studentId,

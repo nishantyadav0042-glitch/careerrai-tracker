@@ -1,5 +1,5 @@
-﻿// Service Worker — push notifications + installability (v7: never answer a
-// navigation)
+﻿// Service Worker — push notifications + installability (v8: chat threads
+// collapse to one tray entry; v7: never answer a navigation)
 //
 // Chrome only offers ONE-TAP PWA install (fires `beforeinstallprompt`) when the
 // site has a service worker with a REAL fetch handler. So we add one — but it is
@@ -83,12 +83,36 @@ self.addEventListener('push', (event) => {
   // device — the SW wakes for this even with the app fully closed, so this is
   // the device-level proof that delivery does not depend on app opens.
   // Best-effort: a failed beacon must never block showing the notification.
-  const work = [
-    self.registration.showNotification(
-      notificationData.title || 'CareerRai',
-      options
-    ),
-  ];
+  // ── Chat threads collapse into ONE tray entry (Shreya, 12 Aug) ────────────
+  //
+  // Chat pushes share a stable `chat-<pair>` tag, so the OS already replaces
+  // the previous entry (renotify keeps the sound). What the OS cannot do is
+  // COUNT — so before showing, read the entry being replaced and carry its
+  // count forward: the second message onward renders as
+  // "Shreya · 3 new messages 💬" with the latest text as the body. Tapping or
+  // dismissing the notification resets the thread count naturally, because
+  // the tagged entry disappears with it. Non-chat pushes are untouched: their
+  // per-send unique tags keep every reminder its own alert.
+  const isChatThread = typeof options.tag === 'string' && options.tag.indexOf('chat-') === 0;
+  const showPromise = isChatThread
+    ? self.registration.getNotifications({ tag: options.tag }).then(function (existing) {
+        const prev = existing && existing[0];
+        const count = ((prev && prev.data && prev.data.chatCount) || (prev ? 1 : 0)) + 1;
+        options.data = options.data || {};
+        options.data.chatCount = count;
+        let title = notificationData.title || 'CareerRai';
+        if (count > 1) {
+          const sender = (options.data && options.data.senderName) || title.replace(/ sent you a message.*$/, '');
+          title = sender + ' · ' + count + ' new messages 💬';
+        }
+        return self.registration.showNotification(title, options);
+      }).catch(function () {
+        // Counting is a nicety; showing the notification is the job.
+        return self.registration.showNotification(notificationData.title || 'CareerRai', options);
+      })
+    : self.registration.showNotification(notificationData.title || 'CareerRai', options);
+
+  const work = [showPromise];
   const notifId = notificationData.data && notificationData.data.notifId;
   if (notifId) {
     work.push(
