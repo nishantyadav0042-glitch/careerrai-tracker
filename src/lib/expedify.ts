@@ -77,7 +77,19 @@ export function readWorkflowVerdict(body: string | null): { ok: boolean | null; 
   return { ok: null, error: null };
 }
 
+// ── OUTBOUND HARD-DISABLED — founder, 12 Aug 2026: "don't trigger any leads
+// to Expedify." This is the ONE choke point every outbound path passes
+// through (daily flush cron, admin follow-ups, the test route), so gating
+// here stops them all. The INBOUND webhook (/api/expedify/outcome — after-call
+// summaries) is untouched and stays open. Queued statuses keep accumulating,
+// so flipping this back to false resumes exactly where we stopped.
+const OUTBOUND_DISABLED = true;
+
 export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResult> {
+  if (OUTBOUND_DISABLED) {
+    console.warn('[expedify] outbound disabled by founder (12 Aug) — lead NOT sent:', lead.phone ?? 'unknown');
+    return { configured: false, ok: false, httpStatus: null, responseBody: null, error: 'outbound disabled by founder (12 Aug)', workflowOk: null, workflowError: null };
+  }
   const url = process.env.EXPEDIFY_WEBHOOK_URL;
   if (!url) return { configured: false, ok: false, httpStatus: null, responseBody: null, error: 'EXPEDIFY_WEBHOOK_URL not set', workflowOk: null, workflowError: null };
 
