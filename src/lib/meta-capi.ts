@@ -39,7 +39,15 @@ export interface CapiEvent {
 export async function sendMetaCapiEvent(e: CapiEvent): Promise<void> {
   const token = process.env.META_CAPI_TOKEN;
   const pixelId = process.env.META_PIXEL_ID || process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  if (!token || !pixelId) return;
+  // Say so when we are inert. This used to `return` in silence, and on 12 Aug
+  // that silence cost a whole debugging session: Meta reported 42 leads
+  // against 26 real signups and nothing in our logs could answer the first
+  // question — did the server even send anything? An unconfigured integration
+  // must announce itself, or it looks identical to a working one.
+  if (!token || !pixelId) {
+    console.warn(`[meta-capi] SKIPPED ${e.eventName} — ${!token ? 'META_CAPI_TOKEN' : 'pixel id'} not set. No server event was sent.`);
+    return;
+  }
 
   try {
     const userData: Record<string, unknown> = {};
@@ -71,6 +79,10 @@ export async function sendMetaCapiEvent(e: CapiEvent): Promise<void> {
     );
     if (!res.ok) {
       console.error('[meta-capi]', e.eventName, 'HTTP', res.status);
+    } else {
+      // One line per accepted event, with the dedup id — this is what lets us
+      // reconcile "Meta says N" against "we sent M" without guessing.
+      console.log(`[meta-capi] sent ${e.eventName} id=${e.eventId ?? 'none'}`);
     }
   } catch (err) {
     console.error('[meta-capi]', (err as Error)?.message);
