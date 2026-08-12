@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PLANS, type PlanId } from '@/lib/plans';
+import { CAMPAIGN, campaignAppliesTo } from '@/lib/campaign';
 
 // Razorpay won't create an order below ₹1. At or below this we treat the
 // purchase as effectively free and activate without a payment round-trip.
@@ -43,7 +44,7 @@ export function priceWithCoupon(basePaise: number, c: ActiveCoupon): number {
 export interface PriceResult {
   basePaise: number;
   finalPaise: number;
-  discountSource: 'scholarship' | 'coupon' | null;
+  discountSource: 'scholarship' | 'coupon' | 'campaign' | null;
   label: string | null;        // human note e.g. "Founder scholarship" / "WELCOME20"
   couponId: string | null;
   couponCode: string | null;
@@ -64,6 +65,26 @@ export async function getActiveScholarship(studentId: string): Promise<ActiveSch
   return { id: data.id, discount_percent: data.discount_percent, final_price_paise: data.final_price_paise };
 }
 
+/**
+ * Seats already sold on the campaign — counted from REAL PAID PURCHASES.
+ *
+ * Scale Contract §4: the number on the page must drill down to the exact rows
+ * behind it. This counts student_payments rows that are `paid`, on the
+ * campaign plan, inside the campaign window — the same rows the founder can
+ * open in the payments workspace. Never a cached integer, never a guess.
+ */
+export async function campaignSeatsSold(): Promise<number> {
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from('student_payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('plan', CAMPAIGN.plan)
+    .eq('status', 'paid')
+    .gte('paid_at', CAMPAIGN.startsAt)
+    .lte('paid_at', CAMPAIGN.endsAt);
+  return count ?? 0;
+}
+
 // Authoritative price resolution for a checkout. Scholarship (founder hardship
 // grant) takes precedence over any coupon — we never stack them.
 export async function resolvePrice(
@@ -74,16 +95,36 @@ export async function resolvePrice(
   const basePaise = PLANS[planId].amountPaise;
   const admin = createAdminClient();
 
+  // ── The campaign, applied LAST and only if it helps ────────────────────────
+  //
+  // Every return path below funnels through withCampaign(). The offer can only
+  // ever LOWER a price: a founder scholarship or a cheaper coupon still wins.
+  // The 50-seat cap is enforced HERE, on the money path — not merely displayed
+  // — so the 51st checkout is charged list price even if a stale page promised
+  // otherwise. An invalid-coupon error is passed through untouched.
+  const soldPromise = campaignSeatsSold();
+  const withCampaign = async (r: PriceResult): Promise<PriceResult> => {
+    if (r.error) return r;
+    const sold = await soldPromise;
+    if (!campaignAppliesTo(planId, r.finalPaise, new Date(), sold)) return r;
+    return {
+      ...r,
+      finalPaise: CAMPAIGN.offerPaise,
+      discountSource: 'campaign',
+      label: CAMPAIGN.label,
+    };
+  };
+
   const scholarship = await getActiveScholarship(studentId);
   if (scholarship) {
-    return {
+    return withCampaign({
       basePaise,
       finalPaise: priceWithScholarship(basePaise, scholarship),
       discountSource: 'scholarship',
       label: 'Founder scholarship',
       couponId: null,
       couponCode: null,
-    };
+    });
   }
 
   const code = couponCodeInput?.trim().toUpperCase();
@@ -111,17 +152,17 @@ export async function resolvePrice(
       .maybeSingle();
     if (already) return invalid("You've already used that coupon.");
 
-    return {
+    return withCampaign({
       basePaise,
       finalPaise: priceWithCoupon(basePaise, coupon as ActiveCoupon),
       discountSource: 'coupon',
       label: coupon.code,
       couponId: coupon.id,
       couponCode: coupon.code,
-    };
+    });
   }
 
-  return { basePaise, finalPaise: basePaise, discountSource: null, label: null, couponId: null, couponCode: null };
+  return withCampaign({ basePaise, finalPaise: basePaise, discountSource: null, label: null, couponId: null, couponCode: null });
 }
 
 // Display helper: per-plan price strings after a scholarship, for the membership card.

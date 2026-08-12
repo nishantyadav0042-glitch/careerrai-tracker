@@ -11,6 +11,7 @@ import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
 import { PlanResetButton } from '@/components/home/plan-reset-button';
 import { HomeTimetableCard } from '@/components/home/home-timetable-card';
+import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { Shield } from 'lucide-react';
 import { CheckInGate } from '@/components/check-in-gate';
@@ -522,6 +523,13 @@ export default async function DailyTrackerPage() {
 
         {/* 1 · POSITION — % done, pace, finish date, reschedule (with hours). */}
         {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
+
+        {/* The campaign card — eligible FREE students only, self-hiding when the
+            offer ends, sells out, they buy, or they dismiss it. Sits BELOW the
+            student's position and ABOVE nothing they need: the plan is still
+            the product (founder, 12 Aug: in-app carries the sales load, but
+            the app is not an advertisement). */}
+        <CampaignOfferCard />
 
         {/* 2 · TODAY'S PLAN — with whole-plan, busy-day and reset actions. */}
         {planBlock}

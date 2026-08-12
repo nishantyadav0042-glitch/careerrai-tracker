@@ -213,6 +213,10 @@ export type EventName =
   | 'pay_success_callback'
   | 'push_enabled' | 'shield_intro_shown'
   | 'buddy_plan_click' | 'buddy_unlock_open'
+  // Independence Day campaign (12 Aug): one funnel, measured end to end —
+  // card seen → clicked → offer page → checkout (pay_* above carries the rest).
+  | 'campaign_card_seen' | 'campaign_card_click' | 'campaign_card_dismissed'
+  | 'campaign_offer_view' | 'campaign_offer_cta'
   | 'coverage_review_shown' | 'coverage_reviewed'
   | 'timetable_upload_start' | 'timetable_saved' | 'timetable_parse_failed'
   | 'timetable_dismissed'
