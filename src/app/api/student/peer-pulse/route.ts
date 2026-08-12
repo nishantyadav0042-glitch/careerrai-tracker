@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { loadPeerRows } from '@/lib/os/peer-cohort-data';
-import { peerPulse, cohortInsights, selfVsObserved } from '@/lib/os/peer-cohort';
+import { peerPulse, cohortInsights, selfVsObserved, populationProofAllowed } from '@/lib/os/peer-cohort';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -40,10 +40,20 @@ export async function GET() {
   if (!me) return NextResponse.json({ pulse: null, insights: [], planGap: null });
 
   const thisYear = now.getUTCFullYear();
+  const pulse = peerPulse(me, rows);
+
+  // The density gate, applied HERE rather than in the component, so no client
+  // can render population numbers we have decided are not yet credible — and
+  // so the numbers never even reach the browser to be found in a network tab.
+  //
+  // planGap is exempt by design: it is built from this student's own record,
+  // says nothing about how many of us there are, and is the one line on this
+  // card that makes the app look useful rather than small.
+  const allowed = populationProofAllowed(pulse.studiedToday);
 
   return NextResponse.json({
-    pulse: peerPulse(me, rows),
-    insights: cohortInsights(me, rows, thisYear),
+    pulse: allowed ? pulse : null,
+    insights: allowed ? cohortInsights(me, rows, thisYear) : [],
     planGap: selfVsObserved(me),
   });
 }

@@ -55,15 +55,24 @@ export function PeerPulseCard() {
 
   const { pulse, insights, planGap } = data;
 
-  // The headline is only worth showing when somebody is actually there. One
-  // other student is still company; zero is not a fact worth rendering.
+  // Population proof is gated server-side (peer-cohort.ts). Below the density
+  // threshold the API sends no pulse and no insights at all, so this card
+  // renders ONLY the student's own record — which is the whole point: the app
+  // should look useful, never small.
   const showPresence = !!pulse && pulse.studiedToday > 0;
   if (!showPresence && insights.length === 0 && !planGap) return null;
+
+  // With no population content, this is not a "you're not alone" card any more
+  // — it is a card about the student's own preparation, and it must not claim
+  // otherwise.
+  const heading = showPresence || insights.length > 0
+    ? "You're not doing this alone"
+    : 'Your preparation';
 
   return (
     <Card className="p-3.5">
       <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">
-        You&apos;re not doing this alone
+        {heading}
       </p>
 
       {showPresence && pulse && (

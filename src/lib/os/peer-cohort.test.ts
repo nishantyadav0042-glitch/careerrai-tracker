@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   findCohort, peerPulse, cohortInsights, selfVsObserved,
   phaseOf, intensityOf, isRepeater, MIN_COHORT, type PeerRow,
+  populationProofAllowed, MIN_ACTIVE_FOR_POPULATION_PROOF,
 } from './peer-cohort';
 
 // ── The peer engine speaks about real people ────────────────────────────────
@@ -214,5 +215,32 @@ describe('self vs observed — the gap the student cannot see', () => {
   it('says nothing when either side of the comparison is missing', () => {
     expect(selfVsObserved(row('me', { targetHours: null }))).toBeNull();
     expect(selfVsObserved(row('me', { observedAvgHours: null }))).toBeNull();
+  });
+});
+
+describe('the density gate — never use numbers to prove we are popular', () => {
+  it('stays shut at the scale that caused the correction', () => {
+    // 12 Aug: 9 students studied. "9 students studied today" reads as an empty
+    // shop, not as social proof.
+    expect(populationProofAllowed(9)).toBe(false);
+    expect(populationProofAllowed(0)).toBe(false);
+  });
+
+  it('opens only when a day is genuinely busy', () => {
+    expect(populationProofAllowed(MIN_ACTIVE_FOR_POPULATION_PROOF)).toBe(true);
+    expect(populationProofAllowed(MIN_ACTIVE_FOR_POPULATION_PROOF - 1)).toBe(false);
+  });
+
+  it('is set well above the point where a room still feels empty', () => {
+    // Guards against someone quietly lowering it to make the card light up.
+    expect(MIN_ACTIVE_FOR_POPULATION_PROOF).toBeGreaterThanOrEqual(100);
+  });
+
+  it('gates on students who SHOWED UP, never on registrations', () => {
+    // A registration count is the number a struggling app quotes. This one
+    // takes today's actives, so the gate cannot be gamed by signups alone.
+    const me = row('me');
+    const all = [me, ...peers(400, { loggedToday: false })];
+    expect(populationProofAllowed(peerPulse(me, all).studiedToday)).toBe(false);
   });
 });

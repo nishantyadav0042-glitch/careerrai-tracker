@@ -73,6 +73,48 @@ export interface PeerRow {
 // makes no statistical claim.
 export const MIN_COHORT = 5;
 
+// ── The density gate: population proof stays dark until it is credible ──────
+//
+// Founder, 12 Aug 2026, correcting this engine's first release: "9 students
+// studied today" at 319 signups does not read as social proof. It reads as
+// evidence that the app is small — and a student does not compute the
+// denominator, they FEEL it. Nobody wants to be the first customer in an empty
+// shop.
+//
+// This was a product mistake, not an engineering one. The counts were true and
+// carefully built; truth is necessary and was never sufficient. So the rule
+// that governs this file from now on:
+//
+//   Never use numbers to prove CareerRai is POPULAR.
+//   Only use numbers to prove CareerRai is USEFUL.
+//
+// Anything derived from the student's OWN record (selfVsObserved, the mirror)
+// is product proof and always allowed — it says the app is useful and reveals
+// nothing about how many of us there are. Anything that reveals the size of the
+// base is population proof and stays dark until the base carries it.
+//
+// The fix is deliberately a threshold and not a deletion. The engine is right;
+// only its audience is missing. When enough students are genuinely active in a
+// day, the exact same code lights up on its own and the sentences become
+// interesting instead of embarrassing — and the progression after that is
+// counts → proportions → pattern intelligence, each unlocking as its sample
+// becomes honest.
+//
+// One constant, deliberately, so switching it on is a founder decision and not
+// an archaeology expedition. Raise or lower it here and nowhere else.
+export const MIN_ACTIVE_FOR_POPULATION_PROOF = 250;
+
+/**
+ * May we say anything about the size or behaviour of the base today?
+ *
+ * `activeToday` is students who logged a study day — not registrations. A
+ * registration count is the number a struggling app quotes; the number of
+ * people who actually showed up today is the one that makes a room feel full.
+ */
+export function populationProofAllowed(activeToday: number): boolean {
+  return activeToday >= MIN_ACTIVE_FOR_POPULATION_PROOF;
+}
+
 /** Preparation phase from days remaining. The bands are the ones the planner
  *  already reasons in, so a student is never in two different "phases" on two
  *  different screens. */

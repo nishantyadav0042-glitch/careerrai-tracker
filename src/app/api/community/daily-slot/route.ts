@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
 import { loadPeerRows } from '@/lib/os/peer-cohort-data';
-import { peerPulse, cohortInsights } from '@/lib/os/peer-cohort';
+import { peerPulse, cohortInsights, populationProofAllowed } from '@/lib/os/peer-cohort';
 import { mirrorForDay } from '@/lib/os/mirror';
 import {
   pickKindForDay, reflectionForDay, KIND_LABEL, type PickAvailability, type PickKind,
@@ -72,11 +72,19 @@ export async function GET() {
     console.error('[daily-slot] community availability failed', e);
   }
 
+  // The 'peer' slot is population proof, so it obeys the same density gate as
+  // the Home card (peer-cohort.ts). Below the threshold it is not "unavailable
+  // because we lack data" — we have the data — it is unavailable because
+  // saying it out loud at this size makes CareerRai look empty rather than
+  // alive. 'mirror' and 'reflection' carry the rotation until then, and both
+  // are built from the student alone.
+  const densityOk = pulse != null && populationProofAllowed(pulse.studiedToday);
+
   const available: PickAvailability = {
     question: false, // no bank yet — see note above
     community: communityOpen,
     mirror: mirror != null,
-    peer: insights.length > 0 || (pulse != null && pulse.studiedToday > 0),
+    peer: densityOk && insights.length > 0,
     reflection: true, // the floor: needs nothing but the student
   };
 
