@@ -2,6 +2,10 @@ import { remainingSyllabusHours, MOCK_HOURS_EACH, totalSyllabusHours, type Topic
 import { catExamDate, type Phase } from './routine-engine';
 import type { Section } from './prep-model';
 import { projectPlan, type ProjectionDay } from './plan-projection';
+import {
+  MOCKS_PER_WEEK, MOCK_ANALYSIS_HOURS, MOCK_SIT_HOURS,
+  phaseOn, mocksForWeekOf, isMockDay, calendarClaim, type PlanPhase,
+} from './exam-calendar';
 
 // ── The whole plan, today to CAT day ────────────────────────────────────────
 //
@@ -31,20 +35,15 @@ import { projectPlan, type ProjectionDay } from './plan-projection';
 
 const DAY_MS = 86_400_000;
 
-/** Mocks per week, by how close the exam is. Founder-approved, 8 Aug. */
-export const MOCKS_PER_WEEK = {
-  /** Now through September. The floor: "one complete mock every week." */
-  build: 1,
-  /** October and November. Two, not three — the founder's call: three a week
-   *  leaves no room to act on what the analysis found. */
-  intensive: 2,
-} as const;
+// The calendar itself — which day carries a mock, what a day owes — moved to
+// lib/exam-calendar so Home's engine reads the SAME claim (the PR #88 gap:
+// "Home does not yet know about the Whole Plan's exam calendar"). Re-exported
+// so every existing consumer of this module keeps working unchanged.
+export { MOCKS_PER_WEEK, MOCK_ANALYSIS_HOURS, phaseOn, mocksForWeekOf, isMockDay };
+export type { PlanPhase };
 
 /** A mock is 2h of exam + ~2h of honest analysis. Priced once, in study-pace. */
 export { MOCK_HOURS_EACH };
-
-/** Analysis is scheduled as its own block the NEXT day, never bundled in. */
-export const MOCK_ANALYSIS_HOURS = 2;
 
 /** A full revision block when the day has room for it. */
 export const REVISION_HOURS = 1.5;
@@ -57,7 +56,6 @@ export const REVISION_HOURS = 1.5;
  */
 export const MIN_REVISION_HOURS = 0.5;
 
-export type PlanPhase = 'build' | 'intensive' | 'revision';
 
 export interface PlanItem {
   kind: 'topic' | 'revision' | 'mock' | 'mock_analysis';
@@ -157,52 +155,6 @@ export interface FullPlan {
 function iso(d: Date): string { return d.toISOString().slice(0, 10); }
 
 /**
- * Which phase a date falls in.
- *
- * September and October are "intensive" and November is "revision", matching
- * getPhase() in routine-engine so the long view and the daily plan can never
- * disagree about what season it is.
- */
-export function phaseOn(date: Date, exam: Date): PlanPhase {
-  if (date.getFullYear() === exam.getFullYear()) {
-    const m = date.getMonth();
-    if (m === 10) return 'revision';        // November, to exam day
-    if (m === 8 || m === 9) return 'intensive'; // September, October
-  }
-  return 'build';
-}
-
-/**
- * How many mocks the week containing `date` should carry.
- *
- * Keyed on the MONTH, not on phaseOn — the study phase and the mock cadence
- * are different things and conflating them silently put September on two
- * mocks a week. The founder's rule is October and November: "two a week is
- * right; three is too many."
- */
-export function mocksForWeekOf(date: Date, exam: Date): number {
-  const sameYear = date.getFullYear() === exam.getFullYear();
-  const m = date.getMonth();
-  return sameYear && (m === 9 || m === 10) ? MOCKS_PER_WEEK.intensive : MOCKS_PER_WEEK.build;
-}
-
-/**
- * Is this a mock day?
- *
- * Sunday always — a full mock needs an unbroken two hours plus analysis, and a
- * weekday evening is where good intentions go to die. The second mock, once
- * October starts, goes on Wednesday: far enough from Sunday that the analysis
- * of one is done before the next begins, which is the entire point of two.
- */
-export function isMockDay(date: Date, exam: Date): boolean {
-  if (date > exam) return false;
-  const dow = date.getUTCDay(); // 0 = Sunday
-  const perWeek = mocksForWeekOf(date, exam);
-  if (dow === 0) return true;
-  return perWeek >= 2 && dow === 3; // Wednesday
-}
-
-/**
  * The whole plan, day by day.
  *
  * Deliberately built from the SAME inputs the daily plan uses, so a student who
@@ -230,9 +182,7 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   // A mock day owes 2h to the mock; the day after owes 2h to its analysis.
   // Reserving the WHOLE day was the first attempt and it was too blunt — a
   // student with six hours still has four left after a mock.
-  const reservedOn = (date: Date): number =>
-    (isMockDay(date, exam) ? 2 : 0) +
-    (isMockDay(new Date(date.getTime() - DAY_MS), exam) ? MOCK_ANALYSIS_HOURS : 0);
+  const reservedOn = (date: Date): number => calendarClaim(date, exam).reservedHours;
 
   // Topic capacity, day by day, honestly: what the student has, minus what the
   // exam calendar already claimed. November is zero — no new topics.
@@ -322,7 +272,7 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
     const items: PlanItem[] = [];
 
     if (mockToday) {
-      items.push({ kind: 'mock', label: 'Full mock', section: null, hours: 2 });
+      items.push({ kind: 'mock', label: 'Full mock', section: null, hours: MOCK_SIT_HOURS });
     }
     if (analysisToday) {
       // Its own block, the day after, because every source in the research says

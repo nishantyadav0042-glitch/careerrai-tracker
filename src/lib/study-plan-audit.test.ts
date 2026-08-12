@@ -179,7 +179,11 @@ describe('AUDIT: does the day fit the hours the student chose?', () => {
     // 15% more than their chosen hours (repeater 6h got 414m, mocks-stage 5h
     // got 345m). The closer's minutes now come out of the topic tasks, so
     // every day sums to exactly the budget.
-    const monday = new Date('2026-08-10T06:00:00');
+    // Calendar-free Tuesday: on the real Monday 10 Aug, Home now carves the
+    // exam calendar's 2h mock-analysis out first (lib/exam-calendar) — planned
+    // still equals committed, but the task count shifts. This test is about
+    // the CLOSER's arithmetic, so it runs on a day the calendar leaves alone.
+    const monday = new Date('2026-08-11T06:00:00');
     const results = cases.map(([name, p]) => {
       const state: SimState = { coverage: new Map(), lastPracticed: new Map() };
       const r = generateRoutine(p, monday, NO_HISTORY, buildChoices(state, p, 0, false));

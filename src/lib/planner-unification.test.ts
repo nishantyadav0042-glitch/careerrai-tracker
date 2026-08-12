@@ -94,6 +94,69 @@ describe('Home and the Whole Plan agree about TODAY', () => {
     expect(whole, `Home ${home} tasks vs Whole Plan ${whole}`).toBe(home);
   });
 
+  // ── Mock days — the gap PR #88 shipped with is CLOSED ─────────────────────
+  //
+  // #88's own description: "Home does not yet know about the Whole Plan's
+  // exam calendar, so on a mock day the two still differ by the mock's two
+  // hours. Tracked, not hidden." lib/exam-calendar is now the one calendar
+  // both surfaces reserve from, so a Sunday agrees end to end.
+  describe('a mock day is ONE day on both surfaces', () => {
+    const SUNDAY = new Date('2026-08-16T00:00:00Z');
+    const MONDAY = new Date('2026-08-17T00:00:00Z');
+
+    function homeOn(day: Date) {
+      const { choices, extras } = buildTopicChoices(
+        UNTOUCHED.map((r) => ({ topic: r.topic, status: r.status })),
+        profile,
+        { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null }, daysSinceLastPracticedByTopic: {}, daysSincePlannedByTopic: {}, postponedTopics: [] },
+        null, [], 25, day,
+      );
+      return generateRoutine(profile, day, { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null } }, choices, extras);
+    }
+    const wholeOn = (day: Date) => buildFullPlan({
+      coverage: UNTOUCHED, effort: EFFORT, weekdayHours: 6, today: day,
+      attemptYear: 2026, weakestSection: 'DILR', daysToSyllabusTarget: 25,
+    }).days[0];
+
+    it('Sunday: Home carries the mock and the SAME topic blocks as day 0', () => {
+      const home = homeOn(SUNDAY);
+      const whole = wholeOn(SUNDAY);
+      expect(whole.isMockDay).toBe(true);
+      const mockTask = home.tasks.find((t) => t.id === 'exam-mock');
+      expect(mockTask?.estMinutes).toBe(120);
+      expect(whole.items.find((i) => i.kind === 'mock')?.hours).toBe(2);
+      const homeTopics = home.tasks.filter((t) => t.topic).map((t) => t.topic!).sort();
+      expect(topicsOn(whole.items), `Home: ${homeTopics.join(', ')}`).toEqual(homeTopics);
+    });
+
+    it("Monday: both surfaces owe yesterday's analysis, and agree on the rest", () => {
+      const home = homeOn(MONDAY);
+      const whole = wholeOn(MONDAY);
+      const analysis = home.tasks.find((t) => t.id === 'exam-mock-analysis');
+      expect(analysis?.estMinutes).toBe(120);
+      expect(whole.items.some((i) => i.kind === 'mock_analysis')).toBe(true);
+      const homeTopics = home.tasks.filter((t) => t.topic).map((t) => t.topic!).sort();
+      expect(topicsOn(whole.items), `Home: ${homeTopics.join(', ')}`).toEqual(homeTopics);
+    });
+
+    it('a 2h Sunday is the mock and nothing else — on both surfaces', () => {
+      const p2: RoutineProfile = { ...profile, weekdayHours: 2, weekendHours: 2 };
+      const { choices, extras } = buildTopicChoices(
+        UNTOUCHED.map((r) => ({ topic: r.topic, status: r.status })), p2,
+        { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null }, daysSinceLastPracticedByTopic: {}, daysSincePlannedByTopic: {}, postponedTopics: [] },
+        null, [], 25, SUNDAY,
+      );
+      const home = generateRoutine(p2, SUNDAY, { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null } }, choices, extras);
+      expect(home.tasks.map((t) => t.id)).toEqual(['exam-mock']);
+      expect(home.estMinutes).toBe(120);
+      const whole = buildFullPlan({
+        coverage: UNTOUCHED, effort: EFFORT, weekdayHours: 2, today: SUNDAY,
+        attemptYear: 2026, weakestSection: 'DILR', daysToSyllabusTarget: 25,
+      }).days[0];
+      expect(whole.items.map((i) => i.kind)).toEqual(['mock']);
+    });
+  });
+
   // ── Abhishek, 352d0c81…, his real Coverage Matrix on 11 Aug ───────────────
   //
   // The fresh-student cases above pass with an empty history, which is exactly

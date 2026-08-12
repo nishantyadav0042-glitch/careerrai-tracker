@@ -64,8 +64,12 @@ contains an `if` about the product, that `if` is in the wrong file.
     ├─ app/api/routine/today/route.ts  ← the app's hot path (student opens tracker)
     └─ lib/routine-plan.ts             ← the 6am notification cron (runs FIRST — it wins mornings)
   lib/plan-projection.ts  the same authority walked forward, day by day
-    ├─ lib/full-plan.ts        Whole Plan (today → CAT day) + the EXAM CALENDAR on top
+    ├─ lib/full-plan.ts        Whole Plan (today → CAT day) + the exam calendar's items
     └─ lib/study-forecast.ts   the Blueprint's 7-day strip
+  lib/exam-calendar.ts    THE EXAM CALENDAR — mock days, their analysis, phases.
+                          Both full-plan AND generateRoutine reserve from this
+                          one claim, so Home == whole-plan day 0 on mock days
+                          too (the gap PR #88 shipped with, closed 12 Aug).
 
 profiles.study_target_hours ──▶ lib/daily-hours.ts ──▶ routine profile
 Staleness (may today's plan rebuild?): lib/plan-freshness.ts — ONLY on the

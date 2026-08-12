@@ -9,6 +9,7 @@ import type { TopicChoice } from './topic-selector';
 // One Section union for the whole app — prep-model owns it.
 import type { Section } from '@/lib/prep-model';
 import type { CoverageStatus } from '@/lib/topic-selector';
+import { catExamDate, calendarClaim, MOCK_SIT_HOURS, MOCK_ANALYSIS_HOURS } from './exam-calendar';
 export type { Section };
 export type Phase = 'foundation' | 'intensive' | 'revision';
 
@@ -69,15 +70,10 @@ export interface GeneratedRoutine {
   whySummary: string;
 }
 
-// CAT is always the last Sunday of November of a given year. Reuses the same
-// convention already live on the Home tab (student/tracker/page.tsx
-// CAT_EXAM_DATE) so phase boundaries and the countdown never disagree.
-export function catExamDate(year: number): Date {
-  const nov30 = new Date(year, 10, 30);
-  const lastSunday = new Date(nov30);
-  lastSunday.setDate(30 - nov30.getDay());
-  return lastSunday;
-}
+// CAT's date lives in lib/exam-calendar with the rest of the exam calendar;
+// re-exported here because every phase consumer historically imports it from
+// this module, and the convention must stay ONE implementation.
+export { catExamDate };
 
 // A student already at sectionals/mocks shouldn't get "concept + practice"
 // framing just because their exam is still far off on the calendar — but the
@@ -449,20 +445,71 @@ export function generateRoutine(
   // The day's shape — sections, minutes, blocks — from the ONE authority both
   // Home and the whole plan read (dayShape above). Nothing about the split is
   // decided here any more; this function turns that shape into tasks.
-  const shape = dayShape({
-    hours,
+  // ── The exam calendar's claim comes FIRST — the PR #88 gap, closed ────────
+  //
+  // The Whole Plan reserved a mock day's two hours (and the next day's two of
+  // analysis) before laying any topic; Home shaped the FULL committed hours
+  // and the two surfaces described two different Sundays. Now Home subtracts
+  // the same claim (lib/exam-calendar.calendarClaim — the exact function
+  // full-plan reserves with) and carries the mock as a real task, so day 0 of
+  // the projection equals Home on mock days by construction.
+  const exam = catExamDate(profile.attemptYear ?? now.getFullYear());
+  const claim = calendarClaim(now, exam);
+
+  const weak = profile.weakestSection ?? 'DILR';
+  const strong = profile.strongestSection;
+  const weakChoice = topicChoices[weak];
+
+  const tasks: RoutineTask[] = [];
+
+  // Calendar blocks lead the day with the Whole Plan's own labels and hours —
+  // but a block lands only on a day BIG ENOUGH to hold it. The small-day law
+  // (≤75 min = one finishable task, a won day) outranks the calendar: a
+  // 30-minute student cannot sit a 2-hour mock, and shrinking the mock to fit
+  // would schedule a lie. Days of 2h+ — every real mock-taking student —
+  // match the Whole Plan exactly.
+  let budgetMinutes = Math.round(hours * 60);
+  if (claim.mockToday && budgetMinutes >= MOCK_SIT_HOURS * 60) {
+    tasks.push({
+      id: 'exam-mock',
+      section: 'General',
+      topic: null,
+      label: 'Full mock',
+      target: 'Full paper, exam conditions — 2 hours',
+      estMinutes: MOCK_SIT_HOURS * 60,
+      reason: 'Mock day — one complete mock every week',
+    });
+    budgetMinutes -= MOCK_SIT_HOURS * 60;
+  }
+  if (claim.analysisToday && budgetMinutes >= MOCK_ANALYSIS_HOURS * 60) {
+    tasks.push({
+      id: 'exam-mock-analysis',
+      section: 'General',
+      topic: null,
+      label: "Analyse yesterday's mock",
+      target: 'Every error: why it happened, and the fix',
+      estMinutes: MOCK_ANALYSIS_HOURS * 60,
+      reason: 'The analysis is where the marks are',
+    });
+    budgetMinutes -= MOCK_ANALYSIS_HOURS * 60;
+  }
+  const topicHours = budgetMinutes / 60;
+  // Below half an hour of topic room the day belongs to the calendar alone —
+  // dayShape floors its budget back up to 30 minutes, which would invent time
+  // the mock already took.
+  const hasTopicRoom = topicHours >= 0.5;
+
+  const shape = hasTopicRoom ? dayShape({
+    hours: topicHours,
     weakestSection: profile.weakestSection ?? null,
     isWorkingProfessional: !!profile.isWorkingProfessional,
     isRepeater: !!profile.isRepeater,
     weekend,
     phase,
-  });
-  const { totalMinutes, closerMinutes, hasCloser } = shape;
+  }) : null;
 
-  const weak = profile.weakestSection ?? 'DILR';
-  const strong = profile.strongestSection;
-
-  const tasks: RoutineTask[] = [];
+  if (shape) {
+  const { closerMinutes, hasCloser } = shape;
 
   const prioritySlice = shape.sections[0];
   const otherSlices = shape.sections.slice(1);
@@ -470,7 +517,6 @@ export function generateRoutine(
   const otherMinutes = otherSlices.map((s) => s.minutes);
   const priorityMinutes = prioritySlice.minutes;
 
-  const weakChoice = topicChoices[weak];
   const weakPicks = extraChoices?.[weak]?.slice(0, prioritySlice.blocks) ?? [weakChoice];
   const weakEach = Math.round(priorityMinutes / weakPicks.length);
 
@@ -574,11 +620,13 @@ export function generateRoutine(
     });
   }
 
+  }
+
   const estMinutes = tasks.reduce((s, t) => s + t.estMinutes, 0);
-  // The size we SAY must be the size we BUILT. Deriving it from totalMinutes
-  // rather than the stored hours keeps the sentence honest on every path —
-  // floor-only accounts, archetype fallbacks, and rounding alike.
-  const shownHours = Math.round((totalMinutes / 60) * 10) / 10;
+  // The size we SAY must be the size we BUILT — calendar blocks included.
+  // estMinutes equals the day's whole budget by construction: the priority
+  // slice absorbs topic rounding and the mock/analysis blocks are fixed.
+  const shownHours = Math.round((estMinutes / 60) * 10) / 10;
   const whySummary = personalizationSummary(profile, weekend, shownHours, weakChoice.topic);
   return { phase, tasks, estMinutes, whySummary };
 }

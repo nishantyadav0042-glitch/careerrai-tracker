@@ -266,7 +266,11 @@ describe('small days are small, few-task, and exactly the size promised', () => 
     weakestSection: 'QA', strongestSection: 'VARC', weakTopic: null,
     currentStage: 'not_started', attemptYear: 2026, ...over,
   });
-  const MON = new Date('2026-08-10T06:00:00');
+  // A CALENDAR-FREE day on purpose: 10 Aug was the analysis day after
+  // Sunday's mock, and once Home learned the exam calendar (lib/exam-calendar)
+  // a 2h Monday rightly became the analysis block. These tests assert the
+  // size law of TOPIC days, so they run on a Tuesday the calendar leaves alone.
+  const MON = new Date('2026-08-11T06:00:00');
 
   it('a 30-minute day is ONE task of exactly 30 minutes', () => {
     const r = generateRoutine(P(30), MON, NO_HIST, CHOICES);
