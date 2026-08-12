@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { PerfBeacon } from '@/components/perf-beacon';
 import { MetaPixel } from '@/components/meta-pixel';
+import { GoogleAdsTag } from '@/components/google-ads-tag';
 import { JourneyTracker } from '@/components/journey-tracker';
 import { InAppBrowserEscape } from '@/components/install/in-app-escape';
 import { DeployFreshness } from '@/components/deploy-freshness';
@@ -59,6 +60,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Self-gates: renders only inside FB/IG/Messenger webviews. */}
         <InAppBrowserEscape />
         <MetaPixel />
+        {/* Google Ads conversion tag — same web-only rules as the Meta pixel. */}
+        <GoogleAdsTag />
       </body>
     </html>
   );
