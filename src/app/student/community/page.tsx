@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { HeartHandshake } from 'lucide-react';
 import { track } from '@/lib/journey';
-import { CommunityVoteCard } from '@/components/community-vote-card';
+import { DailySlotCard } from '@/components/daily-slot-card';
 import { CommunitySubmit } from '@/components/community-submit';
 
 // The Daily Pick tab — the community's one home (founder, 25 Jul: bottom nav
@@ -34,7 +34,12 @@ export default function CommunityPage() {
         </p>
       </div>
 
-      <CommunityVoteCard />
+      {/* One thing per day, chosen by the rotation — voting is now one of
+          several asks rather than the only one. 12 Aug: twelve openers, zero
+          votes, on a healthy pool and a healthy route; the problem was never
+          the vote button, it was that a single repeated ask cannot carry a
+          daily habit. */}
+      <DailySlotCard />
 
       {/* Share CTA is PINNED above the bottom nav (founder, 26 Jul: "scroll
           or not, it should be visible") — never buried under three questions.

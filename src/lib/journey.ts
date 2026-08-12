@@ -227,6 +227,12 @@ export type EventName =
   | 'challenge_opened' | 'challenge_answered' | 'challenge_shared'
   | 'coaching_progress_logged'
   | 'daily_pick_open' | 'community_voted' | 'community_submitted'
+  // Which KIND of thing Daily Pick served, and whether it landed. The 12 Aug
+  // zero-vote day took an hour of SQL to diagnose because the surface recorded
+  // that it was opened but never what it had offered — so a low-engagement day
+  // was indistinguishable from a day the rotation served something nobody
+  // wanted. These two make that a query instead of an investigation.
+  | 'daily_slot_served' | 'daily_slot_reflected'
   // Impressions of the daily rotation's winner — without this the next "are
   // students really picking anything?" question is unanswerable again.
   | 'top_pick_shown'
