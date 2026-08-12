@@ -22,6 +22,24 @@ Rules this file follows:
 
 ---
 
+## 0. The mission — read `docs/MISSION.md` first
+
+Everything below this line describes what CareerRai **is today**.
+`docs/MISSION.md` describes what it is **for**, and it outranks every other
+document in this repo including the OS Constitutions.
+
+> Build a free, massively used student platform that continuously learns how
+> Indian students actually study, struggle, decide, improve, interact, and
+> eventually achieve outcomes — and use small amounts of monetisation only to
+> keep that machine running.
+> — *founder, 12 Aug 2026*
+
+The four questions every feature must pass, the four student-facing surfaces,
+the standing product decisions, and the honest retention gap all live in that
+file. Do not design a feature without it.
+
+---
+
 ## 1. What CareerRai is
 
 **One sentence:** a daily CAT-prep accountability system — a study plan that

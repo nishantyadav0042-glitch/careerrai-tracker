@@ -4,6 +4,28 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# The mission comes first — `docs/MISSION.md`
+
+**Read `docs/MISSION.md` before anything else in this repo, including this
+file's own build rules.** It is the one document that outranks the
+Constitutions: it says what the company is for, and it carries the four
+questions every new feature must answer before it is designed.
+
+The short version, which is not a substitute for reading it:
+
+> Build a free, massively used student platform that continuously learns how
+> Indian students actually study, struggle, decide, improve, interact, and
+> eventually achieve outcomes — and use small amounts of monetisation only to
+> keep that machine running.
+
+The comparison set is Duolingo and Reddit, not Topmate or Unacademy. Revenue is
+fuel, never the destination. A feature that does not make the free product
+better for a student who will never pay, and does not deepen what we learn
+about how that student studies, does not ship — however much revenue it
+promises.
+
+---
+
 # Operating Systems + Engineering Playbook — read before you build
 
 CareerRai is built as five Operating Systems (`docs/OS/`), each with a binding
