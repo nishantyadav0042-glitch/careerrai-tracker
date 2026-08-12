@@ -1060,3 +1060,46 @@ and reality — executed by the agent itself this time.
 in-command. Session rule (AGENTS.md hygiene section, and this entry): commit
 first, move branches second; any reset --hard must be preceded by
 `git status --short` showing a clean tree.
+
+---
+
+## Incident #30 — the daily log rejected fractional hours (2026-08-12)
+
+**Symptom.** 22:53 IST, a student marked one task "Done" and one "Half",
+pressed **Save log**, and got "Internal server error". They pressed it again —
+roughly 25 times in two minutes, every one rejected. The founder caught it from
+a screenshot, not from an alert.
+
+**Root cause.** `daily_reports.study_duration` is NUMERIC and has always
+accepted decimals. The RPC that writes it, `upsert_log_and_streak`, declared
+`p_study_duration INTEGER`. **The function contradicted its own table.** A
+"Half" task produces fractional hours (4.6, 2.8), so Postgres refused with
+22P02 at the door. Every student who ever half-completed a task hit this.
+
+**How it hid.** The log path has no test that sends a decimal, and the two
+types sat in different places — a column definition and a function signature —
+that nothing compared. Three decimal logs exist historically, written before
+the RPC was introduced, which is why the column was right and the function
+was wrong.
+
+**The fix, and the fix NOT taken.** `Math.round()` in the route would have made
+the error disappear and quietly lied about how long a student studied. The log
+is sacred (Learning OS: never punished, never falsified), so the PARAMETER TYPE
+was corrected instead — dropped and recreated as NUMERIC in one transaction,
+body byte-identical, ACL restored explicitly because DROP takes grants with it
+and a fresh CREATE grants PUBLIC by default (Incident #14's lesson, applied
+pre-emptively this time).
+
+**Lessons.**
+1. A column type and every function parameter that writes it are ONE decision.
+   Split across two places, they drift, and the drift surfaces as a 500 on a
+   student's phone at 11pm.
+2. When a type error meets a value the product legitimately produces, fix the
+   type — rounding is data loss wearing a fix's clothes.
+3. Twenty-five retries and no alert. The core action deserves an alarm.
+
+**Teeth.** `log-hours-decimal.guard.test.ts` pins the shape of the fix: the
+route sends hours unrounded, the migration declares NUMERIC and DROPs the old
+integer overload (leaving both would let Postgres still pick the broken one),
+and it restores the grants the DROP removes. Verified in production: the RPC
+called with 4.6 stores 4.6, one function version present.
