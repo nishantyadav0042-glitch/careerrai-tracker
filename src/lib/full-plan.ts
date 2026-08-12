@@ -143,6 +143,12 @@ export interface FullPlanInput {
   daysSincePlannedByTopic?: Record<string, number | null>;
   daysSinceLastPracticedByTopic?: Record<string, number | null>;
   postponedTopics?: string[];
+  /**
+   * TODAY'S PERSISTED PLAN (daily_routines), topic blocks only. When present,
+   * day 0 of the whole plan IS this list — the same row Home renders — and the
+   * projection advances from it. Today is a fact; only the future is a guess.
+   */
+  todayPlan?: { topic: string; hours: number }[] | null;
 }
 
 export interface FullPlan {
@@ -237,6 +243,10 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
       classTopics: input.coachingByDate?.[key],
       weekend: date.getUTCDay() === 0 || date.getUTCDay() === 6,
       phase: (planPhase === 'build' ? 'foundation' : planPhase) as Phase,
+      // Day 0 is the plan the student is already holding, when one exists.
+      ...(d === 0 && input.todayPlan && input.todayPlan.length > 0
+        ? { fixedTopics: input.todayPlan }
+        : {}),
     });
   }
 

@@ -93,6 +93,24 @@ export async function GET() {
     for (const d of cal) if (d.topics.length) coachingByDate[d.date] = d.topics;
   }
 
+  // ── Today is a FACT (12 Aug) ────────────────────────────────────────────
+  //
+  // Once the 6am cron persists today's routine, that row IS today — Home
+  // renders it, the student is studying it. This route used to recompute day 0
+  // from scratch AND feed that very row back into the planner's memory as
+  // "planned 0 days ago" — so the whole plan punished its own topics and
+  // re-rolled the day the student was already holding (Abhishek's Wednesday,
+  // three surfaces, three answers). Now: day 0 = the persisted row, the memory
+  // sees only days BEFORE today, and the projection advances from the fact.
+  const todayIso = getLogDateString();
+  const todayRow = (pastRoutines ?? []).find((r) => r.routine_date === todayIso);
+  const todayPlan = Array.isArray(todayRow?.tasks)
+    ? (todayRow!.tasks as { topic?: string | null; estMinutes?: number }[])
+        .filter((t) => typeof t.topic === 'string' && t.topic)
+        .map((t) => ({ topic: t.topic as string, hours: Math.round(((t.estMinutes ?? 0) / 60) * 10) / 10 }))
+    : null;
+  const historyRows = (pastRoutines ?? []).filter((r) => r.routine_date < todayIso);
+
   const plan = buildFullPlan({
     coverage: (coverageRows ?? []).map((r: { topic: string; status: string | null }) => ({ topic: r.topic, status: r.status })),
     effort: studentEffortMultiplier({
@@ -115,7 +133,8 @@ export async function GET() {
     priorityTopics: (coverageRows ?? [])
       .filter((r: { is_priority?: boolean | null }) => r.is_priority === true)
       .map((r: { topic: string }) => r.topic),
-    ...plannerRecency(pastRoutines ?? [], pastCompletions ?? [], getLogDateString()),
+    ...plannerRecency(historyRows, pastCompletions ?? [], todayIso),
+    todayPlan,
     // Same weakest-section the daily plan leans on, so the mix tilts the same
     // way on both surfaces — the self-report if given, else derived from the
     // coverage grid, else the app-wide DILR default.

@@ -276,6 +276,77 @@ describe('the Blueprint 7-day strip is a window on the same planner', () => {
   });
 });
 
+// ── 2.5 Today is a FACT: day 0 is the persisted plan, never a re-roll ───────
+//
+// Abhishek, 12 Aug, to his mentor: "Bhaiye ye kal dikha rha tha … aur aaj ye
+// aaye hai today topics me." The Whole Plan re-rolled the Wednesday he was
+// already holding, because the API fed today's own routine row back into the
+// planner's memory as "planned 0 days ago" and day 0 punished its own topics
+// away. Day 0 must BE the frozen routine — agreement with Home by identity,
+// not by resemblance.
+describe('today is a fact: day 0 is the persisted plan', () => {
+  const FROZEN = [
+    { topic: 'Para Jumbles', hours: 2.2 }, { topic: 'Reading Comprehension', hours: 2.2 },
+    { topic: 'Venn / Sets', hours: 1.7 }, { topic: 'Selection & Distribution', hours: 1.6 },
+    { topic: 'Logarithms', hours: 1.7 }, { topic: 'Inequalities', hours: 1.6 },
+  ];
+
+  it('day 0 equals the frozen routine even with self-poisoned memory', () => {
+    // The poison: every topic on today's plan reads "planned 0 days ago" —
+    // exactly what the route used to feed the planner after the cron ran.
+    const poisoned: Record<string, number | null> = {};
+    for (const f of FROZEN) poisoned[f.topic] = 0;
+
+    const plan = buildFullPlan({
+      coverage: UNTOUCHED, effort: EFFORT, weekdayHours: 11, today: TODAY,
+      attemptYear: 2026, weakestSection: 'VARC', daysToSyllabusTarget: 25,
+      daysSincePlannedByTopic: poisoned,
+      todayPlan: FROZEN,
+    });
+    expect(topicsOn(plan.days[0].items)).toEqual(FROZEN.map((f) => f.topic).sort());
+    // And the frozen hours survive verbatim — no reshaping of a fact.
+    const hoursByTopic = new Map(plan.days[0].items.map((i) => [i.label, i.hours]));
+    for (const f of FROZEN) expect(hoursByTopic.get(f.topic)).toBe(f.hours);
+  });
+
+  it('tomorrow projects FROM the fact: day 1 is a new day, not an echo', () => {
+    // On an all-untouched syllabus the memory clock's share can only revise
+    // what day 0 opened — the LIVE engine would do the same — so a couple of
+    // repeats are legitimate. What must never happen is the echo: day 1
+    // re-serving the frozen day wholesale.
+    const plan = buildFullPlan({
+      coverage: UNTOUCHED, effort: EFFORT, weekdayHours: 11, today: TODAY,
+      attemptYear: 2026, weakestSection: 'VARC', daysToSyllabusTarget: 25,
+      todayPlan: FROZEN,
+    });
+    const day0 = new Set(topicsOn(plan.days[0].items));
+    const day1 = topicsOn(plan.days[1].items);
+    const repeats = day1.filter((t) => day0.has(t));
+    expect(day1.length).toBeGreaterThan(0);
+    expect(repeats.length, `day 1 echoed day 0: ${repeats.join(', ')}`).toBeLessThanOrEqual(2);
+  });
+
+  it('a day still never carries the same topic twice — fixed day 0 included', () => {
+    const plan = buildFullPlan({
+      coverage: UNTOUCHED, effort: EFFORT, weekdayHours: 11, today: TODAY,
+      attemptYear: 2026, weakestSection: 'VARC', daysToSyllabusTarget: 25,
+      todayPlan: FROZEN,
+    });
+    for (const d of plan.days) {
+      const labels = topicsOn(d.items);
+      expect(new Set(labels).size, `${d.date}: ${labels.join(', ')}`).toBe(labels.length);
+    }
+  });
+
+  it('without a persisted plan (pre-6am), day 0 falls back to the authority', () => {
+    const plan = buildFullPlan({
+      coverage: UNTOUCHED, effort: EFFORT, weekdayHours: 6, today: TODAY,
+      attemptYear: 2026, weakestSection: 'DILR', daysToSyllabusTarget: 25,
+    });
+    expect(plan.days[0].items.filter((i) => i.kind === 'topic').length).toBeGreaterThan(0);
+  });
+});
+
 // ── 3. The plan does not change when you look at it twice ───────────────────
 
 describe('a future day is a promise, not a re-roll', () => {

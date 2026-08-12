@@ -1003,3 +1003,60 @@ executable code — fails CI.
 
 ---
 
+
+---
+
+## Incident #28 — the Whole Plan re-rolled the day the student was holding (2026-08-12)
+
+**Symptom.** Abhishek to his mentor, 08:43: "Bhaiye ye kal dikha rha tha …
+aur aaj ye aaye hai today topics me." Yesterday's Whole Plan promised one
+Wednesday; the 6am cron built another; and at 10:25 the Whole Plan showed a
+THIRD list — including Caselets twice on one day (0.5h + 3h). Three surfaces,
+three answers, one authority.
+
+**Root causes (two).** (1) Deploy transition: his 11 Aug routine was built at
+07:38 IST, BEFORE the planner unification deployed at 13:19 — so the evening's
+projection assumed a day 0 that never existed and projected Wednesday from it.
+(2) Structural self-poisoning: /api/plan/full fed the planner's memory the
+latest 14 routine rows INCLUDING TODAY'S OWN ROW, so after the cron ran, the
+Whole Plan read its own topics as "planned 0 days ago" and the repeat
+cool-down pushed them off day 0. Home reads history only through yesterday.
+Same authority, different memory — Incident #26's subtler cousin.
+
+**The repair.** Today is a FACT: when daily_routines holds today's row, the
+Whole Plan's day 0 IS that row (plan-projection `fixedTopics`, full-plan
+`todayPlan`), the memory sees only days before today, and the projection
+advances FROM the fact. Agreement with Home by identity, not by resemblance.
+
+**Teeth.** planner-unification.test.ts: "today is a fact" suite — frozen day 0
+survives poisoned memory verbatim, day 1 never echoes day 0 wholesale, the
+never-twice-in-a-day guard covers fixed days, and the pre-6am fallback still
+plans.
+
+---
+
+## Incident #29 — git reset --hard destroyed a verified change pre-commit (2026-08-12)
+
+**Symptom.** Commit 215bdc5 "Exam calendar shared with Home" shipped ONE file:
+the orphan module. All wiring — the calendar claim in generateRoutine,
+full-plan's delegation, three test files, the CODEMAP note — was missing from
+main for a day while the founder was told the gap was closed.
+
+**Root cause.** The agent's commit chain ran `git checkout branch && git reset
+--hard main` against a working tree whose edits were NOT yet committed. The
+reset destroyed every tracked-file edit; only the untracked new module
+survived, which made `git add -A && git commit` look successful. Tests had
+been run BEFORE the reset — the pushed tree was never re-verified. A second
+occurrence in the same session (the Meta CAPI edits) was caught immediately
+only because that commit came out "nothing to commit".
+
+**The lesson.** Never run a destructive git step against an uncommitted tree;
+verify the COMMIT (git show --stat + content grep), not the working copy; and
+"tests passed" is a statement about a tree, valid only for the tree that
+ships. The same lesson as #27 — a silent failure between a success message
+and reality — executed by the agent itself this time.
+
+**Teeth.** Recovery commit f092e82 verifies content inside the committed tree
+in-command. Session rule (AGENTS.md hygiene section, and this entry): commit
+first, move branches second; any reset --hard must be preceded by
+`git status --short` showing a clean tree.

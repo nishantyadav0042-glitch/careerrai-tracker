@@ -78,6 +78,16 @@ export interface ProjectionDay {
   weekend?: boolean;
   /** The study phase on this date, for the closer reservation. */
   phase?: Phase;
+  /**
+   * TODAY IS A FACT, NOT A PROJECTION. When the 6am cron has already persisted
+   * this day's plan (daily_routines), the caller passes its topic blocks here
+   * and this walk USES them instead of asking the authority again — then
+   * advances the pool exactly as if it had chosen them. Born 12 Aug, when the
+   * Whole Plan re-rolled Abhishek's Wednesday against the Home plan he was
+   * already holding: the API had fed the plan's own row back into its memory
+   * as "planned 0 days ago", and day 0 punished its own topics away.
+   */
+  fixedTopics?: { topic: string; hours: number }[];
 }
 
 export interface ProjectedItem {
@@ -229,6 +239,27 @@ export function projectPlan(input: ProjectionInput): ProjectedDayPlan[] {
         .map((t) => byTopic.get(t)?.section)
         .filter((s): s is Section => !!s)
     );
+
+    // The persisted plan wins outright — no selector, no shape, no re-roll.
+    // The pool still advances through it, so tomorrow projects FROM the fact.
+    if (day.fixedTopics && day.fixedTopics.length > 0) {
+      const planned = new Set<string>();
+      for (const f of day.fixedTopics) {
+        const state = byTopic.get(f.topic);
+        items.push({
+          topic: f.topic,
+          section: state?.section ?? ((TOPIC_METADATA[f.topic]?.section as Section) ?? 'QA'),
+          hours: f.hours,
+          mode: state ? modeFor(state.status) : 'learn',
+          coverageStatus: state?.status ?? 'not_started',
+        });
+        if (state) state.remainingHours = half(Math.max(0, state.remainingHours - f.hours));
+        planned.add(f.topic);
+      }
+      advanceDay(pool, planned);
+      out.push({ date: day.date, items, closerHours: 0 });
+      continue;
+    }
 
     const capacity = Math.max(0, day.capacityHours);
 

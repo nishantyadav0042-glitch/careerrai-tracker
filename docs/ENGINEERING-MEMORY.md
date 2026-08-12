@@ -40,6 +40,8 @@
 | 25 | 2026-08-07 | A rule the founder killed kept running in three other files | Architecture | — |
 | 26 | 2026-08-11 | Three planners, one Tuesday | Learning | all plan users |
 | 27 | 2026-08-11 | The database moved, the code didn't — signups lost name+phone | Data / Signup | 20 (8 phones recovered) |
+| 28 | 2026-08-12 | Whole Plan re-rolled the day the student was holding | Learning | 1 visible (all exposed) |
+| 29 | 2026-08-12 | git reset --hard destroyed a verified change pre-commit | Process / agent | — (caught next day) |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
