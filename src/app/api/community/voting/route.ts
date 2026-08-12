@@ -139,5 +139,15 @@ export async function GET() {
     tip: shapeTop((topRows ?? []).find((r) => r.kind === 'tip')),
   };
 
-  return NextResponse.json({ tip: pickBy('tip'), questions, topPick });
+  const tip = pickBy('tip');
+
+  // 12 Aug: 12 openers, 0 votes, and the only way to tell "nothing to vote on"
+  // from "chose not to vote" was an hour of SQL archaeology after the fact.
+  // Same fix as meta-capi's silent skip — announce the state instead of
+  // leaving it invisible, so the next thin day is a log line, not an audit.
+  if (!tip && questions.length === 0) {
+    console.warn(`[community/voting] EMPTY ballot student=${user.id} day=${day} eligiblePool=${eligible.length}`);
+  }
+
+  return NextResponse.json({ tip, questions, topPick });
 }
