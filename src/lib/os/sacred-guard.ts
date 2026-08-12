@@ -1,4 +1,7 @@
 import { SELF_HEAL_WINDOW_MIN as CFG_SELF_HEAL_MIN, BUDDY_SLA_HOURS as CFG_BUDDY_SLA_HOURS } from './scale-config';
+import {
+  burstsFrom, ACTION_LABEL, ACTION_ROUTE, SACRED_FAILURE_WINDOW_MIN,
+} from './sacred-failure';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;
@@ -148,6 +151,47 @@ export async function findSacredFailures(admin: Admin, nowMs: number): Promise<F
       retryAvailable: false,
       actionLabel: 'Open student',
       actionRoute: `/admin/student/${s.id}`,
+    });
+  }
+
+  // ── 3. A sacred action is FAILING right now (Incident #30) ────────────────
+  //
+  // Founder, 12 Aug: "I told you to alert me always if I face any errors."
+  // Logging, paying and signing up now record their 500s (sacred-failure.ts),
+  // so a broken core action becomes an interrupt instead of a screenshot the
+  // founder happens to catch at 11pm. Two failures of the same action inside
+  // fifteen minutes is the bar — one can be a dead phone, two is a pattern.
+  const failWindow = new Date(nowMs - SACRED_FAILURE_WINDOW_MIN * 60_000).toISOString();
+  // Defensive by design: this detector is the thing that REPORTS breakage, so
+  // it must never become the breakage. If the failure query itself fails, the
+  // money and mentor alerts below it still reach the founder.
+  let failRows: { fingerprint: string | null; message: string | null; student_id: string | null; created_at: string }[] = [];
+  try {
+    const { data } = await admin
+      .from('client_errors')
+      .select('fingerprint, message, student_id, created_at')
+      .eq('source', 'server')
+      .gte('created_at', failWindow);
+    failRows = data ?? [];
+  } catch {
+    failRows = [];
+  }
+
+  for (const burst of burstsFrom(failRows)) {
+    alerts.push({
+      // The id carries the window start, so a failure that persists escalates
+      // once per burst rather than every fifteen minutes forever.
+      id: `sacred-fail:${burst.action}:${burst.firstAt.slice(0, 16)}`,
+      severity: 'critical',
+      channel: escalationChannel('critical'),
+      title: `${burst.count} students could not ${ACTION_LABEL[burst.action]} in the last ${SACRED_FAILURE_WINDOW_MIN} minutes`,
+      // A burst is about many students; the drill-down lives at actionRoute.
+      student: { id: '', name: `${burst.studentsHit} student${burst.studentsHit === 1 ? '' : 's'} hit`, phone: null },
+      amountRupees: null,
+      rootCause: `Server error: ${burst.lastMessage}`,
+      retryAvailable: false,
+      actionLabel: 'Open',
+      actionRoute: ACTION_ROUTE[burst.action],
     });
   }
 

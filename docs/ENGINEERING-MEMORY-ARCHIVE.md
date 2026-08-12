@@ -1098,6 +1098,15 @@ pre-emptively this time).
    type — rounding is data loss wearing a fix's clothes.
 3. Twenty-five retries and no alert. The core action deserves an alarm.
 
+**The alarm, added the same night.** The founder's standing rule — "alert me
+always if I face any errors" — had no mechanism behind it for server errors.
+Now the three sacred actions (logging, paying, signing up) record their 500s
+to `client_errors` (source='server'), `findSacredFailures` detects two failures
+of one action inside fifteen minutes, and the existing founder-alert cron
+escalates it as critical. On 12 Aug it would have fired ~20 seconds in, not the
+next morning. `sacred-failure.test.ts` replays that night and asserts it fires,
+plus the noise cases where it must stay silent.
+
 **Teeth.** `log-hours-decimal.guard.test.ts` pins the shape of the fix: the
 route sends hours unrounded, the migration declares NUMERIC and DROPs the old
 integer overload (leaving both would let Postgres still pick the broken one),

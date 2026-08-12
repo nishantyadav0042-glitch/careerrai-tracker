@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { VALID_BLOCKER_REASONS, VALID_DAY_OUTCOMES } from '@/lib/check-in';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -260,6 +261,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, streak: streakUpdated, bonus, daily_nudge: dailyNudge, milestone, report_date: dateStr }, { status: 200 });
   } catch (error) {
     console.error('Logging error:', error);
+    // The founder is told when the core action breaks (Incident #30): on 12 Aug
+    // a student hit this 25 times and nothing raised a hand. Fire-and-forget.
+    void recordSacredFailure(createAdminClient(), 'log_daily', null, error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

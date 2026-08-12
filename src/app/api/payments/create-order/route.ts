@@ -7,6 +7,7 @@ import { createRazorpayOrder } from '@/lib/razorpay';
 import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 import { normalizeIndianPhone } from '@/lib/phone';
+import { recordSacredFailure } from '@/lib/os/sacred-failure';
 
 export async function POST(request: NextRequest) {
   if (!paymentsEnabled()) return NextResponse.json({ error: 'Payments are not enabled.' }, { status: 403 });
@@ -177,6 +178,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (e) {
     console.error('[create-order]', e);
+    // Money is the most sacred of the three — a checkout that will not open is
+    // revenue and trust leaving at the same moment (Incident #30's lesson).
+    void recordSacredFailure(createAdminClient(), 'payment_order', null, e);
     return NextResponse.json({ error: "Couldn't start checkout. Try again." }, { status: 500 });
   }
 }

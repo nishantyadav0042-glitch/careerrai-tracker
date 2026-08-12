@@ -13,6 +13,7 @@ import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validat
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isValidPushEndpoint } from '@/lib/push-validate';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
+import { recordSacredFailure } from '@/lib/os/sacred-failure';
 
 // Whitelisted answers from the pre-auth /start funnel — collected before
 // an account existed, handed over here in one shot on first signup only.
@@ -477,6 +478,9 @@ export async function POST(request: NextRequest) {
     return res;
   } catch (e) {
     console.error('[verify-phone-otp] error', e);
+    // A signup that 500s is a student lost at the door, and nobody ever hears
+    // about it — the same silence that hid Incident #30 for a whole evening.
+    void recordSacredFailure(createAdminClient(), 'signup', null, e);
     return NextResponse.json({ error: 'Something went wrong. Try again.' }, { status: 500 });
   }
 }
