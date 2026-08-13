@@ -43,9 +43,6 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
           const initials = (b.full_name || 'B').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
           const journey = journeyLabel(b);
           const firstName = b.full_name.split(' ')[0];
-          // "Who is this?" must be answered in the first two lines: name, then
-          // college + percentile immediately below — not buried in a badge row.
-          const subtitle = [b.iim_converted, journey ? `CAT ${journey}` : null].filter(Boolean).join(' · ');
           // "Recommended for what?" must ALWAYS have an answer — students with
           // no baseline data yet (fresh signups) produce a null match reason,
           // which previously just hid the line instead of falling back.
@@ -53,54 +50,71 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
             ? `Verified ${Number(b.cat_percentile)}%ile IIM alumni mentor`
             : 'Handpicked IIM alumni mentor');
 
-          // Restyled 13 Aug to the dark treatment used across My Buddy and
-          // Home. Data, ranking and copy are byte-for-byte unchanged — see
-          // buddy-showcase-restyle.guard.test.ts.
+          // 13 Aug: restyled TWICE. The first pass only changed colour and
+          // kept the old avatar-left/text-right row — which is exactly why it
+          // still read as "the old screen" after that pass. This is the
+          // actual structural fix: centered avatar, name, journey pill, real
+          // bio as the quote line, tags, then the stats grid — the same
+          // layout MentorPool (onboarding S2) now uses, so the two richest
+          // mentor cards in the app finally agree with each other and with
+          // the mock. Every field is still real; only the arrangement moved.
           return (
-            <div key={b.id} className="rounded-2xl bg-stone-900 p-4">
-              <div className="flex items-start gap-3">
+            <div key={b.id} className="rounded-2xl border border-white/5 bg-stone-900 p-5">
+              <div className="flex flex-col items-center text-center">
                 {b.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.avatar_url} alt={b.full_name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+                  <img src={b.avatar_url} alt={b.full_name} className="h-20 w-20 rounded-full object-cover" />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  <div className="grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-teal-500 to-teal-700 text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>
                     {initials}
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-white">{b.full_name}</span>
-                    {i === 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-400">
-                        <Sparkles className="w-3 h-3" />Best match
-                      </span>
-                    )}
-                  </div>
-                  {subtitle && <p className="text-xs font-semibold text-teal-400 mt-0.5">{subtitle}</p>}
-                  {b.strongest_section && (
-                    <div className="mt-1.5">
-                      <Badge color="green">Strong: {b.strongest_section}</Badge>
-                    </div>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <h3 className="text-lg font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>{b.full_name}</h3>
+                  {i === 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-400">
+                      <Sparkles className="w-3 h-3" />Best match
+                    </span>
                   )}
                 </div>
+                {b.iim_converted && <p className="text-xs text-stone-400">{b.iim_converted}</p>}
+                {journey && (
+                  <span className="mt-2.5 rounded-full bg-white/10 px-3.5 py-1 text-[12px] font-extrabold text-white">CAT {journey}</span>
+                )}
               </div>
 
-              <div className="mt-2.5 rounded-lg bg-orange-400/10 px-3 py-1.5 text-[11px] font-semibold text-orange-400">
-                Recommended for {studentName ? studentName.split(' ')[0] : 'you'}: {reasonText}
-              </div>
-
-              {b.current_company && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-stone-300">
-                  <Briefcase className="w-3.5 h-3.5 text-stone-400" />{b.current_company}
-                </div>
-              )}
               {b.how_i_work && (
-                <p className="mt-2 text-xs text-stone-300 italic leading-relaxed border-l-2 border-teal-500/40 pl-2.5">
+                <p className="mt-3 border-t border-white/10 pt-3 text-center text-[13px] italic leading-relaxed text-stone-300">
                   &ldquo;{b.how_i_work}&rdquo;
                 </p>
               )}
 
-              <div className="mt-3 flex items-center justify-between gap-3">
+              {b.strongest_section && (
+                <div className="mt-2.5 flex justify-center">
+                  <Badge color="green">Strong: {b.strongest_section}</Badge>
+                </div>
+              )}
+
+              <div className="mt-3 rounded-lg bg-orange-400/10 px-3 py-1.5 text-center text-[11px] font-semibold text-orange-400">
+                Recommended for {studentName ? studentName.split(' ')[0] : 'you'}: {reasonText}
+              </div>
+
+              {b.current_company && (
+                <div className="mt-2.5 flex items-center justify-center gap-1.5 text-xs text-stone-400">
+                  <Briefcase className="w-3.5 h-3.5" />{b.current_company}
+                </div>
+              )}
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {([['1-on-1', 'only yours'], ['Weekly', 'live call'], ['Daily', 'chat replies']] as const).map(([big, small]) => (
+                  <div key={big} className="rounded-lg bg-white/5 py-1.5 text-center">
+                    <p className="text-[12.5px] font-extrabold text-white">{big}</p>
+                    <p className="text-[8.5px] font-semibold uppercase tracking-wide text-stone-400">{small}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3.5 flex items-center justify-between gap-3">
                 {b.linkedin_url ? (
                   <a
                     href={b.linkedin_url}

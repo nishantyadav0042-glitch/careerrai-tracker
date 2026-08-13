@@ -88,6 +88,9 @@ describe('RecommendedBuddies — real data, real ranking, only the card is dark'
   });
 
   it('the card itself is dark', () => {
-    expect(src()).toContain('rounded-2xl bg-stone-900 p-4');
+    // Padding went from p-4 to p-5 in the follow-up structural fix (13 Aug) —
+    // see recommended-buddies-structural-fix.guard.test.ts for that pass.
+    // This test only needs to know the card is still dark.
+    expect(src()).toContain('bg-stone-900');
   });
 });
