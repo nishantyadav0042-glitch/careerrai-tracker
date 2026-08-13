@@ -349,7 +349,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 'path-choice': return 'Two ways this year can go.';
       case 'build-animation': return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
       // The one habit the whole machine runs on — taught, not announced.
-      case 'log-tour': return '10 seconds. Learn it, then start.';
+      case 'log-tour': return 'Last step — takes 10 seconds.';
       default: return null;
     }
   })();

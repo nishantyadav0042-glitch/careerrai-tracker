@@ -29,8 +29,9 @@ import { track } from '@/lib/journey';
 //   completion, a whole cohort's logging died behind it. A tutorial that
 //   holds the finish line hostage is that bug wearing a friendly face.
 //
-// Copy is English throughout (founder, 13 Aug: "everything should be in
-// english") — matching the rest of the onboarding journey's voice.
+// Copy is English throughout, in plain everyday words (founder, 13 Aug:
+// "everything should be in english… use simple words which students use in
+// daily life") — short sentences, no clever phrasing.
 
 interface PracticeTask {
   id: string;
@@ -91,11 +92,11 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
     <div className="space-y-4">
       <div>
         <h3 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {firstName ? `${firstName}, ` : ''}this is your daily ritual
+          {firstName ? `${firstName}, ` : ''}this is how you&apos;ll log every day
         </h3>
         <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
-          Every day, Home shows 2–3 tasks like these. After you study, just tap the
-          circle and say how far you got — <b>that&apos;s your log, done</b>. No typing, no forms.
+          Every day you get 2–3 tasks like these on Home. After studying, tap the
+          circle and pick how much you did — <b>that&apos;s it, log done</b>. No typing, no forms.
         </p>
       </div>
 
@@ -186,16 +187,16 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
         <div className="rounded-2xl bg-stone-900 p-4 text-center">
           <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-white">
             <Flame className="h-4 w-4 text-orange-400" />
-            That&apos;s it — that&apos;s the whole log.
+            Done — that&apos;s the whole log.
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-stone-300">
-            Three taps and your day is recorded. From tomorrow this lives on Home with
-            your real topics — and a half day counts too, so never leave a day blank.
+            3 taps, log done. From tomorrow you&apos;ll see this on Home with your real
+            topics — and half done also counts, so never skip a day.
           </p>
         </div>
       ) : (
         <p className="text-center text-[11px] text-stone-400">
-          This is just practice — nothing is saved. Your real log starts with tomorrow&apos;s study.
+          This is just practice — nothing is saved. Your real log starts tomorrow.
         </p>
       )}
 
