@@ -79,13 +79,13 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
     // summary fetch succeeded.
     return (
       <div className="space-y-6 text-center py-8">
-        <p className="text-sm text-stone-600">Your CAT Plan is built — head to Home to see it.</p>
+        <p className="text-sm text-stone-600">Your CAT Plan is built and waiting on Home.</p>
         <button
           onClick={() => onNext({ onboardingCompleted: true })}
           disabled={isLoading}
           className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
         >
-          {isLoading ? 'Finishing up…' : 'Start my prep →'}
+          {isLoading ? 'Finishing up…' : 'Continue →'}
         </button>
       </div>
     );

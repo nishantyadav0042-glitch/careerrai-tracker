@@ -200,6 +200,10 @@ export type EventName =
   | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
   | 'first_log_prompt'
+  // Onboarding's closing log-practice screen (13 Aug): props carry how many of
+  // the 3 practice tasks were marked and whether it was skipped — the cohort
+  // key for "does practising the log move onboarded → first real log".
+  | 'log_tour_done'
   | 'install_click' | 'install_already' | 'install_dismissed' | 'install_escape'
   | 'install_guide_shown' | 'install_prompt_result' | 'install_prompt_shown'
   // iOS since the native app shipped: the App Store hand-off, and the quiet

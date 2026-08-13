@@ -17,6 +17,7 @@ import ScreenMeetBuddy from './screens/screen-meet-buddy';
 import ScreenPathChoice from './screens/screen-path-choice';
 import ScreenBuildAnimation from './screens/screen-build-animation';
 import ScreenBlueprintReveal from './screens/screen-blueprint-reveal';
+import ScreenLogTour from './screens/screen-log-tour';
 // Shared with the pre-auth /start funnel — the SAME diagnosis, not a second
 // copy. See the instant-insight screen entry below for why it is here at all.
 import ScreenInstantInsight from '@/app/start/screens/screen-instant-insight';
@@ -269,10 +270,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     { key: 'path-choice', component: ScreenPathChoice, sectionId: null },
     { key: 'build-animation', component: ScreenBuildAnimation, sectionId: null },
     {
-      // Last screen (founder cut: the success-goal question duplicated the
-      // percentile ask, and the contract/oath screen was one tap too many —
-      // super quick beats ceremonial). The Reveal's "Start my prep →"
-      // already sends onboardingCompleted and fires the final save.
+      // (Founder cut: the success-goal question duplicated the percentile
+      // ask, and the contract/oath screen was one tap too many — super quick
+      // beats ceremonial.) The Reveal's CTA now advances to the log tour
+      // below; the tour fires the final save.
       key: 'blueprint-reveal',
       component: ScreenBlueprintReveal,
       sectionId: null,
@@ -280,6 +281,25 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         successGoal: null,
         // Same derivation as hFirstName below — computed inline here because
         // this array is built before that variable exists.
+        firstName: typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
+          ? onboardingData.full_name.trim().split(' ')[0] : null,
+      },
+    },
+    {
+      // TRUE last screen (founder, 13 Aug): today's cohort onboarded 19/19
+      // and only 4 ever logged — the plan lands, the ritual doesn't. So the
+      // journey ends with the student's hands on the actual log mechanic
+      // (tap the circle → Got halfway / Finished it), practiced once before
+      // it's real. Practice only — writes nothing; skippable always
+      // (Incident #2: nothing may stand between a student and completion).
+      //
+      // Appended at the END on purpose: every earlier screen keeps its index,
+      // so a v10 draft's currentScreen still resumes on the right screen and
+      // no draftKey version bump is needed.
+      key: 'log-tour',
+      component: ScreenLogTour,
+      sectionId: null,
+      extraProps: {
         firstName: typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
           ? onboardingData.full_name.trim().split(' ')[0] : null,
       },
@@ -328,6 +348,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       case 'meet-buddy': return preview.weeklyLoadHours != null ? `Your ${preview.weeklyLoadHours}h/week plan is nearly built.` : 'Nearly built.';
       case 'path-choice': return 'Two ways this year can go.';
       case 'build-animation': return hFirstName ? `Building ${hFirstName}'s CAT plan…` : 'Building your CAT plan…';
+      // The one habit the whole machine runs on — taught, not announced.
+      case 'log-tour': return '10 seconds. Seekh lo, phir shuru.';
       default: return null;
     }
   })();
