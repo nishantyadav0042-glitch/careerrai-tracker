@@ -283,3 +283,65 @@ makes the second one believable later.
 
 On approval I schedule days 1–10 with `live_date` values, flip the rotation's
 question slot on, and the surface rebalances itself with no code change.
+
+---
+
+# Round 2 — founder review applied (13 Aug)
+
+## Takeaways rewritten (the 5 flagged as poster material)
+
+Your rule, restated: *"oh, I do that"*, never *"yes, obviously"*. Each of these
+failed it by being true, agreeable and completely unmemorable.
+
+**#15 — was:** "Consistency isn't studying daily. It's coming back the day after you missed one."
+**now:** The day after a missed day is the only one that matters. Nobody quits on day one.
+
+**#20 — was:** "Two mocks a week without analysis is worse than one mock with it."
+**now:** You don't need another mock. You need to finish reading the last one.
+
+**#23 — was:** "You can't fix accuracy and speed in the same week. Pick one."
+*(Dropped entirely. You were right that it's too absolute — a student can train
+both if the training is structured. It was advice we cannot stand behind.)*
+**replaced with:** Speed comes from recognising the question, not from calculating faster.
+
+**#26 — was:** "Everyone's plan survives until the first bad week. That week is the plan."
+**now:** You built your plan on your best day. Build the backup on your worst one.
+
+**#30 — was:** "Motivation starts you. A plan you can do on a bad day is what keeps you here."
+**now:** If your plan needs a good mood to work, it isn't a plan yet.
+
+The five that survive are shorter, more specific, and each names a behaviour
+rather than a virtue — the same thing that makes #8 ("you don't have a time
+problem in QA, you have a which-question problem") the strongest one in the set.
+
+## Emotional mix — measured against your target
+
+Your target versus what the 30-day sequence actually delivers:
+
+| Feeling | You wanted | Sequence has | |
+|---|---|---|---|
+| "I can't believe I got that wrong" | 40% (12) | 33% (10) | −2 |
+| "What would YOU do?" | 25% (7.5) | 23% (7) | ✓ |
+| "That's actually useful" | 15% (4.5) | 17% (5) | ✓ |
+| "Oh, I never knew that" | 10% (3) | 10% (3) | ✓ |
+| "That's literally me" | 10% (3) | ~7% (2) | −1 |
+| *(spot-it puzzles)* | not in your list | 17% (5) | +5 |
+
+**The imbalance has one clean cause, and it's a duplicate you already spotted.**
+B22 and #24 are both truth-teller puzzles — the same experience twice. Dropping
+one and promoting a gotcha would land the mix almost exactly on your target.
+
+I have NOT made that change, because you approved the sequence explicitly and I
+would rather flag it than quietly re-cut something you signed off. Say the word
+and it's a two-line edit.
+
+## Share reasons stay internal
+
+Confirmed — they exist only in these review documents. Nothing student-facing
+carries them, and the seeded rows have no field for them. They are a writing
+criterion, not copy.
+
+## What was scheduled
+
+**Days 1–10 only**, per your instruction. Days 11–30 stay drafted and unscheduled
+until the first ten have told us something.

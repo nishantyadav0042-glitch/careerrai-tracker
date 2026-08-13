@@ -5,6 +5,7 @@ import { Swords, Check, X, Users, HeartHandshake } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
 import { shareChallenge } from '@/lib/share-challenge';
+import { reactionLine } from '@/lib/challenge-reaction';
 import { CommunitySubmit } from '@/components/community-submit';
 import type { ChallengeView } from '@/lib/challenge';
 
@@ -213,7 +214,21 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
               {verdict.isCorrect ? 'Correct.' : 'Not this time.'}
             </p>
 
-            {/* The community moment — shown only when the number is real. */}
+            {/* The beat before the teaching. Founder, 13 Aug: the question is
+                content, the reveal is entertainment — a student handed algebra
+                the instant they answer feels corrected; one who first reads
+                "you're in very good company" feels let in on something. */}
+            <p className="text-[13.5px] font-semibold text-stone-600">
+              {reactionLine(verdict.isCorrect, challenge.id)}
+            </p>
+
+            {/* The community moment — shown ONLY when the number is real.
+                The fallback used to read "you're one of the first {N} to
+                attempt today's question", which rendered as "one of the first
+                2" and told the student exactly how empty the room was — the
+                precise thing the no-small-numbers rule exists to prevent.
+                Being early is still a nice status; it just does not need a
+                count attached to it. */}
             {verdict.communityCorrectPct != null ? (
               <p className="flex items-center gap-1.5 text-[12px] text-stone-500">
                 <Users className="h-3.5 w-3.5" />
@@ -222,7 +237,7 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
             ) : (
               <p className="flex items-center gap-1.5 text-[12px] text-stone-500">
                 <Users className="h-3.5 w-3.5" />
-                You&apos;re one of the first {verdict.attemptCount} to attempt today&apos;s question
+                You&apos;re among the first to attempt today&apos;s question
               </p>
             )}
 
