@@ -15,22 +15,31 @@ export interface ShareableQuestion {
   text?: string | null;
   options?: string[] | null;
   imageUrl?: string | null;
+  /** The sharer's own time, if they were timed — turns the forward from
+   *  "look at this question" into "beat my time". */
+  yourSeconds?: number | null;
 }
 
 export function buildChallengeText(q: ShareableQuestion): string {
   const tag = [q.section, q.topic].filter(Boolean).join(' · ');
-  const lines: string[] = [
-    `Think this one is tough? See how many of your friends can solve it 👇${tag ? `  (${tag})` : ''}`,
-    '',
-  ];
+  // The 90 seconds IS the share (founder, 13 Aug: "will your friends also be
+  // able to solve it in 90 secs — this urgency will push the share"). A
+  // question is homework; a question with a clock is a dare. When the sharer
+  // has a time, the dare is personal — beat ME — which is stronger still.
+  const dare = q.yourSeconds != null
+    ? `I solved this in ${q.yourSeconds} seconds ⏱️ Can you beat me?${tag ? `  (${tag})` : ''}`
+    // No personal time claimed when none was measured — the dare still
+    // stands on the clock alone.
+    : `⏱️ Can you crack this in 90 seconds? 👇${tag ? `  (${tag})` : ''}`;
+  const lines: string[] = [dare, ''];
   if (q.text) lines.push(q.text.trim(), '');
   if (q.options && q.options.length > 0) {
     q.options.forEach((o, i) => lines.push(`${String.fromCharCode(65 + i)}. ${o}`));
     lines.push('');
   }
   if (q.imageUrl) lines.push(q.imageUrl, '');
-  lines.push('Reply with your answer!');
-  lines.push('— today’s student-shared question on CareerRai, by the students for the students');
+  lines.push('Time yourself — reply with your answer AND your seconds.');
+  lines.push('— today’s 90-second question on CareerRai, by the students for the students');
   lines.push('https://careerrai.in/start?src=challenge');
   return lines.join('\n');
 }

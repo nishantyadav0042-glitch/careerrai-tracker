@@ -407,16 +407,28 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
             </p>
 
             {/* Post-solve is the peak moment to forward it — they just felt
-                something (nailed it or got burned) and the group should too. */}
+                something (nailed it or got burned) and the group should too.
+                Founder, 13 Aug: the 90 seconds IS the push to share — "will
+                your friends also solve it in 90 secs?" So the button is the
+                dare, personalised with their own time when we have it, and
+                the forwarded text opens with the same dare. */}
             <button
               type="button"
               onClick={() => void shareChallenge(
-                { section: challenge.section, topic: challenge.topic, text: challenge.question, options: challenge.options },
+                {
+                  section: challenge.section, topic: challenge.topic,
+                  text: challenge.question, options: challenge.options,
+                  yourSeconds: verdict.yourSeconds ?? null,
+                },
                 'daily_proof',
               ).then((r) => setShareResult(r))}
-              className="w-full rounded-xl border border-stone-300 py-2.5 text-[13px] font-bold text-stone-700 active:scale-[0.99]"
+              className="w-full rounded-xl border-2 border-orange-300 bg-orange-50 py-2.5 text-[13px] font-bold text-orange-700 active:scale-[0.99]"
             >
-              {shareResult === 'copied' ? 'Copied — paste it in your group' : '📤 Challenge your friends — who else can solve it?'}
+              {shareResult === 'copied'
+                ? 'Copied — paste it in your group'
+                : verdict.yourSeconds != null && verdict.beatTheClock
+                  ? `📤 You did it in ${verdict.yourSeconds}s — dare your friends to beat that`
+                  : '📤 Can your friends crack it in 90 secs? Share it'}
             </button>
             {/* The chain. One question rarely costs the full 90 seconds a
                 student showed up with — so the moment this one is settled,
