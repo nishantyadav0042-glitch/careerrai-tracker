@@ -128,7 +128,12 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
   }
 
   return (
-    <div className="fixed inset-0 z-[85] flex flex-col bg-white">
+    // Same scroll trap the six-promises screen had (13 Aug): a `fixed` layer
+    // with no overflow rule clips anything past the viewport instead of
+    // scrolling it, so on a short phone the button at the bottom becomes
+    // unreachable. overflow-y-auto here + min-h-full below centres short
+    // content and scrolls tall content.
+    <div className="fixed inset-0 z-[85] overflow-y-auto overscroll-contain bg-white">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-6 px-6 py-10 text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 shadow-lg shadow-stone-900/15">
           <BellRing className="h-8 w-8 text-white" />

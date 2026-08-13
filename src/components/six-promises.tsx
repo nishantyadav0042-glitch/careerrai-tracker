@@ -56,9 +56,27 @@ export const SIX_PROMISES: { n: string; head: string }[] = [
   { n: '6', head: 'off days' },
 ];
 
+// ── Sized to fit a phone (founder, 13 Aug) ──────────────────────────────────
+//
+// "Complete content is not visible, the content is cut… there is no button to
+// move further, I am stuck here." Two separate faults, both fixed:
+//
+//   The container it renders into never scrolled (see post-signup-sequence),
+//   so anything past the fold was unreachable rather than merely below.
+//
+//   Even with scrolling, this screen ran well past a 667px phone. Type and
+//   padding are tightened here so the whole argument — six jobs, the one job,
+//   the free badge — lands in roughly one screen instead of being discovered
+//   by scrolling. Nothing was cut: every one of the six, the hour-back claim
+//   and the free badge all still say exactly what they said.
+//
+// The CTA is sticky, matching every other decision screen in the funnel (see
+// funnel-cta.guard.test.ts, which pins that rule for /start). On the one
+// screen that introduces the product, the way forward must never be something
+// the student has to go looking for.
 export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' }: { onNext: () => void; ctaLabel?: string }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* This screen answers ONE question — what is CareerRai — and asks for
           nothing. It used to end in "Turn on my reminders", which quietly made
           the six a wrapper around a permission prompt; a student who senses
@@ -66,28 +84,28 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
           NEXT step, with its own reason. Founder, 8 Aug: "not like this, as 6
           things hidden as notifications permission. It should be next step." */}
       <div className="text-center">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">What is CareerRai</p>
-        <h1 className="mt-2 text-[23px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600">What is CareerRai</p>
+        <h1 className="mt-1.5 text-[20px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Six jobs are ours.<br />One job is yours.
         </h1>
 
         {/* THE claim. Founder: "we have to tell them we are giving you your one
             hour back daily." Said before the list, because it is the reason
             the list matters. */}
-        <div className="mx-auto mt-3 max-w-[18rem] rounded-xl bg-orange-50 px-3.5 py-2.5">
-          <p className="text-[13.5px] font-bold leading-snug text-stone-900">
+        <div className="mx-auto mt-2.5 max-w-[18rem] rounded-lg bg-orange-50 px-3 py-2">
+          <p className="text-[12.5px] font-bold leading-snug text-stone-900">
             That&apos;s about <span className="text-orange-600">1 hour of your day</span>, back.
           </p>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-stone-600">
+          <p className="mt-0.5 text-[10.5px] leading-snug text-stone-600">
             Every day. The planning, the remembering, the deciding — gone.
           </p>
         </div>
       </div>
 
-      <ul className="space-y-1.5">
+      <ul className="space-y-1">
         {SIX_PROMISES.map((p) => (
-          <li key={p.n} className="rounded-xl bg-stone-50 px-3.5 py-2.5">
-            <p className="text-[15px] leading-snug text-stone-500">
+          <li key={p.n} className="rounded-lg bg-stone-50 px-3 py-1.5">
+            <p className="text-[13.5px] leading-snug text-stone-500">
               {RELIEF_PREFIX}{' '}
               <b className="text-stone-900">{p.head}</b>
             </p>
@@ -97,28 +115,32 @@ export function SixPromises({ onNext, ctaLabel = 'Got it — start my plan →' 
 
       {/* The one job, given the same weight as the six. This is the trade, and
           it is the whole positioning: six to one. */}
-      <div className="rounded-xl bg-stone-900 px-4 py-3.5 text-center">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-white/40">Yours</p>
-        <p className="mt-1 text-[20px] font-bold leading-none text-white">Study.</p>
-        <p className="mt-2 text-[12px] leading-relaxed text-white/75">
+      <div className="rounded-xl bg-stone-900 px-3.5 py-3 text-center">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Yours</p>
+        <p className="mt-0.5 text-[18px] font-bold leading-none text-white">Study.</p>
+        <p className="mt-1.5 text-[11.5px] leading-snug text-white/75">
           That&apos;s it. The hard part was never the <b className="text-white">padhai</b> — it&apos;s the{' '}
           <b className="text-white">not knowing</b>. Am I on track, what did I forget, will I finish.
         </p>
-        <p className="mt-3 inline-block rounded-lg bg-emerald-500 px-3.5 py-1.5 text-[14px] font-extrabold uppercase tracking-wide text-white">
+        <p className="mt-2 inline-block rounded-lg bg-emerald-500 px-3 py-1 text-[12.5px] font-extrabold uppercase tracking-wide text-white">
           All six · 100% free
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={onNext}
-        className={cn(
-          'w-full rounded-2xl bg-stone-900 py-3.5 text-[13.5px] font-semibold text-white',
-          'transition-all hover:bg-stone-800 active:scale-[0.98]'
-        )}
-      >
-        {ctaLabel}
-      </button>
+      {/* Sticky: reachable at any scroll position, and clear of the iPhone
+          home indicator. */}
+      <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={onNext}
+          className={cn(
+            'w-full rounded-2xl bg-stone-900 py-3.5 text-[13.5px] font-semibold text-white',
+            'transition-all hover:bg-stone-800 active:scale-[0.98]'
+          )}
+        >
+          {ctaLabel}
+        </button>
+      </div>
     </div>
   );
 }

@@ -176,8 +176,23 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-white">
-      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-10">
+    // ── The screen a student could get STUCK on (founder, 13 Aug) ──────────
+    //
+    // This was `fixed inset-0 flex flex-col` with no overflow rule. A fixed
+    // element does not scroll by default, so on any phone where the content
+    // ran past the viewport — which is every phone, on the six-promises step
+    // — the rest of the screen was simply unreachable. The forward button sat
+    // below the fold with no way to reach it: a dead end one step after
+    // signup, on the exact screen that introduces the product.
+    //
+    // `overflow-y-auto` on the fixed layer + `min-h-full` on the inner column
+    // is the safe pairing: when content is short the column still fills the
+    // screen and `justify-center` centres it; when content is tall the column
+    // grows past the viewport, centring becomes a no-op, and the whole thing
+    // scrolls instead of clipping. Centring alone (without the scroll layer)
+    // is what made the top AND bottom unreachable at once.
+    <div className="fixed inset-0 z-[80] overflow-y-auto overscroll-contain bg-white">
+      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-5 py-6">
 
         {step === 'installFirst' && (
           <div className="space-y-6 text-center">

@@ -88,7 +88,12 @@ export function InAppBrowserEscape() {
   }
 
   return (
-    <div className="fixed inset-0 z-[110] flex flex-col bg-white">
+    // Same scroll trap the six-promises screen had (13 Aug): a `fixed` layer
+    // with no overflow rule clips rather than scrolls, stranding the button on
+    // a short phone. This one is the in-app-browser escape hatch, so a student
+    // who cannot reach its button is stuck inside Instagram's webview with no
+    // way out at all.
+    <div className="fixed inset-0 z-[110] overflow-y-auto overscroll-contain bg-white">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-6 px-6 py-10">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 shadow-lg shadow-stone-900/15">
           {isIphone ? <Zap className="h-8 w-8 text-white" /> : <ArrowUpRight className="h-8 w-8 text-white" />}
