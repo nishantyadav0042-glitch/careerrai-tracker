@@ -591,6 +591,11 @@ to hold a hesitant student, is inventing a product. Escalate: if the student
 specifically wants only a one-off session, log it and flag it — that demand
 signal is exactly what the founder needs before launching the ₹299 option.
 
+**Q (for when ₹299 goes live): Session accha na laga toh refund milega?**
+A: "Refund guarantee subscription pe hai — single session pe nahi." Say it
+plainly. Never soften it into "dekh lenge" or an implied refund — the
+guarantee covers the subscription only (founder, 13 Aug 2026).
+
 ### D. Product usage FAQs
 
 **Q: Daily log kya hai?**
@@ -696,6 +701,13 @@ to be misread as a subjective/discretionary decision. The real policy is a
 specific, objective 20-day threshold. Pooja should be trained on the exact
 number, not the vague paraphrase.
 
+> **🚨 See Appendix A, Conflict 7 — do not quote "21 days" to any student.**
+> The founder said "21 day login after subscription" on 13 Aug; the live
+> code and the public `/refunds` page both say **20 logged study days**.
+> Until this is settled, **Pooja quotes 20** — because 20 is what the
+> student can read on our own public page, and quoting the higher number
+> would wrongly tell a qualifying student they don't qualify.
+
 ### Payment process
 
 Razorpay only. Price is resolved and enforced **server-side** — the price a
@@ -731,9 +743,9 @@ applied from memory or verbal founder approval alone.
 
 ### 🕓 Coming soon — NOT sellable yet
 
-| Product | Price | Status |
-|---|---|---|
-| **Per-session with a buddy** | **₹299 / session** | **Planned, not yet live** (founder, 13 Aug 2026) |
+| Product | Price | Who can buy | Refundable? | Status |
+|---|---|---|---|---|
+| **Per-session with a buddy** | **₹299 / session** | **Any free student** — no subscription needed | **No.** The money-back guarantee covers the subscription only | **Planned, not yet live** (founder, 13 Aug 2026) |
 
 **What Pooja does with this today: nothing.** Do not quote it, do not offer
 it, do not hint that it's coming to close a hesitant student. It is recorded
@@ -745,11 +757,17 @@ a guess in either direction.
 above with a Module 11 Change Log row. Until that happens, treating it as
 available is the same category of error as inventing a discount.
 
-> **⚑ Founder input needed before this can go live in Pooja's script**
-> (see Appendix A, Conflict 3): who can buy a ₹299 session — any free
-> student, or only existing subscribers? And does buying one affect the
-> 20-day refund guarantee on a subsequent full plan? Pooja will be asked
-> both on the first day this is live.
+**When it does go live, two rules are already settled** (founder, 13 Aug
+2026) and must be said plainly rather than glossed over:
+
+1. **Any free student can buy one** — it is not gated behind a subscription.
+   This makes it the cheapest real entry point into the product, so it will
+   attract exactly the students who said "abhi nahi" to the full plan.
+2. **It is not refundable.** The money-back guarantee applies to the
+   *subscription* only. If a student asks "agar session accha na laga toh?",
+   the honest answer is that the guarantee does not cover a one-off session —
+   never soften this into an implied refund. Saying otherwise creates a
+   promise CareerRai has not made.
 
 ### ⛔ NEVER SAY — the absolute list
 
@@ -1067,6 +1085,9 @@ never left ambiguous next to the new value.
 | 13 Aug 2026 | Manual created (v1) | — | This document | Founder requested a centralised training/operating system for Pooja, replacing an ad hoc document approach | Pending founder review |
 | 13 Aug 2026 | CAT Readiness Test removed from product knowledge | ~~"Readiness Test, 35 questions, free"~~ **SUPERSEDED** | Does not exist — never mention it | Founder: *"there is nothing like readiness test as of now"* | Founder |
 | 13 Aug 2026 | Per-session buddy option recorded as planned | ~~"Secondary offering: single advisory session" (implied current)~~ **SUPERSEDED** | ₹299/session — planned, **not sellable**; do not quote or hint | Founder: *"we are also soon gonna introduce 299 per session as well from buddies"* | Founder |
+| 13 Aug 2026 | ₹299 session — eligibility settled | (open question) | Any free student may buy; no subscription required | Founder: *"any free students"* | Founder |
+| 13 Aug 2026 | ₹299 session — refundability settled | (open question) | Not refundable; guarantee covers the subscription only | Founder: *"refund for only subscription"* | Founder |
+| 13 Aug 2026 | Refund threshold — **conflict opened, NOT applied** | Live: 20 logged study days, from signup | Founder stated "21 day login after subscription" — **not written into the manual pending decision** | Three-way mismatch vs live code and the public refunds page; see Appendix A, Conflict 7 | ⚠ Unresolved — awaiting founder |
 
 *Every future entry needs all six fields filled — a change with no reason or
 no approver is not a valid update to this manual. When a value is replaced,
@@ -1130,15 +1151,60 @@ answer.
   with an explicit instruction that Pooja must not quote, offer, or hint at
   it until it appears in the live price table. The FAQ now carries the
   honest current answer (*"abhi sirf full plan hai"*).
-- **Still needed before it can enter Pooja's script** — she will be asked
-  both of these on day one of launch:
-  1. **Who can buy a ₹299 session?** Any free student, or only existing
-     subscribers?
-  2. **Does buying one affect the refund guarantee** on a full plan bought
-     afterwards — does the 20-day clock or eligibility change at all?
-  A third, lower-urgency question worth settling before launch: does the
-  ₹299 session count against, or sit alongside, the free-tier mentor-doors
-  mechanic in Conflict 5?
+- **Both blocking questions answered by the founder, 13 Aug 2026:**
+  1. **Who can buy?** *"any free students"* — open to any free student, no
+     subscription required. Recorded in Module 06.
+  2. **Refundable?** *"refund for only subscription"* — no. The money-back
+     guarantee covers the subscription only; a one-off session is not
+     refundable. Recorded in Module 06 with an explicit instruction not to
+     soften it into an implied refund.
+- **Only remaining item (low urgency, not blocking):** does the ₹299 session
+  sit alongside or count against the free-tier mentor-doors mechanic in
+  Conflict 5? Both are "a free student gets some mentor contact," so they
+  need to not contradict each other on the day both are live.
+
+### 🚨 Conflict 7 — NEW, 13 Aug 2026 — the refund threshold is stated three different ways
+
+This one is flagged loudest because getting it wrong **denies a real student
+a refund they actually qualify for.**
+
+| Source | What it says |
+|---|---|
+| **Founder, 13 Aug 2026** | *"21 day **login** after **subscription**"* |
+| **Public `/refunds` page** (live, student-readable) | **20 logged study days** within the **first month** |
+| **Live code** (`src/app/api/student/request-refund/route.ts`) | `REQUIRED_DAYS = 20`, counting rows in `daily_reports` within **30 days of `profiles.created_at`** |
+
+Three separate discrepancies, not one:
+
+1. **21 vs 20.** If Pooja quotes 21 and the real threshold is 20, a student
+   sitting on exactly 20 logged days is told they don't qualify — while our
+   own public page tells them they do. That is the exact claim-vs-delivery
+   gap `docs/OS/TRUST-OS.md` §0 exists to drive to zero.
+2. **"login" vs "logged study day."** These are not the same action. The
+   code counts `daily_reports` — a student recording what they studied.
+   Opening the app 21 times without logging a single study day would satisfy
+   a "login" rule and fail the current one. This changes who qualifies, not
+   just how many.
+3. **"after subscription" vs from signup.** The founder's phrasing measures
+   the window from the **subscription date**. The code measures it from
+   **account creation** (`profile.created_at + 30 days`). For anyone who
+   used the free product before paying, these are wildly different windows.
+
+**Why #3 is more than a wording issue — it is a live defect today.** A
+student who signs up free in June, subscribes in August, then logs 25 study
+days as a paying member is currently **refused**, because their 30-day
+window closed in July, before they ever paid. Conversely a student who
+logged 20 days as a free user and subscribed months later qualifies
+instantly, having never experienced the paid product at all. The founder's
+own phrasing ("after subscription") is the version that actually matches
+what the guarantee is *for*.
+
+**Decision needed, three parts:** (a) is the threshold 20 or 21? (b) is it
+logged study days or logins? (c) does the window start at subscription or at
+signup? Whichever way (a) and (b) go, **(c) looks like a bug worth fixing in
+code regardless** — but it changes who gets money back, so it is a founder
+decision, not one to make quietly. Until all three are answered, Module 06
+instructs Pooja to quote the public page's 20-logged-days version.
 
 ### Conflict 4 (informational, not a contradiction) — Refund policy specificity
 
