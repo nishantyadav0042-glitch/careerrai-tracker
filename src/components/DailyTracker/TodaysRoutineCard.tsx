@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
-import { Check } from 'lucide-react';
+import { Check, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import { TopicInsights } from '@/components/topic-insights';
@@ -378,20 +378,24 @@ export function TodaysRoutineCard() {
 
   return (
     <Card className="p-3" data-tour="plan">
+      {/* Two chips removed here 13 Aug (founder: "remove these 2 extra buttons
+          which make no sense").
+            "8h today" repeated the hours the position card states two
+            centimetres above, on the same screen, every day.
+            "🟢 Planned" was a status that only ever read "Planned" — a chip
+          that never changes carries no information; the tick circles below
+          already say what is done and what is not. */}
       <div className="flex items-center justify-between mb-1">
         <p className="text-[11px] uppercase tracking-widest text-red-600 font-semibold">Today&apos;s Study Plan</p>
-        <div className="flex items-center gap-1.5">
-          {/* The size of today, stated. A student who set 11 hours and sees
-              four should never have to ask us why. */}
-          {data.todayBudget && (
-            <span className="inline-flex items-center rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-700">
-              {data.todayBudget.hours}h today
-            </span>
-          )}
-          {!fullyDone && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-stone-200 px-2 py-0.5 text-[11px] font-semibold text-stone-900">🟢 Planned</span>
-          )}
-        </div>
+        {/* The whole plan, where a student actually looks for it — at the top
+            of the plan, not buried under the day's tasks. */}
+        <Link
+          href="/student/plan"
+          className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-stone-500 hover:text-stone-800"
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          Whole plan
+        </Link>
       </div>
 
       {/* Why it is that size, but only when it differs from what they asked

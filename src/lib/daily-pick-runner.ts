@@ -46,13 +46,20 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
     id: string; kind: string; created_at: string; featured_on: string | null; status: string;
   }[];
 
-  // Vote totals. Counted here rather than trusted from a denormalised column:
-  // a stale counter would silently mis-order the queue, and ordering is the
-  // entire product now that there is no threshold.
-  const { data: voteRows } = await admin.from('submission_votes').select('submission_id');
-  const votes = new Map<string, number>();
-  for (const v of (voteRows ?? []) as { submission_id: string }[]) {
-    votes.set(v.submission_id, (votes.get(v.submission_id) ?? 0) + 1);
+  // Vote totals AND helpful counts. Counted here rather than trusted from a
+  // denormalised column: a stale counter would silently mis-order the queue,
+  // and ordering is the entire product now that there is no threshold.
+  //
+  // `helpful` matters as much as the total (13 Aug): the old query dropped
+  // the helpful flag, so the ranking counted a "not useful" vote identically
+  // to a "helpful" one — being voted on a lot beat being good.
+  const { data: voteRows } = await admin.from('submission_votes').select('submission_id, helpful');
+  const votes = new Map<string, { total: number; helpful: number }>();
+  for (const v of (voteRows ?? []) as { submission_id: string; helpful: boolean }[]) {
+    const t = votes.get(v.submission_id) ?? { total: 0, helpful: 0 };
+    t.total += 1;
+    if (v.helpful) t.helpful += 1;
+    votes.set(v.submission_id, t);
   }
 
   const candidates: PickCandidate[] = submissions
@@ -60,7 +67,8 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
     .map((s) => ({
       id: s.id,
       kind: s.kind as 'question' | 'tip',
-      votes: votes.get(s.id) ?? 0,
+      votes: votes.get(s.id)?.total ?? 0,
+      helpful: votes.get(s.id)?.helpful ?? 0,
       createdAt: s.created_at,
       featuredOn: s.featured_on,
     }));

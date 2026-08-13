@@ -27,6 +27,8 @@
 // Deterministic on purpose — same inputs, same pick. The cron and the lazy path
 // can both run it, twice in a minute if they like, and agree.
 
+import { wilsonLower } from './pick-quality';
+
 export type PickKind = 'question' | 'tip';
 
 export interface PickCandidate {
@@ -40,6 +42,11 @@ export interface PickCandidate {
   createdAt: string;
   /** The date this item last held the top slot, or null if it never has. */
   featuredOn: string | null;
+  /**
+   * Helpful votes only. Optional so existing callers/tests keep compiling;
+   * when absent, every vote is treated as helpful — the old behaviour.
+   */
+  helpful?: number;
 }
 
 export type PickReason =
@@ -55,14 +62,22 @@ export interface KindPick {
 }
 
 /**
- * Ordering: most votes first, then oldest first.
+ * Ordering: best-evidenced quality first, then oldest first.
  *
- * Oldest-first is the fairness rule. Newest-first would let a fresh submission
- * jump a queue of items that have waited days, and with most items on zero
- * votes that tie-break decides nearly every pick.
+ * QUALITY, not raw count (13 Aug). The old rule ranked by total votes, which
+ * counted a "not useful" vote identically to a "helpful" one — ten downvotes
+ * outranked three upvotes, so the surest way to the top slot was to be
+ * voted on a lot, not to be good. The Wilson lower bound (lib/pick-quality)
+ * fixes both failures at once: downvotes now push an item DOWN, and a
+ * 3-vote-perfect newcomer cannot leapfrog a 500-vote 91% veteran.
+ *
+ * Oldest-first stays as the tie-break — the fairness rule. With most items
+ * unvoted (score 0), it still decides nearly every pick, exactly as before.
  */
-function byVotesThenOldest(a: PickCandidate, b: PickCandidate): number {
-  if (b.votes !== a.votes) return b.votes - a.votes;
+function byQualityThenOldest(a: PickCandidate, b: PickCandidate): number {
+  const qa = wilsonLower(a.helpful ?? a.votes, a.votes);
+  const qb = wilsonLower(b.helpful ?? b.votes, b.votes);
+  if (qb !== qa) return qb - qa;
   return Date.parse(a.createdAt) - Date.parse(b.createdAt);
 }
 
@@ -73,7 +88,7 @@ export function pickForKind(candidates: PickCandidate[], kind: PickKind): KindPi
 
   const fresh = ofKind.filter((c) => c.featuredOn == null);
   if (fresh.length > 0) {
-    const winner = [...fresh].sort(byVotesThenOldest)[0];
+    const winner = [...fresh].sort(byQualityThenOldest)[0];
     return {
       id: winner.id,
       reason: winner.votes > 0 ? 'by_votes' : 'queue_order',
@@ -86,7 +101,7 @@ export function pickForKind(candidates: PickCandidate[], kind: PickKind): KindPi
   const recycled = [...ofKind].sort((a, b) => {
     const d = Date.parse(a.featuredOn!) - Date.parse(b.featuredOn!);
     if (d !== 0) return d;
-    return byVotesThenOldest(a, b);
+    return byQualityThenOldest(a, b);
   })[0];
   return { id: recycled.id, reason: 'recycled', votes: recycled.votes };
 }

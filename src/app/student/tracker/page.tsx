@@ -367,13 +367,9 @@ export default async function DailyTrackerPage() {
           and the one honest way out of today. Founder, 8 Aug: "sometimes you
           just want to see what your next fifteen days look like." */}
       <div className="mt-2 space-y-2">
-        <Link
-          href="/student/plan"
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white py-2.5 text-[13px] font-semibold text-stone-700 transition-colors hover:border-stone-900"
-        >
-          <CalendarDays className="h-4 w-4" />
-          See my whole plan
-        </Link>
+        {/* "See my whole plan" moved INTO the plan card's header (13 Aug,
+            founder) — a student looking for their plan looks at the top of
+            their plan, not below the day's tasks. One link, not two. */}
         <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
         {/* "Reset today's plan" removed 13 Aug. Founder: "why do both reset and
             swap exist… I don't want fancy buttons existing just for existence
