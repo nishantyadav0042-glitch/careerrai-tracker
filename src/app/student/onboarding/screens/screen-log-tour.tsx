@@ -92,11 +92,11 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
     <div className="space-y-4">
       <div>
         <h3 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {firstName ? `${firstName}, ` : ''}this is how you&apos;ll log every day
+          {firstName ? `${firstName}, ` : ''}one last thing — try this
         </h3>
         <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
           Every day you get 2–3 tasks like these on Home. After studying, tap the
-          circle and pick how much you did — <b>that&apos;s it, log done</b>. No typing, no forms.
+          circle and pick how much you did — <b>that&apos;s it, done for the day</b>. No typing, no forms.
         </p>
       </div>
 
@@ -187,16 +187,16 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
         <div className="rounded-2xl bg-stone-900 p-4 text-center">
           <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-white">
             <Flame className="h-4 w-4 text-orange-400" />
-            Done — that&apos;s the whole log.
+            Done — that&apos;s all you do.
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-stone-300">
-            3 taps, log done. From tomorrow you&apos;ll see this on Home with your real
-            topics — and half done also counts, so never skip a day.
+            3 taps and your day is marked. From tomorrow you&apos;ll see this on Home with
+            your real topics — and half done also counts, so never skip a day.
           </p>
         </div>
       ) : (
         <p className="text-center text-[11px] text-stone-400">
-          This is just practice — nothing is saved. Your real log starts tomorrow.
+          This is just practice — nothing is saved. It counts for real from tomorrow.
         </p>
       )}
 

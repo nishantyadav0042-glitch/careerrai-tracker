@@ -101,8 +101,12 @@ describe('one door, not two', () => {
   });
 
   it('new students are told how to log, on the plan itself', () => {
+    // Reworded 13 Aug (founder: no jargon — "log" isn't a word students use;
+    // say it in plain words). The hint must still exist and still point at
+    // the circle; the exact phrasing is the plain-words version.
     const card = readFileSync(CARD, 'utf8');
-    expect(card).toContain("that&apos;s your log for today");
+    expect(card).toContain('Tap the circle');
+    expect(card).toContain('your day is marked');
   });
 });
 

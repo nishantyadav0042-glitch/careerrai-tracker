@@ -497,7 +497,7 @@ export function TodaysRoutineCard() {
               furniture. */}
           {doneCount === 0 && (
             <p className="mb-1.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
-              Tap the circle when you finish a task — that&apos;s your log for today.
+              Finished a task? Tap the circle — that&apos;s it, your day is marked.
             </p>
           )}
 
