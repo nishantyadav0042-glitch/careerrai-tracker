@@ -14,7 +14,6 @@ import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
-import { BusyDayButton } from '@/components/busy-day-button';
 import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
@@ -362,7 +361,7 @@ export default async function DailyTrackerPage() {
   // the answer in the same glance, not in a settings screen.
   const planBlock = (
     <>
-      <TodaysRoutineCard />
+      <TodaysRoutineCard planSource={(profile?.plan_source as string | null) ?? null} />
       {/* The two things a student wants next to today's plan: the whole plan,
           and the one honest way out of today. Founder, 8 Aug: "sometimes you
           just want to see what your next fifteen days look like." */}
@@ -370,7 +369,10 @@ export default async function DailyTrackerPage() {
         {/* "See my whole plan" moved INTO the plan card's header (13 Aug,
             founder) — a student looking for their plan looks at the top of
             their plan, not below the day's tasks. One link, not two. */}
-        <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
+        {/* The standalone "Busy day?" banner is gone (13 Aug, founder) — it
+            now lives in the plan card's own footer, beside "Topics covered".
+            A full-width bordered button floating under the card read as a
+            fifth control competing with the plan it was about. */}
         {/* "Reset today's plan" removed 13 Aug. Founder: "why do both reset and
             swap exist… I don't want fancy buttons existing just for existence
             without any impact."

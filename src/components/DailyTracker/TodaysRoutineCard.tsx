@@ -7,6 +7,7 @@ import { Check, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import { TopicInsights } from '@/components/topic-insights';
+import { BusyDayButton } from '@/components/busy-day-button';
 
 // For the swap-topic picker (student ask: "change today's topic from
 // Geometry to Number System") — same-section alternatives only.
@@ -135,7 +136,7 @@ function ProgressChoice({
   );
 }
 
-export function TodaysRoutineCard() {
+export function TodaysRoutineCard({ planSource = null }: { planSource?: string | null }) {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [budget] = useState<TimeBudget>('planned');
@@ -684,11 +685,16 @@ export function TodaysRoutineCard() {
             </p>
           )}
 
-          <div className="mt-3">
+          {/* Footer: where the day goes next. Left, the map of what is
+              covered; right, the honest exit for a day that did not happen.
+              Both belong to the day, so both live in the day's card rather
+              than as loose buttons beneath it. */}
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-100 pt-2.5">
             {/* "My CAT Plan" said nothing about what is behind it — the page
                 is the topic-coverage map. Founder, 13 Aug: name it after what
                 it shows. */}
             <Link href="/student/blueprint" className="text-xs font-semibold text-stone-900">Topics covered →</Link>
+            <BusyDayButton planSource={planSource} />
           </div>
         </>
       )}

@@ -73,14 +73,21 @@ export function BusyDayButton({ planSource }: { planSource: string | null }) {
     );
   }
 
+  // Collapsed state moved INSIDE the plan card (founder, 13 Aug: "add busy day
+  // option here in Today's Study Plan bottom right corner… and remove the
+  // standalone banner"). A full-width bordered banner floating under the card
+  // read as a fifth button competing with the plan; the honest place for
+  // "I couldn't study today" is the bottom of the day it is about. Expanded,
+  // it still opens the full confirm panel below — the consequence has to be
+  // spelled out before anything moves.
   if (!asking) {
     return (
       <button
         type="button"
         onClick={() => setAsking(true)}
-        className="w-full rounded-xl border border-stone-200 py-2.5 text-[12.5px] font-medium text-stone-500 transition-colors hover:border-stone-300 hover:text-stone-700"
+        className="text-xs font-semibold text-stone-500 transition-colors hover:text-stone-800"
       >
-        Busy day? <span className="text-stone-400">(personal commitments)</span>
+        Busy day — didn&apos;t study →
       </button>
     );
   }
