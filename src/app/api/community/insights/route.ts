@@ -54,6 +54,10 @@ export async function GET() {
   }
   const mine = new Set((myVotes ?? []).map((v: { submission_id: string }) => v.submission_id));
 
+  // Names we publish under ourselves — never shown as a byline.
+  const isCuratedName = (n: string | null | undefined) =>
+    !n || n.trim().toLowerCase() === 'careerrai';
+
   const toRow = (s: SubmissionRow): InsightRow => {
     const t = tally.get(s.id) ?? { helpful: 0, total: 0 };
     return {
@@ -61,7 +65,13 @@ export async function GET() {
       kind: s.kind === 'question' ? 'question' : 'tip',
       text: s.payload?.text ?? '',
       section: s.payload?.section ?? null,
-      displayName: s.display_name ?? 'a CareerRai student',
+      // Only a real student ever gets a byline. Seeded/curated rows carry
+      // display_name 'CareerRai', and signing our own content as if it were a
+      // peer contribution is the opposite of what this feed is for — founder,
+      // 13 Aug: "don't mention the name of CareerRai under questions… if any
+      // student submits then only their name should be there, otherwise just
+      // the topic and section." null here means the card shows section only.
+      displayName: isCuratedName(s.display_name) ? null : s.display_name,
       imageUrl: s.image_path
         ? admin.storage.from('community-questions').getPublicUrl(s.image_path).data.publicUrl
         : null,

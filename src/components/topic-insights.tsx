@@ -59,11 +59,12 @@ export function TopicInsights({ topic }: { topic: string }) {
             <span className="font-bold">
               {f.emoji} {ins.curated ? (CURATED_LABEL[ins.kind] ?? 'CAT tip') : f.label}:
             </span> {ins.text}
-            <span className="mt-0.5 block text-[10px] opacity-70">
-              {ins.curated
-                ? '— Curated by CareerRai'
-                : `— ${ins.name ?? 'a CareerRai student'} · verified by CareerRai`}
-            </span>
+            {/* Only a real student gets a byline (founder, 13 Aug). Curated
+                lines carry none — the kind label above already says what this
+                is, and signing it ourselves adds nothing a student wants. */}
+            {!ins.curated && ins.name && (
+              <span className="mt-0.5 block text-[10px] opacity-70">— {ins.name}</span>
+            )}
           </div>
         );
       })}

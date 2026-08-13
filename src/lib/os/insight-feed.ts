@@ -49,7 +49,8 @@ export interface InsightRow {
   kind: InsightKind;
   text: string;
   section: string | null;
-  displayName: string;
+  /** null for curated content — only real student submissions get a byline. */
+  displayName: string | null;
   imageUrl: string | null;
   /** Recorded always, rendered only above the reveal threshold. */
   helpfulVotes: number;

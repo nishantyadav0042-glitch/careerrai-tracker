@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowBigUp, ArrowBigDown, Sparkles } from 'lucide-react';
+import { ArrowBigUp, ArrowBigDown, Sparkles, Trophy } from 'lucide-react';
 import { track } from '@/lib/journey';
 
 // ── Student Insights — the community loop ───────────────────────────────────
@@ -30,7 +30,7 @@ interface Item {
   kind: 'question' | 'tip';
   text: string;
   section: string | null;
-  displayName: string;
+  displayName: string | null;
   imageUrl: string | null;
   /** Already decided server-side: null means it must not be shown. */
   helpfulCount: number | null;
@@ -91,6 +91,33 @@ export function StudentInsights() {
 
   return (
     <div className="space-y-5">
+      {/* ── Student Contributors, first and loud (founder, 13 Aug) ─────────
+          This sat at the bottom in grey — "you have kept it hidden, such a
+          boring thing". It is the whole reason a student writes anything
+          here, so it opens the screen instead of closing it.
+          Still no leaderboard, no countdown, no participant count: all three
+          would report how small the room is. Rank without a vote count is the
+          one honest way to show standing at any size. */}
+      <div className="rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-[1.5px]">
+        <div className="rounded-[14.5px] bg-white px-4 py-3.5">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
+              <Trophy className="h-4 w-4 text-white" />
+            </span>
+            <p className="text-[14px] font-extrabold text-stone-900">Student Contributors</p>
+          </div>
+          {myRank != null && (
+            <p className="mt-2 inline-block rounded-lg bg-orange-50 px-2.5 py-1 text-[12.5px] font-bold text-orange-700">
+              {myRank === 1 ? "You're #1 this month" : `You're #${myRank} this month`}
+            </p>
+          )}
+          <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">
+            Every month, the <b className="text-stone-900">ten most helpful</b> student contributions
+            earn a <b className="text-stone-900">free month of Buddy</b>.
+          </p>
+        </div>
+      </div>
+
       {topPick && (
         <section>
           <SectionLabel>Today&apos;s Pick</SectionLabel>
@@ -114,25 +141,6 @@ export function StudentInsights() {
         </section>
       )}
 
-      {/* The monthly reward, stated once and quietly. No leaderboard, no
-          countdown, no participant count — all three would expose exactly the
-          number we are keeping off this screen. "Most helpful" and never "most
-          upvoted": the second phrasing is an instruction to go and collect
-          votes from forty friends, and the moment that starts the ranking stops
-          measuring anything worth rewarding. */}
-      <div className="rounded-xl bg-stone-100 px-3.5 py-3">
-        {/* Rank is the reward. The student sees where they stand, never how
-            many votes it took — a raw count at our size reports our size. */}
-        {myRank != null && (
-          <p className="mb-1 text-[12.5px] font-bold text-stone-800">
-            {myRank === 1 ? "You're the #1 Student Contributor this month" : `You're #${myRank} this month`}
-          </p>
-        )}
-        <p className="text-[11.5px] leading-relaxed text-stone-500">
-          <span className="font-bold text-stone-700">Student Contributors</span> — each month, the ten
-          most helpful student contributions earn a free month of Buddy.
-        </p>
-      </div>
     </div>
   );
 }
@@ -179,10 +187,14 @@ function Card({
       )}
 
       <div className="mt-3 flex items-center justify-between">
+        {/* A byline is earned by a student, never taken by us. Curated rows
+            arrive with displayName null and show their section alone —
+            signing our own content as a peer contribution is exactly what
+            this feed must not do. */}
         <p className="text-[11.5px] text-stone-400">
-          {item.isMine ? 'Yours' : `— ${item.displayName}`}
-          {item.section && <span className="ml-1.5 text-stone-300">·</span>}
-          {item.section && <span className="ml-1.5">{item.section}</span>}
+          {item.isMine ? 'Yours' : item.displayName ? `— ${item.displayName}` : null}
+          {item.section && (item.isMine || item.displayName) && <span className="ml-1.5 text-stone-300">·</span>}
+          {item.section && <span className={item.isMine || item.displayName ? 'ml-1.5' : ''}>{item.section}</span>}
         </p>
 
         {/* Votes. No number unless the server sent one, which it only does once
