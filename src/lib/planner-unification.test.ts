@@ -211,7 +211,7 @@ describe('Home and the Whole Plan agree about TODAY', () => {
       }).days[0];
 
       const homeTopics = home.tasks.filter((t) => t.topic).map((t) => t.topic!).sort();
-      expect(homeTopics.length).toBe(6); // 11h buys two blocks in every section
+      expect(homeTopics.length).toBe(7); // 11h buys three VARC blocks + two in each other section
       expect(topicsOn(whole.items), `Home: ${homeTopics.join(', ')}`).toEqual(homeTopics);
     });
 
@@ -323,7 +323,16 @@ describe('today is a fact: day 0 is the persisted plan', () => {
     const day1 = topicsOn(plan.days[1].items);
     const repeats = day1.filter((t) => day0.has(t));
     expect(day1.length).toBeGreaterThan(0);
-    expect(repeats.length, `day 1 echoed day 0: ${repeats.join(', ')}`).toBeLessThanOrEqual(2);
+    // Asserted as a SHARE, not a count. The absolute "≤2" was calibrated
+    // against a day that happened to hold six blocks; when the block split was
+    // corrected on 13 Aug (blocksForMinutes was rounding, so an 11-hour VARC
+    // slice became two 132-minute blocks instead of three 88-minute ones) an
+    // eleven-hour day legitimately gained a seventh block and a third
+    // legitimate revision repeat — and this test failed for a change that
+    // made the plan better. The rule was never "at most two"; it is "day 1
+    // must not re-serve day 0 wholesale", which is a proportion.
+    const share = repeats.length / day1.length;
+    expect(share, `day 1 echoed day 0: ${repeats.join(', ')} (${repeats.length}/${day1.length})`).toBeLessThan(0.5);
   });
 
   it('a day still never carries the same topic twice — fixed day 0 included', () => {

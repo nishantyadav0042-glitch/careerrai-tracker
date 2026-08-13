@@ -211,6 +211,9 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   const [calibrated, setCalibrated] = useState(false);
   const [calibrationBusy, setCalibrationBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A failed tick must be visible. See toggleTask: the card used to return
+  // silently on !res.ok, leaving the student sure their day was recorded.
+  const [tickError, setTickError] = useState<string | null>(null);
 
   // One-tap daily calibration — the highest-ROI signal we collect. Fire and
   // thank; the engine collects first and tunes later.
@@ -323,7 +326,15 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         // merges rather than overwrites, so an earlier manual log is safe.
         body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, close_day: true, ...(confidence ? { confidence } : {}), ...(portion ? { portion } : {}) }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        // A tick that silently does nothing is worse than one that fails
+        // loudly: the circle filled in, the student moved on, and the day was
+        // never recorded. Say so and leave the circle empty.
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setTickError(body.error ?? 'Could not save that — check your connection and tap again.');
+        return;
+      }
+      setTickError(null);
       // Server state changed — the 30s GET cache must never serve
       // pre-completion data.
       routineTodayCache = null;
@@ -753,6 +764,12 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               );
             })}
           </div>
+
+          {tickError && (
+            <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
+              {tickError}
+            </p>
+          )}
 
           {swapNote && (
             <p className="mt-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-[11px] font-medium text-teal-800">

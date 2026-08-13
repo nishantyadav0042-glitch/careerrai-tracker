@@ -36,6 +36,38 @@ export function statusRank(s: CoverageStatus): number {
 }
 
 /**
+ * Coerce whatever the database actually holds into a status we can rank.
+ *
+ * Backbone audit, 13 Aug: several call sites did `STATUS_ORDER.indexOf(row)`
+ * on a raw DB value and then indexed the array with the result. For any value
+ * outside the ladder that is `indexOf → -1`, and:
+ *
+ *   · `STATUS_ORDER[-1 + 1]` is `'not_started'` — so a "Finished it" tap on
+ *     an unrecognised row ERASED the topic instead of advancing it;
+ *   · `STATUS_ORDER[-1]` is `undefined` — written straight back to the row.
+ *
+ * `'mastered'` is the known legacy name for the top rung and four modules
+ * still defend against it, so it maps to `exam_ready` rather than being
+ * thrown away. Anything genuinely unknown floors at `not_started`, which is
+ * safe ONLY because every caller pairs this with the never-regress rule
+ * below — normalising must not become a quiet downgrade path.
+ */
+export function normalizeStatus(v: unknown): CoverageStatus {
+  if (isCoverageStatus(v)) return v;
+  if (v === 'mastered') return 'exam_ready';
+  return 'not_started';
+}
+
+/**
+ * The highest of two statuses. The one safe way to apply an advancing signal
+ * to a row whose stored value we could not fully trust: a tap may lift a
+ * topic, never drop it.
+ */
+export function highestStatus(a: CoverageStatus, b: CoverageStatus): CoverageStatus {
+  return statusRank(a) >= statusRank(b) ? a : b;
+}
+
+/**
  * A status may only move FORWARD in bulk/self-service flows, or stay put.
  * Deliberate regressions belong in flows built for them (the red confidence
  * signal, the full matrix editor) — never in a weekly tap-through where a

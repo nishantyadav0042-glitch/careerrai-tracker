@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
+import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
 import { creditedHours } from '@/lib/study-credit';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
@@ -70,12 +71,21 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (existingCompletion) {
-    await admin.from('routine_task_completions').delete().eq('id', existingCompletion.id);
+    const { error: delErr } = await admin.from('routine_task_completions').delete().eq('id', existingCompletion.id);
+    if (delErr) {
+      // The tick IS the log. Reporting success on a write that did not happen
+      // leaves the card green over an empty table, and the student finds out
+      // days later when their streak is wrong. (Backbone audit, 13 Aug.)
+      return NextResponse.json({ error: 'Could not un-mark that task — try again.' }, { status: 500 });
+    }
   } else {
-    await admin.from('routine_task_completions').insert({
+    const { error: insErr } = await admin.from('routine_task_completions').insert({
       student_id: user.id, routine_date: today, task_id: taskId, is_emergency: !!isEmergency,
       confidence: effectiveConfidence ?? null,
     });
+    if (insErr) {
+      return NextResponse.json({ error: 'Could not save that tick — try again.' }, { status: 500 });
+    }
 
     // Confidence-aware planning: a real 🟢/🟡/🔴 tap on a topic-bearing task
     // feeds straight back into the Coverage Matrix — the same table the
@@ -83,17 +93,35 @@ export async function POST(request: NextRequest) {
     // being editable from a separate self-audit screen.
     const completedTask = tasks.find((t) => t.id === taskId);
     if (effectiveConfidence && completedTask?.topic) {
-      const { data: coverageRow } = await admin
+      const { data: coverageRow, error: readErr } = await admin
         .from('topic_coverage')
         .select('status')
         .eq('student_id', user.id)
         .eq('topic', completedTask.topic)
         .maybeSingle();
-      const newStatus = applyConfidenceSignal((coverageRow?.status as CoverageStatus | undefined) ?? null, effectiveConfidence as ConfidenceSignal);
-      await admin.from('topic_coverage').upsert(
-        { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
-        { onConflict: 'student_id,section,topic' }
-      );
+
+      // A FAILED READ IS NOT A BLANK ROW. This error was unchecked, so any
+      // transient failure produced `coverageRow === undefined`, which the
+      // line below read as "never started" — and a student's 'revising'
+      // topic was rewritten to 'learning' by the act of ticking it off.
+      // Losing the update is recoverable; corrupting the matrix the whole
+      // planner reads is not. (Backbone audit, 13 Aug.)
+      if (readErr) {
+        console.error('[complete-task] coverage read failed, skipping advance', readErr.message);
+      } else {
+        const current = (coverageRow?.status as CoverageStatus | undefined) ?? null;
+        const advanced = applyConfidenceSignal(current, effectiveConfidence as ConfidenceSignal);
+        // Green/blue are ADVANCING signals and must never move a topic down.
+        // applyConfidenceSignal caps them, but the floor belongs here too:
+        // this is the one writer that bypasses isForwardMove, which every
+        // other student-facing path honours.
+        const newStatus = current ? highestStatus(normalizeStatus(current), advanced) : advanced;
+        const { error: upsertErr } = await admin.from('topic_coverage').upsert(
+          { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
+          { onConflict: 'student_id,section,topic' }
+        );
+        if (upsertErr) console.error('[complete-task] coverage upsert failed', upsertErr.message);
+      }
     }
   }
 
@@ -166,6 +194,15 @@ export async function POST(request: NextRequest) {
       p_emotional_chips: [],
     });
     dayClosed = !rpcError;
+    if (rpcError) {
+      // This RPC is what makes a tick count as a studied day — it writes the
+      // daily_reports row AND moves the streak. Silently failing here is the
+      // worst outcome on this route: the card says "Ready for tomorrow ✅"
+      // while the day never happened as far as every other surface is
+      // concerned. The tick itself is already saved, so we report the partial
+      // truth rather than pretending either way.
+      console.error('[complete-task] day close failed', rpcError.message);
+    }
   }
 
   return NextResponse.json({

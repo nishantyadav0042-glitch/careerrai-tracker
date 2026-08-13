@@ -351,7 +351,19 @@ export interface DayShape {
  * covered before his date however well the ranking works.
  */
 export function blocksForMinutes(minutes: number): number {
-  return Math.max(1, Math.min(MAX_TOPIC_BLOCKS_PER_SECTION, Math.round(minutes / MAX_TOPIC_MINUTES)));
+  // CEIL, not round. Round re-broke the very rule this function exists to
+  // enforce: a 144-minute slice is round(1.2) = ONE block, i.e. 144 minutes
+  // on a single chapter — over the 120 cap, the Abhishek failure in
+  // miniature. Audit 13 Aug measured it across the budget matrix: every
+  // student at 4h+ was getting single blocks of 122–168 minutes. Ceil makes
+  // the slice/blocks split honour the cap by construction.
+  //
+  // The section cap still binds above 3 × MAX_TOPIC_MINUTES (a >6-hour slice
+  // in ONE section). That is deliberate — three distinct topics a day in one
+  // section is already the most a student can hold — so the invariant is
+  // "at most MAX_TOPIC_MINUTES unless the block cap binds", and
+  // routine-hours.guard.test.ts asserts exactly that.
+  return Math.max(1, Math.min(MAX_TOPIC_BLOCKS_PER_SECTION, Math.ceil(minutes / MAX_TOPIC_MINUTES)));
 }
 
 export function dayShape(input: DayShapeInput): DayShape {

@@ -12,7 +12,7 @@
 // CoverageStatus 'unknown' below) — this is additive, not a breaking change.
 
 import { TOPIC_METADATA, qaCluster } from './topics-constants';
-import { STATUS_ORDER, type CoverageStatus } from './coverage-status';
+import { STATUS_ORDER, normalizeStatus, type CoverageStatus } from './coverage-status';
 import { newTopicUrgencyPoints, repeatPenaltyPoints, revisionWeight } from './syllabus-pace';
 
 // Student-controlled states (declared in the Blueprint Builder):
@@ -468,7 +468,11 @@ const REVISING_RANK = STATUS_ORDER.indexOf('revising');
 //             it drops back to 'learning' — never all the way to
 //             'not_started', since the attempt itself is still real signal
 export function applyConfidenceSignal(current: CoverageStatus | null, confidence: ConfidenceSignal): CoverageStatus {
-  const rank = STATUS_ORDER.indexOf(current ?? 'not_started');
+  // normalizeStatus, not a raw indexOf: an unrecognised stored value (the
+  // legacy 'mastered', or anything a future migration leaves behind) used to
+  // rank -1, which turned a green tap into STATUS_ORDER[0] — "Finished it"
+  // ERASED the topic — and a yellow tap into an undefined write.
+  const rank = STATUS_ORDER.indexOf(normalizeStatus(current ?? 'not_started'));
   // 'revising' is the ceiling a tap can reach; a topic already ABOVE it (an
   // evidence-earned exam_ready) is never pulled back down by more green taps.
   if (confidence === 'green') return STATUS_ORDER[rank >= REVISING_RANK ? rank : rank + 1];
