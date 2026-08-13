@@ -46,10 +46,25 @@ export function DailySlotCard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Never leave the day's one surface blank on a network blip — fall back to
-  // the voting card, which is the behaviour this screen has always had.
+  // ── One screen, every day (founder, 13 Aug) ─────────────────────────────
+  //
+  // The rotation used to hand a different CARD to the hero slot each day —
+  // question, community ballot, mirror, peer stat, reflection — so Daily Pick
+  // looked like a different product depending on when you opened it. His
+  // words: "2 different screens are live… this mix of screen should not
+  // exist."
+  //
+  // It was built as a curiosity engine, and variety was the point. But the
+  // variety cost the one thing a daily habit needs most: a student has to know
+  // what they are opening BEFORE they open it. A timed question every day is a
+  // reason to come back; a surprise format is a reason to bounce.
+  //
+  // So the question always wins the hero slot when one exists. The other kinds
+  // are not deleted — they still render below when there is no question for
+  // the day, which keeps the rotation engine and its tests intact.
   if (failed) return <CommunityVoteCard />;
   if (!slot) return null;
+  if (slot.kind === 'question') return <DailyChallengeCard />;
   if (slot.kind === 'community' || slot.kind === null) return <CommunityVoteCard />;
   // The question slot renders the challenge system that ALREADY EXISTS rather
   // than a second implementation of "a question a day". Founder, 12 Aug: do not
@@ -59,8 +74,6 @@ export function DailySlotCard() {
   // captures choice, correctness and seconds-taken, and already refuses to show
   // a community split below 20 attempts). Neither is rebuilt; the rotation just
   // decides which day each one gets.
-  if (slot.kind === 'question') return <DailyChallengeCard />;
-
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4">
       <p className="text-[10.5px] font-bold uppercase tracking-widest text-indigo-500">{slot.label}</p>

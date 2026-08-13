@@ -7,7 +7,7 @@ import { track } from '@/lib/journey';
 import { shareChallenge } from '@/lib/share-challenge';
 import { reactionLine } from '@/lib/challenge-reaction';
 import { CommunitySubmit } from '@/components/community-submit';
-import type { ChallengeView } from '@/lib/challenge';
+import { TARGET_SECONDS, type ChallengeView } from '@/lib/challenge';
 
 // Today's Proof — one question per section, same for every student, live
 // from 8am. What makes ours different from every other daily question in CAT
@@ -122,6 +122,12 @@ interface Verdict {
   isCorrect: boolean; correctIndex: number; explanation: string;
   communityCorrectPct: number | null; attemptCount: number;
   topic: string; coverageStatus: string;
+  /** Share of timed attempts that came in under the target. Null until enough
+   *  attempts exist — same density gate as the correctness split. */
+  inTimePct?: number | null;
+  yourSeconds?: number | null;
+  targetSeconds?: number;
+  beatTheClock?: boolean | null;
 }
 
 function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onClose: (changed: boolean) => void }) {
@@ -134,6 +140,24 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
   const [busy, setBusy] = useState(false);
   const [shareResult, setShareResult] = useState<string | null>(null);
   const [startedAt] = useState(() => Date.now());
+
+  // ── The clock (founder, 13 Aug) ───────────────────────────────────────────
+  // "Start a timer as soon as they click Daily Pick — solve this in 90 secs —
+  // so they don't even think, they just read and start solving."
+  //
+  // It runs from the moment the card opens and freezes on answer. It NEVER
+  // blocks: past 90s it keeps counting up in grey, the student still answers
+  // and still learns, they just don't get the in-time badge. A hard cutoff
+  // would make a daily habit into something you can fail, which is the
+  // quickest way to stop it being daily.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (verdict) return;
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [verdict, startedAt]);
+  const left = TARGET_SECONDS - elapsed;
+  const overtime = left < 0;
 
   async function submit(choice: number) {
     if (verdict || busy) return;
@@ -163,6 +187,13 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
       <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl">
+        {/* The loudest line on the screen (founder, 13 Aug): this feed is not
+            content we publish, it is students helping students — and that is
+            the whole reason to open it. */}
+        <p className="mb-3 rounded-lg bg-stone-900 px-3 py-2 text-center text-[11.5px] font-extrabold uppercase tracking-wider text-white">
+          Daily Pick — by the students, for the students
+        </p>
+
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-600">
@@ -174,6 +205,23 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
               </p>
             )}
           </div>
+          {/* The clock. Counts down to the target, then keeps counting up in
+              grey rather than stopping or blocking — the answer is always
+              available, the badge is what's at stake. */}
+          {!verdict && (
+            <div className={`shrink-0 rounded-xl px-3 py-1.5 text-center ${
+              overtime ? 'bg-stone-100' : left <= 15 ? 'bg-rose-50' : 'bg-indigo-50'
+            }`}>
+              <p className={`font-mono text-[17px] font-extrabold leading-none tabular-nums ${
+                overtime ? 'text-stone-400' : left <= 15 ? 'text-rose-600' : 'text-indigo-700'
+              }`}>
+                {overtime ? `+${Math.abs(left)}` : left}s
+              </p>
+              <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-wide text-stone-400">
+                {overtime ? 'over' : 'to beat'}
+              </p>
+            </div>
+          )}
           <button type="button" onClick={() => onClose(!!verdict)} aria-label="Close" className="text-stone-400">
             <X className="h-4 w-4" />
           </button>
@@ -236,6 +284,24 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
                 their answer, and on a quiet day it quietly advertises that
                 the room is empty. Silence reads as normal; a filler line
                 reads as an excuse. */}
+            {/* The clock's payoff. Their own time always shows — it is their
+                own data and needs no density gate. The comparison only appears
+                once enough students have been timed, same rule as the
+                correctness split: a percentage over three people reports how
+                few of us there are, not how hard the question was. */}
+            {verdict.yourSeconds != null && (
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-xl bg-stone-50 px-3 py-2">
+                <span className={`text-[12.5px] font-extrabold ${verdict.beatTheClock ? 'text-emerald-700' : 'text-stone-600'}`}>
+                  {verdict.beatTheClock ? `Beat the clock — ${verdict.yourSeconds}s` : `${verdict.yourSeconds}s`}
+                </span>
+                {verdict.inTimePct != null && (
+                  <span className="text-[11.5px] text-stone-500">
+                    {verdict.inTimePct}% finished in time
+                  </span>
+                )}
+              </div>
+            )}
+
             {verdict.communityCorrectPct != null && (
               <p className="flex items-center gap-1.5 text-[12px] text-stone-500">
                 <Users className="h-3.5 w-3.5" />

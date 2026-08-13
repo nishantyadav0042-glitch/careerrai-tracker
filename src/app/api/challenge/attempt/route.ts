@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { activeChallengeDate, SPLIT_MIN_ATTEMPTS } from '@/lib/challenge';
+import { activeChallengeDate, SPLIT_MIN_ATTEMPTS, TARGET_SECONDS } from '@/lib/challenge';
 import { getLogDateString } from '@/lib/streak-utils';
 
 export const maxDuration = 30;
@@ -70,18 +70,29 @@ export async function POST(request: NextRequest) {
   if (evErr) console.error('[challenge] evidence write failed', evErr.message);
 
   const [{ data: allAttempts }, { data: cov }] = await Promise.all([
-    admin.from('challenge_attempts').select('is_correct').eq('challenge_id', challengeId),
+    admin.from('challenge_attempts').select('is_correct, seconds_taken').eq('challenge_id', challengeId),
     admin.from('topic_coverage').select('status').eq('student_id', user.id)
       .eq('topic', challenge.topic).maybeSingle(),
   ]);
   const total = allAttempts?.length ?? 0;
   const correct = (allAttempts ?? []).filter((a) => a.is_correct).length;
 
+  // "x% finished in time" — the number that makes the clock mean something.
+  // Only counts attempts that actually recorded a duration, and rides the SAME
+  // density gate as the correctness split: a percentage over three people
+  // reports how few of us there are, not how hard the question is.
+  const timed = (allAttempts ?? []).filter((a) => typeof a.seconds_taken === 'number');
+  const inTime = timed.filter((a) => (a.seconds_taken as number) <= TARGET_SECONDS).length;
+
   return NextResponse.json({
     isCorrect,
     correctIndex: Number(challenge.correct_index),
     explanation: challenge.explanation,
     communityCorrectPct: total >= SPLIT_MIN_ATTEMPTS ? Math.round((correct / total) * 100) : null,
+    inTimePct: timed.length >= SPLIT_MIN_ATTEMPTS ? Math.round((inTime / timed.length) * 100) : null,
+    yourSeconds: secs,
+    targetSeconds: TARGET_SECONDS,
+    beatTheClock: secs != null ? secs <= TARGET_SECONDS : null,
     attemptCount: total,
     topic: challenge.topic,
     coverageStatus: (cov?.status as string) ?? 'not_started',

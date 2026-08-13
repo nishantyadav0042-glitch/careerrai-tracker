@@ -19,6 +19,18 @@ export function activeChallengeDate(now: Date = new Date()): string {
 
 /** Community split shown only past this many attempts — below it, a
  *  percentage is noise wearing a suit (the no-invented-numbers rule). */
+// The clock (founder, 13 Aug): "start a timer as soon as they click Daily
+// Pick — solve this in 90 secs — so they don't even think, they just read and
+// start solving."
+//
+// 90s is the point: it is enough to actually solve a real CAT-level question
+// and far too little to browse, second-guess or look anything up. The timer
+// never blocks an answer — a student who takes 4 minutes still answers and
+// still learns; they just do not get the in-time badge. A hard cutoff would
+// turn a daily habit into a test you can fail, which is the fastest way to
+// stop someone opening it tomorrow.
+export const TARGET_SECONDS = 90;
+
 export const SPLIT_MIN_ATTEMPTS = 20;
 
 

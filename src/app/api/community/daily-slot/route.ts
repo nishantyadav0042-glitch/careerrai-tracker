@@ -127,7 +127,17 @@ export async function GET() {
       .reverse();
   } catch { /* best effort */ }
 
-  const kind = pickKindForDay(user.id, day, available, recent);
+  // The question is the hero, every day it exists (founder, 13 Aug: "this mix
+  // of screen should not exist"). A student must know what they are opening
+  // before they open it — that predictability is what makes a daily habit
+  // daily, and it is what the timed question is built around.
+  //
+  // The rotation still runs for every other day: when no challenge is
+  // scheduled, pickKindForDay chooses among the remaining kinds exactly as
+  // before, so nothing about that engine or its tests changed.
+  const kind: PickKind | null = available.question
+    ? 'question'
+    : pickKindForDay(user.id, day, available, recent);
   if (!kind) return NextResponse.json({ kind: null });
 
   const body: Record<string, unknown> = { kind, label: KIND_LABEL[kind], day };
