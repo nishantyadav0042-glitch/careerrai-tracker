@@ -30,13 +30,36 @@ function waNumber(phone: string | null): string | null {
   return d.length === 12 && d.startsWith('91') ? d : null;
 }
 
-// Confident, value-first, risk-removed. Two openers: one for students who
-// signalled buddy intent, one for strong studiers who haven't yet.
+// Confident, value-first, honestly-conditioned. Two openers: one for students
+// who signalled buddy intent, one for strong studiers who haven't yet.
+//
+// HONESTY AUDIT, 13 Aug 2026 — found while wiring the Pooja training manual,
+// before a new salesperson was handed this script. Two claims were removed
+// because a student could not actually receive them:
+//
+//   The free-messages promise. This offered a fixed number of free mentor
+//   messages to every lead. That mechanic is dormant by design
+//   (mentor-doors.ts — needs both an env flag AND per-grant admin
+//   activation). Live check the day of the audit: 20 grants recorded, ZERO
+//   activated. So the promise was undeliverable for every student who would
+//   have received this message. TRUST-OS §0 is exactly this: the distance
+//   between what we claimed and what the student got, driven to zero.
+//
+//   The risk-free framing. The refund is real but conditional — the public
+//   /refunds page requires logged study days in the first month. Stating the
+//   guarantee while dropping its one condition sets a student up to discover
+//   it at the worst possible moment. The condition is now said out loud; it
+//   also sells better, because it signals we only refund people who tried.
+//
+// The price below is deliberately NOT touched: which plan leads (₹999/month
+// vs the ₹2,999 Till-CAT hero in plans.ts) is an open founder decision —
+// see Appendix A, Conflict 1 in docs/POOJA-TRAINING-MANUAL.md. Resolve it
+// there first, then change it here in the same commit.
 function buildScript(first: string, tappedBuddy: boolean): string {
   const lead = tappedBuddy
     ? `${first}, you've been preparing seriously for CAT and you checked out the Exam Buddy on CareerRai.`
     : `${first}, you've been studying consistently on CareerRai — that's exactly when a mentor makes the biggest difference.`;
-  return `${lead} An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you. It's Rs 999, and if you don't find real value you get a full refund — so there's no risk. You also get 3 free messages to start. Can I show you how it works? Bata do, details bhej deta hoon. App: ${SITE_URL}`;
+  return `${lead} An Exam Buddy is a personal mentor who tracks your plan, your weak areas and your mocks with you. It's Rs 999. If it hasn't helped in your first month you get a full refund — the one condition is 20 logged study days, so we know you gave it a real go. Can I show you how it works? Bata do, details bhej deta hoon. App: ${SITE_URL}`;
 }
 
 export async function buildSalesQueue(admin?: any): Promise<SalesQueue> {
