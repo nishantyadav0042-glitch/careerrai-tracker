@@ -50,14 +50,14 @@ export default function CommunityPage() {
         <div className="mx-auto max-w-md">
           <button
             type="button" onClick={() => setShare(true)}
-            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-left shadow-lg active:scale-[0.99]"
+            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 shadow-lg active:scale-[0.99]"
           >
-            <span className="flex items-center gap-2 text-[13px] font-extrabold text-white">
+            {/* One line (founder, 13 Aug: "too verbose, no one will read
+                long lines — share tough question/tip you solved today,
+                simple and sorted"). The second explainer line is gone. */}
+            <span className="flex items-center justify-center gap-2 text-[13.5px] font-extrabold text-white">
               <HeartHandshake className="h-4 w-4 shrink-0" />
-              Solved a tough question today? Share it — just a photo 📷
-            </span>
-            <span className="mt-0.5 block pl-6 text-[10.5px] font-medium text-white/85">
-              Or a tip that worked. Be part of <span className="font-bold text-white">by the students, for the students</span>.
+              Share a tough question / tip you solved today 📷
             </span>
           </button>
         </div>

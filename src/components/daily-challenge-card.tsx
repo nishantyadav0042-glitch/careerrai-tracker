@@ -39,6 +39,9 @@ export function DailyChallengeCard() {
   const [challenges, setChallenges] = useState<ChallengeView[] | null>(null);
   const [open, setOpen] = useState<ChallengeView | null>(null);
   const [share, setShare] = useState(false);
+  // Answered THIS visit, before the refetch lands — so "which question is
+  // next?" never re-offers the one just solved.
+  const [justAnswered, setJustAnswered] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -173,7 +176,20 @@ export function DailyChallengeCard() {
 
       {open && (
         <ChallengeModal
+          /* key = the whole "smart timer" guarantee. Founder, 13 Aug: when one
+             question is solved and the next comes up, ITS clock must start
+             fresh. Keying the sheet by question id forces a full remount on
+             advance, so startedAt, the tick interval and every piece of state
+             are born new for every question — the old clock cannot leak into
+             the next one. */
+          key={open.id}
           challenge={open}
+          next={challenges.find((c) => c.id !== open.id && !c.attempt && !justAnswered.has(c.id)) ?? null}
+          onNext={(answeredId, nxt) => {
+            setJustAnswered((prev) => new Set(prev).add(answeredId));
+            void load();
+            setOpen(nxt);
+          }}
           onClose={(changed) => { setOpen(null); if (changed) { void load(); router.refresh(); } }}
         />
       )}
@@ -194,7 +210,14 @@ interface Verdict {
   beatTheClock?: boolean | null;
 }
 
-function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onClose: (changed: boolean) => void }) {
+function ChallengeModal({ challenge, next, onNext, onClose }: {
+  challenge: ChallengeView;
+  /** The following unanswered question, if today has one — powers the
+   *  solve → next → solve chain, each hop on a fresh clock. */
+  next: ChallengeView | null;
+  onNext: (answeredId: string, nxt: ChallengeView) => void;
+  onClose: (changed: boolean) => void;
+}) {
   const [picked, setPicked] = useState<number | null>(challenge.attempt?.choice ?? null);
   const [verdict, setVerdict] = useState<Verdict | null>(
     challenge.attempt
@@ -395,12 +418,36 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
             >
               {shareResult === 'copied' ? 'Copied — paste it in your group' : '📤 Challenge your friends — who else can solve it?'}
             </button>
-            <button
-              type="button" onClick={() => onClose(true)}
-              className="w-full rounded-xl bg-stone-900 py-3 text-[14px] font-bold text-white"
-            >
-              Done
-            </button>
+            {/* The chain. One question rarely costs the full 90 seconds a
+                student showed up with — so the moment this one is settled,
+                the next unsolved one is a single tap away, on its OWN fresh
+                clock (the parent remounts the sheet per question). Always a
+                choice, never an auto-advance: yanking the screen away while
+                someone is reading the explanation would teach them not to
+                read it. */}
+            {next ? (
+              <div className="flex gap-2">
+                <button
+                  type="button" onClick={() => onClose(true)}
+                  className="rounded-xl border border-stone-300 px-4 py-3 text-[14px] font-bold text-stone-600"
+                >
+                  Done
+                </button>
+                <button
+                  type="button" onClick={() => onNext(challenge.id, next)}
+                  className="flex-1 rounded-xl bg-stone-900 py-3 text-[14px] font-bold text-white active:scale-[0.99]"
+                >
+                  Next question · {next.section} →
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button" onClick={() => onClose(true)}
+                className="w-full rounded-xl bg-stone-900 py-3 text-[14px] font-bold text-white"
+              >
+                Done
+              </button>
+            )}
           </div>
         )}
       </div>

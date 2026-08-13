@@ -39,6 +39,27 @@ describe('the clock', () => {
     expect(readFileSync(CARD, 'utf8')).toContain('if (verdict) return;');
   });
 
+  it('every question gets a FRESH clock — the sheet remounts per question', () => {
+    // Founder, 13 Aug: "as soon as one question is solved and the other comes
+    // to the top, its timer also starts." Without key={open.id} React reuses
+    // the mounted sheet when `open` changes, so startedAt — a useState
+    // initialiser — survives the swap and question 2 opens with question 1's
+    // clock already spent. The key forces a full remount: every question is
+    // born at 0 seconds.
+    const src = readFileSync(CARD, 'utf8');
+    expect(src).toContain('key={open.id}');
+  });
+
+  it('the next question is offered, never forced', () => {
+    // A chain the student taps into; auto-advance would yank the explanation
+    // away mid-read, and the explanation is where the learning is.
+    const src = readFileSync(CARD, 'utf8');
+    expect(src).toContain('Next question · {next.section}');
+    expect(src).toContain('onNext(challenge.id, next)');
+    // The just-solved question can never be re-offered as "next".
+    expect(src).toContain('!justAnswered.has(c.id)');
+  });
+
   it('never blocks the answer — it counts up past the target instead', () => {
     // A hard cutoff turns a daily habit into something you can fail, which is
     // the fastest way to stop it being daily.
