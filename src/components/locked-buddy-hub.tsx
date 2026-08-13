@@ -47,15 +47,21 @@ export function LockedBuddyHub({
   return (
     <>
     <div className="mx-auto max-w-md space-y-6 px-1 pt-5 pb-28">
-      {/* 1 — the hook: urgency → fear → cost → credible promise */}
-      <div className="text-center">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-600">{catUrgencyLabel()}</p>
-        <h1 className="mt-2.5 text-[26px] font-bold leading-[1.15] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+      {/* 1 — the hook: urgency → fear → cost → credible promise.
+          Restyled 13 Aug into the same dark hero treatment as S1 (Blueprint
+          Reveal) and S3 (Home Position), so this — the most-viewed screen for
+          any free student — no longer looks like the one surface tonight
+          skipped. COPY IS UNCHANGED: this is the app's most revenue-critical
+          page and the fear/cost/promise wording is proven, tested marketing,
+          not something to rewrite alongside a visual pass. */}
+      <div className="overflow-hidden rounded-3xl bg-stone-900 px-5 py-6 text-center text-white">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-orange-400">{catUrgencyLabel()}</p>
+        <h1 className="mt-2.5 text-[26px] font-bold leading-[1.15]" style={{ fontFamily: 'Georgia, serif' }}>
           {fear}
         </h1>
-        <p className="mt-2 text-[17px] font-semibold leading-snug text-red-600">{cost}</p>
-        <p className="mx-auto mt-3 max-w-xs text-[15px] font-semibold leading-snug text-stone-800">
-          Only <span className="text-orange-600">IIM buddies</span> to guide you.
+        <p className="mt-2 text-[17px] font-semibold leading-snug text-rose-400">{cost}</p>
+        <p className="mx-auto mt-3 max-w-xs text-[15px] font-semibold leading-snug text-stone-200">
+          Only <span className="text-orange-400">IIM buddies</span> to guide you.
         </p>
       </div>
 
