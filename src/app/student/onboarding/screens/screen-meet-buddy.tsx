@@ -142,6 +142,12 @@ function AssignedMentor({ mentor: m }: { mentor: MentorPreview }) {
 }
 
 function MentorPool({ mentors }: { mentors: MentorPreview[] }) {
+  // Rich cards (13 Aug), matching the density RecommendedBuddies already uses
+  // on the My Buddy showcase — avatar, journey pill, bio line, tag, USP grid
+  // — rather than the thin compact row this used to be. Real data only: the
+  // bio is the mentor's own how_i_work/buddy_bio text, never an invented
+  // quote, and the journey pill only renders when journey is non-null (a
+  // genuine climb on file), same rule the onboarding API already enforces.
   return (
     <>
       <div className="text-center">
@@ -149,16 +155,42 @@ function MentorPool({ mentors }: { mentors: MentorPreview[] }) {
       </div>
 
       {mentors.length > 0 ? (
-        <div className="space-y-2.5">
-          {mentors.map((m) => (
-            <div key={m.fullName} className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-3.5">
-              <Avatar m={m} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>{m.fullName}</p>
-                <p className="truncate text-[11px] text-stone-500">{m.college ?? 'IIM mentor'}{m.journey ? ` · ${m.journey}` : ''}</p>
-                {m.matchedOn[0] && (
-                  <span className="mt-1 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-700">{m.matchedOn[0]}</span>
+        <div className="space-y-3">
+          {mentors.map((m, i) => (
+            <div key={m.fullName} className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-5">
+              <div className="flex flex-col items-center">
+                <Avatar m={m} size="lg" />
+                <div className="mt-2 flex items-center gap-1.5">
+                  <h3 className="text-lg font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>{m.fullName}</h3>
+                  {i === 0 && (
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Best match</span>
+                  )}
+                </div>
+                {m.college && <p className="text-xs text-stone-500">{m.college}</p>}
+                {m.journey && (
+                  <span className="mt-2.5 rounded-full bg-stone-900 px-3.5 py-1 text-[12px] font-extrabold text-white">{m.journey}</span>
                 )}
+              </div>
+
+              {m.bio && (
+                <p className="mt-3 border-t border-orange-100 pt-3 text-center text-[13px] italic leading-relaxed text-stone-700">
+                  &quot;{m.bio}&quot;
+                </p>
+              )}
+
+              {m.matchedOn[0] && (
+                <p className="mt-2.5 rounded-lg bg-orange-100 px-3 py-1.5 text-center text-[11px] font-semibold text-orange-700">
+                  {m.matchedOn[0]}
+                </p>
+              )}
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {([['1-on-1', 'only yours'], ['Weekly', 'live call'], ['Daily', 'chat replies']] as const).map(([big, small]) => (
+                  <div key={big} className="rounded-lg bg-stone-100 py-1.5 text-center">
+                    <p className="text-[12.5px] font-extrabold text-stone-900">{big}</p>
+                    <p className="text-[8.5px] font-semibold uppercase tracking-wide text-stone-500">{small}</p>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -178,15 +210,6 @@ function MentorPool({ mentors }: { mentors: MentorPreview[] }) {
         <p className="text-[12.5px] leading-snug text-stone-700">
           <b>These are real IIM mentors, already guiding students on CareerRai.</b> Upgrade and one of them is assigned to you — a real person, within 24 hours.
         </p>
-      </div>
-
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        {([['1-on-1', 'only yours'], ['Weekly', 'live call'], ['Daily', 'chat replies']] as const).map(([big, small]) => (
-          <div key={big} className="rounded-xl bg-stone-100 py-2 text-center">
-            <p className="text-[14px] font-extrabold text-stone-900">{big}</p>
-            <p className="text-[9.5px] font-semibold uppercase tracking-wide text-stone-500">{small}</p>
-          </div>
-        ))}
       </div>
     </>
   );

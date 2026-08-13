@@ -21,6 +21,7 @@ import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { PositionStrip } from '@/components/home/position-strip';
+import { MentorTeaserCard } from '@/components/home/mentor-teaser-card';
 import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
@@ -540,6 +541,14 @@ export default async function DailyTrackerPage() {
 
         {/* 2 · TODAY'S PLAN — with whole-plan, busy-day and reset actions. */}
         {planBlock}
+
+        {/* The mentor teaser (13 Aug) — the piece the 9 Aug mock had and Home
+            never actually built: a real buddy card between the plan and the
+            log. Two honest states inside the component itself — a real
+            assigned buddy if one exists, else the real top match from the
+            same showcase engine My Buddy uses. Never a claim of assignment
+            that has not happened. */}
+        <MentorTeaserCard studentId={user.id} buddyId={buddyId} isPremium={!!profile?.is_premium} />
 
         {/* 3 · LOG + MENTOR — the streak hero, the log, the buddy insight. */}
         {logBlock}
