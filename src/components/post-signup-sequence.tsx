@@ -7,6 +7,7 @@ import { useInstall } from '@/lib/install/use-install';
 import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 import { SixPromises } from '@/components/six-promises';
+import ScreenLogTour from '@/app/student/onboarding/screens/screen-log-tour';
 
 // The setup journey, made visible (founder, 21 July: "it should feel like a
 // journey, not a boring job — sticky like a magnet till app notifications are
@@ -56,7 +57,7 @@ function JourneyRail({ current, stations }: { current: number; stations: readonl
 // here needs it any more.
 
 
-type Step = 'promises' | 'reminders' | 'installFirst' | 'openApp';
+type Step = 'promises' | 'reminders' | 'logTour' | 'installFirst' | 'openApp';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -301,10 +302,10 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
                 <p className="text-sm font-semibold text-emerald-700">Done. We&apos;ve got you from here.</p>
                 <button
                   type="button"
-                  onClick={finishCommitment}
+                  onClick={() => setStep('logTour')}
                   className="mt-1 w-full rounded-2xl bg-stone-900 py-3.5 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
                 >
-                  Open today&apos;s plan →
+                  Last thing →
                 </button>
               </div>
             ) : (
@@ -336,13 +337,34 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
 
                 <button
                   type="button"
-                  onClick={finishCommitment}
+                  onClick={() => setStep('logTour')}
                   className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
                 >
-                  {pushState ? 'Open my plan →' : 'Maybe later'}
+                  {pushState ? 'Last thing →' : 'Maybe later'}
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── The last screen before Home: practise the log ──────────────────
+            Built 13 Aug and wired into onboarding-modal — which turned out to
+            be unreachable for anyone who signs up through /start, because
+            that route marks onboarding_completed server-side, so the modal
+            never renders. Every real student therefore finished setup without
+            ever seeing it. It belongs here: this sequence IS the last thing
+            between signup and Home.
+
+            Practice only — writes nothing, and skippable (Incident #2). */}
+        {step === 'logTour' && (
+          <div className="space-y-4">
+            <JourneyRail current={stations.length - 1} stations={stations} />
+            <ScreenLogTour
+              onNext={async () => { finishCommitment(); }}
+              onBack={() => setStep('reminders')}
+              canGoBack
+              isLoading={false}
+            />
           </div>
         )}
 

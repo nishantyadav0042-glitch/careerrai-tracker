@@ -229,15 +229,17 @@ function ChallengeModal({ challenge, onClose }: { challenge: ChallengeView; onCl
                 precise thing the no-small-numbers rule exists to prevent.
                 Being early is still a nice status; it just does not need a
                 count attached to it. */}
-            {verdict.communityCorrectPct != null ? (
+            {/* When there is no real community number yet, say NOTHING.
+                Founder, 13 Aug: "why are you mentioning you are among the
+                first… it's unnecessary." He is right — it is a consolation
+                line dressed as a stat. It tells the student nothing about
+                their answer, and on a quiet day it quietly advertises that
+                the room is empty. Silence reads as normal; a filler line
+                reads as an excuse. */}
+            {verdict.communityCorrectPct != null && (
               <p className="flex items-center gap-1.5 text-[12px] text-stone-500">
                 <Users className="h-3.5 w-3.5" />
                 {verdict.communityCorrectPct}% of {verdict.attemptCount} students got this right
-              </p>
-            ) : (
-              <p className="flex items-center gap-1.5 text-[12px] text-stone-500">
-                <Users className="h-3.5 w-3.5" />
-                You&apos;re among the first to attempt today&apos;s question
               </p>
             )}
 

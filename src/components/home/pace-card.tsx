@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronRight, Flame, Shield } from 'lucide-react';
 import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
 import { remainingMockHours } from '@/lib/study-pace';
@@ -62,9 +62,31 @@ interface PaceCardProps {
   targetIso: string;
   week: number[];
   weekLabels: string[];
+  /** Absorbed from PositionStrip (13 Aug) — see the merge note below. */
+  streak: number;
+  shields: number;
+  todayHours: number;
+  /** Absorbed from ImportantDates — the two anchors this card didn't have.
+   *  The syllabus date is already here as `targetIso`, so it is NOT passed
+   *  again; repeating it was half of what made the old stack redundant. */
+  mocksLabel: string;
+  revisionLabel: string;
 }
 
-export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
+// ── One card, not three (founder, 13 Aug) ───────────────────────────────────
+//
+// Home carried three separate black blocks — PositionStrip, this, and
+// ImportantDates — and between them the finish date appeared THREE times,
+// "covered %" twice and the pace verdict twice. His note: "combine all these
+// 3 black screens into one very smartly or max 2, with minimal spaces… they
+// don't deserve this much space."
+//
+// Merged here rather than in a new component so the reschedule flow (the only
+// interactive thing in the group, and the most-tested) keeps working
+// untouched. Nothing was dropped: streak, shields, hours-today, coverage
+// ring, pace verdict, days left, the week sparkline, the finish date, mocks
+// and revision anchors are all still on screen — each said exactly once.
+export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, todayHours, mocksLabel, revisionLabel }: PaceCardProps) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
@@ -200,6 +222,22 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
   // provably readable.
   return (
     <div className="overflow-hidden rounded-2xl bg-stone-900 p-3 text-white">
+      {/* Row 1 — the streak line PositionStrip used to be. The pace chip moved
+          up here beside it, so the verdict is stated once, at the top. */}
+      <div className="mb-2 flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Flame className={streak > 0 ? 'h-4 w-4 shrink-0 text-orange-400' : 'h-4 w-4 shrink-0 text-stone-500'} />
+          <span className="text-[13.5px] font-extrabold">{streak}-day streak</span>
+          {shields > 0 && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-stone-300">
+              <Shield className="h-2.5 w-2.5" />{shields}
+            </span>
+          )}
+          <span className="ml-1 truncate text-[11.5px] text-stone-400">{todayHours}h today</span>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
+      </div>
+
       <div className="flex items-center gap-2.5">
         {/* Ring — % of syllabus done */}
         <div className="relative shrink-0">
@@ -220,8 +258,9 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
 
         {/* Detail — one clean line, no repeated pace stats */}
         <div className="min-w-0 flex-1">
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
-          <p className="mt-0.5 text-[14px] font-extrabold leading-tight text-white">{headline}</p>
+          {/* The tone chip lives in the row above now — it was appearing twice
+              across the old three-card stack. */}
+          <p className="text-[14px] font-extrabold leading-tight text-white">{headline}</p>
           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-300"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
         </div>
 
@@ -231,10 +270,17 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
-        <span className="text-[12px] text-stone-300">Finish by <span className="font-bold text-white">{fmt(targetIso)}</span></span>
+      {/* Row 3 — the three plan anchors ImportantDates used to be, plus the
+          reschedule control. Syllabus reads off targetIso, so the date that
+          used to be printed three times across the stack now appears once. */}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px]">
+          <span className="text-stone-400">Syllabus <b className="text-white">{fmt(targetIso)}</b></span>
+          <span className="text-stone-400">Mocks <b className="text-white">{mocksLabel}</b></span>
+          <span className="text-stone-400">Revision <b className="text-white">{revisionLabel}</b></span>
+        </div>
         <button type="button" onClick={() => { setEditing((v) => !v); setErr(null); }}
-          className="inline-flex items-center gap-0.5 text-[12px] font-bold text-orange-400 hover:underline">
+          className="inline-flex shrink-0 items-center gap-0.5 text-[12px] font-bold text-orange-400 hover:underline">
           Reschedule <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>

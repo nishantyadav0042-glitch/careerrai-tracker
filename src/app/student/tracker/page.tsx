@@ -20,9 +20,7 @@ import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
-import { PositionStrip } from '@/components/home/position-strip';
 import { MentorTeaserCard } from '@/components/home/mentor-teaser-card';
-import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { getStudentProfile } from '@/lib/student-profile';
@@ -283,7 +281,9 @@ export default async function DailyTrackerPage() {
   //   daily habit. The final 3-week consolidation still happens — inside the
   //   plan — but the anchor strip now tells the truth: revision is continuous.
   const fmtDM = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  const syllabusLabel = targetIso ? fmtDM(new Date(targetIso + 'T00:00:00')) : '—';
+  // No syllabusLabel any more: the merged position card formats the finish
+  // date straight from targetIso, so this second derivation of the same date
+  // would have been a third place for it to drift.
   const mockSeasonStart = new Date(examYear, 7, 1); // 1 Aug of the CAT year
   const mockLabel = now >= mockSeasonStart ? 'Every week' : `Starts ${fmtDM(mockSeasonStart)}`;
   // Revision season (founder, 21 July): structured revision opens 1 September
@@ -477,15 +477,6 @@ export default async function DailyTrackerPage() {
           <p className="text-[13px] text-stone-500">{slotGreeting(slot)}</p>
         </div>
 
-        {/* S3 — POSITION, consolidated (13 Aug founder ask): streak, syllabus
-            date, coverage% and hours-today in one strip, composed entirely
-            from numbers this page already computed for PaceCard below —
-            nothing here is a new query or a new engine. Only renders once
-            pace/targetIso exist, same gate PaceCard already uses. */}
-        {pace && targetIso && (
-          <PositionStrip streak={currentStreak} shields={momentum.shields} pace={pace} targetIso={targetIso} todayHours={todayHours} />
-        )}
-
         {/* Streak restore (founder, 23 Jul): shields no longer auto-cover a
             miss. A broken streak shows a Restore button the student taps
             themselves (Snapchat-style); out of shields → one honest line. */}
@@ -529,8 +520,20 @@ export default async function DailyTrackerPage() {
             topic-stats grid are gone from Home: the plan is the product and it
             now sits above the fold, not at the bottom of nine blocks. */}
 
-        {/* 1 · POSITION — % done, pace, finish date, reschedule (with hours). */}
-        {pace && targetIso && <PaceCard pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels} />}
+        {/* 1 · POSITION — ONE card (13 Aug founder ask: "combine all these 3
+            black screens into one… they don't deserve this much space").
+            Streak/shields/hours-today (was PositionStrip), the coverage ring +
+            pace verdict + week sparkline, and the syllabus/mocks/revision
+            anchors (was ImportantDates) now live in a single block. The finish
+            date used to be printed three times across those cards; it appears
+            once. Reschedule is unchanged. */}
+        {pace && targetIso && (
+          <PaceCard
+            pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels}
+            streak={currentStreak} shields={momentum.shields} todayHours={todayHours}
+            mocksLabel={mockLabel} revisionLabel={revLabel}
+          />
+        )}
 
         {/* The campaign card — eligible FREE students only, self-hiding when the
             offer ends, sells out, they buy, or they dismiss it. Sits BELOW the
@@ -563,8 +566,8 @@ export default async function DailyTrackerPage() {
         {/* The daily insight, as a passing 7-second cloud. */}
         {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
 
-        {/* Context, below the work: important dates + what we do for them. */}
-        {targetIso && <ImportantDates syllabus={syllabusLabel} mocks={mockLabel} revision={revLabel} />}
+        {/* ImportantDates was a third dark card repeating the syllabus date a
+            third time — its three anchors now sit in the position card above. */}
         <ValueProofCard
           stats={{
             plansBuilt: plansBuiltCount ?? 0,

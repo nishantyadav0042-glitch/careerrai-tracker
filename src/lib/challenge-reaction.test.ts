@@ -41,12 +41,16 @@ describe('tone — this fires on a student who just got it wrong', () => {
 });
 
 describe('no small numbers on the challenge surface either', () => {
-  it('the empty-community fallback no longer prints an attempt count', () => {
+  it('says nothing at all when there is no real community number', () => {
     const card = readFileSync('src/components/daily-challenge-card.tsx', 'utf8');
-    // It used to read "one of the first {attemptCount} to attempt today's
-    // question", which rendered as "one of the first 2" and reported our size.
+    // First this printed "one of the first {attemptCount}", which rendered as
+    // "one of the first 2" and reported our size. That was replaced by a
+    // countless "you're among the first" — which the founder then cut too
+    // (13 Aug): it is a consolation line dressed as a stat, tells the student
+    // nothing about their answer, and on a quiet day still advertises an
+    // empty room. The correct empty state is silence.
     expect(card).not.toMatch(/first \{verdict\.attemptCount\}/);
-    expect(card).toContain('among the first to attempt');
+    expect(card).not.toContain('among the first');
   });
 
   it('the real percentage is still gated behind a live count', () => {

@@ -1,58 +1,85 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-// ── S3: the Position strip consolidates, it does not recompute ─────────────
+// ── One position card, not three (13 Aug) ───────────────────────────────────
 //
-// The founder's mock showed one dark strip carrying streak, syllabus date,
-// coverage% and hours-today. Home already had every one of those numbers —
-// split across a separate white streak pill and PaceCard below it. The only
-// honest way to build this is composition: reuse the exact variables the page
-// already computed for PaceCard, add zero new queries and zero new pace math.
+// Home used to stack three separate black blocks: PositionStrip (streak +
+// syllabus date + coverage% + hours-today), PaceCard (ring + pace verdict +
+// week sparkline + finish date + reschedule) and ImportantDates (syllabus /
+// mocks / revision anchors).
+//
+// Between them the finish date was printed THREE times, coverage% twice and
+// the pace verdict twice. Founder: "combine all these 3 black screens into
+// one very smartly or max 2, with minimal spaces… they don't deserve this
+// much space."
+//
+// They merged into PaceCard rather than a new component so the reschedule
+// flow — the only interactive part, and the most-tested — kept working
+// untouched. This guard pins the merge: everything still shown, each fact
+// said once, and the composition rule that made the strip safe in the first
+// place (reuse Home's numbers, never recompute them) still holding.
 
 const PAGE = 'src/app/student/tracker/page.tsx';
-const STRIP = 'src/components/home/position-strip.tsx';
+const CARD = 'src/components/home/pace-card.tsx';
 
-describe('PositionStrip reuses, never recomputes', () => {
-  it('todayHours is read off the SAME hoursByDate map PaceCard’s sparkline uses', () => {
+describe('the position card composes — it never recomputes', () => {
+  it('todayHours is read off the SAME hoursByDate map the sparkline uses', () => {
+    expect(readFileSync(PAGE, 'utf8')).toContain('const todayHours = hoursByDate.get(todayStr)');
+  });
+
+  it('streak and shields come from the existing momentum object, not a new query', () => {
     const src = readFileSync(PAGE, 'utf8');
-    expect(src).toContain('const todayHours = hoursByDate.get(todayStr)');
+    expect(src).toContain('streak={currentStreak}');
+    expect(src).toContain('shields={momentum.shields}');
   });
 
-  it('the status chip wording comes from the SAME map PaceCard uses — one source, not two', () => {
-    // 13 Aug incident: this map used to live inside pace-card.tsx, a
-    // 'use client' file. PositionStrip (a plain server component) importing
-    // it as a named const from there crashed Home in production — the import
-    // resolved to undefined on the server. Fixed by moving the map to a
-    // plain, boundary-free module both files import from identically.
-    const strip = readFileSync(STRIP, 'utf8');
-    const paceCard = readFileSync('src/components/home/pace-card.tsx', 'utf8');
-    expect(strip).toContain("from '@/lib/pace-tone'");
-    expect(paceCard).toContain("from '@/lib/pace-tone'");
-    // Neither file may declare its own TONE any more.
-    expect(strip).not.toMatch(/const TONE\s*[:=]/);
-    expect(paceCard).not.toMatch(/const TONE\s*[:=]/);
-  });
-
-  it('the shared map lives in a module with no client-boundary directive anywhere it is imported from', () => {
-    const tone = readFileSync('src/lib/pace-tone.ts', 'utf8');
-    expect(tone).not.toContain("'use client'");
-  });
-
-  it('renders under the same gate PaceCard already uses — no new empty-state logic', () => {
-    const src = readFileSync(PAGE, 'utf8');
-    expect(src).toMatch(/\{pace && targetIso && \(\s*<PositionStrip/);
+  it('no pace math lives in the card — it only renders what the engine returned', () => {
+    const src = readFileSync(CARD, 'utf8');
+    // The card may format and position numbers; it must never derive the
+    // verdict itself. computeRequiredPace belongs to study-pace.ts.
+    expect(src).not.toContain('function computeRequiredPace');
   });
 });
 
-describe('the old duplicate streak pill is gone, not just hidden behind the new one', () => {
-  it('the greeting no longer renders its own streak card', () => {
+describe('the three merged blocks are gone, and their content is not', () => {
+  it('the two absorbed components no longer exist as separate cards', () => {
     const src = readFileSync(PAGE, 'utf8');
-    expect(src).not.toContain('day streak</div>');
+    expect(src).not.toMatch(/<PositionStrip/);
+    expect(src).not.toMatch(/<ImportantDates/);
   });
 
-  it('PositionStrip is the only place Home renders a streak count now', () => {
+  it('Home renders exactly ONE position card', () => {
     const src = readFileSync(PAGE, 'utf8');
-    const streakStripUses = (src.match(/<PositionStrip/g) ?? []).length;
-    expect(streakStripUses).toBe(1);
+    expect((src.match(/<PaceCard/g) ?? []).length).toBe(1);
+  });
+
+  it('every fact the old stack showed is still on screen', () => {
+    const src = readFileSync(CARD, 'utf8');
+    for (const shown of ['-day streak', 'h today', 'Covered', 'Syllabus ', 'Mocks ', 'Revision ', 'Reschedule']) {
+      expect(src, `merged card dropped "${shown}"`).toContain(shown);
+    }
+  });
+
+  it('the finish date is derived once, not formatted separately on the page', () => {
+    // It used to be built into a `syllabusLabel` on the page AND formatted
+    // inside the card — two derivations of one date, which is how three
+    // copies of it ended up on screen.
+    expect(readFileSync(PAGE, 'utf8')).not.toContain('const syllabusLabel');
+  });
+
+  it('the pace verdict chip appears once, not twice', () => {
+    const src = readFileSync(CARD, 'utf8');
+    expect((src.match(/\$\{tone\.chipBg\}/g) ?? []).length).toBe(1);
+  });
+});
+
+describe('the client-boundary rule that caused the one production crash still holds', () => {
+  it('TONE is imported from the plain module, never redeclared', () => {
+    // A server component importing a named const from a 'use client' file
+    // builds fine and resolves to undefined at runtime — that is what took
+    // /student/tracker down for ~8 minutes. TONE lives in lib/pace-tone.ts.
+    const src = readFileSync(CARD, 'utf8');
+    expect(src).toContain("from '@/lib/pace-tone'");
+    expect(src).not.toMatch(/^const TONE\s*[:=]/m);
   });
 });

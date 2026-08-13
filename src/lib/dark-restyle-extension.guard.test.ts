@@ -34,15 +34,11 @@ describe('PaceCard — the ring and pace math are untouched, only the shell', ()
   });
 });
 
-describe('ImportantDates — labels unchanged, only colour', () => {
-  it('still renders the same three anchors', () => {
-    const src = readFileSync('src/components/home/important-dates.tsx', 'utf8');
-    expect(src).toContain("label: 'Syllabus'");
-    expect(src).toContain("label: 'Mocks'");
-    expect(src).toContain("label: 'Revision'");
-    expect(src).toContain('bg-stone-900');
-  });
-});
+// ImportantDates was merged into the position card on 13 Aug — its three
+// anchors (syllabus / mocks / revision) now render inside PaceCard, which
+// position-strip.guard.test.ts pins. Nothing to assert about a file that no
+// longer exists; deleting the block beats leaving a test that reads a
+// component Home stopped rendering.
 
 describe('LockedBuddyHub — the comparison cards are dark, the wedge copy is frozen', () => {
   const src = () => readFileSync('src/components/locked-buddy-hub.tsx', 'utf8');
