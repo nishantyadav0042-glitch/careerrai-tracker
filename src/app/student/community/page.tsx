@@ -23,17 +23,12 @@ export default function CommunityPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-3 pb-32">
-      {/* Compact hero — small type, warm colour. The page must feel like a
-          place students MADE, not a grey admin list (founder, 26 Jul). */}
-      <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-white">
-        <h1 className="text-[17px] font-extrabold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
-          Daily Pick 🤝
-        </h1>
-        <p className="mt-0.5 text-[11px] leading-snug text-white/80">
-          One small thing from a fellow CAT aspirant, every day.
-          <span className="font-bold text-white"> You decide what helps — by the students, for the students.</span>
-        </p>
-      </div>
+      {/* The gradient hero that used to sit here is GONE (13 Aug). It said
+          "Daily Pick" and "by the students, for the students" directly above a
+          card that now says both, louder — two headers stacked, the second
+          contradicting the first's design. Founder: "this mix of screen should
+          not exist." The card is the header now, and it is the same header on
+          Home, so the surface reads identically wherever a student meets it. */}
 
       {/* One thing per day, chosen by the rotation — voting is now one of
           several asks rather than the only one. 12 Aug: twelve openers, zero

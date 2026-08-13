@@ -54,5 +54,10 @@ export interface ChallengeView {
     attemptCount: number;
     /** Where this topic sits in the student's own plan. */
     coverageStatus: string;
+    /** How long they took. Null for attempts made before the clock shipped. */
+    yourSeconds?: number | null;
+    beatTheClock?: boolean | null;
+    /** Share of timed attempts inside the target; null below the density gate. */
+    inTimePct?: number | null;
   } | null;
 }

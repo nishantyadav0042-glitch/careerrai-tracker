@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Swords, Check, X, Users, HeartHandshake } from 'lucide-react';
+import { Check, X, Users, HeartHandshake } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { track } from '@/lib/journey';
 import { shareChallenge } from '@/lib/share-challenge';
@@ -16,6 +16,16 @@ import { TARGET_SECONDS, type ChallengeView } from '@/lib/challenge';
 //
 // Statuses shown in plain words: the verdict line tells the student where
 // this topic sits in THEIR plan, which is the integration no competitor has.
+// A byline is EARNED by a student. A contributed question carries their real
+// name; ours carries its section and topic and nothing else. We never sign our
+// own content as if a student wrote it (founder, 13 Aug: "don't mention the
+// name of CareerRai under questions — if a student submits then only their
+// name should be there, otherwise just mention the topic and Section").
+function byline(c: ChallengeView): string {
+  const base = `${c.section} · ${c.topic}`;
+  return c.contributorName ? `${base} · by ${c.contributorName}` : base;
+}
+
 const STATUS_LINE: Record<string, string> = {
   not_started: "a topic you haven't started yet",
   learning: "a topic you're learning",
@@ -51,60 +61,106 @@ export function DailyChallengeCard() {
 
   return (
     <>
-      <div className="rounded-2xl border border-stone-200 bg-white p-4">
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600">
-            <Swords className="h-4 w-4 text-white" />
-          </span>
-          {/* "Proof", not "Challenge" — every prep app has a Daily Quiz; the
-              name must say what makes ours different: this is measurement.
-              You are not playing, you are adding a row to your evidence. */}
-          <h2 className="text-sm font-bold text-stone-900">Today&apos;s Proof</h2>
-          <span className="ml-auto text-[11px] font-bold text-stone-400">{done}/{challenges.length}</span>
+      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        {/* ── The loud line, on the card itself ────────────────────────────
+            Founder, 13 Aug: "on top should be one line loud — Daily Pick, BY
+            THE STUDENTS, FOR THE STUDENTS — very loudly, so students notice."
+            It went into the question sheet first, which is exactly the place a
+            student cannot see until they have already opened a question. This
+            card is what is on screen, so it carries the line, on every surface
+            the card appears on. */}
+        <div className="bg-stone-900 px-4 py-2.5 text-white">
+          <p className="text-[15px] font-black uppercase leading-none tracking-[0.14em]">Daily Pick</p>
+          <p className="mt-1 text-[10.5px] font-black uppercase leading-none tracking-[0.09em] text-orange-400">
+            By the students, for the students
+          </p>
         </div>
 
-        {allDone ? (
-          <p className="mt-2 text-[13px] text-stone-600">
-            Proof logged for today — tomorrow&apos;s at 8&nbsp;AM.
-          </p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {challenges.map((c) => (
-              <button
-                key={c.id} type="button"
-                onClick={() => { setOpen(c); track('challenge_opened', { section: c.section, answered: !!c.attempt }); }}
-                className="flex w-full items-center gap-2.5 rounded-xl border border-stone-200 px-3 py-2.5 text-left active:scale-[0.99]"
-              >
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
-                  c.attempt ? (c.attempt.isCorrect ? 'bg-emerald-600 text-white' : 'bg-rose-500 text-white') : 'bg-stone-100 text-stone-600'
-                }`}>
-                  {c.attempt ? (c.attempt.isCorrect ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />) : c.section.charAt(0)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-bold text-stone-900">{c.section} · {c.topic}</span>
-                  {c.contributorName && (
-                    <span className="block truncate text-[11px] text-indigo-600">
-                      Shared by {c.contributorName}
+        <div className="p-4">
+          {allDone ? (
+            /* ── The finished state is the payoff, not a locked door ────────
+               It used to be one grey sentence saying come back at 8 AM: the
+               student had just solved a timed CAT question and the screen
+               said nothing about it. The clock's result is the whole reason
+               the clock exists, so it is reported here, and it stays readable
+               all day. */
+            <div className="space-y-2">
+              {challenges.map((c) => (
+                <button
+                  key={c.id} type="button"
+                  onClick={() => { setOpen(c); track('challenge_opened', { section: c.section, answered: true }); }}
+                  className="flex w-full items-center gap-2.5 rounded-xl bg-stone-50 px-3 py-2.5 text-left active:scale-[0.99]"
+                >
+                  <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${c.attempt?.isCorrect ? 'bg-emerald-600' : 'bg-rose-500'}`}>
+                    {c.attempt?.isCorrect ? <Check className="h-4 w-4 text-white" /> : <X className="h-4 w-4 text-white" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-bold text-stone-900">
+                      {c.attempt?.isCorrect ? 'Got it' : 'Missed it'}
+                      {c.attempt?.yourSeconds != null && (
+                        <span className={c.attempt.beatTheClock ? 'text-emerald-700' : 'text-stone-500'}>
+                          {' '}· {c.attempt.yourSeconds}s{c.attempt.beatTheClock ? ' ⚡' : ''}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                <span className="shrink-0 text-[11px] font-bold text-orange-600">
-                  {c.attempt ? 'Review' : 'Solve'}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+                    <span className="block truncate text-[11px] text-stone-500">
+                      {byline(c)}
+                      {c.attempt?.inTimePct != null && ` · ${c.attempt.inTimePct}% finished in time`}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-bold text-orange-600">See why</span>
+                </button>
+              ))}
+              <p className="pt-0.5 text-center text-[11px] text-stone-400">
+                Next one at 8&nbsp;AM tomorrow.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* The deal, stated BEFORE they open it. A timer nobody was told
+                  about is a trap; a timer announced up front is the reason
+                  they stop scrolling and start solving. */}
+              <p className="text-[12px] font-bold text-stone-900">
+                One question. <span className="text-orange-600">{TARGET_SECONDS} seconds.</span>
+                <span className="ml-1 font-medium text-stone-500">Clock starts when you open it.</span>
+              </p>
+              {challenges.map((c) => (
+                <button
+                  key={c.id} type="button"
+                  onClick={() => { setOpen(c); track('challenge_opened', { section: c.section, answered: !!c.attempt }); }}
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-stone-200 px-3 py-2.5 text-left active:scale-[0.99]"
+                >
+                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+                    c.attempt ? (c.attempt.isCorrect ? 'bg-emerald-600 text-white' : 'bg-rose-500 text-white') : 'bg-stone-100 text-stone-600'
+                  }`}>
+                    {c.attempt ? (c.attempt.isCorrect ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />) : c.section.charAt(0)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-bold text-stone-900">{c.section} · {c.topic}</span>
+                    {c.contributorName && (
+                      <span className="block truncate text-[11px] font-semibold text-indigo-600">
+                        Shared by {c.contributorName}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[11px] font-bold text-orange-600">
+                    {c.attempt ? 'Review' : 'Solve'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
-        {/* Students helping students — always visible, open from day one. */}
-        <button
-          type="button"
-          onClick={() => { setShare(true); track('community_share_opened', {}); }}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-stone-100 pt-2.5 text-[12px] font-semibold text-stone-500"
-        >
-          <HeartHandshake className="h-3.5 w-3.5" />
-          Help the next student
-        </button>
+          {/* Students helping students — always visible, open from day one. */}
+          <button
+            type="button"
+            onClick={() => { setShare(true); track('community_share_opened', {}); }}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-stone-100 pt-2.5 text-[12px] font-semibold text-stone-500"
+          >
+            <HeartHandshake className="h-3.5 w-3.5" />
+            Help the next student
+          </button>
+        </div>
       </div>
 
       {open && (

@@ -94,4 +94,62 @@ describe('the screen says whose it is', () => {
   it('leads with the by-students-for-students line', () => {
     expect(readFileSync(CARD, 'utf8')).toContain('by the students, for the students');
   });
+
+  // 13 Aug: the loud line went into the question SHEET, which a student cannot
+  // see until they have already opened a question. The founder had answered
+  // today's question, so the only thing on his screen was the un-redesigned
+  // list card — old heading, no clock, no line. "No timer, nothing, no header
+  // updates, neither the design updates." The card is the surface; it carries
+  // the line.
+  it('the CARD itself carries the loud line, not only the sheet', () => {
+    const src = readFileSync(CARD, 'utf8');
+    const header = src.indexOf('By the students, for the students');
+    const modal = src.indexOf('function ChallengeModal');
+    expect(header, 'loud line missing from the card').toBeGreaterThan(-1);
+    expect(header, 'loud line is inside the sheet, not on the card').toBeLessThan(modal);
+  });
+
+  it('the card announces the clock BEFORE the question is opened', () => {
+    // A timer nobody was told about is a trap. Read off the shared constant,
+    // never a re-typed 90.
+    const src = readFileSync(CARD, 'utf8');
+    expect(src).toContain('{TARGET_SECONDS} seconds');
+  });
+});
+
+describe('the finished state is a payoff, not a locked door', () => {
+  // It was one grey sentence pointing at 8 AM tomorrow. A student who had just
+  // solved a timed CAT question was shown nothing about it — and for a founder
+  // testing the feature, that grey sentence WAS the feature.
+  it('reports their own time back to them', () => {
+    const src = readFileSync(CARD, 'utf8');
+    expect(src).toContain('c.attempt?.yourSeconds != null');
+    expect(src).toContain('beatTheClock');
+  });
+
+  it('the list endpoint actually returns the clock data the card reads', () => {
+    // The card can only show this if /api/challenge/today sends it; it used to
+    // select neither seconds_taken nor any timing tally.
+    const src = readFileSync('src/app/api/challenge/today/route.ts', 'utf8');
+    expect(src).toContain('seconds_taken');
+    expect(src).toContain('inTimePct');
+    expect(src).toContain('<= TARGET_SECONDS');
+  });
+
+  it('"x% finished in time" keeps the density gate here too', () => {
+    const src = readFileSync('src/app/api/challenge/today/route.ts', 'utf8');
+    expect(src).toContain('st.timed >= SPLIT_MIN_ATTEMPTS');
+  });
+});
+
+describe('a question is never signed with our own name', () => {
+  // The byline sweep on 13 Aug fixed three community surfaces and missed this
+  // route, which was still returning the literal string for every contributed
+  // question — under the questions, which is exactly what the founder named.
+  it('the challenge route resolves a real contributor name or none at all', () => {
+    const src = readFileSync('src/app/api/challenge/today/route.ts', 'utf8');
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toContain("'a CareerRai student'");
+    expect(code).toContain('isCuratedName');
+  });
 });
