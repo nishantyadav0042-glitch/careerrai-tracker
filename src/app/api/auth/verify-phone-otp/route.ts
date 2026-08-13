@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { parseSignupDevice } from '@/lib/device-detect';
+import { attributionFromCookie } from '@/lib/attribution';
 import { setDailyHours } from '@/lib/daily-hours';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeIndianPhone } from '@/lib/phone';
@@ -151,6 +152,26 @@ export async function POST(request: NextRequest) {
     // sent to Expedify so the AI agent gives device-specific guidance.
     const signupDevice = parseSignupDevice(request.headers.get('user-agent'));
 
+    // Which ad paid for this student. The cr_attr cookie has been capturing
+    // utm/gclid/fbclid on landing for a while; this is the first place it is
+    // read server-side, which is what turns it into an answerable question
+    // (GROWTH-OS §5 listed the missing join under Planned).
+    //
+    // Written on BOTH paths below, not just the insert. The stub-update branch
+    // exists because a DB trigger can win the race and create the row first —
+    // and that branch is the one that already cost 32 students their name and
+    // number by writing fewer fields than the insert did. Attribution must not
+    // become the next field that only lands when the timing is lucky.
+    const attr = attributionFromCookie(request.cookies.get('cr_attr')?.value ?? null);
+    const attrColumns = {
+      attr_channel: attr.channel,
+      attr_source: attr.source,
+      attr_medium: attr.medium,
+      attr_campaign: attr.campaign,
+      attr_click_id: attr.clickId,
+      attr_stamped_at: new Date().toISOString(),
+    };
+
     if (!existing) {
       // ── The race that lost 32 students their name and number ──────────────
       //
@@ -184,6 +205,7 @@ export async function POST(request: NextRequest) {
         signup_device: signupDevice.device,
         signup_browser: signupDevice.browser,
         password_set: false,
+        ...(role === 'student' ? attrColumns : {}),
       }, { onConflict: 'id' });
       if (upsertErr) {
         // A profile row is not optional: without it the student has no plan, no
@@ -216,7 +238,7 @@ export async function POST(request: NextRequest) {
           buddy_id: role === 'student' ? (entry?.assigned_buddy_id ?? null) : null,
           signup_device: signupDevice.device,
           signup_browser: signupDevice.browser,
-          ...(role === 'student' ? { subscription_status: 'free', signup_source: signupSource } : {}),
+          ...(role === 'student' ? { subscription_status: 'free', signup_source: signupSource, ...attrColumns } : {}),
         })
         .eq('id', data.user.id);
       if (stubErr) {

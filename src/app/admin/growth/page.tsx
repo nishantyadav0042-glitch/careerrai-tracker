@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { AD_CHANNELS, CHANNEL_LABEL, type AdChannel } from '@/lib/attribution';
 import { TrendingUp } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export default async function AdminGrowthPage() {
   if (me?.role !== 'admin') redirect('/login');
 
   const [{ data: profiles }, { data: streaks }, { data: engagement }, { data: funnel }] = await Promise.all([
-    admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account'),
+    admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account, attr_channel, attr_source, attr_campaign, attr_stamped_at'),
     admin.from('streak_data').select('student_id, last_log_date'),
     admin.from('student_engagement').select('student_id, buddy_cta_clicks'),
     admin.from('funnel_events').select('step, anon_id').gte('created_at', daysAgoIso(30)),
@@ -81,6 +82,46 @@ export default async function AdminGrowthPage() {
     bySource.set(key, row);
   }
   const sources = [...bySource.entries()].sort((a, b) => b[1].n - a[1].n);
+
+  // ── Which ad paid for the lead ──────────────────────────────────────────
+  //
+  // Two "no channel" cases that must never be added together:
+  //
+  //   attr_stamped_at is null — the row predates attribution shipping, so we
+  //   simply never looked. Not evidence of anything.
+  //   channel 'direct' — we did look, and there was no ad marker.
+  //
+  // Merging them would quietly turn "we weren't measuring yet" into "these
+  // people came direct", which is the kind of number that survives into a
+  // budget decision precisely because it looks like data.
+  const byChannel = new Map<AdChannel, { n: number; onboarded: number; paid: number }>();
+  let untracked = 0;
+  for (const s of students) {
+    if (!s.attr_stamped_at) { untracked += 1; continue; }
+    const key = (AD_CHANNELS as readonly string[]).includes(String(s.attr_channel))
+      ? (s.attr_channel as AdChannel)
+      : 'direct';
+    const row = byChannel.get(key) ?? { n: 0, onboarded: 0, paid: 0 };
+    row.n += 1;
+    if (s.onboarding_completed) row.onboarded += 1;
+    if (s.subscription_status === 'active') row.paid += 1;
+    byChannel.set(key, row);
+  }
+  const channels = [...byChannel.entries()].sort((a, b) => b[1].n - a[1].n);
+  const tracked = students.length - untracked;
+
+  // ── Is capture actually working? ────────────────────────────────────────
+  //
+  // The question this answers is "is the pipe connected", which is NOT the
+  // same as "are the ads working". A stretch of signups where every tracked
+  // row says direct is the signature of a broken cookie/tag, and it looks
+  // identical to genuinely untagged traffic unless you name the difference.
+  const recent = students
+    .filter((s) => within(s.created_at, 14) && s.attr_stamped_at)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const recentWithSignal = recent.filter((s) => s.attr_channel && s.attr_channel !== 'direct');
+  const lastSignal = recentWithSignal[0]?.created_at ?? null;
+  const captureLive = tracked > 0;
 
   const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
   const onboardDrop = total - onboarded;
@@ -210,9 +251,82 @@ export default async function AdminGrowthPage() {
           </div>
         </div>
 
+        {/* Which ad paid for the lead */}
+        <div className="rounded-2xl border border-stone-200 bg-white p-5 mb-6">
+          <div className="flex items-baseline justify-between mb-1">
+            <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Where leads come from</p>
+            <span className="text-[11px] text-stone-400 tabular-nums">{tracked} tracked</span>
+          </div>
+
+          {/* Capture health — "is the pipe connected", answered before any number
+              below is trusted. A channel table that silently reports zeros is
+              indistinguishable from one that is measuring correctly. */}
+          {!captureLive ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-900">Capture not confirmed yet</p>
+              <p className="text-[12.5px] text-amber-800 mt-1">
+                No signup has been stamped with attribution yet. That is expected until the first person signs up
+                after this shipped — every existing student predates it. Send yourself a test click with
+                <code className="mx-1 rounded bg-amber-100 px-1">?utm_source=google&amp;utm_medium=cpc</code>
+                and sign up to confirm the whole path end to end.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+              <p className="text-sm font-semibold text-stone-900">
+                Capture is live · {recentWithSignal.length} of {recent.length} signups in the last 14 days carried an ad marker
+              </p>
+              <p className="text-[12.5px] text-stone-600 mt-1">
+                {lastSignal
+                  ? `Last attributed signup: ${istDay(new Date(lastSignal))}.`
+                  : 'No attributed signup in the last 14 days — if ads are running right now, check that the landing URLs still carry their utm tags.'}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-1.5 mt-4">
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 text-[11px] uppercase tracking-wide text-stone-400 font-semibold px-1">
+              <span>Channel</span><span className="text-right">Leads</span><span className="text-right">Onboarded</span><span className="text-right">Paid</span>
+            </div>
+            {channels.map(([ch, r]) => (
+              <Link
+                key={ch}
+                href={`/admin/growth/channel/${ch}`}
+                className="grid grid-cols-[1fr_auto_auto_auto] gap-3 text-sm px-1 py-1.5 border-t border-stone-100 hover:bg-stone-50"
+              >
+                <span className="text-stone-800 truncate">
+                  {CHANNEL_LABEL[ch]}
+                  {ch === 'meta_link' && (
+                    <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">can&apos;t confirm paid</span>
+                  )}
+                </span>
+                <span className="text-right tabular-nums text-stone-900 font-semibold">{r.n}</span>
+                <span className="text-right tabular-nums text-stone-500">{r.onboarded} ({pct(r.onboarded, r.n)}%)</span>
+                <span className="text-right tabular-nums text-stone-500">{r.paid}</span>
+              </Link>
+            ))}
+            {channels.length === 0 && <p className="text-sm text-stone-400 py-2">Nothing tracked yet.</p>}
+            {untracked > 0 && (
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 text-sm px-1 py-1.5 border-t border-stone-100 text-stone-400">
+                <span className="truncate">Signed up before tracking existed</span>
+                <span className="text-right tabular-nums">{untracked}</span>
+                <span /><span />
+              </div>
+            )}
+          </div>
+
+          <p className="text-[11px] text-stone-400 mt-3">
+            Tap a channel to see exactly which students it brought. <b>Meta link</b> is counted separately on purpose:
+            Facebook and Instagram add <code className="rounded bg-stone-100 px-1">fbclid</code> to organic posts and
+            shares too, so it is not proof of a paid click. Add
+            <code className="mx-1 rounded bg-stone-100 px-1">utm_medium=cpc</code> to your Meta ad URLs and those clicks
+            move into Meta Ads.
+          </p>
+        </div>
+
         {/* By source */}
         <div className="rounded-2xl border border-stone-200 bg-white p-5">
-          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3">By acquisition source</p>
+          <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold mb-3">How the account was created</p>
           <div className="space-y-1.5">
             <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 text-[11px] uppercase tracking-wide text-stone-400 font-semibold px-1">
               <span>Source</span><span className="text-right">Signups</span><span className="text-right">Onboarded</span><span className="text-right">Paid</span>
@@ -227,7 +341,10 @@ export default async function AdminGrowthPage() {
             ))}
             {sources.length === 0 && <p className="text-sm text-stone-400 py-2">No students yet.</p>}
           </div>
-          <p className="text-[11px] text-stone-400 mt-3">Source is self-reported at signup. Ad-campaign attribution (utm) is captured in a cookie — say the word and I&apos;ll persist it here per signup.</p>
+          <p className="text-[11px] text-stone-400 mt-3">
+            This is the account-creation route (self-signup vs allowlist), not an ad channel — which is why almost
+            everything lands in one bucket. For which ad paid for the lead, use <b>Where leads come from</b> above.
+          </p>
         </div>
       </div>
     </div>

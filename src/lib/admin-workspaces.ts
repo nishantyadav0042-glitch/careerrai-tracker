@@ -251,4 +251,5 @@ export const UNLISTED: Record<string, string> = {
   '/admin/leads/[id]': 'Detail page, reached from the leads list. Not a nav destination.',
   '/admin/buddy/[id]': 'Buddy 360 detail, reached from the mentor roster. Not a nav destination.',
   '/admin/payment/[id]': 'Payment 360 detail, reached from payments. Not a nav destination.',
+  '/admin/growth/channel/[channel]': 'The students behind one acquisition channel, reached by tapping a row in Growth. Not a nav destination.',
 };
