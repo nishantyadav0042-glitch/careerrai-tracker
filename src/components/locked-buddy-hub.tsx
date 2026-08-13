@@ -65,7 +65,19 @@ export function LockedBuddyHub({
         </p>
       </div>
 
-      {/* 2 — THE BUY. On the page, above the fold. One tap → Razorpay. */}
+      {/* 2 — THE PERSON. Founder, 13 Aug (circling the S2 mock): the matched
+          mentor card leads, "proper professional", before any price. The old
+          order was hero → price → …scroll… → mentor, so what a free student
+          actually saw was a poster and a bill; the one thing that makes the
+          price credible — a real, named IIM senior matched to their profile —
+          was below the fold. You sell a person, then their price. Every field
+          on the card is real (TRUST-OS: no invented mentors, ever); moving it
+          up changes nothing about it except that it finally gets seen. */}
+      {recommendedBuddies.length > 0 && (
+        <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
+      )}
+
+      {/* 3 — THE BUY. One tap → Razorpay, right under the person it pays for. */}
       <BuddyBuyButtons fullName={fullName} />
 
       {/* Zero-commission trust strip (founder) — reframes the price as fair:
@@ -108,11 +120,6 @@ export function LockedBuddyHub({
             {proofLine}
           </p>
         </div>
-      )}
-
-      {/* The real mentor — one best match, others one tap away */}
-      {recommendedBuddies.length > 0 && (
-        <RecommendedBuddies buddies={recommendedBuddies} studentName={fullName} />
       )}
 
       {/* Product proof — an example mock review, clearly labelled as one */}

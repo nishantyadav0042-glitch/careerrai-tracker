@@ -52,3 +52,22 @@ describe('everything below the hero is untouched — proven, already-honest sect
     expect(src).toMatch(/proof\.mappedTotal >= 25/);
   });
 });
+
+describe('the person leads, the price follows (founder, 13 Aug)', () => {
+  // He circled the S2 mentor-match mock: "proper professional, not like the
+  // one currently live." The card itself was already professional — it was
+  // below the fold, behind the price. What a free student saw was a poster
+  // and a bill; the one thing that makes the bill credible is the person.
+  it('the matched mentor renders BEFORE the buy buttons', () => {
+    const src = readFileSync('src/components/locked-buddy-hub.tsx', 'utf8');
+    const mentor = src.indexOf('<RecommendedBuddies');
+    const buy = src.indexOf('<BuddyBuyButtons');
+    expect(mentor, 'mentor card missing').toBeGreaterThan(-1);
+    expect(mentor).toBeLessThan(buy);
+  });
+
+  it('and appears exactly once — moved, not duplicated', () => {
+    const src = readFileSync('src/components/locked-buddy-hub.tsx', 'utf8');
+    expect((src.match(/<RecommendedBuddies/g) ?? []).length).toBe(1);
+  });
+});
