@@ -9,7 +9,6 @@ import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
-import { PlanResetButton } from '@/components/home/plan-reset-button';
 import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
@@ -376,7 +375,21 @@ export default async function DailyTrackerPage() {
           See my whole plan
         </Link>
         <BusyDayButton planSource={(profile?.plan_source as string | null) ?? null} />
-        <PlanResetButton />
+        {/* "Reset today's plan" removed 13 Aug. Founder: "why do both reset and
+            swap exist… I don't want fancy buttons existing just for existence
+            without any impact."
+            He was right, and it was worse than redundant. Reset deleted today's
+            daily_routines row AND today's routine_task_completions, then let
+            the next fetch rebuild from the SAME inputs (hours, coverage,
+            timetable) — so when nothing had changed it handed back an
+            near-identical plan while silently erasing every tick the student
+            had already made, and with them the day's credited hours.
+            Everything it was meant to offer already exists, and each of those
+            actually changes the plan:
+              Swap        — a different topic now, and the old one returns
+                            tomorrow (+50 in topic-selector, never lost).
+              Busy day    — less time today, and the finish date moves with it.
+              Reschedule  — a different date, priced before it is committed. */}
       </div>
     </>
   );

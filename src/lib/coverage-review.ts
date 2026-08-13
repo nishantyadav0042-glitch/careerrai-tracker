@@ -24,18 +24,47 @@ export function daysSinceReview(reviewedAt: string | null | undefined, now: Date
 }
 
 /**
- * Never reviewed, or a full interval has passed. Onboarding must be finished
- * first — a student mid-onboarding is already filling the matrix, and asking
- * them to review it in the same session would be absurd.
+ * A full interval has passed since the matrix was last known-good.
+ *
+ * ── The daily-nag bug (founder, 13 Aug: "this screen should come once a week
+ * not daily… it comes daily whenever I open the app") ──────────────────────
+ *
+ * This used to return true whenever `reviewedAt` was null:
+ *
+ *     return days === null || days >= REVIEW_INTERVAL_DAYS;
+ *
+ * A student who has just finished onboarding — where they filled all 53 topics
+ * minutes ago — has no review stamp yet. So the checkpoint fired immediately,
+ * asking "where are you right now?" about a matrix that was the freshest data
+ * in the system. And because the stamp is only written on submit, anyone who
+ * closed the sheet instead of completing it got it again on the next app open,
+ * and the next, forever. Measured the day it was found: 241 of 296 onboarded
+ * students had never been stamped, so four out of five students were seeing a
+ * "weekly" checkpoint every single time they opened the app.
+ *
+ * The fix is to start the clock where the data actually came from. Coverage is
+ * filled during onboarding, so onboarding IS the first review — `filledAt`
+ * (onboarding completion, falling back to account creation) anchors the first
+ * interval. After that the student's own stamp takes over.
+ *
+ * With no anchor at all we return false rather than true: an unknown age is
+ * not evidence of staleness, and guessing "stale" is what produced the nag.
+ *
+ * Onboarding must be finished first — a student mid-onboarding is already
+ * filling the matrix, and asking them to review it in the same session would
+ * be absurd.
  */
 export function isReviewDue(
   reviewedAt: string | null | undefined,
   onboardingCompleted: boolean,
   now: Date = new Date(),
+  filledAt?: string | null,
 ): boolean {
   if (!onboardingCompleted) return false;
-  const days = daysSinceReview(reviewedAt, now);
-  return days === null || days >= REVIEW_INTERVAL_DAYS;
+  const anchor = reviewedAt ?? filledAt ?? null;
+  const days = daysSinceReview(anchor, now);
+  if (days === null) return false;
+  return days >= REVIEW_INTERVAL_DAYS;
 }
 
 // The ladder (type, order, labels, guards) is defined ONCE in

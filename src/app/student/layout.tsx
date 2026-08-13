@@ -109,10 +109,14 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // all read topic_coverage; a matrix filled once at onboarding and never
   // revisited makes every one of them confidently wrong. Because it's required,
   // it outranks the optional nudges below and they stand down while it's up.
+  // The 4th argument is the fix for the daily nag: coverage is filled during
+  // onboarding, so onboarding IS the first review. Without it, every student
+  // who had not yet submitted a review saw this on every single app open.
   const showCoverageReview = isReviewDue(
     profile?.coverage_reviewed_at as string | null,
     profile?.onboarding_completed === true,
     new Date(nowMs),
+    (profile?.onboarding_last_activity_at as string | null) ?? (profile?.created_at as string | null),
   ) && noBlockingModal;
 
   const showInstallJourney = noBlockingModal && !showCoverageReview && !appInstalled;

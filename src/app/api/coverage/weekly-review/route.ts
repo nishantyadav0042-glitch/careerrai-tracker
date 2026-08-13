@@ -19,10 +19,17 @@ export async function GET() {
 
   const admin = createAdminClient();
   const { data: prof } = await admin
-    .from('profiles').select('coverage_reviewed_at, onboarding_completed').eq('id', user.id).maybeSingle();
+    .from('profiles')
+    .select('coverage_reviewed_at, onboarding_completed, onboarding_last_activity_at, created_at')
+    .eq('id', user.id).maybeSingle();
 
   const reviewedAt = (prof?.coverage_reviewed_at as string | null) ?? null;
-  const due = isReviewDue(reviewedAt, prof?.onboarding_completed === true);
+  // Same anchor the layout gate uses: coverage is filled during onboarding, so
+  // onboarding is the first review. Passing it here keeps this route and the
+  // gate from disagreeing about whether a review is due — a disagreement would
+  // render the sheet and then have it immediately close itself.
+  const filledAt = (prof?.onboarding_last_activity_at as string | null) ?? (prof?.created_at as string | null) ?? null;
+  const due = isReviewDue(reviewedAt, prof?.onboarding_completed === true, new Date(), filledAt);
   if (!due) return NextResponse.json({ due: false, topics: [] });
 
   const { data: rows } = await admin
