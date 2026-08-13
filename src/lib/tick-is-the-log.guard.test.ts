@@ -121,3 +121,35 @@ describe('the log sheet survives — Incident #2 must not repeat', () => {
     expect(app).toContain('setIsLogOpen(true)');
   });
 });
+
+describe('a mock must always have a door of its own', () => {
+  // Removing the big log button left mock logging reachable only behind
+  // "Studied something else today?" — which does not read as "record your
+  // mock". A mock is three hours plus the percentiles that feed every
+  // diagnostic we have; it is the single highest-value thing a student
+  // records, and it briefly had no name anywhere on Home.
+  const APP = 'src/components/DailyTracker/DailyTrackerApp.tsx';
+
+  it('Home names the mock explicitly', () => {
+    expect(readFileSync(APP, 'utf8')).toContain('Gave a mock');
+  });
+
+  it('the mock entry opens the sheet already on the mock', () => {
+    const app = readFileSync(APP, 'utf8');
+    expect(app).toContain('setLogWithMock(true)');
+    expect(app).toContain('openWithMock={logWithMock}');
+    const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
+    expect(modal).toContain('if (openWithMock) setMockTaken(true)');
+  });
+
+  it('off-plan study keeps its own separate door', () => {
+    // Two different days, two different entries — collapsing them is what
+    // hid the mock in the first place.
+    expect(readFileSync(APP, 'utf8')).toContain('Studied off-plan');
+  });
+
+  it('a mock alone is still a complete log', () => {
+    const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
+    expect(modal).toContain('taskChoice.size > 0 || mockTaken === true || rest');
+  });
+});

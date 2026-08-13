@@ -16,6 +16,9 @@ interface LoggingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: LoggingData) => Promise<{ mockSelected: boolean }>;
+  /** Opened from the "Gave a mock" entry — the mock section starts open, so a
+   *  student who came here to record a mock is not asked to find it again. */
+  openWithMock?: boolean;
   isSubmitting?: boolean;
 }
 
@@ -46,7 +49,7 @@ export type { DayOutcome };
 
 type TaskState = 'half' | 'full';
 
-export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }: LoggingModalProps) {
+export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, openWithMock }: LoggingModalProps) {
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
@@ -69,9 +72,16 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false }
 
   useEffect(() => {
     setLogModalOpen(isOpen);
-    if (isOpen) { openedAt.current = Date.now(); savedRef.current = false; track('log_open'); }
+    if (isOpen) {
+      openedAt.current = Date.now();
+      savedRef.current = false;
+      track('log_open');
+      // Arriving from the mock entry: the answer to "did you give a mock" is
+      // already known, so pre-answer it rather than making them say it twice.
+      if (openWithMock) setMockTaken(true);
+    }
     return () => setLogModalOpen(false);
-  }, [isOpen]);
+  }, [isOpen, openWithMock]);
 
   useEffect(() => {
     if (!isOpen) return;

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import { Video, Star, ArrowRight } from 'lucide-react';
+import { Video, Star, ClipboardList } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
@@ -102,6 +102,9 @@ export function DailyTrackerApp({
   firstLogNudge = false,
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
+  /** Which door the sheet was opened from — the mock one pre-answers "did you
+   *  give a mock today". */
+  const [logWithMock, setLogWithMock] = useState(false);
   const [logDateOverride, setLogDateOverride] = useState<string | null>(null);
   const [lastNudge, setLastNudge] = useState<string | null>(null);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
@@ -310,14 +313,31 @@ export function DailyTrackerApp({
             competes with the plan for attention. */}
         {!hasLoggedToday && (
           <div className="mt-2.5">
-            <button
-              data-tour="log"
-              onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
-              disabled={isSubmitting}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[12px] font-semibold text-stone-600 transition-all active:scale-[0.99] disabled:opacity-50"
-            >
-              {isSubmitting ? 'Saving…' : <>Studied something else today? Add it <ArrowRight className="h-3.5 w-3.5" /></>}
-            </button>
+            {/* TWO entries, because they are two different days.
+                A mock is the highest-value thing a student records — three
+                hours plus the percentiles that drive every diagnostic we
+                have — and after the big log button was removed it had no
+                name anywhere on Home. "Studied something else today?" does
+                not read as "record your mock", so a student who just sat one
+                would never have found it. It gets its own door, and that door
+                opens straight into the mock section. */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setLogDateOverride(null); setLogWithMock(true); setIsLogOpen(true); }}
+                disabled={isSubmitting}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-[12px] font-bold text-indigo-700 transition-all active:scale-[0.99] disabled:opacity-50"
+              >
+                <ClipboardList className="h-3.5 w-3.5" /> Gave a mock
+              </button>
+              <button
+                data-tour="log"
+                onClick={() => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); }}
+                disabled={isSubmitting}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[12px] font-semibold text-stone-600 transition-all active:scale-[0.99] disabled:opacity-50"
+              >
+                {isSubmitting ? 'Saving…' : 'Studied off-plan'}
+              </button>
+            </div>
             {!hasLoggedYesterday && yesterdayStr && (
               <button
                 onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
@@ -330,7 +350,7 @@ export function DailyTrackerApp({
         )}
       </Card>
 
-      <LoggingModal isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} />
+      <LoggingModal isOpen={isLogOpen} onClose={() => { setIsLogOpen(false); setLogWithMock(false); }} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} openWithMock={logWithMock} />
       {/* The payoff replaces the old "Logged! 🎉 Your streak is now 1 day"
           modal, which celebrated the act of recording and said nothing about
           the plan the recording produced. Now the student watches the plan
