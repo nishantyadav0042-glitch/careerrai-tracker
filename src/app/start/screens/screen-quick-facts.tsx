@@ -184,12 +184,15 @@ export default function ScreenQuickFacts({ onNext, onBack, canGoBack, isLoading 
         {/* Short labels in a 3-up grid. "Working professional / College student
             / Full-time aspirant" each took a full row on a 360px phone — three
             rows for one question. The stored values are unchanged; only the
-            words on the chip are shorter, and the question above already
-            supplies the noun. */}
+            words on the chip are shorter.
+            Founder, 13 Aug, testing his own funnel: "what is this full
+            time...??" — on its own, "Full-time" answers a question nobody
+            asked (full-time WHAT?). "Full-time prep" keeps it short but says
+            the actual thing: not working, not in college, just preparing. */}
         <div className="grid grid-cols-3 gap-2">
           <Chip active={situation === 'working'} label="Working" onClick={() => setSituation('working')} />
           <Chip active={situation === 'college'} label="College" onClick={() => setSituation('college')} />
-          <Chip active={situation === 'fulltime'} label="Full-time" onClick={() => setSituation('fulltime')} />
+          <Chip active={situation === 'fulltime'} label="Full-time prep" onClick={() => setSituation('fulltime')} />
         </div>
       </div>
 

@@ -25,12 +25,11 @@ interface Props {
   isLoading: boolean;
   matrix: MatrixEntry[] | null;
   isRepeater?: boolean;
-  targetPercentile?: number | null;
 }
 
 const CORE_SECTIONS = ['QA', 'VARC', 'DILR'] as const;
 
-export default function ScreenInstantInsight({ onNext, matrix, isRepeater, targetPercentile }: Props) {
+export default function ScreenInstantInsight({ onNext, matrix, isRepeater }: Props) {
   // Only topics the engine knows (QA/VARC/DILR with metadata) — MOCKS/READING
   // rows in the declared matrix aren't syllabus topics.
   const entries = (matrix ?? []).filter((m) => TOPIC_METADATA[m.topic] && CORE_SECTIONS.includes(TOPIC_METADATA[m.topic].section as typeof CORE_SECTIONS[number]));
@@ -83,34 +82,43 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, targe
   const errorLog = habit('Error Log');
   const mockAnalysis = habit('Mock Analysis');
 
+  // ── One short line, not a paragraph (founder, 13 Aug: "too much, no one
+  // will read a single line") ─────────────────────────────────────────────
+  // Same real math as before — every number and topic name still comes
+  // straight from what the student just tapped. Only the WORDS changed:
+  // one plain sentence, no second clause explaining why it matters. The
+  // section bars above already carry the "why" visually.
   let flag: string;
   if (fresh) {
-    flag = `You're starting clean — no gap yet, only open ground. The highest-mark ground: Arithmetic in QA, Reading Comprehension in VARC, Arrangements in DILR. Start where the marks are, not where the syllabus begins.`;
+    flag = `Clean slate. Start where the marks are: Arithmetic, Reading Comprehension, Arrangements.`;
   } else if (inversion) {
-    const names = heavyUntouched.slice(0, 3).map((m) => m.topic).join(', ');
-    flag = `The ${heavyUntouched.length} high-mark ${weakest.sec} topic${heavyUntouched.length === 1 ? '' : 's'} you haven't touched — ${names} — carr${heavyUntouched.length === 1 ? 'ies' : 'y'} more mark-weight than everything you've finished in ${weakest.sec} combined. All those study hours went somewhere the paper barely asks about. This is the gap quietly deciding your percentile.`;
+    const names = heavyUntouched.slice(0, 2).map((m) => m.topic).join(' and ');
+    flag = `${names} carr${heavyUntouched.length === 1 ? 'ies' : 'y'} more marks than everything you've finished in ${weakest.sec}.`;
   } else if (totalFinished >= 8 && fullMocks === 'not_started') {
-    flag = `${totalFinished} topics finished — and not one full mock. You've been preparing a SYLLABUS, not an exam, and the difference only shows up on exam day. Serious aspirants mock weekly from August; every week without one is a week of blind prep.`;
+    flag = `${totalFinished} topics done, zero full mocks. That's studying — not testing yourself.`;
   } else if (fullMocks != null && fullMocks !== 'not_started' && (errorLog === 'not_started' || mockAnalysis === 'not_started')) {
-    flag = `You take mocks — but ${errorLog === 'not_started' ? 'keep no error log' : 'skip the analysis'}. A mock without an error log repeats the same mistakes on the next one; you've been paying the exam fee without collecting the lesson. Ask any topper — the error log is the habit they credit most.`;
+    flag = `You take mocks but ${errorLog === 'not_started' ? 'keep no error log' : 'skip the analysis'} — the habit that actually raises scores.`;
   } else if (arith.untouched >= 5 && hardQa.finished >= 2) {
-    flag = `You've put real work into ${hardQa.finished} of the harder QA chapters — while ${arith.untouched} Arithmetic topics sit untouched. Arithmetic is QA's single biggest scoring block. This is the classic coaching-sequence trap: months on the tough chapters, while the paper's easiest marks wait.`;
+    flag = `${hardQa.finished} hard QA chapters done, but ${arith.untouched} Arithmetic topics — QA's biggest scoring area — sit untouched.`;
   } else if (vaTouched >= 1 && rcStatus !== 'practicing' && rcStatus !== 'revising') {
-    flag = `You've worked on Verbal Ability but Reading Comprehension isn't in practice — and RC alone is roughly two-thirds of VARC's marks. Polishing the small questions while the big block waits is the most common VARC mistake there is.`;
+    flag = `Verbal is in progress, but Reading Comprehension — two-thirds of VARC's marks — isn't.`;
   } else if (totalLearning >= 6 && totalLearning >= 2 * Math.max(1, totalFinished)) {
-    flag = `${totalLearning + totalFinished} topics opened, only ${totalFinished} finished. Half-open topics FEEL like progress — they're not. In CAT, ${Math.max(totalFinished, 8)} finished topics beat ${totalLearning + totalFinished} half-learned ones, because half-learned scores zero under exam pressure.`;
+    flag = `${totalLearning + totalFinished} topics opened, only ${totalFinished} finished. Half-learned scores zero on exam day.`;
   } else if (heavyUntouched.length > 0) {
     const names = heavyUntouched.slice(0, 2).map((m) => m.topic).join(' and ');
-    flag = `${names} — among the highest-mark areas in ${weakest.sec} — ${heavyUntouched.length === 1 ? 'is' : 'are'} still untouched in your map. Most students discover this in their first mock. You just discovered it in 4 minutes.`;
+    flag = `${names} — some of ${weakest.sec}'s highest-mark topics — are still untouched.`;
   } else if (weakest.learning.length > weakest.finished.length) {
-    flag = `Your ${weakest.sec} pattern: ${weakest.learning.length} topics opened, only ${weakest.finished.length} finished. Started-but-unfinished is the most expensive place a topic can sit — it costs time AND marks.`;
+    flag = `${weakest.sec}: ${weakest.learning.length} started, only ${weakest.finished.length} finished. That costs the most marks.`;
   } else {
     const strongest = [...bySection].sort((a, b) => a.gap - b.gap)[0];
-    flag = `Your coverage is strongest in ${strongest.sec} and thinnest in ${weakest.sec} — ${weakest.untouched.length + weakest.learning.length} of ${weakest.secEntries.length} topics still to finish there. That imbalance is a comfort-zone pattern: we study what we're already good at. Your plan will refuse it, politely.`;
+    flag = `Strongest in ${strongest.sec}, thinnest in ${weakest.sec} — ${weakest.untouched.length + weakest.learning.length} topics still to go.`;
   }
 
+  // Repeater note, second-attempt pattern only — one short clause, not a
+  // second card. Cut entirely (13 Aug) when it isn't relevant; when it is,
+  // it rides as one extra line under the flag, not its own bordered block.
   const repeaterLine = isRepeater && !fresh && weakest.untouched.length >= 3
-    ? `Repeater pattern check: your untouched list is concentrated in ${weakest.sec} — the classic second-attempt trap is rebuilding comfort zones first. Your plan won't let that happen this time.`
+    ? `Second-attempt pattern: it's concentrated in ${weakest.sec} again.`
     : null;
 
   return (
@@ -138,31 +146,26 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, targe
         ))}
       </div>
 
-      {/* The red flag — the sentence that earns the "tagda issue" reaction */}
+      {/* The red flag — one short line, plus the repeater note (if any) as a
+          second line in the SAME card, not a second block. Founder, 13 Aug,
+          testing his own funnel: "too much... no one even will read a
+          single line." Cut to: one flag, one hook, done. */}
       <div className="flex items-start gap-2.5 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
-        <p className="text-sm font-medium leading-relaxed text-stone-800">{flag}</p>
+        <div>
+          <p className="text-sm font-medium leading-relaxed text-stone-800">{flag}</p>
+          {repeaterLine && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-stone-600">
+              <Target className="h-3 w-3 shrink-0" />{repeaterLine}
+            </p>
+          )}
+        </div>
       </div>
 
-      {repeaterLine && (
-        <div className="flex items-start gap-2.5 rounded-2xl border border-stone-200 bg-white p-4">
-          <Target className="mt-0.5 h-4 w-4 shrink-0 text-stone-900" />
-          <p className="text-sm leading-relaxed text-stone-700">{repeaterLine}</p>
-        </div>
-      )}
-
-      {targetPercentile != null && !fresh && (
-        <p className="px-1 text-[13px] text-stone-500">
-          You said {targetPercentile}%ile. That number is decided in exactly these gaps — not in the topics you already know.
-        </p>
-      )}
-
-      {/* The hook: this is what CareerRai does daily */}
-      <div className="flex items-start gap-2.5 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-        <Bell className="mt-0.5 h-4 w-4 shrink-0 text-stone-900" />
-        <p className="text-sm leading-relaxed text-stone-600">
-          This took 10 seconds from your own answers. <b>CareerRai sends you one insight like this every evening</b> — your pattern, your gap, one advice — as you study. That&apos;s what you&apos;re signing up for.
-        </p>
+      {/* The hook: this is what CareerRai does daily — one line, not a pitch. */}
+      <div className="flex items-center gap-2.5 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+        <Bell className="h-4 w-4 shrink-0 text-stone-900" />
+        <p className="text-sm text-stone-600">You&apos;ll get one insight like this every evening, once you start.</p>
       </div>
 
       {/* Sticky, like every other decision screen in this funnel.

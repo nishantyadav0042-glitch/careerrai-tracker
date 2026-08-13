@@ -27,7 +27,6 @@ const STICKY = /sticky\s+bottom-0/;
 const FOOTER_CTA_SCREENS: { file: string; why: string }[] = [
   { file: 'src/app/start/screens/screen-dream-percentile.tsx', why: 'college list can run long' },
   { file: 'src/app/start/screens/screen-quick-facts.tsx', why: 'four questions, overflows a 667px phone' },
-  { file: 'src/app/start/screens/screen-pain-points.tsx', why: 'six long options' },
   { file: 'src/app/start/screens/screen-instant-insight.tsx', why: 'THE pitch screen — regressed once, 10 Aug' },
   { file: 'src/app/start/screens/screen-login-build.tsx', why: 'the signup form itself' },
   { file: 'src/app/student/onboarding/screens/screen-topic-coverage.tsx', why: 'the tallest screen in the product' },

@@ -33,7 +33,6 @@ export const START_STEP_KEYS = [
   'target-date',
   'dream-percentile',
   'quick-facts',
-  'pain-points',
   'reality-check',
   'topic-coverage',
   'instant-insight',
@@ -49,8 +48,11 @@ export const START_STEP_KEYS = [
  *   START_STEP_KEYS so it never counts toward the progress bar.
  * - `reassurance` was removed from the funnel in v4. It stays accepted so the
  *   historical rows keep a valid name; nothing fires it any more.
+ * - `pain-points` was removed 13 Aug (founder: the screen was too much text,
+ *   nobody would read it). Same reasoning as reassurance — kept acceptable so
+ *   funnel_events history for it stays a valid, queryable name.
  */
-const EXTRA_STEPS = ['landed', 'login-build', 'reassurance'] as const;
+const EXTRA_STEPS = ['landed', 'login-build', 'reassurance', 'pain-points'] as const;
 
 /** Every `start:*` name the beacon route will accept. Derived — never hand-written. */
 export const ACCEPTED_FUNNEL_STEPS: ReadonlySet<string> = new Set(

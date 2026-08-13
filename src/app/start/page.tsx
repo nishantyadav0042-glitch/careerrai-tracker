@@ -8,7 +8,6 @@ import ScreenNeedCheck from './screens/screen-need-check';
 import ScreenTargetDate from './screens/screen-target-date';
 import ScreenDreamPercentile from './screens/screen-dream-percentile';
 import ScreenQuickFacts from './screens/screen-quick-facts';
-import ScreenPainPoints from './screens/screen-pain-points';
 import ScreenRealityCheck from '@/app/student/onboarding/screens/screen-reality-check';
 import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
 import ScreenInstantInsight from './screens/screen-instant-insight';
@@ -68,11 +67,6 @@ const DEMO_STEPS: Record<string, { what: string; answer: string; patch: Record<s
     answer: 'Aarav: 4 hrs self-study · first attempt · has coaching.',
     patch: { is_repeater: false, coaching_enrolled: true, self_study_hours: 4 },
   },
-  'pain-points': {
-    what: 'What has been going wrong so far — this feeds the first diagnosis and the sales brief.',
-    answer: 'Aarav: "no structure" + "mock scores stuck".',
-    patch: { pain_points: ['no_structure', 'mock_plateau'] },
-  },
   'reality-check': {
     what: 'Three honest calibration questions — separates confidence from wishful thinking.',
     answer: 'Aarav answers honestly (mid confidence).',
@@ -126,7 +120,10 @@ function stepKeysFor(): readonly string[] {
 // v6: repeater-only buddy pitch inserted after quick-facts — REVERTED in v7,
 //     see note above stepKeysFor.
 // v7: repeater buddy pitch removed from this funnel (stays in-app only).
-const DRAFT_KEY = 'cr_preauth_draft_v7';
+// v8: pain-points screen removed (founder, 13 Aug: too much text, nobody
+//     would read it) — a saved v7 draft's stepIdx would otherwise point at
+//     the wrong screen for everyone after it in the list.
+const DRAFT_KEY = 'cr_preauth_draft_v8';
 // A draft older than this is an abandoned lead, not a session to resume —
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -227,9 +224,6 @@ function StartPageInner() {
     case 'quick-facts':
       content = <ScreenQuickFacts onNext={advance} ambitionDate={data.ambition_date as string | undefined} {...shared} />;
       break;
-    case 'pain-points':
-      content = <ScreenPainPoints onNext={advance} {...shared} />;
-      break;
     case 'reality-check':
       content = <ScreenRealityCheck onNext={advance} {...shared} />;
       break;
@@ -255,7 +249,6 @@ function StartPageInner() {
           {...shared}
           matrix={(data.topic_matrix as { section: string; topic: string; status: 'not_started' | 'learning' | 'practicing' | 'revising' }[] | undefined) ?? null}
           isRepeater={data.is_repeater === true}
-          targetPercentile={(data.target_percentile as number | undefined) ?? null}
         />
       );
       break;

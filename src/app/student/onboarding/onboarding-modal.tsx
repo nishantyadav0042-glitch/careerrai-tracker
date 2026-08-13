@@ -220,7 +220,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           extraProps: {
             matrix: onboardingData.topic_matrix,
             isRepeater: onboardingData.is_repeater === true,
-            targetPercentile: (onboardingData.target_percentile as number | undefined) ?? null,
           },
         } satisfies Screen]
       : []),
