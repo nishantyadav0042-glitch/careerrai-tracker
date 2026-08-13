@@ -74,6 +74,14 @@ export function DailyChallengeCard() {
           <p className="mt-1 text-[10.5px] font-black uppercase leading-none tracking-[0.09em] text-orange-400">
             By the students, for the students
           </p>
+          {/* The strength, said as what the feature REPLACES (founder, 13
+              Aug: tell them CareerRai saved them the hour). Finding one
+              genuinely hard, exam-level question means an hour of Telegram
+              and YouTube; here it is waiting at 8 AM. A claim about the
+              product's mechanism — never a fabricated personal stat. */}
+          <p className="mt-1.5 text-[11px] font-semibold leading-snug text-stone-300">
+            The hour you&apos;d spend hunting a good question — saved. Just solve.
+          </p>
         </div>
 
         <div className="p-4">
