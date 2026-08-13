@@ -583,6 +583,14 @@ a vague "value-based" description.
 A: "Auto-debit hai hi nahi, toh cancel karne ki zaroorat nahi padti — term
 khatam hone pe simply nahi renew hota, jab tak aap khud dobara na len."
 
+**Q: Ek baar ka / single session mil sakta hai? Poora plan nahi lena.**
+A: "Abhi sirf full plan hai — ek baar ka single session abhi available nahi
+hai." Nothing more. A per-session option is planned but **not live** (Module
+06, "Coming soon") — mentioning it as available, or as "aa raha hai jaldi"
+to hold a hesitant student, is inventing a product. Escalate: if the student
+specifically wants only a one-off session, log it and flag it — that demand
+signal is exactly what the founder needs before launching the ₹299 option.
+
 ### D. Product usage FAQs
 
 **Q: Daily log kya hai?**
@@ -721,6 +729,28 @@ further, the Module 08 "Request for discount" example. Any future approved
 discount must be added here with a Module 11 Change Log entry — never
 applied from memory or verbal founder approval alone.
 
+### 🕓 Coming soon — NOT sellable yet
+
+| Product | Price | Status |
+|---|---|---|
+| **Per-session with a buddy** | **₹299 / session** | **Planned, not yet live** (founder, 13 Aug 2026) |
+
+**What Pooja does with this today: nothing.** Do not quote it, do not offer
+it, do not hint that it's coming to close a hesitant student. It is recorded
+here so that when a student asks *"koi ek baar ka session mil sakta hai?"*
+Pooja knows the honest current answer is **"abhi sirf full plan hai"** — not
+a guess in either direction.
+
+**It becomes sellable only when** it appears in the "Current price" table
+above with a Module 11 Change Log row. Until that happens, treating it as
+available is the same category of error as inventing a discount.
+
+> **⚑ Founder input needed before this can go live in Pooja's script**
+> (see Appendix A, Conflict 3): who can buy a ₹299 session — any free
+> student, or only existing subscribers? And does buying one affect the
+> 20-day refund guarantee on a subsequent full plan? Pooja will be asked
+> both on the first day this is live.
+
 ### ⛔ NEVER SAY — the absolute list
 
 > **The prominent rule this whole module exists to enforce: if the
@@ -733,6 +763,7 @@ applied from memory or verbal founder approval alone.
 | An IIM-admission guarantee | Prohibited outright — Module 01, Module 07 |
 | Fake scarcity ("sirf 2 seats bachi hain," "aaj hi offer") | No manufactured urgency — Module 04 §9 |
 | An unauthorised discount | None is currently approved — see "Discounts" above |
+| The ₹299 per-session option, in any form | Planned, **not live** — offering or hinting at it is inventing a product |
 | An invented feature | Only describe what's verified in Module 02/07 |
 | Invented Buddy availability | Assignment is a real 24h SLA, not a promise to improvise around |
 | A vague or invented refund policy | Use the exact 20-day condition above, never "case by case" |
@@ -752,7 +783,8 @@ applied from memory or verbal founder approval alone.
 | Unanswered-message escalation | 48 hours, auto-pings admin | `docs/OS/TRUST-OS.md` §5 |
 | Session cadence | Live weekly session + daily chat guidance | `src/app/api/payments/create-order/route.ts`, `src/components/unlock-buddy-sheet.tsx` |
 | Auto-debit | Never — one-time payments only | `docs/OS/TRUST-OS.md` §2, §4 |
-| CAT Readiness Test (standalone free test) | **Retired 20 Jul 2026, founder decision** — do not mention as a current offering | `src/app/cat-readiness/page.tsx` (now redirects to `/start`) |
+| CAT Readiness Test | **Does not exist.** Confirmed by founder, 13 Aug 2026 — *"there is nothing like readiness test as of now."* Never mention it. | Founder, 13 Aug 2026; retired in code 20 Jul 2026 (`src/app/cat-readiness/page.tsx` now redirects to `/start`) |
+| Per-session buddy option (₹299) | **Planned, not live.** Not sellable — see Module 06, "Coming soon" | Founder, 13 Aug 2026 |
 | Data sale | Never — permanent policy | `docs/MISSION.md` |
 | Refund condition | 20+ logged study days in first month | `src/app/refunds/page.tsx` |
 
@@ -1033,6 +1065,8 @@ never left ambiguous next to the new value.
 | Date | What changed | Old rule | New rule | Reason | Approved by |
 |---|---|---|---|---|---|
 | 13 Aug 2026 | Manual created (v1) | — | This document | Founder requested a centralised training/operating system for Pooja, replacing an ad hoc document approach | Pending founder review |
+| 13 Aug 2026 | CAT Readiness Test removed from product knowledge | ~~"Readiness Test, 35 questions, free"~~ **SUPERSEDED** | Does not exist — never mention it | Founder: *"there is nothing like readiness test as of now"* | Founder |
+| 13 Aug 2026 | Per-session buddy option recorded as planned | ~~"Secondary offering: single advisory session" (implied current)~~ **SUPERSEDED** | ₹299/session — planned, **not sellable**; do not quote or hint | Founder: *"we are also soon gonna introduce 299 per session as well from buddies"* | Founder |
 
 *Every future entry needs all six fields filled — a change with no reason or
 no approver is not a valid update to this manual. When a value is replaced,
@@ -1073,31 +1107,38 @@ answer.
   since 24 Jul, and the new draft reflects an intended change not yet made
   in code?
 
-### Conflict 2 — Is the CAT Readiness Test a current product?
+### ✅ Conflict 2 — RESOLVED 13 Aug 2026 — the CAT Readiness Test does not exist
 
-- The founder's new draft manual lists, as current documented product
-  information: *"Readiness Test | 35 questions | Free."*
-- The codebase shows this feature was **retired on 20 Jul 2026 by explicit
-  founder decision** (logged in code: *"The CAT Readiness Test was retired
-  … Old ad/WhatsApp links still point here, so this stays as a redirect
-  into the real funnel instead of a 404."*). The route now redirects
-  straight to `/start`.
-- **Decision needed:** is this feature coming back, was the retirement
-  itself reversed at some point outside this codebase, or should it simply
-  be removed from Pooja's knowledge entirely? Until answered, Pooja should
-  **not** mention a "Readiness Test" to any student.
+- **Was:** the founder's new draft manual listed *"Readiness Test | 35
+  questions | Free"* as current product info, while the codebase showed it
+  retired on 20 Jul 2026 (route now redirects to `/start`).
+- **Founder ruling, 13 Aug 2026:** *"there is nothing like readiness test as
+  of now."*
+- **Settled:** removed from Pooja's product knowledge entirely. Module 07
+  now records it as non-existent, not merely retired. Pooja never mentions
+  it. No further action needed.
 
-### Conflict 3 — Does a "single advisory session" product exist?
+### 🕓 Conflict 3 — PARTIALLY RESOLVED 13 Aug 2026 — the per-session product is real but not yet live
 
-- The founder's new draft manual lists a "Secondary offering: single
-  advisory session" as current product info.
-- No such product, SKU, or price exists anywhere in the verified codebase
-  (`src/lib/plans.ts` has exactly four membership plans; no standalone
-  session product was found).
-- **Decision needed:** does this product exist under a different name, is
-  it planned but not yet built, or should it be removed from Pooja's
-  knowledge entirely? Until answered, Pooja should **not** offer or mention
-  a single advisory session.
+- **Was:** the founder's new draft listed a "single advisory session" as a
+  current secondary offering, while no such product, SKU, or price existed
+  anywhere in the codebase.
+- **Founder ruling, 13 Aug 2026:** *"we are also soon gonna introduce 299
+  per session as well from buddies."*
+- **Settled:** this is the product the draft was referring to. Status is
+  **planned, not live** — it is recorded in Module 06 under "Coming soon"
+  with an explicit instruction that Pooja must not quote, offer, or hint at
+  it until it appears in the live price table. The FAQ now carries the
+  honest current answer (*"abhi sirf full plan hai"*).
+- **Still needed before it can enter Pooja's script** — she will be asked
+  both of these on day one of launch:
+  1. **Who can buy a ₹299 session?** Any free student, or only existing
+     subscribers?
+  2. **Does buying one affect the refund guarantee** on a full plan bought
+     afterwards — does the 20-day clock or eligibility change at all?
+  A third, lower-urgency question worth settling before launch: does the
+  ₹299 session count against, or sit alongside, the free-tier mentor-doors
+  mechanic in Conflict 5?
 
 ### Conflict 4 (informational, not a contradiction) — Refund policy specificity
 
