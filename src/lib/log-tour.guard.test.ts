@@ -32,7 +32,17 @@ describe('practice writes nothing', () => {
   });
 
   it('says out loud that nothing is saved', () => {
-    expect(screen()).toContain('kuch save nahi hota');
+    expect(screen()).toContain('nothing is saved');
+  });
+
+  it('copy stays English-only (founder, 13 Aug)', () => {
+    // The first draft shipped in Hinglish; the founder's correction was
+    // immediate and total. Pin a few of the removed phrases so the old
+    // voice can't drift back in a later edit.
+    const s = screen();
+    for (const hinglish of ['yeh raha', 'kaam milenge', 'nahi hota', 'Seekh lo']) {
+      expect(s).not.toContain(hinglish);
+    }
   });
 });
 

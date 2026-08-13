@@ -29,8 +29,8 @@ import { track } from '@/lib/journey';
 //   completion, a whole cohort's logging died behind it. A tutorial that
 //   holds the finish line hostage is that bug wearing a friendly face.
 //
-// Copy is Hinglish where the real coaching voice is Hinglish — this is the
-// one screen whose entire job is "bhai, aise log karna hai."
+// Copy is English throughout (founder, 13 Aug: "everything should be in
+// english") — matching the rest of the onboarding journey's voice.
 
 interface PracticeTask {
   id: string;
@@ -91,11 +91,11 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
     <div className="space-y-4">
       <div>
         <h3 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {firstName ? `${firstName}, ` : ''}yeh raha roz ka ritual
+          {firstName ? `${firstName}, ` : ''}this is your daily ritual
         </h3>
         <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
-          Har din Home par aise 2–3 kaam milenge. Padhne ke baad bas circle tap karo,
-          batao kitna hua — <b>ho gaya log</b>. Koi typing nahi, koi form nahi.
+          Every day, Home shows 2–3 tasks like these. After you study, just tap the
+          circle and say how far you got — <b>that&apos;s your log, done</b>. No typing, no forms.
         </p>
       </div>
 
@@ -177,7 +177,7 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
 
         {!allDone && doneCount === 0 && (
           <p className="mt-2.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
-            Pehle circle par tap karke dekho 👆
+            Try it — tap the first circle 👆
           </p>
         )}
       </div>
@@ -186,16 +186,16 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
         <div className="rounded-2xl bg-stone-900 p-4 text-center">
           <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-white">
             <Flame className="h-4 w-4 text-orange-400" />
-            Bas — yehi hai poora log.
+            That&apos;s it — that&apos;s the whole log.
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-stone-300">
-            3 taps mein din record. Kal se yehi Home par milega, aapke asli topics ke saath —
-            aur half din bhi ginta hai, isliye kabhi khaali mat chhodna.
+            Three taps and your day is recorded. From tomorrow this lives on Home with
+            your real topics — and a half day counts too, so never leave a day blank.
           </p>
         </div>
       ) : (
         <p className="text-center text-[11px] text-stone-400">
-          Ye sirf practice hai — kuch save nahi hota. Asli log kal ke padhai ka hoga.
+          This is just practice — nothing is saved. Your real log starts with tomorrow&apos;s study.
         </p>
       )}
 
