@@ -21,6 +21,7 @@ import { PaceCard } from '@/components/home/pace-card';
 import { MentorTeaserCard } from '@/components/home/mentor-teaser-card';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
+import { computePrepGain } from '@/lib/prep-gain';
 import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
@@ -254,9 +255,11 @@ export default async function DailyTrackerPage() {
 
   // Total study time (all logs) + a 7-day study-hours sparkline for the pace card.
   const hoursByDate = new Map((logs ?? []).map((l) => [l.report_date, Number(l.study_duration) || 0]));
-  // Same map, today's key — PositionStrip's "Xh today" is read off it, not
-  // recomputed from anything else.
-  const todayHours = hoursByDate.get(todayStr) ?? 0;
+  // What CareerRai has actually added, from the logs already fetched above —
+  // no extra query. Replaces the "Xh today" reading this card printed beside
+  // a headline that printed the same number (founder, 13 Aug). See
+  // prep-gain.ts for why it is a before/after and not a counterfactual.
+  const prepGain = computePrepGain(logs ?? [], todayStr);
   const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const week: number[] = [];
   const weekLabels: string[] = [];
@@ -541,7 +544,8 @@ export default async function DailyTrackerPage() {
         {pace && targetIso && (
           <PaceCard
             pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels}
-            streak={currentStreak} shields={momentum.shields} todayHours={todayHours}
+            streak={currentStreak} shields={momentum.shields}
+            gain={prepGain} isPremium={!!profile?.is_premium}
             mocksLabel={mockLabel} revisionLabel={revLabel}
           />
         )}

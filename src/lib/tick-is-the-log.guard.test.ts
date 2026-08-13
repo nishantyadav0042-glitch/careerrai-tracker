@@ -95,9 +95,17 @@ describe('one door, not two', () => {
 
   it('what replaced it reads as an escape hatch, not a call to action', () => {
     const app = readFileSync('src/components/DailyTracker/DailyTrackerApp.tsx', 'utf8');
-    expect(app).toContain('Studied something else today?');
-    // No longer the black primary button competing with the plan.
+    // Muted, not the black primary button competing with the plan above it.
+    expect(app).toMatch(/data-tour="log"[\s\S]{0,400}bg-stone-50/);
     expect(app).not.toMatch(/data-tour="log"[\s\S]{0,400}bg-stone-900 px-3 py-3/);
+  });
+
+  it('the strip says nothing once the day is already recorded', () => {
+    // "Today's Focus / Topics updated ✓" restated the ticks the student had
+    // just tapped one card above. Founder, 13 Aug: remove it.
+    const app = readFileSync('src/components/DailyTracker/DailyTrackerApp.tsx', 'utf8');
+    expect(app).not.toContain('Topics updated');
+    expect(app).not.toContain("Today's Focus");
   });
 
   it('new students are told how to log, on the plan itself', () => {
@@ -127,15 +135,34 @@ describe('the log sheet survives — Incident #2 must not repeat', () => {
 });
 
 describe('a mock must always have a door of its own', () => {
-  // Removing the big log button left mock logging reachable only behind
-  // "Studied something else today?" — which does not read as "record your
-  // mock". A mock is three hours plus the percentiles that feed every
-  // diagnostic we have; it is the single highest-value thing a student
-  // records, and it briefly had no name anywhere on Home.
+  // Removing the big log button left mock logging reachable only behind the
+  // off-plan escape hatch — which does not read as "record your mock". A mock
+  // is three hours plus the percentiles that feed every diagnostic we have;
+  // it is the single highest-value thing a student records, and it briefly
+  // had no name anywhere on Home.
+  //
+  // 13 Aug the door MOVED rather than closing. Founder: "whenever there is a
+  // mock planned in the study plan add submit today's mock score in the study
+  // plan only — there is no need of a different button for mock." So the rule
+  // is unchanged and the address is new: the door is on the mock task.
   const APP = 'src/components/DailyTracker/DailyTrackerApp.tsx';
+  const CARD_SRC = 'src/components/DailyTracker/TodaysRoutineCard.tsx';
 
-  it('Home names the mock explicitly', () => {
-    expect(readFileSync(APP, 'utf8')).toContain('Gave a mock');
+  it('the plan names the mock explicitly, on the mock', () => {
+    const card = readFileSync(CARD_SRC, 'utf8');
+    expect(card).toContain('Add mock score');
+    expect(card).toContain('isMockSitting(task)');
+  });
+
+  it('the standalone daily mock button is gone from Home', () => {
+    // It was on screen 365 days a year for something that happens weekly.
+    expect(readFileSync(APP, 'utf8')).not.toContain('Gave a mock');
+  });
+
+  it('finishing the day does not take the door with it', () => {
+    // The completed state replaces the task list, and with it the button —
+    // at the exact moment the paper has been sat and the score exists.
+    expect(readFileSync(CARD_SRC, 'utf8')).toContain('routine.tasks.some(isMockSitting)');
   });
 
   it('the mock entry opens the sheet already on the mock', () => {
@@ -146,9 +173,16 @@ describe('a mock must always have a door of its own', () => {
     expect(modal).toContain('if (openWithMock) setMockTaken(true)');
   });
 
+  it('the plan card and the sheet are wired to the same event name', () => {
+    // They are siblings, not parent and child — a typo in either string
+    // would silently produce a button that does nothing at all.
+    expect(readFileSync(CARD_SRC, 'utf8')).toContain("new Event('cr-open-mock-log')");
+    expect(readFileSync(APP, 'utf8')).toContain("addEventListener('cr-open-mock-log'");
+  });
+
   it('off-plan study keeps its own separate door', () => {
-    // Two different days, two different entries — collapsing them is what
-    // hid the mock in the first place.
+    // Two different days. The off-plan sheet still carries the mock section
+    // inside it, so an UNPLANNED mock is never unrecordable.
     expect(readFileSync(APP, 'utf8')).toContain('Studied off-plan');
   });
 

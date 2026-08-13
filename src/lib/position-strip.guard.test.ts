@@ -23,8 +23,13 @@ const PAGE = 'src/app/student/tracker/page.tsx';
 const CARD = 'src/components/home/pace-card.tsx';
 
 describe('the position card composes — it never recomputes', () => {
-  it('todayHours is read off the SAME hoursByDate map the sparkline uses', () => {
-    expect(readFileSync(PAGE, 'utf8')).toContain('const todayHours = hoursByDate.get(todayStr)');
+  it('the prep-gain line reuses the logs already on the page, not a new query', () => {
+    // This slot used to hold the day's hours, read off the same hoursByDate
+    // map the sparkline uses. It now holds the before/after (13 Aug) — same
+    // composition rule, same single fetch of daily_reports.
+    const src = readFileSync(PAGE, 'utf8');
+    expect(src).toContain('computePrepGain(logs ?? [], todayStr)');
+    expect(src).toContain('gain={prepGain}');
   });
 
   it('streak and shields come from the existing momentum object, not a new query', () => {
@@ -55,7 +60,9 @@ describe('the three merged blocks are gone, and their content is not', () => {
 
   it('every fact the old stack showed is still on screen', () => {
     const src = readFileSync(CARD, 'utf8');
-    for (const shown of ['-day streak', 'h today', 'Covered', 'Syllabus ', 'Mocks ', 'Revision ', 'Reschedule']) {
+    // The day's hours are deliberately NOT in this list: they were the one
+    // fact the merged card said twice, and the duplicate was cut on 13 Aug.
+    for (const shown of ['-day streak', 'Covered', 'Syllabus ', 'Mocks ', 'Revision ', 'Reschedule']) {
       expect(src, `merged card dropped "${shown}"`).toContain(shown);
     }
   });

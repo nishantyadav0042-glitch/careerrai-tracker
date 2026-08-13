@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import { TopicInsights } from '@/components/topic-insights';
 import { BusyDayButton } from '@/components/busy-day-button';
+import { isMockSitting } from '@/lib/mock-in-plan';
 
 // For the swap-topic picker (student ask: "change today's topic from
 // Geometry to Number System") — same-section alternatives only.
@@ -133,6 +134,30 @@ function ProgressChoice({
         Finished it
       </button>
     </div>
+  );
+}
+
+// ── The mock's door, on the mock's own row ──────────────────────────────────
+//
+// Founder, 13 Aug: the score goes in the study plan, and the separate mock
+// button goes away. It renders only on the tasks that actually produce a
+// score (see isMockSitting) and stays put after the tick, because the score
+// is entered AFTER the paper is sat, not before.
+//
+// The log sheet belongs to a sibling component, so the tap travels the way a
+// finished task already talks to it: one window event.
+function MockScoreButton({ className }: { className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => { try { window.dispatchEvent(new Event('cr-open-mock-log')); } catch { /* noop */ } }}
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition-transform active:scale-95',
+        className
+      )}
+    >
+      Add mock score
+    </button>
   );
 }
 
@@ -461,6 +486,13 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
             <p className="text-sm text-stone-600">Your next step is already being built — open tomorrow and go</p>
           </div>
 
+          {/* Finishing the day hides the task list — and with it the mock's
+              door, at the exact moment the paper has actually been sat and
+              the score exists. So it survives the fold. */}
+          {routine.tasks.some(isMockSitting) && (
+            <div className="mt-3 flex justify-center"><MockScoreButton /></div>
+          )}
+
           {/* Stage A: the door a finished floor-day opens. The plan is small
               on purpose; a good day grows one block at a time — each finished
               before the next appears, never a wall of tasks up front. */}
@@ -573,6 +605,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                           ⇄ Swap
                         </button>
                       )}
+                      {isMockSitting(task) && <MockScoreButton className="mt-0.5" />}
                     </div>
                     {markingTaskId === task.id && !done && (
                       <div className="rounded-b-2xl bg-stone-100/70">
@@ -646,6 +679,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                         ⇄ Swap
                       </button>
                     )}
+                    {isMockSitting(task) && <MockScoreButton />}
                   </div>
                   {markingTaskId === task.id && !done && (
                     <div className="rounded-b-xl bg-stone-100/70">

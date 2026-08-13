@@ -30,10 +30,22 @@ describe('PaceCard — the ring and pace math are untouched, only the shell', ()
     expect(src()).toContain('rounded-xl border border-white/10 bg-white p-3 text-stone-900');
   });
 
-  it('none of the pace formula changed — same headline logic, same TONE import', () => {
-    expect(src()).toContain('pace.catchUpPerDay > 0');
-    expect(src()).toContain('pace.aheadPerDay > 0');
+  it('none of the pace formula changed — same ring, same TONE import', () => {
+    // The ring and the verdict are the pace engine's output; the restyle was
+    // only ever allowed to change how they look.
+    expect(src()).toContain('pace.completedPct');
+    expect(src()).toContain('TONE[pace.status]');
     expect(src()).toContain("from '@/lib/pace-tone'");
+  });
+
+  it('the headline is no longer a second copy of the verdict', () => {
+    // It used to branch on catchUpPerDay/aheadPerDay to say in words what the
+    // chip beside it was already saying in words, over a repeat of the hours
+    // printed one row above. Replaced 13 Aug — prep-gain.test.ts pins what
+    // took its place.
+    const src_ = src();
+    expect(src_).not.toContain('pace.catchUpPerDay > 0');
+    expect(src_).not.toContain('pace.aheadPerDay > 0');
   });
 });
 

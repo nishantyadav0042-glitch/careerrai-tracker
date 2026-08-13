@@ -8,6 +8,7 @@ import { remainingMockHours } from '@/lib/study-pace';
 import type { PaceResult } from '@/lib/study-pace';
 import { TONE } from '@/lib/pace-tone';
 import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
+import type { PrepGain } from '@/lib/prep-gain';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
 // steady-pace headline, three at-a-glance pace facts, a weekly study sparkline,
@@ -65,7 +66,11 @@ interface PaceCardProps {
   /** Absorbed from PositionStrip (13 Aug) — see the merge note below. */
   streak: number;
   shields: number;
-  todayHours: number;
+  /** Their own before-and-after, in place of the hours this card used to
+   *  print twice. See prep-gain.ts and the headline note below. */
+  gain: PrepGain;
+  /** "Free" is only said to students on the free plan. */
+  isPremium: boolean;
   /** Absorbed from ImportantDates — the two anchors this card didn't have.
    *  The syllabus date is already here as `targetIso`, so it is NOT passed
    *  again; repeating it was half of what made the old stack redundant. */
@@ -86,7 +91,7 @@ interface PaceCardProps {
 // untouched. Nothing was dropped: streak, shields, hours-today, coverage
 // ring, pace verdict, days left, the week sparkline, the finish date, mocks
 // and revision anchors are all still on screen — each said exactly once.
-export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, todayHours, mocksLabel, revisionLabel }: PaceCardProps) {
+export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel }: PaceCardProps) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
@@ -162,18 +167,24 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, t
     }
   }
 
-  // THE HEADLINE IS THE STUDENT'S OWN NUMBER. Always.
+  // THE HEADLINE SAYS WHAT THIS APP HAS DONE FOR THEM. Not their hours again.
   //
-  // It used to be `pace.requiredPerDay` — remaining syllabus ÷ days to their
-  // date. That number moves on its own every morning, so this card showed one
-  // figure while the plan two cards below was built from another, and neither
-  // was the one the student had typed. It is the most visible half of "sometimes
-  // I see 4 hours, sometimes 6".
+  // Until 13 Aug it read "8h a day — you're ahead", with "8h today" in the row
+  // above and "Date is safe" in the chip beside it: the same number twice and
+  // the same verdict twice. Founder: "why repeating 8 hours again and again —
+  // instead pitch CareerRai smartly: with CareerRai you have added 1 hour to
+  // your CAT prep, then with the streak the hours increase, and also for free."
   //
-  // The date is what gives now, so behind/ahead is said as a DATE fact, not by
-  // quietly adding hours to their day. A student who is behind sees their own
-  // hours and a warning about the date — never "5h + 2h catch-up", which is the
-  // app inventing a commitment on their behalf.
+  // So the headline is now their own before-and-after (prep-gain.ts), which is
+  // the only version of "we added hours" we can actually prove. The date
+  // verdict is not lost — the chip above has said it in words the whole time,
+  // and it is the chip's entire job. Their committed hours are not lost
+  // either: they live in the reschedule sheet, where they can be changed,
+  // which is the only place the number is actionable.
+  //
+  // Two things still outrank the pitch, because they are instructions rather
+  // than decoration: a finished syllabus, and an account that has not set its
+  // hours yet (its plan cannot be sized until it does).
   const mine = pace.committedPerDay;
   const headline = pace.status === 'done'
     ? 'Syllabus complete 🎉'
@@ -181,11 +192,16 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, t
       // No hours set yet (a day-one account). Say nothing about a number we
       // do not have rather than substituting the date's demand for it.
       ? 'Set your daily hours to size your plan'
-      : pace.catchUpPerDay > 0
-        ? `${mine}h a day — your date is slipping`
-        : pace.aheadPerDay > 0
-          ? `${mine}h a day — you're ahead`
-          : `${mine}h a day, steady`;
+      : gain.kind === 'gain'
+        ? `${gain.extraHours}h extra prep since your first week`
+        : gain.kind === 'banked'
+          ? `${gain.banked}h of CAT prep with CareerRai`
+          : 'Mark today done — your hours start counting';
+
+  // The streak's payoff, stated as a rate, in the slot the duplicated "Xh
+  // today" used to occupy. Only ever shown when the trend is earned; for
+  // everyone else the slot carries the thing that is always true instead.
+  const streakGain = gain.kind === 'gain' ? `↑ +${gain.perDay}h a day` : null;
 
   if (expired && !editing) {
     return (
@@ -238,7 +254,15 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, t
               <Shield className="h-2.5 w-2.5" />{shields}
             </span>
           )}
-          <span className="ml-1 truncate text-[11.5px] text-stone-400">{todayHours}h today</span>
+          {/* This slot held the day's hours — the same number the headline was
+              already printing. It now carries the streak's payoff when there
+              is one, and otherwise the one thing that is true on day one and
+              every day after: this costs them nothing. */}
+          {streakGain ? (
+            <span className="ml-1 shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">{streakGain}</span>
+          ) : !isPremium ? (
+            <span className="ml-1 shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-stone-300">Free</span>
+          ) : null}
         </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
       </div>

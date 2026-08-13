@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import { Video, Star, ClipboardList } from 'lucide-react';
+import { Video, Star } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
@@ -114,6 +114,23 @@ export function DailyTrackerApp({
   // Mock details are captured INLINE in the daily log now (single sheet), so the
   // separate "pending debrief" card + forced modal are gone (founder, 24 Jul) —
   // that screen was redundant and duplicated data the log already collected.
+
+  // ── The mock score is asked for by the plan, answered by this sheet ────────
+  //
+  // Founder, 13 Aug: "whenever there is a mock planned in the study plan add
+  // submit today's mock score in the study plan only — there is no need of a
+  // different button for mock."
+  //
+  // The button now lives on the mock task itself, in TodaysRoutineCard, which
+  // is a SIBLING of this component rather than a child. The sheet stays here
+  // (it owns submitLog and the debrief POST), so the tap crosses the gap the
+  // same way a completed task already tells the plan card to refresh: a
+  // window event. Opening it here — not there — keeps one log sheet on Home.
+  useEffect(() => {
+    const open = () => { setLogDateOverride(null); setLogWithMock(true); setIsLogOpen(true); };
+    window.addEventListener('cr-open-mock-log', open);
+    return () => window.removeEventListener('cr-open-mock-log', open);
+  }, []);
 
   const {
     currentStreak,
@@ -277,78 +294,66 @@ export function DailyTrackerApp({
           aspirant thinks "aaj kitna padha", not "I'll log my study". Code
           identifiers (submitLog, useLogging, log_date, companion_log) keep the
           old name on purpose: renaming those breaks data continuity. */}
-      <Card className="p-2.5">
-        {todaySession && <div className="mb-2"><SessionStrip session={todaySession} /></div>}
+      {/* The strip only renders when it has something to say. Once the day is
+          recorded it had nothing: a tick-confirmation line restating the ticks
+          the student had just tapped one card above, which the founder cut on
+          sight (13 Aug) — a card that exists to confirm what the screen
+          already shows is furniture. A live class is different; that still
+          earns the space. */}
+      {(todaySession || !hasLoggedToday) && (
+        <Card className="p-2.5">
+          {todaySession && <div className={hasLoggedToday ? undefined : 'mb-2'}><SessionStrip session={todaySession} /></div>}
 
-        {/* Kept full-width rather than beside the text: a long label crushed
-            the focus line into four overlapping rows at 360px when these sat
-            side by side. That was verified in a render, not assumed, and the
-            constraint still holds for whatever label lives here. */}
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-            <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">
-              {hasLoggedToday ? "Today's Focus" : 'How to log'}
-            </p>
-            <p className="text-[13px] font-extrabold leading-tight text-stone-900">
-              {hasLoggedToday ? 'Topics updated ✓' : 'Tap a task above as you finish it.'}
-            </p>
-          </div>
-          {hasLoggedToday && (
-            <p className="shrink-0 text-right text-[10px] text-stone-400">Tomorrow&apos;s plan<br />builds on it.</p>
+          {!hasLoggedToday && (
+            <>
+              {/* Kept full-width rather than beside the text: a long label
+                  crushed the focus line into four overlapping rows at 360px
+                  when these sat side by side. That was verified in a render,
+                  not assumed, and the constraint still holds for whatever
+                  label lives here. */}
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">How to log</p>
+                  <p className="text-[13px] font-extrabold leading-tight text-stone-900">Tap a task above as you finish it.</p>
+                </div>
+              </div>
+
+              {/* ONE door here, not two. The big black primary action went
+                  first (13 Aug: two doors to one action is a fork, not a
+                  convenience); the standalone mock button went with it,
+                  because a mock happens about once a week and that button was
+                  on screen every day — and on the day it mattered it sat two
+                  cards away from the mock it was about. The score is now
+                  asked for by the mock task itself, in the plan.
+                  What is left is the escape hatch, not a call to action: the
+                  day that happened OFF the plan, or a rest day. That path must
+                  never close (Incident #2: requiring a plan-tick to submit
+                  took a whole cohort's logging to 0/29). */}
+              <div className="mt-2.5">
+                <button
+                  data-tour="log"
+                  onClick={() => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); }}
+                  disabled={isSubmitting}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[12px] font-semibold text-stone-600 transition-all active:scale-[0.99] disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving…' : 'Studied off-plan'}
+                </button>
+                {!hasLoggedYesterday && yesterdayStr && (
+                  <button
+                    onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
+                    className="mt-1 block w-full text-center text-[10px] text-stone-400 hover:text-stone-600"
+                  >
+                    Add {yesterdayLabel} too
+                  </button>
+                )}
+              </div>
+            </>
           )}
-        </div>
-
-        {/* The big black primary action that used to live here is GONE.
-            Founder, 13 Aug: once a task can be marked from the plan itself,
-            a second place to record the same day is not a convenience, it is
-            a fork — two doors to one action, and the student has to work out
-            which one counts.
-            What remains is a quiet line, not a call to action: the escape
-            hatch for a day that happened OFF the plan, or a rest day. That
-            path must never close (Incident #2: requiring a plan-tick to
-            submit took a whole cohort's logging to 0/29), but it no longer
-            competes with the plan for attention. */}
-        {!hasLoggedToday && (
-          <div className="mt-2.5">
-            {/* TWO entries, because they are two different days.
-                A mock is the highest-value thing a student records — three
-                hours plus the percentiles that drive every diagnostic we
-                have — and after the big log button was removed it had no
-                name anywhere on Home. "Studied something else today?" does
-                not read as "record your mock", so a student who just sat one
-                would never have found it. It gets its own door, and that door
-                opens straight into the mock section. */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setLogDateOverride(null); setLogWithMock(true); setIsLogOpen(true); }}
-                disabled={isSubmitting}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-[12px] font-bold text-indigo-700 transition-all active:scale-[0.99] disabled:opacity-50"
-              >
-                <ClipboardList className="h-3.5 w-3.5" /> Gave a mock
-              </button>
-              <button
-                data-tour="log"
-                onClick={() => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); }}
-                disabled={isSubmitting}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[12px] font-semibold text-stone-600 transition-all active:scale-[0.99] disabled:opacity-50"
-              >
-                {isSubmitting ? 'Saving…' : 'Studied off-plan'}
-              </button>
-            </div>
-            {!hasLoggedYesterday && yesterdayStr && (
-              <button
-                onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-                className="mt-1 block w-full text-center text-[10px] text-stone-400 hover:text-stone-600"
-              >
-                Add {yesterdayLabel} too
-              </button>
-            )}
-          </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       <LoggingModal isOpen={isLogOpen} onClose={() => { setIsLogOpen(false); setLogWithMock(false); }} onSubmit={handleLogSubmit} isSubmitting={isSubmitting} openWithMock={logWithMock} />
       {/* The payoff replaces the old "Logged! 🎉 Your streak is now 1 day"
