@@ -685,7 +685,10 @@ export function TodaysRoutineCard() {
           )}
 
           <div className="mt-3">
-            <Link href="/student/blueprint" className="text-xs font-semibold text-stone-900">My CAT Plan →</Link>
+            {/* "My CAT Plan" said nothing about what is behind it — the page
+                is the topic-coverage map. Founder, 13 Aug: name it after what
+                it shows. */}
+            <Link href="/student/blueprint" className="text-xs font-semibold text-stone-900">Topics covered →</Link>
           </div>
         </>
       )}

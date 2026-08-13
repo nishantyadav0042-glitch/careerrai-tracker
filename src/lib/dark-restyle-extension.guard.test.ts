@@ -17,7 +17,10 @@ describe('PaceCard — the ring and pace math are untouched, only the shell', ()
   const src = () => readFileSync('src/components/home/pace-card.tsx', 'utf8');
 
   it('the collapsed card is now dark', () => {
-    expect(src()).toContain('rounded-2xl bg-stone-900 p-3 text-white');
+    // Padding tightened 13 Aug when the card was compacted (p-3 → px-3 py-2),
+    // so this asserts the dark treatment rather than an exact spacing value —
+    // spacing is design, darkness is the thing this guard exists for.
+    expect(src()).toMatch(/rounded-2xl bg-stone-900 px?-\d[^"]*text-white/);
   });
 
   it('the reschedule editing panel stays on its own light, readable surface', () => {
