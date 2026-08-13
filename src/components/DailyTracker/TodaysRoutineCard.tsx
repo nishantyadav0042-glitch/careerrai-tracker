@@ -558,7 +558,17 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
           </button>
           {addBlockError && <p className="mt-2 text-center text-xs text-stone-500">{addBlockError}</p>}
           {(calibrated || data.routine.calibration) ? (
-            <p className="mt-4 text-center text-xs font-medium text-teal-700">✓ Noted — this tunes tomorrow&apos;s plan.</p>
+            /* Was "✓ Noted — this tunes tomorrow's plan." It does not. The
+               tap is stored on daily_routines.calibration and nothing in the
+               engine reads it, so the line promised a change that never
+               happened — a plan explanation must correspond to a real
+               decision (backbone audit, 13 Aug).
+               And it cannot honestly be wired the obvious way: acting on
+               "too much" means shrinking the day, which is exactly the
+               auto-resizing the hours-are-sacred rule forbids. So the
+               collection stays (it is real signal for us) and the promise
+               goes. */
+            <p className="mt-4 text-center text-xs font-medium text-teal-700">✓ Noted.</p>
           ) : (
             <div className="mt-4">
               <p className="text-center text-xs font-semibold text-stone-500 mb-2">Today&apos;s plan was…</p>

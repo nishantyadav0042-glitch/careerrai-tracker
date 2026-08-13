@@ -86,11 +86,18 @@ export async function POST() {
 
   // 2. The date gives. It is the only thing that ever gives (lib/daily-hours:
   //    "the date gives, the hours don't"), and a busy day is exactly that.
+  // The response below tells the student their finish date moved, and the
+  // button prints the new date. That claim has to be TRUE: this error was
+  // only logged, so a failed write still produced "New finish date: 21 Aug"
+  // on screen while the profile kept the old one. Report what actually
+  // happened. (Backbone audit, 13 Aug.)
+  let dateShifted = false;
   if (verdict.newTargetDate) {
     const { error } = await admin.from('profiles')
       .update({ syllabus_target_date: verdict.newTargetDate })
       .eq('id', user.id);
     if (error) console.error('[busy-day] date shift failed', error.message);
+    else dateShifted = true;
   }
 
   admin.from('student_events').insert({
@@ -108,7 +115,9 @@ export async function POST() {
     shifted: true,
     postponed: postponed.length,
     previousTargetDate: verdict.previousTargetDate,
-    newTargetDate: verdict.newTargetDate,
+    // Null unless the write actually landed — the UI only prints a new date
+    // when there is one.
+    newTargetDate: dateShifted ? verdict.newTargetDate : null,
     hitExamWall: verdict.hitExamWall,
     message: verdict.message,
   });

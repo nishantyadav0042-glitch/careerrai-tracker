@@ -18,7 +18,7 @@ archetype** — never a separate codebase per student type
 | Daily hours (weekday + weekend) | Student sets at onboarding / reschedule. **Never changed by us** (founder rule, 6 Aug) | `profiles.hours_available`, `weekend_hours_available` via `lib/daily-hours.ts` |
 | Syllabus finish date | Student sets; renegotiated only BY them via Reschedule | `profiles.syllabus_target_date` |
 | Archetype | Onboarding: working professional? repeater? | `profiles.is_working_professional`, `is_repeater` |
-| Coverage grid (46 topics × status) | Blueprint Builder at onboarding; weekly review; confidence taps | `topic_coverage` (status: not_started → learning → practicing → revising → exam_ready) |
+| Coverage grid (53 rows × status) | Blueprint Builder at onboarding; weekly review; task ticks | `topic_coverage` (status: not_started → learning → practicing → revising → exam_ready) |
 | Weakest/strongest section | See section C — a 5-link chain | derived per request |
 | Current stage | One tap: "just starting / already practicing / mock-testing" | `profiles.current_stage` |
 | Biggest blocker | One tap at onboarding, required | `profiles.biggest_blocker` |
@@ -26,6 +26,21 @@ archetype** — never a separate codebase per student type
 | What actually happened | Daily ticks, half/full portions, busy days, off-plan logs | `daily_reports`, `routine_task_completions` |
 | **Mock results** | Score sheet in the daily log | `mock_debriefs` (per-section percentiles, error buckets) |
 | Baseline mock (if any) | Onboarding | `profiles.baseline_varc/dilr/qa` |
+
+### A.1 The topic counts, settled (audit, 13 Aug)
+
+Three different numbers are all correct, for three different things — this is
+the answer to "43 or 46 or 53?":
+
+| Number | What it is |
+|---|---|
+| **46** | **Syllabus topics the planner can schedule** — QA 28 + VARC 9 + DILR 9. This is `TOPIC_METADATA`, and the coverage ring is computed over exactly these. |
+| **53** | Coverage rows seeded per student — the 46 above **plus 7 habit rows** (MOCKS: Sectional Tests, Full Length Mocks, Mock Analysis, Error Log; READING: Daily Editorials, Business & Economy Reading, Long-form Reading). Tracked, never scheduled as topics. |
+| **45** | Units actually tapped during onboarding — QA is trimmed to its 22 highest-value topics there; the other 6 stay markable in the Analysis matrix. Un-asked topics default to `not_started`. |
+
+Verified against the live database, not assumed. `topic-taxonomy.guard.test.ts`
+pins all three counts plus the consistency rules (no duplicates, no orphans, no
+dangling or cyclic prerequisites, every syllabus topic seeded and plannable).
 
 ## B. The phase — what season of prep it is
 

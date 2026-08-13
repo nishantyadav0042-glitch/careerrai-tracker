@@ -6,6 +6,7 @@ import {
   isCoverageStatus, isForwardMove, isReviewDue, daysSinceReview,
   type CoverageStatus,
 } from '@/lib/coverage-review';
+import { normalizeStatus } from '@/lib/coverage-status';
 
 export const maxDuration = 60;
 
@@ -44,7 +45,9 @@ export async function GET() {
   const all = (rows ?? []).map((r) => ({
     topic: r.topic as string,
     section: (r.section as string) ?? TOPIC_METADATA[r.topic as string]?.section ?? 'QA',
-    status: (isCoverageStatus(r.status) ? r.status : 'not_started') as CoverageStatus,
+    // Same normalisation as the write path — showing a finished topic as
+    // "Not started" is how a student gets talked into downgrading it.
+    status: normalizeStatus(r.status),
     touched: r.updated_at ? Date.parse(r.updated_at as string) > since : false,
   }));
 
@@ -81,11 +84,17 @@ export async function POST(request: NextRequest) {
     const byTopic = new Map(
       (current ?? []).map((r) => [r.topic as string, {
         section: r.section as string,
-        status: (isCoverageStatus(r.status) ? r.status : 'not_started') as CoverageStatus,
+        // normalizeStatus, not a coerce-to-not_started. Flattening an
+        // unrecognised value (the legacy 'mastered') to the bottom rung made
+        // isForwardMove below wave through ANY tap — so the one screen we
+        // made mandatory could silently downgrade a topic the student had
+        // already finished. (Backbone audit, 13 Aug.)
+        status: normalizeStatus(r.status),
       }]),
     );
 
-    const rowsToWrite: { student_id: string; section: string; topic: string; status: string }[] = [];
+    const nowIso = new Date().toISOString();
+    const rowsToWrite: { student_id: string; section: string; topic: string; status: string; updated_at: string }[] = [];
 
     for (const u of (updates as unknown[]).slice(0, 60)) {
       if (!u || typeof u !== 'object') { rejected++; continue; }
@@ -117,6 +126,12 @@ export async function POST(request: NextRequest) {
         section: existing?.section ?? meta?.section ?? 'QA',
         topic,
         status,
+        // Every other writer stamps this; omitting it here meant a topic
+        // changed THROUGH the weekly review never counted as "touched" —
+        // so the next review would not resurface it, and revision-due and
+        // prep-memory recency (which key off updated_at) never learned the
+        // student had moved it.
+        updated_at: nowIso,
       });
     }
 
