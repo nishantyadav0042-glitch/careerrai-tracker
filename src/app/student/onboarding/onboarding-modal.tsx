@@ -220,6 +220,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
           extraProps: {
             matrix: onboardingData.topic_matrix,
             isRepeater: onboardingData.is_repeater === true,
+            ambitionDate: (onboardingData.ambition_date as string | undefined) ?? null,
+            // Self-study hours aren't collected until the finish-date screen,
+            // which comes AFTER this one in this flow's order — the engine's
+            // date-arithmetic detector simply doesn't fire without it rather
+            // than being fed a fabricated placeholder number.
+            selfStudyHours: null,
+            lastYearPercentile: (onboardingData.last_year_percentile as number | undefined) ?? null,
           },
         } satisfies Screen]
       : []),

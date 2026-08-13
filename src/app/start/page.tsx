@@ -249,6 +249,9 @@ function StartPageInner() {
           {...shared}
           matrix={(data.topic_matrix as { section: string; topic: string; status: 'not_started' | 'learning' | 'practicing' | 'revising' }[] | undefined) ?? null}
           isRepeater={data.is_repeater === true}
+          ambitionDate={(data.ambition_date as string | undefined) ?? null}
+          selfStudyHours={(data.self_study_hours as number | undefined) ?? null}
+          lastYearPercentile={(data.last_year_percentile as number | undefined) ?? null}
         />
       );
       break;
