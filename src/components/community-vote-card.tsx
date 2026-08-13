@@ -165,7 +165,10 @@ export function CommunityVoteCard() {
                 onClick={() => void vote(item, true)}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold text-white active:scale-[0.97] disabled:opacity-50 ${tone.yes}`}
               >
-                <ThumbsUp className="h-3.5 w-3.5" /> Yes, helpful
+                {/* Same words as the insights list — one voting vocabulary
+                    everywhere, and it names the standard: does this move a
+                    CAT score, not "do I like it". */}
+                <ThumbsUp className="h-3.5 w-3.5" /> Helps for CAT
               </button>
               <button
                 type="button" disabled={busy === item.id}

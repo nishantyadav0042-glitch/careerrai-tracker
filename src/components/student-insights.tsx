@@ -201,35 +201,39 @@ function Card({
           {item.section && <span className={item.isMine || item.displayName ? 'ml-1.5' : ''}>{item.section}</span>}
         </p>
 
-        {/* Votes. No number unless the server sent one, which it only does once
-            the number is worth seeing. Until then the student's own tap is the
-            whole feedback — and that is genuinely enough. */}
+        {/* Votes, IN WORDS. Founder, 13 Aug: bare arrows say nothing — a
+            student must know why the buttons exist before they will ever tap
+            one. "Helps for CAT" also states the judging standard: not "do I
+            like this" but "would this move my score" — which is exactly the
+            signal the Wilson ranking needs to be worth anything. No number
+            unless the server sent one, which it only does once the number is
+            worth seeing. */}
         {item.isMine ? null : done ? (
           <span className="text-[11.5px] font-semibold text-teal-700">
-            {myVote === 'down' ? 'Noted' : 'Marked helpful'}
+            {myVote === 'down' ? 'Noted' : 'Marked: helps for CAT ✓'}
           </span>
         ) : (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              aria-label="Helpful"
               disabled={busy === item.id}
               onClick={() => onVote(item, true)}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-teal-700 active:scale-95 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[11.5px] font-bold text-teal-700 transition-transform active:scale-95 disabled:opacity-50"
             >
-              <ArrowBigUp className="h-[18px] w-[18px]" />
+              <ArrowBigUp className="h-4 w-4" />
+              Helps for CAT
               {item.helpfulCount != null && (
-                <span className="text-[12px] font-bold">{item.helpfulCount}</span>
+                <span className="text-[11px] font-bold">· {item.helpfulCount}</span>
               )}
             </button>
             <button
               type="button"
-              aria-label="Not useful"
               disabled={busy === item.id}
               onClick={() => onVote(item, false)}
-              className="rounded-lg px-2 py-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 active:scale-95 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11.5px] font-semibold text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 active:scale-95 disabled:opacity-50"
             >
-              <ArrowBigDown className="h-[18px] w-[18px]" />
+              <ArrowBigDown className="h-4 w-4" />
+              Not helpful
             </button>
           </div>
         )}
