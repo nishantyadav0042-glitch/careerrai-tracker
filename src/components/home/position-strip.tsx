@@ -1,5 +1,5 @@
 import { Flame, Shield } from 'lucide-react';
-import { TONE } from './pace-card';
+import { TONE } from '@/lib/pace-tone';
 import type { PaceResult } from '@/lib/study-pace';
 
 interface PositionStripProps {

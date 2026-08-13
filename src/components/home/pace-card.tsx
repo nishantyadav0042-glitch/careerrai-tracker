@@ -6,6 +6,7 @@ import { isTargetExpired, selectableCatCycles } from '@/lib/cat-cycle';
 import { HOURS_ARE_ESTIMATES } from '@/lib/prep-model';
 import { remainingMockHours } from '@/lib/study-pace';
 import type { PaceResult } from '@/lib/study-pace';
+import { TONE } from '@/lib/pace-tone';
 import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 
 // The redesigned Home progress card (15 Jul mockup): a %-of-syllabus ring, the
@@ -13,19 +14,11 @@ import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 // and inline reschedule. Ring % and the daily-hours number come from the same
 // pace engine as before — only the presentation changed.
 
-// Exported so PositionStrip (the S3 Home consolidation, 13 Aug) can show the
-// exact same status wording — "Date is safe" etc. — rather than a second,
-// driftable copy of this map.
-export const TONE: Record<PaceResult['status'], { ring: string; chipBg: string; chipText: string; label: string }> = {
-  // The chip describes the DATE, not the day's workload — the date is the thing
-  // that moves when a student falls behind. "Catching up" used to sit above a
-  // headline that had silently added catch-up hours to their commitment.
-  ahead:       { ring: '#10b981', chipBg: 'bg-emerald-50', chipText: 'text-emerald-700', label: 'Date is safe' },
-  on_pace:     { ring: '#6366f1', chipBg: 'bg-indigo-50',  chipText: 'text-indigo-700',  label: 'Date is on track' },
-  behind:      { ring: '#f59e0b', chipBg: 'bg-amber-50',   chipText: 'text-amber-700',   label: 'Date is slipping' },
-  unrealistic: { ring: '#f43f5e', chipBg: 'bg-rose-50',    chipText: 'text-rose-700',    label: 'Date won\u2019t hold' },
-  done:        { ring: '#10b981', chipBg: 'bg-emerald-50', chipText: 'text-emerald-700', label: 'Syllabus done' },
-};
+// TONE now lives in lib/pace-tone.ts — a plain, boundary-free module. It used
+// to be declared here, inside a 'use client' file, and PositionStrip (a
+// server component) importing it as a named const crashed Home in production
+// on 13 Aug: the import resolved to undefined on the server. See
+// pace-tone.ts's comment for the full incident.
 
 function fmt(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
