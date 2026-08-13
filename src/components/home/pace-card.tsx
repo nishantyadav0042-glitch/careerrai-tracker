@@ -189,18 +189,27 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
     );
   }
 
+  // Restyled 13 Aug to match the dark hero on Home/My Buddy — collapsed view
+  // only. The editing sub-panel below (native date input, +/- hour steppers,
+  // the "that date needs more than you study" warning) stays on its own
+  // light inset card rather than going fully dark: those are real form
+  // controls, and unverified dark-mode contrast on a native <input type=date>
+  // across devices is exactly the kind of unwitnessed regression tonight's
+  // PositionStrip crash was about. The collapsed ring/headline — what nearly
+  // every visit actually sees — gets the full treatment; the edit flow stays
+  // provably readable.
   return (
-    <div className="rounded-2xl border border-stone-200/70 bg-white p-3 shadow-sm">
+    <div className="overflow-hidden rounded-2xl bg-stone-900 p-3 text-white">
       <div className="flex items-center gap-2.5">
         {/* Ring — % of syllabus done */}
         <div className="relative shrink-0">
           <svg width="72" height="72" viewBox="0 0 72 72">
-            <circle cx="36" cy="36" r={R} fill="none" stroke="#f1f0ef" strokeWidth="7" />
+            <circle cx="36" cy="36" r={R} fill="none" stroke="rgba(255,255,255,.1)" strokeWidth="7" />
             <circle cx="36" cy="36" r={R} fill="none" stroke={tone.ring} strokeWidth="7" strokeLinecap="round"
               strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 36 36)" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-lg font-extrabold leading-none text-stone-900">{pace.completedPct}<span className="text-[11px] font-bold">%</span></span>
+            <span className="text-lg font-extrabold leading-none text-white">{pace.completedPct}<span className="text-[11px] font-bold">%</span></span>
             {/* "Covered", not "Progress". This ring is built from statuses the
                 student declared — it measures what they say they have been
                 through, which is not the same claim as knowing it. The
@@ -212,8 +221,8 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
         {/* Detail — one clean line, no repeated pace stats */}
         <div className="min-w-0 flex-1">
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chipBg} ${tone.chipText}`}>{tone.label}</span>
-          <p className="mt-0.5 text-[14px] font-extrabold leading-tight text-stone-900">{headline}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-500"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
+          <p className="mt-0.5 text-[14px] font-extrabold leading-tight text-white">{headline}</p>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-300"><CalendarDays className="h-3 w-3" />{pace.daysLeft} days to CAT syllabus</p>
         </div>
 
         {/* Weekly sparkline — always inline */}
@@ -222,16 +231,16 @@ export function PaceCard({ pace, targetIso, week, weekLabels }: PaceCardProps) {
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
-        <span className="text-[12px] text-stone-500">Finish by <span className="font-bold text-stone-800">{fmt(targetIso)}</span></span>
+      <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
+        <span className="text-[12px] text-stone-300">Finish by <span className="font-bold text-white">{fmt(targetIso)}</span></span>
         <button type="button" onClick={() => { setEditing((v) => !v); setErr(null); }}
-          className="inline-flex items-center gap-0.5 text-[12px] font-bold text-indigo-600 hover:underline">
+          className="inline-flex items-center gap-0.5 text-[12px] font-bold text-orange-400 hover:underline">
           Reschedule <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {editing && (
-        <div className="mt-3 space-y-2.5 border-t border-stone-100 pt-3">
+        <div className="mt-3 space-y-2.5 rounded-xl border border-white/10 bg-white p-3 text-stone-900">
           {/* Founder principle: never fake precision. Students forgive an
               estimate that says it is one. */}
           <p className="text-[11px] leading-relaxed text-stone-400">{HOURS_ARE_ESTIMATES}</p>

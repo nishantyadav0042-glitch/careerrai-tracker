@@ -77,17 +77,19 @@ export function LockedBuddyHub({
         </p>
       </div>
 
-      {/* 3 — the value in three lines, not a feature list */}
+      {/* 3 — the value in three lines, not a feature list.
+          Restyled 13 Aug: both cards now sit on the same dark language as the
+          hero above them. Copy is untouched. */}
       <div className="space-y-2">
-        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3.5">
+        <div className="rounded-2xl bg-stone-900 p-3.5">
           <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Right now, on your own</p>
-          <p className="mt-1 text-sm italic leading-relaxed text-stone-500">
+          <p className="mt-1 text-sm italic leading-relaxed text-stone-300">
             &ldquo;Should I give another mock? Should I revise Algebra? Am I even improving?&rdquo;
           </p>
         </div>
-        <div className="rounded-2xl border-2 border-purple-200 bg-purple-50 p-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-purple-600">With your buddy</p>
-          <p className="mt-1 text-sm font-semibold text-purple-900">
+        <div className="rounded-2xl border-2 border-purple-400/40 bg-stone-900 p-3.5">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-purple-400">With your buddy</p>
+          <p className="mt-1 text-sm font-semibold text-white">
             You know exactly what to do today. And tomorrow. All the way to CAT.
           </p>
         </div>
@@ -122,22 +124,22 @@ export function LockedBuddyHub({
       {/* Real testimonials — renders only when a genuine quote exists */}
       <Testimonials max={3} />
 
-      {/* Coaching batch vs 1:1 — the wedge */}
+      {/* Coaching batch vs 1:1 — the wedge. Restyled 13 Aug, copy untouched. */}
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
-          <p className="font-semibold text-stone-500">Coaching batch</p>
-          <ul className="mt-1.5 space-y-1 text-stone-500">
+        <div className="rounded-2xl bg-stone-900 p-3">
+          <p className="font-semibold text-stone-400">Coaching batch</p>
+          <ul className="mt-1.5 space-y-1 text-stone-400">
             <li>200 students, 1 teacher</li>
             <li>Same plan for everyone</li>
             <li>No one reviews your prep</li>
           </ul>
         </div>
-        <div className="rounded-2xl border-2 border-purple-200 bg-purple-50 p-3">
-          <p className="font-semibold text-purple-700">Your IIM buddy</p>
-          <ul className="mt-1.5 space-y-1 text-purple-900">
-            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0" /> Just you, 1-on-1</li>
-            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0" /> Plan built for you</li>
-            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0" /> Prep reviewed weekly</li>
+        <div className="rounded-2xl border-2 border-purple-400/40 bg-stone-900 p-3">
+          <p className="font-semibold text-purple-400">Your IIM buddy</p>
+          <ul className="mt-1.5 space-y-1 text-white">
+            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0 text-purple-400" /> Just you, 1-on-1</li>
+            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0 text-purple-400" /> Plan built for you</li>
+            <li className="flex gap-1"><Check className="h-3.5 w-3.5 shrink-0 text-purple-400" /> Prep reviewed weekly</li>
           </ul>
         </div>
       </div>

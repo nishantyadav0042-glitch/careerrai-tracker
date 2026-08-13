@@ -53,27 +53,30 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
             ? `Verified ${Number(b.cat_percentile)}%ile IIM alumni mentor`
             : 'Handpicked IIM alumni mentor');
 
+          // Restyled 13 Aug to the dark treatment used across My Buddy and
+          // Home. Data, ranking and copy are byte-for-byte unchanged — see
+          // buddy-showcase-restyle.guard.test.ts.
           return (
-            <div key={b.id} className="rounded-2xl bg-stone-50 p-4">
+            <div key={b.id} className="rounded-2xl bg-stone-900 p-4">
               <div className="flex items-start gap-3">
                 {b.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={b.avatar_url} alt={b.full_name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                     {initials}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-stone-900">{b.full_name}</span>
+                    <span className="text-sm font-bold text-white">{b.full_name}</span>
                     {i === 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-400">
                         <Sparkles className="w-3 h-3" />Best match
                       </span>
                     )}
                   </div>
-                  {subtitle && <p className="text-xs font-semibold text-teal-700 mt-0.5">{subtitle}</p>}
+                  {subtitle && <p className="text-xs font-semibold text-teal-400 mt-0.5">{subtitle}</p>}
                   {b.strongest_section && (
                     <div className="mt-1.5">
                       <Badge color="green">Strong: {b.strongest_section}</Badge>
@@ -82,17 +85,17 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
                 </div>
               </div>
 
-              <div className="mt-2.5 rounded-lg bg-orange-50 px-3 py-1.5 text-[11px] font-semibold text-orange-700">
+              <div className="mt-2.5 rounded-lg bg-orange-400/10 px-3 py-1.5 text-[11px] font-semibold text-orange-400">
                 Recommended for {studentName ? studentName.split(' ')[0] : 'you'}: {reasonText}
               </div>
 
               {b.current_company && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-stone-600">
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-stone-300">
                   <Briefcase className="w-3.5 h-3.5 text-stone-400" />{b.current_company}
                 </div>
               )}
               {b.how_i_work && (
-                <p className="mt-2 text-xs text-stone-600 italic leading-relaxed border-l-2 border-teal-200 pl-2.5">
+                <p className="mt-2 text-xs text-stone-300 italic leading-relaxed border-l-2 border-teal-500/40 pl-2.5">
                   &ldquo;{b.how_i_work}&rdquo;
                 </p>
               )}
@@ -103,7 +106,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
                     href={b.linkedin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0a66c2] hover:underline"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#4da3ff] hover:underline"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />Verify on LinkedIn
                   </a>
