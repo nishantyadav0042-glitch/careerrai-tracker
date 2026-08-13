@@ -75,6 +75,9 @@ interface RoutineResponse {
   /** Today's recorded mock debrief, if one exists — turns the score door
    *  into visible proof the save happened. */
   todayMock?: { overallPercentile: number | null } | null;
+  /** Set when a recent mock DECIDED today's focus — the proof that entering
+   *  a score changes the plan. Null when the usual chain decided. */
+  focusBasis?: string | null;
 }
 
 // Time budget filters today's list — same tasks, never invented ones.
@@ -449,6 +452,18 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
           Whole plan
         </Link>
       </div>
+
+      {/* The mock's fingerprint on the plan — rendered only when a mock
+          actually DECIDED today's focus. This is the loop that makes a
+          student enter their next score: three hours of mock → visible
+          change in tomorrow's plan. Founder, 13 Aug: "mock score
+          performance is significantly important." */}
+      {!fullyDone && data.focusBasis && (
+        <p className="mb-1.5 rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-medium text-indigo-800">
+          <span className="mr-1 font-bold uppercase tracking-wide text-indigo-500 text-[9px]">Built from your mock</span>
+          <br />{data.focusBasis}
+        </p>
+      )}
 
       {/* Why it is that size, but only when it differs from what they asked
           for — otherwise it is noise on every single day. */}

@@ -1,4 +1,5 @@
 import { weakestFromCoverage } from '@/lib/section-weakness';
+import { mockInformedFocus, type DebriefRow } from '@/lib/mock-informed-focus';
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -46,6 +47,7 @@ export async function GET() {
     { daysSincePendingMock, pendingMockName },
     { data: recentReports },
     { data: timetableRow },
+    { data: recentDebriefRows },
   ] = await Promise.all([
     admin
       .from('profiles')
@@ -100,13 +102,25 @@ export async function GET() {
       .select('blocks, confirmed_at')
       .eq('student_id', user.id)
       .maybeSingle(),
+    // Real mock results, newest first — the strongest evidence we hold about
+    // where a student actually loses marks. Five rows is plenty: the focus
+    // rule only ever reads back to the latest COMPLETE one.
+    admin
+      .from('mock_debriefs')
+      .select('taken_on, varc, dilr, qa')
+      .eq('student_id', user.id)
+      .order('taken_on', { ascending: false })
+      .limit(5),
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-  // Weakest-section chain: explicit self-report (legacy accounts that
-  // answered the old tap) → baseline mock scores → derived from the
-  // student's own declared Coverage grid (the Blueprint Builder no longer
-  // asks the single-section question — the full grid answers it better).
+  // Weakest-section chain: MEASURED mock performance (founder, 13 Aug:
+  // "mock score performance is significantly important" — a recent,
+  // complete, decisive debrief outranks everything, because evidence beats
+  // memory) → explicit self-report (legacy accounts that answered the old
+  // tap) → baseline mock scores → derived from the student's own declared
+  // Coverage grid (the Blueprint Builder no longer asks the single-section
+  // question — the full grid answers it better).
   // Falls back to 'DILR' — the same deterministic, stated default the
   // tie-break in computeWeakestFromCoverage already uses — when nothing is
   // derivable (a true beginner: no self-report, no baselines, and an
@@ -114,11 +128,17 @@ export async function GET() {
   // gate that used to re-interrogate exactly those students on the home
   // screen ("Which section is toughest?") even though they'd just finished
   // the mandatory Builder.
-  const weakest = (profile.self_reported_weakest_section as Section | null)
+  // The override is never silent: focusBasis rides the response so the plan
+  // says "Your last mock (VARC 89 · DILR 99 · QA 99) — VARC needs the work"
+  // instead of quietly contradicting what the student typed at signup.
+  const mockFocus = mockInformedFocus((recentDebriefRows ?? []) as DebriefRow[], today);
+  const weakest = mockFocus?.weakest
+    ?? (profile.self_reported_weakest_section as Section | null)
     ?? computeWeakestFromBaseline(profile)
     ?? computeWeakestFromCoverage(coverageRows ?? [])
     ?? 'DILR';
-  const strongest = (profile.self_reported_strongest_section as Section | null)
+  const strongest = mockFocus?.strongest
+    ?? (profile.self_reported_strongest_section as Section | null)
     ?? computeStrongestFromBaseline(profile);
 
   // null = never asked (the legacy quick-setup that used to collect this is
@@ -460,6 +480,14 @@ export async function GET() {
 
   return NextResponse.json({
     routine: { ...routine, tasks: tasksWithStatus },
+    // Why the plan's focus is what it is, when a mock decided it. The card
+    // renders this over the task list — the payoff loop for entering a
+    // score: mock in, plan visibly moves.
+    // Suppressed on the day the mock was entered: today's routine froze at
+    // generation time, BEFORE that score existed, and this line may only
+    // ever render when it is true of the plan on screen (the plan-reason
+    // rule). From tomorrow's build onward the mock has actually steered it.
+    focusBasis: mockFocus && mockFocus.takenOn < today ? mockFocus.basis : null,
     todayMock: todayDebrief
       ? { overallPercentile: todayDebrief.overall_percentile != null ? Number(todayDebrief.overall_percentile) : null }
       : null,
