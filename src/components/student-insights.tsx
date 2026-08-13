@@ -111,12 +111,13 @@ export function StudentInsights() {
               {myRank === 1 ? "You're #1 this month" : `You're #${myRank} this month`}
             </p>
           )}
-          {/* Founder, 13 Aug: "too long, no one will read this, not at all
-              catchy — ten most… simply write 10." A reward line that takes a
-              sentence to parse is not a reward, it is terms and conditions.
-              Numeral, arrow, prize last. */}
+          {/* Founder, 13 Aug: "too long, no one will read this — simply write
+              10", then the criterion made explicit: "top 10 students maximum
+              shared questions — Free Buddy Access for a month." So the line
+              names the ACTION (share questions), not a vague "helpful" — a
+              student reading it must know exactly what to do to win. */}
           <p className="mt-2 text-[13px] font-bold text-stone-900">
-            Top 10 each month → <span className="text-orange-600">free month of Buddy</span>
+            Share questions. Top 10 each month → <span className="text-orange-600">Buddy free for a month</span>
           </p>
         </div>
       </div>
