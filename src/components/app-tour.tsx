@@ -21,7 +21,10 @@ interface TourStep { sel: string; title: string; body: string }
 const STEPS: TourStep[] = [
   { sel: '[data-tour="plan"]',  title: 'Your plan for today', body: 'Built around the highest-scoring CAT topics for exactly where you are. Each task tells you why it’s there.' },
   { sel: '[data-tour="swap"]',  title: 'Not feeling a topic?', body: 'Tap ⇄ Swap to change it — your plan, your call. It comes back tomorrow, never lost.' },
-  { sel: '[data-tour="log"]',   title: 'Update it in seconds',     body: 'Done studying? Update topics studied today. This one habit keeps your whole plan on track.' },
+  // Points at the PLAN, not at the old log button — the tick on the task is
+  // now the log, and this is where a new student is told so (founder, 13 Aug:
+  // "just guide the new students the way they can log").
+  { sel: '[data-tour="plan"]',  title: 'Logging takes one tap', body: 'Finished a task? Tap its circle — got halfway, or finished it. That is your log for the day; there is nothing else to fill in.' },
   { sel: '[data-tour="daily-pick"]', title: 'Daily Pick 🤝', body: 'A tip and questions from fellow aspirants, every day. Your vote decides what gets featured — and you can share yours too. By the students, for the students.' },
   { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'Your 1:1 IIM buddy reviews your prep and tells you what to fix — right here.' },
 ];

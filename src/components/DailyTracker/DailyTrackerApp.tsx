@@ -266,9 +266,10 @@ export function DailyTrackerApp({
         </div>
       )}
 
-      {/* Today's Focus — star + TODAY'S FOCUS label + one-line focus on the
-          left, the black "Update topics studied today" action on the right. Always
-          side-by-side (compact) to keep Home to one screen.
+      {/* The strip under the plan. Before 13 Aug this carried a full-width
+          black primary action that opened the log sheet; now that a task can be
+          marked on the plan itself, that button is gone and this space teaches
+          the tick instead.
           STUDENT VOCABULARY: never the word "log" in visible copy — a CAT
           aspirant thinks "aaj kitna padha", not "I'll log my study". Code
           identifiers (submitLog, useLogging, log_date, companion_log) keep the
@@ -276,23 +277,20 @@ export function DailyTrackerApp({
       <Card className="p-2.5">
         {todaySession && <div className="mb-2"><SessionStrip session={todaySession} /></div>}
 
-        {/* The action is a FULL-WIDTH row under the focus line, not beside it.
-            It used to sit side-by-side to keep Home to one screen, and that
-            worked while the label was short. "Update topics studied today"
-            measures 233px at 12px bold, which at 360px crushed "Be consistent,
-            not perfect." into four lines and overlapped it — verified in a
-            render, not assumed. A ~40px taller card is a cheap price for the
-            founder's exact wording plus a full-width tap target. If Home ever
-            has to shrink again, shorten the LABEL rather than re-cramming this
-            button next to the text. */}
+        {/* Kept full-width rather than beside the text: a long label crushed
+            the focus line into four overlapping rows at 360px when these sat
+            side by side. That was verified in a render, not assumed, and the
+            constraint still holds for whatever label lives here. */}
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
             <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">Today&apos;s Focus</p>
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">
+              {hasLoggedToday ? "Today's Focus" : 'How to log'}
+            </p>
             <p className="text-[13px] font-extrabold leading-tight text-stone-900">
-              {hasLoggedToday ? 'Topics updated ✓' : 'Be consistent, not perfect.'}
+              {hasLoggedToday ? 'Topics updated ✓' : 'Tap a task above as you finish it.'}
             </p>
           </div>
           {hasLoggedToday && (
@@ -300,15 +298,25 @@ export function DailyTrackerApp({
           )}
         </div>
 
+        {/* The big black primary action that used to live here is GONE.
+            Founder, 13 Aug: once a task can be marked from the plan itself,
+            a second place to record the same day is not a convenience, it is
+            a fork — two doors to one action, and the student has to work out
+            which one counts.
+            What remains is a quiet line, not a call to action: the escape
+            hatch for a day that happened OFF the plan, or a rest day. That
+            path must never close (Incident #2: requiring a plan-tick to
+            submit took a whole cohort's logging to 0/29), but it no longer
+            competes with the plan for attention. */}
         {!hasLoggedToday && (
           <div className="mt-2.5">
             <button
               data-tour="log"
               onClick={() => { setLogDateOverride(null); setIsLogOpen(true); }}
               disabled={isSubmitting}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3 py-3 text-[13px] font-bold text-white transition-all active:scale-[0.99] disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[12px] font-semibold text-stone-600 transition-all active:scale-[0.99] disabled:opacity-50"
             >
-              {isSubmitting ? 'Saving…' : <>Update topics studied today <ArrowRight className="h-4 w-4" /></>}
+              {isSubmitting ? 'Saving…' : <>Studied something else today? Add it <ArrowRight className="h-3.5 w-3.5" /></>}
             </button>
             {!hasLoggedYesterday && yesterdayStr && (
               <button

@@ -99,6 +99,42 @@ function taskTitle(task: RoutineTask): string {
 let routineTodayCache: { at: number; json: unknown } | null = null;
 const ROUTINE_CACHE_MS = 30_000;
 
+
+// ── How far did you get? ────────────────────────────────────────────────────
+//
+// Founder, 13 Aug: "3 short click option — 50% completed, task 100% done, or
+// something like this." Two taps maximum, no modal, no typing.
+//
+// Three states, not two: not-marked / half / done. A single all-or-nothing
+// tick loses the most common honest day — the student who sat down, got
+// through some of it, and would rather record nothing than overclaim. Half
+// credits half the block's hours (creditedHours, the same formula the log
+// sheet uses), so the number stays true either way.
+function ProgressChoice({
+  onPick, busy,
+}: { onPick: (portion: 'full' | 'half') => void; busy: boolean }) {
+  return (
+    <div className="flex gap-1.5 px-1 pb-2 pt-1.5">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onPick('half')}
+        className="flex-1 rounded-lg border border-amber-300 bg-amber-50 py-2 text-[12px] font-bold text-amber-800 transition-transform active:scale-95 disabled:opacity-50"
+      >
+        Got halfway
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => onPick('full')}
+        className="flex-1 rounded-lg bg-stone-900 py-2 text-[12px] font-bold text-white transition-transform active:scale-95 disabled:opacity-50"
+      >
+        Finished it
+      </button>
+    </div>
+  );
+}
+
 export function TodaysRoutineCard() {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -107,6 +143,11 @@ export function TodaysRoutineCard() {
   const [addingBlock, setAddingBlock] = useState(false);
   const [addBlockError, setAddBlockError] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  // Which task is showing its Half / Done choice. Founder, 13 Aug: the tap
+  // should offer a short set of options, not a single all-or-nothing tick —
+  // most real days end somewhere in between, and a student forced to choose
+  // between "done" and nothing will pick nothing.
+  const [markingTaskId, setMarkingTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [swapTaskId, setSwapTaskId] = useState<string | null>(null);
@@ -213,7 +254,7 @@ export function TodaysRoutineCard() {
     return () => window.removeEventListener('cr-routine-updated', onUpdated);
   }, [load]);
 
-  async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal) {
+  async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal, portion?: 'full' | 'half') {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
     try {
@@ -225,7 +266,7 @@ export function TodaysRoutineCard() {
         // a student who ticks one task still reads as "never logged", which is
         // the exact 319 -> 59 leak this change exists to close. The route
         // merges rather than overwrites, so an earlier manual log is safe.
-        body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, close_day: true, ...(confidence ? { confidence } : {}) }),
+        body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, close_day: true, ...(confidence ? { confidence } : {}), ...(portion ? { portion } : {}) }),
       });
       if (!res.ok) return;
       // Server state changed — the 30s GET cache must never serve
@@ -449,6 +490,17 @@ export function TodaysRoutineCard() {
         </div>
       ) : (
         <>
+          {/* First-timer guidance. Founder, 13 Aug: "just guide the new
+              students the way they can log — they can log directly from home
+              screen only." Shown until they have marked anything at all today,
+              then it disappears; a hint that outstays its welcome becomes
+              furniture. */}
+          {doneCount === 0 && (
+            <p className="mb-1.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
+              Tap the circle when you finish a task — that&apos;s your log for today.
+            </p>
+          )}
+
           <div className="space-y-1">
             {tasks.map((task, idx) => {
               const done = completedIds.has(task.id);
@@ -481,9 +533,9 @@ export function TodaysRoutineCard() {
                           honest day impossible and cost a whole cohort). */}
                       <button
                         type="button"
-                        aria-label={`Mark done: ${taskTitle(task)}`}
+                        aria-label={`Mark progress: ${taskTitle(task)}`}
                         disabled={busyTaskId === task.id}
-                        onClick={() => { reportStart(); void toggleTask(task); }}
+                        onClick={() => { reportStart(); setMarkingTaskId((cur) => (cur === task.id ? null : task.id)); }}
                         className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300 transition-colors hover:border-stone-900 active:scale-90 disabled:opacity-50"
                       />
                       <div className="min-w-0 flex-1">
@@ -517,6 +569,14 @@ export function TodaysRoutineCard() {
                         </button>
                       )}
                     </div>
+                    {markingTaskId === task.id && !done && (
+                      <div className="rounded-b-2xl bg-stone-100/70">
+                        <ProgressChoice
+                          busy={busyTaskId === task.id}
+                          onPick={(portion) => { setMarkingTaskId(null); void toggleTask(task, undefined, portion); }}
+                        />
+                      </div>
+                    )}
                     {swapOpen && !done && task.topic && (
                       <div className={cn('bg-stone-100/70 px-4 pb-4 pt-1', expanded ? '' : 'rounded-b-2xl')}>
                         <p className="mb-1.5 text-[11px] font-semibold text-stone-500">
@@ -542,14 +602,18 @@ export function TodaysRoutineCard() {
 
               return (
                 <div key={task.id}>
-                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', swapTaskId === task.id && !done && task.topic && 'rounded-b-none')}>
+                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', ((swapTaskId === task.id && task.topic) || markingTaskId === task.id) && !done && 'rounded-b-none')}>
                     {/* Same single-state tick as the hero task. Tapping a done
                         task un-does it — a mis-tap must never be permanent. */}
                     <button
                       type="button"
-                      aria-label={done ? `Undo: ${taskTitle(task)}` : `Mark done: ${taskTitle(task)}`}
+                      aria-label={done ? `Undo: ${taskTitle(task)}` : `Mark progress: ${taskTitle(task)}`}
                       disabled={busyTaskId === task.id}
-                      onClick={() => { if (!done) reportStart(); void toggleTask(task); }}
+                      onClick={() => {
+                        if (done) { void toggleTask(task); return; }
+                        reportStart();
+                        setMarkingTaskId((cur) => (cur === task.id ? null : task.id));
+                      }}
                       className={cn(
                         'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors active:scale-90 disabled:opacity-50',
                         done ? 'border-stone-900 bg-stone-900' : 'border-stone-300 hover:border-stone-900'
@@ -578,6 +642,14 @@ export function TodaysRoutineCard() {
                       </button>
                     )}
                   </div>
+                  {markingTaskId === task.id && !done && (
+                    <div className="rounded-b-xl bg-stone-100/70">
+                      <ProgressChoice
+                        busy={busyTaskId === task.id}
+                        onPick={(portion) => { setMarkingTaskId(null); void toggleTask(task, undefined, portion); }}
+                      />
+                    </div>
+                  )}
                   {swapTaskId === task.id && !done && task.topic && (
                     <div className="rounded-b-2xl bg-stone-100/70 px-4 pb-4 pt-1">
                       <p className="mb-1.5 text-[11px] font-semibold text-stone-500">

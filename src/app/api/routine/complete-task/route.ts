@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
+import { creditedHours } from '@/lib/study-credit';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
@@ -27,7 +28,17 @@ export async function POST(request: NextRequest) {
   // single marked topic as a valid day — so requiring the WHOLE routine before
   // the streak moves held the card to a stricter bar than the log it feeds.
   // Same RPC, same merge rules; only the trigger differs.
-  const { task_id: taskId, is_emergency: isEmergency, confidence, skip_day_close: skipDayClose, close_day: closeDay } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string; skip_day_close?: boolean; close_day?: boolean };
+  const { task_id: taskId, is_emergency: isEmergency, confidence, skip_day_close: skipDayClose, close_day: closeDay, portion } = (await request.json()) as { task_id?: string; is_emergency?: boolean; confidence?: string; skip_day_close?: boolean; close_day?: boolean; portion?: string };
+  if (portion !== undefined && portion !== 'full' && portion !== 'half') {
+    return NextResponse.json({ error: "portion must be 'full' or 'half'" }, { status: 400 });
+  }
+  // How much of the task got done, carried on the EXISTING confidence column
+  // using the mapping LoggingModal already established (full -> green, half ->
+  // blue). Deliberately no new column: the plan card does not offer a separate
+  // confidence control, so there is nothing for this to collide with, and a
+  // migration for a two-value flag the sheet already encodes would be adding a
+  // second representation of one concept (Incident #23).
+  const effectiveConfidence = confidence ?? (portion === 'half' ? 'blue' : portion === 'full' ? 'green' : undefined);
   if (!taskId || typeof taskId !== 'string') return NextResponse.json({ error: 'task_id required' }, { status: 400 });
   if (confidence !== undefined && !VALID_CONFIDENCE.includes(confidence as ConfidenceSignal)) {
     return NextResponse.json({ error: 'confidence must be green, blue, yellow, or red' }, { status: 400 });
@@ -38,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   const { data: routine } = await admin
     .from('daily_routines')
-    .select('tasks, est_minutes')
+    .select('tasks, est_minutes, generated_hours')
     .eq('student_id', user.id)
     .eq('routine_date', today)
     .maybeSingle();
@@ -63,7 +74,7 @@ export async function POST(request: NextRequest) {
   } else {
     await admin.from('routine_task_completions').insert({
       student_id: user.id, routine_date: today, task_id: taskId, is_emergency: !!isEmergency,
-      confidence: confidence ?? null,
+      confidence: effectiveConfidence ?? null,
     });
 
     // Confidence-aware planning: a real 🟢/🟡/🔴 tap on a topic-bearing task
@@ -71,14 +82,14 @@ export async function POST(request: NextRequest) {
     // Topic Selector reads for tomorrow's choice — rather than only ever
     // being editable from a separate self-audit screen.
     const completedTask = tasks.find((t) => t.id === taskId);
-    if (confidence && completedTask?.topic) {
+    if (effectiveConfidence && completedTask?.topic) {
       const { data: coverageRow } = await admin
         .from('topic_coverage')
         .select('status')
         .eq('student_id', user.id)
         .eq('topic', completedTask.topic)
         .maybeSingle();
-      const newStatus = applyConfidenceSignal((coverageRow?.status as CoverageStatus | undefined) ?? null, confidence as ConfidenceSignal);
+      const newStatus = applyConfidenceSignal((coverageRow?.status as CoverageStatus | undefined) ?? null, effectiveConfidence as ConfidenceSignal);
       await admin.from('topic_coverage').upsert(
         { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
         { onConflict: 'student_id,section,topic' }
@@ -88,7 +99,7 @@ export async function POST(request: NextRequest) {
 
   const { data: completions } = await admin
     .from('routine_task_completions')
-    .select('task_id, is_emergency')
+    .select('task_id, is_emergency, confidence')
     .eq('student_id', user.id)
     .eq('routine_date', today);
 
@@ -120,7 +131,25 @@ export async function POST(request: NextRequest) {
       .eq('report_date', today)
       .maybeSingle();
 
-    const mergedHours = Math.max(1, Math.round(routineMinutes / 60), existingLog?.study_duration ?? 0);
+    // ONE hours formula for both write paths. The log sheet already prices a
+    // day with creditedHours (coverage x the plan's own hours); this route used
+    // to run its own rounded minutes/60, so the same day could be worth
+    // different amounts depending on which surface recorded it. With a HALF
+    // state now reachable from the plan card that divergence would also make
+    // the number wrong — half a task credited as a whole one is the log lying
+    // about time, which is what Incident #30 was about.
+    const halfDone = (completions ?? []).filter((c) => c.confidence === 'blue' && completedIds.has(c.task_id)).length;
+    const fullDone = completedTasks.length - halfDone;
+    const generatedHours = (routine.generated_hours as number | null) ?? routineMinutes / 60;
+    const earned = creditedHours({
+      generatedHours,
+      plannedTasks: tasks.length,
+      fullDone,
+      halfDone,
+      offPlanCount: 0,
+    });
+    // Never shrink a log the student already made by hand.
+    const mergedHours = Math.max(earned, existingLog?.study_duration ?? 0);
     const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...routineSections])];
     const mergedMockTaken = routineMockTaken || !!existingLog?.mock_taken;
     const mergedNotes = existingLog?.notes
