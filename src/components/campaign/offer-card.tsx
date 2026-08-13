@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { track } from '@/lib/journey';
+import { mayShowSeatsLeft } from '@/lib/campaign';
 
 // ── The in-app campaign card (founder, 12 Aug: in-app carries the sales load) ─
 //
@@ -96,10 +97,15 @@ export function CampaignOfferCard() {
         >
           Get my buddy →
         </Link>
-        {/* The seat count is real: paid purchases counted against the 50. */}
-        <span className="text-[11.5px] font-semibold text-stone-500">
-          {c.seatsLeft} of {c.slots} spots left
-        </span>
+        {/* The seat count is real (paid purchases counted against the 50) —
+            and it is shown ONLY once enough are gone that the number carries
+            urgency instead of announcing that nobody has bought. See
+            mayShowSeatsLeft in lib/campaign.ts. */}
+        {mayShowSeatsLeft(c.seatsLeft, c.slots) && (
+          <span className="text-[11.5px] font-semibold text-stone-500">
+            Only {c.seatsLeft} spots left
+          </span>
+        )}
       </div>
     </div>
   );

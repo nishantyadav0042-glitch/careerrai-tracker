@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { campaignState } from '@/lib/campaign';
+import { campaignState, mayShowSeatsLeft } from '@/lib/campaign';
 import { campaignSeatsSold } from '@/lib/pricing';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -54,9 +54,9 @@ export default async function OfferPage() {
         <p className="mt-1.5 text-[13px] font-bold text-emerald-700">
           Save {c.savingDisplay} · one payment, no renewal until CAT
         </p>
-        {c.live && (
+        {c.live && mayShowSeatsLeft(c.seatsLeft, c.slots) && (
           <p className="mt-2 text-[12px] font-semibold text-stone-500">
-            {c.seatsLeft} of {c.slots} spots left
+            Only {c.seatsLeft} spots left
           </p>
         )}
       </div>

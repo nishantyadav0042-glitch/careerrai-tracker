@@ -46,6 +46,34 @@ export function seatsLeft(sold: number): number {
   return Math.max(0, CAMPAIGN.slots - Math.max(0, sold));
 }
 
+// ── Scarcity may only be shown when it is actually scarce ───────────────────
+//
+// Founder, 13 Aug, seeing the live Home card: "don't show 50/50 spots left —
+// student will feel no one is buying."
+//
+// He is right, and this is the worst instance of it in the app. "9 students
+// studied today" is a weak signal; "50 of 50 spots left" is a STRONG one
+// pointing the wrong way — it is a precise, confident announcement that not a
+// single person has bought, printed directly above the buy button. A student
+// reads it as a verdict other people have already reached.
+//
+// A seat counter only does its job in one direction. "12 spots left" carries
+// urgency AND implies 38 people decided this was worth ₹2,499. The same
+// component with a full counter carries no urgency and implies the opposite.
+// So the number appears only once enough seats are genuinely gone.
+//
+// Half, deliberately: at 50 slots the line appears at 25 left, which means 25
+// real students have paid. That is a number worth showing on both counts.
+//
+// The fix is a threshold, never a fake figure. We do not inflate `sold`, we do
+// not invent "only a few left", and we do not count anything but real paid
+// purchases. When there is nothing true and helpful to say about seats, the
+// card says nothing about seats and sells on the offer instead.
+export function mayShowSeatsLeft(left: number, slots: number): boolean {
+  if (slots <= 0) return false;
+  return left <= Math.floor(slots / 2);
+}
+
 /** The saving, in whole rupees, for display. */
 export function savingRupees(): number {
   return Math.round((PLANS[CAMPAIGN.plan].amountPaise - CAMPAIGN.offerPaise) / 100);

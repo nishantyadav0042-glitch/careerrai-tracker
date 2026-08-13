@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
 import { sendNotification } from '@/lib/notifications';
-import { campaignState, CAMPAIGN } from '@/lib/campaign';
+import { campaignState, CAMPAIGN, mayShowSeatsLeft } from '@/lib/campaign';
 import { campaignSeatsSold } from '@/lib/pricing';
 
 // ── Campaign push waves — the REACTIVATION layer, not the sales engine ──────
@@ -41,8 +41,10 @@ const COPY: Record<Wave, { title: string; body: (seats: number) => string }> = {
   closing: {
     title: 'Offer closes tonight',
     body: (seats) =>
-      seats > 0 && seats <= 20
-        ? `${seats} of ${CAMPAIGN.slots} spots left. Your buddy till CAT for ₹2,499.`
+      // Already gated, and now gated by the SAME rule the two student-facing
+      // surfaces use, so no channel can ever announce a full counter.
+      seats > 0 && mayShowSeatsLeft(seats, CAMPAIGN.slots)
+        ? `Only ${seats} spots left. Your buddy till CAT for ₹2,499.`
         : 'Your buddy till CAT for ₹2,499 — the offer ends at midnight.',
   },
 };

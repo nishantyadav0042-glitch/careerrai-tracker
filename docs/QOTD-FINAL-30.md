@@ -345,3 +345,51 @@ criterion, not copy.
 
 **Days 1–10 only**, per your instruction. Days 11–30 stay drafted and unscheduled
 until the first ten have told us something.
+
+---
+
+# Round 3 — approved changes (13 Aug)
+
+## Truth-teller duplicate resolved
+
+**Dropped: #24 "who is lying"** (day 22). Kept B22 on day 4, which is already
+scheduled and live for 16 Aug — dropping the unscheduled one avoids touching a
+row students may already be counting on.
+
+**Day 22 becomes a new non-percentage gotcha:**
+
+### N11. The clock at 3:15
+A clock shows exactly 3:15. What is the angle between the hour and minute hands?
+
+- A) 0° · **B) 7.5°** · C) 15° · D) 2.5°
+
+→ **7.5°.** Almost everyone says 0° — the hands *look* like they're on top of
+each other. But the hour hand doesn't jump from 3 to 4; it creeps. At 3:15 it
+has already moved a quarter of the way, to 97.5°, while the minute hand is at
+90°.
+
+*Non-percentage, non-famous, and the "obviously 0" instinct is universal.*
+*Share reason: everyone has looked at a clock. The wrong answer feels so
+certain that being corrected is genuinely fun.*
+
+## Mix after the swap
+
+| Feeling | Target | Now | |
+|---|---|---|---|
+| "I can't believe I got that wrong" | 40% (12) | 37% (11) | −1 |
+| "What would YOU do?" | 25% (7.5) | 23% (7) | ✓ |
+| "That's actually useful" | 15% (4.5) | 17% (5) | ✓ |
+| "Oh, I never knew that" | 10% (3) | 10% (3) | ✓ |
+| spot-it puzzles | — | 13% (4) | −1 from before |
+
+Close enough to your target that further shuffling would be fiddling rather
+than fixing.
+
+## Seat counter removed from the offer
+
+Separate from the question bank, but the same rule. `mayShowSeatsLeft` now gates
+all three surfaces (Home card, /offer, campaign push): the number appears only
+once at least half the seats are genuinely gone, so it can carry urgency instead
+of announcing that nobody has bought. No fake figure, no inflated `sold` — when
+there is nothing true and useful to say about seats, the card says nothing and
+sells on the offer.
