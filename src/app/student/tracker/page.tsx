@@ -13,7 +13,6 @@ import { PlanResetButton } from '@/components/home/plan-reset-button';
 import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight } from '@/lib/daily-insight';
-import { Shield } from 'lucide-react';
 import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { BusyDayButton } from '@/components/busy-day-button';
@@ -21,6 +20,7 @@ import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
+import { PositionStrip } from '@/components/home/position-strip';
 import { ImportantDates } from '@/components/home/important-dates';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
@@ -257,6 +257,9 @@ export default async function DailyTrackerPage() {
 
   // Total study time (all logs) + a 7-day study-hours sparkline for the pace card.
   const hoursByDate = new Map((logs ?? []).map((l) => [l.report_date, Number(l.study_duration) || 0]));
+  // Same map, today's key — PositionStrip's "Xh today" is read off it, not
+  // recomputed from anything else.
+  const todayHours = hoursByDate.get(todayStr) ?? 0;
   const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const week: number[] = [];
   const weekLabels: string[] = [];
@@ -461,28 +464,26 @@ export default async function DailyTrackerPage() {
             <span className="shrink-0 text-2xl" aria-hidden>📖</span>
           </Link>
         )}
-        {/* Greeting + streak card */}
-        <div className="flex items-center justify-between gap-3 px-1">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-stone-900">
-              Hello, {firstName}! <span aria-hidden>👋</span>
-            </h1>
-            {/* Moves with the slot, so the page reads like it knows the hour. */}
-            <p className="text-[13px] text-stone-500">{slotGreeting(slot)}</p>
-          </div>
-          {/* Streak is a status display, not a link — tapping it used to open
-              the Analysis page, which made no sense (founder, 24 Jul). */}
-          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-stone-200/70 bg-white px-3 py-2 shadow-sm">
-            <Flame className={currentStreak > 0 ? 'h-5 w-5 text-orange-500' : 'h-5 w-5 text-stone-300'} />
-            <div className="leading-none">
-              <div className="text-lg font-extrabold text-stone-900 tabular-nums">{currentStreak}</div>
-              <div className="text-[10px] font-medium text-stone-500">day streak</div>
-            </div>
-            <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600">
-              <Shield className="h-3 w-3" />{momentum.shields}
-            </span>
-          </div>
+        {/* Greeting. The streak used to live in a separate white pill here;
+            it moved into PositionStrip below, which already carries the same
+            number alongside pace/coverage/hours — one place for "where do I
+            stand", not two. */}
+        <div className="px-1">
+          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-stone-900">
+            Hello, {firstName}! <span aria-hidden>👋</span>
+          </h1>
+          {/* Moves with the slot, so the page reads like it knows the hour. */}
+          <p className="text-[13px] text-stone-500">{slotGreeting(slot)}</p>
         </div>
+
+        {/* S3 — POSITION, consolidated (13 Aug founder ask): streak, syllabus
+            date, coverage% and hours-today in one strip, composed entirely
+            from numbers this page already computed for PaceCard below —
+            nothing here is a new query or a new engine. Only renders once
+            pace/targetIso exist, same gate PaceCard already uses. */}
+        {pace && targetIso && (
+          <PositionStrip streak={currentStreak} shields={momentum.shields} pace={pace} targetIso={targetIso} todayHours={todayHours} />
+        )}
 
         {/* Streak restore (founder, 23 Jul): shields no longer auto-cover a
             miss. A broken streak shows a Restore button the student taps

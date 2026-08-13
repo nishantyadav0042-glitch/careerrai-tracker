@@ -6,6 +6,7 @@ import { type Section, type Stage } from '@/lib/routine-engine';
 import { type Blocker } from '@/lib/mission-engine';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam, projectSyllabusFinish, phaseBoundaryDates } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
+import { MOCKS_PER_WEEK, mocksForWeekOf, phaseOn } from '@/lib/exam-calendar';
 import { computePrepMemory, computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
@@ -224,11 +225,28 @@ export async function GET() {
   const narrative = fallbackNarrative(phase.label, weeksRemaining, weak, weakTopic, blocker);
   const source: 'ai' | 'fallback' = 'fallback';
 
+  // Additive fields for the Blueprint Reveal hero (S1 restyle, 13 Aug) — every
+  // one of these reuses a value or function this route already computed above;
+  // none of it is new date/phase/mock-cadence math (see docs/CODEMAP.md's rule
+  // on the exam calendar's one authority).
+  const daysToExam = Math.max(0, Math.round((exam.getTime() - today.getTime()) / 86_400_000));
+  const mocksPerWeekNow = mocksForWeekOf(today, exam);
+  // Only worth a "bumps to N from <month>" note when the cadence is still
+  // going to change — once already in the higher cadence there is nothing to
+  // announce.
+  const mocksPerWeekRisesTo = phaseOn(today, exam) === 'build' && mocksPerWeekNow < MOCKS_PER_WEEK.intensive
+    ? MOCKS_PER_WEEK.intensive
+    : null;
+
   return NextResponse.json({
     narrative,
     source,
     examTarget: profile.exam_target ?? null,
     attemptYear: profile.attempt_year ?? null,
+    daysToExam,
+    mocksPerWeekNow,
+    mocksPerWeekRisesTo,
+    studyTargetHoursPerDay: (profile.study_target_hours as number | null) ?? null,
     phase,
     weeksRemaining,
     weakestSection: weak,

@@ -276,7 +276,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       key: 'blueprint-reveal',
       component: ScreenBlueprintReveal,
       sectionId: null,
-      extraProps: { successGoal: null },
+      extraProps: {
+        successGoal: null,
+        // Same derivation as hFirstName below — computed inline here because
+        // this array is built before that variable exists.
+        firstName: typeof onboardingData.full_name === 'string' && onboardingData.full_name.trim()
+          ? onboardingData.full_name.trim().split(' ')[0] : null,
+      },
     },
   ];
 

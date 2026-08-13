@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface ScreenBlueprintRevealProps {
   onNext: (data?: Record<string, unknown>) => Promise<void>;
@@ -10,6 +9,7 @@ interface ScreenBlueprintRevealProps {
   canGoBack: boolean;
   isLoading: boolean;
   successGoal?: string | null;
+  firstName?: string | null;
 }
 
 const SUCCESS_GOAL_LABEL: Record<string, string> = {
@@ -28,7 +28,27 @@ interface BlueprintSnapshot {
   targetPercentile: number | null;
   coverageTally: { not_started: number; learning: number; practicing: number; revising: number; exam_ready: number };
   blueprintConfidence: { score: number; reasons: string[] };
+  totalTopics: number;
+  daysToExam: number;
+  mocksPerWeekNow: number;
+  mocksPerWeekRisesTo: number | null;
+  studyTargetHoursPerDay: number | null;
+  finishProjection: { status: 'done' | 'stalled' | 'ahead' | 'tight' | 'critical'; windowLabel: string | null; sub: string };
 }
+
+// The finish-projection engine's own verdict, styled — never a re-derived
+// number. A fixed slack-day count from the original mock would mean computing
+// a NEW statistic outside study-plan.ts, the one module that owns this math
+// (docs/CODEMAP.md: "do not add a fourth planner"). The engine's real `sub`
+// line says the same kind of thing honestly, for whatever the student's
+// actual pace is today.
+const FIT_STYLE: Record<BlueprintSnapshot['finishProjection']['status'], { bg: string; icon: string }> = {
+  done: { bg: '#0F766E', icon: '✓' },
+  ahead: { bg: '#0F766E', icon: '✓' },
+  tight: { bg: '#C2410C', icon: '⚡' },
+  critical: { bg: '#B91C1C', icon: '⚠' },
+  stalled: { bg: '#44403C', icon: '○' },
+};
 
 // The ownership moment — everything before this screen was building toward
 // THIS: a real, already-generated Blueprint, not a "form submitted"
@@ -37,7 +57,7 @@ interface BlueprintSnapshot {
 // nothing on this screen is staged or fabricated for effect. A first-day
 // confidence score in the 60s-70s is the honest number, not a bug — it
 // climbs as real history accumulates (see blueprintConfidence.reasons).
-export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal = null }: ScreenBlueprintRevealProps) {
+export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal = null, firstName = null }: ScreenBlueprintRevealProps) {
   const [data, setData] = useState<BlueprintSnapshot | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -81,53 +101,104 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
   }
 
   const coverageTotal = data.coverageTally.not_started + data.coverageTally.learning + data.coverageTally.practicing + data.coverageTally.revising + data.coverageTally.exam_ready;
+  const fit = FIT_STYLE[data.finishProjection.status];
+  // The ring's sweep — a fraction of a full circle, capped so a fresh 46-week
+  // countdown never reads as "almost none of the way there" on day one; the
+  // days number itself (not the ring) carries the real information.
+  const ringPct = Math.max(0.04, Math.min(1, 1 - data.daysToExam / 240));
 
   return (
     <div className="space-y-5">
-      <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">🎉 Your CAT Plan is ready</p>
-        <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          This is yours now.
+      {/* S1 — the reveal hero. Every number on it is real: daysToExam,
+          mocksPerWeekNow/RisesTo and studyTargetHoursPerDay are additive
+          fields on /api/blueprint (13 Aug) built from the exact same
+          exam-calendar/study-plan values the rest of the route already
+          computes — nothing here is invented for the visual. */}
+      <div className="overflow-hidden rounded-3xl bg-stone-900 p-5 text-white">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-400">Your CAT Blueprint</p>
+        <h1 className="mt-1 text-[22px] font-bold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
+          {firstName ? `${firstName}, your plan is ready.` : 'Your plan is ready.'}
         </h1>
+        <p className="mt-1 text-[12.5px] text-stone-300">
+          {data.totalTopics} topics, sized to your hours, your coverage, your exam date.
+        </p>
         {successGoal && SUCCESS_GOAL_LABEL[successGoal] && (
-          <p className="mt-1.5 inline-block text-[11px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
+          <p className="mt-2 inline-block rounded-full border border-orange-400/40 bg-orange-400/10 px-3 py-1 text-[11px] font-bold text-orange-300">
             Built for your goal: {SUCCESS_GOAL_LABEL[successGoal]}
           </p>
         )}
-      </div>
 
-      <div className="bg-white rounded-2xl border-2 border-orange-100 p-5 space-y-4">
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-1">Where you are</p>
-          <p className="text-base font-bold text-stone-900">{data.phase.label} <span className="font-normal text-stone-400 text-sm">· {data.weeksRemaining}w to CAT</span></p>
-          <p className="text-xs text-stone-500 mt-0.5">{data.phase.objective}</p>
+        <div
+          className="mx-auto mt-4 grid h-[118px] w-[118px] place-items-center rounded-full"
+          style={{ background: `conic-gradient(#EA580C 0 ${ringPct * 360}deg, rgba(255,255,255,.12) ${ringPct * 360}deg 360deg)` }}
+        >
+          <div className="grid h-24 w-24 place-items-center rounded-full bg-stone-900 text-center">
+            <div>
+              <p className="text-[22px] font-extrabold leading-none">{data.daysToExam}</p>
+              <p className="mt-1 text-[9px] tracking-[0.08em] text-stone-400">DAYS TO CAT</p>
+            </div>
+          </div>
         </div>
 
-        {data.weakestSection && (
-          <div className="border-t border-stone-100 pt-3">
-            <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-1">Your plan&apos;s focus</p>
-            <p className="text-sm font-semibold text-stone-800">{data.weakestSection}{data.weakTopic ? ` — ${data.weakTopic}` : ''}</p>
+        <div className="mt-3.5 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-white/10 bg-white/[0.06] p-2.5">
+            <p className="text-[9px] uppercase tracking-wide text-stone-400">Phase</p>
+            <p className="mt-0.5 text-[13.5px] font-bold leading-tight">{data.phase.label}</p>
           </div>
-        )}
+          <div className="rounded-xl border border-white/10 bg-white/[0.06] p-2.5">
+            <p className="text-[9px] uppercase tracking-wide text-stone-400">Your focus</p>
+            <p className="mt-0.5 truncate text-[13.5px] font-bold leading-tight">
+              {data.weakestSection ?? 'All 3 sections'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.06] p-2.5">
+            <p className="text-[9px] uppercase tracking-wide text-stone-400">Syllabus done by</p>
+            <p className="mt-0.5 text-[13.5px] font-bold leading-tight">
+              {data.finishProjection.windowLabel ?? (data.finishProjection.status === 'done' ? 'Done' : '—')}
+            </p>
+            {data.studyTargetHoursPerDay != null && (
+              <p className="text-[9.5px] text-stone-400">at your {data.studyTargetHoursPerDay}h/day</p>
+            )}
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.06] p-2.5">
+            <p className="text-[9px] uppercase tracking-wide text-stone-400">Mocks</p>
+            <p className="mt-0.5 text-[13.5px] font-bold leading-tight">{data.mocksPerWeekNow} / week</p>
+            {data.mocksPerWeekRisesTo != null && (
+              <p className="text-[9.5px] text-stone-400">{data.mocksPerWeekRisesTo}/week from October</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold" style={{ background: fit.bg }}>
+          {fit.icon} {data.finishProjection.sub}
+        </div>
 
         {coverageTotal > 0 && (
-          <div className="border-t border-stone-100 pt-3 grid grid-cols-5 gap-1 text-center">
+          <div className="mt-3.5 border-t border-white/10 pt-3 grid grid-cols-5 gap-1 text-center">
             {([
-              ['⚪ New', data.coverageTally.not_started, 'text-stone-400'],
-              ['🟡 Learning', data.coverageTally.learning, 'text-amber-600'],
-              ['🔵 Practicing', data.coverageTally.practicing, 'text-blue-600'],
-              ['🟠 Revising', data.coverageTally.revising, 'text-orange-600'],
-              ['🟢 Ready', data.coverageTally.exam_ready, 'text-teal-600'],
-            ] as const).map(([label, count, color]) => (
+              ['New', data.coverageTally.not_started],
+              ['Learning', data.coverageTally.learning],
+              ['Practicing', data.coverageTally.practicing],
+              ['Revising', data.coverageTally.revising],
+              ['Ready', data.coverageTally.exam_ready],
+            ] as const).map(([label, count]) => (
               <div key={label}>
-                <p className={cn('text-base font-bold', color)}>{count}</p>
-                <p className="text-[9px] text-stone-400">{label}</p>
+                <p className="text-[13.5px] font-bold">{count}</p>
+                <p className="text-[8.5px] text-stone-400">{label}</p>
               </div>
             ))}
           </div>
         )}
 
+        <p className="mt-3 text-center text-[10px] text-stone-500">Recalculated every day from what you actually cover.</p>
       </div>
+
+      {data.weakestSection && (
+        <div className="rounded-2xl border-2 border-orange-100 bg-white p-4">
+          <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mb-1">Your plan&apos;s focus</p>
+          <p className="text-sm font-semibold text-stone-800">{data.weakestSection}{data.weakTopic ? ` — ${data.weakTopic}` : ''}</p>
+        </div>
+      )}
 
       {/* The deal, said loudly (founder, 10 Aug): we carry six jobs, the
           student carries one. Every line is a real live system, not a promise. */}
@@ -187,7 +258,7 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
           disabled={isLoading}
           className="w-full py-3.5 bg-stone-900 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60"
         >
-          {isLoading ? 'Finishing up…' : 'Start my prep →'}
+          {isLoading ? 'Finishing up…' : 'See Day 1 of my plan →'}
         </button>
       </div>
     </div>

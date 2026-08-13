@@ -13,7 +13,10 @@ import { MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 // and inline reschedule. Ring % and the daily-hours number come from the same
 // pace engine as before — only the presentation changed.
 
-const TONE: Record<PaceResult['status'], { ring: string; chipBg: string; chipText: string; label: string }> = {
+// Exported so PositionStrip (the S3 Home consolidation, 13 Aug) can show the
+// exact same status wording — "Date is safe" etc. — rather than a second,
+// driftable copy of this map.
+export const TONE: Record<PaceResult['status'], { ring: string; chipBg: string; chipText: string; label: string }> = {
   // The chip describes the DATE, not the day's workload — the date is the thing
   // that moves when a student falls behind. "Catching up" used to sit above a
   // headline that had silently added catch-up hours to their commitment.
