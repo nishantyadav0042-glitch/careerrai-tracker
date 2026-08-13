@@ -1,0 +1,881 @@
+<title>Pooja Training Hub</title>
+<style>
+  @font-face {
+    font-family: 'Georgia-fallback';
+    src: local('Georgia');
+  }
+  :root {
+    --pg: #F7F5F1; --card: #FFFFFF; --card-2: #FBF9F6; --ink: #1B1810; --mut: #7C7367;
+    --line: #E6DFD5; --teal: #0E7C6B; --teal-soft: #E4F1EE; --orange: #DC5A18;
+    --orange-soft: #FCEDE3; --red: #B4342A; --red-soft: #FAEAE8; --green: #15803D;
+    --green-soft: #E8F3EB; --chip: #EFEAE3; --sidebar: #1B1810; --sidebar-ink: #F2EEE7;
+    --sidebar-mut: #A79C8E; --shadow: 0 1px 2px rgba(27,24,16,.06), 0 8px 24px rgba(27,24,16,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --pg: #14120F; --card: #1E1B17; --card-2: #221E19; --ink: #EDE8E1; --mut: #A79C8E;
+      --line: #332C24; --teal: #3FBFA9; --teal-soft: #0F2E29; --orange: #F5883F;
+      --orange-soft: #3A2317; --red: #F07168; --red-soft: #3A1C1A; --green: #4ADE80;
+      --green-soft: #18301F; --chip: #282019; --sidebar: #0F0D0B; --sidebar-ink: #EDE8E1;
+      --sidebar-mut: #8A8072; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --pg: #14120F; --card: #1E1B17; --card-2: #221E19; --ink: #EDE8E1; --mut: #A79C8E;
+    --line: #332C24; --teal: #3FBFA9; --teal-soft: #0F2E29; --orange: #F5883F;
+    --orange-soft: #3A2317; --red: #F07168; --red-soft: #3A1C1A; --green: #4ADE80;
+    --green-soft: #18301F; --chip: #282019; --sidebar: #0F0D0B; --sidebar-ink: #EDE8E1;
+    --sidebar-mut: #8A8072; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--pg); color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: Georgia, 'Georgia-fallback', serif; text-wrap: balance; margin: 0; }
+  a { color: var(--teal); }
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────── */
+  .sidebar {
+    width: 250px; flex-shrink: 0; background: var(--sidebar); color: var(--sidebar-ink);
+    padding: 20px 14px 24px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .brand { padding: 4px 8px 16px; border-bottom: 1px solid rgba(255,255,255,.09); margin-bottom: 14px; }
+  .brand .eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--orange); }
+  .brand h1 { font-size: 19px; color: #fff; margin-top: 4px; line-height: 1.25; }
+  .brand .sub { font-size: 11.5px; color: var(--sidebar-mut); margin-top: 5px; }
+  .search-box { position: relative; margin-bottom: 14px; }
+  .search-box input {
+    width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 9px; padding: 8px 10px 8px 30px; color: #fff; font-size: 13px; outline: none;
+  }
+  .search-box input::placeholder { color: var(--sidebar-mut); }
+  .search-box input:focus { border-color: var(--orange); }
+  .search-box svg { position: absolute; left: 9px; top: 9px; width: 14px; height: 14px; stroke: var(--sidebar-mut); }
+  nav.modules { display: flex; flex-direction: column; gap: 2px; }
+  nav.modules button {
+    all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 9px; font-size: 13.5px; font-weight: 600;
+    color: var(--sidebar-mut); transition: background .12s, color .12s;
+  }
+  nav.modules button .num {
+    font-size: 10px; font-weight: 800; width: 20px; height: 20px; border-radius: 6px;
+    display: grid; place-items: center; background: rgba(255,255,255,.07); flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  nav.modules button:hover { background: rgba(255,255,255,.06); color: #fff; }
+  nav.modules button.active { background: var(--orange); color: #1B1810; }
+  nav.modules button.active .num { background: rgba(27,24,16,.15); color: #1B1810; }
+  .sidebar-foot { margin-top: 16px; padding: 12px 10px; border-radius: 10px; background: rgba(180,52,42,.16); }
+  .sidebar-foot p { margin: 0; font-size: 11.5px; color: #F0B3AC; line-height: 1.5; }
+  .sidebar-foot a { color: #fff; font-weight: 700; }
+
+  /* ── Main ────────────────────────────────────────────────────────── */
+  main { flex: 1; min-width: 0; padding: 30px 40px 90px; max-width: 880px; }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fade .18s ease; }
+  @media (prefers-reduced-motion: reduce) { .panel.active { animation: none; } }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .panel-head { margin-bottom: 22px; }
+  .panel-head .eyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--teal); }
+  .panel-head h2 { font-size: 27px; margin-top: 6px; }
+  .panel-head .sub { color: var(--mut); font-size: 13.5px; margin-top: 6px; max-width: 62ch; }
+  section.block { margin-top: 30px; }
+  section.block > h3 { font-size: 16px; margin-bottom: 10px; }
+  section.block > .lede { color: var(--mut); font-size: 13.5px; margin: -4px 0 12px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+  .card + .card { margin-top: 10px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } main { padding: 24px 18px 80px; } .shell { flex-direction: column; } .sidebar { width: 100%; height: auto; position: relative; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  td { padding: 9px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .twrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .twrap table { min-width: 480px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; padding: 3px 9px; border-radius: 99px; }
+  .pill.teal { background: var(--teal-soft); color: var(--teal); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+
+  .rule { border-left: 3px solid var(--orange); background: var(--orange-soft); border-radius: 0 10px 10px 0; padding: 12px 15px; font-size: 13.5px; }
+  .warn { border-left: 3px solid var(--red); background: var(--red-soft); border-radius: 0 10px 10px 0; padding: 12px 15px; font-size: 13.5px; }
+  .ok { border-left: 3px solid var(--green); background: var(--green-soft); border-radius: 0 10px 10px 0; padding: 12px 15px; font-size: 13.5px; }
+  .say { font-style: italic; color: var(--ink); background: var(--chip); border-radius: 9px; padding: 9px 12px; font-size: 13.5px; margin: 6px 0; }
+
+  .script-card summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 14px; }
+  .script-card summary::-webkit-details-marker { display: none; }
+  .script-card summary .chev { transition: transform .15s; color: var(--mut); }
+  .script-card[open] summary .chev { transform: rotate(90deg); }
+  .script-card .body { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+  .script-card .lbl { font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--mut); margin-bottom: 3px; }
+
+  .faq-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--card); margin-top: 8px; }
+  .faq-item .q { font-weight: 700; font-size: 14px; }
+  .faq-item .a { margin-top: 6px; font-size: 13.5px; }
+  .faq-item .meta { margin-top: 8px; font-size: 12px; color: var(--mut); }
+  .faq-item.hidden { display: none; }
+  .faq-cat-title { margin-top: 24px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
+
+  .example { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 12px; }
+  .example .stq { padding: 12px 16px; background: var(--card-2); font-size: 13.5px; border-bottom: 1px solid var(--line); }
+  .example .pair { display: grid; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 640px) { .example .pair { grid-template-columns: 1fr; } }
+  .example .good, .example .bad { padding: 14px 16px; font-size: 13px; }
+  .example .good { background: var(--green-soft); }
+  .example .bad { background: var(--red-soft); border-left: 1px solid var(--line); }
+  @media (max-width: 640px) { .example .bad { border-left: none; border-top: 1px solid var(--line); } }
+  .example .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; display: block; }
+  .example .good .tag { color: var(--green); } .example .bad .tag { color: var(--red); }
+
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .day { display: grid; grid-template-columns: 68px 1fr; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .day:first-child { border-top: none; }
+  .day .dnum { font-family: Georgia, serif; font-size: 22px; color: var(--orange); font-weight: 700; }
+  .day .dlbl { font-size: 10px; color: var(--mut); text-transform: uppercase; letter-spacing: .06em; }
+  .day h4 { font-size: 14.5px; margin: 0 0 4px; }
+  .day p { margin: 0; font-size: 13px; color: var(--mut); }
+
+  .quiz-cat { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--orange); margin: 16px 0 6px; }
+  ol.quiz { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; flex-direction: column; gap: 7px; }
+
+  .reveal { margin-top: 10px; }
+  .reveal summary { cursor: pointer; color: var(--teal); font-size: 12.5px; font-weight: 700; }
+
+  .conflict { border: 1px solid var(--line); border-left: 4px solid var(--red); border-radius: 0 14px 14px 0; padding: 16px 18px; margin-top: 14px; background: var(--card); }
+  .conflict h4 { font-size: 14.5px; margin-bottom: 8px; }
+  .conflict .src { font-size: 12.5px; color: var(--mut); margin-top: 4px; }
+  .conflict .ask { margin-top: 10px; font-weight: 700; font-size: 13px; color: var(--red); }
+
+  .callcard { background: var(--sidebar); color: var(--sidebar-ink); border-radius: 16px; padding: 20px; }
+  .callcard h3 { color: #fff; font-size: 16px; margin-bottom: 4px; }
+  .callcard .row { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.1); font-size: 13px; }
+  .callcard .row .k { width: 110px; flex-shrink: 0; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--sidebar-mut); padding-top: 2px; }
+
+  .badge-req { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 800; color: var(--orange); background: var(--orange-soft); border-radius: 99px; padding: 3px 10px; letter-spacing: .03em; }
+  ul.clean { margin: 6px 0 0; padding-left: 19px; font-size: 13.5px; display: flex; flex-direction: column; gap: 5px; }
+  ul.clean li::marker { color: var(--teal); }
+  .kicker { font-size: 11px; color: var(--mut); margin-top: -4px; }
+  code { background: var(--chip); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+</style>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="eyebrow">CareerRai · Internal</span>
+      <h1>Pooja Training Hub</h1>
+      <p class="sub">One place for everything the job needs. Say less, never more.</p>
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="text" placeholder="Search FAQs, scripts…" autocomplete="off" />
+    </div>
+    <nav class="modules" id="nav"></nav>
+    <div class="sidebar-foot">
+      <p>⚑ 4 open items need a founder decision before Pooja is certified on price. See <a data-goto="conflicts">Source Conflicts</a>.</p>
+    </div>
+  </aside>
+
+  <main id="main">
+
+  <!-- ══════════════════════════ 01 · START HERE ══════════════════════════ -->
+  <section class="panel" id="panel-start">
+    <div class="panel-head">
+      <span class="eyebrow">Module 01</span>
+      <h2>Start Here</h2>
+      <p class="sub">Read this once, in full, before anything else. Everything downstream assumes you know this.</p>
+    </div>
+
+    <section class="block">
+      <h3>What is CareerRai</h3>
+      <p>CareerRai is a CAT preparation platform built around <b>execution</b>, not more content. The core problem it
+      solves is the gap between <i>"I know what I should study"</i> and <i>"I actually studied the right thing
+      today."</i></p>
+      <div class="card"><b>The product loop:</b> Plan → Study → Log → Plan adjusts. CareerRai uses the student's
+      <i>actual</i> preparation data — not what they intended to do — to keep handing them the next right thing to
+      study.</div>
+    </section>
+
+    <section class="block">
+      <h3>The mission (top priority document in the company)</h3>
+      <div class="rule">"How do we build a free, massively used student platform that continuously learns how
+      Indian students actually study, struggle, decide, improve, interact, and eventually achieve outcomes — and
+      use small amounts of monetisation only to keep that machine running?"</div>
+      <p class="kicker">Practically: the free product comes first. CareerRai is compared internally to Duolingo and
+      Reddit — not coaching institutes. Revenue keeps the lights on; it is never the goal. A tactic that makes the
+      free experience worse to convert someone is against company policy, not just bad practice.</p>
+    </section>
+
+    <section class="block">
+      <h3>The four surfaces</h3>
+      <div class="twrap"><table>
+        <tr><th>#</th><th>Surface</th><th>Job</th></tr>
+        <tr><td>1</td><td><b>Study plan</b> (free)</td><td>"What do I do today?" — the core habit</td></tr>
+        <tr><td>2</td><td><b>Buddy</b> (paid)</td><td>A real human who watches whether the student actually changes</td></tr>
+        <tr><td>3</td><td><b>Daily Pick</b> (engagement)</td><td>A reason to open the app on a day they didn't study</td></tr>
+        <tr><td>4</td><td><b>Depth</b></td><td>Analysis, reports, journey, blueprint — the payoff for staying</td></tr>
+      </table></div>
+    </section>
+
+    <section class="block">
+      <h3>What CareerRai is NOT</h3>
+      <div class="warn">Never casually describe CareerRai as: a traditional coaching institute · a lecture platform
+      · a replacement for all study material · a generic motivation app · a random mentor marketplace where students
+      browse and compare mentors by price · a platform that guarantees percentile improvement · a platform that
+      guarantees IIM admission · "better than coaching" as an unsupported claim.</div>
+      <p class="kicker"><b>Correct framing:</b> coaching provides teaching/content. CareerRai provides execution,
+      tracking, accountability, and personalised guidance from someone who has actually seen the student's real prep
+      data.</p>
+    </section>
+
+    <section class="block">
+      <h3>Your role</h3>
+      <p>You're the human bridge between a student's doubt and their decision to trust CareerRai with their
+      preparation. A CAT aspirant is handing us a year of their life and, often, their parents' money — every
+      conversation either earns that or spends it.</p>
+      <div class="card"><span class="badge-req">⚑ Role-specific info required</span>
+      <p style="margin:8px 0 0;font-size:13.5px">Pooja's exact job title/scope (full-cycle sales vs. qualifier vs.
+      support) isn't specified in any source document yet — so this hub is the <b>Core Training & Process Manual</b>,
+      with role-specific modules to be added once that's confirmed. No role-specific sales target is assumed or
+      invented here.</p></div>
+    </section>
+
+    <section class="block">
+      <h3>What success looks like</h3>
+      <p>Not reading this hub once and remembering everything. Success is reaching the point where you can,
+      unprompted: explain what CareerRai is and isn't · handle common questions without checking anything · know
+      exactly where to check when something's outside what you know · know when to escalate instead of guessing.</p>
+    </section>
+  </section>
+
+  <!-- ══════════════════════════ 02 · PRODUCT ══════════════════════════ -->
+  <section class="panel" id="panel-product">
+    <div class="panel-head">
+      <span class="eyebrow">Module 02</span>
+      <h2>Product Knowledge</h2>
+      <p class="sub">Every feature answers "why does this matter to the student?" — never a feature dump.</p>
+    </div>
+
+    <section class="block">
+      <h3>The core product loop</h3>
+      <div class="card" style="font-size:13.5px;line-height:2">
+        Student enters CareerRai, gives real info about their prep<br>↓<br>
+        System understands them: prep level, available time, topic coverage, weak areas, past attempts, study behaviour<br>↓<br>
+        Student gets a clear "what to do today"<br>↓<br>
+        Student studies<br>↓<br>
+        Student logs what actually happened — including "I studied nothing today." The log is information, not punishment.<br>↓<br>
+        Tomorrow's plan adapts to what actually happened.
+      </div>
+    </section>
+
+    <section class="block">
+      <h3>The two products</h3>
+      <div class="grid2">
+        <div class="card"><span class="pill teal">FREE</span><h4 style="margin:10px 0 4px">Study plan</h4>
+        <p style="font-size:13px;margin:0"><code>/student/today</code>, <code>/student/plan</code> — a personalised,
+        adapting daily plan from the student's own prep data. This isn't a lite version of anything — it's the actual
+        mission.</p></div>
+        <div class="card"><span class="pill orange">PAID</span><h4 style="margin:10px 0 4px">Buddy</h4>
+        <p style="font-size:13px;margin:0"><code>/student/buddy</code> — a real, verified IIM student/alumnus,
+        matched to the student. Live weekly sessions + daily chat guidance.</p></div>
+      </div>
+      <div class="rule" style="margin-top:12px"><b>The distinction that matters most in every conversation:</b>
+      don't sell the IIM tag alone. Not "IIM student hai" — but "this person understands YOUR preparation and can
+      give specific feedback on it."</div>
+    </section>
+
+    <section class="block">
+      <h3>Mentors are reviewed, not self-serve</h3>
+      <p style="font-size:13.5px">Every mentor profile goes through review and a background check before it's ever
+      shown to a student. If asked how mentors are verified: "every mentor is manually reviewed and background-checked
+      before going live, and their profile shows verifiable proof — LinkedIn, CAT percentile, college — you can check
+      yourself." Exact background-check steps aren't documented for you to recite — escalate if pushed further.</p>
+    </section>
+
+    <section class="block">
+      <h3>Key terminology</h3>
+      <div class="twrap"><table>
+        <tr><th>Term</th><th>Meaning</th></tr>
+        <tr><td><b>Log</b></td><td>Recording what was actually studied that day — the single most important action in the product</td></tr>
+        <tr><td><b>Plan</b></td><td>System-generated "what to study today," adapting from logs</td></tr>
+        <tr><td><b>Buddy</b></td><td>The paid, matched IIM mentor</td></tr>
+        <tr><td><b>Mock</b></td><td>A full-length practice test the student takes and debriefs</td></tr>
+        <tr><td><b>Streak</b></td><td>Consecutive days logged — a habit signal, not a score</td></tr>
+        <tr><td><b>VARC / DILR / QA</b></td><td>CAT's 3 sections: Verbal & Reading, Data Interpretation & Logical Reasoning, Quant</td></tr>
+        <tr><td><b>Percentile</b></td><td>How the student ranks against everyone taking CAT that year</td></tr>
+      </table></div>
+    </section>
+
+    <section class="block">
+      <h3>Pain first, product second</h3>
+      <div class="twrap"><table>
+        <tr><th>Student's real pain</th><th>Without us</th><th>Why it fails</th><th>The line</th></tr>
+        <tr><td>"Aaj kya padhun?"</td><td>Opens YouTube, browses</td><td>Hours lost, nothing structured</td><td>"Roz subah 3 kaam ready milte hain — sochna nahi padta."</td></tr>
+        <tr><td>"Akela hoon, koi check nahi karta"</td><td>Studies alone, quits ~day 10</td><td>No accountability</td><td>"Ek IIM senior — sirf aapka. Coaching nahi."</td></tr>
+        <tr><td>"Syllabus khatam nahi hoga"</td><td>Studies randomly</td><td>Panic close to exam</td><td>"App batati hai kab tak khatam hoga, roz update ke saath."</td></tr>
+      </table></div>
+      <p class="kicker">Never open with "humara feature yeh hai…" — always open with the problem the student already has.</p>
+    </section>
+  </section>
+
+  <!-- ══════════════════════════ 03 · PROCESS ══════════════════════════ -->
+  <section class="panel" id="panel-process">
+    <div class="panel-head">
+      <span class="eyebrow">Module 03</span>
+      <h2>End-to-End Process</h2>
+      <p class="sub">Only the stages actually supported by CareerRai source documents — nothing invented.</p>
+    </div>
+
+    <section class="block">
+      <div class="card" style="font-family:Georgia,serif;font-size:14px;line-height:2.2;text-align:center">
+        LEAD / STUDENT → FIRST CONTACT → QUALIFICATION → PRODUCT EXPLANATION → QUESTION / OBJECTION →
+        CONVERSION → WHATSAPP / NEXT STEP → FOLLOW-UP → CRM / RECORD → <span style="color:var(--red)">ESCALATION (IF REQUIRED)</span>
+      </div>
+      <div class="rule" style="margin-top:12px"><b>For every interaction:</b> Understand → Respond → Record → Escalate if required.</div>
+    </section>
+
+    <section class="block">
+      <h3>Daily workflow</h3>
+      <div class="grid2">
+        <div class="card"><b style="font-size:12.5px">BEFORE STARTING</b>
+        <ul class="clean"><li>Check process/pricing updates</li><li>Check announcements</li><li>Confirm no pending escalations are waiting on you</li></ul></div>
+        <div class="card"><b style="font-size:12.5px">AFTER WORK</b>
+        <ul class="clean"><li>Complete CRM/record entries</li><li>Flag unresolved cases</li><li>Flag repeated questions (may be a training gap)</li><li>Flag anything outdated or confusing</li></ul></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h3>Escalation Matrix</h3>
+      <p class="lede">The last stage, made explicit. "Can Pooja solve this?" is yes/no — no partial-solve-and-hope.</p>
+      <div class="twrap"><table>
+        <tr><th>Situation</th><th>Solve?</th><th>Action</th></tr>
+        <tr><td>Standard FAQ</td><td><span class="pill green">YES</span></td><td>Answer directly</td></tr>
+        <tr><td>Standard pricing <span style="color:var(--red)">⚑</span></td><td><span class="pill green">YES</span></td><td>Quote current approved price only — <a data-goto="conflicts">unresolved, see conflicts</a></td></tr>
+        <tr><td>Technical issue covered in FAQ</td><td><span class="pill green">YES</span></td><td>Follow the documented answer</td></tr>
+        <tr><td>Unknown technical issue</td><td><span class="pill red">NO</span></td><td>Escalate — founder/team confirmation required</td></tr>
+        <tr><td>Refund exception</td><td><span class="pill red">NO</span></td><td>Escalate — founder/team confirmation required</td></tr>
+        <tr><td>Pricing exception / discount</td><td><span class="pill red">NO</span></td><td>Escalate — founder/team confirmation required</td></tr>
+        <tr><td>Policy conflict</td><td><span class="pill red">NO</span></td><td>Escalate — founder/team confirmation required</td></tr>
+        <tr><td>Payment deducted, status wrong</td><td><span class="pill red">NO</span></td><td>Escalate immediately</td></tr>
+        <tr><td>Buddy overdue (past 24h) / switch request</td><td><span class="pill red">NO</span></td><td>Escalate — founder/team confirmation required</td></tr>
+        <tr><td>Angry / upset student</td><td><span class="pill red">NO*</span></td><td>De-escalate with empathy first, then escalate the issue</td></tr>
+      </table></div>
+      <p class="kicker">⚑ No source document names a specific escalation owner beyond the founder generally — every "No" row routes to the founder until one is named.</p>
+    </section>
+  </section>
+
+  <!-- ══════════════════════════ 04 · SCRIPTS ══════════════════════════ -->
+  <section class="panel" id="panel-scripts">
+    <div class="panel-head">
+      <span class="eyebrow">Module 04</span>
+      <h2>Script Library</h2>
+      <p class="sub">Structure is fixed. Language is flexible. Never drift past the constraints below.</p>
+    </div>
+
+    <section class="block">
+      <h3>Conversation principles — apply to every script</h3>
+      <ul class="clean">
+        <li>Listen first — don't answer a question the student hasn't asked</li>
+        <li>Don't overload — give the smallest useful answer</li>
+        <li>Ask one question at a time</li>
+        <li>Don't argue — understand why first</li>
+        <li>Don't manufacture urgency</li>
+        <li>Don't promise outcomes</li>
+        <li>Don't guess</li>
+        <li>Use the student's own words back to them</li>
+      </ul>
+    </section>
+
+    <section class="block" id="script-list"></section>
+  </section>
+
+  <!-- ══════════════════════════ 05 · FAQS ══════════════════════════ -->
+  <section class="panel" id="panel-faqs">
+    <div class="panel-head">
+      <span class="eyebrow">Module 05</span>
+      <h2>FAQ Library</h2>
+      <p class="sub">Pattern for every FAQ: Question → Approved answer → If they ask further → When to escalate. Search the sidebar box to filter.</p>
+    </div>
+    <div id="faq-list"></div>
+  </section>
+
+  <!-- ══════════════════════════ 06 · PRICE & POLICY ══════════════════════════ -->
+  <section class="panel" id="panel-price">
+    <div class="panel-head">
+      <span class="eyebrow">Module 06</span>
+      <h2>Price & Policy Centre</h2>
+      <p class="sub">Read Appendix / Conflicts before quoting any price to a student.</p>
+    </div>
+
+    <div class="warn"><b>If the price or policy is uncertain, do not guess.</b> Check this page. If it still isn't
+    covered, escalate.</div>
+
+    <section class="block">
+      <h3>Current price <span class="kicker">— code-verified, live in production</span></h3>
+      <div class="twrap"><table>
+        <tr><th>Plan</th><th>Price</th><th>Duration</th><th>Positioning</th></tr>
+        <tr><td><b>Till CAT</b></td><td><b>₹2,999</b></td><td>4 months</td><td><span class="pill orange">HERO</span> One payment, buddy all the way to exam day</td></tr>
+        <tr><td>6 Months</td><td>₹4,499</td><td>6 months</td><td>Existing subs + admin only — not actively offered</td></tr>
+        <tr><td>3 Months</td><td>₹2,499</td><td>3 months</td><td>Same — kept, not actively offered</td></tr>
+        <tr><td>1 Month</td><td>₹999</td><td>1 month</td><td>Fallback for month-to-month insistence — not the lead price</td></tr>
+      </table></div>
+      <p class="kicker">All plans are one-time payments. No auto-debit, no recurring mandate, ever.</p>
+      <div class="warn" style="margin-top:10px"><b>⚑ Unresolved:</b> the founder's own new draft states "₹999/month" as the primary price with no mention of Till CAT — conflicts with the live product and the already-approved Design v2 draft. See <a data-goto="conflicts">Source Conflicts, #1</a>.</div>
+    </section>
+
+    <section class="block">
+      <h3>Refund policy <span class="kicker">— updated 25 Jul 2026</span></h3>
+      <ul class="clean">
+        <li><b>The promise:</b> full refund in the student's first month, on one condition — <b>20+ logged study days</b> within that month.</li>
+        <li><b>How to request:</b> in-app Profile → Refund guarantee, or email <code>business@careerrai.com</code>.</li>
+        <li><b>Timeline:</b> reviewed in 2–3 working days; refund lands in 5–7 working days via Razorpay.</li>
+        <li><b>Doesn't apply:</b> after month 1 ends · fewer than 20 days logged · account terminated for abuse.</li>
+        <li>Failed/duplicate payments: always refunded in full, unconditionally.</li>
+        <li>Hand-processed by a human — never instant, never auto-fired.</li>
+      </ul>
+    </section>
+
+    <div class="grid2">
+      <div class="card"><h4 style="margin:0 0 6px;font-size:14px">Assignment timeline</h4>
+      <p style="font-size:13px;margin:0">Buddy assigned within <b>24 hours</b> of activation. Overdue = real SLA breach → escalate, don't reassure and wait.</p></div>
+      <div class="card"><h4 style="margin:0 0 6px;font-size:14px">Cancellation</h4>
+      <p style="font-size:13px;margin:0">No auto-debit, nothing to cancel. Term ends → mentorship stops, data fully preserved, buy again anytime.</p></div>
+    </div>
+
+    <section class="block">
+      <h3>Discounts</h3>
+      <div class="warn">No discount is currently officially approved for Pooja to apply. Price is enforced server-side — even a verbal promise can't actually change what's charged.</div>
+    </section>
+
+    <section class="block">
+      <h3>⛔ Never say / promise</h3>
+      <div class="twrap"><table>
+        <tr><th>Never</th><th>Because</th></tr>
+        <tr><td>Percentile-improvement guarantee</td><td>Prohibited outright</td></tr>
+        <tr><td>IIM-admission guarantee</td><td>Prohibited outright</td></tr>
+        <tr><td>Fake scarcity ("aaj hi offer")</td><td>No manufactured urgency</td></tr>
+        <tr><td>An unauthorised discount</td><td>None currently approved</td></tr>
+        <tr><td>An invented feature</td><td>Only describe what's verified — Module 02/07</td></tr>
+        <tr><td>Invented Buddy availability</td><td>24h is a real SLA, not something to improvise around</td></tr>
+        <tr><td>Vague/invented refund policy</td><td>Use the exact 20-day condition, never "case by case"</td></tr>
+        <tr><td>"Better than coaching"</td><td>Unsupported comparison — say "different from"</td></tr>
+      </table></div>
+    </section>
+  </section>
+
+  <!-- ══════════════════════════ 07 · KNOWLEDGE BASE ══════════════════════════ -->
+  <section class="panel" id="panel-kb">
+    <div class="panel-head">
+      <span class="eyebrow">Module 07</span>
+      <h2>Knowledge Base</h2>
+      <p class="sub">Master facts, current as of 13 Aug 2026. Everything here is code-verified against the live product.</p>
+    </div>
+
+    <div class="twrap"><table>
+      <tr><th>Fact</th><th>Value</th></tr>
+      <tr><td>CAT 2026 exam date</td><td>29 November 2026 (last Sunday of November)</td></tr>
+      <tr><td>CAT exam sections</td><td>VARC, DILR, QA</td></tr>
+      <tr><td>Buddy assignment SLA</td><td>Within 24 hours of activation</td></tr>
+      <tr><td>Unanswered-message escalation</td><td>48 hours, auto-pings admin</td></tr>
+      <tr><td>Session cadence</td><td>Live weekly session + daily chat guidance</td></tr>
+      <tr><td>Auto-debit</td><td>Never — one-time payments only</td></tr>
+      <tr><td>CAT Readiness Test</td><td><span class="pill red">RETIRED 20 Jul 2026</span> — do not mention as current. See conflicts.</td></tr>
+      <tr><td>Data sale</td><td>Never — permanent policy</td></tr>
+      <tr><td>Refund condition</td><td>20+ logged study days in first month</td></tr>
+    </table></div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h4 style="margin:0 0 8px;font-size:13.5px;color:var(--green)">✓ Approved claims</h4>
+      <ul class="clean" style="font-size:12.5px">
+        <li>A real, verified, background-checked IIM mentor</li>
+        <li>Your buddy reviews your actual preparation, not a script</li>
+        <li>No auto-debit — one-time payment, ever</li>
+        <li>Full refund if 20+ study days logged in month 1</li>
+        <li>Buddy assigned within 24 hours of activation</li>
+      </ul></div>
+      <div class="card"><h4 style="margin:0 0 8px;font-size:13.5px;color:var(--red)">✗ Prohibited claims</h4>
+      <ul class="clean" style="font-size:12.5px">
+        <li>Guaranteed percentile improvement</li>
+        <li>Guaranteed IIM admission</li>
+        <li>"Better than coaching," unsupported</li>
+        <li>Any invented discount / offer / student statistic</li>
+        <li>Any testimonial not verified as really said</li>
+        <li>A technical answer you're not certain of</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 08 · REAL EXAMPLES ══════════════════════════ -->
+  <section class="panel" id="panel-examples">
+    <div class="panel-head">
+      <span class="eyebrow">Module 08</span>
+      <h2>Real Examples</h2>
+      <p class="sub">GOOD vs BAD, side by side, for every situation you'll actually hit.</p>
+    </div>
+    <div id="example-list"></div>
+  </section>
+
+  <!-- ══════════════════════════ 09 · TRAINING ══════════════════════════ -->
+  <section class="panel" id="panel-training">
+    <div class="panel-head">
+      <span class="eyebrow">Module 09</span>
+      <h2>Training Curriculum</h2>
+      <p class="sub">Learn → Observe → Practice → Test → Certify. The progression matters more than exactly 5 days.</p>
+    </div>
+    <div class="timeline">
+      <div class="day"><div><div class="dnum">1</div><div class="dlbl">Day</div></div><div><h4>CareerRai + product</h4><p>Modules 01–02, 07. Mission, four surfaces, product loop, Study-plan/Buddy distinction.</p></div></div>
+      <div class="day"><div><div class="dnum">2</div><div class="dlbl">Day</div></div><div><h4>Process</h4><p>Module 03. Walk the full lead-to-escalation flow. Know the Escalation Matrix cold.</p></div></div>
+      <div class="day"><div><div class="dnum">3</div><div class="dlbl">Day</div></div><div><h4>Scripts + FAQs</h4><p>Modules 04–06. Read the full library, say each script out loud once.</p></div></div>
+      <div class="day"><div><div class="dnum">4</div><div class="dlbl">Day</div></div><div><h4>Role-play</h4><p>Module 08. Live role-play of all 10 scenarios.</p></div></div>
+      <div class="day"><div><div class="dnum">5</div><div class="dlbl">Day</div></div><div><h4>Independent handling + certification</h4><p>Module 10. Once certified, first ~5 real interactions are observed.</p></div></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 10 · CERTIFICATION ══════════════════════════ -->
+  <section class="panel" id="panel-cert">
+    <div class="panel-head">
+      <span class="eyebrow">Module 10</span>
+      <h2>Certification</h2>
+      <p class="sub">Tests 7 things: product, process, FAQ handling, pricing accuracy, escalation judgement, communication quality, and handling the unexpected. Certify on performance, not on "read the manual."</p>
+    </div>
+
+    <div class="warn"><b>Q8 (pricing) cannot be certified yet</b> — Appendix Conflict #1 is unresolved. Everything else can proceed now.</div>
+
+    <div class="quiz-cat">Product</div>
+    <ol class="quiz" start="1"><li>What is CareerRai?</li><li>What problem does it solve?</li><li>What is CareerRai <i>not</i>?</li><li>What's the difference between coaching and CareerRai?</li></ol>
+    <div class="quiz-cat">Buddy</div>
+    <ol class="quiz" start="5"><li>What is a Buddy?</li><li>What does the Buddy actually do?</li><li>How is the Buddy layer different from generic content?</li></ol>
+    <div class="quiz-cat">Pricing</div>
+    <ol class="quiz" start="8"><li>What is the current approved price? ⚑</li><li>What is the current refund policy?</li><li>What should you do if you're unsure about pricing?</li></ol>
+    <div class="quiz-cat">Process</div>
+    <ol class="quiz" start="11"><li>What happens after a student signs up?</li><li>What happens when a student asks something outside the FAQ?</li><li>When should you escalate?</li></ol>
+    <div class="quiz-cat">Trust</div>
+    <ol class="quiz" start="14"><li>Can we promise percentile improvement?</li><li>Can we promise IIM admission?</li><li>Can we invent a discount to close a student?</li></ol>
+
+    <details class="reveal"><summary>Reveal answer key (14–16)</summary>
+      <p style="font-size:13.5px;margin-top:8px">The correct answer to 14, 15, and 16 is <b>No</b> — always, no exception.</p>
+    </details>
+
+    <section class="block">
+      <h3>Role-play — practise at least these five</h3>
+      <div class="card"><b>1. Interested student</b> — "Achha, CareerRai exactly kya karta hai?" → explain simply, no feature dump.</div>
+      <div class="card"><b>2. Price question</b> — "Kitna cost hai?" → current approved price only, no invented offers.</div>
+      <div class="card"><b>3. Refund question</b> — "Agar mujhe value nahi mili toh?" → the exact 20-day condition.</div>
+      <div class="card"><b>4. Doubt / objection</b> — "Mujhe nahi lagta isse improve hogi." → don't argue, understand first.</div>
+      <div class="card"><b>5. Unknown question</b> — "Buddy allocation algorithm kaise decide karta hai?" → "Confirm karke bataungi," never a guess.</div>
+    </section>
+    <p class="kicker">Passing certification isn't the finish line — the first ~5 real interactions are observed before fully independent work begins.</p>
+  </section>
+
+  <!-- ══════════════════════════ 11 · CHANGE LOG ══════════════════════════ -->
+  <section class="panel" id="panel-changelog">
+    <div class="panel-head">
+      <span class="eyebrow">Module 11</span>
+      <h2>Change Log</h2>
+      <p class="sub">An old fact must never silently compete with the current one. Superseded values are marked, never deleted.</p>
+    </div>
+    <div class="twrap"><table>
+      <tr><th>Date</th><th>What changed</th><th>Old rule</th><th>New rule</th><th>Reason</th><th>Approved by</th></tr>
+      <tr><td>13 Aug 2026</td><td>Hub created (v1)</td><td>—</td><td>This document</td><td>Founder requested a centralised training/operating system for Pooja</td><td>Pending founder review</td></tr>
+    </table></div>
+    <p class="kicker">Every future entry needs all six fields. When a value is replaced, add a row here <i>and</i> mark the old value SUPERSEDED at its source location — never a silent swap.</p>
+  </section>
+
+  <!-- ══════════════════════════ SOURCE CONFLICTS ══════════════════════════ -->
+  <section class="panel" id="panel-conflicts">
+    <div class="panel-head">
+      <span class="eyebrow">Requires founder decision</span>
+      <h2>Source Conflicts</h2>
+      <p class="sub">Real disagreements found between source documents while building this hub. None have been silently resolved — Pooja isn't certified on any of these until the founder picks an answer.</p>
+    </div>
+
+    <div class="conflict">
+      <h4>1 · What is "the" price Pooja should lead with?</h4>
+      <p style="font-size:13.5px">The founder's own new draft lists <code>₹999/month</code> as the primary price, no
+      mention of Till CAT. The live code (<code>src/lib/plans.ts</code>) and the already-approved "Design v2" draft
+      both mark <b>Till CAT (₹2,999, 4 months)</b> as the hero, with ₹999/month explicitly the fallback "for those who
+      insist."</p>
+      <div class="ask">Decision needed: lead with ₹2,999 Till CAT (matches live product + approved draft), or has strategy changed since 24 Jul and code hasn't caught up?</div>
+    </div>
+
+    <div class="conflict">
+      <h4>2 · Is the CAT Readiness Test a current product?</h4>
+      <p style="font-size:13.5px">The founder's new draft lists "Readiness Test — 35 questions — Free" as current.
+      The codebase shows it was <b>retired 20 Jul 2026</b> by explicit founder decision — the route now redirects to
+      <code>/start</code>.</p>
+      <div class="ask">Decision needed: is it coming back, or should it be removed from Pooja's knowledge entirely? Until answered — don't mention it.</div>
+    </div>
+
+    <div class="conflict">
+      <h4>3 · Does a "single advisory session" product exist?</h4>
+      <p style="font-size:13.5px">Listed in the founder's new draft as a secondary offering. No such product, SKU, or
+      price exists anywhere in the verified codebase — only 4 membership plans.</p>
+      <div class="ask">Decision needed: exists under another name, planned but unbuilt, or remove entirely? Until answered — don't offer it.</div>
+    </div>
+
+    <div class="conflict" style="border-left-color:var(--orange)">
+      <h4>4 · Refund policy specificity <span class="pill orange">informational, not a contradiction</span></h4>
+      <p style="font-size:13.5px">The founder's draft describes the policy only as "first-month value-based," which
+      reads as subjective. The live policy is a specific, objective 20-day threshold. No decision needed — Module 06
+      already uses the precise version — flagged so the founder knows his own phrasing understates how firm the rule
+      actually is.</p>
+    </div>
+
+    <div class="conflict">
+      <h4>5 · Should the free-tier "Mentor Doors" mechanic be part of Pooja's knowledge?</h4>
+      <p style="font-size:13.5px">Neither training draft mentions that free students can earn 3 messages with a
+      matched buddy. It's currently <b>live-but-dormant</b> in code — detection runs, but access is gated behind an
+      admin flag not turned on by default.</p>
+      <div class="ask">Decision needed: should Pooja know about this, and if so, told explicitly whether it's active — so she never confirms or denies something she can't verify?</div>
+    </div>
+
+    <div class="conflict">
+      <h4>6 · Which training approach is primary — this hub, or the existing Missions/Design v2 track?</h4>
+      <p style="font-size:13.5px">Two prior approved documents exist (10–11 Aug): "5 Missions" (day-by-day,
+      psychology-first) and "Design v2" (sharper, built from 15 real production leads). This hub is structurally
+      different — a KNOW/DO/SAY/CHECK/ESCALATE reference system. Small pieces of Design v2's real-lead psychology
+      (the "3 fears" framework, follow-up patterns) are already folded into Module 04 and Module 08 here, but Design
+      v2 hasn't been reproduced in full.</p>
+      <div class="ask">Decision needed: replace, run alongside as a separate practice track, or fully absorb Design v2's archetype table into this hub? Recommendation (not a decision): absorb — it's the only source built from real lead data.</div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+const MODULES = [
+  { id: 'start',    num: '01', label: 'Start Here' },
+  { id: 'product',  num: '02', label: 'Product' },
+  { id: 'process',  num: '03', label: 'Process' },
+  { id: 'scripts',  num: '04', label: 'Script Library' },
+  { id: 'faqs',     num: '05', label: 'FAQs' },
+  { id: 'price',    num: '06', label: 'Price & Policy' },
+  { id: 'kb',       num: '07', label: 'Knowledge Base' },
+  { id: 'examples', num: '08', label: 'Real Examples' },
+  { id: 'training', num: '09', label: 'Training' },
+  { id: 'cert',     num: '10', label: 'Certification' },
+  { id: 'changelog',num: '11', label: 'Change Log' },
+  { id: 'conflicts',num: '⚑', label: 'Source Conflicts' },
+];
+
+const nav = document.getElementById('nav');
+MODULES.forEach(m => {
+  const b = document.createElement('button');
+  b.dataset.target = m.id;
+  b.innerHTML = `<span class="num">${m.num}</span><span>${m.label}</span>`;
+  nav.appendChild(b);
+});
+
+function show(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + id));
+  document.querySelectorAll('nav.modules button').forEach(b => b.classList.toggle('active', b.dataset.target === id));
+  window.scrollTo(0, 0);
+  const m = document.getElementById('main');
+  if (m) m.scrollTop = 0;
+  history.replaceState(null, '', '#' + id);
+}
+nav.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (btn) show(btn.dataset.target);
+});
+document.addEventListener('click', e => {
+  const link = e.target.closest('[data-goto]');
+  if (link) { e.preventDefault(); show(link.dataset.goto); }
+});
+
+// Search filters FAQ + script cards by keyword, jumps to the relevant panel.
+document.getElementById('search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const faqItems = document.querySelectorAll('.faq-item');
+  const scriptItems = document.querySelectorAll('.script-card');
+  if (!q) {
+    faqItems.forEach(i => i.classList.remove('hidden'));
+    scriptItems.forEach(i => i.style.display = '');
+    return;
+  }
+  let faqHit = false, scriptHit = false;
+  faqItems.forEach(i => {
+    const hit = i.textContent.toLowerCase().includes(q);
+    i.classList.toggle('hidden', !hit);
+    if (hit) faqHit = true;
+  });
+  scriptItems.forEach(i => {
+    const hit = i.textContent.toLowerCase().includes(q);
+    i.style.display = hit ? '' : 'none';
+    if (hit) scriptHit = true;
+  });
+  if (faqHit) show('faqs'); else if (scriptHit) show('scripts');
+});
+
+// ── Module 04 — Script Library ──────────────────────────────────────────
+const SCRIPTS = [
+  { t: 'Opening', when: 'The very first message or the first 10 seconds of a call.',
+    why: "The first line decides whether the student stays open or goes defensive. It must show you already know something real about them.",
+    say: 'Hi! Main Pooja, CareerRai se. Aapne [signup / checkout / buddy page] tak dekha tha — bas jaanna chahti thi, kya cheez atki ya koi sawal hai?',
+    not: 'A scripted "Hi, hope you\'re doing well!" with no reference to anything real about this student.' },
+  { t: 'Context', when: 'Right after opening, before qualification.',
+    why: 'Tells the student this is a real conversation about them, not a sales call.',
+    say: 'Main sirf 2 minute lena chahti hoon — samajhna chahti hoon aap CAT prep mein kahan ho, phir bataungi kya help ho sakti hai.',
+    not: 'Jumping straight to price or features before understanding the student.' },
+  { t: 'Qualification', when: 'After context is set.',
+    why: "You can't give a relevant answer to someone whose actual situation you don't know.",
+    say: 'Abhi tak preparation kaisi chal rahi hai? Roz padh rahe ho ya break-break mein?\nSabse zyada mushkil kya lag raha hai — plan banane mein, consistency mein, ya kisi specific section mein?',
+    not: 'Multiple questions stacked in one message — one at a time.' },
+  { t: 'Product explanation', when: 'Once you understand their actual problem.',
+    why: "Explains the product against the student's own stated pain — never a generic feature list.",
+    say: 'Jo aapne bataya — [restate their actual problem] — CareerRai isi ke liye bana hai. Roz aapko exact pata hota hai kya padhna hai, based on aapki asli progress. Aur ek real IIM senior aapki prep dekh ke specific feedback deta hai — sirf "IIM se hai" nahi, balki aapki actual weak areas pe.',
+    not: 'A list of every feature. Answer the named problem — nothing more.' },
+  { t: 'Common questions', when: 'A direct question from the student.',
+    why: 'ANSWER → CLARIFY → NEXT STEP — see the FAQ Library for the full set.',
+    say: '"Buddy kaise milega?" → "Payment aur activation ke baad Buddy assignment hota hai — 24 hours ke andar." → "Aap chaho toh main exact next step bata deti hoon."',
+    not: 'Stacking five unrelated features onto a direct question.' },
+  { t: 'Objection handling', when: 'A student pushes back or expresses doubt.',
+    why: 'The instinct to argue makes it worse. Understanding the real concern is the actual skill.',
+    say: '"Mujhe nahi lagta isse meri preparation improve hogi." → "Samajh sakti hoon — bahut log yehi sochte hain shuru mein. Aapko sabse zyada kis cheez ka doubt hai — ki plan kaam karega, ya ki aap follow karenge?"',
+    not: '"No no, it definitely works, trust me" — that\'s arguing, not understanding.' },
+  { t: 'Price discussion', when: 'Only after the student has heard what changes for them — never as the opening line.',
+    why: 'Price before value reads as a pitch; price after a specific "what changes for you" reads as an honest offer.',
+    say: '1 mahine ke andar aapko roz pata hoga kya padhna hai, aur ek real senior aapki prep dekhega. Uske baad current pricing hai [state the currently approved price — Price & Policy module].',
+    not: 'Any discount, "today only" offer, or refund period you haven\'t verified is currently approved.' },
+  { t: 'Closing', when: 'Student has heard the value and price and is ready to move.',
+    why: 'A close should always land on one concrete next action.',
+    say: 'Toh main abhi aapko payment link bhej deti hoon — activate hote hi Buddy assignment start ho jayega, 24 hours ke andar.',
+    not: 'Vague endings like "Let me know if interested" with no concrete next step.' },
+  { t: 'Follow-up', when: "A student who engaged but didn't convert, has gone quiet, or asked to think about it.",
+    why: 'Should never feel like a repeated pitch — reference something real and specific.',
+    say: 'Gone quiet: "Koi bechne nahi aayi — bas ye poochne ki prep chhoot toh nahi gayi?"\nStudies daily, hasn\'t converted: "Aap roz log kar rahe ho — ye 90% log nahi karte. Bas ek cheez missing hai abhi — poochun kya?"',
+    not: 'A generic "Just checking in!" with no reference to what they\'ve actually done.' },
+  { t: 'WhatsApp templates', when: 'Any written follow-up outside a live call.',
+    why: 'Consistency and a record.',
+    say: 'Hi [Name], jaisa baat hui — yeh raha aapka link: [link]. Koi bhi sawal ho, bas yahi reply kar dena. — Pooja, CareerRai',
+    not: 'Anything with an old price, an old link, or a promise not in the Price & Policy module.' },
+  { t: 'Escalation language', when: "Any Escalation Matrix situation (Module 03).",
+    why: 'A confident wrong answer is worse than an honest "let me check."',
+    say: 'Achha sawal — main exact confirm karke aapko aaj hi bata deti hoon.',
+    not: 'A guess dressed as certainty — e.g. "Probably AI automatically decide karta hai" for something you don\'t actually know.' },
+];
+
+const scriptList = document.getElementById('script-list');
+SCRIPTS.forEach((s, i) => {
+  const d = document.createElement('details');
+  d.className = 'script-card card';
+  d.innerHTML = `<summary>${i + 1}. ${s.t}<span class="chev">▸</span></summary>
+    <div class="body">
+      <div><div class="lbl">When to use</div>${s.when}</div>
+      <div><div class="lbl">Why it exists</div>${s.why}</div>
+      <div><div class="lbl">Exact language</div><div class="say">${s.say.replace(/\n/g,'<br>')}</div></div>
+      <div><div class="lbl">What not to say</div>${s.not}</div>
+    </div>`;
+  scriptList.appendChild(d);
+});
+
+// ── Module 05 — FAQ Library ──────────────────────────────────────────────
+const FAQS = {
+  'A · Product': [
+    { q: 'CareerRai kya hai?', a: 'CareerRai ek CAT preparation platform hai jo execution pe focus karta hai — roz aapko pata hota hai kya padhna hai, based on aapki asli progress.', more: 'Explain the Plan → Study → Log → Plan adjusts loop.', esc: 'Never — core knowledge.' },
+    { q: 'Coaching hai?', a: 'Nahi, hum content/lectures nahi dete — CareerRai execution, tracking aur personalised guidance pe focus karta hai.', more: 'Explain the coaching-vs-CareerRai distinction.', esc: 'Never.' },
+    { q: 'Lectures/study material milta hai?', a: 'Not verified as a current offering — do not claim it exists or doesn\'t.', more: '—', esc: 'Escalate if asked directly.' },
+    { q: 'Mocks milte hain?', a: 'The product tracks mock attempts and debriefs. Whether CareerRai provides the tests themselves isn\'t confirmed.', more: '—', esc: 'Escalate before stating either way.' },
+    { q: 'Free kya hai, paid kya hai?', a: 'Study plan — roz ka "kya padhna hai" — free hai. Buddy, ek real IIM mentor jo prep dekh ke feedback deta hai, paid hai.', more: '—', esc: 'Never — this line must be exact.' },
+  ],
+  'B · Buddy': [
+    { q: 'Buddy kaun hota hai?', a: 'Ek verified, background-checked IIM student ya alumnus, jo aapki asli prep data dekh ke specific feedback deta hai.', more: 'Point to their profile — real name, college, CAT percentile, LinkedIn, all verifiable.', esc: '—' },
+    { q: 'Buddy kaise assign hota hai?', a: 'Payment/activation ke baad, 24 hours ke andar.', more: '—', esc: 'If overdue past 24h with no assignment — real SLA breach, escalate.' },
+    { q: 'Buddy kya karta hai, kitni baar milta hai?', a: 'Live weekly session, plus daily chat guidance.', more: '—', esc: 'Any question about exact session length/format beyond this.' },
+    { q: 'Buddy change kar sakte hain?', a: 'Not documented in verified source material.', more: '—', esc: 'Escalate — do not guess or promise either way.' },
+  ],
+  'C · Pricing': [
+    { q: 'Kitna cost hai?', a: 'State the current approved price from Price & Policy only — never from memory.', more: '—', esc: '⚑ Live unresolved conflict — confirm with founder before quoting a number as "the" price.' },
+    { q: 'Monthly hai ya ek baar ka payment?', a: 'Ek baar ka payment hai — koi auto-debit, koi recurring mandate nahi. Term khatam hone ke baad mentorship simply ruk jaata hai, data safe rehta hai.', more: '—', esc: 'Never — this is confirmed and code-verified.' },
+    { q: 'Refund hai?', a: 'See Price & Policy — quote the specific 20-day condition, not a vague description.', more: '—', esc: '—' },
+    { q: 'Cancel kar sakte hain?', a: 'Auto-debit hai hi nahi, toh cancel karne ki zaroorat nahi padti — term khatam hone pe simply nahi renew hota.', more: '—', esc: '—' },
+  ],
+  'D · Product usage': [
+    { q: 'Daily log kya hai?', a: 'Aapne aaj kya padha, uska real record — kuch na padha ho, wo bhi likhna helpful hai, kyunki system usi se kal ka plan banata hai.', more: '—', esc: '—' },
+    { q: 'Plan kaise banta hai?', a: 'Aapki asli progress, weak areas, aur exam tak bache din — inse system roz ka plan banata hai.', more: '—', esc: 'Exact algorithm/ranking logic questions.' },
+    { q: 'Agar task complete nahi hua toh?', a: 'Bas honestly log kar dena — system usi se kal ka plan adjust karega. Yeh koi punishment nahi hai.', more: '—', esc: '—' },
+    { q: 'Notifications nahi aa rahe / technical issue?', a: 'Escalate as a technical issue — do not attempt to diagnose or guess a fix.', more: '—', esc: 'Always.' },
+  ],
+  'E · Trust': [
+    { q: 'Buddy genuine hai?', a: 'Har mentor review aur background check ke baad hi live hota hai — profile (college, CAT percentile, LinkedIn) khud verify kiya ja sakta hai.', more: '—', esc: '—' },
+    { q: 'Data safe hai?', a: 'Haan — hum data kabhi bechte nahi. Wo sirf aapki khud ki prep behtar karne ke liye use hota hai.', more: 'This is a permanent company policy, not a current preference.', esc: '—' },
+    { q: 'Isse actual benefit kya hai?', a: "Return to this specific student's own stated problem — never a generic \"it helps a lot.\"", more: '—', esc: '—' },
+  ],
+  'F · Refund': [
+    { q: 'Refund kaise milega?', a: 'In-app Profile → Refund guarantee, ya business@careerrai.com se email. 2-3 working days review, 5-7 working days refund.', more: 'See Price & Policy for full detail.', esc: 'Any case outside the 20-day rule.' },
+  ],
+  'G · Process': [
+    { q: 'Aap se dubara contact kaise ho sakta hai?', a: 'WhatsApp or email — confirm the current live channel before quoting one, don\'t assume. ⚑ Channel not yet confirmed in source material.', more: '—', esc: '—' },
+  ],
+  'H · Escalation': [
+    { q: 'When does anything here get escalated?', a: 'Payment mismatch · refund eligibility · unresolved technical issue · buddy assignment/switch · policy exception · any unknown answer.', more: '—', esc: 'All of these escalate — none get an improvised answer.' },
+  ],
+};
+
+const faqList = document.getElementById('faq-list');
+Object.entries(FAQS).forEach(([cat, items]) => {
+  const h = document.createElement('div');
+  h.className = 'faq-cat-title';
+  h.textContent = cat;
+  faqList.appendChild(h);
+  items.forEach(it => {
+    const el = document.createElement('div');
+    el.className = 'faq-item';
+    el.innerHTML = `<div class="q">${it.q}</div><div class="a">${it.a}</div>
+      ${it.more !== '—' ? `<div class="meta"><b>If asked further:</b> ${it.more}</div>` : ''}
+      ${it.esc !== '—' ? `<div class="meta"><b>Escalate:</b> ${it.esc}</div>` : ''}`;
+    faqList.appendChild(el);
+  });
+});
+
+// ── Module 08 — Real Examples ────────────────────────────────────────────
+const EXAMPLES = [
+  { stu: '"Kitna cost hai?"', good: 'States the current approved price only, then asks what matters most before adding anything else.', why1: 'Answers exactly what was asked, nothing invented.',
+    bad: '"Bohot affordable hai, sirf ₹999 mein sab kuch milta hai, abhi le lo!"', why2: 'Editorializes, doesn\'t confirm which plan, manufactures urgency.' },
+  { stu: '"Refund milta hai kya agar kaam na aaye?"', good: 'States the exact 20-day condition and timeline.', why1: 'Precise, not vague — sets real expectations.',
+    bad: '"Haan bilkul, koi bhi time refund mil jayega."', why2: 'Invents an unconditional, un-timed refund that doesn\'t exist.' },
+  { stu: '"Yeh coaching hai ya app hai, samajh nahi aaya."', good: 'Coaching teaches content, CareerRai is execution + tracking + a real mentor.', why1: 'Resolves the actual confusion in one clear line.',
+    bad: 'Lists ten features hoping one lands.', why2: 'More confusion, not less.' },
+  { stu: '"Mujhe nahi lagta isse meri preparation improve hogi."', good: 'Asks what specifically is in doubt, doesn\'t argue.', why1: 'Understanding beats persuading.',
+    bad: '"Trust me it definitely works."', why2: 'Argues instead of understanding.' },
+  { stu: '"Notifications aa hi nahi rahe."', good: '"Yeh technical cheez hai — main flag kar deti hoon, jaldi update dungi." Escalates.', why1: 'Honest, and routed correctly.',
+    bad: 'Guesses a fix ("try reinstalling") without knowing the cause.', why2: 'Confident guess on something outside her knowledge.' },
+  { stu: '"Ye bakwaas hai, paisa waste ho gaya, kuch nahi ho raha."', good: '"Samajh sakti hoon aap frustrated hain — bataiye exactly kya nahi ho raha, main abhi dekhti hoon."', why1: 'Absorbs the tone, moves to understanding, then escalates.',
+    bad: 'Matching the tone, or a defensive "Actually humne bola tha ki…"', why2: 'An upset student needs to be heard first — arguing makes CareerRai the opponent.' },
+  { stu: '"Mujhe details bhej do, main dekh leta hoon."', good: 'Sends accurate current details, asks one grounding question first if possible.', why1: 'Not generic — a real follow-up.',
+    bad: 'Sends a wall of every feature and plan with no context.', why2: '"Send details" is often a polite exit — a generic dump earns no second look.' },
+  { stu: '"Main soch ke batata hoon."', good: '"Bilkul, jaldi mein decide karne ki zaroorat nahi. Ek cheez poochun — abhi sabse zyada kis baat pe confusion hai?"', why1: 'Respects the answer, tries once to surface real hesitation.',
+    bad: 'Immediately offers an unapproved discount to force a decision.', why2: 'Forbidden by the Price Rule, and reads as pressure.' },
+  { stu: '"Parents se baat karke batata hoon."', good: '"Bilkul sahi approach hai — CAT jaisa decision family ke saath hi lena chahiye. Chahen toh main unhe bhi basic details bhej sakti hoon."', why1: 'Validates rather than treating it as a stall tactic.',
+    bad: 'Any attempt to rush past this or imply it\'s unnecessary.', why2: 'Dismissive — for many CAT households this is a genuine, reasonable step.' },
+  { stu: '"Aapka Buddy allocation algorithm exactly kaise decide karta hai?"', good: '"Iska exact internal process main confirm karke bataungi." Escalates.', why1: 'Honest uncertainty, correctly routed.',
+    bad: 'A confident guess.', why2: 'The single most-repeated failure mode this hub exists to prevent.' },
+  { stu: '"Koi discount mil sakta hai?"', good: '"Abhi koi official discount approved nahi hai jo main de sakti hoon — current price yeh hai."', why1: 'Clear, no false hope implied.',
+    bad: 'Inventing a number, or hinting "shayad ho jaaye agar abhi le lete hain."', why2: 'An unauthorised discount by implication is forbidden exactly like a stated one.' },
+];
+
+const exList = document.getElementById('example-list');
+EXAMPLES.forEach(e => {
+  const el = document.createElement('div');
+  el.className = 'example';
+  el.innerHTML = `<div class="stq">Student: ${e.stu}</div>
+    <div class="pair">
+      <div class="good"><span class="tag">✓ Good</span>${e.good}<div class="kicker" style="margin-top:6px">${e.why1}</div></div>
+      <div class="bad"><span class="tag">✗ Bad</span>${e.bad}<div class="kicker" style="margin-top:6px">${e.why2}</div></div>
+    </div>`;
+  exList.appendChild(el);
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  const initial = (location.hash || '#start').slice(1);
+  show(MODULES.some(m => m.id === initial) ? initial : 'start');
+});
+</script>
