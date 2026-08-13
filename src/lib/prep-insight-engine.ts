@@ -1,37 +1,47 @@
 // ── The Prep Insight Engine ──────────────────────────────────────────────────
 //
-// Answers one question: "Given everything this student just told us, what are
-// the two or three most non-obvious, defensible things we can tell them about
-// their own preparation — and what's one real thing they're doing right?"
+// Answers one question: after a student gives us ~60 onboarding inputs, what
+// are the 1-3 things about their preparation that are specific, defensible,
+// AND non-obvious enough that they think "this app actually understood me"?
 //
-// Built 13 Aug after the founder tested Instant Insight himself and rejected
-// it: one branch picked one paragraph, so most students landed in the same
-// few sentences regardless of their actual 53-topic map, and topic COUNT
-// ("10/28 done") was the headline number when topic count means almost
-// nothing in CAT — a student can finish 30 low-weight topics and still be
-// exposed on the topics the paper actually asks.
+// ── Why v2 exists (13 Aug adversarial audit) ─────────────────────────────────
 //
-// Same discipline as every other engine in this codebase (topic-selector,
-// mission-engine, study-pace): every signal is a pure function over data the
-// student actually gave us, every number traces back to a real tap, and a
-// detector either fires for a stated reason or it doesn't fire at all. No ML,
-// no invented weights, nothing that looks like a percentile promise —
-// TRUST-OS forbids exactly that class of claim.
+// v1 replaced a single if/else paragraph with 15 detectors ranked by
+// severity × confidence. It made the output technically differentiated but
+// pedagogically shallow: 25 adversarial profiles produced only 4 genuinely
+// insightful cards. Three root problems, all fixed here:
 //
-// ARCHITECTURE: up to ~15 detectors run internally. The student never sees
-// that number — they see the 3 that matter most for THEM. Each detector
-// carries two independent scores:
-//   severity   — how big a deal is this, if true
-//   confidence — how sure are we it's actually happening (not every pattern
-//                is provable the way "you're behind on hours" is provable)
-// A prerequisite gap read straight off the topic graph is confidence 9; a
-// "comfort zone" inference from a difficulty skew is confidence 6 — real
-// signal, but an inference, and the copy says so by describing the PATTERN,
-// never diagnosing the student's psychology.
+//   FALSE MATHEMATICS. v1 summed `weightage` across QA+DILR+VARC into one
+//   137-point denominator and called the result "% of the paper's marks".
+//   The metadata defines weightage as "relative emphasis within its OWN
+//   section, 1-5" and explicitly warns it is "editable content… NOT measured
+//   data… never a cited fact." The summed pool was 59% QA / 23% DILR / 18%
+//   VARC — a fabricated distribution. Weighting is now ONLY ever used within
+//   a section, which is what the field actually means, and the word "marks"
+//   appears nowhere in student-facing copy.
 //
-// The 3-card shape is fixed, not incidental: position 1 (biggest finding),
-// position 2 (a second pattern), position 3 (a REAL strength, always
-// present — a screen that's all red reads as scare tactics, not a mirror).
+//   CERTAINTY MISTAKEN FOR INSIGHT. Ranking on severity × confidence alone
+//   rewarded restatement: "VARC is completely untouched" scored high purely
+//   because it is certain — but the student tapped it twenty seconds ago.
+//   Every signal now carries `nonObvious`, and ranking discounts anything
+//   the student could read off their own answers.
+//
+//   CORRELATED CARDS. "QA is your strongest" + "progressing unevenly, QA
+//   100% / DILR 0%" are one finding rendered twice. Every signal now
+//   declares a `rootCause`, and at most ONE card per root cause survives.
+//
+// ── Standing rules ───────────────────────────────────────────────────────────
+//
+// Same discipline as topic-selector / mission-engine / study-pace: pure
+// functions, every number traceable to a real student tap or to reviewed
+// metadata, a detector fires for a stated reason or not at all. No ML, no
+// invented weights, and — per TRUST-OS — no score, percentile, or outcome
+// prediction anywhere.
+//
+// No card quota. If the evidence supports two findings, the student sees
+// two. If a student has barely started, the honest answer is that we don't
+// have enough history to name a weakness yet — which builds more trust than
+// dressing up "VARC is untouched" as a discovery.
 
 import { TOPIC_METADATA, type TopicMetadata } from './topics-constants';
 import { remainingSyllabusHours, studentEffortMultiplier, computeRequiredPace, type TopicStatusRow } from './study-pace';
@@ -41,20 +51,56 @@ export interface MatrixEntry { section: string; topic: string; status: CoverageS
 
 export type SignalPolarity = 'risk' | 'pattern' | 'strength';
 
+/**
+ * The layer above detectors. Several detectors can describe one underlying
+ * problem; only the strongest card per root cause reaches the student, so
+ * they never read three statistical descriptions of the same issue.
+ */
+export type RootCause =
+  | 'timeline'
+  | 'foundation'
+  | 'imbalance'
+  | 'high_value_neglect'
+  | 'unfinished'
+  | 'difficulty'
+  | 'mock_readiness';
+
 export interface PrepSignal {
   key: string;
+  rootCause: RootCause;
   polarity: SignalPolarity;
-  severity: number;   // 0-10 — how big a deal, if true
-  confidence: number; // 0-10 — how sure we are it's real, not inferred noise
-  headline: string;   // one bold line — the WHAT
-  stats?: string[];   // 0-3 short evidence lines — the WHY, numbers only, no prose
-  note?: string;      // one optional short line — the SO-WHAT / NOW-WHAT
-  recommend: string;  // 3-6 words, feeds the closing synthesis line
+  /** 0-10 — how materially this affects the student's preparation. */
+  severity: number;
+  /** 0-10 — how strongly the conclusion is supported by the evidence. */
+  confidence: number;
+  /**
+   * 0-10 — could the student have learned this by looking at the answers
+   * they just entered? 1 = pure restatement of their own taps; 9-10 =
+   * requires traversing a graph or combining several inputs they never
+   * connected. This is what separates insight from a mirror.
+   */
+  nonObvious: number;
+  headline: string;
+  /** Short evidence lines — numbers, not prose. */
+  stats?: string[];
+  /** One short line: why it matters / what changes. */
+  note?: string;
+  /** 3-6 words, feeds the closing synthesis line. */
+  recommend: string;
+}
+
+export interface SectionCoverage {
+  sec: CoreSection;
+  /** Weighted WITHIN this section only — the metadata's actual semantics. */
+  donePct: number;
+  inProgressPct: number;
+  finishedCount: number;
+  totalCount: number;
 }
 
 export interface PrepInsightInput {
   matrix: MatrixEntry[] | null;
-  /** ISO date, the syllabus finish date the student committed to (NOT the exam date). */
+  /** ISO date: the syllabus finish date the student chose (NOT the exam date). */
   ambitionDate: string | null;
   /** Self-study hours/day. Null when not yet collected at this point in the flow. */
   selfStudyHours: number | null;
@@ -63,55 +109,56 @@ export interface PrepInsightInput {
   today: Date;
 }
 
-export interface WeightedCoverage {
-  donePct: number;
-  inProgressPct: number;
-  untouchedPct: number;
-}
+export type InsightState = 'insufficient_evidence' | 'diagnosed';
+
+export interface StartingPoint { sec: CoreSection; topic: string }
 
 export interface PrepInsightResult {
-  /** True when the student has tapped nothing at all — a different, much shorter screen. */
-  fresh: boolean;
-  weightedCoverage: WeightedCoverage;
-  /** Always length 3 once `fresh` is false: [biggest finding, second pattern, real strength]. */
+  state: InsightState;
+  /** Per-section, weighted within section. Never summed across sections. */
+  sectionCoverage: SectionCoverage[];
+  /** 0-2 earned findings. No quota, no filler. */
   cards: PrepSignal[];
-  /** One short line synthesised from the top 2 non-strength cards' `recommend`. */
+  /** Only when genuinely earned — never manufactured for positive sentiment. */
+  strength: PrepSignal | null;
+  /** For the insufficient-evidence state: where to actually begin. */
+  startingPoints: StartingPoint[];
   synthesis: string | null;
 }
 
 const CORE_SECTIONS = ['QA', 'VARC', 'DILR'] as const;
-type CoreSection = (typeof CORE_SECTIONS)[number];
+export type CoreSection = (typeof CORE_SECTIONS)[number];
 const TIE_ORDER: Record<CoreSection, number> = { DILR: 0, QA: 1, VARC: 2 };
+
+type Row = { topic: string; status: CoverageStatus; meta: TopicMetadata };
 
 interface SectionStats {
   sec: CoreSection;
-  entries: { topic: string; status: CoverageStatus; meta: TopicMetadata }[];
-  finished: { topic: string; status: CoverageStatus; meta: TopicMetadata }[];
-  learning: { topic: string; status: CoverageStatus; meta: TopicMetadata }[];
-  untouched: { topic: string; status: CoverageStatus; meta: TopicMetadata }[];
+  entries: Row[];
+  finished: Row[];   // practicing | revising
+  mastered: Row[];   // revising only — the real mastery signal
+  learning: Row[];
+  untouched: Row[];
   weightTotal: number;
   weightDone: number;
   weightLearning: number;
   weightUntouched: number;
-  /** 0-1, higher = weaker. Weight-based, not count-based — a section with one
-   *  huge untouched topic can outweigh a section with three small ones. */
+  /** 0-1 within this section, higher = weaker. */
   gap: number;
 }
 
 const isFinished = (s: CoverageStatus) => s === 'practicing' || s === 'revising';
-
-function sumWeight(rows: { meta: TopicMetadata }[]): number {
-  return rows.reduce((s, r) => s + r.meta.weightage, 0);
-}
+const sumWeight = (rows: Row[]) => rows.reduce((s, r) => s + r.meta.weightage, 0);
 
 function buildSectionStats(matrix: MatrixEntry[]): SectionStats[] {
-  const withMeta = matrix
+  const withMeta: Row[] = matrix
     .map((m) => ({ topic: m.topic, status: m.status, meta: TOPIC_METADATA[m.topic] }))
-    .filter((m): m is { topic: string; status: CoverageStatus; meta: TopicMetadata } => !!m.meta);
+    .filter((m): m is Row => !!m.meta);
 
   return CORE_SECTIONS.map((sec) => {
     const entries = withMeta.filter((m) => m.meta.section === sec);
     const finished = entries.filter((m) => isFinished(m.status));
+    const mastered = entries.filter((m) => m.status === 'revising');
     const learning = entries.filter((m) => m.status === 'learning');
     const untouched = entries.filter((m) => m.status === 'not_started');
     const weightTotal = sumWeight(entries);
@@ -119,20 +166,18 @@ function buildSectionStats(matrix: MatrixEntry[]): SectionStats[] {
     const weightLearning = sumWeight(learning);
     const weightUntouched = sumWeight(untouched);
     const gap = weightTotal > 0 ? (weightUntouched * 2 + weightLearning) / (weightTotal * 2) : 0;
-    return { sec, entries, finished, learning, untouched, weightTotal, weightDone, weightLearning, weightUntouched, gap };
+    return { sec, entries, finished, mastered, learning, untouched, weightTotal, weightDone, weightLearning, weightUntouched, gap };
   });
 }
 
-// ── Clusters reused from the original branch logic — same topic lists, now
-// consumed by named detectors instead of one long if/else. ──────────────────
 const ARITHMETIC = ['Percentages', 'Profit & Loss', 'Ratio & Proportion', 'Average', 'Mixtures', 'Time & Work', 'Pipes & Cisterns', 'Time Speed Distance', 'SI & CI'];
 const HARD_QA = ['Linear Equations', 'Quadratic Equations', 'Functions', 'Inequalities', 'Logarithms', 'Progressions', 'Divisibility', 'HCF & LCM', 'Remainders', 'Base System', 'Lines & Angles', 'Triangles', 'Quadrilaterals', 'Circles', 'Mensuration', 'Coordinate Geometry'];
-const VERBAL_SMALL = ['Para Jumbles', 'Para Summary', 'Odd One Out', 'Para Completion', 'Vocabulary'];
+const VERBAL_SMALL = ['Para Jumbles', 'Para Summary', 'Odd One Out', 'Sentence Completion', 'Vocabulary'];
 
 function statusOf(matrix: MatrixEntry[], topic: string): CoverageStatus | null {
   return matrix.find((m) => m.topic === topic)?.status ?? null;
 }
-function clusterCounts(matrix: MatrixEntry[], units: string[]): { finished: number; untouched: number; total: number } {
+function clusterCounts(matrix: MatrixEntry[], units: string[]) {
   const rows = units.map((t) => statusOf(matrix, t)).filter((s): s is CoverageStatus => s != null);
   return {
     finished: rows.filter(isFinished).length,
@@ -141,199 +186,269 @@ function clusterCounts(matrix: MatrixEntry[], units: string[]): { finished: numb
   };
 }
 
-// ── Detector pool ────────────────────────────────────────────────────────────
-// Each returns null when it doesn't apply. score = severity * confidence,
-// used only for ranking — never shown to the student.
+// ── Prerequisite root-cause traversal ────────────────────────────────────────
+//
+// The audit's P0-4: v1 reported whichever violated prerequisite had the
+// highest weightage, which for a chain C → B → A could name the middle link.
+// That tells a student nothing actionable — the thing blocking them is the
+// DEEPEST unmet foundation, not the nearest one.
+//
+// "Unmet" means not_started only. The metadata is explicit that a
+// prerequisite "should be at least 'started'", so a prerequisite sitting at
+// learning/practicing/revising is legitimately satisfied and must not be
+// reported as missing.
+//
+// Cycle-safe by construction: `seen` guards the descent, so malformed
+// metadata with a circular edge terminates instead of blowing the stack.
+
+interface FoundationGap { topic: string; status: CoverageStatus; root: string; depth: number }
+
+function deepestUnmetPrereq(matrix: MatrixEntry[], topic: string, seen: Set<string>, depth: number): { root: string; depth: number } | null {
+  if (seen.has(topic)) return null;
+  seen.add(topic);
+  const meta = TOPIC_METADATA[topic];
+  if (!meta) return null;
+
+  let best: { root: string; depth: number } | null = null;
+  for (const prereq of meta.prerequisites) {
+    if (!TOPIC_METADATA[prereq]) continue; // missing metadata — skip, never guess
+    const status = statusOf(matrix, prereq);
+    const unmet = status == null || status === 'not_started';
+
+    // Descend first: a deeper unmet ancestor outranks this one.
+    const deeper = deepestUnmetPrereq(matrix, prereq, seen, depth + 1);
+    if (deeper && (!best || deeper.depth > best.depth)) best = deeper;
+    if (unmet && (!best || depth + 1 > best.depth)) {
+      best = { root: prereq, depth: depth + 1 };
+    }
+  }
+  return best;
+}
+
+function findFoundationGap(bySection: SectionStats[], matrix: MatrixEntry[]): FoundationGap | null {
+  const candidates: FoundationGap[] = [];
+  for (const s of bySection) {
+    // Only topics the student is ACTIVELY working on can be "built on sand".
+    for (const e of [...s.finished, ...s.learning]) {
+      const found = deepestUnmetPrereq(matrix, e.topic, new Set(), 0);
+      if (found) candidates.push({ topic: e.topic, status: e.status, root: found.root, depth: found.depth });
+    }
+  }
+  if (candidates.length === 0) return null;
+  // Most-advanced topic first, then deepest chain — that combination is the
+  // most surprising and the most actionable.
+  const rank = (c: FoundationGap) => (c.status === 'revising' ? 3 : c.status === 'practicing' ? 2 : 1) * 10 + c.depth;
+  return candidates.sort((a, b) => rank(b) - rank(a))[0];
+}
+
+// ── Timeline ────────────────────────────────────────────────────────────────
+//
+// P0-3: v1 could print "add ~390h/day" and treated a date already in the past
+// as an ordinary pace problem. Both destroy trust instantly. The arithmetic
+// still comes from study-pace.ts (the same engine the Blueprint reveal
+// already trusts) — what's added here are semantic guards around its output.
+
+type TimelineState = 'passed' | 'not_achievable' | 'tight' | 'comfortable' | 'unknown';
+/** Above this, a required daily pace is not a plan — it's a scope problem. */
+const MAX_SANE_HOURS_PER_DAY = 14;
+
+interface Timeline {
+  state: TimelineState;
+  remainingHours: number;
+  availableHours: number;
+  requiredPerDay: number;
+  committedPerDay: number | null;
+  sparePerDay: number;
+}
+
+function computeTimeline(input: PrepInsightInput, matrix: MatrixEntry[]): Timeline | null {
+  // 0 h/day is not a real answer (the picker's lowest option is 1) — treat it
+  // as missing rather than dividing by it and printing an infinite shortfall.
+  const hours = input.selfStudyHours != null && input.selfStudyHours > 0 ? input.selfStudyHours : null;
+  if (!input.ambitionDate || hours == null) return null;
+
+  const target = new Date(input.ambitionDate);
+  if (Number.isNaN(target.getTime())) return null;
+
+  const rows: TopicStatusRow[] = matrix.map((m) => ({ topic: m.topic, status: m.status }));
+  const effort = studentEffortMultiplier({ isRepeater: input.isRepeater, lastYearPercentile: input.lastYearPercentile });
+  const remainingHours = remainingSyllabusHours(rows, effort);
+
+  if (target.getTime() <= input.today.getTime()) {
+    return { state: 'passed', remainingHours, availableHours: 0, requiredPerDay: 0, committedPerDay: hours, sparePerDay: 0 };
+  }
+
+  const pace = computeRequiredPace({ remainingHours, today: input.today, targetDate: target, committedPerDay: hours });
+  const availableHours = Math.round(hours * pace.daysLeft);
+
+  let state: TimelineState;
+  if (pace.requiredPerDay > MAX_SANE_HOURS_PER_DAY) state = 'not_achievable';
+  else if (pace.status === 'behind' || pace.status === 'unrealistic') state = 'tight';
+  else if (pace.status === 'ahead') state = 'comfortable';
+  else state = 'unknown'; // on_pace / done — real, but not a finding worth a card
+
+  return {
+    state, remainingHours, availableHours,
+    requiredPerDay: pace.requiredPerDay, committedPerDay: hours, sparePerDay: pace.aheadPerDay,
+  };
+}
 
 interface Ctx {
+  /** Exam topics only (those carrying TOPIC_METADATA) — section maths. */
   matrix: MatrixEntry[];
+  /**
+   * The COMPLETE declared matrix, including the MOCKS and READING habit
+   * tracks. Those units deliberately carry no topic metadata, so filtering
+   * the matrix down to metadata-bearing rows silently deleted them — which
+   * made every mock detector read `null` and fire "not one full mock" at
+   * students who mock weekly. Habit lookups must use this, never `matrix`.
+   */
+  habitMatrix: MatrixEntry[];
   bySection: SectionStats[];
   weakest: SectionStats;
   strongest: SectionStats;
   totalFinished: number;
+  totalMastered: number;
   totalLearning: number;
-  weightTotalAll: number;
-  weightDoneAll: number;
-  weightLearningAll: number;
-  weightUntouchedAll: number;
   isRepeater: boolean | null;
-  pace: ReturnType<typeof computeRequiredPace> | null;
-  remainingHours: number;
+  timeline: Timeline | null;
+  foundation: FoundationGap | null;
 }
 
 type Detector = (ctx: Ctx) => PrepSignal | null;
 
-const detectDateArithmetic: Detector = (ctx) => {
-  const { pace, remainingHours } = ctx;
-  if (!pace) return null;
-  const availableHours = Math.round((pace.committedPerDay ?? 0) * pace.daysLeft);
-  if (pace.status === 'unrealistic' || pace.status === 'behind') {
-    const shortfall = Math.max(1, Math.round(remainingHours - availableHours));
+// ── Detectors ────────────────────────────────────────────────────────────────
+
+const detectTimeline: Detector = (ctx) => {
+  const t = ctx.timeline;
+  if (!t) return null;
+
+  if (t.state === 'passed') {
     return {
-      key: 'date-arithmetic', polarity: 'risk', severity: pace.status === 'unrealistic' ? 10 : 8, confidence: 10,
-      headline: `Your target date doesn't survive the arithmetic.`,
-      stats: [
-        `~${Math.round(remainingHours)}h estimated study left`,
-        `~${availableHours}h available by your date`,
-        `≈${shortfall}h short`,
-      ],
-      recommend: `add ~${pace.catchUpPerDay}h/day or move the date`,
+      key: 'timeline-passed', rootCause: 'timeline', polarity: 'risk',
+      severity: 9, confidence: 10, nonObvious: 3,
+      headline: `That finish date has already passed.`,
+      note: 'Pick a new target date and the plan rebuilds around it.',
+      recommend: 'set a new target date',
+    };
+  }
+  if (t.state === 'not_achievable') {
+    return {
+      key: 'timeline-impossible', rootCause: 'timeline', polarity: 'risk',
+      severity: 10, confidence: 10, nonObvious: 9,
+      headline: `Your current scope doesn't fit this date.`,
+      stats: [`~${t.remainingHours}h of syllabus left`, `~${t.availableHours}h before your date`],
+      note: 'Either the date moves, or the scope does. The plan can do either.',
+      recommend: 'move the date or cut scope',
+    };
+  }
+  if (t.state === 'tight') {
+    // committedPerDay is non-null whenever a timeline exists (computeTimeline
+    // returns null without it), but the compiler can't see that — and a bare
+    // `!` here would be exactly the silent hole this codebase's engines don't
+    // allow, so fall back to the arithmetic instead of asserting.
+    const committed = t.committedPerDay ?? 0;
+    const days = committed > 0 ? Math.round(t.availableHours / committed) : 0;
+    const extra = Math.max(0.5, Math.round((t.requiredPerDay - committed) * 2) / 2);
+    return {
+      key: 'timeline-tight', rootCause: 'timeline', polarity: 'risk',
+      severity: 8, confidence: 10, nonObvious: 9,
+      headline: `This date needs ~${t.requiredPerDay}h/day — you planned ${committed}h.`,
+      stats: [`~${t.remainingHours}h of syllabus left`, `${committed}h/day × ${days} days`],
+      recommend: `find ~${extra}h/day or move the date`,
+    };
+  }
+  if (t.state === 'comfortable') {
+    return {
+      key: 'timeline-comfortable', rootCause: 'timeline', polarity: 'strength',
+      severity: 6, confidence: 10, nonObvious: 7,
+      headline: `You have more time than your current scope needs.`,
+      stats: [`~${t.remainingHours}h of syllabus left`, `~${t.sparePerDay}h/day spare`],
+      note: 'Spend the slack on mocks, not on more topics.',
+      recommend: 'put the spare hours into mocks',
     };
   }
   return null;
 };
 
-// Ahead-of-pace is the strength version of the same arithmetic — same
-// numbers, opposite framing. Kept as a separate detector rather than a flag
-// on the risk one so it competes cleanly in the strength pool.
-const detectAheadOfPace: Detector = (ctx) => {
-  const { pace, remainingHours } = ctx;
-  if (!pace || pace.status !== 'ahead') return null;
-  const availableHours = Math.round((pace.committedPerDay ?? 0) * pace.daysLeft);
+const detectFoundation: Detector = (ctx) => {
+  const g = ctx.foundation;
+  if (!g) return null;
+  const depthPhrase = g.depth >= 2 ? ` — ${g.depth} levels beneath it —` : '';
   return {
-    key: 'ahead-of-pace', polarity: 'strength', severity: 6, confidence: 10,
-    headline: `You have more time than your syllabus currently needs.`,
-    stats: [`~${Math.round(remainingHours)}h estimated study left`, `~${availableHours}h available by your date`, `~${pace.aheadPerDay}h/day to spare`],
-    recommend: 'use the spare time on mocks',
+    key: 'foundation-gap', rootCause: 'foundation', polarity: 'risk',
+    severity: 8, confidence: 9, nonObvious: 10,
+    headline: `You're ${g.status === 'learning' ? 'learning' : g.status === 'revising' ? 'revising' : 'practising'} ${g.topic}, but ${g.root}${depthPhrase} is untouched.`,
+    note: `${g.root} comes first — that's why the hard questions feel random.`,
+    recommend: `start ${g.root} before more ${g.topic}`,
   };
 };
 
-const detectOnPace: Detector = (ctx) => {
-  const { pace } = ctx;
-  if (!pace || pace.status !== 'on_pace') return null;
+// The strategic version of "you're lopsided" — not "VARC is untouched"
+// (which the student just tapped), but what that imbalance MEANS for where
+// the next hour should go. Requires real depth somewhere, so it can't fire
+// for a student who has simply barely started.
+const detectImbalance: Detector = (ctx) => {
+  const { strongest, weakest } = ctx;
+  if (strongest.sec === weakest.sec) return null;
+  const strongPct = strongest.weightTotal > 0 ? Math.round((strongest.weightDone / strongest.weightTotal) * 100) : 0;
+  const weakPct = weakest.weightTotal > 0 ? Math.round((weakest.weightDone / weakest.weightTotal) * 100) : 0;
+  // Real depth on one side, near-nothing on the other.
+  if (strongest.finished.length < 4 || strongPct - weakPct < 35) return null;
+
+  const dormant = ctx.bySection.filter((s) => s.finished.length === 0 && s.learning.length === 0).map((s) => s.sec);
+  const dormantPhrase = dormant.length === 2 ? `${dormant[0]} and ${dormant[1]} haven't started` : `${weakest.sec} has barely started`;
+
   return {
-    key: 'on-pace', polarity: 'strength', severity: 4, confidence: 9,
-    headline: `You're exactly on pace for your own date.`,
-    stats: [`~${pace.requiredPerDay}h/day needed, ~${pace.committedPerDay}h/day committed`],
-    recommend: 'stay consistent, nothing to fix here',
+    key: 'imbalance-strategic', rootCause: 'imbalance', polarity: 'pattern',
+    severity: 7, confidence: 8, nonObvious: 8,
+    headline: `You've built real depth in ${strongest.sec}, but ${dormantPhrase}.`,
+    stats: [`${strongest.sec} ${strongPct}%`, `${weakest.sec} ${weakPct}%`],
+    note: `Another hour in ${strongest.sec} is worth less right now than the first hour in ${weakest.sec}.`,
+    recommend: `move your next hours into ${weakest.sec}`,
   };
 };
 
-// Deterministic off the topic graph itself — the highest-confidence pattern
-// detector in the set, because it isn't an inference about the student, it's
-// a fact about the order they worked in.
-const detectPrerequisiteGap: Detector = (ctx) => {
-  const violations: { topic: string; prereq: string; status: CoverageStatus; weight: number }[] = [];
+// Within-section only — this is what `weightage` actually means. Never
+// compares importance across sections, and never calls it "marks".
+const detectHighValueNeglect: Detector = (ctx) => {
+  // Scans EVERY section, not just the weakest. The most interesting inversion
+  // is often in a section the student HAS worked in — they finished the light
+  // topics and left the heavy ones closed — and the weakest section (usually
+  // one they've barely opened) has no finished topics to compare against at
+  // all, so restricting to it silently hid the finding.
+  let best: { sec: CoreSection; heavy: Row[]; done: number; delta: number } | null = null;
   for (const s of ctx.bySection) {
-    for (const e of [...s.learning, ...s.finished]) {
-      for (const prereq of e.meta.prerequisites) {
-        const prereqStatus = statusOf(ctx.matrix, prereq);
-        if (prereqStatus == null || prereqStatus === 'not_started') {
-          violations.push({ topic: e.topic, prereq, status: e.status, weight: e.meta.weightage });
-        }
-      }
-    }
+    if (s.finished.length === 0) continue;
+    const heavy = s.untouched.filter((e) => e.meta.weightage >= 4).sort((a, b) => b.meta.weightage - a.meta.weightage);
+    if (heavy.length === 0) continue;
+    const delta = sumWeight(heavy) - s.weightDone;
+    if (delta <= 0) continue;
+    if (!best || delta > best.delta) best = { sec: s.sec, heavy, done: s.weightDone, delta };
   }
-  if (violations.length === 0) return null;
-  violations.sort((a, b) => b.weight - a.weight);
-  const top = violations[0];
+  if (!best) return null;
+  const names = best.heavy.slice(0, 2).map((e) => e.topic).join(' and ');
   return {
-    key: 'prereq-gap', polarity: 'risk', severity: 8, confidence: 9,
-    headline: `You're ${top.status === 'learning' ? 'learning' : 'practising'} ${top.topic} before its foundation.`,
-    stats: [`${top.topic} → ${top.status}`, `${top.prereq} (needed first) → not started`],
-    note: 'Fix the foundation before pushing this further.',
-    recommend: `finish ${top.prereq} before more ${top.topic}`,
+    key: 'high-value-neglect', rootCause: 'high_value_neglect', polarity: 'pattern',
+    severity: 7, confidence: 8, nonObvious: 8,
+    headline: `In ${best.sec}, ${names} matter more than everything you've finished there.`,
+    note: `They're among the highest-priority topics in ${best.sec} and both are still closed.`,
+    recommend: `start ${best.heavy[0].topic} next`,
   };
 };
 
-const detectNoPrereqGaps: Detector = (ctx) => {
-  const hasProgress = ctx.totalFinished + ctx.totalLearning >= 5;
-  if (!hasProgress) return null;
-  const anyViolation = ctx.bySection.some((s) =>
-    [...s.learning, ...s.finished].some((e) => e.meta.prerequisites.some((p) => {
-      const st = statusOf(ctx.matrix, p);
-      return st == null || st === 'not_started';
-    }))
-  );
-  if (anyViolation) return null;
-  return {
-    key: 'sequencing-clean', polarity: 'strength', severity: 4, confidence: 7,
-    headline: `You're building in the right order.`,
-    stats: [`no foundation gaps in what you've started`],
-    recommend: 'keep following the natural sequence',
-  };
-};
-
-// The weighted version of "you're prepping the wrong half" — untouched
-// high-mark topics in the weakest section outweigh what's actually finished.
-const detectWeightedInversion: Detector = (ctx) => {
-  const { weakest } = ctx;
-  const heavyUntouched = weakest.untouched.filter((e) => e.meta.weightage >= 4).sort((a, b) => b.meta.weightage - a.meta.weightage);
-  if (heavyUntouched.length === 0 || weakest.finished.length === 0) return null;
-  const untouchedWeight = sumWeight(heavyUntouched);
-  if (untouchedWeight <= weakest.weightDone) return null;
-  const names = heavyUntouched.slice(0, 2).map((e) => e.topic).join(' and ');
-  return {
-    key: 'weighted-inversion', polarity: 'risk', severity: 7, confidence: 8,
-    headline: `${names} carr${heavyUntouched.length === 1 ? 'ies' : 'y'} more marks than everything you've finished in ${weakest.sec}.`,
-    stats: [`untouched high-mark: ${untouchedWeight} pts`, `finished in ${weakest.sec}: ${weakest.weightDone} pts`],
-    recommend: `start ${heavyUntouched[0].topic} next`,
-  };
-};
-
-const detectHalfOpenPile: Detector = (ctx) => {
-  const { totalLearning, totalFinished } = ctx;
-  if (totalLearning < 6 || totalLearning < 2 * Math.max(1, totalFinished)) return null;
-  return {
-    key: 'half-open', polarity: 'pattern', severity: 6, confidence: 7,
-    headline: `${totalLearning + totalFinished} topics opened, only ${totalFinished} finished.`,
-    stats: [`half-learned scores zero on exam day`],
-    recommend: 'close open topics before starting new ones',
-  };
-};
-
-const detectMockNoErrorLog: Detector = (ctx) => {
-  const fullMocks = statusOf(ctx.matrix, 'Full Length Mocks');
-  const errorLog = statusOf(ctx.matrix, 'Error Log');
-  const mockAnalysis = statusOf(ctx.matrix, 'Mock Analysis');
-  if (fullMocks == null || fullMocks === 'not_started') return null;
-  if (errorLog != null && errorLog !== 'not_started' && mockAnalysis != null && mockAnalysis !== 'not_started') return null;
-  const missing = errorLog === 'not_started' || errorLog == null ? 'keep no error log' : 'skip the analysis';
-  return {
-    key: 'mock-no-log', polarity: 'risk', severity: 7, confidence: 9,
-    headline: `You take mocks but ${missing}.`,
-    note: 'The same mistakes repeat on the next one without it.',
-    recommend: 'start an error log from your next mock',
-  };
-};
-
-const detectGoodMockHygiene: Detector = (ctx) => {
-  const fullMocks = statusOf(ctx.matrix, 'Full Length Mocks');
-  const errorLog = statusOf(ctx.matrix, 'Error Log');
-  const mockAnalysis = statusOf(ctx.matrix, 'Mock Analysis');
-  const active = (s: CoverageStatus | null) => s != null && s !== 'not_started';
-  if (!active(fullMocks) || !active(errorLog) || !active(mockAnalysis)) return null;
-  return {
-    key: 'good-mock-hygiene', polarity: 'strength', severity: 5, confidence: 8,
-    headline: `You're already testing yourself properly.`,
-    stats: [`mocks + error log + analysis — all active`],
-    recommend: 'keep the mock-analysis-log loop weekly',
-  };
-};
-
-const detectNeverMocked: Detector = (ctx) => {
-  const fullMocks = statusOf(ctx.matrix, 'Full Length Mocks');
-  if (ctx.totalFinished < 8) return null;
-  if (fullMocks != null && fullMocks !== 'not_started') return null;
-  return {
-    key: 'never-mocked', polarity: 'pattern', severity: 6, confidence: 8,
-    headline: `${ctx.totalFinished} topics done, zero full mocks.`,
-    note: `That's studying — not testing yourself.`,
-    recommend: 'take one full mock this week',
-  };
-};
-
-const detectReadingHabitGap: Detector = (ctx) => {
+const detectRcNeglect: Detector = (ctx) => {
   const vaTouched = VERBAL_SMALL.filter((t) => {
     const s = statusOf(ctx.matrix, t);
     return s != null && s !== 'not_started';
   }).length;
   const rc = statusOf(ctx.matrix, 'Reading Comprehension');
-  if (vaTouched < 1 || (rc != null && isFinished(rc))) return null;
+  if (vaTouched < 2 || (rc != null && isFinished(rc))) return null;
   return {
-    key: 'reading-gap', polarity: 'pattern', severity: 5, confidence: 6,
-    headline: `Verbal is moving, but Reading Comprehension isn't.`,
-    stats: [`RC is roughly two-thirds of VARC's marks`],
+    key: 'rc-neglect', rootCause: 'high_value_neglect', polarity: 'pattern',
+    severity: 6, confidence: 8, nonObvious: 7,
+    headline: `You've started ${vaTouched} smaller VARC topics but not Reading Comprehension.`,
+    note: `RC is the largest block in VARC — the small ones can't cover for it.`,
     recommend: 'bring Reading Comprehension into practice',
   };
 };
@@ -343,212 +458,264 @@ const detectCoachingSequenceTrap: Detector = (ctx) => {
   const hard = clusterCounts(ctx.matrix, HARD_QA);
   if (arith.untouched < 5 || hard.finished < 2) return null;
   return {
-    key: 'coaching-trap', polarity: 'pattern', severity: 5, confidence: 6,
-    headline: `${hard.finished} hard QA chapters done, but ${arith.untouched} Arithmetic topics sit untouched.`,
-    note: `Arithmetic is QA's single biggest scoring block.`,
+    key: 'coaching-trap', rootCause: 'high_value_neglect', polarity: 'pattern',
+    severity: 6, confidence: 7, nonObvious: 8,
+    headline: `${hard.finished} harder QA chapters done, ${arith.untouched} Arithmetic topics still closed.`,
+    note: `Arithmetic is QA's broadest scoring block — this is the classic coaching sequence.`,
     recommend: 'start Arithmetic next',
   };
 };
 
-// Difficulty skew — an inference, not a fact, so confidence is deliberately
-// lower than the graph-based detectors. Describes the pattern, never
-// diagnoses the student ("you're avoiding X" would be psychoanalysis).
+const detectUnfinished: Detector = (ctx) => {
+  const { totalLearning, totalFinished } = ctx;
+  if (totalLearning < 6 || totalLearning < 2 * Math.max(1, totalFinished)) return null;
+  return {
+    key: 'unfinished-pile', rootCause: 'unfinished', polarity: 'pattern',
+    severity: 7, confidence: 8, nonObvious: 6,
+    headline: `${totalLearning + totalFinished} topics opened, only ${totalFinished} finished.`,
+    note: `Opening more topics adds breadth without adding readiness. Close loops first.`,
+    recommend: 'close open topics before opening new ones',
+  };
+};
+
 const detectDifficultySkew: Detector = (ctx) => {
   const all = ctx.bySection.flatMap((s) => s.entries);
   const finished = all.filter((e) => isFinished(e.status));
   const untouched = all.filter((e) => e.status === 'not_started');
-  if (finished.length < 3 || untouched.length < 3) return null;
-  const avg = (rows: typeof finished) => rows.reduce((s, r) => s + r.meta.difficulty, 0) / rows.length;
+  if (finished.length < 4 || untouched.length < 4) return null;
+  const avg = (rows: Row[]) => rows.reduce((s, r) => s + r.meta.difficulty, 0) / rows.length;
   const finishedAvg = avg(finished);
   const untouchedAvg = avg(untouched);
   if (untouchedAvg - finishedAvg < 1.0) return null;
   return {
-    key: 'difficulty-skew', polarity: 'pattern', severity: 5, confidence: 6,
-    headline: `Most of what you've finished is on the easier side.`,
-    stats: [`finished avg difficulty ${finishedAvg.toFixed(1)}`, `untouched avg difficulty ${untouchedAvg.toFixed(1)}`],
-    recommend: 'move into harder topics next',
+    key: 'difficulty-skew', rootCause: 'difficulty', polarity: 'pattern',
+    severity: 6, confidence: 6, nonObvious: 8,
+    headline: `What's left is measurably harder than what you've finished.`,
+    stats: [`finished avg difficulty ${finishedAvg.toFixed(1)}`, `remaining avg ${untouchedAvg.toFixed(1)}`],
+    note: `Your pace will slow from here — the plan accounts for that.`,
+    recommend: 'expect slower going on what remains',
   };
 };
 
-const detectSectionImbalance: Detector = (ctx) => {
-  const { strongest, weakest } = ctx;
-  if (strongest.sec === weakest.sec) return null;
-  const strongPct = strongest.weightTotal > 0 ? Math.round((strongest.weightDone / strongest.weightTotal) * 100) : 0;
-  const weakPct = weakest.weightTotal > 0 ? Math.round((weakest.weightDone / weakest.weightTotal) * 100) : 0;
-  if (strongPct - weakPct < 25) return null;
+const detectMockNoErrorLog: Detector = (ctx) => {
+  const fullMocks = statusOf(ctx.habitMatrix, 'Full Length Mocks');
+  const errorLog = statusOf(ctx.habitMatrix, 'Error Log');
+  const mockAnalysis = statusOf(ctx.habitMatrix, 'Mock Analysis');
+  if (fullMocks == null || fullMocks === 'not_started') return null;
+  const logMissing = errorLog == null || errorLog === 'not_started';
+  const analysisMissing = mockAnalysis == null || mockAnalysis === 'not_started';
+  if (!logMissing && !analysisMissing) return null;
   return {
-    key: 'section-imbalance', polarity: 'pattern', severity: 5, confidence: 6,
-    headline: `You're progressing unevenly across sections.`,
-    stats: [`${strongest.sec} ${strongPct}%`, `${weakest.sec} ${weakPct}%`],
-    recommend: `put your next hours into ${weakest.sec}`,
+    key: 'mock-no-log', rootCause: 'mock_readiness', polarity: 'risk',
+    severity: 7, confidence: 9, nonObvious: 7,
+    headline: `You take mocks but ${logMissing ? 'keep no error log' : 'skip the analysis'}.`,
+    note: `Without it the same mistakes come back on the next mock.`,
+    recommend: 'start an error log from the next mock',
   };
 };
 
-// Repeater-specific — behavioural, not outcome-predictive. Deliberately does
-// NOT say "again" or reference last year's actual gaps: we have last year's
-// PERCENTILE, not last year's topic map, so any claim about repeating a
-// specific pattern from last year would be invented, not observed.
-const detectRepeaterConcentration: Detector = (ctx) => {
-  if (!ctx.isRepeater) return null;
-  const { weakest } = ctx;
-  const untouchedShare = weakest.weightTotal > 0 ? weakest.weightUntouched / weakest.weightTotal : 0;
-  if (untouchedShare < 0.4) return null;
+const detectNeverMocked: Detector = (ctx) => {
+  const fullMocks = statusOf(ctx.habitMatrix, 'Full Length Mocks');
+  if (ctx.totalFinished < 8) return null;
+  // Absent row (a matrix saved before habit tracks existed) is NOT evidence
+  // of never mocking — stay silent rather than accuse.
+  if (fullMocks == null) return null;
+  if (fullMocks !== 'not_started') return null;
+  // The more finished, the more serious never having tested any of it is.
+  const heavy = ctx.totalFinished >= 20;
   return {
-    key: 'repeater-concentration', polarity: 'pattern', severity: 5, confidence: 6,
-    headline: `As a repeater, your untouched topics are concentrated in ${weakest.sec}.`,
-    note: `That's where the plan will focus first.`,
-    recommend: `prioritise ${weakest.sec} early`,
+    key: 'never-mocked', rootCause: 'mock_readiness', polarity: 'risk',
+    severity: heavy ? 9 : 7, confidence: 9, nonObvious: 6,
+    headline: `${ctx.totalFinished} topics finished, not one full mock.`,
+    note: `You've prepared a syllabus, not an exam — those are different skills.`,
+    recommend: 'take one full mock this week',
   };
 };
 
-const detectStrongestSection: Detector = (ctx) => {
+// ── Strengths — earned, never manufactured ───────────────────────────────────
+//
+// P1-2: v1 guaranteed a green card, so it shipped "QA is your strongest"
+// alongside "your QA foundation is broken" — schizophrenic, and it taught
+// students the positive line was decoration. A strength now requires real
+// mastery evidence (topics at `revising`, not merely touched), and is
+// suppressed entirely if the same section carries an active risk.
+
+const detectSectionStrength: Detector = (ctx) => {
   const { strongest } = ctx;
   if (strongest.weightTotal === 0) return null;
+  // Mastery, not activity: at least two topics actually in revision.
+  if (strongest.mastered.length < 2) return null;
   const pct = Math.round((strongest.weightDone / strongest.weightTotal) * 100);
-  if (pct < 40) return null; // only brag when it's actually true
+  if (pct < 40) return null;
   return {
-    key: 'strongest-section', polarity: 'strength', severity: pct >= 55 ? 6 : 4, confidence: 8,
-    headline: `${strongest.sec} is your strongest section so far.`,
-    stats: [`~${pct}% weighted coverage`],
-    recommend: `protect ${strongest.sec} — don't restart it`,
+    key: 'section-strength', rootCause: 'imbalance', polarity: 'strength',
+    severity: pct >= 60 ? 6 : 4, confidence: 9, nonObvious: 5,
+    headline: `${strongest.sec} is genuinely ahead — ${strongest.mastered.length} topics already in revision.`,
+    stats: [`${pct}% of ${strongest.sec} covered`],
+    note: `The plan will protect this, not restart it.`,
+    recommend: `hold ${strongest.sec} with light revision`,
   };
 };
 
-// ── The early-stage floor ────────────────────────────────────────────────
-//
-// A student who's tapped only 1-2 topics gives almost every detector above
-// too little signal to fire honestly — and that's correct, not a bug: this
-// codebase's rule is a detector fires for a stated reason or not at all, and
-// "you're behind on hours" from two touched topics would be exactly the
-// manufactured-problem the founder rejected outright ("don't manufacture a
-// problem" — his own words, on the headline-severity question). These two
-// are the honest things left to say at that stage: real, low-stakes,
-// genuinely always computable, and naturally outranked (low severity) the
-// moment anything sharper has enough data to fire.
-
-const detectUntouchedSection: Detector = (ctx) => {
-  const wideOpen = ctx.bySection.find((s) => s.weightTotal > 0 && s.weightDone === 0 && s.weightLearning === 0);
-  if (!wideOpen) return null;
+const detectMockHygiene: Detector = (ctx) => {
+  const active = (t: string) => {
+    const s = statusOf(ctx.habitMatrix, t);
+    return s != null && s !== 'not_started';
+  };
+  if (!active('Full Length Mocks') || !active('Error Log') || !active('Mock Analysis')) return null;
   return {
-    key: 'untouched-section', polarity: 'pattern', severity: 3, confidence: 10,
-    headline: `${wideOpen.sec} is completely untouched so far.`,
-    recommend: `open ${wideOpen.sec} next`,
+    key: 'mock-hygiene', rootCause: 'mock_readiness', polarity: 'strength',
+    severity: 6, confidence: 9, nonObvious: 6,
+    headline: `You already mock, analyse, and keep an error log.`,
+    note: `That loop is what actually moves scores — most students skip two of the three.`,
+    recommend: 'keep the mock loop weekly',
   };
 };
 
-const detectStartedSomewhere: Detector = (ctx) => {
-  if (ctx.totalFinished + ctx.totalLearning === 0) return null;
-  const busiest = [...ctx.bySection].sort((a, b) => (b.finished.length + b.learning.length) - (a.finished.length + a.learning.length))[0];
-  if (busiest.finished.length + busiest.learning.length === 0) return null;
+const detectSequencingStrength: Detector = (ctx) => {
+  if (ctx.foundation != null) return null; // contradicted
+  if (ctx.totalFinished < 5) return null;
   return {
-    key: 'started-somewhere', polarity: 'pattern', severity: 2, confidence: 6,
-    headline: `Most of your effort so far is in ${busiest.sec}.`,
-    recommend: `keep building ${busiest.sec}, then branch out`,
+    key: 'sequencing-strength', rootCause: 'foundation', polarity: 'strength',
+    severity: 5, confidence: 8, nonObvious: 7,
+    headline: `Every topic you've opened has its foundation in place.`,
+    note: `Nothing you're practising is built on a gap — rarer than it sounds.`,
+    recommend: 'keep following the sequence',
   };
 };
 
-// The guaranteed floor. Always fires (ctx is unused — same Detector shape as
-// every other entry, on purpose: a bespoke zero-arg signature here would
-// erase call-site arity checking the moment it's annotated as `Detector`,
-// which is exactly the kind of silent-type-hole this codebase's engines
-// don't allow). Always true, never invented: mapping all 53 topics in
-// detail is real behaviour most students never do.
-const detectMappedEverything: Detector = (): PrepSignal => ({
-  key: 'mapped-everything', polarity: 'strength', severity: 2, confidence: 10,
-  headline: `You just mapped all 53 topics in detail.`,
-  note: `Most students never break their prep down this precisely.`,
-  recommend: 'let the plan use this instead of starting blind',
-});
-
-const RISK_PATTERN_DETECTORS: Detector[] = [
-  detectDateArithmetic, detectPrerequisiteGap, detectWeightedInversion, detectHalfOpenPile,
-  detectMockNoErrorLog, detectNeverMocked, detectReadingHabitGap, detectCoachingSequenceTrap,
-  detectDifficultySkew, detectSectionImbalance, detectRepeaterConcentration,
-  // Early-stage floor — deliberately last: lowest severity*confidence of the
-  // pool, so anything sharper above always outranks them once it has data.
-  detectUntouchedSection, detectStartedSomewhere,
+const RISK_DETECTORS: Detector[] = [
+  detectTimeline, detectFoundation, detectImbalance, detectHighValueNeglect,
+  detectRcNeglect, detectCoachingSequenceTrap, detectUnfinished, detectDifficultySkew,
+  detectMockNoErrorLog, detectNeverMocked,
 ];
-// detectMappedEverything is last and unconditional — this array (unlike
-// RISK_PATTERN_DETECTORS) can never produce zero results.
 const STRENGTH_DETECTORS: Detector[] = [
-  detectAheadOfPace, detectOnPace, detectNoPrereqGaps, detectGoodMockHygiene, detectStrongestSection,
-  detectMappedEverything,
+  detectTimeline, detectSectionStrength, detectMockHygiene, detectSequencingStrength,
 ];
 
-function score(sig: PrepSignal): number {
-  return sig.severity * sig.confidence;
+/**
+ * Ranking. severity × confidence establishes "is this real and important";
+ * the non-obviousness multiplier then discounts anything the student could
+ * have read off their own answers. A pure restatement (nonObvious 1) keeps
+ * less than half its weight, so a genuine inference beats an obvious fact of
+ * similar severity — while a catastrophic-but-obvious finding (a date that
+ * has already passed) still surfaces, which is why this is a multiplier and
+ * not a filter.
+ */
+function rank(sig: PrepSignal): number {
+  return sig.severity * sig.confidence * (0.4 + 0.06 * sig.nonObvious);
 }
 
-export function computePrepInsight(input: PrepInsightInput): PrepInsightResult {
-  const matrix = (input.matrix ?? []).filter((m) => TOPIC_METADATA[m.topic]);
-  const fresh = matrix.length === 0 || matrix.every((m) => m.status === 'not_started');
-
-  const bySection = buildSectionStats(matrix);
-  const weightTotalAll = bySection.reduce((s, x) => s + x.weightTotal, 0);
-  const weightDoneAll = bySection.reduce((s, x) => s + x.weightDone, 0);
-  const weightLearningAll = bySection.reduce((s, x) => s + x.weightLearning, 0);
-  const weightUntouchedAll = bySection.reduce((s, x) => s + x.weightUntouched, 0);
-
-  const weightedCoverage: WeightedCoverage = weightTotalAll > 0
-    ? {
-        donePct: Math.round((weightDoneAll / weightTotalAll) * 100),
-        inProgressPct: Math.round((weightLearningAll / weightTotalAll) * 100),
-        untouchedPct: Math.round((weightUntouchedAll / weightTotalAll) * 100),
-      }
-    : { donePct: 0, inProgressPct: 0, untouchedPct: 100 };
-
-  if (fresh) {
-    return { fresh: true, weightedCoverage, cards: [], synthesis: null };
+/** At most one card per root cause — no student sees one problem described twice. */
+function dedupeByRootCause(signals: PrepSignal[]): PrepSignal[] {
+  const best = new Map<RootCause, PrepSignal>();
+  for (const s of signals) {
+    const cur = best.get(s.rootCause);
+    if (!cur || rank(s) > rank(cur)) best.set(s.rootCause, s);
   }
+  return [...best.values()].sort((a, b) => rank(b) - rank(a));
+}
+
+/** Highest-priority prerequisite-free topic per section — a real place to begin. */
+function startingPoints(bySection: SectionStats[]): StartingPoint[] {
+  const out: StartingPoint[] = [];
+  for (const s of bySection) {
+    const open = s.entries
+      .filter((e) => e.status === 'not_started' && e.meta.prerequisites.length === 0)
+      .sort((a, b) => b.meta.weightage - a.meta.weightage || a.meta.sequenceRank - b.meta.sequenceRank);
+    if (open[0]) out.push({ sec: s.sec, topic: open[0].topic });
+  }
+  return out;
+}
+
+/**
+ * Below this much real activity, there is nothing defensible to diagnose.
+ * Saying so plainly beats dressing up "VARC is untouched" as a discovery —
+ * the student tapped that themselves 30 seconds ago, and pretending it is a
+ * finding is exactly what made v1 feel hollow.
+ */
+const MIN_ACTIVITY_TO_DIAGNOSE = 3;
+
+export function computePrepInsight(input: PrepInsightInput): PrepInsightResult {
+  // Two views of the same declaration, deliberately: `matrix` is exam topics
+  // only (everything carrying TOPIC_METADATA) for the section maths, while
+  // `habitMatrix` keeps every declared row including the MOCKS and READING
+  // tracks. Those habit units carry no topic metadata by design, so the
+  // filtered view silently deleted them — and the mock detectors, reading
+  // `null` for every student, told people who mock weekly that they had
+  // never taken a mock.
+  const habitMatrix = input.matrix ?? [];
+  const matrix = habitMatrix.filter((m) => TOPIC_METADATA[m.topic]);
+  const bySection = buildSectionStats(matrix);
+
+  const sectionCoverage: SectionCoverage[] = bySection.map((s) => ({
+    sec: s.sec,
+    donePct: s.weightTotal > 0 ? Math.round((s.weightDone / s.weightTotal) * 100) : 0,
+    inProgressPct: s.weightTotal > 0 ? Math.round((s.weightLearning / s.weightTotal) * 100) : 0,
+    finishedCount: s.finished.length,
+    totalCount: s.entries.length,
+  }));
+
+  const totalFinished = bySection.reduce((s, x) => s + x.finished.length, 0);
+  const totalMastered = bySection.reduce((s, x) => s + x.mastered.length, 0);
+  const totalLearning = bySection.reduce((s, x) => s + x.learning.length, 0);
+
+  const timeline = computeTimeline(input, matrix);
 
   const sorted = [...bySection].sort((a, b) => b.gap - a.gap || TIE_ORDER[a.sec] - TIE_ORDER[b.sec]);
   const weakest = sorted[0];
   const strongest = sorted[sorted.length - 1];
+  const foundation = findFoundationGap(bySection, matrix);
 
-  const rows: TopicStatusRow[] = matrix.map((m) => ({ topic: m.topic, status: m.status }));
-  const effort = studentEffortMultiplier({ isRepeater: input.isRepeater, lastYearPercentile: input.lastYearPercentile });
-  const remainingHours = remainingSyllabusHours(rows, effort);
-  const pace = input.ambitionDate && input.selfStudyHours != null
-    ? computeRequiredPace({
-        remainingHours, today: input.today, targetDate: new Date(input.ambitionDate),
-        committedPerDay: input.selfStudyHours,
-      })
-    : null;
+  // Not enough real activity to name a weakness honestly.
+  //
+  // Two findings still escape this gate, because both are fully supported by
+  // a single tap plus data the student never sees, and suppressing them was
+  // the audit's worst false negative: a student practising Functions with
+  // Linear Equations untouched got NO cards at all, losing the single
+  // highest-value insight the engine can produce.
+  //   · a hard timeline blocker (a date already passed is true regardless)
+  //   · a foundation gap (the prerequisite graph, not the student's volume)
+  if (totalFinished + totalLearning < MIN_ACTIVITY_TO_DIAGNOSE) {
+    const earlyCtx: Ctx = {
+      matrix, habitMatrix, bySection, weakest, strongest,
+      totalFinished, totalMastered, totalLearning,
+      isRepeater: input.isRepeater, timeline, foundation,
+    };
+    const early: PrepSignal[] = [];
+    const t = timeline && (timeline.state === 'passed' || timeline.state === 'not_achievable') ? detectTimeline(earlyCtx) : null;
+    if (t) early.push(t);
+    const f = detectFoundation(earlyCtx);
+    if (f) early.push(f);
+    return {
+      state: early.length > 0 ? 'diagnosed' : 'insufficient_evidence',
+      sectionCoverage,
+      cards: early.sort((a, b) => rank(b) - rank(a)).slice(0, 2),
+      strength: null,
+      startingPoints: startingPoints(bySection),
+      synthesis: early.length > 0 ? early.map((c) => c.recommend).join(' — then ') : null,
+    };
+  }
 
   const ctx: Ctx = {
-    matrix, bySection, weakest, strongest,
-    totalFinished: bySection.reduce((s, x) => s + x.finished.length, 0),
-    totalLearning: bySection.reduce((s, x) => s + x.learning.length, 0),
-    weightTotalAll, weightDoneAll, weightLearningAll, weightUntouchedAll,
-    isRepeater: input.isRepeater, pace, remainingHours,
+    matrix, habitMatrix, bySection, weakest, strongest,
+    totalFinished, totalMastered, totalLearning,
+    isRepeater: input.isRepeater, timeline, foundation,
   };
 
-  const riskPattern = RISK_PATTERN_DETECTORS.map((d) => d(ctx)).filter((s): s is PrepSignal => s != null)
-    .sort((a, b) => score(b) - score(a));
+  const risks = dedupeByRootCause(
+    RISK_DETECTORS.map((d) => d(ctx)).filter((s): s is PrepSignal => s != null).filter((s) => s.polarity !== 'strength')
+  );
+  const cards = risks.slice(0, 2);
 
-  // detectMappedEverything (last in STRENGTH_DETECTORS) is unconditional, so
-  // this pool can never come back empty.
-  const strengths = STRENGTH_DETECTORS.map((d) => d(ctx)).filter((s): s is PrepSignal => s != null)
-    .sort((a, b) => score(b) - score(a));
-  const bestStrength = strengths[0];
+  // A strength must not contradict a finding the student is reading directly
+  // above it, so anything sharing a root cause with a shown card is dropped.
+  const shownCauses = new Set(cards.map((c) => c.rootCause));
+  const strength = dedupeByRootCause(
+    STRENGTH_DETECTORS.map((d) => d(ctx)).filter((s): s is PrepSignal => s != null).filter((s) => s.polarity === 'strength')
+  ).filter((s) => !shownCauses.has(s.rootCause))[0] ?? null;
 
-  // Positions 1-2: risk/pattern findings, ranked. Structurally guaranteed to
-  // reach 2 (not just usually) by falling back to the next-best strength
-  // when the risk/pattern pool runs dry — the early-stage floor detectors
-  // above mean that's rare, but the guarantee holds even if it happens.
-  const top2 = riskPattern.slice(0, 2);
-  if (top2.length < 2) {
-    for (const s of strengths.slice(1)) {
-      if (top2.length >= 2) break;
-      top2.push(s);
-    }
-  }
-  const cards = [...top2, bestStrength];
+  const synthesis = cards.length > 0 ? cards.map((c) => c.recommend).join(' — then ') : null;
 
-  const nonStrength = top2.filter((c) => c.polarity !== 'strength');
-  const synthesis = nonStrength.length > 0
-    ? nonStrength.map((c) => c.recommend).join(' — then ')
-    : null;
-
-  return { fresh: false, weightedCoverage, cards, synthesis };
+  return { state: 'diagnosed', sectionCoverage, cards, strength, startingPoints: startingPoints(bySection), synthesis };
 }
