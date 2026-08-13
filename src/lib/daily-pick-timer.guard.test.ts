@@ -22,8 +22,29 @@ const ROUTE = 'src/app/api/community/daily-slot/route.ts';
 const ATTEMPT = 'src/app/api/challenge/attempt/route.ts';
 
 describe('the clock', () => {
-  it('targets 90 seconds', () => {
+  it('falls back to 90 seconds', () => {
     expect(TARGET_SECONDS).toBe(90);
+  });
+
+  it('each question carries its OWN clock — the modal never reads the global 90 directly', () => {
+    // Founder, 13 Aug (after solving a VARC summary in 31 of its 90s): "we
+    // have to minimise the time for VARC, then only it is a challenge — if
+    // they didn't feel the rush of the clock, no one will share." The rush is
+    // the product. target_seconds rides each daily_challenges row; both
+    // routes and the modal must judge against it, not one shared constant.
+    const card = readFileSync(CARD, 'utf8');
+    expect(card).toContain('challenge.targetSeconds ?? TARGET_SECONDS');
+    const attempt = readFileSync(ATTEMPT, 'utf8');
+    expect(attempt).toContain('targetFor(challenge)');
+    const today = readFileSync('src/app/api/challenge/today/route.ts', 'utf8');
+    expect(today).toContain('targetFor(c)');
+  });
+
+  it('a bad or missing stored target can only ever fall back to 90', () => {
+    const src = readFileSync('src/lib/challenge.ts', 'utf8');
+    // Bounds live in targetFor: below 30s no question is honest, above 600s
+    // no clock is felt.
+    expect(src).toMatch(/t >= 30 && t <= 600/);
   });
 
   it('starts on open, not on first tap', () => {
@@ -79,9 +100,10 @@ describe('"x% finished in time" obeys the same density gate as everything else',
     expect(SPLIT_MIN_ATTEMPTS).toBeGreaterThan(1);
   });
 
-  it('measures against the shared target, not a re-typed 90', () => {
+  it('measures against the question\'s own target, not a re-typed 90', () => {
     const src = readFileSync(ATTEMPT, 'utf8');
-    expect(src).toContain('<= TARGET_SECONDS');
+    expect(src).toContain('<= target');
+    expect(src).not.toMatch(/<=\s*90\b/);
   });
 
   it('the student\'s OWN time needs no gate — it is their own data', () => {
@@ -130,11 +152,11 @@ describe('the screen says whose it is', () => {
     expect(header, 'loud line is inside the sheet, not on the card').toBeLessThan(modal);
   });
 
-  it('the card announces the clock BEFORE the question is opened', () => {
-    // A timer nobody was told about is a trap. Read off the shared constant,
-    // never a re-typed 90.
+  it('the card announces each question\'s clock BEFORE it is opened', () => {
+    // A timer nobody was told about is a trap. Every unanswered row wears its
+    // own target chip, read from the row's data, never a re-typed number.
     const src = readFileSync(CARD, 'utf8');
-    expect(src).toContain('{TARGET_SECONDS} seconds');
+    expect(src).toContain('⏱ {c.targetSeconds ?? TARGET_SECONDS}s');
   });
 });
 
@@ -150,11 +172,12 @@ describe('the finished state is a payoff, not a locked door', () => {
 
   it('the list endpoint actually returns the clock data the card reads', () => {
     // The card can only show this if /api/challenge/today sends it; it used to
-    // select neither seconds_taken nor any timing tally.
+    // select neither seconds_taken nor any timing tally. In-time is judged
+    // against each row's own target via the targetById map.
     const src = readFileSync('src/app/api/challenge/today/route.ts', 'utf8');
     expect(src).toContain('seconds_taken');
     expect(src).toContain('inTimePct');
-    expect(src).toContain('<= TARGET_SECONDS');
+    expect(src).toContain('targetById');
   });
 
   it('"x% finished in time" keeps the density gate here too', () => {

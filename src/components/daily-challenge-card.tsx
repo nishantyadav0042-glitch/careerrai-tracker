@@ -130,10 +130,11 @@ export function DailyChallengeCard() {
             <div className="space-y-2">
               {/* The deal, stated BEFORE they open it. A timer nobody was told
                   about is a trap; a timer announced up front is the reason
-                  they stop scrolling and start solving. */}
+                  they stop scrolling and start solving. Each row wears its OWN
+                  clock — a VARC summary races 60s, a QA grind gets its 90. */}
               <p className="text-[12px] font-bold text-stone-900">
-                One question. <span className="text-orange-600">{TARGET_SECONDS} seconds.</span>
-                <span className="ml-1 font-medium text-stone-500">Clock starts when you open it.</span>
+                Beat the clock.
+                <span className="ml-1 font-medium text-stone-500">It starts the moment you open a question.</span>
               </p>
               {challenges.map((c) => (
                 <button
@@ -154,6 +155,11 @@ export function DailyChallengeCard() {
                       </span>
                     )}
                   </span>
+                  {!c.attempt && (
+                    <span className="shrink-0 rounded-md bg-orange-50 px-1.5 py-0.5 text-[11px] font-extrabold text-orange-600">
+                      ⏱ {c.targetSeconds ?? TARGET_SECONDS}s
+                    </span>
+                  )}
                   <span className="shrink-0 text-[11px] font-bold text-orange-600">
                     {c.attempt ? 'Review' : 'Solve'}
                   </span>
@@ -243,7 +249,9 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
     const id = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
     return () => clearInterval(id);
   }, [verdict, startedAt]);
-  const left = TARGET_SECONDS - elapsed;
+  // THIS question's clock — a VARC summary races 60s, a QA grind gets its 90.
+  const target = challenge.targetSeconds ?? TARGET_SECONDS;
+  const left = target - elapsed;
   const overtime = left < 0;
 
   async function submit(choice: number) {
@@ -419,6 +427,7 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
                   section: challenge.section, topic: challenge.topic,
                   text: challenge.question, options: challenge.options,
                   yourSeconds: verdict.yourSeconds ?? null,
+                  targetSeconds: target,
                 },
                 'daily_proof',
               ).then((r) => setShareResult(r))}
@@ -428,7 +437,7 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
                 ? 'Copied — paste it in your group'
                 : verdict.yourSeconds != null && verdict.beatTheClock
                   ? `📤 You did it in ${verdict.yourSeconds}s — dare your friends to beat that`
-                  : '📤 Can your friends crack it in 90 secs? Share it'}
+                  : `📤 Can your friends crack it in ${target} secs? Share it`}
             </button>
             {/* The chain. One question rarely costs the full 90 seconds a
                 student showed up with — so the moment this one is settled,

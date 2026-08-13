@@ -72,6 +72,9 @@ interface RoutineResponse {
     trimmed: boolean;
     reason: string | null;
   } | null;
+  /** Today's recorded mock debrief, if one exists — turns the score door
+   *  into visible proof the save happened. */
+  todayMock?: { overallPercentile: number | null } | null;
 }
 
 // Time budget filters today's list — same tasks, never invented ones.
@@ -146,7 +149,30 @@ function ProgressChoice({
 //
 // The log sheet belongs to a sibling component, so the tap travels the way a
 // finished task already talks to it: one window event.
-function MockScoreButton({ className }: { className?: string }) {
+//
+// AND THE SAVE MUST BE SEEN. Founder, same night, having filled the sheet:
+// "my mock score is getting recorded nowhere — for sure." It was recorded
+// perfectly; the button just still said "Add mock score", which reads as
+// "nothing happened". Once today's debrief exists, the button BECOMES the
+// recorded score and opens the mock history — proof at the exact spot the
+// score went in, and the road to every score before it.
+function MockScoreButton({ className, recorded }: {
+  className?: string;
+  recorded?: { overallPercentile: number | null } | null;
+}) {
+  if (recorded) {
+    return (
+      <Link
+        href="/student/analysis?tab=mocks"
+        className={cn(
+          'inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 transition-transform active:scale-95',
+          className
+        )}
+      >
+        ✓ {recorded.overallPercentile != null ? `${recorded.overallPercentile}%ile saved` : 'Mock saved'} →
+      </Link>
+    );
+  }
   return (
     <button
       type="button"
@@ -490,7 +516,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               door, at the exact moment the paper has actually been sat and
               the score exists. So it survives the fold. */}
           {routine.tasks.some(isMockSitting) && (
-            <div className="mt-3 flex justify-center"><MockScoreButton /></div>
+            <div className="mt-3 flex justify-center"><MockScoreButton recorded={data.todayMock} /></div>
           )}
 
           {/* Stage A: the door a finished floor-day opens. The plan is small
@@ -605,7 +631,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                           ⇄ Swap
                         </button>
                       )}
-                      {isMockSitting(task) && <MockScoreButton className="mt-0.5" />}
+                      {isMockSitting(task) && <MockScoreButton className="mt-0.5" recorded={data.todayMock} />}
                     </div>
                     {markingTaskId === task.id && !done && (
                       <div className="rounded-b-2xl bg-stone-100/70">
@@ -679,7 +705,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                         ⇄ Swap
                       </button>
                     )}
-                    {isMockSitting(task) && <MockScoreButton />}
+                    {isMockSitting(task) && <MockScoreButton recorded={data.todayMock} />}
                   </div>
                   {markingTaskId === task.id && !done && (
                     <div className="rounded-b-xl bg-stone-100/70">

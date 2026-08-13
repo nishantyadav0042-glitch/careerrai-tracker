@@ -173,6 +173,24 @@ describe('a mock must always have a door of its own', () => {
     expect(modal).toContain('if (openWithMock) setMockTaken(true)');
   });
 
+  it('a saved score is SHOWN saved, at the spot it went in', () => {
+    // Founder, 13 Aug, having just filled the sheet: "my mock score is
+    // getting recorded nowhere — for sure." The row was in mock_debriefs,
+    // percentiles correct — but the button still said "Add mock score", and
+    // a save the student cannot see is indistinguishable from one that
+    // failed. Once today's debrief exists the button becomes the recorded
+    // percentile and links to the mock history.
+    const card = readFileSync(CARD_SRC, 'utf8');
+    expect(card).toContain('%ile saved');
+    expect(card).toContain('/student/analysis?tab=mocks');
+    const route = readFileSync('src/app/api/routine/today/route.ts', 'utf8');
+    expect(route).toContain('todayMock');
+    // And the proof appears within one breath of Submit — the debrief POST
+    // busts the plan card's 30s cache via the shared refresh event.
+    const app = readFileSync(APP, 'utf8');
+    expect(app).toMatch(/pending-debrief[\s\S]{0,700}cr-routine-updated/);
+  });
+
   it('the plan card and the sheet are wired to the same event name', () => {
     // They are siblings, not parent and child — a typo in either string
     // would silently produce a button that does nothing at all.

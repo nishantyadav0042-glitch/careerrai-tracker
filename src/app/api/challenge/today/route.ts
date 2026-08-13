@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { activeChallengeDate, SPLIT_MIN_ATTEMPTS, TARGET_SECONDS, type ChallengeView } from '@/lib/challenge';
+import { activeChallengeDate, SPLIT_MIN_ATTEMPTS, targetFor, type ChallengeView } from '@/lib/challenge';
 
 export const maxDuration = 30;
 
@@ -23,7 +23,7 @@ export async function GET() {
 
   const { data: challenges } = await admin
     .from('daily_challenges')
-    .select('id, section, topic, question, options, correct_index, difficulty, explanation, source, contributor_id')
+    .select('id, section, topic, question, options, correct_index, difficulty, explanation, source, contributor_id, target_seconds')
     .eq('status', 'live').eq('live_date', date)
     .order('section');
 
@@ -67,7 +67,9 @@ export async function GET() {
 
   // Correctness and the clock, tallied together — the card's finished state
   // reports both, and reporting them from two different reads is how they
-  // start disagreeing.
+  // start disagreeing. "In time" is judged against EACH question's own clock
+  // (target_seconds), never one shared 90.
+  const targetById = new Map(challenges.map((c) => [c.id as string, targetFor(c)]));
   const stats = new Map<string, { total: number; correct: number; timed: number; inTime: number }>();
   for (const a of allAttempts ?? []) {
     const s = stats.get(a.challenge_id as string) ?? { total: 0, correct: 0, timed: 0, inTime: 0 };
@@ -75,7 +77,7 @@ export async function GET() {
     if (a.is_correct) s.correct += 1;
     if (typeof a.seconds_taken === 'number') {
       s.timed += 1;
-      if ((a.seconds_taken as number) <= TARGET_SECONDS) s.inTime += 1;
+      if ((a.seconds_taken as number) <= (targetById.get(a.challenge_id as string) ?? 90)) s.inTime += 1;
     }
     stats.set(a.challenge_id as string, s);
   }
@@ -85,6 +87,7 @@ export async function GET() {
     const st = stats.get(c.id as string) ?? { total: 0, correct: 0, timed: 0, inTime: 0 };
     const contributed = c.contributor_id ? nameById.get(c.contributor_id as string) : null;
     const yourSeconds = typeof my?.seconds_taken === 'number' ? (my.seconds_taken as number) : null;
+    const target = targetFor(c);
     return {
       id: c.id as string,
       section: c.section as string,
@@ -92,6 +95,7 @@ export async function GET() {
       question: c.question as string,
       options: (c.options as string[]) ?? [],
       difficulty: c.difficulty as string,
+      targetSeconds: target,
       contributorName: isCuratedName(contributed) ? null : (contributed as string),
       attempt: my ? {
         choice: Number(my.choice),
@@ -102,10 +106,10 @@ export async function GET() {
         attemptCount: st.total,
         coverageStatus: coverageByTopic.get(c.topic as string) ?? 'not_started',
         // The clock's result, so a student who already answered still sees
-        // what the 90 seconds bought them. Same density gate as every other
+        // what the clock bought them. Same density gate as every other
         // community percentage — below it we show their own time only.
         yourSeconds,
-        beatTheClock: yourSeconds == null ? null : yourSeconds <= TARGET_SECONDS,
+        beatTheClock: yourSeconds == null ? null : yourSeconds <= target,
         inTimePct: st.timed >= SPLIT_MIN_ATTEMPTS ? Math.round((st.inTime / st.timed) * 100) : null,
       } : null,
     };

@@ -445,8 +445,24 @@ export async function GET() {
     reason: null as string | null,
   };
 
+  // Proof the mock landed. Founder, 13 Aug, after filling the score sheet:
+  // "my mock score is getting recorded nowhere — for sure." It WAS recorded
+  // (mock_debriefs row, correct percentiles) — but nothing on the screen he
+  // filled it from ever said so, and a save the student cannot see is
+  // indistinguishable from a save that failed. The card uses this to turn
+  // the mock task's button into the recorded score.
+  const { data: todayDebrief } = await admin
+    .from('mock_debriefs')
+    .select('overall_percentile')
+    .eq('student_id', user.id)
+    .eq('log_date', today)
+    .maybeSingle();
+
   return NextResponse.json({
     routine: { ...routine, tasks: tasksWithStatus },
+    todayMock: todayDebrief
+      ? { overallPercentile: todayDebrief.overall_percentile != null ? Number(todayDebrief.overall_percentile) : null }
+      : null,
     todayBudget,
     because,
     whySummary,

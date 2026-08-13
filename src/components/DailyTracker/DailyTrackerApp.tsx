@@ -272,6 +272,11 @@ export function DailyTrackerApp({
         }
       } catch { /* best-effort — the log itself already saved */ }
       queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
+      // The plan card must show the save IMMEDIATELY — its "Add mock score"
+      // button becomes "✓ 99%ile saved" off /api/routine/today, which sits
+      // behind a 30s cache. A save the student cannot see within one breath
+      // of tapping Submit reads as a save that failed (founder, 13 Aug).
+      try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* noop */ }
     }
     return { mockSelected };
   };

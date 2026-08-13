@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { activeChallengeDate, SPLIT_MIN_ATTEMPTS, TARGET_SECONDS } from '@/lib/challenge';
+import { activeChallengeDate, SPLIT_MIN_ATTEMPTS, targetFor } from '@/lib/challenge';
 import { getLogDateString } from '@/lib/streak-utils';
 
 export const maxDuration = 30;
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: challenge } = await admin
     .from('daily_challenges')
-    .select('id, live_date, status, section, topic, options, correct_index, difficulty, explanation')
+    .select('id, live_date, status, section, topic, options, correct_index, difficulty, explanation, target_seconds')
     .eq('id', challengeId).maybeSingle();
 
   // Only the active day's live challenge is answerable — yesterday's stays
@@ -78,11 +78,14 @@ export async function POST(request: NextRequest) {
   const correct = (allAttempts ?? []).filter((a) => a.is_correct).length;
 
   // "x% finished in time" — the number that makes the clock mean something.
-  // Only counts attempts that actually recorded a duration, and rides the SAME
-  // density gate as the correctness split: a percentage over three people
-  // reports how few of us there are, not how hard the question is.
+  // Judged against THIS question's own clock (target_seconds — a VARC summary
+  // races 60s, a QA grind gets its 90). Only counts attempts that actually
+  // recorded a duration, and rides the SAME density gate as the correctness
+  // split: a percentage over three people reports how few of us there are,
+  // not how hard the question is.
+  const target = targetFor(challenge);
   const timed = (allAttempts ?? []).filter((a) => typeof a.seconds_taken === 'number');
-  const inTime = timed.filter((a) => (a.seconds_taken as number) <= TARGET_SECONDS).length;
+  const inTime = timed.filter((a) => (a.seconds_taken as number) <= target).length;
 
   return NextResponse.json({
     isCorrect,
@@ -91,8 +94,8 @@ export async function POST(request: NextRequest) {
     communityCorrectPct: total >= SPLIT_MIN_ATTEMPTS ? Math.round((correct / total) * 100) : null,
     inTimePct: timed.length >= SPLIT_MIN_ATTEMPTS ? Math.round((inTime / timed.length) * 100) : null,
     yourSeconds: secs,
-    targetSeconds: TARGET_SECONDS,
-    beatTheClock: secs != null ? secs <= TARGET_SECONDS : null,
+    targetSeconds: target,
+    beatTheClock: secs != null ? secs <= target : null,
     attemptCount: total,
     topic: challenge.topic,
     coverageStatus: (cov?.status as string) ?? 'not_started',

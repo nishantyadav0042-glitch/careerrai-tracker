@@ -31,6 +31,24 @@ export function activeChallengeDate(now: Date = new Date()): string {
 // stop someone opening it tomorrow.
 export const TARGET_SECONDS = 90;
 
+// ── The clock must fit the question (founder, 13 Aug) ───────────────────────
+// He solved a VARC summary in 31 of its 90 seconds: no rush felt, so no dare
+// worth sharing — "if they didn't feel the rush of the clock, no one will
+// share." Each question row carries target_seconds (default 90); TARGET_SECONDS
+// above is only the fallback for rows and attempts from before this shipped.
+//
+// CALIBRATION RULE for anyone writing questions: a prepared student should
+// need ~60–80% of the target — the founder's brief verbatim: "a bit tough to
+// solve in 90 seconds but not too hard… it should take at least 1 minute."
+// A clock nobody beats kills sharing as surely as one nobody feels:
+//   QA    90s — multi-step computation earns the full minute and a half
+//   DILR  90s — reading the setup is part of the solve
+//   VARC  60s — reading is fast; elimination is the whole game
+export function targetFor(row: { target_seconds?: number | null }): number {
+  const t = Number(row.target_seconds);
+  return Number.isFinite(t) && t >= 30 && t <= 600 ? t : TARGET_SECONDS;
+}
+
 export const SPLIT_MIN_ATTEMPTS = 20;
 
 
@@ -41,6 +59,8 @@ export interface ChallengeView {
   question: string;
   options: string[];
   difficulty: string;
+  /** This question's own clock — see targetFor(). */
+  targetSeconds: number;
   /** Set when a student contributed it — their public credit. */
   contributorName: string | null;
   /** The student's own attempt, if any. Null until answered. */
