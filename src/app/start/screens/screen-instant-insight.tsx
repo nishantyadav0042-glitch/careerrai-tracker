@@ -58,46 +58,67 @@ const POLARITY_STYLE: Record<PrepSignal['polarity'], { icon: typeof AlertTriangl
   strength: { icon: CheckCircle2, border: 'border-emerald-300', bg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
 };
 
-function Card({ card, label, hero }: { card: PrepSignal; label: string; hero?: boolean }) {
+/** The hero. One realization, its evidence, the feeling it names, and what
+ *  changes because of it — in that order, and visually dominant. The student
+ *  should remember ONE thing from this screen, so only this card gets room. */
+function HeroCard({ card }: { card: PrepSignal }) {
   const style = POLARITY_STYLE[card.polarity];
   const Icon = style.icon;
   return (
-    <div className={`rounded-2xl border-2 ${style.border} ${style.bg} ${hero ? 'p-4' : 'p-3.5'}`}>
-      <div className="flex items-start gap-2.5">
-        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${style.iconColor}`} />
+    <div className={`rounded-2xl border-2 ${style.border} ${style.bg} p-5`}>
+      <div className="flex items-start gap-3">
+        <Icon className={`mt-1 h-5 w-5 shrink-0 ${style.iconColor}`} />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{label}</p>
-          <p className={`mt-0.5 font-semibold leading-snug text-stone-900 ${hero ? 'text-[15.5px]' : 'text-sm'}`}>{card.headline}</p>
+          <h2 className="text-[19px] font-bold leading-[1.25] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+            {card.headline}
+          </h2>
           {card.stats && card.stats.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+            <div className="mt-3 space-y-1">
               {card.stats.map((st) => (
-                <span key={st} className="font-mono text-[11px] text-stone-600">{st}</span>
+                <p key={st} className="font-mono text-[12px] leading-snug text-stone-700">{st}</p>
               ))}
             </div>
           )}
-          {card.note && <p className="mt-1 text-[12px] leading-snug text-stone-600">{card.note}</p>}
+          {card.note && <p className="mt-3 text-[13.5px] leading-relaxed text-stone-700">{card.note}</p>}
         </div>
       </div>
+      {card.action && (
+        <div className="mt-4 border-t border-stone-900/10 pt-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">What we&apos;ll do</p>
+          <p className="mt-1 text-[13.5px] font-medium leading-snug text-stone-900">{card.action}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Secondary findings — deliberately one quiet line each. They exist so the
+ *  screen feels complete, never to compete with the hero for attention. */
+function MinorLine({ card }: { card: PrepSignal }) {
+  const dot = card.polarity === 'strength' ? 'bg-emerald-500' : card.polarity === 'risk' ? 'bg-red-500' : 'bg-orange-500';
+  return (
+    <div className="flex items-start gap-2.5 py-1.5">
+      <span className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+      <p className="text-[13px] leading-snug text-stone-700">{card.headline}</p>
     </div>
   );
 }
 
 /** Coverage per section, weighted WITHIN each section — never summed across
- *  them. `weightage` means "relative emphasis within its OWN section", so one
- *  cross-section percentage would be a fabricated paper distribution. */
+ *  them, because `weightage` means "relative emphasis within its OWN
+ *  section". Shows the weighted figure rather than a topic count: finishing
+ *  20 light topics and 20 heavy ones are not the same preparation, and the
+ *  count says they are. */
 function SectionBars({ coverage }: { coverage: SectionCoverage[] }) {
   return (
     <div className="space-y-2 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Where you stand</p>
       {coverage.map((s) => (
-        <div key={s.sec} className="flex items-center gap-2">
+        <div key={s.sec} className="flex items-center gap-2.5">
           <span className="w-11 shrink-0 text-xs font-bold text-stone-600">{s.sec}</span>
-          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-stone-200">
-            <div className="h-full bg-emerald-500" style={{ width: `${s.donePct}%` }} />
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-200">
+            <div className="h-full rounded-full bg-stone-700" style={{ width: `${s.donePct}%` }} />
           </div>
-          <span className="w-20 shrink-0 text-right font-mono text-[11px] text-stone-500">
-            {s.finishedCount}/{s.totalCount} done
-          </span>
+          <span className="w-9 shrink-0 text-right font-mono text-[11px] tabular-nums text-stone-500">{s.donePct}%</span>
         </div>
       ))}
     </div>
@@ -110,16 +131,22 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, ambit
     matrix, ambitionDate, selfStudyHours: selfStudyHours ?? null,
     isRepeater: isRepeater ?? null, lastYearPercentile, today,
   });
-  const { state, sectionCoverage, cards, strength, startingPoints, synthesis } = result;
+  const { state, sectionCoverage, cards, strength, startingPoints } = result;
 
-  const heroLabel = (c: PrepSignal) => (c.polarity === 'risk' && c.severity >= 8 ? 'YOUR BIGGEST RISK' : 'WHAT STANDS OUT');
+  // ONE realization gets the room; everything else is a quiet line. The
+  // previous three-equal-cards grid meant the student remembered nothing —
+  // three findings of identical visual weight read as a report, not a
+  // reveal. `synthesis` is deliberately unused now: the hero's own "what
+  // we'll do" says it better than a concatenated sentence at the bottom.
+  const hero = cards[0] ?? strength ?? null;
+  const minor = [...cards.slice(1), ...(strength && hero !== strength ? [strength] : [])];
 
   return (
     <div className="space-y-4 pt-1">
       <div>
         <p className="text-[11px] font-bold uppercase tracking-widest text-orange-500">Your first insight — free, before signup</p>
         <h1 className="mt-1 text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {state === 'insufficient_evidence' ? 'You\u2019re right at the start.' : "Here's what your prep actually looks like."}
+          {state === 'insufficient_evidence' ? 'You\u2019re right at the start.' : 'We found something in your prep.'}
         </h1>
       </div>
 
@@ -129,17 +156,18 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, ambit
               to diagnose yet — and then giving them a real first move — is
               more trustworthy than dressing up "VARC is untouched" as a
               discovery they made themselves 30 seconds ago. */}
-          <div className="rounded-2xl border-2 border-stone-300 bg-stone-50 p-4">
-            <p className="text-sm font-semibold leading-snug text-stone-900">
-              We don&apos;t have enough of your history yet to name a real weakness.
-            </p>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-              That&apos;s normal this early — and your first job isn&apos;t fixing weaknesses, it&apos;s building a baseline.
+          <div className="rounded-2xl border-2 border-stone-300 bg-stone-50 p-5">
+            <h2 className="text-[18px] font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+              We won&apos;t invent a weakness you haven&apos;t shown us yet.
+            </h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-stone-700">
+              You&apos;ve mapped your syllabus, but there isn&apos;t enough history yet to name a real pattern.
+              Your first job isn&apos;t fixing weaknesses — it&apos;s building a baseline worth reading.
             </p>
           </div>
           {startingPoints.length > 0 && (
             <div className="rounded-2xl border border-stone-200 bg-white p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Where to start</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Where we&apos;ll start you</p>
               <div className="mt-2 space-y-1.5">
                 {startingPoints.map((sp) => (
                   <div key={sp.sec} className="flex items-baseline gap-2.5 text-sm">
@@ -148,28 +176,24 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, ambit
                   </div>
                 ))}
               </div>
-              <p className="mt-2 text-[11.5px] text-stone-500">
-                High-priority in their section, and nothing has to come first.
+              <p className="mt-2.5 text-[11.5px] leading-snug text-stone-500">
+                Highest-priority in their section, and nothing has to come before them.
               </p>
             </div>
           )}
         </>
       ) : (
         <>
-          <SectionBars coverage={sectionCoverage} />
+          {hero && <HeroCard card={hero} />}
 
-          <div className="space-y-2.5">
-            {cards.map((card, i) => (
-              <Card key={card.key} card={card} hero={i === 0} label={i === 0 ? heroLabel(card) : 'ALSO WORTH KNOWING'} />
-            ))}
-            {strength && <Card card={strength} label="WORTH PROTECTING" />}
-          </div>
-
-          {synthesis && (
-            <p className="px-1 text-[13px] font-medium leading-snug text-stone-700">
-              {synthesis.charAt(0).toUpperCase() + synthesis.slice(1)}.
-            </p>
+          {minor.length > 0 && (
+            <div className="rounded-2xl border border-stone-200 bg-white px-4 py-2.5">
+              <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-500">Also noticed</p>
+              {minor.map((c) => <MinorLine key={c.key} card={c} />)}
+            </div>
           )}
+
+          <SectionBars coverage={sectionCoverage} />
         </>
       )}
 

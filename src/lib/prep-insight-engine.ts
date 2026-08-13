@@ -80,11 +80,24 @@ export interface PrepSignal {
    * connected. This is what separates insight from a mirror.
    */
   nonObvious: number;
+  /**
+   * The CONSEQUENCE, not the count. This is the one line the student
+   * remembers, so it states what their data MEANS — "You're collecting
+   * topics, not finishing them" — never what it says: "14 opened, 1
+   * finished". The facts belong in `stats` directly underneath, where they
+   * prove the headline instead of being the headline.
+   */
   headline: string;
-  /** Short evidence lines — numbers, not prose. */
+  /** The numbers that prove the headline. Numbers, never prose. */
   stats?: string[];
-  /** One short line: why it matters / what changes. */
+  /**
+   * The recognition line — names a feeling the student already has, so the
+   * card lands as "that's exactly what's happening to me" rather than as a
+   * statistic. The strongest single sentence on any card.
+   */
   note?: string;
+  /** What CareerRai will actually do about it. Concrete, always achievable. */
+  action?: string;
   /** 3-6 words, feeds the closing synthesis line. */
   recommend: string;
 }
@@ -327,8 +340,9 @@ const detectTimeline: Detector = (ctx) => {
     return {
       key: 'timeline-passed', rootCause: 'timeline', polarity: 'risk',
       severity: 9, confidence: 10, nonObvious: 3,
-      headline: `That finish date has already passed.`,
-      note: 'Pick a new target date and the plan rebuilds around it.',
+      headline: `Your plan is pointing at a date that's already gone.`,
+      note: 'Everything downstream — daily load, revision, mocks — is being sized against it.',
+      action: 'Pick a new date and the whole plan rebuilds around it.',
       recommend: 'set a new target date',
     };
   }
@@ -336,9 +350,10 @@ const detectTimeline: Detector = (ctx) => {
     return {
       key: 'timeline-impossible', rootCause: 'timeline', polarity: 'risk',
       severity: 10, confidence: 10, nonObvious: 9,
-      headline: `Your current scope doesn't fit this date.`,
-      stats: [`~${t.remainingHours}h of syllabus left`, `~${t.availableHours}h before your date`],
-      note: 'Either the date moves, or the scope does. The plan can do either.',
+      headline: `This date can't hold your syllabus.`,
+      stats: [`~${t.remainingHours}h of study left`, `~${t.availableHours}h before your date`],
+      note: `It isn't a matter of trying harder — the hours don't exist between here and there.`,
+      action: 'Either the date moves or the scope shrinks. The plan can do either.',
       recommend: 'move the date or cut scope',
     };
   }
@@ -350,21 +365,39 @@ const detectTimeline: Detector = (ctx) => {
     const committed = t.committedPerDay ?? 0;
     const days = committed > 0 ? Math.round(t.availableHours / committed) : 0;
     const extra = Math.max(0.5, Math.round((t.requiredPerDay - committed) * 2) / 2);
+
+    // Severity scales with the size of the gap. A half-hour a day is not
+    // "YOUR BIGGEST RISK" — labelling it that way once cost the whole screen
+    // its credibility, because the student can see it's noise.
+    const severity = extra >= 3 ? 9 : extra >= 1.5 ? 7 : 4;
+
+    // Never advise the impossible. "Find ~9.5h/day" is arithmetically true
+    // and humanly absurd — the same failure as the old "390h/day", just
+    // inside the sane range. Past ~3h of catch-up the honest advice is that
+    // the date has to move.
+    const action = extra > 3
+      ? 'Realistically this date needs to move — the plan will suggest one that fits.'
+      : `Find ~${extra}h/day, or move the date a little. The plan handles both.`;
+
     return {
       key: 'timeline-tight', rootCause: 'timeline', polarity: 'risk',
-      severity: 8, confidence: 10, nonObvious: 9,
-      headline: `This date needs ~${t.requiredPerDay}h/day — you planned ${committed}h.`,
-      stats: [`~${t.remainingHours}h of syllabus left`, `${committed}h/day × ${days} days`],
-      recommend: `find ~${extra}h/day or move the date`,
+      severity, confidence: 10, nonObvious: 8,
+      headline: extra >= 1.5
+        ? `Your hours and your date don't agree.`
+        : `You're a little behind your own date — nothing dramatic.`,
+      stats: [`needs ~${t.requiredPerDay}h/day`, `you planned ${committed}h/day`, `~${t.remainingHours}h left over ${days} days`],
+      action,
+      recommend: extra > 3 ? 'move the date to one that fits' : `find ~${extra}h/day or shift the date`,
     };
   }
   if (t.state === 'comfortable') {
     return {
       key: 'timeline-comfortable', rootCause: 'timeline', polarity: 'strength',
       severity: 6, confidence: 10, nonObvious: 7,
-      headline: `You have more time than your current scope needs.`,
-      stats: [`~${t.remainingHours}h of syllabus left`, `~${t.sparePerDay}h/day spare`],
-      note: 'Spend the slack on mocks, not on more topics.',
+      headline: `Time isn't your problem.`,
+      stats: [`~${t.remainingHours}h of study left`, `~${t.sparePerDay}h/day spare`],
+      note: `Most students are fighting the calendar. You aren't — which changes what you should spend the extra on.`,
+      action: 'The plan will put your spare hours into mocks, not more topics.',
       recommend: 'put the spare hours into mocks',
     };
   }
@@ -378,8 +411,13 @@ const detectFoundation: Detector = (ctx) => {
   return {
     key: 'foundation-gap', rootCause: 'foundation', polarity: 'risk',
     severity: 8, confidence: 9, nonObvious: 10,
-    headline: `You're ${g.status === 'learning' ? 'learning' : g.status === 'revising' ? 'revising' : 'practising'} ${g.topic}, but ${g.root}${depthPhrase} is untouched.`,
-    note: `${g.root} comes first — that's why the hard questions feel random.`,
+    headline: `You're building on an incomplete foundation.`,
+    stats: [
+      `${g.topic} → ${g.status === 'learning' ? 'learning' : g.status === 'revising' ? 'revising' : 'practising'}`,
+      `${g.root}${depthPhrase} → untouched`,
+    ],
+    note: `That's why the hard questions feel random — you're above your own base.`,
+    action: `The plan puts ${g.root} first, then unlocks ${g.topic}.`,
     recommend: `start ${g.root} before more ${g.topic}`,
   };
 };
@@ -393,8 +431,13 @@ const detectImbalance: Detector = (ctx) => {
   if (strongest.sec === weakest.sec) return null;
   const strongPct = strongest.weightTotal > 0 ? Math.round((strongest.weightDone / strongest.weightTotal) * 100) : 0;
   const weakPct = weakest.weightTotal > 0 ? Math.round((weakest.weightDone / weakest.weightTotal) * 100) : 0;
-  // Real depth on one side, near-nothing on the other.
-  if (strongest.finished.length < 4 || strongPct - weakPct < 35) return null;
+  // Real work on one side, near-nothing on the other. Two fully dormant
+  // sections is itself the signal, so it qualifies at a lower gap than a
+  // merely-lopsided student would — that case left a genuinely useful
+  // finding hidden behind thresholds tuned for someone much further along.
+  const dormantCount = ctx.bySection.filter((x) => x.finished.length === 0 && x.learning.length === 0).length;
+  const qualifies = strongest.finished.length >= 3 && (strongPct - weakPct >= 35 || (dormantCount >= 2 && strongPct - weakPct >= 20));
+  if (!qualifies) return null;
 
   const dormant = ctx.bySection.filter((s) => s.finished.length === 0 && s.learning.length === 0).map((s) => s.sec);
   const dormantPhrase = dormant.length === 2 ? `${dormant[0]} and ${dormant[1]} haven't started` : `${weakest.sec} has barely started`;
@@ -402,9 +445,10 @@ const detectImbalance: Detector = (ctx) => {
   return {
     key: 'imbalance-strategic', rootCause: 'imbalance', polarity: 'pattern',
     severity: 7, confidence: 8, nonObvious: 8,
-    headline: `You've built real depth in ${strongest.sec}, but ${dormantPhrase}.`,
-    stats: [`${strongest.sec} ${strongPct}%`, `${weakest.sec} ${weakPct}%`],
-    note: `Another hour in ${strongest.sec} is worth less right now than the first hour in ${weakest.sec}.`,
+    headline: `Your next hour in ${weakest.sec} is worth more than your next five in ${strongest.sec}.`,
+    stats: [`${strongest.sec} ${strongPct}% covered`, `${weakest.sec} ${weakPct}%`],
+    note: `${dormantPhrase.charAt(0).toUpperCase() + dormantPhrase.slice(1)} — and every section is scored separately.`,
+    action: `The plan will hold ${strongest.sec} steady and open ${weakest.sec}.`,
     recommend: `move your next hours into ${weakest.sec}`,
   };
 };
@@ -431,8 +475,10 @@ const detectHighValueNeglect: Detector = (ctx) => {
   return {
     key: 'high-value-neglect', rootCause: 'high_value_neglect', polarity: 'pattern',
     severity: 7, confidence: 8, nonObvious: 8,
-    headline: `In ${best.sec}, ${names} matter more than everything you've finished there.`,
-    note: `They're among the highest-priority topics in ${best.sec} and both are still closed.`,
+    headline: `You've finished the easier half of ${best.sec}.`,
+    stats: [`still closed: ${names}`],
+    note: `Those are the ones ${best.sec} is actually built on — and they're the ones still shut.`,
+    action: `The plan opens ${best.heavy[0].topic} before anything lighter.`,
     recommend: `start ${best.heavy[0].topic} next`,
   };
 };
@@ -447,8 +493,10 @@ const detectRcNeglect: Detector = (ctx) => {
   return {
     key: 'rc-neglect', rootCause: 'high_value_neglect', polarity: 'pattern',
     severity: 6, confidence: 8, nonObvious: 7,
-    headline: `You've started ${vaTouched} smaller VARC topics but not Reading Comprehension.`,
-    note: `RC is the largest block in VARC — the small ones can't cover for it.`,
+    headline: `You're polishing the small VARC questions and leaving the big one shut.`,
+    stats: [`${vaTouched} smaller VARC topics started`, `Reading Comprehension → not in practice`],
+    note: `RC is the largest block in VARC. The small ones can't cover for it.`,
+    action: 'The plan brings Reading Comprehension in first.',
     recommend: 'bring Reading Comprehension into practice',
   };
 };
@@ -460,8 +508,10 @@ const detectCoachingSequenceTrap: Detector = (ctx) => {
   return {
     key: 'coaching-trap', rootCause: 'high_value_neglect', polarity: 'pattern',
     severity: 6, confidence: 7, nonObvious: 8,
-    headline: `${hard.finished} harder QA chapters done, ${arith.untouched} Arithmetic topics still closed.`,
-    note: `Arithmetic is QA's broadest scoring block — this is the classic coaching sequence.`,
+    headline: `You've been following the coaching order, not the scoring order.`,
+    stats: [`${hard.finished} harder QA chapters done`, `${arith.untouched} Arithmetic topics closed`],
+    note: `Arithmetic is QA's broadest block — coaching usually reaches it last.`,
+    action: 'The plan reorders around Arithmetic first.',
     recommend: 'start Arithmetic next',
   };
 };
@@ -472,8 +522,10 @@ const detectUnfinished: Detector = (ctx) => {
   return {
     key: 'unfinished-pile', rootCause: 'unfinished', polarity: 'pattern',
     severity: 7, confidence: 8, nonObvious: 6,
-    headline: `${totalLearning + totalFinished} topics opened, only ${totalFinished} finished.`,
-    note: `Opening more topics adds breadth without adding readiness. Close loops first.`,
+    headline: `You're collecting topics, not finishing them.`,
+    stats: [`${totalLearning + totalFinished} opened`, `${totalFinished} actually finished`],
+    note: `Half-learned feels like progress on a checklist and scores nothing on the paper.`,
+    action: 'The plan closes what\u2019s open before it opens anything new.',
     recommend: 'close open topics before opening new ones',
   };
 };
@@ -490,9 +542,10 @@ const detectDifficultySkew: Detector = (ctx) => {
   return {
     key: 'difficulty-skew', rootCause: 'difficulty', polarity: 'pattern',
     severity: 6, confidence: 6, nonObvious: 8,
-    headline: `What's left is measurably harder than what you've finished.`,
+    headline: `Your pace is about to slow down.`,
     stats: [`finished avg difficulty ${finishedAvg.toFixed(1)}`, `remaining avg ${untouchedAvg.toFixed(1)}`],
-    note: `Your pace will slow from here — the plan accounts for that.`,
+    note: `The easy half is behind you. Same hours will start covering fewer topics.`,
+    action: 'The plan budgets more time per topic from here.',
     recommend: 'expect slower going on what remains',
   };
 };
@@ -508,8 +561,10 @@ const detectMockNoErrorLog: Detector = (ctx) => {
   return {
     key: 'mock-no-log', rootCause: 'mock_readiness', polarity: 'risk',
     severity: 7, confidence: 9, nonObvious: 7,
-    headline: `You take mocks but ${logMissing ? 'keep no error log' : 'skip the analysis'}.`,
-    note: `Without it the same mistakes come back on the next mock.`,
+    headline: `You're paying for mocks and not collecting the lesson.`,
+    stats: [`mocks → yes`, `${logMissing ? 'error log' : 'mock analysis'} → not started`],
+    note: `Without it the same mistakes come back on the next one, and the score sits still.`,
+    action: 'The plan adds a short debrief after every mock.',
     recommend: 'start an error log from the next mock',
   };
 };
@@ -521,13 +576,22 @@ const detectNeverMocked: Detector = (ctx) => {
   // of never mocking — stay silent rather than accuse.
   if (fullMocks == null) return null;
   if (fullMocks !== 'not_started') return null;
-  // The more finished, the more serious never having tested any of it is.
+  // Same fact, two very different students. Someone deep into the syllabus
+  // has EARNED the next step and should hear it that way; someone earlier is
+  // being warned. Reporting the empty checkbox identically to both was the
+  // single most-repeated dull card in the audit.
   const heavy = ctx.totalFinished >= 20;
   return {
     key: 'never-mocked', rootCause: 'mock_readiness', polarity: 'risk',
-    severity: heavy ? 9 : 7, confidence: 9, nonObvious: 6,
-    headline: `${ctx.totalFinished} topics finished, not one full mock.`,
-    note: `You've prepared a syllabus, not an exam — those are different skills.`,
+    severity: heavy ? 9 : 7, confidence: 9, nonObvious: heavy ? 8 : 6,
+    headline: heavy
+      ? `You've done the hard part. You just don't know what it's worth yet.`
+      : `You're preparing a syllabus, not an exam.`,
+    stats: [`${ctx.totalFinished} topics finished`, `full mocks → none`],
+    note: heavy
+      ? `Coverage this deep with no mock means your score is still a guess — to you and to us.`
+      : `Studying and testing are different skills, and only one of them is scored in November.`,
+    action: 'The plan schedules your first full mock this week.',
     recommend: 'take one full mock this week',
   };
 };
@@ -550,9 +614,10 @@ const detectSectionStrength: Detector = (ctx) => {
   return {
     key: 'section-strength', rootCause: 'imbalance', polarity: 'strength',
     severity: pct >= 60 ? 6 : 4, confidence: 9, nonObvious: 5,
-    headline: `${strongest.sec} is genuinely ahead — ${strongest.mastered.length} topics already in revision.`,
-    stats: [`${pct}% of ${strongest.sec} covered`],
-    note: `The plan will protect this, not restart it.`,
+    headline: `${strongest.sec} is real progress — not just activity.`,
+    stats: [`${strongest.mastered.length} topics in revision`, `${pct}% of ${strongest.sec} covered`],
+    note: `Revision stage is the part most students never reach. This is worth defending.`,
+    action: `The plan holds ${strongest.sec} on light revision instead of restarting it.`,
     recommend: `hold ${strongest.sec} with light revision`,
   };
 };
@@ -566,8 +631,10 @@ const detectMockHygiene: Detector = (ctx) => {
   return {
     key: 'mock-hygiene', rootCause: 'mock_readiness', polarity: 'strength',
     severity: 6, confidence: 9, nonObvious: 6,
-    headline: `You already mock, analyse, and keep an error log.`,
-    note: `That loop is what actually moves scores — most students skip two of the three.`,
+    headline: `Your testing loop is already right.`,
+    stats: [`mocks + analysis + error log — all running`],
+    note: `Most students run one of those three. Running all three is what actually moves a score.`,
+    action: 'The plan keeps this weekly and builds around it.',
     recommend: 'keep the mock loop weekly',
   };
 };
@@ -578,16 +645,38 @@ const detectSequencingStrength: Detector = (ctx) => {
   return {
     key: 'sequencing-strength', rootCause: 'foundation', polarity: 'strength',
     severity: 5, confidence: 8, nonObvious: 7,
-    headline: `Every topic you've opened has its foundation in place.`,
-    note: `Nothing you're practising is built on a gap — rarer than it sounds.`,
+    headline: `You've been building in the right order.`,
+    stats: [`no foundation gaps across ${ctx.totalFinished} topics`],
+    note: `Nothing you're practising sits on top of something you skipped — rarer than it sounds.`,
+    action: 'The plan keeps following your sequence rather than resetting it.',
     recommend: 'keep following the sequence',
+  };
+};
+
+const detectFinalStretch: Detector = (ctx) => {
+  const totalTopics = ctx.bySection.reduce((n, s) => n + s.entries.length, 0);
+  if (totalTopics === 0) return null;
+  const covered = ctx.bySection.reduce((n, s) => n + s.weightDone, 0);
+  const total = ctx.bySection.reduce((n, s) => n + s.weightTotal, 0);
+  const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
+  if (pct < 65) return null;
+  const left = ctx.bySection.reduce((n, s) => n + s.untouched.length + s.learning.length, 0);
+  if (left === 0) return null;
+  return {
+    key: 'final-stretch', rootCause: 'unfinished', polarity: 'pattern',
+    severity: 6, confidence: 9, nonObvious: 7,
+    headline: `You're closer to the end of the syllabus than the start.`,
+    stats: [`${left} topic${left === 1 ? '' : 's'} still open`],
+    note: `From here the risk stops being coverage and starts being retention — what you finished in June is fading while you finish July.`,
+    action: 'The plan shifts from covering new topics to holding the ones you have.',
+    recommend: 'switch from covering to consolidating',
   };
 };
 
 const RISK_DETECTORS: Detector[] = [
   detectTimeline, detectFoundation, detectImbalance, detectHighValueNeglect,
   detectRcNeglect, detectCoachingSequenceTrap, detectUnfinished, detectDifficultySkew,
-  detectMockNoErrorLog, detectNeverMocked,
+  detectMockNoErrorLog, detectNeverMocked, detectFinalStretch,
 ];
 const STRENGTH_DETECTORS: Detector[] = [
   detectTimeline, detectSectionStrength, detectMockHygiene, detectSequencingStrength,

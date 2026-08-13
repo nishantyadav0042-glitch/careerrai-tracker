@@ -147,7 +147,9 @@ describe('timeline arithmetic can never print an absurd number', () => {
     });
     const card = r.cards.find((c) => c.key === 'timeline-tight');
     expect(card).toBeTruthy();
-    const hours = Number(/~([\d.]+)h\/day/.exec(card!.headline)?.[1]);
+    // The figures live in `stats` now — the headline states the consequence,
+    // not the number, so the student reads a meaning before an arithmetic.
+    const hours = Number(/~([\d.]+)h\/day/.exec((card!.stats ?? []).join(' '))?.[1]);
     expect(hours).toBeGreaterThan(0);
     expect(hours).toBeLessThanOrEqual(14);
   });
@@ -166,8 +168,10 @@ describe('prerequisite traversal finds the ROOT, not the nearest link', () => {
     // Functions ← Quadratic Equations ← Linear Equations, all unmet below.
     const r = computePrepInsight({ ...BASE, matrix: fullMatrix({ Functions: 'practicing' }) });
     const card = r.cards.find((c) => c.rootCause === 'foundation');
-    expect(card!.headline).toContain('Linear Equations');
-    expect(card!.headline).not.toContain('Quadratic Equations');
+    // Topic names sit in `stats`; the headline carries the consequence.
+    const evidence = (card!.stats ?? []).join(' ');
+    expect(evidence).toContain('Linear Equations');
+    expect(evidence).not.toContain('Quadratic Equations');
   });
 
   it('a prerequisite that is merely "learning" counts as satisfied', () => {
@@ -331,5 +335,80 @@ describe('hostile input', () => {
     expect(() => computePrepInsight({
       ...BASE, matrix: [...fullMatrix({ Percentages: 'practicing' }), { section: 'QA', topic: 'Percentages', status: 'not_started' }],
     })).not.toThrow();
+  });
+});
+
+describe('headlines state consequences, never bare counts', () => {
+  // The whole point of the rewrite. A headline that opens with a number is
+  // reporting; the student can read counts off their own answers. Numbers
+  // belong in `stats`, underneath, proving a sentence that says what they mean.
+  const profiles: Record<string, MatrixEntry['status']>[] = [
+    allOf(QA_TOPICS, 'revising'),
+    Object.assign(allOf(QA_TOPICS.slice(0, 12), 'learning'), { Percentages: 'practicing' as const }),
+    { Functions: 'practicing' },
+    Object.assign(allOf(QA_TOPICS.slice(0, 22), 'revising'), allOf(VARC_TOPICS, 'revising')),
+    { Vocabulary: 'revising', Grammar: 'revising', 'Odd One Out': 'revising', 'Sentence Completion': 'revising' },
+  ];
+
+  it('no headline begins with a digit', () => {
+    for (const p of profiles) {
+      const r = computePrepInsight({ ...BASE, matrix: fullMatrix(p), ambitionDate: '2026-11-01', selfStudyHours: 4 });
+      for (const c of [...r.cards, ...(r.strength ? [r.strength] : [])]) {
+        expect(c.headline).not.toMatch(/^\d/);
+      }
+    }
+  });
+
+  it('every risk card tells the student what CareerRai will do about it', () => {
+    for (const p of profiles) {
+      const r = computePrepInsight({ ...BASE, matrix: fullMatrix(p), ambitionDate: '2026-11-01', selfStudyHours: 4 });
+      for (const c of r.cards) expect(c.action, `${c.key} has no action`).toBeTruthy();
+    }
+  });
+});
+
+describe('advice is always humanly achievable', () => {
+  // "Find ~9.5h/day" is arithmetically true and useless — the same failure as
+  // the old "390h/day", just inside the sane range. Past ~3h of catch-up the
+  // only honest advice is that the date has to move.
+  it('never asks a student to find more than ~3h/day extra', () => {
+    const r = computePrepInsight({
+      ...BASE, matrix: fullMatrix(allOf(QA_TOPICS.slice(0, 5), 'practicing')),
+      ambitionDate: '2026-09-15', selfStudyHours: 2,
+    });
+    const card = r.cards.find((c) => c.key === 'timeline-tight');
+    if (card) {
+      const asked = Number(/find ~([\d.]+)h\/day/i.exec(`${card.action} ${card.recommend}`)?.[1] ?? 0);
+      expect(asked).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('a trivial half-hour gap is not labelled a major risk', () => {
+    const r = computePrepInsight({
+      ...BASE, matrix: fullMatrix(allOf(QA_TOPICS.slice(0, 6), 'practicing')),
+      ambitionDate: '2026-10-15', selfStudyHours: 5,
+    });
+    const card = r.cards.find((c) => c.key === 'timeline-tight');
+    if (card) expect(card.severity).toBeLessThan(8);
+  });
+});
+
+describe('no student who put in real work sees an empty screen', () => {
+  it('a deep-coverage student with a clean mock loop still gets a finding', () => {
+    const advanced = Object.assign(
+      allOf(QA_TOPICS.slice(0, 20), 'revising'),
+      allOf(VARC_TOPICS.slice(0, 7), 'revising'),
+      { 'Full Length Mocks': 'practicing' as const, 'Error Log': 'practicing' as const, 'Mock Analysis': 'practicing' as const },
+    );
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix(advanced) });
+    expect(r.cards.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a student a few topics into one section still gets a finding', () => {
+    const r = computePrepInsight({
+      ...BASE, matrix: fullMatrix(allOf(QA_TOPICS.slice(0, 5), 'practicing')),
+      ambitionDate: '2027-06-01', selfStudyHours: 10,
+    });
+    expect(r.cards.length + (r.strength ? 1 : 0)).toBeGreaterThanOrEqual(2);
   });
 });
