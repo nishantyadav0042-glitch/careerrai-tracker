@@ -29,6 +29,8 @@ import { buildTopicChoices } from '@/lib/day-topics';
 import { plannerRecency } from '@/lib/plan-history';
 import { dailyHours } from '@/lib/daily-hours';
 import { coachingTopicsForDate } from '@/lib/timetable-month';
+import { resolveFocusSections } from '@/lib/focus-sections';
+import type { DebriefRow } from '@/lib/mock-informed-focus';
 import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { getLogDateString } from '@/lib/streak-utils';
@@ -158,7 +160,11 @@ export async function computeTodaysPlan(
     // The 21-day daily_reports read that used to ride along here fed the
     // capacity cap. Nothing sizes the plan from behaviour any more, so the
     // query is gone — one fewer round trip on the notification cron's hot path.
-    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }, { data: timetableRow }] = await Promise.all([
+    // recentDebriefRows joins this wave because the focus resolver needs it:
+    // the cron previously had no mock branch at all, which is precisely how
+    // it and the tracker route ended up building different days. Same wave,
+    // so it costs no extra round trip.
+    const [{ data: profile }, { data: coverageRows }, { data: existing }, { data: completions }, { data: timetableRow }, { data: recentDebriefRows }] = await Promise.all([
       admin
         .from('profiles')
         .select(`
@@ -178,15 +184,23 @@ export async function computeTodaysPlan(
         .maybeSingle(),
       admin.from('routine_task_completions').select('task_id').eq('student_id', studentId).eq('routine_date', today),
       admin.from('student_timetables').select('blocks, confirmed_at').eq('student_id', studentId).maybeSingle(),
+      admin
+        .from('mock_debriefs')
+        .select('taken_on, varc, dilr, qa')
+        .eq('student_id', studentId)
+        .order('taken_on', { ascending: false })
+        .limit(5),
     ]);
 
     if (!profile) return null;
 
-    const weakest = (profile.self_reported_weakest_section as Section | null)
-      ?? weakestFromBaseline(profile)
-      ?? weakestFromCoverage(coverageRows ?? [])
-      ?? 'DILR';
-    const strongest = (profile.self_reported_strongest_section as Section | null) ?? strongestFromBaseline(profile);
+    // ONE resolver, shared with api/routine/today. This used to be a
+    // hand-copied chain with NO mock branch, so a student whose latest mock
+    // disagreed with their signup answer got a different day depending on
+    // which writer ran first. See lib/focus-sections.
+    const focus = resolveFocusSections(profile, (coverageRows ?? []) as { section: string; status: string }[], (recentDebriefRows ?? []) as DebriefRow[], today);
+    const weakest = focus.weakest;
+    const strongest = focus.strongest;
     const weakTopic = (profile.self_reported_weak_topic as string | null) || null;
     const currentStage = profile.current_stage as Stage | null;
 

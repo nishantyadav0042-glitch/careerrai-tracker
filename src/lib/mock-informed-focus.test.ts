@@ -85,12 +85,32 @@ describe('the override is wired in and SAID, never silent', () => {
 
   it('measured focus outranks the self-report in the chain', () => {
     // Evidence beats memory: the mock override sits ABOVE self_reported in
-    // the weakest chain.
-    const src = route();
-    const mockIdx = src.indexOf('mockFocus?.weakest');
-    const selfIdx = src.indexOf('profile.self_reported_weakest_section as Section');
+    // the weakest chain. The chain now lives in ONE module — see below for
+    // why that matters more than which file holds it.
+    // Scoped to the resolver body — the field name also appears in the
+    // interface above it, which is a declaration, not the chain.
+    const file = readFileSync('src/lib/focus-sections.ts', 'utf8');
+    const src = file.slice(file.indexOf('export function resolveFocusSections'));
+    const mockIdx = src.indexOf('mock?.weakest');
+    const selfIdx = src.indexOf('self_reported_weakest_section');
     expect(mockIdx, 'mock override missing from the chain').toBeGreaterThan(-1);
     expect(mockIdx).toBeLessThan(selfIdx);
+  });
+
+  it('BOTH plan writers resolve focus through that one chain', () => {
+    // The bug this pins: api/routine/today applied the mock override and
+    // lib/routine-plan (the cron) did not. weakestSection decides which
+    // section leads the day and takes the 40–55% priority slice, so the same
+    // student got a genuinely different plan depending on which writer ran
+    // first — two authoritative plans for one student and one date.
+    // 0 students were diverging when this was found, only because mock
+    // logging was still rare. Latent split-brain is still split-brain.
+    for (const f of ['src/app/api/routine/today/route.ts', 'src/lib/routine-plan.ts']) {
+      const s = readFileSync(f, 'utf8');
+      expect(s, `${f} must use the shared resolver`).toContain('resolveFocusSections(');
+      // ...and must not rebuild the chain locally again.
+      expect(s, `${f} must not re-derive the weakest section`).not.toContain('?? weakestFromBaseline(');
+    }
   });
 
   it('the basis line reaches the response, so the student sees WHY focus moved', () => {

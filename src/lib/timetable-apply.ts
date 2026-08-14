@@ -9,6 +9,7 @@
 // rebuild today's plan — lives here, and both routes call it.
 
 import { TOPIC_METADATA } from './topics-constants';
+import { getLogDateString } from './streak-utils';
 import { topicsTaught, type TimetableBlock, type CoachingTarget, type TimetableKind } from './timetable';
 import { anchorToMonth, detectShape, summariseMonth, type MonthSummary } from './timetable-month';
 
@@ -58,7 +59,15 @@ export async function applyCoachingTimetable(admin: any, studentId: string, inpu
   // month is written to coaching_sessions instead, keyed on (student, date), so
   // a new upload refines the dates it covers and leaves every earlier date
   // standing.
-  const today = new Date().toISOString().slice(0, 10);
+  // getLogDateString, NOT toISOString().slice(0,10). Raw UTC midnight is
+  // 05:30 IST, but the study day rolls at 03:00 IST — so between 03:00 and
+  // 05:29 the two disagree, and this `today` is used to DELETE a plan row
+  // below. In that window the raw-UTC value named YESTERDAY: uploading a
+  // timetable at 4 AM deleted the previous day's plan (history that
+  // plannerRecency and the "yesterday: x/y done" card both read) and left
+  // today's plan standing, so the realignment never happened and the
+  // response still claimed planRebuilt: true. One authority, everywhere.
+  const today = getLogDateString();
   const calendar = anchorToMonth(input.blocks, today);
   const month = summariseMonth(calendar, detectShape(input.blocks));
   const busy = calendar.filter((d) => d.topics.length > 0 || d.sections.length > 0);

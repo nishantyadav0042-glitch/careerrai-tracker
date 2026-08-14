@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, getPhase, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { timetableDayTasks } from '@/lib/timetable-day';
+import { resolveFocusSections } from '@/lib/focus-sections';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { type CoverageStatus } from '@/lib/topic-selector';
 import { buildTopicChoices } from '@/lib/day-topics';
@@ -132,15 +133,18 @@ export async function GET() {
   // The override is never silent: focusBasis rides the response so the plan
   // says "Your last mock (VARC 89 · DILR 99 · QA 99) — VARC needs the work"
   // instead of quietly contradicting what the student typed at signup.
-  const mockFocus = mockInformedFocus((recentDebriefRows ?? []) as DebriefRow[], today);
-  const weakest = mockFocus?.weakest
-    ?? (profile.self_reported_weakest_section as Section | null)
-    ?? computeWeakestFromBaseline(profile)
-    ?? computeWeakestFromCoverage(coverageRows ?? [])
-    ?? 'DILR';
-  const strongest = mockFocus?.strongest
-    ?? (profile.self_reported_strongest_section as Section | null)
-    ?? computeStrongestFromBaseline(profile);
+  // ONE resolver, shared with the cron writer (lib/routine-plan). These two
+  // are the only writers of daily_routines and they used to resolve this
+  // differently — the cron had no mock branch — so the same student could get
+  // two different days depending on which ran first. See lib/focus-sections.
+  const focus = resolveFocusSections(
+    profile,
+    (coverageRows ?? []) as { section: string; status: string }[],
+    (recentDebriefRows ?? []) as DebriefRow[],
+    today,
+  );
+  const weakest = focus.weakest;
+  const strongest = focus.strongest;
 
   // null = never asked (the legacy quick-setup that used to collect this is
   // gone; the topic selector derives per-section topics from the Coverage
@@ -519,7 +523,9 @@ export async function GET() {
     // generation time, BEFORE that score existed, and this line may only
     // ever render when it is true of the plan on screen (the plan-reason
     // rule). From tomorrow's build onward the mock has actually steered it.
-    focusBasis: mockFocus && mockFocus.takenOn < today ? mockFocus.basis : null,
+    // The same-day suppression now lives in the resolver, so both writers
+    // agree about when a mock may be claimed as the reason.
+    focusBasis: focus.mockBasis,
     todayMock: todayDebrief
       ? { overallPercentile: todayDebrief.overall_percentile != null ? Number(todayDebrief.overall_percentile) : null }
       : null,

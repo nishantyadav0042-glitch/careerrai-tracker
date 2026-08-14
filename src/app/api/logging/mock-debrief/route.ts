@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToUser } from '@/lib/push';
+import { getLogDateString } from '@/lib/streak-utils';
 
 interface DebriefRequest {
   log_date: string;
@@ -74,6 +75,23 @@ export async function POST(request: NextRequest) {
 
     if (!body.log_date || !/^\d{4}-\d{2}-\d{2}$/.test(body.log_date)) {
       return NextResponse.json({ error: 'Invalid log_date' }, { status: 400 });
+    }
+
+    // The DATE has to be checked, not just its shape. This value is sent by
+    // the browser from the DEVICE clock, and it is not cosmetic: taken_on is
+    // what mockInformedFocus reads to decide which section the plan attacks,
+    // and log_date is matched against today to claim "score recorded". A
+    // phone with a wrong timezone — or anything hand-rolling this request —
+    // could write a mock dated any day it liked and permanently steer the
+    // plan's focus from a date that never happened.
+    //
+    // Same window log-daily already allows: today or yesterday. A mock is
+    // sat and logged within a day; anything else is a clock, not a student.
+    const todayStr = getLogDateString();
+    const yesterdayStr = new Date(Date.parse(todayStr + 'T00:00:00.000Z') - 86_400_000)
+      .toISOString().slice(0, 10);
+    if (body.log_date !== todayStr && body.log_date !== yesterdayStr) {
+      return NextResponse.json({ error: 'Can only log a mock for today or yesterday' }, { status: 400 });
     }
 
     const admin = createAdminClient();

@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { setDailyHours, normaliseHours, MIN_DAILY_HOURS, MAX_DAILY_HOURS } from '@/lib/daily-hours';
 import { serverError } from '@/lib/api-error';
+import { getLogDateString } from '@/lib/streak-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,12 @@ export async function POST(request: NextRequest) {
   // /api/routine/today rebuild it at the new one — but only when nothing has
   // been ticked yet, because completed work is never wiped by a resize. If they
   // have already started, today stands and tomorrow uses the new number.
-  const today = new Date().toISOString().slice(0, 10);
+  // getLogDateString — see timetable-apply for the same fix. Raw UTC named
+  // YESTERDAY between 03:00 and 05:29 IST, so changing your hours at 4 AM
+  // deleted the previous day's plan and left today's sized to the old number,
+  // while the response still reported planRebuilt: true and the card reloaded
+  // onto an unchanged plan.
+  const today = getLogDateString();
   const { data: done } = await admin
     .from('routine_task_completions')
     .select('task_id')
