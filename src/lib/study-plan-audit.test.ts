@@ -1,29 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import {
-  generateRoutine, archetypeRevisionMultiplier,
-  type RoutineProfile, type Section,
-} from './routine-engine';
-import { chooseTopicForSection, applyConfidenceSignal, type TopicChoice, type CoverageStatus } from './topic-selector';
+import { readFileSync } from 'node:fs';
+import { generateRoutine, type RoutineProfile, type Section } from './routine-engine';
+import { buildTopicChoices } from './day-topics';
+import { applyConfidenceSignal, type CoverageStatus } from './topic-selector';
 import { remainingSyllabusHours } from './study-pace';
 import { totalSyllabusHours, topicsInSection } from './prep-model';
 import { TOPIC_METADATA } from './topics-constants';
 
 // ── THE SYLLABUS-COMPLETION AUDIT ───────────────────────────────────────────
 //
-// Founder audit, 8 Aug 2026. One question, asked of the shipped engine:
-// "if a student follows CareerRai every day, do they finish the syllabus by
-// their target date?"
+// Founder audit, 8 Aug 2026: "if a student follows CareerRai every day, do
+// they finish the syllabus by their target date?"
 //
-// This file does NOT re-implement the planner. It imports the SAME functions
-// the production route calls (generateRoutine, chooseTopicForSection,
-// applyConfidenceSignal, remainingSyllabusHours) and drives them day by day
-// with a student who does everything right.
+// REWRITTEN 14 Aug, and the reason matters more than the rewrite.
 //
-// THESE ASSERTIONS ENCODE A BUG, ON PURPOSE. Today the plan teaches 13 of 46
-// topics and then loops forever. When the planner is fixed these numbers will
-// change and this test will fail — that failure is the point. Update the
-// expectations in the same commit that fixes the planner, and the diff will
-// show exactly how much more syllabus students now reach.
+// This file used to carry a local `buildChoices` function, labelled in its own
+// comment as an exact reproduction of buildTopicChoices. It stopped being one
+// on 11 Aug, when the real selector gained the two-clock split — the syllabus
+// clock that reserves first-contact blocks, `newTopicPressure`,
+// `daysSincePlanned`. The clone kept none of them.
+//
+// So its assertions ("teaches 13 of 46 topics", "276 hours still outstanding",
+// "caps VARC at two topics in a year") described the PRE-unification engine.
+// They passed because the clone reproduced the old behaviour faithfully, not
+// because production did. The file was certifying a bug that had already been
+// fixed, and — the part that actually matters — it could no longer fail when
+// the real planner regressed. A test that cannot fail is worse than no test:
+// it occupies the space where a real check would go.
+//
+// It now drives the REAL pipeline (buildTopicChoices → generateRoutine) and
+// asserts what is true today. Reachability itself is proved exhaustively in
+// topic-reachability.gate.test.ts across every budget and archetype; what
+// stays HERE is the arithmetic that file does not cover — the completion
+// ceiling, the confidence ladder, and the closer's carve-out.
 
 const SECTIONS: Section[] = ['VARC', 'DILR', 'QA'];
 const TOPICS_BY_SECTION: Record<Section, string[]> = {
@@ -33,37 +42,53 @@ const ALL_TOPICS = Object.keys(TOPIC_METADATA);
 
 interface SimState { coverage: Map<string, CoverageStatus>; lastPracticed: Map<string, number> }
 
-/** Faithful copy of buildTopicChoices (routine-plan.ts / api/routine/today). */
-function buildChoices(state: SimState, profile: RoutineProfile, dayIdx: number, revisionSeason: boolean): Record<Section, TopicChoice> {
-  const revisionMultiplier = archetypeRevisionMultiplier(profile);
-  const out = {} as Record<Section, TopicChoice>;
-  for (const section of SECTIONS) {
-    const candidates = TOPICS_BY_SECTION[section].map((topic) => {
-      const last = state.lastPracticed.get(topic);
-      return {
-        topic,
-        coverageStatus: state.coverage.get(topic) ?? null,
-        daysSinceLastPracticed: last == null ? null : dayIdx - last,
-        selfReportedBonus: section === profile.weakestSection && topic === profile.weakTopic,
-        priorityBonus: false, focusBonus: false, postponedBonus: false, todayClassBonus: false,
-      };
-    });
-    out[section] = chooseTopicForSection(candidates, revisionMultiplier, revisionSeason);
-  }
-  return out;
-}
-
 const NO_HISTORY = { daysSinceLastPracticed: { VARC: null, DILR: null, QA: null } };
 
-/** A student who opens the app every day and marks every task fully done. */
-function simulate(profile: RoutineProfile, days: number, start = new Date('2026-08-08T06:00:00')) {
+/**
+ * A student who opens the app every day and marks every task fully done —
+ * driven through the SAME buildTopicChoices the two plan writers call.
+ */
+function simulate(profile: RoutineProfile, days: number, start = new Date('2026-08-08T06:00:00Z')) {
   const state: SimState = { coverage: new Map(), lastPracticed: new Map() };
   const touched = new Set<string>();
   const picksBySection: Record<string, string[]> = { VARC: [], DILR: [], QA: [] };
+
   for (let day = 0; day < days; day++) {
     const date = new Date(start.getTime() + day * 86_400_000);
-    const revisionSeason = date >= new Date(profile.attemptYear ?? 2026, 8, 1);
-    const routine = generateRoutine(profile, date, NO_HISTORY, buildChoices(state, profile, day, revisionSeason));
+
+    const coverageRows = SECTIONS.flatMap((section) =>
+      TOPICS_BY_SECTION[section].map((topic) => ({
+        section, topic,
+        status: state.coverage.get(topic) ?? 'not_started',
+        is_priority: false,
+      })));
+
+    const daysSinceLastPracticedByTopic: Record<string, number | null> = {};
+    const daysSincePlannedByTopic: Record<string, number | null> = {};
+    for (const topic of ALL_TOPICS) {
+      const last = state.lastPracticed.get(topic);
+      const gap = last == null ? null : day - last;
+      daysSinceLastPracticedByTopic[topic] = gap;
+      daysSincePlannedByTopic[topic] = gap;
+    }
+
+    const history = {
+      ...NO_HISTORY,
+      daysSinceLastPracticedByTopic, daysSincePlannedByTopic,
+      timesPracticedByTopic: {}, postponedTopics: [], recentTopics: [],
+      yesterday: null, yesterdayUnfinishedTopics: [],
+      completedTasks: 0, plannedTasks: 0, planDays: day,
+    } as unknown as Parameters<typeof buildTopicChoices>[2];
+
+    // The student's own finish date drives the syllabus clock — the input the
+    // old clone had no concept of.
+    const daysToTarget = days - day;
+    const choices = buildTopicChoices(coverageRows, profile, history, null, [], daysToTarget, date);
+    const routine = generateRoutine(
+      profile, date, history as unknown as Parameters<typeof generateRoutine>[2],
+      choices.choices, choices.extras,
+    );
+
     for (const t of routine.tasks) {
       if (!t.topic) continue;
       touched.add(t.topic);
@@ -72,6 +97,7 @@ function simulate(profile: RoutineProfile, days: number, start = new Date('2026-
       state.coverage.set(t.topic, applyConfidenceSignal(state.coverage.get(t.topic) ?? null, 'green'));
     }
   }
+
   const rows = [...state.coverage.entries()].map(([topic, status]) => ({ topic, status }));
   return { state, touched, picksBySection, remaining: remainingSyllabusHours(rows, 1) };
 }
@@ -83,56 +109,63 @@ const beginner = (over: Partial<RoutineProfile> = {}): RoutineProfile => ({
   ...over,
 });
 
+describe('the audit drives the real planner, not a copy of it', () => {
+  it('imports buildTopicChoices instead of re-implementing it', () => {
+    // The guard that would have caught the drift this file was rewritten for.
+    // If someone re-adds a local reproduction of the selector, this fails on
+    // the same day rather than three engine changes later.
+    //
+    // The banned phrase is ASSEMBLED rather than written: a literal here would
+    // be found in this very file and the check could never pass — the
+    // self-quoting trap that has bitten several guards in this repo.
+    const src = readFileSync('src/lib/study-plan-audit.test.ts', 'utf8');
+    expect(src).toContain("from './day-topics'");
+    expect(src).toContain('buildTopicChoices(coverageRows,');
+    const bannedLabel = ['faithful', 'copy'].join(' ');
+    expect(src.toLowerCase()).not.toContain(bannedLabel);
+    // No hand-rolled scorer either — the coverage-points table lives in
+    // topic-selector and nowhere else. Assembled for the same reason as above.
+    const bannedTable = `const ${'COVER'}: Record<string, number>`;
+    expect(src).not.toContain(bannedTable);
+  });
+});
+
 describe('AUDIT: does following the plan finish the syllabus?', () => {
-  it('teaches only a fraction of the syllabus, then loops forever', () => {
-    // 365 days. Perfect attendance. Every task marked fully done.
-    const { touched, remaining } = simulate(beginner(), 365);
-
-    // 13 of 46. Thirty-three topics are never taught even once in a YEAR.
-    expect(touched.size).toBe(13);
-    expect(ALL_TOPICS.length - touched.size).toBe(33);
-    // Of 397 syllabus hours, 276 are still outstanding after a perfect year.
-    expect(remaining).toBe(276);
-    expect(remaining).toBeGreaterThan(totalSyllabusHours() * 0.6);
+  // The old version of this block asserted 13 of 46 and "loops forever".
+  // That was the pre-two-clock engine. The syllabus clock now reserves
+  // first-contact blocks against the student's own date, so a perfect year
+  // opens the whole syllabus.
+  it('a perfect year opens every topic, not a fraction of them', () => {
+    const { touched } = simulate(beginner(), 365);
+    expect(touched.size).toBe(ALL_TOPICS.length);
   });
 
-  it('gives the same syllabus progress to a 1.5h student and a 12h student', () => {
-    // The most damaging single fact in this audit: daily hours change how much
-    // work each task contains, but NOT which topics the plan advances through.
-    // An 8x difference in effort buys identical syllabus coverage.
-    const lowTime = simulate(beginner({ weekdayHours: 1.5, weekendHours: 1.5 }), 84);
-    const aggressive = simulate(beginner({ weekdayHours: 12, weekendHours: 12 }), 84);
-
-    expect(lowTime.touched.size).toBe(aggressive.touched.size);
-    expect(lowTime.remaining).toBe(aggressive.remaining);
-    expect([...lowTime.touched].sort()).toEqual([...aggressive.touched].sort());
+  it('a finished syllabus leaves only the revision ceiling outstanding', () => {
+    // Every topic reached and tapped green three times tops out at 'revising'
+    // — see the completion-ceiling block below for why that is not zero.
+    const { remaining } = simulate(beginner(), 365);
+    expect(remaining).toBeLessThan(totalSyllabusHours() * 0.25);
   });
 
-  it('lets a finished topic outrank an untouched one, which is the mechanism', () => {
-    // After 40 days Percentages is 'revising' — worked three times, done.
-    // Linear Equations has never been opened. The selector still prefers
-    // Percentages, because weightage(40) + sequence outweighs the coverage
-    // gap (revising=8 vs untouched=20). That single inequality is why the
-    // plan stops advancing.
-    const { state } = simulate(beginner(), 40);
-    expect(state.coverage.get('Percentages')).toBe('revising');
-    expect(state.coverage.get('Linear Equations')).toBeUndefined();
-
-    const score = (topic: string, status: CoverageStatus | null) => {
-      const meta = TOPIC_METADATA[topic];
-      const COVER: Record<string, number> = { learning: 30, not_started: 22, unknown: 20, practicing: 12, revising: 8, exam_ready: 2 };
-      return COVER[status ?? 'unknown'] + (meta?.weightage ?? 3) * 8 + Math.max(0, 30 - (meta?.sequenceRank ?? 30)) * 0.5;
-    };
-    const finished = score('Percentages', 'revising');
-    const untouched = score('Linear Equations', null);
-    expect(finished).toBeGreaterThan(untouched); // 62.5 > 62 — the whole bug
+  it('more hours now buys more syllabus — the 8x-effort bug is gone', () => {
+    // THE most damaging fact in the original audit was that a 1.5h student and
+    // a 12h student reached identical topics: hours changed how much work each
+    // task held but not which topics advanced. Over a short horizon where the
+    // budget genuinely binds, that must no longer hold.
+    const lowTime = simulate(beginner({ weekdayHours: 1.5, weekendHours: 1.5 }), 21);
+    const aggressive = simulate(beginner({ weekdayHours: 12, weekendHours: 12 }), 21);
+    expect(aggressive.touched.size).toBeGreaterThan(lowTime.touched.size);
   });
 
-  it('caps VARC at two topics in a year', () => {
+  it('no section is capped at a handful of topics over a year', () => {
+    // Was: VARC 2, QA 6, DILR 5 in a full year.
     const { picksBySection } = simulate(beginner(), 365);
-    expect(new Set(picksBySection.VARC).size).toBe(2);
-    expect(new Set(picksBySection.QA).size).toBe(6);
-    expect(new Set(picksBySection.DILR).size).toBe(5);
+    for (const section of SECTIONS) {
+      expect(
+        new Set(picksBySection[section]).size,
+        `${section} reached too few distinct topics`,
+      ).toBe(TOPICS_BY_SECTION[section].length);
+    }
   });
 });
 
@@ -179,22 +212,28 @@ describe('AUDIT: does the day fit the hours the student chose?', () => {
     // 15% more than their chosen hours (repeater 6h got 414m, mocks-stage 5h
     // got 345m). The closer's minutes now come out of the topic tasks, so
     // every day sums to exactly the budget.
-    // Calendar-free Tuesday: on the real Monday 10 Aug, Home now carves the
-    // exam calendar's 2h mock-analysis out first (lib/exam-calendar) — planned
+    // Calendar-free Tuesday: on the real Monday 10 Aug, Home carves the exam
+    // calendar's 2h mock-analysis out first (lib/exam-calendar) — planned
     // still equals committed, but the task count shifts. This test is about
     // the CLOSER's arithmetic, so it runs on a day the calendar leaves alone.
-    const monday = new Date('2026-08-11T06:00:00');
-    const results = cases.map(([name, p]) => {
-      const state: SimState = { coverage: new Map(), lastPracticed: new Map() };
-      const r = generateRoutine(p, monday, NO_HISTORY, buildChoices(state, p, 0, false));
-      const committed = Math.round((p.weekdayHours ?? 0) * 60);
-      return { name, planned: r.estMinutes, committed, tasks: r.tasks.length, phase: r.phase };
-    });
+    const monday = new Date('2026-08-11T06:00:00Z');
+    for (const [name, p] of cases) {
+      const coverageRows = SECTIONS.flatMap((section) =>
+        TOPICS_BY_SECTION[section].map((topic) => ({ section, topic, status: 'not_started', is_priority: false })));
+      const history = {
+        ...NO_HISTORY, daysSinceLastPracticedByTopic: {}, daysSincePlannedByTopic: {},
+        timesPracticedByTopic: {}, postponedTopics: [], recentTopics: [],
+        yesterday: null, yesterdayUnfinishedTopics: [],
+        completedTasks: 0, plannedTasks: 0, planDays: 0,
+      } as unknown as Parameters<typeof buildTopicChoices>[2];
 
-    expect(results[0]).toMatchObject({ planned: 480, committed: 480, tasks: 3 });
-    expect(results[1]).toMatchObject({ planned: 90, committed: 90, tasks: 3 });
-    expect(results[2]).toMatchObject({ planned: 360, committed: 360, tasks: 4 });
-    expect(results[3]).toMatchObject({ planned: 300, committed: 300, tasks: 4 });
-    for (const r of results) expect(r.planned).toBe(r.committed);
+      const choices = buildTopicChoices(coverageRows, p, history, null, [], 90, monday);
+      const r = generateRoutine(
+        p, monday, history as unknown as Parameters<typeof generateRoutine>[2],
+        choices.choices, choices.extras,
+      );
+      const committed = Math.round((p.weekdayHours ?? 0) * 60);
+      expect(r.estMinutes, `${name}: planned must equal committed`).toBe(committed);
+    }
   });
 });

@@ -12,6 +12,7 @@ import { resolveFocusSections } from '@/lib/focus-sections';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
 import { plannerRecency } from '@/lib/plan-history';
 import { getLogDateString } from '@/lib/streak-utils';
+import type { Stage } from '@/lib/routine-engine';
 
 // GET /api/plan/full — the student's whole plan.
 //
@@ -33,7 +34,7 @@ export async function GET() {
   const [{ data: profile }, { data: coverageRows }, completionRecords, { data: timetable }, { data: pastRoutines }, { data: pastCompletions }, { data: debriefRows }] =
     await Promise.all([
       admin.from('profiles')
-        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name, self_reported_weakest_section, self_reported_strongest_section, baseline_varc, baseline_dilr, baseline_qa, syllabus_target_date')
+        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, current_stage, plan_source, full_name, self_reported_weakest_section, self_reported_strongest_section, baseline_varc, baseline_dilr, baseline_qa, syllabus_target_date')
         .eq('id', user.id).maybeSingle(),
       admin.from('topic_coverage').select('section, topic, status, updated_at, is_priority').eq('student_id', user.id),
       buildCompletionRecords(admin, user.id, '2000-01-01'),
@@ -124,6 +125,12 @@ export async function GET() {
     weekdayHours: dailyHours(profile).weekday,
     today: new Date(),
     attemptYear: profile.attempt_year as number | null,
+    // The phase FLOORS, so the long view runs the same phase rule as Home.
+    // Without these the projection used the bare calendar season and a
+    // repeater in July was 'intensive' on Home and 'build' here — a different
+    // day shape for the same student on the same date.
+    isRepeater: !!profile.is_repeater,
+    currentStage: (profile.current_stage as Stage | null) ?? null,
     revisionDue,
     horizonDays,
     coachingByDate,

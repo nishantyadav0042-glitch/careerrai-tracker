@@ -1,3 +1,4 @@
+import { isRevisionDue, isRevisableStatus } from './revision-due';
 // The Decision Engine — four boxes, nothing else: diff → events → priority →
 // template. No AI anywhere in this file, on purpose. Every example in the
 // founder's spec ("Geometry today. Revision is due.") is a template fill,
@@ -52,14 +53,24 @@ export interface CoverageSignalRow {
 export function detectRevisionDue(
   rows: CoverageSignalRow[],
   today: string,
-  revisionFrequencyDays: Record<string, number>
+  /**
+   * Retained so existing callers compile, but no longer consulted: the cadence
+   * now comes from lib/revision-due, which is what makes this rule and the
+   * screen impossible to drift apart again.
+   */
+  _revisionFrequencyDays: Record<string, number>,
+  /** archetypeRevisionMultiplier for this student. 1 when unknown. */
+  multiplier = 1,
 ): DecisionEvent | null {
   for (const row of rows) {
-    if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') continue;
-    const freq = revisionFrequencyDays[row.topic];
-    if (freq == null) continue;
+    if (!isRevisableStatus(row.status)) continue;
     const daysSince = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
-    if (daysSince >= Math.round(freq) + 1) {
+    // ONE rule, shared with the screen this notification links to
+    // (lib/revision-due). This used to compare a RAW `freq + 1` with no
+    // archetype multiplier while prep-memory painted the Preparation Map WITH
+    // it — so a repeater (x0.7) or a working professional (x1.4) was told to
+    // revise a topic the app itself showed as not yet due.
+    if (isRevisionDue({ topic: row.topic, daysSince, multiplier })) {
       return { type: 'revision_due', priority: PRIORITY.revision_due, topic: row.topic };
     }
   }

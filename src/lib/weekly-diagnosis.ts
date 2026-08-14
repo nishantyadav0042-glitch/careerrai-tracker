@@ -1,3 +1,5 @@
+import { archetypeRevisionMultiplier } from './routine-engine';
+import { isRevisionDue, isRevisableStatus } from './revision-due';
 // The Weekly Diagnosis — the paid product's engine. Computes a student's week
 // from data that already exists (logs, routines, coverage, mocks, pace) and
 // returns plain-language lines a BUDDY delivers to their paid student, and the
@@ -5,7 +7,6 @@
 // tier gets the daily engine; the weekly verdict is what the buddy sells.
 // Deterministic — every line traces to a formula in docs/plan-engine-formulas.md.
 
-import { TOPIC_METADATA } from './topics-constants';
 import { dailyHours } from './daily-hours';
 import { remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from './study-pace';
 
@@ -33,7 +34,7 @@ export async function computeWeeklyDiagnosis(admin: any, studentId: string): Pro
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', studentId).gte('routine_date', weekAgo),
     admin.from('routine_task_completions').select('routine_date, task_id').eq('student_id', studentId).gte('routine_date', weekAgo),
     admin.from('topic_coverage').select('topic, status, updated_at').eq('student_id', studentId),
-    admin.from('profiles').select('syllabus_target_date, study_target_hours, hours_available, is_repeater, last_year_percentile').eq('id', studentId).maybeSingle(),
+    admin.from('profiles').select('syllabus_target_date, study_target_hours, hours_available, is_repeater, is_working_professional, last_year_percentile').eq('id', studentId).maybeSingle(),
     admin.from('daily_reports').select('report_date').eq('student_id', studentId).eq('mock_taken', true).order('report_date', { ascending: false }).limit(1),
   ]);
 
@@ -65,14 +66,22 @@ export async function computeWeeklyDiagnosis(admin: any, studentId: string): Pro
   }
   const skippedSections = Object.keys(planned).filter((s) => (planned[s] ?? 0) >= 2 && (completed[s] ?? 0) === 0);
 
-  // Revision overdue (same rule as the Preparation Map's red flag).
+  // The archetype cadence this student's own screens use. Dropping it here is
+  // what made the digest disagree with the Preparation Map.
+  const revisionMultiplier = archetypeRevisionMultiplier({
+    isRepeater: !!profile?.is_repeater,
+    isWorkingProfessional: !!profile?.is_working_professional,
+  });
+
+  // Revision overdue — the SAME rule as the Preparation Map's red flag, now
+  // literally (lib/revision-due) rather than by comment. This copy had dropped
+  // the archetype multiplier, so the weekly digest counted a repeater's topics
+  // as overdue later than the screen did.
   let revisionOverdue = 0;
   for (const row of coverage ?? []) {
-    if (!['practicing', 'revising', 'exam_ready'].includes(row.status)) continue;
-    const meta = TOPIC_METADATA[row.topic];
-    if (!meta) continue;
+    if (!isRevisableStatus(row.status)) continue;
     const daysSince = Math.round((now.getTime() - Date.parse(row.updated_at)) / 86_400_000);
-    if (daysSince > meta.revisionFrequencyDays) revisionOverdue++;
+    if (isRevisionDue({ topic: row.topic, daysSince, multiplier: revisionMultiplier })) revisionOverdue++;
   }
 
   const lastMock = mocksRecent?.[0]?.report_date as string | undefined;

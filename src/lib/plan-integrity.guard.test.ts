@@ -339,3 +339,100 @@ describe('INVARIANT 8 — duplicate topics are structurally impossible', () => {
     expect(s).not.toMatch(/extraChoices\?\.\[section\]\?\.slice\(/);
   });
 });
+
+// ── INVARIANT 9: ONE revision rule ─────────────────────────────────────────
+//
+// The sweep found SIX, with three different comparisons. The damaging pair:
+// decision-engine fired the "time to revise X" push on a RAW cadence while
+// prep-memory painted the screen that push links to WITH the archetype
+// multiplier — so a repeater (x0.7) or working professional (x1.4) was told
+// to revise a topic the app itself showed as not yet due.
+describe('INVARIANT 9 — revision-due has one implementation', () => {
+  const CONSUMERS = [
+    'src/lib/decision-engine.ts',
+    'src/lib/prep-memory.ts',
+    'src/lib/weekly-diagnosis.ts',
+    'src/lib/next-action.ts',
+  ];
+
+  it('every consumer asks lib/revision-due', () => {
+    for (const f of CONSUMERS) {
+      expect(readFileSync(f, 'utf8'), f).toContain("from './revision-due'");
+    }
+  });
+
+  it('none of them re-implements the comparison', () => {
+    // The tell is doing the cadence arithmetic locally.
+    for (const f of CONSUMERS) {
+      const s = readFileSync(f, 'utf8');
+      expect(s.includes('revisionFrequencyDays *'), `${f} re-derives the cadence`).toBe(false);
+      expect(s.includes('meta.revisionFrequencyDays)'), `${f} compares raw cadence`).toBe(false);
+    }
+  });
+
+  it('the boolean is DEFINED as the graded amount, so they cannot disagree', () => {
+    // isRevisionDue === overdueDays > 0. A separate comparison for the
+    // boolean is how a screen starts saying "not due" about a topic the
+    // planner is prioritising for being overdue.
+    const s = readFileSync('src/lib/revision-due.ts', 'utf8');
+    expect(s).toMatch(/return overdueDays\(input\) > 0;/);
+  });
+});
+
+// ── INVARIANT 10: ONE phase rule ───────────────────────────────────────────
+//
+// getPhase floors a repeater (and a self-reported sectionals/mocks stage) up
+// to 'intensive'. The Whole Plan ran on phaseOn — the bare calendar season —
+// so a repeater in July was 'intensive' on Home and 'build' in the projection,
+// and since phase feeds dayShape the two surfaces shaped the same day
+// differently.
+describe('INVARIANT 10 — the student phase is one rule', () => {
+  it('the whole-plan projection applies the same floors as Home', () => {
+    const s = readFileSync('src/lib/full-plan.ts', 'utf8');
+    expect(s).toContain('getPhase(');
+    expect(s).toContain('studentPhaseOn');
+  });
+
+  it('the projection no longer shapes days off the bare calendar season', () => {
+    const s = readFileSync('src/lib/full-plan.ts', 'utf8');
+    // phaseOn is still legitimate for mock cadence (a fact about the date),
+    // but it must not be what decides a day's phase.
+    expect(s).not.toMatch(/const planPhase = phaseOn\(/);
+    expect(s).not.toMatch(/const phase = phaseOn\(/);
+  });
+
+  it('the caller supplies the inputs the floors need', () => {
+    const s = readFileSync('src/app/api/plan/full/route.ts', 'utf8');
+    expect(s).toContain('isRepeater:');
+    expect(s).toContain('currentStage:');
+  });
+});
+
+// ── INVARIANT 11: Home's next-action is not a second planner ───────────────
+//
+// It had its own weakest-section rule (latest mock at ANY age, 2 of 3
+// sections, gap >= 10 against the canonical 45 days / 3 sections / gap >= 3),
+// its own flat 14-day revision rule, and its own 03:00 day boundary left over
+// from before the rollover moved to 05:30.
+describe('INVARIANT 11 — Home reads the plan authorities, it does not fork them', () => {
+  it('the weakest section is resolved by the shared chain', () => {
+    const s = readFileSync('src/app/api/next-action/route.ts', 'utf8');
+    expect(s).toContain('resolveFocusSections(');
+    const lib = readFileSync('src/lib/next-action.ts', 'utf8');
+    expect(lib).toContain('ctx.weakestSection');
+  });
+
+  it('it no longer ranks sections from raw mock percentiles', () => {
+    const lib = readFileSync('src/lib/next-action.ts', 'utf8');
+    expect(lib).not.toMatch(/best\[1\] - weakest\[1\] >= 10/);
+    expect(lib).not.toMatch(/entries\.length >= 2/);
+  });
+
+  it('the day boundary is the study day, not a hardcoded hour', () => {
+    for (const f of ['src/app/api/next-action/route.ts', 'src/app/api/next-action/ack/route.ts']) {
+      const s = readFileSync(f, 'utf8');
+      expect(s, f).toContain('studyDayStart()');
+      expect(s.includes('T03:00:00+05:30'), `${f} pins the old 3am rollover`).toBe(false);
+    }
+  });
+});

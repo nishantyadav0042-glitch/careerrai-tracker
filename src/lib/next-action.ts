@@ -1,3 +1,4 @@
+import { isRevisionDue, isRevisableStatus } from './revision-due';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import type { TargetProgress } from '@/lib/coaching-progress';
 
@@ -39,8 +40,22 @@ export interface ActionContext {
   minutes: number;
   /** topic -> coverage status. */
   coverage: { topic: string; status: string; isPriority?: boolean }[];
-  /** Latest mock section percentiles, when they've taken one. */
+  /** Latest mock section percentiles, when they've taken one. DISPLAY ONLY. */
   mock: { varc: number | null; dilr: number | null; qa: number | null } | null;
+  /**
+   * The student's weakest section, ALREADY RESOLVED by the caller through
+   * lib/focus-sections — the same value the daily plan leads with.
+   *
+   * This module used to derive it here from `mock` with rules of its own: the
+   * latest mock at ANY age (no recency window at all), two of three sections
+   * counted as complete, and a gap of 10 percentile points to act on — against
+   * the canonical 45 days, all three sections, and a gap of 3. So a two-year-old
+   * partial mock could tell a student "VARC is your weakest section" on Home,
+   * directly above a plan card leading DILR.
+   */
+  weakestSection: string | null;
+  /** The archetype cadence multiplier, for the revision rule. */
+  revisionMultiplier?: number;
   /** Days since each topic was last practised, when known. */
   daysSincePractice: Record<string, number | null>;
   /** Coaching targets with a real daily requirement. */
@@ -106,32 +121,32 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
   }
 
   // 2 — The section actually dragging the score down, from real mock data.
-  if (ctx.mock) {
-    const entries: [string, number][] = [
-      ['VARC', ctx.mock.varc], ['DILR', ctx.mock.dilr], ['QA', ctx.mock.qa],
-    ].filter((e): e is [string, number] => typeof e[1] === 'number');
-    if (entries.length >= 2) {
-      const weakest = [...entries].sort((a, b) => a[1] - b[1])[0];
-      const best = [...entries].sort((a, b) => b[1] - a[1])[0];
-      // Only worth calling out when the gap is real, not mock-to-mock noise.
-      if (best[1] - weakest[1] >= 10) {
-        const candidates = Object.keys(TOPIC_METADATA)
-          .filter((t) => SECTION_OF[t] === weakest[0])
-          .filter((t) => (statusOf.get(t) ?? 'not_started') !== 'exam_ready')
-          .sort((a, b) => weightage(b) - weightage(a));
-        const pick = candidates[0];
-        if (pick) {
-          out.push({
-            kind: 'weak_section',
-            title: `${pick} — one focused block`,
-            why: `${weakest[0]} sat at ${weakest[1]} percentile against ${best[1]} in ${best[0]}. That gap is the biggest single lever you have.`,
-            whyShort: `${weakest[0]} is your weakest section`,
-            minutes: Math.min(ctx.minutes, 45),
-            section: weakest[0],
-            topic: pick,
-          });
-        }
-      }
+  if (ctx.weakestSection) {
+    const weakSection = ctx.weakestSection;
+    const candidates = Object.keys(TOPIC_METADATA)
+      .filter((t) => SECTION_OF[t] === weakSection)
+      .filter((t) => (statusOf.get(t) ?? 'not_started') !== 'exam_ready')
+      .sort((a, b) => weightage(b) - weightage(a));
+    const pick = candidates[0];
+    if (pick) {
+      // The percentiles are quoted only when the caller supplied them, and
+      // only to EXPLAIN a section the shared resolver already chose. They no
+      // longer decide it.
+      const p = ctx.mock;
+      const measured = p && typeof (p as Record<string, number | null>)[weakSection.toLowerCase()] === 'number'
+        ? (p as unknown as Record<string, number>)[weakSection.toLowerCase()]
+        : null;
+      out.push({
+        kind: 'weak_section',
+        title: `${pick} — one focused block`,
+        why: measured != null
+          ? `${weakSection} sat at ${measured} percentile in your last mock. That gap is the biggest single lever you have.`
+          : `${weakSection} is where your plan says the marks are leaking. That gap is the biggest single lever you have.`,
+        whyShort: `${weakSection} is your weakest section`,
+        minutes: Math.min(ctx.minutes, 45),
+        section: weakSection,
+        topic: pick,
+      });
     }
   }
 
@@ -154,11 +169,13 @@ export function nextBestActions(ctx: ActionContext): StudyAction[] {
   }
 
   // 4 — Something earned and now fading. Cheapest marks on the board.
+  // ONE revision rule (lib/revision-due) — per-topic cadence, archetype
+  // adjusted. This was a flat 14 days for EVERY topic, so a weekly-cadence
+  // topic looked fresh for a fortnight while the plan had it overdue.
   const fading = Object.entries(ctx.daysSincePractice)
-    .filter(([topic, days]) => {
-      const st = statusOf.get(topic);
-      return days != null && days >= 14 && (st === 'practicing' || st === 'revising' || st === 'exam_ready');
-    })
+    .filter(([topic, days]) =>
+      isRevisableStatus(statusOf.get(topic))
+      && isRevisionDue({ topic, daysSince: days, multiplier: ctx.revisionMultiplier ?? 1 }))
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0];
   if (fading) {
     out.push({

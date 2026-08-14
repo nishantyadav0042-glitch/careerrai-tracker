@@ -1,3 +1,4 @@
+import { isRevisionDue, isRevisableStatus } from './revision-due';
 // Preparation Memory v1 (Engine v2, Part 5) — a read view over data that
 // already exists (routine_task_completions, daily_routines, mock_debriefs),
 // not a new event-sourcing table. Answers "what has this student actually
@@ -9,7 +10,6 @@
 // caller resolves "today" once and passes date-window boundaries in.
 
 import type { Section } from './routine-engine';
-import { TOPIC_METADATA } from './topics-constants';
 
 export interface CompletionRecord {
   routineDate: string; // YYYY-MM-DD
@@ -200,10 +200,8 @@ export function revisionDueStats(
   let completed = 0;
   for (const row of coverageRows) {
     if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') continue;
-    const meta = TOPIC_METADATA[row.topic];
-    if (!meta) continue;
     const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
-    if (daysSinceUpdate > meta.revisionFrequencyDays * revisionMultiplier) {
+    if (isRevisionDue({ topic: row.topic, daysSince: daysSinceUpdate, multiplier: revisionMultiplier })) {
       due += 1;
       if (touchedTopicsInWindow.has(row.topic)) completed += 1;
     }
@@ -343,13 +341,12 @@ export function buildTopicMemory(
       if (lastTouchedDaysAgo == null || coverageDaysAgo < lastTouchedDaysAgo) lastTouchedDaysAgo = coverageDaysAgo;
     }
 
+    // ONE rule (lib/revision-due) — the same one the planner ranks by and the
+    // same one the push notification fires on.
     let revisionOverdue = false;
-    if ((status === 'practicing' || status === 'revising' || status === 'exam_ready') && coverageRow?.updatedAt) {
-      const meta = TOPIC_METADATA[topic];
-      if (meta) {
-        const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(coverageRow.updatedAt)) / 86_400_000);
-        revisionOverdue = daysSinceUpdate > meta.revisionFrequencyDays * revisionMultiplier;
-      }
+    if (isRevisableStatus(status) && coverageRow?.updatedAt) {
+      const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(coverageRow.updatedAt)) / 86_400_000);
+      revisionOverdue = isRevisionDue({ topic, daysSince: daysSinceUpdate, multiplier: revisionMultiplier });
     }
 
     return {

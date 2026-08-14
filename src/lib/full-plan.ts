@@ -1,5 +1,5 @@
 import { remainingSyllabusHours, MOCK_HOURS_EACH, totalSyllabusHours, type TopicStatusRow } from './study-pace';
-import { catExamDate, type Phase } from './routine-engine';
+import { catExamDate, getPhase, type Phase, type Stage } from './routine-engine';
 import type { Section } from './prep-model';
 import { projectPlan, type ProjectionDay } from './plan-projection';
 import {
@@ -101,6 +101,18 @@ export interface FullPlanInput {
   weekdayHours: number | null;
   today: Date;
   attemptYear: number | null;
+  /**
+   * The two inputs that let getPhase apply its FLOORS.
+   *
+   * Without them this projection ran on `phaseOn` alone — the calendar season
+   * — while Home ran on getPhase, which also floors a repeater (and anyone
+   * with a self-reported stage of sectionals/mocks) up to 'intensive'. So a
+   * repeater in July was 'intensive' on Home and 'build' here, and since the
+   * phase feeds dayShape, the two surfaces shaped the same day differently.
+   * Optional so existing callers compile; every real caller passes them.
+   */
+  isRepeater?: boolean;
+  currentStage?: Stage | null;
   /** Revision-overdue topics, most overdue first. Surfaced, not recomputed. */
   revisionDue?: string[];
   /**
@@ -171,6 +183,15 @@ function iso(d: Date): string { return d.toISOString().slice(0, 10); }
  */
 export function buildFullPlan(input: FullPlanInput): FullPlan {
   const exam = catExamDate(input.attemptYear ?? input.today.getFullYear());
+
+  // ONE phase rule for this student, shared with the daily plan. `phaseOn`
+  // answers "what season is this date in" — a fact about the calendar, still
+  // the right question for mock cadence. This answers "what phase is THIS
+  // student in on that date", which is the question that shapes a day.
+  const studentPhaseOn = (date: Date): PlanPhase => {
+    const p = getPhase(date, input.attemptYear, input.currentStage ?? null, input.isRepeater);
+    return p === 'foundation' ? 'build' : p;
+  };
   const daysToExam = Math.max(1, Math.round((exam.getTime() - input.today.getTime()) / DAY_MS));
   const span = input.horizonDays != null ? Math.min(input.horizonDays, daysToExam) : daysToExam;
 
@@ -235,7 +256,9 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   for (let d = 0; d < span; d++) {
     const date = new Date(input.today.getTime() + d * DAY_MS);
     const key = iso(date);
-    const planPhase = phaseOn(date, exam);
+    // The STUDENT's phase, not just the calendar's: getPhase layers the stage
+    // and repeater floors on top of the season, exactly as Home does.
+    const planPhase = studentPhaseOn(date);
     projectionDays.push({
       date: key,
       // November places no new topics at all — the one rule every source states.
@@ -276,7 +299,7 @@ export function buildFullPlan(input: FullPlanInput): FullPlan {
   for (let d = 0; d < span; d++) {
     const date = new Date(input.today.getTime() + d * DAY_MS);
     const key = iso(date);
-    const phase = phaseOn(date, exam);
+    const phase = studentPhaseOn(date);
     const mockToday = isMockDay(date, exam);
     const analysisToday = isMockDay(new Date(date.getTime() - DAY_MS), exam);
     const items: PlanItem[] = [];

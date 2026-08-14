@@ -5,6 +5,15 @@ import { nextBestActions } from '@/lib/next-action';
 import { sanitizeTargets } from '@/lib/timetable';
 import { computeTargetProgress, targetKey } from '@/lib/coaching-progress';
 import { getLogDateString } from '@/lib/streak-utils';
+import { studyDayStart } from '@/lib/study-day';
+import { resolveFocusSections } from '@/lib/focus-sections';
+import type { DebriefRow } from '@/lib/mock-informed-focus';
+import { archetypeRevisionMultiplier } from '@/lib/routine-engine';
+import { TOPIC_METADATA } from '@/lib/topics-constants';
+
+const SECTION_OF: Record<string, string> = Object.fromEntries(
+  Object.entries(TOPIC_METADATA).map(([t, m]) => [t, (m as { section: string }).section]),
+);
 
 export const maxDuration = 60;
 
@@ -25,10 +34,13 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const [{ data: cov }, { data: mock }, { data: tt }, { data: prof }, { data: prog }, { data: routine }] = await Promise.all([
     admin.from('topic_coverage').select('topic, status, is_priority, updated_at').eq('student_id', user.id),
+    // Five rows, not one, and no date filter here — mockInformedFocus applies
+    // the recency window itself. Taking limit(1) and using it raw is how this
+    // surface ended up acting on a mock of any age.
     admin.from('mock_debriefs').select('varc, dilr, qa, taken_on')
-      .eq('student_id', user.id).order('taken_on', { ascending: false }).limit(1).maybeSingle(),
+      .eq('student_id', user.id).order('taken_on', { ascending: false }).limit(5),
     admin.from('student_timetables').select('targets, confirmed_at').eq('student_id', user.id).maybeSingle(),
-    admin.from('profiles').select('plan_source').eq('id', user.id).maybeSingle(),
+    admin.from('profiles').select('plan_source, is_repeater, is_working_professional, self_reported_weakest_section, self_reported_strongest_section, baseline_varc, baseline_dilr, baseline_qa').eq('id', user.id).maybeSingle(),
     admin.from('coaching_target_progress').select('target_key, done').eq('student_id', user.id),
     // Today's routine, so "Done" on the card can tick the REAL plan task
     // instead of writing a second, parallel record of the same fact.
@@ -58,8 +70,11 @@ export async function GET(request: NextRequest) {
     const n = Number((v as { percentile?: unknown } | null)?.percentile);
     return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
   };
-  const mockPercentiles = mock
-    ? { varc: pct(mock.varc), dilr: pct(mock.dilr), qa: pct(mock.qa) }
+  // The newest row is display fuel only — it explains the section the shared
+  // resolver picked, it no longer picks one.
+  const latestMock = (mock ?? [])[0] ?? null;
+  const mockPercentiles = latestMock
+    ? { varc: pct(latestMock.varc), dilr: pct(latestMock.dilr), qa: pct(latestMock.qa) }
     : null;
 
   // Anything the student has already marked DONE today. A completed action must
@@ -73,7 +88,11 @@ export async function GET(request: NextRequest) {
   // single busiest usage block, 22:00–04:00) had their "done today" filter and
   // their log date disagree, and a finished action could reappear on the card.
   // One day boundary, defined once, or the same student lives in two days.
-  const dayStart = new Date(`${getLogDateString()}T03:00:00+05:30`);
+  // studyDayStart, not a hardcoded 03:00 — the rollover moved to 05:30 on
+  // 14 Aug and this literal silently kept the old boundary, so an action
+  // acknowledged at 04:00 was filtered against the previous day's window and
+  // could reappear.
+  const dayStart = studyDayStart();
   const { data: todayLog } = await admin
     .from('study_action_log').select('kind, outcome')
     .eq('student_id', user.id).gte('shown_at', dayStart.toISOString());
@@ -97,10 +116,24 @@ export async function GET(request: NextRequest) {
   const targets = sanitizeTargets(tt?.targets)
     .map((t) => computeTargetProgress(t, doneBy.get(targetKey(t)) ?? 0, (tt?.confirmed_at as string | null) ?? null));
 
+  // THE shared chain — the same weakest section the plan leads with. This
+  // module used to decide it here from a raw mock with its own thresholds.
+  const focus = resolveFocusSections(
+    prof ?? {},
+    coverage.map((c) => ({ section: SECTION_OF[c.topic] ?? '', status: c.status })),
+    (mock ?? []) as DebriefRow[],
+    getLogDateString(),
+  );
+
   const allActions = nextBestActions({
     minutes,
     coverage,
     mock: mockPercentiles,
+    weakestSection: focus.weakest,
+    revisionMultiplier: archetypeRevisionMultiplier({
+      isRepeater: !!prof?.is_repeater,
+      isWorkingProfessional: !!prof?.is_working_professional,
+    }),
     daysSincePractice,
     targets,
     followingCoaching: prof?.plan_source === 'coaching',

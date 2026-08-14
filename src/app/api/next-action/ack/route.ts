@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getLogDateString } from '@/lib/streak-utils';
+import { studyDayStart } from '@/lib/study-day';
 
 // The student telling us directly what happened.
 //
@@ -35,7 +35,9 @@ export async function POST(request: NextRequest) {
   // (next-action/route.ts). This was UTC midnight — 5:30am IST — so between
   // 3:00 and 5:30am a student's ack targeted rows the GET had already
   // excluded. One day definition, or the write and the read disagree.
-  const dayStart = new Date(`${getLogDateString()}T03:00:00+05:30`);
+  // studyDayStart — see the note in ../route.ts. A hardcoded 03:00 kept the
+  // pre-14-Aug rollover after the study day moved to 05:30.
+  const dayStart = studyDayStart();
   const { data, error } = await admin
     .from('study_action_log')
     .update({ outcome: 'followed', outcome_at: new Date().toISOString() })
