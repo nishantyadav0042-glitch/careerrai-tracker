@@ -1,8 +1,8 @@
 'use client';
 
 import { STATUS_LABEL } from '@/lib/coverage-status';
-import { Suspense } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Suspense, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -20,6 +20,26 @@ interface TopicMem { topic: string; status: Status; revisionOverdue?: boolean }
 interface BlueprintData { topicMemory: TopicMem[] }
 
 const SECTION_ORDER = ['QA', 'DILR', 'VARC'] as const;
+
+// ── Correcting your own record ──────────────────────────────────────────────
+//
+// Backbone audit, 13 Aug: coverage could only ever move FORWARD. The daily
+// tick advances it, the weekly review is forward-only by design, and the two
+// escape hatches the code promised — the red confidence signal and "the full
+// matrix editor" — did not exist: the red signal has no UI anywhere, and this
+// page, the matrix, was read-only. So a student who genuinely forgot a topic
+// had no way to say so, and the planner kept believing a chapter was done.
+//
+// This is that door, and it belongs HERE rather than in a daily flow: the
+// student has navigated to their coverage map and tapped one named topic on
+// purpose. That is the "deliberate flow" the forward-only rule always carved
+// out for (see coverage-status.isForwardMove) — a mis-tap on the home screen
+// would rewrite history, a considered tap on this page is the student
+// correcting it.
+//
+// exam_ready is absent on purpose. It is earned from evidence and can never be
+// self-assigned; the API refuses it too (validateCoverageEntry).
+const EDITABLE: Status[] = ['not_started', 'learning', 'practicing', 'revising'];
 
 // Colours are local presentation; the LABEL TEXT comes from the canonical
 // ladder (coverage-status.STATUS_LABEL) so this page can never say
@@ -48,6 +68,37 @@ function TopicsInner() {
   const params = useSearchParams();
   const key = (params.get('status') ?? 'remaining') as ViewKey;
   const view = VIEWS[key] ?? VIEWS.remaining;
+
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function setStatus(t: TopicMem, status: Status) {
+    if (saving) return;
+    setSaving(t.topic);
+    setSaveError(null);
+    try {
+      const section = TOPIC_METADATA[t.topic]?.section;
+      const res = await fetch('/api/coverage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section, topic: t.topic, status }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setSaveError(body.error ?? 'Could not save — try again.');
+        return;
+      }
+      setEditing(null);
+      // The plan reads this table, so every surface built on it must re-read.
+      await queryClient.invalidateQueries({ queryKey: ['blueprint'] });
+    } catch {
+      setSaveError('Could not save — check your connection.');
+    } finally {
+      setSaving(null);
+    }
+  }
 
   const { data, isLoading } = useQuery<BlueprintData>({
     queryKey: ['blueprint'],
@@ -102,16 +153,48 @@ function TopicsInner() {
               <div className="divide-y divide-stone-100">
                 {items.map((t) => {
                   const pill = STATUS_PILL[t.status];
+                  const open = editing === t.topic;
                   return (
-                    <div key={t.topic} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <span className="text-sm font-medium text-stone-800">{t.topic}</span>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          t.revisionOverdue ? 'bg-red-100 text-red-600' : pill.cls
-                        }`}
-                      >
-                        {t.revisionOverdue ? 'Revision due' : pill.label}
-                      </span>
+                    <div key={t.topic}>
+                      <div className="flex items-center justify-between gap-3 px-4 py-3">
+                        <span className="text-sm font-medium text-stone-800">{t.topic}</span>
+                        <button
+                          type="button"
+                          onClick={() => { setEditing(open ? null : t.topic); setSaveError(null); }}
+                          aria-label={`Change status: ${t.topic}`}
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold transition-transform active:scale-95 ${
+                            t.revisionOverdue ? 'bg-red-100 text-red-600' : pill.cls
+                          }`}
+                        >
+                          {t.revisionOverdue ? 'Revision due' : pill.label} ▾
+                        </button>
+                      </div>
+                      {open && (
+                        <div className="bg-stone-50 px-4 pb-3 pt-1">
+                          <p className="mb-1.5 text-[11px] font-semibold text-stone-500">
+                            Where are you really on {t.topic}?
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {EDITABLE.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                disabled={saving != null}
+                                onClick={() => void setStatus(t, s)}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-transform active:scale-95 disabled:opacity-50 ${
+                                  t.status === s ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 bg-white text-stone-700'
+                                }`}
+                              >
+                                {STATUS_LABEL[s]}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="mt-1.5 text-[10.5px] text-stone-400">
+                            Moving it back is fine — tomorrow&apos;s plan picks it up again.
+                          </p>
+                          {saveError && <p className="mt-1.5 text-[11px] font-semibold text-rose-600">{saveError}</p>}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

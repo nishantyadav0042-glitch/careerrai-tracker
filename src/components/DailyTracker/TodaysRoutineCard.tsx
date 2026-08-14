@@ -43,18 +43,18 @@ function memoryTag(task: RoutineTask): string | null {
   return times > 1 ? `${ordinal} revision · ${task.lastTouchedDaysAgo}d ago` : `Last done ${task.lastTouchedDaysAgo}d ago`;
 }
 
-// Plain self-assessment words, not slang. Four points, not three, so
-// "real progress but not solid yet" has its own answer instead of getting
-// forced into either "Confident" or "Not sure." Maps directly to
-// applyConfidenceSignal (topic-selector.ts): green advances fully, blue
-// advances but caps below revision-ready, yellow holds steady, red regresses.
+// The card sends only the two ADVANCING signals, derived from how far the
+// student got: "Finished it" -> green, "Got halfway" -> blue (mapped
+// server-side in complete-task). The 🟡/🔴 four-option picker that used to be
+// declared here was never rendered by any version of this card — the founder's
+// Half/Done simplification replaced it — so it was removed on 13 Aug rather
+// than left looking like a live feature.
+//
+// Moving a topic BACKWARDS is a deliberate act and now has a deliberate home:
+// the coverage map at /student/plan/topics, where the student taps one named
+// topic on purpose. A daily flow is the wrong place for it — a mis-tap there
+// would rewrite their history.
 type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
-const CONFIDENCE_OPTIONS: { value: ConfidenceSignal; emoji: string; label: string }[] = [
-  { value: 'green', emoji: '🟢', label: 'Confident' },
-  { value: 'blue', emoji: '🔵', label: 'Getting there' },
-  { value: 'yellow', emoji: '🟡', label: 'Not sure' },
-  { value: 'red', emoji: '🔴', label: 'Struggling' },
-];
 
 interface RoutineResponse {
   routine: { phase: string; tasks: RoutineTask[]; est_minutes: number; calibration?: string | null };
@@ -80,15 +80,14 @@ interface RoutineResponse {
   focusBasis?: string | null;
 }
 
-// Time budget filters today's list — same tasks, never invented ones.
-// 'planned' = the full plan (default; most days nobody changes it). 30 is
-// not just "a shorter list" — completing just the top task under this
-// budget is tagged is_emergency server-side (complete-task/route.ts) and
-// counts as a full streak-preserving day. Only two options because that's
-// the only real fork: a normal day, or a crisis day. 1h/2h were arbitrary
-// in-between trims with no distinct meaning and no visible effect most
-// days, just four buttons competing with the actual task below them.
-type TimeBudget = 30 | 'planned';
+// The 30-minute "crisis day" budget that used to live here had no setter left
+// after the trim buttons were removed, so `budget` was permanently 'planned'
+// and `is_emergency` was permanently false — a whole branch the client could
+// not reach. The crisis day is now the Busy Day button, which is explicit and
+// honest about what it does to the finish date.
+//
+// The SERVER side stays exactly as it is: historical completions carry
+// is_emergency = true and emergencyMinimumDone still reads them correctly.
 
 // Fallback for routines generated before targets existed: the plain label,
 // never an invented count — the old minutes/3 formula here claimed "15
@@ -193,7 +192,6 @@ function MockScoreButton({ className, recorded }: {
 export function TodaysRoutineCard({ planSource = null }: { planSource?: string | null }) {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
-  const [budget] = useState<TimeBudget>('planned');
   const [fullyDone, setFullyDone] = useState(false);
   const [addingBlock, setAddingBlock] = useState(false);
   const [addBlockError, setAddBlockError] = useState<string | null>(null);
@@ -324,7 +322,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         // a student who ticks one task still reads as "never logged", which is
         // the exact 319 -> 59 leak this change exists to close. The route
         // merges rather than overwrites, so an earlier manual log is safe.
-        body: JSON.stringify({ task_id: task.id, is_emergency: budget === 30, close_day: true, ...(confidence ? { confidence } : {}), ...(portion ? { portion } : {}) }),
+        body: JSON.stringify({ task_id: task.id, close_day: true, ...(confidence ? { confidence } : {}), ...(portion ? { portion } : {}) }),
       });
       if (!res.ok) {
         // A tick that silently does nothing is worse than one that fails
@@ -429,16 +427,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   }
 
   const { routine } = data;
-  // Budget filter: keep tasks (in priority order) while they fit; always ≥1.
-  const tasks = budget === 'planned'
-    ? routine.tasks
-    : routine.tasks.reduce<{ list: RoutineTask[]; used: number }>((acc, t) => {
-        if (acc.list.length === 0 || acc.used + t.estMinutes <= budget) {
-          acc.list.push(t);
-          acc.used += t.estMinutes;
-        }
-        return acc;
-      }, { list: [], used: 0 }).list;
+  const tasks = routine.tasks;
   const doneCount = routine.tasks.filter((t) => completedIds.has(t.id)).length;
   const completedWithTopic = routine.tasks.filter((t) => completedIds.has(t.id) && t.topic);
 
