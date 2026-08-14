@@ -4,6 +4,7 @@ import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
 import { emitTimeline } from '@/lib/os/timeline';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
+import { SESSION_PLAN_ID, SESSION_PRICE_PAISE } from '@/lib/session-credit';
 
 // The ONE path that turns a real Razorpay capture into a paid, premium student.
 // Shared by the webhook (normal case) and the reconcile-payments cron (the
@@ -16,6 +17,10 @@ export interface PayableRow {
   plan: string;
   coupon_code?: string | null;
   amount?: number | null;
+  /** Session purchases only: the diagnostic finding that motivated the buy,
+   *  carried onto the credit so the mentor opens knowing the problem. */
+  finding_kind?: string | null;
+  finding_evidence?: string | null;
 }
 
 export type ActivationSource = 'webhook' | 'reconcile';
@@ -26,6 +31,67 @@ export type ActivationSource = 'webhook' | 'reconcile';
  * transaction failed — the caller should surface that (webhook 500 → Razorpay
  * retries; cron → logged and retried next run).
  */
+/**
+ * A paid ₹299 session: mark the payment, mint ONE credit, and put it in the
+ * assignment queue. Deliberately does NOT grant premium.
+ *
+ * The credit carries the finding that motivated the purchase, so the mentor
+ * opens the session already knowing the problem — and so we can eventually
+ * answer the only question that matters: which findings convert, and which
+ * interventions actually help.
+ */
+async function activateSessionCredit(
+  admin: ReturnType<typeof createAdminClient>,
+  row: PayableRow,
+  orderId: string,
+  paymentId: string | null,
+  source: ActivationSource,
+): Promise<boolean> {
+  // Idempotent by the same guard the caller uses (status !== 'paid'), plus
+  // this: a second webhook delivery must never mint a second credit.
+  const { data: existing } = await admin
+    .from('session_credits').select('id').eq('payment_id', row.id).maybeSingle();
+
+  const { error: payErr } = await admin
+    .from('student_payments')
+    .update({ status: 'paid', razorpay_payment_id: paymentId ?? null })
+    .eq('id', row.id);
+  if (payErr) {
+    console.error(`[activate:${source}] session payment update failed:`, payErr.message);
+    return false;
+  }
+
+  if (!existing) {
+    const { error: creditErr } = await admin.from('session_credits').insert({
+      student_id: row.student_id,
+      payment_id: row.id,
+      status: 'paid',
+      amount_paise: row.amount ?? SESSION_PRICE_PAISE,
+      finding_kind: row.finding_kind ?? null,
+      finding_evidence: row.finding_evidence ?? null,
+    });
+    if (creditErr) {
+      // The money arrived and the entitlement did not — the one failure here
+      // that must be loud, because the student has paid for nothing.
+      console.error(`[activate:${source}] SESSION CREDIT MINT FAILED`, creditErr.message);
+      return false;
+    }
+  }
+
+  await logSecurityEvent(admin, {
+    type: 'payment_activated', severity: 'info', userId: row.student_id,
+    metadata: { plan: row.plan, orderId, paymentId, source, kind: 'session_credit' },
+  });
+
+  await emitTimeline(admin, {
+    entity: 'student', entityId: row.student_id, kind: 'subscribed',
+    summary: `Booked a 1:1 session — ₹${(row.amount ?? SESSION_PRICE_PAISE) / 100}`,
+    actor: 'student', metadata: { orderId, plan: row.plan, finding: row.finding_kind ?? null },
+  });
+
+  return true;
+}
+
 export async function activatePaidOrder(
   admin: ReturnType<typeof createAdminClient>,
   row: PayableRow,
@@ -33,6 +99,17 @@ export async function activatePaidOrder(
   paymentId: string | null,
   source: ActivationSource,
 ): Promise<boolean> {
+  // ── The ₹299 session takes a DIFFERENT road ──────────────────────────────
+  //
+  // Every other plan here is a subscription: it flips is_premium and assigns a
+  // permanent buddy. A session must do neither — the student stays free, and
+  // the Buddy plan stays the thing they upgrade TO. Before session_credits
+  // existed there was no way to express that, so selling one session would
+  // have meant giving away the whole membership.
+  if (row.plan === SESSION_PLAN_ID) {
+    return activateSessionCredit(admin, row, orderId, paymentId, source);
+  }
+
   const months = isPlanId(row.plan) ? PLANS[row.plan].months : 1;
   const renews = addMonthsClamped(new Date(), months);
 
