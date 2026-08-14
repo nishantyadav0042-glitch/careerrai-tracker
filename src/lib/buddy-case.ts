@@ -47,6 +47,9 @@
 // repeating the year is common; repeating the same preparation is the part
 // that is avoidable.
 export const REPEATER_FACT = 'Around 1 in 3 CAT aspirants is retaking the exam — an estimated 30–40%.';
+/** The strip version: one line, no clause after it (founder, 14 Aug —
+ *  "don't write anything else"). Still the sourced 1-in-3, never ~50%. */
+export const REPEATER_HEADLINE = '1 in 3 students repeats CAT every year.';
 export const REPEATER_SOURCE = 'Careers360 estimate; official repeater figures are not published.';
 export const REPEATER_SO_WHAT = 'Repeating the year is common. Repeating the same preparation is the avoidable part.';
 
@@ -61,6 +64,9 @@ export type CaseKind =
   | 'mock_missing'
   | 'mock_gap'
   | 'topic_avoidance'
+  | 'section_weak_mock'
+  | 'stuck_learning'
+  | 'not_started'
   | 'unreviewed';
 
 export interface CaseFinding {
@@ -104,6 +110,13 @@ export interface BuddyCaseInput {
   daysSinceLastMock: number | null;
   /** One topic swapped out of the plan again and again — avoidance. */
   repeatSwapped: { topic: string; times: number } | null;
+  /** Latest mock, per section. The sharpest weakness a student ever gives us:
+   *  "VARC 89 when QA is 99" is undeniable and entirely theirs. */
+  latestSectionPercentiles: { section: string; percentile: number }[];
+  /** Topics OPENED but never finished, and never opened at all. "Started" is
+   *  a weak signal; 22 chapters parked at Learning is the real weakness. */
+  stuckLearning: number;
+  notStartedCount: number;
 }
 
 /** A section under this share of topics started is a gap worth naming —
@@ -112,6 +125,10 @@ export const SECTION_GAP_SHARE = 0.4;
 export const SECTION_PROGRESS_SHARE = 0.3;
 /** Days without a mock before the gap itself is the finding. */
 export const MOCK_GAP_DAYS = 14;
+/** Percentile points below their own best section before we call it weak. */
+export const SECTION_WEAK_GAP = 5;
+/** Topics parked at 'learning' before that backlog is the story. */
+export const STUCK_LEARNING_MIN = 6;
 
 /** Below this many mocks we cannot speak about a trend at all. */
 export const MIN_MOCKS_FOR_TREND = 3;
@@ -247,6 +264,54 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
     });
   }
 
+  // 2e. THE WEAKEST SECTION, FROM THEIR OWN MOCK. The sharpest, least
+  //     deniable weakness we can show: their own percentiles, side by side.
+  const secPct = input.latestSectionPercentiles
+    .filter((s) => Number.isFinite(s.percentile) && s.percentile >= 0 && s.percentile <= 100);
+  if (secPct.length >= 2) {
+    const ranked = [...secPct].sort((a, b) => a.percentile - b.percentile);
+    const worst = ranked[0];
+    const best = ranked[ranked.length - 1];
+    if (best.percentile - worst.percentile >= SECTION_WEAK_GAP) {
+      out.push({
+        kind: 'section_weak_mock',
+        title: `${worst.section} is dragging your score`,
+        evidence: `${worst.section} ${worst.percentile}%ile vs ${best.percentile} in ${best.section}.`,
+        soWhat: `A Buddy rebuilds your ${worst.section} approach — that gap is where your marks are.`,
+        severity: 6,
+        chip: worst.section,
+        stat: `${worst.percentile}%ile — your weakest section`,
+      });
+    }
+  }
+
+  // 2f. OPENED BUT NEVER FINISHED. "Started" flatters; a pile of chapters
+  //     parked at Learning is the honest weakness underneath it.
+  if (input.stuckLearning >= STUCK_LEARNING_MIN) {
+    out.push({
+      kind: 'stuck_learning',
+      title: 'Too many topics left half-done',
+      evidence: `${input.stuckLearning} topics opened but never finished.`,
+      soWhat: 'A Buddy closes them in order of marks, instead of opening more.',
+      severity: 5,
+      chip: 'HALF-DONE',
+      stat: `${input.stuckLearning} topics stuck at Learning`,
+    });
+  }
+
+  // 2g. NEVER OPENED — only once they are clearly underway elsewhere.
+  if (input.notStartedCount > 0 && input.coveragePct != null && input.coveragePct >= 20) {
+    out.push({
+      kind: 'not_started',
+      title: 'Untouched topics still on your syllabus',
+      evidence: `${input.notStartedCount} topics not started yet.`,
+      soWhat: 'A Buddy tells you which of them actually carry marks.',
+      severity: 3,
+      chip: 'UNTOUCHED',
+      stat: `${input.notStartedCount} topics not started`,
+    });
+  }
+
   // 3. STRATEGY — no finish date, no daily hours: they are studying without a
   //    shape, which is the thing a plan cannot fix on its own.
   if (!input.hasPlanShape) {
@@ -315,36 +380,11 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
   return out.sort((a, b) => b.severity - a.severity);
 }
 
-/**
- * Neutral, PERSONAL status lines used to pad the diagnosis to three bullets
- * when a student has fewer than three true findings (founder, 14 Aug: every
- * student gets three pointers from their own preparation; ChatGPT's review,
- * accepted: the generic "nobody is reviewing" line never leads the card).
- *
- * These are facts about their prep, stated flat — a snapshot, not an
- * accusation — so honesty survives the always-three rule: a day-one student
- * sees "0/46 topics started · no mock yet · 102 days to your date", which is
- * all true and all theirs.
- */
-export function statusBullets(input: BuddyCaseInput): { chip: string; stat: string }[] {
-  const out: { chip: string; stat: string }[] = [];
-  const totalStarted = input.sectionsStarted.reduce((s, x) => s + x.started, 0);
-  const totalTopics = input.sectionsStarted.reduce((s, x) => s + x.total, 0);
-  if (totalTopics > 0) out.push({ chip: 'SYLLABUS', stat: `${totalStarted}/${totalTopics} topics started` });
-  else if (input.coveragePct != null) out.push({ chip: 'SYLLABUS', stat: `${Math.round(input.coveragePct)}% covered` });
-  out.push({
-    chip: 'MOCKS',
-    stat: !input.mocksEver ? 'no mock recorded yet'
-      : input.daysSinceLastMock != null ? `last mock ${input.daysSinceLastMock} days ago` : 'mocks on record',
-  });
-  if (input.daysToTarget != null && input.daysToTarget > 0) {
-    out.push({ chip: 'TARGET', stat: `${input.daysToTarget} days to your finish date` });
-  }
-  if (input.loggedHours7d != null) {
-    out.push({ chip: 'HOURS', stat: `${input.loggedHours7d} hrs logged this week` });
-  }
-  return out;
-}
+// statusBullets() was deleted on 14 Aug. It padded the card to three with
+// neutral facts (SYLLABUS 41/46 · MOCKS 1 day ago · TARGET 42 days) whenever a
+// student had fewer than three findings — which turned a WEAKNESS card into a
+// status card, exactly the blunder the founder called out. The card now shows
+// weaknesses or nothing; if a student genuinely has one weakness, they see one.
 
 /**
  * The three findings the screen shows. Three is the founder's number and it

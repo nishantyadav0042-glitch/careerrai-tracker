@@ -1,4 +1,4 @@
-import { buildBuddyCase, topFindings, statusBullets, type BuddyCaseInput, type CaseFinding } from '@/lib/buddy-case';
+import { buildBuddyCase, topFindings, type BuddyCaseInput, type CaseFinding } from '@/lib/buddy-case';
 import { mockInformedFocus, type DebriefRow } from '@/lib/mock-informed-focus';
 import { remainingSyllabusHours } from '@/lib/study-pace';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
@@ -15,10 +15,8 @@ import type { CoverageStatus } from '@/lib/coverage-status';
 export interface StudentCase {
   findings: CaseFinding[];
   topKind: string | null;
-  /** Exactly three pointers for the conversion screen: real gaps first
-   *  (gap: true, shown red), padded with neutral personal status facts. The
-   *  generic "nobody reviews your prep" floor never appears here — every
-   *  bullet is this student's own number. */
+  /** WEAKNESSES ONLY, up to three — never padded with status facts. If a
+   *  student has one real weakness they see one line, not three. */
   bullets: { chip: string; stat: string; gap: boolean }[];
   gapCount: number;
 }
@@ -87,6 +85,23 @@ export async function loadStudentCase(admin: any, studentId: string): Promise<St
     total: list.length,
   }));
 
+  // Per-section percentiles from their LATEST mock — the sharpest weakness.
+  const newest = mockRows[mockRows.length - 1];
+  const pct = (v: unknown) => {
+    const n = Number((v as { percentile?: unknown } | null)?.percentile);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+  };
+  const latestSectionPercentiles = newest
+    ? ([['VARC', pct(newest.varc)], ['DILR', pct(newest.dilr)], ['QA', pct(newest.qa)]] as [string, number | null][])
+        .filter((e): e is [string, number] => e[1] !== null)
+        .map(([section, percentile]) => ({ section, percentile }))
+    : [];
+
+  // "Started" flatters. These two are the honest split underneath it.
+  const stuckLearning = rows.filter((r) => r.status === 'learning').length;
+  const syllabusTopics = new Set([...QUANT_TOPICS, ...VERBAL_TOPICS, ...LRDI_TOPICS]);
+  const notStartedCount = rows.filter((r) => syllabusTopics.has(r.topic) && r.status === 'not_started').length;
+
   const lastMockIso = (lastMockReport?.report_date as string | null) ?? mockRows[mockRows.length - 1]?.taken_on ?? null;
   const mocksEver = !!lastMockIso;
   const daysSinceLastMock = lastMockIso
@@ -119,23 +134,21 @@ export async function loadStudentCase(admin: any, studentId: string): Promise<St
     mocksEver,
     daysSinceLastMock,
     repeatSwapped,
+    latestSectionPercentiles,
+    stuckLearning,
+    notStartedCount,
   };
   const findings = buildBuddyCase(caseInput);
 
-  const top = topFindings(findings);
-  const gaps = top.filter((f) => f.kind !== 'unreviewed');
-  const bullets: { chip: string; stat: string; gap: boolean }[] =
-    gaps.map((f) => ({ chip: f.chip, stat: f.stat, gap: true }));
-  for (const b of statusBullets(caseInput)) {
-    if (bullets.length >= 3) break;
-    if (bullets.some((x) => x.chip === b.chip)) continue;
-    bullets.push({ ...b, gap: false });
-  }
+  // WEAKNESSES ONLY. The generic "nobody reviews your prep" floor is dropped
+  // here (it is not a weakness), and nothing is padded in to reach three.
+  const gaps = findings.filter((f) => f.kind !== 'unreviewed');
+  const top = topFindings(gaps);
 
   return {
     findings: top,
-    topKind: gaps[0]?.kind ?? top[0]?.kind ?? null,
-    bullets: bullets.slice(0, 3),
-    gapCount: gaps.length,
+    topKind: top[0]?.kind ?? null,
+    bullets: top.map((f) => ({ chip: f.chip, stat: f.stat, gap: true })),
+    gapCount: top.length,
   };
 }

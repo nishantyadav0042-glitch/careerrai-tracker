@@ -64,7 +64,8 @@ describe('the card refuses honestly rather than failing at checkout', () => {
   it('says plainly that nothing renews', () => {
     // The entire point is that a free student can buy once without a
     // subscription; leaving that ambiguous is how a refund request starts.
-    expect(readFileSync(CARD, 'utf8')).toContain('Not a subscription');
+    // Trimmed to four words on 14 Aug — the claim survives, the sentence did not.
+    expect(readFileSync(CARD, 'utf8')).toContain('One-time. Nothing renews.');
   });
 });
 
@@ -77,11 +78,11 @@ describe('the conversion screen: weakness → person → price, nothing else', (
 
   it('diagnosis → red strip → person → price → till-CAT, in that order', () => {
     const s = readFileSync(SCREEN, 'utf8');
-    const diagnosis = s.indexOf('We found ');
+    const diagnosis = s.indexOf('your weak spots');
     const red = s.indexOf('bg-red-600');
     const person = s.indexOf('Your IIM Buddy');
     const price = s.indexOf('<BookSessionCard');
-    const tillcat = s.indexOf('Want {buddyFirst} till CAT?');
+    const tillcat = s.indexOf('till CAT — ₹2,999');
     expect(diagnosis).toBeGreaterThan(-1);
     expect(red).toBeGreaterThan(diagnosis);
     expect(person).toBeGreaterThan(red);
@@ -98,18 +99,30 @@ describe('the conversion screen: weakness → person → price, nothing else', (
     expect(s).not.toContain('Nobody is reviewing your preparation');
   });
 
-  it('the Till-CAT plan is one active-choice banner, not the price-card stack', () => {
+  it('the Till-CAT plan is one line, not the price-card stack', () => {
     const s = readFileSync(SCREEN, 'utf8');
-    expect(s).toContain('till CAT?');
     expect(s).toContain('₹2,999');
     // ...but the big subscription price cards do not come back.
     expect(s).not.toContain('BuddyBuyButtons');
   });
 
-  it('the repeater fact is the sourced one, never the unsourced ~50%', () => {
+  it('the red strip is ONE sourced line and nothing after it', () => {
     const s = readFileSync(SCREEN, 'utf8');
-    expect(s).toContain('REPEATER_FACT');
+    expect(s).toContain('REPEATER_HEADLINE');
+    expect(s).not.toContain('REPEATER_SO_WHAT');
     expect(s).not.toContain('50%');
+  });
+
+  it('the 5-student cap is printed AND enforced, not just claimed', () => {
+    // A scarcity line next to a payment button has to be true; the student
+    // otherwise discovers it by getting a mentor with no time for them.
+    expect(readFileSync(SCREEN, 'utf8')).toContain('Max 5 students per mentor');
+  });
+
+  it('the diagnosis card can never be padded with status facts again', () => {
+    const loader = readFileSync('src/lib/buddy-case-data.ts', 'utf8');
+    expect(loader).not.toContain('statusBullets');
+    expect(loader).toContain("f.kind !== 'unreviewed'");
   });
 
   it('the free buddy route renders this screen, wired to the student\'s case', () => {

@@ -18,6 +18,7 @@ const BLANK: BuddyCaseInput = {
   hasPlanShape: true, isRepeater: false,
   weakestSectionNow: null, weakestSectionAtSignup: null, hasMentor: false,
   sectionsStarted: [], mocksEver: false, daysSinceLastMock: null, repeatSwapped: null,
+  latestSectionPercentiles: [], stuckLearning: 0, notStartedCount: 0,
 };
 const kinds = (i: Partial<BuddyCaseInput>) => buildBuddyCase({ ...BLANK, ...i }).map((f) => f.kind);
 
@@ -274,5 +275,67 @@ describe('avoidance needs a real pattern', () => {
 
   it('one swap is a choice, not avoidance', () => {
     expect(kinds({ repeatSwapped: { topic: 'Geometry', times: 1 } })).not.toContain('topic_avoidance');
+  });
+});
+
+describe('the weaknesses that were sitting unused in our own data', () => {
+  it('the weakest section comes from THEIR mock, side by side', () => {
+    // Nishant's real mock: VARC 89, DILR 99, QA 99. This is the sharpest,
+    // least deniable weakness we can put in front of a student — and the
+    // first build never showed it.
+    const f = buildBuddyCase({
+      ...BLANK,
+      latestSectionPercentiles: [
+        { section: 'VARC', percentile: 89 }, { section: 'DILR', percentile: 99 }, { section: 'QA', percentile: 99 },
+      ],
+    }).find((x) => x.kind === 'section_weak_mock');
+    expect(f?.stat).toBe('89%ile — your weakest section');
+    expect(f?.evidence).toBe('VARC 89%ile vs 99 in QA.');
+  });
+
+  it('an even mock names no weak section', () => {
+    expect(kinds({
+      latestSectionPercentiles: [
+        { section: 'VARC', percentile: 96 }, { section: 'DILR', percentile: 98 }, { section: 'QA', percentile: 99 },
+      ],
+    })).not.toContain('section_weak_mock');
+  });
+
+  it('"started" is not "finished" — parked topics are the real backlog', () => {
+    const f = buildBuddyCase({ ...BLANK, stuckLearning: 22 })
+      .find((x) => x.kind === 'stuck_learning');
+    expect(f?.stat).toBe('22 topics stuck at Learning');
+  });
+
+  it('a couple of open topics is normal studying, not a weakness', () => {
+    expect(kinds({ stuckLearning: 3 })).not.toContain('stuck_learning');
+  });
+
+  it('untouched topics only count once they are genuinely underway', () => {
+    expect(kinds({ notStartedCount: 5, coveragePct: 45 })).toContain('not_started');
+    expect(kinds({ notStartedCount: 40, coveragePct: 2 })).not.toContain('not_started');
+  });
+});
+
+describe('THE BLUNDER: this card shows weaknesses or nothing', () => {
+  it('status facts can never be padded in — statusBullets is gone', async () => {
+    const mod = await import('./buddy-case');
+    expect((mod as Record<string, unknown>).statusBullets).toBeUndefined();
+  });
+
+  it('a strong student sees FEWER lines, never invented ones', () => {
+    // The first build gave this student "SYLLABUS 41/46 · MOCKS 1 day ago ·
+    // TARGET 42 days" — three lines, zero weaknesses.
+    const strong = buildBuddyCase({
+      ...BLANK, plannedHours7d: 16, loggedHours7d: 15, coveragePct: 90,
+      mocksEver: true, daysSinceLastMock: 1, stuckLearning: 2, notStartedCount: 0,
+      sectionsStarted: [
+        { section: 'QA', started: 26, total: 28 }, { section: 'VARC', started: 9, total: 9 }, { section: 'DILR', started: 9, total: 9 },
+      ],
+      latestSectionPercentiles: [
+        { section: 'VARC', percentile: 97 }, { section: 'DILR', percentile: 99 }, { section: 'QA', percentile: 99 },
+      ],
+    }).filter((f) => f.kind !== 'unreviewed');
+    expect(strong).toHaveLength(0);
   });
 });

@@ -105,10 +105,7 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
         <p className="text-[13.5px] font-extrabold text-emerald-900">Your session is booked ✓</p>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-emerald-800">
-          We&apos;re matching you with the right Buddy — you&apos;ll get the meeting link here
-          and on WhatsApp once it&apos;s scheduled.
-        </p>
+        <p className="mt-1 text-[12.5px] text-emerald-800">Meeting link coming here and on WhatsApp.</p>
       </div>
     );
   }
@@ -116,18 +113,13 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   return (
     <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
       <div className="border-b border-stone-100 px-4 py-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">
-          {state.minutes}-min prep audit · 1:1 · no subscription
-        </p>
-        {/* ₹299 is not "time with an IIM guy" — it is someone finally
-            auditing THIS student's preparation (review, 14 Aug). */}
-        <p className="mt-1 text-[15px] font-extrabold leading-tight text-stone-900">
-          {hasGaps ? `Fix these gaps — ${state.priceLabel}` : `Get your prep audited — ${state.priceLabel}`}
+        <p className="text-[15px] font-extrabold leading-tight text-stone-900">
+          Get an audit of your prep at just {state.priceLabel}
         </p>
         <ul className="mt-1.5 space-y-0.5 text-[12.5px] font-medium text-stone-700">
-          <li>• {mentorFirst ?? 'Your Buddy'} reads your coverage &amp; mocks before the call</li>
-          <li>• You go through your plan and priorities together</li>
-          <li>• You leave with a written next step</li>
+          <li>• {state.minutes} min, 1:1 with {mentorFirst ?? 'your Buddy'}</li>
+          <li>• Your gaps, ranked by marks</li>
+          <li>• A written next step</li>
         </ul>
       </div>
 
@@ -140,22 +132,14 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
             >
               {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
             </button>
-            <p className="mt-2 text-center text-[10.5px] leading-snug text-stone-400">
-              One-time payment — nothing renews. Not a subscription.
-            </p>
-            <p className="mt-1 text-center text-[11px] font-semibold text-stone-600">
-              ₹299 today. Clear direction for the months that matter.
-            </p>
+            <p className="mt-2 text-center text-[10.5px] text-stone-400">One-time. Nothing renews.</p>
           </>
         ) : (
           // Sold out is an honest, GOOD answer: it says we protect the sessions
           // already sold. A silently oversold week does not.
           <div className="rounded-xl bg-stone-50 p-3 text-center">
             <p className="text-[13px] font-bold text-stone-800">Fully booked this week</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-stone-600">
-              Every Buddy is at capacity. We won&apos;t take your money for a session we
-              can&apos;t hold — check back in a day or two.
-            </p>
+            <p className="mt-1 text-[12px] text-stone-600">Check back in a day or two.</p>
           </div>
         )}
         {error && <p className="mt-2 text-center text-[12px] font-semibold text-rose-600">{error}</p>}

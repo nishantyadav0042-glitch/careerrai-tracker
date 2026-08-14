@@ -1,4 +1,4 @@
-import { REPEATER_FACT, REPEATER_SO_WHAT, type CaseFinding } from '@/lib/buddy-case';
+import { REPEATER_HEADLINE, type CaseFinding } from '@/lib/buddy-case';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import { BookSessionCard } from '@/components/buddy/book-session-card';
 
@@ -8,19 +8,21 @@ import { BookSessionCard } from '@/components/buddy/book-session-card';
 // you need a mentor" — it is "we just showed you something about your own
 // preparation you weren't seeing clearly", followed by "₹299 → let's fix it".
 //
-//   1. PERSONAL DIAGNOSIS — always exactly three bullets, every one of them
-//      this student's own number ("QA — 9/28 topics started"). Real gaps show
-//      red; a data-thin student gets neutral personal status facts instead of
-//      an invented problem. The generic "nobody is reviewing your prep" line
-//      is gone from this card for good — a line any student could receive is
-//      a line no student feels.
-//   2. RED STRIP — the one sourced external fact. 1 in 3, never ~50: the
-//      founder's own research (Careers360) puts repeaters at an estimated
-//      30–40%, and both reviews landed on printing the sourced number.
-//   3. THE PERSON — one matched mentor and why them.
-//   4. ₹299 — framed as a preparation AUDIT of the gaps above, not "45
-//      minutes with an IIM guy".
-//   5. TILL CAT — the ₹2,999 as an active choice, not a footnote.
+//   1. WEAK SPOTS — up to three, and ONLY real weaknesses. The first build
+//      padded this to three with status facts (SYLLABUS 41/46 · MOCKS 1 day
+//      ago · TARGET 42 days) whenever a student had fewer findings, which
+//      turned a weakness card into a status card — the founder's word for it
+//      was "blunder", and he was right. Padding is deleted: one weakness
+//      shows one line. The engine now also reads the signals that were
+//      sitting unused — weakest section from their own mock, topics parked at
+//      Learning, topics never opened.
+//   2. RED STRIP — one line, nothing after it. 1 in 3, the sourced figure.
+//   3. THE PERSON — one mentor, why them, and the 5-student cap (enforced by
+//      a DB trigger, so it is a promise and not a poster).
+//   4. ₹299 — an audit of the weak spots above.
+//   5. TILL CAT — one line.
+//
+// The rule for every line here: minimum words, maximum directness.
 
 function firstIim(raw: string | null): string {
   const first = raw?.split(',')[0]?.trim();
@@ -47,9 +49,7 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
       {/* ── 1. PERSONAL DIAGNOSIS — three pointers, all their own numbers ── */}
       <div className="overflow-hidden rounded-3xl bg-stone-900 px-5 py-5 text-white">
         <p className="text-[11px] font-bold uppercase tracking-widest text-orange-400">
-          {gapCount > 0
-            ? `We found ${gapCount === 1 ? '1 gap' : `${gapCount} gaps`} in your prep, ${firstName}`
-            : `Your prep right now, ${firstName}`}
+          {firstName}, your weak spots
         </p>
         <div className="mt-3 space-y-2.5">
           {bullets.map((b) => (
@@ -64,10 +64,9 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
         </div>
       </div>
 
-      {/* ── 2. RED STRIP — sourced, two lines, no paragraph ──────────────── */}
-      <div className="rounded-2xl bg-red-600 px-4 py-3 text-white">
-        <p className="text-[13.5px] font-extrabold leading-snug">{REPEATER_FACT}</p>
-        <p className="mt-1 text-[12px] font-semibold leading-snug text-red-100">{REPEATER_SO_WHAT}</p>
+      {/* ── 2. RED STRIP — one line. Nothing else. ───────────────────────── */}
+      <div className="rounded-2xl bg-red-600 px-4 py-3 text-center text-white">
+        <p className="text-[14px] font-extrabold leading-snug">{REPEATER_HEADLINE}</p>
       </div>
 
       {/* ── 3. THE PERSON ────────────────────────────────────────────────── */}
@@ -94,6 +93,11 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
           {buddy.how_i_work && (
             <p className="mt-2 text-[12px] italic leading-snug text-stone-600">&ldquo;{buddy.how_i_work}&rdquo;</p>
           )}
+          {/* Scarcity that is also the quality promise, and it is TRUE — the
+              cap is enforced in the assignment queue. */}
+          <p className="mt-2.5 border-t border-stone-100 pt-2 text-[12px] font-bold text-stone-800">
+            Max 5 students per mentor. Ever.
+          </p>
         </div>
       )}
 
@@ -107,9 +111,7 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
 
       {/* ── 5. TILL CAT — an active choice, not a footnote ───────────────── */}
       <a href="/offer" className="block rounded-2xl bg-stone-900 px-4 py-3.5 text-white active:scale-[0.99]">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400">Want {buddyFirst} till CAT?</p>
-        <p className="mt-1 text-[15px] font-extrabold leading-tight">₹2,999 · your Buddy until exam day</p>
-        <p className="mt-0.5 text-[11.5px] font-medium text-stone-300">Weekly review + guidance, all the way. →</p>
+        <p className="text-[15px] font-extrabold leading-tight">{buddyFirst} till CAT — ₹2,999 →</p>
       </a>
     </div>
   );
