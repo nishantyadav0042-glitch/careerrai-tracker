@@ -8,6 +8,7 @@ import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 import { SixPromises } from '@/components/six-promises';
 import ScreenLogTour from '@/app/student/onboarding/screens/screen-log-tour';
+import { WhatsAppOptIn } from '@/components/onboarding/whatsapp-optin';
 
 // The setup journey, made visible (founder, 21 July: "it should feel like a
 // journey, not a boring job — sticky like a magnet till app notifications are
@@ -57,7 +58,7 @@ function JourneyRail({ current, stations }: { current: number; stations: readonl
 // here needs it any more.
 
 
-type Step = 'promises' | 'reminders' | 'logTour' | 'installFirst' | 'openApp';
+type Step = 'promises' | 'reminders' | 'logTour' | 'whatsapp' | 'installFirst' | 'openApp';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -360,11 +361,25 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
           <div className="space-y-4">
             <JourneyRail current={stations.length - 1} stations={stations} />
             <ScreenLogTour
-              onNext={async () => { finishCommitment(); }}
+              onNext={async () => { setStep('whatsapp'); }}
               onBack={() => setStep('reminders')}
               canGoBack
               isLoading={false}
             />
+          </div>
+        )}
+
+        {/* ── The last screen before Home ────────────────────────────────
+            Reach, not onboarding: 87% finish the sequence, but 64% never log
+            a day, 49% never return after day one, and only 31% have working
+            push. Every student has a phone number, so WhatsApp is the only
+            channel that covers the two-thirds push cannot — and this is the
+            last controlled moment before that drop.
+            Skippable; nothing here gates Home. */}
+        {step === 'whatsapp' && (
+          <div className="space-y-4">
+            <JourneyRail current={stations.length - 1} stations={stations} />
+            <WhatsAppOptIn onDone={finishCommitment} />
           </div>
         )}
 

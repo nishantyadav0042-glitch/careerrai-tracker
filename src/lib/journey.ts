@@ -215,6 +215,9 @@ export type EventName =
   // The ₹299 single session — its own funnel, because it converts a FREE
   // student and we need to see it separately from subscription checkout.
   | 'session_book_click' | 'session_pay_dismissed' | 'session_pay_success'
+  // The WhatsApp opt-in, as its own funnel: join vs skip is the only way to
+  // answer whether day-2 return actually moves for joiners.
+  | 'whatsapp_join_click' | 'whatsapp_skip'
   | 'pay_escape_browser' | 'pay_exception' | 'pay_failed' | 'pay_free_unlock'
   | 'pay_order_created' | 'pay_order_failed' | 'pay_script_failed'
   | 'pay_success_callback'
