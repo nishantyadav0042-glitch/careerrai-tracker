@@ -212,6 +212,9 @@ export type EventName =
   | 'install_prompt_unavailable' | 'install_unsupported'
   | 'meta_escape_click' | 'meta_escape_dismissed' | 'meta_escape_shown'
   | 'pay_blocked_flag_off' | 'pay_checkout_opened' | 'pay_dismissed'
+  // The ₹299 single session — its own funnel, because it converts a FREE
+  // student and we need to see it separately from subscription checkout.
+  | 'session_book_click' | 'session_pay_dismissed' | 'session_pay_success'
   | 'pay_escape_browser' | 'pay_exception' | 'pay_failed' | 'pay_free_unlock'
   | 'pay_order_created' | 'pay_order_failed' | 'pay_script_failed'
   | 'pay_success_callback'

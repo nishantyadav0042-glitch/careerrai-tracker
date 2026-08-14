@@ -4,6 +4,7 @@ import { RecommendedBuddies } from '@/components/recommended-buddies';
 import { Testimonials } from '@/components/testimonials';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import type { SocialProof } from '@/lib/social-proof';
+import { BookSessionCard } from '@/components/buddy/book-session-card';
 import { Check } from 'lucide-react';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 
@@ -79,6 +80,13 @@ export function LockedBuddyHub({
 
       {/* 3 — THE BUY. One tap → Razorpay, right under the person it pays for. */}
       <BuddyBuyButtons fullName={fullName} />
+
+      {/* 3b — THE SMALLER DOOR. ₹299 for one session, for the student who is
+          not ready to commit ₹2,999 to a person they have never met. It sits
+          BELOW the subscription deliberately: the Buddy relationship is the
+          product and this is the way in, not a cheaper substitute. It shows
+          "fully booked" rather than taking money we cannot honour. */}
+      <BookSessionCard />
 
       {/* Zero-commission trust strip (founder) — reframes the price as fair:
           it's going to a real mentor, not a platform cut. */}
