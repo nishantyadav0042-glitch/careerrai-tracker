@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { TopicInsights } from '@/components/topic-insights';
 import { BusyDayButton } from '@/components/busy-day-button';
 import { isMockSitting } from '@/lib/mock-in-plan';
+import { FirstWeekAskCard } from '@/components/first-week-ask-card';
 
 type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
@@ -73,6 +74,23 @@ interface RoutineResponse {
   /** Set when a recent mock DECIDED today's focus — the proof that entering
    *  a score changes the plan. Null when the usual chain decided. */
   focusBasis?: string | null;
+  /** Set only when the student's chosen finish date does not fit their own
+   *  hours — see lib/date-feasibility. Null means the date is fine, or none
+   *  is set; a card that speaks when it has nothing to say gets ignored. */
+  finishDate?: {
+    verdict: 'tight' | 'impossible';
+    headline: string;
+    detail: string;
+    options: string[];
+  } | null;
+  /** The section the "which topic hurts most" first-week ask scopes to. */
+  weakestSection?: string;
+  /** What the first-week ask card needs to decide whether to show, and what. */
+  firstWeekAsk?: {
+    daysSinceSignup: number;
+    daysLogged: number;
+    answered: Partial<Record<string, string | null>>;
+  } | null;
 }
 
 // The 30-minute "crisis day" budget that used to live here had no setter left
@@ -435,6 +453,43 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
           <span className="mr-1 font-bold uppercase tracking-wide text-indigo-500 text-[9px]">Built from your mock</span>
           <br />{data.focusBasis}
         </p>
+      )}
+
+      {/* "Your date doesn't work" — founder, 14 Aug, option (a): reaching
+          every topic is only honest when there is time; when there is not,
+          the student is TOLD rather than quietly served a shorter syllabus.
+          This moves nothing — the date stays exactly where the student put
+          it — it is a sentence, and both ways to close the gap are theirs. */}
+      {!fullyDone && data.finishDate && (
+        <div
+          className={cn(
+            'mb-1.5 rounded-lg border px-2.5 py-2 text-[11px]',
+            data.finishDate.verdict === 'impossible'
+              ? 'border-rose-200 bg-rose-50 text-rose-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900',
+          )}
+        >
+          <p className="font-bold leading-snug">{data.finishDate.headline}</p>
+          <p className="mt-0.5 leading-snug opacity-90">{data.finishDate.detail}</p>
+          <ul className="mt-1 space-y-0.5">
+            {data.finishDate.options.map((o) => (
+              <li key={o} className="leading-snug">· {o}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* First-week ask — founder, 14 Aug: "weakest section in onboarding,
+          rest in first week." Rations itself to one question a day and goes
+          silent once answered or once the week is up; see
+          lib/first-week-asks for the full rule. */}
+      {!fullyDone && data.firstWeekAsk && (
+        <FirstWeekAskCard
+          weakestSection={data.weakestSection ?? 'DILR'}
+          daysSinceSignup={data.firstWeekAsk.daysSinceSignup}
+          daysLogged={data.firstWeekAsk.daysLogged}
+          answered={data.firstWeekAsk.answered}
+        />
       )}
 
       {/* Why it is that size, but only when it differs from what they asked

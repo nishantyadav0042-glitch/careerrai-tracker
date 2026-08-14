@@ -1,13 +1,11 @@
-import { weakestFromCoverage } from '@/lib/section-weakness';
-import { mockInformedFocus, type DebriefRow } from '@/lib/mock-informed-focus';
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, getPhase, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
+import { personalizationSummary, archetypeRevisionMultiplier, type Section, type Phase, type HistoryInput } from '@/lib/routine-engine';
 import { buildDayPlan } from '@/lib/plan-day';
+import { assessFinishDate, feasibilityMessage } from '@/lib/date-feasibility';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { type CoverageStatus } from '@/lib/topic-selector';
-import { buildTopicChoices } from '@/lib/day-topics';
 import { plannerRecency } from '@/lib/plan-history';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
@@ -17,9 +15,8 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { getLogDateString } from '@/lib/streak-utils';
 import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
-import { coachingTopicsForDate } from '@/lib/timetable-month';
-import type { TimetableBlock } from '@/lib/timetable';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
+import type { DebriefRow } from '@/lib/mock-informed-focus';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -56,7 +53,8 @@ export async function GET() {
         is_working_professional, is_repeater, target_percentile,
         hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
         self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
-        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with, plan_source
+        baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with, plan_source,
+        created_at
       `)
       .eq('id', user.id)
       .single(),
@@ -115,23 +113,12 @@ export async function GET() {
   ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-  // Weakest-section chain: MEASURED mock performance (founder, 13 Aug:
-  // "mock score performance is significantly important" — a recent,
-  // complete, decisive debrief outranks everything, because evidence beats
-  // memory) → explicit self-report (legacy accounts that answered the old
-  // tap) → baseline mock scores → derived from the student's own declared
-  // Coverage grid (the Blueprint Builder no longer asks the single-section
-  // question — the full grid answers it better).
-  // Falls back to 'DILR' — the same deterministic, stated default the
-  // tie-break in computeWeakestFromCoverage already uses — when nothing is
-  // derivable (a true beginner: no self-report, no baselines, and an
-  // honestly-empty Coverage grid). This replaced the legacy quick-setup
-  // gate that used to re-interrogate exactly those students on the home
-  // screen ("Which section is toughest?") even though they'd just finished
-  // the mandatory Builder.
-  // The override is never silent: focusBasis rides the response so the plan
-  // says "Your last mock (VARC 89 · DILR 99 · QA 99) — VARC needs the work"
-  // instead of quietly contradicting what the student typed at signup.
+  // Weakest-section chain (mock → self-report → baseline → coverage grid →
+  // DILR) lives in lib/focus-sections, one implementation shared with the
+  // cron. The override is never silent: focusBasis rides the response so the
+  // plan says "Your last mock (VARC 89 · DILR 99 · QA 99) — VARC needs the
+  // work" instead of quietly contradicting what the student typed at signup.
+  //
   // ── ONE DAY-BUILDER (lib/plan-day) ──────────────────────────────────────
   //
   // Focus, hours, the profile mapping, today's class topics, target pacing,
@@ -161,9 +148,8 @@ export async function GET() {
     today,
     now: new Date(),
   });
-  const { routineProfile, focus, hoursToday, todayClassTopics, daysToTarget: daysToSyllabusTarget } = plan;
+  const { routineProfile, focus, hoursToday, daysToTarget: daysToSyllabusTarget } = plan;
   const weakest = focus.weakest;
-  const strongest = focus.strongest;
   const adaptation = computeAdaptation(recentPlanFits, history.completedTasks, history.plannedTasks, history.planDays);
 
   // Weekend-ness comes from the STUDY DAY, not a server-local weekday — the
@@ -453,6 +439,50 @@ export async function GET() {
       ? { overallPercentile: todayDebrief.overall_percentile != null ? Number(todayDebrief.overall_percentile) : null }
       : null,
     todayBudget,
+    // ── "Your date doesn't work" (founder, 14 Aug, option a) ────────────
+    //
+    // The second half of the 6h+ promise. Reaching all 46 topics is only
+    // honest when there is time; when there is not, the student has to be
+    // TOLD rather than quietly served a shorter syllabus. Null whenever the
+    // date genuinely fits, or when no date is set — a product that speaks
+    // when it has nothing to say is one students stop reading.
+    //
+    // It moves nothing. The date stays where the student put it and the plan
+    // keeps running; this is a sentence, and both ways to close the gap
+    // (later date, more hours) are theirs to choose.
+    finishDate: (() => {
+      const untouched = (coverageRows ?? [])
+        .filter((r: { status: string }) => !r.status || r.status === 'not_started')
+        .map((r: { topic: string }) => r.topic);
+      const f = assessFinishDate({
+        untouchedTopics: untouched,
+        hoursPerDay: hoursToday,
+        daysToTarget: daysToSyllabusTarget,
+      });
+      const label = (profile.syllabus_target_date as string | null) ?? 'your date';
+      const message = feasibilityMessage(f, label);
+      return message ? { verdict: f.verdict, ...message } : null;
+    })(),
+    // For the first-week ask card: which section a "weak topic" question
+    // should be scoped to (the bonus it grants only applies within the
+    // weakest section — see day-topics.selfReportedBonus), and what the
+    // planner already knows so the client never re-asks an answered question.
+    weakestSection: weakest,
+    firstWeekAsk: {
+      daysSinceSignup: profile.created_at
+        ? Math.floor((Date.parse(today) - Date.parse(String(profile.created_at).slice(0, 10))) / 86_400_000)
+        : 0,
+      // daily_reports rows in the last 21 days (the same window capacity
+      // already reads) is a fair proxy for "days actually logged" — a student
+      // must have used the product at least once before we ask them to refine
+      // a plan they have not experienced yet.
+      daysLogged: (recentReports ?? []).length,
+      answered: {
+        self_reported_weak_topic: profile.self_reported_weak_topic ?? undefined,
+        current_stage: profile.current_stage ?? undefined,
+        start_with: profile.start_with ?? undefined,
+      },
+    },
     because,
     whySummary,
     mission,
@@ -488,35 +518,9 @@ export async function GET() {
   }
 }
 
-// Weakest section from the student's own declared Coverage grid: the
-// section with the most ground left to cover, weighting untouched topics
-// double vs in-progress ones. Ratio-based (not raw count) so VARC's 5
-// topics and DILR's 4 compare fairly. Ties break DILR → QA → VARC (DILR is
-// the most commonly feared CAT section — a deterministic, stated default,
-// not a guess about this student). Null when nothing is declared at all.
-// The rule itself lives in section-weakness.ts — one implementation for the
-// route, the cron companion, and anything else that asks the question.
-const computeWeakestFromCoverage = weakestFromCoverage;
-
-function computeWeakestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
-  const scores = [
-    { s: 'VARC' as const, v: p.baseline_varc as number | null },
-    { s: 'DILR' as const, v: p.baseline_dilr as number | null },
-    { s: 'QA' as const, v: p.baseline_qa as number | null },
-  ].filter((x): x is { s: Section; v: number } => x.v != null);
-  if (scores.length < 2) return null;
-  return scores.reduce((a, b) => (b.v < a.v ? b : a)).s;
-}
-
-function computeStrongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
-  const scores = [
-    { s: 'VARC' as const, v: p.baseline_varc as number | null },
-    { s: 'DILR' as const, v: p.baseline_dilr as number | null },
-    { s: 'QA' as const, v: p.baseline_qa as number | null },
-  ].filter((x): x is { s: Section; v: number } => x.v != null);
-  if (scores.length < 2) return null;
-  return scores.reduce((a, b) => (b.v > a.v ? b : a)).s;
-}
+// The weakest/strongest-section chain (mock → self-report → baseline →
+// coverage grid → DILR) now lives entirely in lib/focus-sections, shared with
+// the cron via lib/plan-day. Nothing here re-derives it.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buildHistory(admin: any, studentId: string): Promise<HistoryInput & { daysSinceLastPracticedByTopic: Record<string, number | null>; daysSincePlannedByTopic: Record<string, number | null>; timesPracticedByTopic: Record<string, number>; postponedTopics: string[]; yesterday: { total: number; done: number } | null; yesterdayUnfinishedTopics: string[]; completedTasks: number; plannedTasks: number; planDays: number }> {

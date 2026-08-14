@@ -100,29 +100,30 @@ describe('the chain that consumes it still ranks evidence over memory', () => {
   });
 });
 
-describe('no plan input is read without something that fills it', () => {
-  // The rule this file enforces. If the planner starts reading a new profile
-  // field, onboarding or an in-app prompt must write it — otherwise it is a
-  // branch that exists in code and never in a student's plan.
-  //
-  // Founder's sequencing: weakest section in onboarding, the rest collected in
-  // the first week rather than front-loading the funnel. So a field listed
-  // here as "first week" is a commitment, not a gap.
-  const INPUTS: { field: string; filledBy: 'onboarding' | 'first-week' | 'derived' }[] = [
-    { field: 'study_target_hours', filledBy: 'onboarding' },
-    { field: 'weekend_hours_available', filledBy: 'onboarding' },
-    { field: 'syllabus_target_date', filledBy: 'onboarding' },
-    { field: 'is_working_professional', filledBy: 'onboarding' },
-    { field: 'is_repeater', filledBy: 'onboarding' },
-    { field: 'target_percentile', filledBy: 'onboarding' },
-    { field: 'attempt_year', filledBy: 'onboarding' },
-    { field: 'self_reported_weakest_section', filledBy: 'onboarding' },
-    { field: 'self_reported_weak_topic', filledBy: 'first-week' },
-    { field: 'current_stage', filledBy: 'first-week' },
-    { field: 'start_with', filledBy: 'first-week' },
-    { field: 'plan_source', filledBy: 'derived' },
-  ];
+// The rule the rest of this file enforces. If the planner starts reading a
+// new profile field, onboarding or an in-app prompt must write it — otherwise
+// it is a branch that exists in code and never in a student's plan.
+//
+// Founder's sequencing: weakest section in onboarding, the rest collected in
+// the first week rather than front-loading the funnel. So a field listed here
+// as "first week" is a commitment, not a gap — and the second describe block
+// below is what makes that literally true rather than aspirational.
+const INPUTS: { field: string; filledBy: 'onboarding' | 'first-week' | 'derived' }[] = [
+  { field: 'study_target_hours', filledBy: 'onboarding' },
+  { field: 'weekend_hours_available', filledBy: 'onboarding' },
+  { field: 'syllabus_target_date', filledBy: 'onboarding' },
+  { field: 'is_working_professional', filledBy: 'onboarding' },
+  { field: 'is_repeater', filledBy: 'onboarding' },
+  { field: 'target_percentile', filledBy: 'onboarding' },
+  { field: 'attempt_year', filledBy: 'onboarding' },
+  { field: 'self_reported_weakest_section', filledBy: 'onboarding' },
+  { field: 'self_reported_weak_topic', filledBy: 'first-week' },
+  { field: 'current_stage', filledBy: 'first-week' },
+  { field: 'start_with', filledBy: 'first-week' },
+  { field: 'plan_source', filledBy: 'derived' },
+];
 
+describe('no plan input is read without something that fills it', () => {
   it('every field the day-builder maps is on the list', () => {
     // Scoped to real property reads in CODE — `profile.x as T` / `profile.x)` /
     // `profile.x,` — so prose in the comments above them cannot register as an
@@ -160,5 +161,98 @@ describe('no plan input is read without something that fills it', () => {
     // whole plan is sized from.
     expect(s).not.toContain('study_target_hours:');
     expect(s).not.toContain('weekend_hours_available:');
+  });
+});
+
+// ── THE FIRST-WEEK COLLECTION IS ACTUALLY WIRED ──────────────────────────────
+//
+// Founder, 14 Aug: "ask weakest section in onboarding, rest in first week."
+// The three fields deferred here are recorded above as commitments, not
+// gaps — this is what makes that true rather than aspirational.
+describe('the "rest in first week" commitment is kept', () => {
+  const ASKS = 'src/lib/first-week-asks.ts';
+  const CARD = 'src/components/first-week-ask-card.tsx';
+  const API = 'src/app/api/student/first-week-ask/route.ts';
+  const ROUTE = 'src/app/api/routine/today/route.ts';
+  const TRACKER = 'src/components/DailyTracker/TodaysRoutineCard.tsx';
+
+  it('an ask exists for every field deferred to first-week', () => {
+    const s = readFileSync(ASKS, 'utf8');
+    for (const i of INPUTS.filter((x) => x.filledBy === 'first-week')) {
+      expect(s.includes(`field: '${i.field}'`), `no ask defined for ${i.field}`).toBe(true);
+    }
+  });
+
+  it('the API writes to the field the ask declares, not a hand-typed one', () => {
+    // If this route ever hand-writes a column name instead of reading
+    // ask.field, a renamed or added ask silently stops being persisted.
+    const s = readFileSync(API, 'utf8');
+    expect(s).toContain('[ask.field]');
+  });
+
+  it('a null answer is accepted — an honest "I don\'t know" is still an answer', () => {
+    const s = readFileSync(API, 'utf8');
+    expect(s).toMatch(/value\s*!==\s*null\s*&&\s*typeof value\s*!==\s*'string'/);
+  });
+
+  it('the tracker route exposes what the ask card needs to decide', () => {
+    const s = readFileSync(ROUTE, 'utf8');
+    expect(s).toContain('weakestSection: weakest');
+    expect(s).toContain('firstWeekAsk:');
+    expect(s).toContain('daysSinceSignup');
+    expect(s).toContain('daysLogged');
+  });
+
+  it('the card is actually rendered on the plan the student sees', () => {
+    const s = readFileSync(TRACKER, 'utf8');
+    expect(s).toContain('FirstWeekAskCard');
+    expect(s).toContain('data.firstWeekAsk');
+  });
+
+  it('skipping is client-only — it must never write a false "declined" to the profile', () => {
+    // A DB null cannot be told apart from "never asked", so a skip that wrote
+    // null would look identical to an unanswered field and silently satisfy
+    // the "every input has something that fills it" rule without the input
+    // actually being filled.
+    const s = readFileSync(CARD, 'utf8');
+    expect(s).toContain('saveDismissed(');
+    expect(s).not.toMatch(/skip[\s\S]{0,120}fetch\(/);
+  });
+});
+
+// ── "YOUR DATE DOESN'T WORK" IS SAID, NOT SWALLOWED ─────────────────────────
+//
+// Founder, 14 Aug, option (a), second half: "if the date is too close, tell
+// them the date doesn't work." Reaching all 46 topics (topic-reachability.gate)
+// is only honest when there is time; this is what happens when there is not.
+describe('the finish-date warning reaches the student and never moves anything', () => {
+  const ROUTE = 'src/app/api/routine/today/route.ts';
+  const TRACKER = 'src/components/DailyTracker/TodaysRoutineCard.tsx';
+
+  it('the route computes it from the real feasibility engine', () => {
+    const s = readFileSync(ROUTE, 'utf8');
+    expect(s).toContain('assessFinishDate(');
+    expect(s).toContain('feasibilityMessage(');
+    expect(s).toContain('finishDate:');
+  });
+
+  it('is scoped to what the day was actually built to, not a recomputed guess', () => {
+    const s = readFileSync(ROUTE, 'utf8');
+    const block = s.slice(s.indexOf('finishDate: (() => {'), s.indexOf('because,'));
+    expect(block).toContain('hoursPerDay: hoursToday');
+    expect(block).toContain('daysToTarget: daysToSyllabusTarget');
+  });
+
+  it('never writes to syllabus_target_date — the student\'s date is theirs alone', () => {
+    const s = readFileSync(ROUTE, 'utf8');
+    const block = s.slice(s.indexOf('finishDate: (() => {'), s.indexOf('because,'));
+    expect(block).not.toMatch(/\.update\(/);
+    expect(block).not.toContain('syllabus_target_date:');
+  });
+
+  it('is rendered on the plan the student is looking at', () => {
+    const s = readFileSync(TRACKER, 'utf8');
+    expect(s).toContain('data.finishDate');
+    expect(s).toMatch(/finishDate\.headline/);
   });
 });
