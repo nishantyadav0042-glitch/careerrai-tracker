@@ -131,16 +131,33 @@ describe('INVARIANT 3 — both plan writers agree on how a day is built', () => 
     for (const f of files) expect(readFileSync(f, 'utf8')).toContain("from('daily_routines')");
   });
 
-  it('both resolve the focus sections through one shared chain', () => {
+  it('both assemble the day through the ONE shared builder', () => {
+    // Sharing the individual helpers was not enough. Two functions calling the
+    // same five helpers in the same order today will drift the first time
+    // someone edits one of them — which is precisely how the cron ended up
+    // without a mock branch while every part it called was already "shared".
     for (const f of [ROUTE, CRON]) {
-      expect(readFileSync(f, 'utf8'), f).toContain('resolveFocusSections(');
+      expect(readFileSync(f, 'utf8'), f).toContain('buildDayPlan({');
     }
   });
 
-  it('both honour an uploaded timetable through one shared decision', () => {
+  it('neither writer decides any part of the day for itself', () => {
+    // If a writer can call the engine or the selector directly, it can build a
+    // different day. The only permitted caller of these is lib/plan-day.
     for (const f of [ROUTE, CRON]) {
-      expect(readFileSync(f, 'utf8'), f).toContain('timetableDayTasks({');
+      const s = readFileSync(f, 'utf8');
+      for (const forbidden of ['generateRoutine(', 'buildTopicChoices(', 'resolveFocusSections(', 'timetableDayTasks({']) {
+        expect(s.includes(forbidden), `${f} must not call ${forbidden} directly`).toBe(false);
+      }
     }
+  });
+
+  it('the builder is the only place the engine is called from', () => {
+    const s = readFileSync('src/lib/plan-day.ts', 'utf8');
+    expect(s).toContain('generateRoutine(');
+    expect(s).toContain('buildTopicChoices(');
+    expect(s).toContain('resolveFocusSections(');
+    expect(s).toContain('timetableDayTasks({');
   });
 
   it('both read the mock evidence the focus chain depends on', () => {
@@ -211,12 +228,9 @@ describe('INVARIANT 5 — one planner, with exactly one permitted fork', () => {
   });
 
   it('the only fork from the generated day is an uploaded timetable', () => {
-    // Both writers may branch exactly once — to the student's own sheet.
-    for (const f of ['src/app/api/routine/today/route.ts', 'src/lib/routine-plan.ts']) {
-      const s = readFileSync(f, 'utf8');
-      const forks = (s.match(/timetableDayTasks\(\{/g) ?? []).length;
-      expect(forks, `${f} must fork exactly once`).toBe(1);
-      expect((s.match(/generateRoutine\(/g) ?? []).length, `${f} must call the engine once`).toBe(1);
-    }
+    // Exactly one branch, in exactly one file.
+    const s = readFileSync('src/lib/plan-day.ts', 'utf8');
+    expect((s.match(/timetableDayTasks\(\{/g) ?? []).length, 'one timetable fork').toBe(1);
+    expect((s.match(/generateRoutine\(/g) ?? []).length, 'one engine call').toBe(1);
   });
 });

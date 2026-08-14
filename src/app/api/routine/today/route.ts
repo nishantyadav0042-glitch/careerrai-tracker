@@ -4,8 +4,7 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, getPhase, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
-import { timetableDayTasks } from '@/lib/timetable-day';
-import { resolveFocusSections } from '@/lib/focus-sections';
+import { buildDayPlan } from '@/lib/plan-day';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { type CoverageStatus } from '@/lib/topic-selector';
 import { buildTopicChoices } from '@/lib/day-topics';
@@ -133,115 +132,54 @@ export async function GET() {
   // The override is never silent: focusBasis rides the response so the plan
   // says "Your last mock (VARC 89 · DILR 99 · QA 99) — VARC needs the work"
   // instead of quietly contradicting what the student typed at signup.
-  // ONE resolver, shared with the cron writer (lib/routine-plan). These two
-  // are the only writers of daily_routines and they used to resolve this
-  // differently — the cron had no mock branch — so the same student could get
-  // two different days depending on which ran first. See lib/focus-sections.
-  const focus = resolveFocusSections(
-    profile,
-    (coverageRows ?? []) as { section: string; status: string }[],
-    (recentDebriefRows ?? []) as DebriefRow[],
-    today,
-  );
-  const weakest = focus.weakest;
-  const strongest = focus.strongest;
-
-  // null = never asked (the legacy quick-setup that used to collect this is
-  // gone; the topic selector derives per-section topics from the Coverage
-  // grid regardless, so null costs nothing).
-  const weakTopicRaw = profile.self_reported_weak_topic as string | null;
-  const weakTopic = weakTopicRaw ? weakTopicRaw : null;
-
-  // null = never asked. One tap, cheap, and it fixes a real gap: phase used
-  // to come from the calendar alone, so a student already mock-testing and
-  // one who hasn't started got identical "foundation" framing if their
-  // attempt_year matched. See getPhase()'s advance-only override.
-  const currentStage = profile.current_stage as Stage | null;
-
-  // null = never asked. Seeds the Mission Score Engine's cold-start bias —
-  // see blockerBiasSignal in mission-engine.ts. Required, no skip: unlike
-  // the topic tap, there's no defensible universal default for "what's
-  // blocking you," so this is asked once and answered, not defaulted.
+  // ── ONE DAY-BUILDER (lib/plan-day) ──────────────────────────────────────
+  //
+  // Focus, hours, the profile mapping, today's class topics, target pacing,
+  // the timetable fork and the engine call all live in ONE function that the
+  // notification cron also uses. Sharing the individual helpers was not
+  // enough: the ASSEMBLY was written twice, and that is exactly where the
+  // two-writer bug lived — the cron's focus chain silently had no mock branch
+  // for weeks while every part it called was already "shared".
+  // Signals the RESPONSE needs that are not plan inputs — the Mission engine,
+  // the capacity reading and the adaptation note all render alongside the plan
+  // without ever sizing it.
   const biggestBlocker = profile.biggest_blocker as Blocker | null;
-
-  const targetIso = profile.syllabus_target_date as string | null;
-
-  // Capacity is still computed — the buddy dossier and admin surfaces want to
-  // know how a student's logged hours compare to their commitment. It just no
-  // longer touches the plan.
-  const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
   const claimedHours = dailyHours(profile).weekday;
+  const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
   const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
 
-  // Adaptation reads the same behaviour it always did — the explicit plan_fit
-  // taps and how much of the plan gets finished — but it no longer resizes
-  // anything. It is an observation surfaced to coaches, not a lever on the
-  // student's day. (Founder, 6 Aug: "keep their hours fixed and remove
-  // volumeFactor.")
   const recentPlanFits = (recentReports ?? [])
     .map((r: { plan_fit: unknown }) => r.plan_fit)
     .filter((f: unknown): f is string => typeof f === 'string');
+
+  const plan = buildDayPlan({
+    profile,
+    coverageRows: (coverageRows ?? []) as { section: string; topic: string; status: string; is_priority?: boolean | null }[],
+    debriefRows: (recentDebriefRows ?? []) as DebriefRow[],
+    timetableRow: timetableRow ?? null,
+    history,
+    today,
+    now: new Date(),
+  });
+  const { routineProfile, focus, hoursToday, todayClassTopics, daysToTarget: daysToSyllabusTarget } = plan;
+  const weakest = focus.weakest;
+  const strongest = focus.strongest;
   const adaptation = computeAdaptation(recentPlanFits, history.completedTasks, history.plannedTasks, history.planDays);
 
-  const routineProfile: RoutineProfile = {
-    isWorkingProfessional: !!profile.is_working_professional,
-    isRepeater: !!profile.is_repeater,
-    targetPercentile: profile.target_percentile as number | null,
-    // THE STUDENT'S OWN HOURS. Nothing else. Read through lib/daily-hours, the
-    // one module that owns this number for the whole app.
-    //
-    // Founder, 6 Aug: "keep the daily hours same... don't change the hours on
-    // your own, unless the student themselves makes the change or plans again.
-    // You won't take any action yourself."
-    //
-    // Three layers used to sit between the student's number and their plan:
-    //   · `paceHours` — what the DATE demanded (remaining syllabus ÷ days left).
-    //     A tight date demanded 12 hrs/day and built a list nobody finishes.
-    //   · `capBudget` — capacity shrinking that toward logged behaviour.
-    //   · `volumeFactor` — and then task counts scaled ±30% on top.
-    // Each was defensible; stacked, they meant the number on the ring and the
-    // number in the plan were computed from different inputs and disagreed.
-    //
-    // Falling behind no longer changes the day. It moves the FINISH DATE, once
-    // a week, with the arithmetic attached. See /api/cron/weekly-plan-reconcile.
-    weekdayHours: claimedHours,
-    weekendHours: dailyHours(profile).weekend,
-    weakestSection: weakest,
-    strongestSection: strongest,
-    weakTopic,
-    currentStage,
-    attemptYear: profile.attempt_year as number | null,
-  };
+  // Weekend-ness comes from the STUDY DAY, not a server-local weekday — the
+  // same rule plan-day uses to size the day, so the copy can never describe a
+  // different day than the one that was built.
+  const isWeekendToday = (() => {
+    const dow = new Date(today + 'T00:00:00Z').getUTCDay();
+    return dow === 0 || dow === 6;
+  })();
 
-  // Computed unconditionally (not just on generation) — the Mission and the
-  // fresh whySummary below both need current recency/coverage data every
-  // request, the same reasoning as whySummary already being recomputed
-  // fresh rather than frozen at generation time. (history itself is fetched
-  // in the parallel wave above.)
-  // The month, anchored to real dates at upload time — NOT a weekday lookup
-  // over raw blocks. Riya's 48-topic list all carried day 0, so the old read
-  // returned all 48 every Monday (a +45 on every candidate differentiates
-  // nothing) and none on the other six days. See lib/timetable-month.
-  const todayClassTopics = (profile.plan_source === 'coaching')
-    ? coachingTopicsForDate(
-        (timetableRow?.blocks as TimetableBlock[] | null) ?? [],
-        timetableRow?.confirmed_at as string | null,
-        today,
-      )
-    : [];
-  const daysToSyllabusTarget = targetIso
-    ? Math.round((Date.parse(targetIso) - Date.parse(today)) / 86_400_000)
-    : null;
-  const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics, daysToSyllabusTarget);
-
-  // The number today's plan is built to, decided ONCE here and used for both
-  // generating the plan and judging whether a stored one is stale.
-  const nowDay = new Date().getDay();
-  const isWeekendToday = nowDay === 0 || nowDay === 6;
-  const hoursToday = (isWeekendToday ? routineProfile.weekendHours : routineProfile.weekdayHours)
-    ?? (isWeekendToday
-      ? (routineProfile.isWorkingProfessional ? 4 : 3)
-      : (routineProfile.isWorkingProfessional ? 1.5 : 2.5));
+  // The lead topic of the weak section, read from the plan that was actually
+  // built rather than recomputed from the selector — one source, so the "why"
+  // line can never name a topic the student was not given.
+  const weakLeadTopic = plan.tasks.find((t) => t.section === weakest && t.topic)?.topic
+    ?? plan.tasks.find((t) => t.topic)?.topic
+    ?? null;
 
   // A routine frozen earlier today at DIFFERENT hours is stale — regenerate it,
   // but only while nothing is ticked off yet: completed work is never wiped.
@@ -297,22 +235,7 @@ export async function GET() {
     // Silence still falls back. A date the sheet says nothing about — a rest
     // day, or past the end of the month it covers — returns null here and the
     // engine plans as usual. An empty screen is not a plan.
-    const timetableTasks = timetableDayTasks({
-      planSource: profile.plan_source as string | null,
-      blocks: timetableRow?.blocks as TimetableBlock[] | null,
-      confirmedAt: timetableRow?.confirmed_at as string | null,
-      todayIso: today,
-      dayMinutes: hoursToday * 60,
-      phase: getPhase(new Date(), routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
-    });
-
-    const generated = timetableTasks
-      ? {
-          phase: getPhase(new Date(), routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
-          tasks: timetableTasks,
-          estMinutes: timetableTasks.reduce((s, t) => s + t.estMinutes, 0),
-        }
-      : generateRoutine(routineProfile, new Date(), history, topicChoices.choices, topicChoices.extras);
+    const generated = { phase: plan.phase, tasks: plan.tasks, estMinutes: plan.estMinutes };
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
@@ -342,7 +265,7 @@ export async function GET() {
   // CURRENT setup (and Coverage Matrix / revision state) even if today's task
   // list was already frozen. hoursToday was decided above, before generation.
   const weak = routineProfile.weakestSection ?? 'DILR';
-  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday, topicChoices.choices[weak].topic);
+  const whySummary = personalizationSummary(routineProfile, isWeekendToday, hoursToday, weakLeadTopic ?? '');
 
   // Today's Mission — a small, explainable scoring layer (same additive
   // pattern as buddy-match.ts's rankBuddies) on top of data that already
@@ -353,7 +276,7 @@ export async function GET() {
   // differ from the raw self-report once Coverage Matrix data matters), and
   // is adjusted by the same archetype multiplier the selector itself used —
   // a repeater's topic is flagged overdue sooner, a working professional's later.
-  const weakTopicChosen = topicChoices.choices[weak].topic;
+  const weakTopicChosen = weakLeadTopic ?? '';
   const revisionMultiplier = archetypeRevisionMultiplier(routineProfile);
   const weakRevisionFrequency = TOPIC_METADATA[weakTopicChosen]
     ? TOPIC_METADATA[weakTopicChosen].revisionFrequencyDays * revisionMultiplier

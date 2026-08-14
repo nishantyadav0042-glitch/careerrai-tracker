@@ -17,19 +17,13 @@
 // lib/day-topics — one implementation, no lockstep to maintain.
 
 import {
-  generateRoutine,
-  getPhase,
   type RoutineProfile,
   type Section,
-  type Stage,
   type HistoryInput,
 } from '@/lib/routine-engine';
-import { timetableDayTasks } from '@/lib/timetable-day';
-import { buildTopicChoices } from '@/lib/day-topics';
+import { buildDayPlan } from '@/lib/plan-day';
 import { plannerRecency } from '@/lib/plan-history';
 import { dailyHours } from '@/lib/daily-hours';
-import { coachingTopicsForDate } from '@/lib/timetable-month';
-import { resolveFocusSections } from '@/lib/focus-sections';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
 import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
@@ -194,89 +188,30 @@ export async function computeTodaysPlan(
 
     if (!profile) return null;
 
-    // ONE resolver, shared with api/routine/today. This used to be a
-    // hand-copied chain with NO mock branch, so a student whose latest mock
-    // disagreed with their signup answer got a different day depending on
-    // which writer ran first. See lib/focus-sections.
-    const focus = resolveFocusSections(profile, (coverageRows ?? []) as { section: string; status: string }[], (recentDebriefRows ?? []) as DebriefRow[], today);
-    const weakest = focus.weakest;
-    const strongest = focus.strongest;
-    const weakTopic = (profile.self_reported_weak_topic as string | null) || null;
-    const currentStage = profile.current_stage as Stage | null;
-
-    // THE SAME HOURS THE TRACKER USES, from the same module.
+    // ── ONE DAY-BUILDER (lib/plan-day) ────────────────────────────────
     //
-    // This generator writes to the same daily_routines row the app reads.
-    //
-    // CORRECTED 14 Aug, from production evidence. This comment used to say
-    // the cron "runs FIRST — the 6am notification cron builds the day before
-    // the student ever opens the app", and three other files repeated it. It
-    // is not true and has not been: study-companion's plan-writing slots are
-    // `progress` and `log`, scheduled at 15:00 and 16:00 UTC (20:30 / 21:30
-    // IST). The two morning plan slots it also allows — `morning` and `open`
-    // — are not in vercel.json at all, so they never fire. Verified against
-    // the notifications table: companion_* rows land at exactly 02:30, 05:30,
-    // 15:00 and 16:00 UTC daily, and the first two slots do not build a plan.
-    //
-    // So in practice the STUDENT's own request is almost always the first
-    // writer, and this cron usually re-reads what the app already stored. It
-    // still matters: it is the writer whenever a student has not opened the
-    // app all day, and after any delete (hours change, timetable apply) it
-    // rebuilds the row that evening. Both writers must therefore agree
-    // exactly — which is why focus, timetable and hours all resolve through
-    // shared modules rather than being re-derived here.
-    //
-    // While this file sized plans with
-    // capBudget(paceHours ?? claimed, capacity) and the route sized them with
-    // the student's own hours, the cron's version is the one that won, every
-    // morning, for every student who gets a notification. Fixing the route
-    // alone would have fixed nothing. That is how "sometimes 4 hours,
-    // sometimes 6" survived a fix aimed straight at it.
-    //
-    // Both callers now read lib/daily-hours and nothing else.
-    const routineProfile: RoutineProfile = {
-      isWorkingProfessional: !!profile.is_working_professional,
-      isRepeater: !!profile.is_repeater,
-      targetPercentile: profile.target_percentile as number | null,
-      weekdayHours: dailyHours(profile).weekday,
-      weekendHours: dailyHours(profile).weekend,
-      // Stage A floor — kept in lockstep with today/route.ts (the mirror rule:
-      // the notification must name the same plan the student opens).
-      weakestSection: weakest,
-      strongestSection: strongest,
-      weakTopic,
-      currentStage,
-      attemptYear: profile.attempt_year as number | null,
-    };
-
+    // Focus, hours, class topics, target pacing, the timetable fork and the
+    // engine call all live in ONE function that the tracker route also uses.
+    // Sharing the individual helpers was not enough: the ASSEMBLY was written
+    // twice, and that is exactly where the two-writer bug lived — this file's
+    // focus chain silently had no mock branch for weeks while every part it
+    // called was already "shared".
     const history = await buildHistory(admin, studentId);
-    // Same today's-class signal as the tracker route. Whenever this generator
-    // is the day's first writer (a student who never opened the app), not
-    // knowing today's class would freeze an unaligned plan into the row.
-    const todayClassTopics = (profile.plan_source === 'coaching')
-      ? coachingTopicsForDate(
-          (timetableRow?.blocks as TimetableBlock[] | null) ?? [],
-          timetableRow?.confirmed_at as string | null,
-          today,
-        )
-      : [];
-    // The student's own finish date is what makes the plan urgent or relaxed.
-    const targetIso = profile.syllabus_target_date as string | null;
-    const daysToTarget = targetIso
-      ? Math.round((Date.parse(targetIso) - Date.parse(getLogDateString(now))) / 86_400_000)
-      : null;
-    const topicChoices = buildTopicChoices(coverageRows ?? [], routineProfile, history, profile.start_with as string | null, todayClassTopics, daysToTarget);
+    const plan = buildDayPlan({
+      profile,
+      coverageRows: (coverageRows ?? []) as { section: string; topic: string; status: string; is_priority?: boolean | null }[],
+      debriefRows: (recentDebriefRows ?? []) as DebriefRow[],
+      timetableRow: timetableRow ?? null,
+      history,
+      today,
+      now,
+    });
+    const { routineProfile, hoursToday } = plan;
+    const todayClassTopics = plan.todayClassTopics;
 
-    // Read-or-generate, through the SAME staleness rule the tracker uses —
-    // literally the same function now, rather than a hand-copied version of it
-    // that could drift. A plan built earlier today is only rebuilt when the
-    // student changed their own hours, and never over completed work.
-    const dow = now.getDay();
-    const hoursToday = (dow === 0 || dow === 6 ? routineProfile.weekendHours : routineProfile.weekdayHours)
-      ?? (dow === 0 || dow === 6
-        ? (routineProfile.isWorkingProfessional ? 4 : 3)
-        : (routineProfile.isWorkingProfessional ? 1.5 : 2.5));
-
+    // Read-or-generate, through the SAME staleness rule the tracker uses.
+    // A plan built earlier today is only rebuilt when the student changed
+    // their own hours, and never over completed work.
     let routine = existing as { phase: string; tasks: unknown; est_minutes: number; generated_hours: number | null; created_at?: string | null } | null;
     const completedIds = new Set((completions ?? []).map((c: { task_id: string }) => c.task_id));
     if (routine && planStaleReason({
@@ -288,25 +223,7 @@ export async function computeTodaysPlan(
       routine = null;
     }
     if (!routine) {
-      // ONE PLAN PER STUDENT. Same authority the tracker route asks, and this
-      // caller still matters even though it usually runs second: it is the
-      // writer for any student who never opens the app, and it rebuilds the
-      // row each evening after a delete. See lib/timetable-day.
-      const timetableTasks = timetableDayTasks({
-        planSource: profile.plan_source as string | null,
-        blocks: timetableRow?.blocks as TimetableBlock[] | null,
-        confirmedAt: timetableRow?.confirmed_at as string | null,
-        todayIso: today,
-        dayMinutes: hoursToday * 60,
-        phase: getPhase(now, routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
-      });
-      const generated = timetableTasks
-        ? {
-            phase: getPhase(now, routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
-            tasks: timetableTasks,
-            estMinutes: timetableTasks.reduce((s, t) => s + t.estMinutes, 0),
-          }
-        : generateRoutine(routineProfile, now, history, topicChoices.choices, topicChoices.extras);
+      const generated = { phase: plan.phase, tasks: plan.tasks, estMinutes: plan.estMinutes };
       const { data: inserted } = await admin
         .from('daily_routines')
         .upsert(

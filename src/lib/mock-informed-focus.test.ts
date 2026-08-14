@@ -105,12 +105,14 @@ describe('the override is wired in and SAID, never silent', () => {
     // first — two authoritative plans for one student and one date.
     // 0 students were diverging when this was found, only because mock
     // logging was still rare. Latent split-brain is still split-brain.
+    // Both go through lib/plan-day, which is the single caller of the resolver.
     for (const f of ['src/app/api/routine/today/route.ts', 'src/lib/routine-plan.ts']) {
       const s = readFileSync(f, 'utf8');
-      expect(s, `${f} must use the shared resolver`).toContain('resolveFocusSections(');
-      // ...and must not rebuild the chain locally again.
+      expect(s, `${f} must build the day through the shared builder`).toContain('buildDayPlan({');
       expect(s, `${f} must not re-derive the weakest section`).not.toContain('?? weakestFromBaseline(');
+      expect(s, `${f} must not call the resolver itself`).not.toContain('resolveFocusSections(');
     }
+    expect(readFileSync('src/lib/plan-day.ts', 'utf8')).toContain('resolveFocusSections(');
   });
 
   it('the basis line reaches the response, so the student sees WHY focus moved', () => {

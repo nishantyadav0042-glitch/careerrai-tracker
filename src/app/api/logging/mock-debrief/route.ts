@@ -73,33 +73,57 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as DebriefRequest;
 
-    if (!body.log_date || !/^\d{4}-\d{2}-\d{2}$/.test(body.log_date)) {
-      return NextResponse.json({ error: 'Invalid log_date' }, { status: 400 });
-    }
+    const admin = createAdminClient();
 
-    // The DATE has to be checked, not just its shape. This value is sent by
-    // the browser from the DEVICE clock, and it is not cosmetic: taken_on is
-    // what mockInformedFocus reads to decide which section the plan attacks,
-    // and log_date is matched against today to claim "score recorded". A
-    // phone with a wrong timezone — or anything hand-rolling this request —
-    // could write a mock dated any day it liked and permanently steer the
-    // plan's focus from a date that never happened.
+    // ── THE SERVER OWNS THE MOCK'S DATE ─────────────────────────────────
     //
-    // Same window log-daily already allows: today or yesterday. A mock is
-    // sat and logged within a day; anything else is a clock, not a student.
+    // Founder, 14 Aug: "after filling the log, the mock date." The mock rides
+    // on the daily log, so the log decides when it happened. The browser does
+    // not.
+    //
+    // This used to accept body.log_date after checking only its SHAPE, and
+    // that value came from the DEVICE clock. It is not cosmetic: taken_on is
+    // what mockInformedFocus reads to decide which section the plan attacks,
+    // and log_date is matched against today to claim "score recorded". A phone
+    // with a wrong timezone — or anything hand-rolling this request — could
+    // write a mock dated any day it liked and permanently steer a student's
+    // plan from a date that never happened.
+    //
+    // The date is now DERIVED, in this order:
+    //   1. the student's most recent daily log within today/yesterday — the
+    //      log they just filled, which is exactly what the founder described
+    //   2. failing that, the server's own study day
+    //
+    // A client-sent log_date is still read, but only as a PREFERENCE between
+    // those two server-known days; it can never introduce a third date.
     const todayStr = getLogDateString();
     const yesterdayStr = new Date(Date.parse(todayStr + 'T00:00:00.000Z') - 86_400_000)
       .toISOString().slice(0, 10);
-    if (body.log_date !== todayStr && body.log_date !== yesterdayStr) {
-      return NextResponse.json({ error: 'Can only log a mock for today or yesterday' }, { status: 400 });
-    }
 
-    const admin = createAdminClient();
+    const { data: recentLogs } = await admin
+      .from('daily_reports')
+      .select('report_date')
+      .eq('student_id', user.id)
+      .in('report_date', [todayStr, yesterdayStr])
+      .order('report_date', { ascending: false })
+      .limit(2);
+
+    const loggedDays = (recentLogs ?? []).map((r: { report_date: string }) => r.report_date);
+    const asked = typeof body.log_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.log_date)
+      ? body.log_date
+      : null;
+
+    // The log the mock belongs to. Honour the student's ask only when it names
+    // a day they actually logged; otherwise the newest log; otherwise today.
+    const takenOn =
+      (asked && loggedDays.includes(asked) ? asked : null)
+      ?? loggedDays[0]
+      ?? todayStr;
 
     const row = {
       student_id: user.id,
-      taken_on: body.log_date,
-      log_date: body.log_date,
+      taken_on: takenOn,
+      log_date: takenOn,
       varc: body.varc ?? {},
       dilr: body.dilr ?? {},
       qa: body.qa ?? {},
@@ -113,7 +137,7 @@ export async function POST(request: NextRequest) {
       .from('mock_debriefs')
       .select('overall_percentile')
       .eq('student_id', user.id)
-      .lt('taken_on', body.log_date)
+      .lt('taken_on', takenOn)
       .order('taken_on', { ascending: false })
       .limit(1);
     const prevPercentile = prevDebriefs?.[0]?.overall_percentile ?? null;

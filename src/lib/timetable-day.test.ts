@@ -205,21 +205,22 @@ describe('both plan writers ask the same authority', () => {
   // There are exactly two writers of daily_routines, and the cron runs FIRST
   // (6am). A fix applied only to the tracker route would have been overwritten
   // before the student woke up — invisible in production, green in every test.
-  it('the notification cron generator uses it', () => {
-    const s = readFileSync('src/lib/routine-plan.ts', 'utf8');
-    expect(s).toContain('timetableDayTasks({');
-    expect(s.indexOf('timetableDayTasks({')).toBeLessThan(s.indexOf('generateRoutine(routineProfile, now'));
+  it('the shared day-builder asks it BEFORE the engine, so the sheet wins', () => {
+    const s = readFileSync('src/lib/plan-day.ts', 'utf8');
+    expect(s.indexOf('timetableDayTasks({')).toBeLessThan(s.indexOf('generateRoutine('));
   });
 
-  it('the tracker route uses it', () => {
-    const s = readFileSync('src/app/api/routine/today/route.ts', 'utf8');
-    expect(s).toContain('timetableDayTasks({');
+  it('both plan writers reach it through that one builder', () => {
+    for (const f of ['src/lib/routine-plan.ts', 'src/app/api/routine/today/route.ts']) {
+      expect(readFileSync(f, 'utf8'), f).toContain('buildDayPlan({');
+    }
   });
 
-  it('neither writer builds its own version of the decision', () => {
+  it('no writer builds its own version of the decision', () => {
     for (const f of ['src/lib/routine-plan.ts', 'src/app/api/routine/today/route.ts']) {
       const s = readFileSync(f, 'utf8');
       expect(s, `${f} must not re-implement block selection`).not.toContain('coachingBlocksForDate(');
+      expect(s, `${f} must not call the fork itself`).not.toContain('timetableDayTasks({');
     }
   });
 
