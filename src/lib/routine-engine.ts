@@ -320,6 +320,12 @@ export interface DayShapeInput {
   isRepeater: boolean;
   weekend: boolean;
   phase: Phase;
+  /**
+   * Days since epoch, used ONLY to alternate which section takes the single
+   * non-weak slot on a lean weekday. Deterministic (same date = same shape),
+   * so the plan never changes under a student mid-day.
+   */
+  dayIndex?: number;
 }
 
 export interface DayShapeSection {
@@ -330,6 +336,17 @@ export interface DayShapeSection {
   /** True for the weakest section, which leads the day and absorbs rounding. */
   isPriority: boolean;
 }
+
+/**
+ * Above this many hours a day, the syllabus is a PROMISE, not a preference.
+ *
+ * Founder, 14 Aug, choosing option (a): "those students who have more than six
+ * hours should complete all the topics — otherwise topics as per weightage and
+ * coverage matrix." Below the line we prioritise honestly; at or above it every
+ * one of the 46 topics has to be delivered before the student's finish date,
+ * and no archetype rule may quietly opt them out of that.
+ */
+export const FULL_SYLLABUS_MIN_HOURS = 6;
 
 export interface DayShape {
   totalMinutes: number;
@@ -381,12 +398,33 @@ export function dayShape(input: DayShapeInput): DayShape {
 
   // Identity fork (LIS L1→Planning): a working professional's weekday time is
   // scarce, so we don't spread it thin across all three sections — the plan
-  // focuses on the weak area + ONE other (highest ROI), and the weekend gets
-  // the full spread + a real mock. Freshers / full-time aspirants keep all
-  // three. This is what makes the persona *feel* like a different coach, not a
-  // coefficient.
-  const leanWeekday = input.isWorkingProfessional && !input.weekend && input.phase !== 'revision';
-  const activeNonWeak = nonWeak.slice(0, Math.min(leanWeekday ? 1 : 2, maxOthers));
+  // focuses on the weak area + ONE other, and the weekend gets the full spread
+  // + a real mock. This is what makes the persona *feel* like a different
+  // coach, not a coefficient.
+  //
+  // BUT IT MAY NOT COST THEM THE SYLLABUS (founder, 14 Aug, option (a)). This
+  // fork assumed "working professional" implies scarce time. It does not: a
+  // WP who declares eight hours has the same time as anyone else, and the
+  // reachability gate caught what the assumption did to them — with DILR
+  // weakest, nonWeak is ['VARC','QA'] and the slice always took VARC, so QA
+  // ran on WEEKENDS ONLY. Twenty-four QA blocks in fifty-five days instead of
+  // ninety-two, and nine QA topics never opened at all. Silent, and invisible
+  // to every row-level check because each individual day looked reasonable.
+  //
+  // So the lean fork now applies only BELOW the full-syllabus line. At or
+  // above it, all three sections run every day, for every archetype.
+  const leanWeekday = input.isWorkingProfessional
+    && !input.weekend
+    && input.phase !== 'revision'
+    && input.hours < FULL_SYLLABUS_MIN_HOURS;
+
+  // And when it does apply, the slot ALTERNATES. A fixed slice starves one
+  // section permanently, which is the same failure in a smaller budget — the
+  // student simply never sees it rather than never finishing it.
+  const rotated = leanWeekday && (input.dayIndex ?? 0) % 2 === 1
+    ? [...nonWeak].reverse()
+    : nonWeak;
+  const activeNonWeak = rotated.slice(0, Math.min(leanWeekday ? 1 : 2, maxOthers));
 
   // Will a phase-closing task be added at the end? Decide NOW, because its
   // minutes come OUT of the day's budget, not on top of it. Until 8 Aug the
@@ -518,6 +556,7 @@ export function generateRoutine(
     isRepeater: !!profile.isRepeater,
     weekend,
     phase,
+    dayIndex: Math.floor(now.getTime() / 86_400_000),
   }) : null;
 
   if (shape) {
