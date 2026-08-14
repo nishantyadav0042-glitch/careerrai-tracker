@@ -58,7 +58,9 @@ export function CommunityVoteCard() {
   const [questions, setQuestions] = useState<VoteItem[]>([]);
   const [topPick, setTopPick] = useState<{ question: TopPickItem | null; tip: TopPickItem | null } | null>(null);
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<string | null>(null);
+  // Per-item, not global — see student-insights for the bug this prevents:
+  // a single in-flight lock silently swallowed every other tap.
+  const [busy, setBusy] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const [sharedId, setSharedId] = useState<string | null>(null);
 
@@ -92,7 +94,8 @@ export function CommunityVoteCard() {
   useEffect(() => { void load(); }, [load]);
 
   async function vote(item: VoteItem, helpful: boolean) {
-    setBusy(item.id);
+    if (busy.has(item.id) || votedIds.has(item.id)) return;
+    setBusy((b) => new Set(b).add(item.id));
     try {
       const res = await fetch('/api/community/vote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -103,7 +106,7 @@ export function CommunityVoteCard() {
         setVotedIds((prev) => new Set(prev).add(item.id));
       }
     } catch { /* leave as-is */ }
-    setBusy(null);
+    setBusy((b) => { const n = new Set(b); n.delete(item.id); return n; });
   }
 
   const hasTopPick = !!(topPick?.question || topPick?.tip);
@@ -161,7 +164,7 @@ export function CommunityVoteCard() {
             </p>
             <div className="mt-1.5 flex gap-1.5">
               <button
-                type="button" disabled={busy === item.id}
+                type="button" disabled={busy.has(item.id)}
                 onClick={() => void vote(item, true)}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold text-white active:scale-[0.97] disabled:opacity-50 ${tone.yes}`}
               >
@@ -171,7 +174,7 @@ export function CommunityVoteCard() {
                 <ThumbsUp className="h-3.5 w-3.5" /> Helps for CAT
               </button>
               <button
-                type="button" disabled={busy === item.id}
+                type="button" disabled={busy.has(item.id)}
                 onClick={() => void vote(item, false)}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-500 active:scale-[0.97] disabled:opacity-50"
               >

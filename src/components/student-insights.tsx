@@ -50,7 +50,14 @@ interface Payload {
 export function StudentInsights() {
   const [data, setData] = useState<Payload | null>(null);
   const [voted, setVoted] = useState<Record<string, 'up' | 'down'>>({});
-  const [busy, setBusy] = useState<string | null>(null);
+  // A SET, not a single id. This used to be one nullable id used as a global
+  // lock, with a guard at the top of vote() that returned whenever ANY vote
+  // was in flight — so every other tap was silently dropped. On a phone that is a
+  // 200-800ms window per tap, and the other buttons still looked tappable:
+  // a student scrolling a feed and voting on four cards landed one.
+  // Votes are independent rows on independent items, so they run in parallel;
+  // only a second tap on the SAME item is blocked.
+  const [busy, setBusy] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -64,8 +71,8 @@ export function StudentInsights() {
   useEffect(() => { void load(); }, [load]);
 
   async function vote(item: Item, helpful: boolean) {
-    if (busy) return;
-    setBusy(item.id);
+    if (busy.has(item.id) || voted[item.id]) return;
+    setBusy((b) => new Set(b).add(item.id));
     // Optimistic: the student's own action is the reward here, so it must land
     // instantly. There is no count to be wrong about.
     setVoted((v) => ({ ...v, [item.id]: helpful ? 'up' : 'down' }));
@@ -80,7 +87,7 @@ export function StudentInsights() {
     } catch {
       setVoted((v) => { const n = { ...v }; delete n[item.id]; return n; });
     } finally {
-      setBusy(null);
+      setBusy((b) => { const n = new Set(b); n.delete(item.id); return n; });
     }
   }
 
@@ -162,7 +169,7 @@ function Card({
   featured?: boolean;
   voted: Record<string, 'up' | 'down'>;
   onVote: (item: Item, helpful: boolean) => void;
-  busy: string | null;
+  busy: Set<string>;
 }) {
   const myVote = voted[item.id];
   const done = !!myVote || item.votedByMe;
@@ -216,7 +223,7 @@ function Card({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              disabled={busy === item.id}
+              disabled={busy.has(item.id)}
               onClick={() => onVote(item, true)}
               className="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[11.5px] font-bold text-teal-700 transition-transform active:scale-95 disabled:opacity-50"
             >
@@ -228,7 +235,7 @@ function Card({
             </button>
             <button
               type="button"
-              disabled={busy === item.id}
+              disabled={busy.has(item.id)}
               onClick={() => onVote(item, false)}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11.5px] font-semibold text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 active:scale-95 disabled:opacity-50"
             >
