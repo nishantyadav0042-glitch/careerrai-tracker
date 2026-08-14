@@ -68,12 +68,40 @@ describe('the card refuses honestly rather than failing at checkout', () => {
   });
 });
 
-describe('the session sits below the subscription, not in place of it', () => {
-  it('the Buddy plan is still the product', () => {
-    const s = readFileSync('src/components/locked-buddy-hub.tsx', 'utf8');
-    const buy = s.indexOf('<BuddyBuyButtons');
-    const session = s.indexOf('<BookSessionCard');
-    expect(session, 'session card missing').toBeGreaterThan(-1);
-    expect(buy, 'the ₹299 must not outrank the subscription').toBeLessThan(session);
+describe('the conversion screen: weakness → person → price, nothing else', () => {
+  // Founder, 14 Aug: keep only the student's weakness, the buddy profile with
+  // why-this-buddy, and ₹299 book now. The old hub (fear hero, USP stack, two
+  // price cards) is retired from the route; this pins the replacement's shape
+  // so it cannot quietly re-grow.
+  const SCREEN = 'src/components/buddy/buddy-conversion-screen.tsx';
+
+  it('the student\'s own findings lead, the mentor answers, the price closes', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    const weakness = s.indexOf('We looked at your prep');
+    const person = s.indexOf('Fix it with someone who cracked it');
+    const price = s.indexOf('<BookSessionCard');
+    expect(weakness).toBeGreaterThan(-1);
+    expect(person).toBeGreaterThan(weakness);
+    expect(price).toBeGreaterThan(person);
+  });
+
+  it('the Till-CAT plan survives as one line — the session is the way in', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain('Buddy till CAT');
+    // ...but the big subscription price cards do not come back.
+    expect(s).not.toContain('BuddyBuyButtons');
+  });
+
+  it('the repeater fact is the sourced one, never the unsourced ~50%', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain('REPEATER_FACT');
+    expect(s).not.toContain('50%');
+  });
+
+  it('the free buddy route renders this screen, wired to the student\'s case', () => {
+    const page = readFileSync('src/app/student/buddy/page.tsx', 'utf8');
+    expect(page).toContain('<BuddyConversionScreen');
+    expect(page).toContain('loadStudentCase(admin, user.id)');
+    expect(page).not.toContain('<LockedBuddyHub');
   });
 });

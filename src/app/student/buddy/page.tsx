@@ -2,9 +2,9 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/access';
-import { LockedBuddyHub } from '@/components/locked-buddy-hub';
+import { BuddyConversionScreen } from '@/components/buddy/buddy-conversion-screen';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
-import { getSocialProof } from '@/lib/social-proof';
+import { loadStudentCase } from '@/lib/buddy-case-data';
 import { getChatUnreadCount } from '@/lib/chat-unread';
 import { sessionsVisibleFrom } from '@/lib/session-window';
 import { fetchPairMessages } from '@/lib/chat';
@@ -36,15 +36,24 @@ export default async function BuddyPage({
     .eq('id', user.id)
     .single();
 
-  // Freemium: free users see the buddy showcase — real matched mentor profiles,
-  // the 1:1 USP, a sample mock debrief, and the unlock. (Restored the older
-  // profile-first design per founder feedback.)
+  // Freemium (rebuilt 14 Aug, founder: "buddy screen is too much — keep only
+  // the student's weakness, the buddy profile + why, and ₹299 book now").
+  // Three blocks: their own diagnosed weaknesses, ONE matched mentor with the
+  // reason, one price. LockedBuddyHub (fear hero, USP stack, price cards) is
+  // retired from this route; the Till-CAT plan survives as one line.
   if (!isPremium(profile)) {
-    const [recommendedBuddies, proof] = await Promise.all([
+    const [recommendedBuddies, studentCase] = await Promise.all([
       getRecommendedBuddiesForStudent(admin, user.id),
-      getSocialProof(admin),
+      loadStudentCase(admin, user.id),
     ]);
-    return <LockedBuddyHub variant="buddy" fullName={profile?.full_name ?? undefined} recommendedBuddies={recommendedBuddies} proof={proof} />;
+    return (
+      <BuddyConversionScreen
+        firstName={(profile?.full_name ?? 'there').split(' ')[0]}
+        findings={studentCase.findings}
+        buddy={recommendedBuddies[0] ?? null}
+        topKind={studentCase.topKind}
+      />
+    );
   }
 
   const buddyId = profile?.buddy_id ?? null;
