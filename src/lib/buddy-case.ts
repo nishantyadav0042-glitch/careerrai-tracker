@@ -57,6 +57,10 @@ export type CaseKind =
   | 'no_strategy'
   | 'behind_timeline'
   | 'repeating_pattern'
+  | 'section_gap'
+  | 'mock_missing'
+  | 'mock_gap'
+  | 'topic_avoidance'
   | 'unreviewed';
 
 export interface CaseFinding {
@@ -69,6 +73,10 @@ export interface CaseFinding {
   soWhat: string;
   /** Ranking weight — higher surfaces first. */
   severity: number;
+  /** Pointer form for the conversion screen: a short chip + one stat.
+   *  "QA — 9/28 topics started", never a paragraph (founder, 14 Aug). */
+  chip: string;
+  stat: string;
 }
 
 export interface BuddyCaseInput {
@@ -89,7 +97,21 @@ export interface BuddyCaseInput {
   weakestSectionNow: string | null;
   weakestSectionAtSignup: string | null;
   hasMentor: boolean;
+  /** Topics started per section — the founder's "9 of 28 QA" pointer. */
+  sectionsStarted: { section: string; started: number; total: number }[];
+  /** Has ANY mock ever been recorded, and how long since the last one. */
+  mocksEver: boolean;
+  daysSinceLastMock: number | null;
+  /** One topic swapped out of the plan again and again — avoidance. */
+  repeatSwapped: { topic: string; times: number } | null;
 }
+
+/** A section under this share of topics started is a gap worth naming —
+ *  but only once the student is genuinely studying elsewhere. */
+export const SECTION_GAP_SHARE = 0.4;
+export const SECTION_PROGRESS_SHARE = 0.3;
+/** Days without a mock before the gap itself is the finding. */
+export const MOCK_GAP_DAYS = 14;
 
 /** Below this many mocks we cannot speak about a trend at all. */
 export const MIN_MOCKS_FOR_TREND = 3;
@@ -125,6 +147,8 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
       evidence: `You planned ${fmtHours(input.plannedHours7d)} hrs this week and logged ${fmtHours(input.loggedHours7d)}.`,
       soWhat: 'A Buddy builds a routine around the week you actually have — and checks whether you followed it.',
       severity: 3,
+      chip: 'PLAN',
+      stat: `${fmtHours(input.loggedHours7d)}/${fmtHours(input.plannedHours7d)} hrs done this week`,
     });
   }
 
@@ -146,6 +170,8 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
         evidence: `Last ${window.length} mocks: ${trail}.`,
         soWhat: 'A Buddy reads your actual papers and finds what changed — before it becomes a pattern.',
         severity: 5,
+        chip: 'MOCKS',
+        stat: `falling: ${trail}`,
       });
     } else if (spread <= PLATEAU_BAND) {
       out.push({
@@ -154,8 +180,71 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
         evidence: `Last ${window.length} mocks: ${trail}.`,
         soWhat: "A Buddy works out what's holding the ceiling — more mocks alone will not move it.",
         severity: 4,
+        chip: 'MOCKS',
+        stat: `stuck: ${trail}`,
       });
     }
+  }
+
+  // 2b. THE SECTION GAP — the founder's own example: "I've done 9 of 28 QA
+  //     topics; which 15 do I cover next, weightage-wise?" Fires only when
+  //     the student IS studying (some section moving) and one section is
+  //     being left behind — a brand-new student with 0 everywhere has no gap,
+  //     they have a start.
+  const secs = input.sectionsStarted.filter((s) => s.total > 0);
+  const anyProgress = secs.some((s) => s.started / s.total >= SECTION_PROGRESS_SHARE);
+  if (anyProgress) {
+    const worst = [...secs].sort((a, b) => a.started / a.total - b.started / b.total)[0];
+    if (worst && worst.started / worst.total < SECTION_GAP_SHARE) {
+      out.push({
+        kind: 'section_gap',
+        title: `${worst.section} is your biggest gap`,
+        evidence: `Only ${worst.started} of ${worst.total} ${worst.section} topics started.`,
+        soWhat: `A Buddy sequences your next ${worst.section} topics by weightage — highest marks first.`,
+        severity: 4,
+        chip: worst.section,
+        stat: `${worst.started}/${worst.total} topics started`,
+      });
+    }
+  }
+
+  // 2c. MOCKS NOT HAPPENING AT ALL — different from a bad trend. Gated on
+  //     real coverage so a day-one student is not scolded for a mock they
+  //     could not sensibly sit yet.
+  if (!input.mocksEver && input.coveragePct != null && input.coveragePct >= 20) {
+    out.push({
+      kind: 'mock_missing',
+      title: "You haven't given a single mock",
+      evidence: '0 mocks recorded so far.',
+      soWhat: 'A Buddy sets your mock day and reads the first paper with you.',
+      severity: 4,
+      chip: 'MOCKS',
+      stat: '0 mocks recorded',
+    });
+  } else if (input.mocksEver && input.daysSinceLastMock != null && input.daysSinceLastMock >= MOCK_GAP_DAYS) {
+    out.push({
+      kind: 'mock_gap',
+      title: `No mock in ${input.daysSinceLastMock} days`,
+      evidence: `Your last recorded mock was ${input.daysSinceLastMock} days ago.`,
+      soWhat: 'Weekly mocks are the #1 signal now — a Buddy holds you to them.',
+      severity: 3,
+      chip: 'MOCKS',
+      stat: `${input.daysSinceLastMock} days since your last mock`,
+    });
+  }
+
+  // 2d. AVOIDANCE — the same topic pushed out of the plan again and again.
+  //     Their own swaps, counted, never guessed.
+  if (input.repeatSwapped && input.repeatSwapped.times >= 2) {
+    out.push({
+      kind: 'topic_avoidance',
+      title: `You keep pushing ${input.repeatSwapped.topic} away`,
+      evidence: `Swapped out of your plan ${input.repeatSwapped.times} times in 2 weeks.`,
+      soWhat: 'Avoided topics don\'t disappear — a Buddy breaks them down with you.',
+      severity: 3,
+      chip: 'SKIPPED',
+      stat: `${input.repeatSwapped.topic} pushed away ×${input.repeatSwapped.times}`,
+    });
   }
 
   // 3. STRATEGY — no finish date, no daily hours: they are studying without a
@@ -167,6 +256,8 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
       evidence: 'You have not set a finish date and daily hours yet.',
       soWhat: 'A Buddy helps you commit to a realistic shape for your week, then holds it.',
       severity: 3,
+      chip: 'STRATEGY',
+      stat: 'no finish date or daily hours set',
     });
   }
 
@@ -182,6 +273,8 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
       evidence: `${Math.round(input.coveragePct)}% of the syllabus covered, ${input.daysToTarget} days to the date you set.`,
       soWhat: 'A Buddy decides what to cut and what to protect, so the date stops slipping.',
       severity: 4,
+      chip: 'SYLLABUS',
+      stat: `${Math.round(input.coveragePct)}% covered · ${input.daysToTarget} days left`,
     });
   }
 
@@ -198,6 +291,8 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
       evidence: `${input.weakestSectionNow} was your weakest section when you joined — it still is.`,
       soWhat: 'Someone who has already sat CAT twice can tell you what to change, not just what to revise.',
       severity: 5,
+      chip: 'REPEAT',
+      stat: `${input.weakestSectionNow} still your weakest section`,
     });
   }
 
@@ -212,10 +307,43 @@ export function buildBuddyCase(input: BuddyCaseInput): CaseFinding[] {
       evidence: 'Most CAT aspirants prepare alone — and when something stops working, nobody tells them.',
       soWhat: 'A Buddy looks at your week every week, and says the thing you cannot see from inside it.',
       severity: 1,
+      chip: 'REVIEW',
+      stat: 'no one checks your prep week-to-week',
     });
   }
 
   return out.sort((a, b) => b.severity - a.severity);
+}
+
+/**
+ * Neutral, PERSONAL status lines used to pad the diagnosis to three bullets
+ * when a student has fewer than three true findings (founder, 14 Aug: every
+ * student gets three pointers from their own preparation; ChatGPT's review,
+ * accepted: the generic "nobody is reviewing" line never leads the card).
+ *
+ * These are facts about their prep, stated flat — a snapshot, not an
+ * accusation — so honesty survives the always-three rule: a day-one student
+ * sees "0/46 topics started · no mock yet · 102 days to your date", which is
+ * all true and all theirs.
+ */
+export function statusBullets(input: BuddyCaseInput): { chip: string; stat: string }[] {
+  const out: { chip: string; stat: string }[] = [];
+  const totalStarted = input.sectionsStarted.reduce((s, x) => s + x.started, 0);
+  const totalTopics = input.sectionsStarted.reduce((s, x) => s + x.total, 0);
+  if (totalTopics > 0) out.push({ chip: 'SYLLABUS', stat: `${totalStarted}/${totalTopics} topics started` });
+  else if (input.coveragePct != null) out.push({ chip: 'SYLLABUS', stat: `${Math.round(input.coveragePct)}% covered` });
+  out.push({
+    chip: 'MOCKS',
+    stat: !input.mocksEver ? 'no mock recorded yet'
+      : input.daysSinceLastMock != null ? `last mock ${input.daysSinceLastMock} days ago` : 'mocks on record',
+  });
+  if (input.daysToTarget != null && input.daysToTarget > 0) {
+    out.push({ chip: 'TARGET', stat: `${input.daysToTarget} days to your finish date` });
+  }
+  if (input.loggedHours7d != null) {
+    out.push({ chip: 'HOURS', stat: `${input.loggedHours7d} hrs logged this week` });
+  }
+  return out;
 }
 
 /**

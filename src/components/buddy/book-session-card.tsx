@@ -28,10 +28,14 @@ interface Availability {
   minutes: number;
 }
 
-export function BookSessionCard({ findingKind, findingEvidence }: {
+export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, hasGaps }: {
   /** The diagnosis that motivated this, carried to the mentor. */
   findingKind?: string | null;
   findingEvidence?: string | null;
+  /** The matched mentor's first name — "Rudra will look at", not "they". */
+  mentorFirst?: string | null;
+  /** Whether the diagnosis above found real gaps — picks the headline. */
+  hasGaps?: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<Availability | null>(null);
@@ -113,15 +117,18 @@ export function BookSessionCard({ findingKind, findingEvidence }: {
     <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
       <div className="border-b border-stone-100 px-4 py-3">
         <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">
-          One session · no subscription
+          {state.minutes}-min prep audit · 1:1 · no subscription
         </p>
+        {/* ₹299 is not "time with an IIM guy" — it is someone finally
+            auditing THIS student's preparation (review, 14 Aug). */}
         <p className="mt-1 text-[15px] font-extrabold leading-tight text-stone-900">
-          Talk to an IIM Buddy — {state.priceLabel}
+          {hasGaps ? `Fix these gaps — ${state.priceLabel}` : `Get your prep audited — ${state.priceLabel}`}
         </p>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-          {state.minutes} minutes, 1:1 on Google Meet. They look at your actual preparation,
-          not general advice — and you leave with a written next step.
-        </p>
+        <ul className="mt-1.5 space-y-0.5 text-[12.5px] font-medium text-stone-700">
+          <li>• {mentorFirst ?? 'Your Buddy'} reads your coverage &amp; mocks before the call</li>
+          <li>• You go through your plan and priorities together</li>
+          <li>• You leave with a written next step</li>
+        </ul>
       </div>
 
       <div className="p-4">
@@ -134,7 +141,10 @@ export function BookSessionCard({ findingKind, findingEvidence }: {
               {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
             </button>
             <p className="mt-2 text-center text-[10.5px] leading-snug text-stone-400">
-              One-time payment. Not a subscription, and nothing renews.
+              One-time payment — nothing renews. Not a subscription.
+            </p>
+            <p className="mt-1 text-center text-[11px] font-semibold text-stone-600">
+              ₹299 today. Clear direction for the months that matter.
             </p>
           </>
         ) : (

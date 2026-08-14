@@ -50,6 +50,8 @@ export default async function BuddyPage({
       <BuddyConversionScreen
         firstName={(profile?.full_name ?? 'there').split(' ')[0]}
         findings={studentCase.findings}
+        bullets={studentCase.bullets}
+        gapCount={studentCase.gapCount}
         buddy={recommendedBuddies[0] ?? null}
         topKind={studentCase.topKind}
       />

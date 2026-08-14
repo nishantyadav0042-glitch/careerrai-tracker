@@ -17,6 +17,7 @@ const BLANK: BuddyCaseInput = {
   recentMockPercentiles: [], coveragePct: null, daysToTarget: null,
   hasPlanShape: true, isRepeater: false,
   weakestSectionNow: null, weakestSectionAtSignup: null, hasMentor: false,
+  sectionsStarted: [], mocksEver: false, daysSinceLastMock: null, repeatSwapped: null,
 };
 const kinds = (i: Partial<BuddyCaseInput>) => buildBuddyCase({ ...BLANK, ...i }).map((f) => f.kind);
 
@@ -213,5 +214,65 @@ describe('the one external fact we print is sourced and hedged', () => {
       expect(line).not.toMatch(/because/i);
       expect(line).not.toMatch(/mentor/i);
     }
+  });
+});
+
+describe('the section gap is a gap, not a start', () => {
+  const secs = (qa: number, varc: number, dilr: number) => ([
+    { section: 'QA', started: qa, total: 28 },
+    { section: 'VARC', started: varc, total: 9 },
+    { section: 'DILR', started: dilr, total: 9 },
+  ]);
+
+  it('the founder\'s example: 9 of 28 QA while the rest moves → named, with the numbers', () => {
+    const f = buildBuddyCase({ ...BLANK, sectionsStarted: secs(9, 7, 6) })
+      .find((x) => x.kind === 'section_gap');
+    expect(f?.title).toBe('QA is your biggest gap');
+    expect(f?.evidence).toBe('Only 9 of 28 QA topics started.');
+  });
+
+  it('a brand-new student with zero everywhere has a start, not a gap', () => {
+    expect(kinds({ sectionsStarted: secs(0, 0, 0) })).not.toContain('section_gap');
+  });
+
+  it('balanced progress is never called a gap', () => {
+    expect(kinds({ sectionsStarted: secs(15, 5, 5) })).not.toContain('section_gap');
+  });
+});
+
+describe('mocks not happening is its own finding', () => {
+  it('real coverage but zero mocks ever → said plainly', () => {
+    const k = kinds({ mocksEver: false, coveragePct: 35 });
+    expect(k).toContain('mock_missing');
+  });
+
+  it('a day-one student is not scolded for a mock they could not sit', () => {
+    expect(kinds({ mocksEver: false, coveragePct: 5 })).not.toContain('mock_missing');
+    expect(kinds({ mocksEver: false, coveragePct: null })).not.toContain('mock_missing');
+  });
+
+  it('a long gap since the last mock fires with the real count of days', () => {
+    const f = buildBuddyCase({ ...BLANK, mocksEver: true, daysSinceLastMock: 23 })
+      .find((x) => x.kind === 'mock_gap');
+    expect(f?.title).toBe('No mock in 23 days');
+  });
+
+  it('a recent mock keeps both quiet', () => {
+    const k = kinds({ mocksEver: true, daysSinceLastMock: 6, coveragePct: 40 });
+    expect(k).not.toContain('mock_gap');
+    expect(k).not.toContain('mock_missing');
+  });
+});
+
+describe('avoidance needs a real pattern', () => {
+  it('the same topic swapped away twice is named with the count', () => {
+    const f = buildBuddyCase({ ...BLANK, repeatSwapped: { topic: 'Geometry', times: 3 } })
+      .find((x) => x.kind === 'topic_avoidance');
+    expect(f?.title).toBe('You keep pushing Geometry away');
+    expect(f?.evidence).toContain('3 times');
+  });
+
+  it('one swap is a choice, not avoidance', () => {
+    expect(kinds({ repeatSwapped: { topic: 'Geometry', times: 1 } })).not.toContain('topic_avoidance');
   });
 });

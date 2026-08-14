@@ -75,19 +75,33 @@ describe('the conversion screen: weakness → person → price, nothing else', (
   // so it cannot quietly re-grow.
   const SCREEN = 'src/components/buddy/buddy-conversion-screen.tsx';
 
-  it('the student\'s own findings lead, the mentor answers, the price closes', () => {
+  it('diagnosis → red strip → person → price → till-CAT, in that order', () => {
     const s = readFileSync(SCREEN, 'utf8');
-    const weakness = s.indexOf('We looked at your prep');
-    const person = s.indexOf('Fix it with someone who cracked it');
+    const diagnosis = s.indexOf('We found ');
+    const red = s.indexOf('bg-red-600');
+    const person = s.indexOf('Your IIM Buddy');
     const price = s.indexOf('<BookSessionCard');
-    expect(weakness).toBeGreaterThan(-1);
-    expect(person).toBeGreaterThan(weakness);
+    const tillcat = s.indexOf('Want {buddyFirst} till CAT?');
+    expect(diagnosis).toBeGreaterThan(-1);
+    expect(red).toBeGreaterThan(diagnosis);
+    expect(person).toBeGreaterThan(red);
     expect(price).toBeGreaterThan(person);
+    expect(tillcat).toBeGreaterThan(price);
   });
 
-  it('the Till-CAT plan survives as one line — the session is the way in', () => {
+  it('every diagnosis bullet is a pointer with the student\'s own stat', () => {
+    // "QA — 9/28 topics started", never a paragraph — and the generic
+    // "nobody is reviewing" line never leads the card.
     const s = readFileSync(SCREEN, 'utf8');
-    expect(s).toContain('Buddy till CAT');
+    expect(s).toContain('{b.chip}');
+    expect(s).toContain('{b.stat}');
+    expect(s).not.toContain('Nobody is reviewing your preparation');
+  });
+
+  it('the Till-CAT plan is one active-choice banner, not the price-card stack', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain('till CAT?');
+    expect(s).toContain('₹2,999');
     // ...but the big subscription price cards do not come back.
     expect(s).not.toContain('BuddyBuyButtons');
   });
