@@ -10,6 +10,7 @@ import { MeetingRoomCard } from '@/components/buddy/meeting-room-card';
 import { LogoutButton } from '@/components/logout-button';
 import type { NotifPrefs } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
+import { SpecialistForm } from './specialist-form';
 
 export default async function BuddyProfilePage() {
   const supabase = await createClient();
@@ -17,7 +18,9 @@ export default async function BuddyProfilePage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('full_name, email, notif_prefs, buddy_meet_url').eq('id', user.id).single();
+  const { data: profile } = await admin.from('profiles').select(
+    'full_name, email, notif_prefs, buddy_meet_url, specialities, strongest_section, own_weakest_section, attempt_number, previous_percentile, languages, weekly_session_cap, notice_hours, buddy_story'
+  ).eq('id', user.id).single();
   if (!profile) redirect('/login');
 
   const [{ count: studentCount }, { data: upcomingSessions }] = await Promise.all([
@@ -47,6 +50,22 @@ export default async function BuddyProfilePage() {
 
   return (
     <div className="space-y-5 pb-24">
+      {/* The specialist fields. Leads the page while ₹299 sessions are opening,
+          because these are what decide whether a mentor gets matched at all —
+          an undeclared capacity is treated as zero, so an unfilled form is a
+          mentor the system cannot send anyone to. */}
+      <SpecialistForm initial={{
+        specialities: (profile?.specialities as string[] | null) ?? [],
+        strongestSection: (profile?.strongest_section as string | null) ?? null,
+        ownWeakestSection: (profile?.own_weakest_section as string | null) ?? null,
+        attemptNumber: (profile?.attempt_number as number | null) ?? null,
+        previousPercentile: profile?.previous_percentile != null ? Number(profile.previous_percentile) : null,
+        languages: (profile?.languages as string[] | null) ?? [],
+        weeklySessionCap: (profile?.weekly_session_cap as number | null) ?? null,
+        noticeHours: (profile?.notice_hours as number | null) ?? null,
+        buddyStory: (profile?.buddy_story as string | null) ?? null,
+      }} />
+
       <div className="px-1 flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Profile</p>
