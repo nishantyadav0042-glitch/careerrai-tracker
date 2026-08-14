@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { WHATSAPP_GROUP_URL } from '@/components/onboarding/whatsapp-optin';
+import { WHATSAPP_GROUP_URL, reachOf } from '@/components/onboarding/whatsapp-optin';
 
 // ── Two messages a day, and we mean it ──────────────────────────────────────
 //
@@ -45,6 +45,16 @@ describe('joining is always optional', () => {
     expect((s.match(/onDone\(\)/g) ?? []).length).toBe(2);
   });
 
+  it('every variant has a way out, including the hardest ask', () => {
+    // The unreachable variant words its skip as a cost ("I'll remember on my
+    // own") instead of a neutral "Not now" — but it IS still a skip, and there
+    // is exactly one skip button for all three.
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain('I’ll remember on my own');
+    expect(s).toContain('Skip');
+    expect((s.match(/track\('whatsapp_skip'/g) ?? []).length).toBe(1);
+  });
+
   it('opens WhatsApp safely in a new tab', () => {
     const s = readFileSync(SCREEN, 'utf8');
     expect(s).toContain('rel="noopener noreferrer"');
@@ -52,16 +62,65 @@ describe('joining is always optional', () => {
   });
 });
 
-describe('it is the LAST screen, after the first-day log', () => {
-  it('the log tour hands off to it, and it ends the sequence', () => {
+describe('reach decides the weight of the ask', () => {
+  it('app + push = reachable — they are already covered', () => {
+    expect(reachOf({ installed: true, pushOn: true })).toBe('reachable');
+  });
+
+  it('no app and no push = unreachable', () => {
+    // The founder's line, 14 Aug: this student is dead to us the moment the
+    // tab closes. WhatsApp is the only channel left.
+    expect(reachOf({ installed: false, pushOn: false })).toBe('unreachable');
+  });
+
+  it('exactly one working channel = partial, either way round', () => {
+    expect(reachOf({ installed: true, pushOn: false })).toBe('partial');
+    expect(reachOf({ installed: false, pushOn: true })).toBe('partial');
+  });
+
+  it('the unreachable variant makes the strongest claim of the three', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain('This is the only way we can reach you');
+    // …and the reachable one does not pretend to be urgent.
+    expect(s).toContain('Want your plan on WhatsApp too?');
+  });
+
+  it('reads install and push state rather than a student self-report', () => {
+    // "Done — continue" on the openApp screen proves nothing; the install
+    // hook's own signal does.
     const s = readFileSync(SEQUENCE, 'utf8');
-    expect(s).toContain("setStep('whatsapp')");
-    expect(s).toContain('<WhatsAppOptIn onDone={finishCommitment} />');
+    expect(s).toContain('reachOf({ installed, pushOn: pushState === \'granted\' })');
+    expect(s).toContain('const { ui: installUi, installed } = useInstall();');
+  });
+
+  it('segments the outcome, so join rate is readable per reach', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain("track('whatsapp_join_click', { reach })");
+    expect(s).toContain("track('whatsapp_skip', { reach })");
+  });
+});
+
+describe('a student push did not reach sees WhatsApp on the very next screen', () => {
+  it('the not-granted branch of the reminders step goes straight to it', () => {
+    const s = readFileSync(SEQUENCE, 'utf8');
+    // The granted branch keeps the original order (log tour, then WhatsApp);
+    // the branch below the push button is the declined/skipped one.
+    const declineBranch = s.slice(s.indexOf("pushState ? 'Last thing →' : 'Maybe later'") - 600);
+    expect(declineBranch).toContain("onClick={() => setStep('whatsapp')}");
+  });
+
+  it('the log tour is moved, never dropped', () => {
+    // Reordering must not cost the declining cohort a screen: whichever of the
+    // two ran first hands off to the other, and only the second one closes.
+    const s = readFileSync(SEQUENCE, 'utf8');
+    expect(s).toContain('if (waSeen) finishCommitment(); else setStep(\'whatsapp\');');
+    expect(s).toContain('if (tourSeen) finishCommitment(); else setStep(\'logTour\');');
   });
 
   it('nothing after it gates Home', () => {
     // finishCommitment closes the sequence; the student lands on Home either
-    // way. Gating Home on a WhatsApp join would be the Incident #2 shape.
+    // way. Gating Home on a WhatsApp join would be the Incident #2 shape —
+    // requiring an action to proceed took a whole cohort's logging to zero.
     const s = readFileSync(SEQUENCE, 'utf8');
     expect(s).toMatch(/const finishCommitment = \(\) => \{\s*setVisible\(false\);/);
   });

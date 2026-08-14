@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { splitTax, netToPlatformPaise, taxLine, GST_RATE, GST_ENABLED } from './gst';
 import { SESSION_PRICE_PAISE } from './session-credit';
 import { PLANS } from './plans';
@@ -86,7 +87,7 @@ describe('the rate stays declared, ready for registration day', () => {
 });
 
 describe('the money path charges the gross and stores the split', () => {
-  const src = () => require('node:fs').readFileSync('src/app/api/payments/create-order/route.ts', 'utf8');
+  const src = () => readFileSync('src/app/api/payments/create-order/route.ts', 'utf8');
 
   it('Razorpay is charged the GROSS, not the pre-tax figure', () => {
     expect(src()).toContain('createRazorpayOrder(\n      tax.grossPaise,');

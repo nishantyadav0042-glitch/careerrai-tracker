@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   remainingCapacity, rosterCapacity, canSellSession, matchMentor,
   upgradeCreditPaise, SESSION_PRICE_PAISE, CREDIT_WINDOW_DAYS, MAX_SPECIALITIES,
@@ -140,7 +141,7 @@ describe('the shape of the product', () => {
 });
 
 describe('the money path treats a session differently from a subscription', () => {
-  const src = () => require('node:fs').readFileSync('src/lib/activate-payment.ts', 'utf8');
+  const src = () => readFileSync('src/lib/activate-payment.ts', 'utf8');
 
   it('a session NEVER grants premium or a permanent buddy', () => {
     // This is the whole point of the entitlement. If the session ever falls

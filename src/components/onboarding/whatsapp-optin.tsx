@@ -2,52 +2,94 @@
 
 import { track } from '@/lib/journey';
 
-// ── The last screen before Home: two messages a day, on WhatsApp ────────────
+// ── WhatsApp, weighted by how reachable the student actually is ─────────────
 //
-// Measured 14 Aug, on students who signed up more than a week ago:
+// Founder, 14 Aug: "the student who didn't install the app is DEAD to us —
+// we cannot reach them any way at all, so they MUST see WhatsApp. Someone who
+// installed can be asked after. Same for anyone who closed notifications —
+// put WhatsApp on the very next screen, push everything else aside."
 //
-//   87% finish onboarding          — onboarding is NOT the problem
+// That is the right model, and it is not a fixed position in the flow: the
+// placement follows REACH. The measured picture behind it — students who
+// signed up more than a week ago:
+//
+//   87% finish onboarding      — the sequence is not the problem
 //   64% never log a single day
 //   49% never return after day one
-//   31% have working push notifications
+//   31% have a working push subscription
 //
-// Two-thirds of students are unreachable the moment they close the app, and
-// every one of them has a phone number on file. So this screen exists to fix
-// REACH, not onboarding — WhatsApp is the only channel that covers the 69%
-// push cannot.
+// So the students who skip install AND decline push are unreachable the
+// moment the tab closes. Every one of them has a phone number. WhatsApp is
+// the only channel left, and the founder's second point is the real prize:
+// once they are in the group, a daily reminder can pull them back to install
+// the app. Zero → one, even if it is never ten.
 //
-// It sits at the end of the sequence for two reasons: it is the point of peak
-// commitment (they have just built a 46-topic plan and practised logging), and
-// it is the last controlled moment before the drop. Asking at signup would tax
-// a funnel that already converts 87%, for a student with no reason yet to say
-// yes.
+// THREE WEIGHTS, one screen:
 //
-// THE PROMISE IS THE PITCH. "2 messages a day" converts where "join our
-// community" does not: every CAT aspirant is already in a dozen dead groups,
-// so the scarcity of our messaging is the reason to trust this one. The
-// founder confirmed the group is set to admins-only before this shipped —
-// without that, our own members would break the promise the moment 300
-// students started chatting, and the promise sits on screen beside the button.
+//   unreachable  no app, no push → the strongest ask we make anywhere. The
+//                skip is deliberately a sentence that names what they lose,
+//                not a neutral "Not now" — but it IS still a skip. A hard
+//                gate here would be the Incident #2 shape (requiring an
+//                action to proceed took a whole cohort's logging to zero),
+//                and a student who cannot get past a WhatsApp wall is more
+//                lost than one who declines it.
+//   partial      one channel works → normal ask.
+//   reachable    app + push → light ask, easy out. They are already covered;
+//                pushing hard here spends trust we do not need to spend.
 //
-// Skippable, always. Nothing here gates Home.
+// The promise is identical in all three: 2 messages a day, and the founder
+// set the group to admins-only so our own members cannot break it.
 
 export const WHATSAPP_GROUP_URL = 'https://chat.whatsapp.com/LaH25FJ6W5E4tGRC0Z4gPE?s=cl&p=a&ilr=4';
 
-export function WhatsAppOptIn({ onDone }: { onDone: () => void }) {
+export type Reach = 'unreachable' | 'partial' | 'reachable';
+
+export function reachOf({ installed, pushOn }: { installed: boolean; pushOn: boolean }): Reach {
+  if (installed && pushOn) return 'reachable';
+  if (!installed && !pushOn) return 'unreachable';
+  return 'partial';
+}
+
+const COPY: Record<Reach, { kicker: string; head: string; sub: string; skip: string }> = {
+  unreachable: {
+    kicker: 'Important',
+    head: 'This is the only way we can reach you',
+    sub: 'No app, no notifications. Your plan is ready every morning — but nothing will tell you.',
+    skip: 'No thanks — I’ll remember on my own',
+  },
+  partial: {
+    kicker: 'One last thing',
+    head: 'Your plan, on WhatsApp',
+    sub: 'So a reminder reaches you even when notifications don’t.',
+    skip: 'Not now',
+  },
+  reachable: {
+    kicker: 'Optional',
+    head: 'Want your plan on WhatsApp too?',
+    sub: 'Some students prefer it there. Your notifications already work.',
+    skip: 'Skip',
+  },
+};
+
+export function WhatsAppOptIn({ reach, onDone }: { reach: Reach; onDone: () => void }) {
+  const c = COPY[reach];
+  const urgent = reach === 'unreachable';
+
   return (
-    <div className="rounded-3xl bg-stone-900 px-5 py-6 text-white">
+    <div className={`rounded-3xl px-5 py-6 ${urgent ? 'bg-[#0B2E1C] text-white' : 'bg-stone-900 text-white'}`}>
       <div className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-[#25D366]">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="#052613" aria-hidden="true">
           <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm5.8 14.2c-.2.7-1.2 1.3-1.7 1.3-.4 0-1 .1-3.3-.9-2.8-1.2-4.5-4.1-4.7-4.3-.1-.2-1-1.4-1-2.6 0-1.3.7-1.9.9-2.1.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2 1.3 2.3 1.4.3.1.4.1.6-.1l.8-1c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.3.1.1.1.5-.1 1Z" />
         </svg>
       </div>
 
-      <h2 className="text-[23px] font-bold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
-        Your plan, on WhatsApp
-      </h2>
-      <p className="mt-1.5 text-[13px] text-stone-400">
-        So a reminder reaches you even when notifications don&apos;t.
+      <p className={`text-[10px] font-bold uppercase tracking-widest ${urgent ? 'text-[#25D366]' : 'text-stone-400'}`}>
+        {c.kicker}
       </p>
+      <h2 className="mt-1 text-[23px] font-bold leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
+        {c.head}
+      </h2>
+      <p className="mt-1.5 text-[13px] text-stone-400">{c.sub}</p>
 
       <div className="mt-5 space-y-3">
         <div className="flex items-start gap-3">
@@ -70,17 +112,17 @@ export function WhatsAppOptIn({ onDone }: { onDone: () => void }) {
         href={WHATSAPP_GROUP_URL}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={() => { track('whatsapp_join_click', {}); onDone(); }}
+        onClick={() => { track('whatsapp_join_click', { reach }); onDone(); }}
         className="mt-5 block w-full rounded-xl bg-[#25D366] py-3.5 text-center text-[15px] font-extrabold text-[#052613] active:scale-[0.99]"
       >
         Join on WhatsApp
       </a>
       <button
         type="button"
-        onClick={() => { track('whatsapp_skip', {}); onDone(); }}
-        className="mt-1 block w-full py-3 text-[13px] text-stone-400"
+        onClick={() => { track('whatsapp_skip', { reach }); onDone(); }}
+        className={`mt-1 block w-full py-3 text-stone-400 ${urgent ? 'text-[11.5px]' : 'text-[13px]'}`}
       >
-        Not now
+        {c.skip}
       </button>
     </div>
   );

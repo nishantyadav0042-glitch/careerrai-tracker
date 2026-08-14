@@ -106,6 +106,13 @@ function taskTitle(task: RoutineTask): string {
 let routineTodayCache: { at: number; json: unknown } | null = null;
 const ROUTINE_CACHE_MS = 30_000;
 
+// The engagement timers read the clock, and the React compiler treats any
+// Date.now() written inside a component body as render-time impurity even when
+// it only ever runs from an event handler. One module-level reader keeps both
+// timers honest and the rule satisfied — the alternative was silencing the
+// rule, which would also silence a real render-time clock read later.
+const clockMs = () => Date.now();
+
 
 // ── How far did you get? ────────────────────────────────────────────────────
 //
@@ -281,7 +288,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   function reportStart() {
     if (hasReportedStart.current || viewedAt.current == null) return;
     hasReportedStart.current = true;
-    startedAt.current = Date.now();
+    startedAt.current = clockMs();
     const seconds = Math.round((startedAt.current - viewedAt.current) / 1000);
     fetch('/api/routine/engagement', {
       method: 'POST',
@@ -293,7 +300,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   function reportComplete() {
     if (hasReportedComplete.current) return;
     hasReportedComplete.current = true;
-    const seconds = startedAt.current != null ? Math.round((Date.now() - startedAt.current) / 1000) : null;
+    const seconds = startedAt.current != null ? Math.round((clockMs() - startedAt.current) / 1000) : null;
     fetch('/api/routine/engagement', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

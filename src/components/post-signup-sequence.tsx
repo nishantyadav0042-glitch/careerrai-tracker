@@ -8,7 +8,7 @@ import { trackMeta } from '@/lib/track';
 import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 import { SixPromises } from '@/components/six-promises';
 import ScreenLogTour from '@/app/student/onboarding/screens/screen-log-tour';
-import { WhatsAppOptIn } from '@/components/onboarding/whatsapp-optin';
+import { WhatsAppOptIn, reachOf } from '@/components/onboarding/whatsapp-optin';
 
 // The setup journey, made visible (founder, 21 July: "it should feel like a
 // journey, not a boring job — sticky like a magnet till app notifications are
@@ -81,11 +81,32 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
   // iPhone's whole install is one tap on the App Store card, so the "here's how
   // to add it" screen that follows is not just unnecessary — it is a step that
   // asks a student who has already finished to keep going.
-  const { ui: installUi } = useInstall();
+  const { ui: installUi, installed } = useInstall();
   const isIphone = installUi === 'ios-app-store';
   const stations = isIphone ? JOURNEY_IPHONE : JOURNEY;
   const [pushBusy, setPushBusy] = useState(false);
   const [pushState, setPushState] = useState<EnablePushResult | null>(null);
+
+  // ── Reach decides where WhatsApp sits, and how hard it asks ───────────────
+  //
+  // Founder, 14 Aug: a student who never installs the app is dead to us — no
+  // channel reaches them once the tab closes — so WhatsApp must be the ask they
+  // cannot miss. Someone who DID install can be asked afterwards, gently. And
+  // anyone who just closed notifications gets WhatsApp as the very next screen,
+  // everything else pushed aside.
+  //
+  // So the sequence has two orders, not one:
+  //   push granted     → log tour → WhatsApp (light ask; they are already covered)
+  //   push not granted → WhatsApp FIRST → log tour
+  // Neither drops a screen: whichever of the two ran first hands off to the
+  // other, and only the second one closes the sequence. The order changes; the
+  // content a student gets does not.
+  const [tourSeen, setTourSeen] = useState(false);
+  const [waSeen, setWaSeen] = useState(false);
+  // `installed` is the honest read, not a self-report: it comes from the
+  // appinstalled event, the native shell, getInstalledRelatedApps() and
+  // display-mode — never from the student tapping "Done — continue".
+  const reach = reachOf({ installed, pushOn: pushState === 'granted' });
 
   // A new student has completed onboarding — the signup conversion for ad
   // campaigns. MUST fire once per student, but this sequence re-renders on
@@ -336,9 +357,12 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
                   </p>
                 )}
 
+                {/* Push did NOT come on — so this student is one closed tab
+                    away from unreachable, and the next screen is the one that
+                    fixes that. Not the log tour: that runs after. */}
                 <button
                   type="button"
-                  onClick={() => setStep('logTour')}
+                  onClick={() => setStep('whatsapp')}
                   className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
                 >
                   {pushState ? 'Last thing →' : 'Maybe later'}
@@ -361,25 +385,37 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
           <div className="space-y-4">
             <JourneyRail current={stations.length - 1} stations={stations} />
             <ScreenLogTour
-              onNext={async () => { setStep('whatsapp'); }}
-              onBack={() => setStep('reminders')}
+              onNext={async () => {
+                setTourSeen(true);
+                if (waSeen) finishCommitment(); else setStep('whatsapp');
+              }}
+              onBack={() => setStep(waSeen ? 'whatsapp' : 'reminders')}
               canGoBack
               isLoading={false}
             />
           </div>
         )}
 
-        {/* ── The last screen before Home ────────────────────────────────
+        {/* ── WhatsApp, positioned by reach ──────────────────────────────
             Reach, not onboarding: 87% finish the sequence, but 64% never log
             a day, 49% never return after day one, and only 31% have working
             push. Every student has a phone number, so WhatsApp is the only
-            channel that covers the two-thirds push cannot — and this is the
-            last controlled moment before that drop.
-            Skippable; nothing here gates Home. */}
+            channel that covers the two-thirds push cannot.
+
+            It runs FIRST for a student push didn't reach — the moment after
+            the decline is the moment it matters — and last for one it did.
+            Whichever ran first hands off to the other; the second one closes.
+            Skippable in every variant; nothing here gates Home. */}
         {step === 'whatsapp' && (
           <div className="space-y-4">
             <JourneyRail current={stations.length - 1} stations={stations} />
-            <WhatsAppOptIn onDone={finishCommitment} />
+            <WhatsAppOptIn
+              reach={reach}
+              onDone={() => {
+                setWaSeen(true);
+                if (tourSeen) finishCommitment(); else setStep('logTour');
+              }}
+            />
           </div>
         )}
 
