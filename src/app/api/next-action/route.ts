@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     admin.from('mock_debriefs').select('varc, dilr, qa, taken_on')
       .eq('student_id', user.id).order('taken_on', { ascending: false }).limit(1).maybeSingle(),
     admin.from('student_timetables').select('targets, confirmed_at').eq('student_id', user.id).maybeSingle(),
-    admin.from('profiles').select('plan_source, qa_model_enabled, dilr_model_enabled, varc_model_enabled').eq('id', user.id).maybeSingle(),
+    admin.from('profiles').select('plan_source').eq('id', user.id).maybeSingle(),
     admin.from('coaching_target_progress').select('target_key, done').eq('student_id', user.id),
     // Today's routine, so "Done" on the card can tick the REAL plan task
     // instead of writing a second, parallel record of the same fact.
@@ -113,24 +113,20 @@ export async function GET(request: NextRequest) {
   const actions = allActions.filter((a) => !doneToday.has(a.kind));
   const finishedCount = allActions.length - actions.length;
 
-  // Where "Start now" goes. Decided HERE, because only the server knows which
-  // section plans are switched on for this account.
+  // Where "Start now" goes.
   //
-  // The first version always sent them to /student/plan/<section>, which is
-  // gated behind <section>_model_enabled. For any student without that flag the
-  // CTA landed on "This plan isn't switched on for your account yet" — a dead
-  // end produced by the one button whose entire job was to remove friction.
-  const enabled: Record<string, boolean> = {
-    qa: prof?.qa_model_enabled === true,
-    dilr: prof?.dilr_model_enabled === true,
-    varc: prof?.varc_model_enabled === true,
-  };
+  // ONE WAY TO BUILD A STUDY PLAN (founder, 14 Aug): "delete — there should
+  // be only one way for building study plan, unless a student uploads their
+  // coaching or self timetable. Otherwise one study table for all."
+  //
+  // /student/plan/[section] was a SECOND planner: its own per-section day, its
+  // own budget split, its own topic ranking, reachable from this very card
+  // behind a per-section feature flag. A student could read "do Geometry"
+  // there and "do Percentages" on Home — two screens, two answers, one app.
+  // It is deleted. Every action now points at the coverage matrix, which every
+  // student can always open and which never contradicts the daily plan.
   const hrefFor = (section: string | null, kind: string): string => {
     if (kind === 'coaching_due') return '/student/profile';
-    const sec = (section ?? '').toLowerCase();
-    // Only route into a section plan we KNOW is on. Otherwise the coverage
-    // matrix, which every student can always open.
-    if (enabled[sec]) return `/student/plan/${sec}`;
     return '/student/plan/topics';
   };
 

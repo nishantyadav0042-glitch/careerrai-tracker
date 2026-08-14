@@ -23,7 +23,6 @@
 // whose implied hours have drifted from canonical refuses to run.
 
 import { TOPIC_METADATA } from './topics-constants';
-import { SESSION_MINUTES, REVISION_SESSION_MINUTES, type SectionGraph, type MasteryTopicSpec } from './mastery-engine';
 
 export type Section = 'VARC' | 'DILR' | 'QA';
 export const SECTIONS: Section[] = ['VARC', 'DILR', 'QA'];
@@ -89,56 +88,12 @@ export function totalSyllabusHours(): number {
   return Object.values(TOPIC_METADATA).reduce((s, m) => s + m.estimatedHours, 0);
 }
 
-// ── The drift guard ─────────────────────────────────────────────────────────
+// ── The drift guard is gone, with the thing it guarded ──────────────────────
 //
-// Summing a graph's session counts is the ONE thing that recreates the second
-// hours model. This function exists so that the sum has exactly one caller —
-// the check that refuses to let a drifted engine run — and never a display.
-
-/** Hours a section graph's session budget implies. For comparison only. */
-export function graphImpliedHours(graph: SectionGraph<MasteryTopicSpec>, includeBonus = false): number {
-  const topics = includeBonus ? graph.topics : graph.coreTopics;
-  const minutes = topics.reduce((sum, t) => {
-    const s = t.sessions;
-    return sum
-      + s.concept * SESSION_MINUTES.concept
-      + s.easy * SESSION_MINUTES.easy
-      + s.medium * SESSION_MINUTES.medium
-      + s.hard * SESSION_MINUTES.hard
-      + t.initialRevisionSessions * REVISION_SESSION_MINUTES;
-  }, 0);
-  return minutes / 60;
-}
-
-/**
- * How far a section's graph has drifted from canonical, as a fraction.
- * QA today: 238h implied vs 199h canonical = 0.20.
- */
-export function sectionDrift(section: Section, graph: SectionGraph<MasteryTopicSpec>): number {
-  const canonical = sectionHours().find((s) => s.section === section)?.hours ?? 0;
-  if (canonical <= 0) return 1;
-  return Math.abs(graphImpliedHours(graph) - canonical) / canonical;
-}
-
-/**
- * A section engine may only be used where its own plan agrees with the hours
- * we quote the student. 10% is the tolerance — enough that nobody re-tunes a
- * graph over rounding, tight enough that a student can never be handed a daily
- * plan whose total contradicts their own finish date.
- *
- * All three sections FAIL this today, on purpose: the reconciliation is real
- * work, and this is what stops it being skipped and discovered by a student.
- */
-export const MAX_MODEL_DRIFT = 0.10;
-
-export function isSectionReconciled(section: Section, graph: SectionGraph<MasteryTopicSpec>): boolean {
-  return sectionDrift(section, graph) <= MAX_MODEL_DRIFT;
-}
-
-/** The line to log/show when a section is blocked by the guard. */
-export function driftMessage(section: Section, graph: SectionGraph<MasteryTopicSpec>): string {
-  const canonical = sectionHours().find((s) => s.section === section)?.hours ?? 0;
-  const implied = Math.round(graphImpliedHours(graph));
-  return `${section} plan model is out of sync: its sessions imply ${implied}h but the syllabus model says ${canonical}h `
-    + `(${Math.round(sectionDrift(section, graph) * 100)}% drift, limit ${Math.round(MAX_MODEL_DRIFT * 100)}%).`;
-}
+// graphImpliedHours / sectionDrift / isSectionReconciled / driftMessage existed
+// to stop the per-section mastery engines running while their session budgets
+// disagreed with the hours we quote a student. Founder, 14 Aug: "delete —
+// there should be only one way for building study plan." The engines are gone,
+// so the guard has nothing left to guard, and keeping a second hours model
+// alive purely to police a planner that no longer ships is how it would come
+// back. sectionHours() below remains the single canonical model.

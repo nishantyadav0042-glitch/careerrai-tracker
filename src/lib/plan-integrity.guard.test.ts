@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { generateRoutine, type RoutineProfile } from './routine-engine';
 import { buildTopicChoices, TOPICS_BY_SECTION } from './day-topics';
 
@@ -175,5 +175,48 @@ describe('INVARIANT 4 — the uniqueness the whole system rests on is in version
       || /unique[\s\S]{0,120}daily_routines[\s\S]{0,120}student_id[\s\S]{0,40}routine_date/i.test(all),
       'no migration declares the unique constraint on daily_routines(student_id, routine_date)'
     ).toBe(true);
+  });
+});
+
+// ── INVARIANT 5: ONE way to build a study plan ─────────────────────────────
+//
+// Founder, 14 Aug: "delete — there should be only one way for building study
+// plan, unless a student uploads their coaching or self timetable. Otherwise
+// one study table for all. Zero compromise for anyone."
+//
+// /student/plan/[section] and /api/mastery/[section] were a SECOND planner:
+// their own per-section day, their own budget split, their own topic ranking,
+// reachable from the Home "what now" card behind a <section>_model_enabled
+// flag. A student could read "do Geometry" there and "do Percentages" on Home.
+// Both were defensible; together they were two answers from one app.
+//
+// Deleted. The only permitted fork is an uploaded timetable, and that one
+// REPLACES the generated day rather than competing with it (lib/timetable-day).
+describe('INVARIANT 5 — one planner, with exactly one permitted fork', () => {
+  it('the per-section mastery planner is gone and cannot be re-imported', () => {
+    for (const f of [
+      'src/lib/mastery-engine.ts', 'src/lib/mastery-state.ts', 'src/lib/mastery-sections.ts',
+      'src/lib/qa-mastery-engine.ts', 'src/lib/dilr-mastery-engine.ts', 'src/lib/varc-mastery-engine.ts',
+    ]) {
+      expect(existsSync(f), `${f} must stay deleted`).toBe(false);
+    }
+    expect(existsSync('src/app/api/mastery'), 'the mastery API must stay deleted').toBe(false);
+    expect(existsSync('src/app/student/plan/[section]'), 'the per-section plan page must stay deleted').toBe(false);
+  });
+
+  it('nothing routes a student into a per-section planner any more', () => {
+    const s = readFileSync('src/app/api/next-action/route.ts', 'utf8');
+    expect(s).not.toContain('/student/plan/${sec}');
+    expect(s).not.toMatch(/_model_enabled/);
+  });
+
+  it('the only fork from the generated day is an uploaded timetable', () => {
+    // Both writers may branch exactly once — to the student's own sheet.
+    for (const f of ['src/app/api/routine/today/route.ts', 'src/lib/routine-plan.ts']) {
+      const s = readFileSync(f, 'utf8');
+      const forks = (s.match(/timetableDayTasks\(\{/g) ?? []).length;
+      expect(forks, `${f} must fork exactly once`).toBe(1);
+      expect((s.match(/generateRoutine\(/g) ?? []).length, `${f} must call the engine once`).toBe(1);
+    }
   });
 });
