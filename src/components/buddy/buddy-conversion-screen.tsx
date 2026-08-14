@@ -69,34 +69,68 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
         <p className="text-[14px] font-extrabold leading-snug">{REPEATER_HEADLINE}</p>
       </div>
 
-      {/* ── 3. THE PERSON ────────────────────────────────────────────────── */}
+      {/* ── 3. THE PERSON — the hero of this screen, and it must look it ───
+          Founder, 14 Aug: "buddy profile ko bahut bogus tareeke se chhupa
+          diya hai, ye koi hatke nahi dikh rahi — buddy profile to attractive
+          dikhni chahiye." Dead right, and it was a ranking error, not a taste
+          one: the two blocks above are a black card and a red strip, so a
+          white card with a hairline border read as background. The single
+          thing a student is actually buying was the quietest object on screen.
+
+          It is now the loudest, and deliberately in a THIRD register rather
+          than more of the same: black states the problem, red states the
+          stakes, indigo→violet is the answer. Alarm colours cannot sell
+          relief — stacking a third warning-toned card would just read as more
+          bad news. The credential is set in gold because that is what a
+          credential is: a medal, not caption text. */}
       {buddy && (
-        <div className="rounded-3xl border border-stone-200 bg-white px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Your IIM Buddy</p>
-          <div className="mt-3 flex items-start gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-stone-900 text-[14px] font-extrabold text-white">
-              {initials(buddy.full_name)}
-            </span>
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-violet-800 px-5 py-5 text-white shadow-lg shadow-violet-300/50">
+          {/* A soft light source behind the face — depth, so the card reads as
+              an object rather than a coloured rectangle. */}
+          <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+
+          <p className="relative text-[10px] font-bold uppercase tracking-widest text-violet-200">Your IIM Buddy</p>
+
+          <div className="relative mt-3 flex items-center gap-3.5">
+            {buddy.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- storage URL, dimensions unknown
+              <img
+                src={buddy.avatar_url}
+                alt={buddy.full_name}
+                className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-amber-300 ring-offset-2 ring-offset-violet-700"
+              />
+            ) : (
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-white/15 text-[19px] font-extrabold text-white ring-2 ring-amber-300 ring-offset-2 ring-offset-violet-700">
+                {initials(buddy.full_name)}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
-              <p className="text-[16px] font-extrabold leading-tight text-stone-900">{buddy.full_name}</p>
-              <p className="mt-0.5 text-[12.5px] font-semibold text-stone-600">
-                {firstIim(buddy.iim_converted)}
-                {buddy.cat_percentile != null && <span className="text-stone-500"> · CAT {buddy.cat_percentile}%ile</span>}
-              </p>
+              <p className="text-[19px] font-extrabold leading-tight">{buddy.full_name}</p>
+              {/* The credential as a badge. Grey text under a name is a
+                  caption; this is the reason to listen to them. */}
+              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-amber-300 px-2.5 py-1 text-[11px] font-extrabold text-violet-900">
+                🎓 {firstIim(buddy.iim_converted)}
+                {buddy.cat_percentile != null && <span>· CAT {buddy.cat_percentile}%ile</span>}
+              </span>
             </div>
           </div>
+
           {buddy.reason && (
-            <p className="mt-3 rounded-xl bg-orange-50 px-3 py-2 text-[12.5px] leading-snug text-orange-900">
-              <span className="font-bold">Why {buddyFirst} for you:</span> {buddy.reason}
+            <p className="relative mt-4 rounded-xl bg-white/15 px-3 py-2.5 text-[12.5px] leading-snug text-white">
+              <span className="font-extrabold text-amber-300">Why {buddyFirst} for you: </span>
+              {buddy.reason}
             </p>
           )}
           {buddy.how_i_work && (
-            <p className="mt-2 text-[12px] italic leading-snug text-stone-600">&ldquo;{buddy.how_i_work}&rdquo;</p>
+            <p className="relative mt-2.5 text-[12.5px] italic leading-snug text-violet-100">
+              &ldquo;{buddy.how_i_work}&rdquo;
+            </p>
           )}
+
           {/* Scarcity that is also the quality promise, and it is TRUE — the
-              cap is enforced in the assignment queue. */}
-          <p className="mt-2.5 border-t border-stone-100 pt-2 text-[12px] font-bold text-stone-800">
-            Max 5 students per mentor. Ever.
+              cap is enforced by a DB trigger, not by this sentence. */}
+          <p className="relative mt-3.5 flex items-center gap-1.5 border-t border-white/20 pt-3 text-[12.5px] font-extrabold">
+            <span aria-hidden>🔒</span> Max 5 students per mentor. Ever.
           </p>
         </div>
       )}

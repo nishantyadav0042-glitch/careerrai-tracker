@@ -113,6 +113,41 @@ describe('the conversion screen: weakness → person → price, nothing else', (
     expect(s).not.toContain('50%');
   });
 
+  it('the person is the loudest block, not a white card between two loud ones', () => {
+    // Founder, 14 Aug: the buddy profile was "bogus", not distinct, nothing
+    // hatke. It was a ranking error rather than a taste one — a hairline card
+    // on a white page, sitting under a black card and a red strip, so the one
+    // thing being bought was the quietest object on the screen.
+    const s = readFileSync(SCREEN, 'utf8');
+    const card = s.slice(s.indexOf('{buddy && ('), s.indexOf('<BookSessionCard'));
+    expect(card).toMatch(/bg-gradient-to-br from-indigo-600/);
+    // The flat shell that made it disappear must not come back.
+    expect(card).not.toMatch(/border-stone-200 bg-white/);
+  });
+
+  it('answers in a different register from the two blocks that raise alarm', () => {
+    // Black states the problem, red states the stakes. A third alarm-toned
+    // card would read as more bad news; what is being sold here is relief.
+    const s = readFileSync(SCREEN, 'utf8');
+    const card = s.slice(s.indexOf('{buddy && ('), s.indexOf('<BookSessionCard'));
+    expect(card).not.toMatch(/bg-red-|bg-stone-900/);
+  });
+
+  it('the credential is set as a badge, not as caption text under a name', () => {
+    const s = readFileSync(SCREEN, 'utf8');
+    const card = s.slice(s.indexOf('{buddy && ('), s.indexOf('<BookSessionCard'));
+    expect(card).toContain('bg-amber-300');
+    expect(card).toContain('CAT {buddy.cat_percentile}%ile');
+  });
+
+  it('shows the mentor\'s real face when there is one', () => {
+    // A photo is the difference between a person and a placeholder; initials
+    // stay only as the fallback.
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).toContain('buddy.avatar_url ?');
+    expect(s).toContain('initials(buddy.full_name)');
+  });
+
   it('the 5-student cap is printed AND enforced, not just claimed', () => {
     // A scarcity line next to a payment button has to be true; the student
     // otherwise discovers it by getting a mentor with no time for them.

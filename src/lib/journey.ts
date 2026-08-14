@@ -218,6 +218,9 @@ export type EventName =
   // The WhatsApp opt-in, as its own funnel: join vs skip is the only way to
   // answer whether day-2 return actually moves for joiners.
   | 'whatsapp_join_click' | 'whatsapp_skip'
+  // Proof-before-ask on the install screen. Pairs with install_click to answer
+  // the only question that matters: does seeing the real plan move installs?
+  | 'plan_snapshot_shown'
   | 'pay_escape_browser' | 'pay_exception' | 'pay_failed' | 'pay_free_unlock'
   | 'pay_order_created' | 'pay_order_failed' | 'pay_script_failed'
   | 'pay_success_callback'

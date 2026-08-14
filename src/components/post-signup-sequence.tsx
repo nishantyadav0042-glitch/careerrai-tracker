@@ -9,6 +9,7 @@ import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 import { SixPromises } from '@/components/six-promises';
 import ScreenLogTour from '@/app/student/onboarding/screens/screen-log-tour';
 import { WhatsAppOptIn, reachOf } from '@/components/onboarding/whatsapp-optin';
+import { PlanSnapshot } from '@/components/onboarding/plan-snapshot';
 
 // The setup journey, made visible (founder, 21 July: "it should feel like a
 // journey, not a boring job — sticky like a magnet till app notifications are
@@ -217,22 +218,35 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
     <div className="fixed inset-0 z-[80] overflow-y-auto overscroll-contain bg-white">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-5 py-6">
 
+        {/* ── Show the work, THEN ask ────────────────────────────────────
+            This screen used to ask for a download on the strength of a
+            promise ("we remind you what to study") — the same promise every
+            other app on that phone already made. By now we have the student's
+            hours, exam date and weak section, so the plan genuinely exists:
+            showing it turns the ask from "trust us" into "look what is
+            already yours". The snapshot is their real generated day, and it
+            renders nothing at all if the plan can't be loaded. */}
         {step === 'installFirst' && (
-          <div className="space-y-6 text-center">
+          <div className="space-y-5 text-center">
             <JourneyRail current={0} stations={stations} />
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-900 text-3xl">📲</div>
             <div>
               <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                First, let&apos;s get your app ready.
+                Your timetable is ready.
               </h1>
-              {/* "~3 MB" was a PWA fact and stopped being true for iPhone the
-                  day the App Store build shipped — the card states the real
-                  size per platform now, so this line no longer guesses. */}
-              <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                We remind you <b>what to study</b> and <b>when</b>, and send a <b>daily insight every evening</b> — all of it reaches you only through the app. One download, once.
+              <p className="mt-1.5 text-sm text-stone-500">
+                Built for your hours and your weak section.
               </p>
             </div>
-            <div className="space-y-2 pt-2">
+
+            <PlanSnapshot />
+
+            {/* The reason to install, stated after the proof and in one line:
+                the plan is theirs either way, the app is how it arrives. */}
+            <p className="text-[13px] leading-relaxed text-stone-500">
+              A new one every morning — <b className="text-stone-700">it reaches you only in the app.</b>
+            </p>
+
+            <div className="space-y-2">
               <InstallButton variant="banner" />
               <button
                 type="button"
