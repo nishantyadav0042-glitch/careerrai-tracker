@@ -18,11 +18,13 @@
 
 import {
   generateRoutine,
+  getPhase,
   type RoutineProfile,
   type Section,
   type Stage,
   type HistoryInput,
 } from '@/lib/routine-engine';
+import { timetableDayTasks } from '@/lib/timetable-day';
 import { buildTopicChoices } from '@/lib/day-topics';
 import { plannerRecency } from '@/lib/plan-history';
 import { dailyHours } from '@/lib/daily-hours';
@@ -254,7 +256,25 @@ export async function computeTodaysPlan(
       routine = null;
     }
     if (!routine) {
-      const generated = generateRoutine(routineProfile, now, history, topicChoices.choices, topicChoices.extras);
+      // ONE PLAN PER STUDENT. Same authority the tracker route asks, and this
+      // caller matters more: it runs at 6am, before the student is awake, so a
+      // coverage-matrix plan frozen here would be the one they wake up to no
+      // matter what the tracker later believes. See lib/timetable-day.
+      const timetableTasks = timetableDayTasks({
+        planSource: profile.plan_source as string | null,
+        blocks: timetableRow?.blocks as TimetableBlock[] | null,
+        confirmedAt: timetableRow?.confirmed_at as string | null,
+        todayIso: today,
+        dayMinutes: hoursToday * 60,
+        phase: getPhase(now, routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
+      });
+      const generated = timetableTasks
+        ? {
+            phase: getPhase(now, routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
+            tasks: timetableTasks,
+            estMinutes: timetableTasks.reduce((s, t) => s + t.estMinutes, 0),
+          }
+        : generateRoutine(routineProfile, now, history, topicChoices.choices, topicChoices.extras);
       const { data: inserted } = await admin
         .from('daily_routines')
         .upsert(

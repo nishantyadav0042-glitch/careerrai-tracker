@@ -3,7 +3,8 @@ import { mockInformedFocus, type DebriefRow } from '@/lib/mock-informed-focus';
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
+import { generateRoutine, personalizationSummary, archetypeRevisionMultiplier, getPhase, type RoutineProfile, type Section, type Stage, type Phase, type HistoryInput } from '@/lib/routine-engine';
+import { timetableDayTasks } from '@/lib/timetable-day';
 import { pickMission, mockPendingAnalysisSignal, revisionOverdueSignal, baselineRoutineSignal, blockerBiasSignal, type Blocker } from '@/lib/mission-engine';
 import { type CoverageStatus } from '@/lib/topic-selector';
 import { buildTopicChoices } from '@/lib/day-topics';
@@ -276,7 +277,38 @@ export async function GET() {
   if (staleReason) routine = null;
 
   if (!routine) {
-    const generated = generateRoutine(routineProfile, new Date(), history, topicChoices.choices, topicChoices.extras);
+    // ── ONE PLAN PER STUDENT (founder, 14 Aug) ────────────────────────────
+    //
+    // "If someone uploads their timetable it must be implemented then and
+    // there, and the timetable built through the coverage matrix should
+    // become dead instantly."
+    //
+    // When the sheet speaks for today, it IS the day — its blocks, its
+    // topics, its own minutes. generateRoutine is not consulted at all, so
+    // the coverage matrix cannot append a block the coaching never assigned.
+    // That appended block was the real bug: Vedashri's 13 Aug sheet planned
+    // three sessions (7h) and the app served four (8h), the fourth invented,
+    // because the day was sized from her profile and only then filled.
+    //
+    // Silence still falls back. A date the sheet says nothing about — a rest
+    // day, or past the end of the month it covers — returns null here and the
+    // engine plans as usual. An empty screen is not a plan.
+    const timetableTasks = timetableDayTasks({
+      planSource: profile.plan_source as string | null,
+      blocks: timetableRow?.blocks as TimetableBlock[] | null,
+      confirmedAt: timetableRow?.confirmed_at as string | null,
+      todayIso: today,
+      dayMinutes: hoursToday * 60,
+      phase: getPhase(new Date(), routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
+    });
+
+    const generated = timetableTasks
+      ? {
+          phase: getPhase(new Date(), routineProfile.attemptYear, routineProfile.currentStage, routineProfile.isRepeater),
+          tasks: timetableTasks,
+          estMinutes: timetableTasks.reduce((s, t) => s + t.estMinutes, 0),
+        }
+      : generateRoutine(routineProfile, new Date(), history, topicChoices.choices, topicChoices.extras);
     const { data: inserted, error } = await admin
       .from('daily_routines')
       .upsert(
