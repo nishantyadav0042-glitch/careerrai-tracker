@@ -8,6 +8,7 @@ import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
+import { taxForPlan } from '@/lib/gst';
 
 export async function POST(request: NextRequest) {
   if (!paymentsEnabled()) return NextResponse.json({ error: 'Payments are not enabled.' }, { status: 403 });
@@ -30,6 +31,9 @@ export async function POST(request: NextRequest) {
     if (price.finalPaise < MIN_CHARGE_PAISE) {
       const renews = addMonthsClamped(new Date(), p.months);
 
+      // Tax is stored, never recomputed later: the rate can change and an
+      // August payment must keep the split it was actually charged under.
+      const freeTax = taxForPlan(plan, price.finalPaise);
       const { data: payRow } = await admin.from('student_payments').insert({
         student_id: user.id,
         amount: price.finalPaise,
@@ -37,6 +41,10 @@ export async function POST(request: NextRequest) {
         plan,
         discount_source: price.discountSource,
         coupon_code: price.couponCode,
+        base_paise: freeTax.basePaise,
+        gst_paise: freeTax.gstPaise,
+        gst_rate: freeTax.rate,
+        tax_mode: freeTax.mode,
         status: 'paid',
         paid_at: new Date().toISOString(),
       }).select('id').single();
@@ -124,7 +132,7 @@ export async function POST(request: NextRequest) {
       .eq('student_id', user.id)
       .eq('plan', plan)
       .eq('status', 'created')
-      .eq('amount', price.finalPaise)
+      .eq('amount', taxForPlan(plan, price.finalPaise).grossPaise)
       .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
@@ -145,8 +153,13 @@ export async function POST(request: NextRequest) {
     // notes document the true nature of the charge on the order/receipt: a 1:1,
     // person-to-person mentorship service (live sessions + daily guidance), which
     // is exempt from mandatory app-store billing. Not framed as "digital content".
+    // GST decides what Razorpay actually charges. Subscriptions are quoted
+    // inclusive, so gross === finalPaise and nothing about them changes. The
+    // ₹299 session is quoted exclusive — the mentor must receive the full
+    // ₹299 — so the student is charged ₹352.82.
+    const tax = taxForPlan(plan, price.finalPaise);
     const order = await createRazorpayOrder(
-      price.finalPaise,
+      tax.grossPaise,
       `careerrai_${user.id.slice(0, 8)}_${Date.now()}`,
       {
         service: '1:1 CAT mentorship',
@@ -158,11 +171,16 @@ export async function POST(request: NextRequest) {
     // Record the intent; the webhook flips it to 'paid' after signature verify.
     await admin.from('student_payments').insert({
       student_id: user.id,
-      amount: price.finalPaise,
+      // What we actually charge, so reconciliation against Razorpay matches.
+      amount: tax.grossPaise,
       original_amount: price.basePaise,
       plan,
       discount_source: price.discountSource,
       coupon_code: price.couponCode,
+      base_paise: tax.basePaise,
+      gst_paise: tax.gstPaise,
+      gst_rate: tax.rate,
+      tax_mode: tax.mode,
       razorpay_order_id: order.id,
       status: 'created',
     });
