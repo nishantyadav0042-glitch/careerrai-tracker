@@ -96,7 +96,6 @@ describe('INVARIANT 2 — one clock decides which plan row is touched', () => {
     'src/app/api/routine/today/route.ts',
     'src/lib/routine-plan.ts',
     'src/app/api/routine/complete-task/route.ts',
-    'src/app/api/routine/swap-topic/route.ts',
     'src/app/api/routine/add-block/route.ts',
     'src/app/api/routine/busy-day/route.ts',
   ];

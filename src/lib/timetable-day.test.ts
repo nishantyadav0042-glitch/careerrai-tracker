@@ -205,7 +205,7 @@ describe('both plan writers ask the same authority', () => {
   // There are exactly two writers of daily_routines, and the cron runs FIRST
   // (6am). A fix applied only to the tracker route would have been overwritten
   // before the student woke up — invisible in production, green in every test.
-  it('the 6am cron generator uses it', () => {
+  it('the notification cron generator uses it', () => {
     const s = readFileSync('src/lib/routine-plan.ts', 'utf8');
     expect(s).toContain('timetableDayTasks({');
     expect(s.indexOf('timetableDayTasks({')).toBeLessThan(s.indexOf('generateRoutine(routineProfile, now'));

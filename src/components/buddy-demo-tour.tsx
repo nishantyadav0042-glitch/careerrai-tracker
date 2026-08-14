@@ -27,11 +27,6 @@ const STEPS: Step[] = [
     body: 'The app builds each day around the student\'s hours, target and weak section — so they never start the morning deciding what to study. Your job as buddy builds on top of this: you steer the week, the app runs the day.',
   },
   {
-    sel: '[data-tour="swap"]',
-    title: 'Swap — their plan, their call',
-    body: 'A student who is not feeling a topic swaps it out; it returns tomorrow. The app adapts rather than guilt-trips — that is deliberate.',
-  },
-  {
     sel: '[data-tour="log"]',
     title: 'The daily log — the heartbeat',
     body: 'Two minutes every night: what they studied, how long, how it felt. Honest zeros are allowed. THIS is the data you read before every session — streaks, topic map and your advice all run on it.',

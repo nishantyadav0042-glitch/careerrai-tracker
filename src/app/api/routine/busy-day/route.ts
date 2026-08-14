@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
+import { mutatePlanTasks } from '@/lib/plan-mutate';
 import { shiftIsoDay, busyDayOutcome, type BusyDayVerdict } from '@/lib/busy-day';
 
 // POST /api/routine/busy-day — "Busy day (personal commitments)".
@@ -36,14 +37,9 @@ export async function POST() {
   const admin = createAdminClient();
   const today = getLogDateString();
 
-  const [{ data: profile }, { data: routine }] = await Promise.all([
-    admin.from('profiles')
-      .select('plan_source, syllabus_target_date, attempt_year')
-      .eq('id', user.id).maybeSingle(),
-    admin.from('daily_routines')
-      .select('tasks, swapped_out')
-      .eq('student_id', user.id).eq('routine_date', today).maybeSingle(),
-  ]);
+  const { data: profile } = await admin.from('profiles')
+    .select('plan_source, syllabus_target_date, attempt_year')
+    .eq('id', user.id).maybeSingle();
 
   const verdict: BusyDayVerdict = busyDayOutcome({
     planSource: (profile?.plan_source as string | null) ?? null,
@@ -64,25 +60,26 @@ export async function POST() {
   }
 
   // 1. Today's topics become a promise, not a failure. Merged with anything
-  //    already swapped out today so a manual swap earlier is not overwritten.
-  const tasks = Array.isArray(routine?.tasks) ? (routine!.tasks as { topic?: string | null }[]) : [];
-  const already = Array.isArray(routine?.swapped_out) ? (routine!.swapped_out as string[]) : [];
-  const postponed = [...new Set([
-    ...already,
-    ...tasks.map((t) => t.topic).filter((t): t is string => typeof t === 'string' && t.length > 0),
-  ])];
-
-  if (routine) {
-    const { error } = await admin.from('daily_routines')
-      .update({ swapped_out: postponed })
-      .eq('student_id', user.id).eq('routine_date', today);
-    // A failure here means tomorrow would NOT carry today's work forward,
-    // which is the entire promise — so the date must not move either.
-    if (error) {
-      console.error('[busy-day] could not postpone', error.message);
-      return NextResponse.json({ error: 'Could not move today — try again.' }, { status: 500 });
-    }
+  //    already swapped out today so a manual swap earlier is not overwritten
+  //    — and now under compare-and-swap, so a swap landing at the same moment
+  //    cannot be erased by this write (or erase it). See lib/plan-mutate.
+  const postponeResult = await mutatePlanTasks<string[]>(admin, user.id, today, (row) => {
+    const tasks = row.tasks as { topic?: string | null }[];
+    const already = Array.isArray(row.swapped_out) ? (row.swapped_out as string[]) : [];
+    const postponed = [...new Set([
+      ...already,
+      ...tasks.map((t) => t.topic).filter((t): t is string => typeof t === 'string' && t.length > 0),
+    ])];
+    return { ok: true, value: postponed, patch: { swapped_out: postponed } };
+  });
+  // A 404 means there is no plan today — nothing to postpone, and the date
+  // may still move. Any other failure means tomorrow would NOT carry today's
+  // work forward, which is the entire promise, so the date must not move.
+  if (!postponeResult.ok && postponeResult.status !== 404) {
+    console.error('[busy-day] could not postpone', postponeResult.error);
+    return NextResponse.json({ error: 'Could not move today — try again.' }, { status: 500 });
   }
+  const postponed = postponeResult.ok ? postponeResult.value : [];
 
   // 2. The date gives. It is the only thing that ever gives (lib/daily-hours:
   //    "the date gives, the hours don't"), and a busy day is exactly that.

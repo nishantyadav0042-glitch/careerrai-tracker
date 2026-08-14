@@ -206,9 +206,27 @@ export async function computeTodaysPlan(
 
     // THE SAME HOURS THE TRACKER USES, from the same module.
     //
-    // This generator writes to the same daily_routines row the app reads, and
-    // it runs FIRST — the 6am notification cron builds the day before the
-    // student ever opens the app. So while this file sized plans with
+    // This generator writes to the same daily_routines row the app reads.
+    //
+    // CORRECTED 14 Aug, from production evidence. This comment used to say
+    // the cron "runs FIRST — the 6am notification cron builds the day before
+    // the student ever opens the app", and three other files repeated it. It
+    // is not true and has not been: study-companion's plan-writing slots are
+    // `progress` and `log`, scheduled at 15:00 and 16:00 UTC (20:30 / 21:30
+    // IST). The two morning plan slots it also allows — `morning` and `open`
+    // — are not in vercel.json at all, so they never fire. Verified against
+    // the notifications table: companion_* rows land at exactly 02:30, 05:30,
+    // 15:00 and 16:00 UTC daily, and the first two slots do not build a plan.
+    //
+    // So in practice the STUDENT's own request is almost always the first
+    // writer, and this cron usually re-reads what the app already stored. It
+    // still matters: it is the writer whenever a student has not opened the
+    // app all day, and after any delete (hours change, timetable apply) it
+    // rebuilds the row that evening. Both writers must therefore agree
+    // exactly — which is why focus, timetable and hours all resolve through
+    // shared modules rather than being re-derived here.
+    //
+    // While this file sized plans with
     // capBudget(paceHours ?? claimed, capacity) and the route sized them with
     // the student's own hours, the cron's version is the one that won, every
     // morning, for every student who gets a notification. Fixing the route
@@ -223,7 +241,7 @@ export async function computeTodaysPlan(
       weekdayHours: dailyHours(profile).weekday,
       weekendHours: dailyHours(profile).weekend,
       // Stage A floor — kept in lockstep with today/route.ts (the mirror rule:
-      // the 6am notification must name the same plan the student opens).
+      // the notification must name the same plan the student opens).
       weakestSection: weakest,
       strongestSection: strongest,
       weakTopic,
@@ -232,9 +250,9 @@ export async function computeTodaysPlan(
     };
 
     const history = await buildHistory(admin, studentId);
-    // Same today's-class signal as the tracker route — this generator runs
-    // FIRST (6am cron), so if it didn't know about today's class, the morning
-    // notification would freeze an unaligned plan before the student woke up.
+    // Same today's-class signal as the tracker route. Whenever this generator
+    // is the day's first writer (a student who never opened the app), not
+    // knowing today's class would freeze an unaligned plan into the row.
     const todayClassTopics = (profile.plan_source === 'coaching')
       ? coachingTopicsForDate(
           (timetableRow?.blocks as TimetableBlock[] | null) ?? [],
@@ -271,9 +289,9 @@ export async function computeTodaysPlan(
     }
     if (!routine) {
       // ONE PLAN PER STUDENT. Same authority the tracker route asks, and this
-      // caller matters more: it runs at 6am, before the student is awake, so a
-      // coverage-matrix plan frozen here would be the one they wake up to no
-      // matter what the tracker later believes. See lib/timetable-day.
+      // caller still matters even though it usually runs second: it is the
+      // writer for any student who never opens the app, and it rebuilds the
+      // row each evening after a delete. See lib/timetable-day.
       const timetableTasks = timetableDayTasks({
         planSource: profile.plan_source as string | null,
         blocks: timetableRow?.blocks as TimetableBlock[] | null,

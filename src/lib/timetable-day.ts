@@ -248,12 +248,15 @@ export function tasksFromCoachingDay(
  * THE one call both plan writers make. `null` = the sheet is silent for this
  * date, generate as usual.
  *
- * There are exactly two writers of daily_routines — the 6am cron
- * (lib/routine-plan) and the tracker route (api/routine/today) — and the cron
- * runs FIRST. If only the tracker honoured the timetable, the cron would have
- * already frozen a coverage-matrix plan into the row before the student woke
- * up, and the tracker would read that stored row and never call this at all.
- * The fix would have been invisible in production while passing every test.
+ * There are exactly two writers of daily_routines — the notification cron
+ * (lib/routine-plan) and the tracker route (api/routine/today). The cron's
+ * plan-writing slots run in the EVENING (20:30 / 21:30 IST), not at 6am as an
+ * earlier version of this comment claimed, so the student's own request is
+ * usually first. But the cron is still the first writer for anyone who never
+ * opens the app, and it rebuilds the row after every delete (hours change,
+ * timetable apply). If only the tracker honoured the timetable, those students
+ * would silently get a coverage-matrix day instead — a fix that looks complete
+ * in every test and is wrong in production for exactly the quietest cohort.
  * So the decision lives here once, and both writers ask it.
  */
 export function timetableDayTasks(input: {

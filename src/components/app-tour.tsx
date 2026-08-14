@@ -20,7 +20,6 @@ interface TourStep { sel: string; title: string; body: string }
 
 const STEPS: TourStep[] = [
   { sel: '[data-tour="plan"]',  title: 'Your plan for today', body: 'Built around the highest-scoring CAT topics for exactly where you are. Each task tells you why it’s there.' },
-  { sel: '[data-tour="swap"]',  title: 'Not feeling a topic?', body: 'Tap ⇄ Swap to change it — your plan, your call. It comes back tomorrow, never lost.' },
   // Points at the PLAN, not at the old log button — the tick on the task is
   // now the log, and this is where a new student is told so (founder, 13 Aug:
   // "just guide the new students the way they can log").

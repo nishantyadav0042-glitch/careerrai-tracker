@@ -5,14 +5,9 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Check, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import { TopicInsights } from '@/components/topic-insights';
 import { BusyDayButton } from '@/components/busy-day-button';
 import { isMockSitting } from '@/lib/mock-in-plan';
-
-// For the swap-topic picker (student ask: "change today's topic from
-// Geometry to Number System") — same-section alternatives only.
-const SECTION_TOPICS: Record<string, string[]> = { VARC: VERBAL_TOPICS, DILR: LRDI_TOPICS, QA: QUANT_TOPICS };
 
 type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
 
@@ -210,9 +205,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   const [markingTaskId, setMarkingTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [swapTaskId, setSwapTaskId] = useState<string | null>(null);
-  const [swapBusy, setSwapBusy] = useState(false);
-  const [swapNote, setSwapNote] = useState<string | null>(null);
   const [calibrated, setCalibrated] = useState(false);
   const [calibrationBusy, setCalibrationBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -353,10 +345,8 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
     }
   }
 
-  // Swap one of today's topics for a same-section alternative — the plan's
-  // section balance stays; which topic within it is the student's call.
-  // One more block on a finished day — the same engine picks it, the card
-  // re-pulls, and the day reopens with exactly one new task to do.
+  // "One more? +30 min." — the plan is built at the bad-day floor, so
+  // finishing it must open a door rather than close the day.
   async function addBlock() {
     if (addingBlock) return;
     setAddingBlock(true);
@@ -372,31 +362,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
       setAddBlockError('Could not add — check your connection.');
     } finally {
       setAddingBlock(false);
-    }
-  }
-
-  async function swapTopic(task: RoutineTask, topic: string) {
-    if (swapBusy) return;
-    setSwapBusy(true);
-    try {
-      const res = await fetch('/api/routine/swap-topic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: task.id, topic }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) { if (json?.error) alert(json.error); return; }
-      routineTodayCache = null;
-      setData((prev) => (prev ? { ...prev, routine: { ...prev.routine, tasks: json.tasks as RoutineTask[] } } : prev));
-      setSwapTaskId(null);
-      // "Geometry will automatically come back tomorrow" — the never-delete,
-      // always-postpone rule, said out loud so the swap feels safe.
-      if (json.note) {
-        setSwapNote(json.note as string);
-        setTimeout(() => setSwapNote(null), 5000);
-      }
-    } finally {
-      setSwapBusy(false);
     }
   }
 
@@ -608,13 +573,12 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               // skip ahead is making a real choice, not cheating), just not
               // shouting for the same attention as the one thing to do now.
               if (isStart || expanded) {
-                const swapOpen = swapTaskId === task.id;
                 return (
                   <div key={task.id}>
                     <div
                       className={cn(
                         'w-full flex items-start gap-2.5 rounded-2xl bg-stone-100/70 p-2.5 transition-all',
-                        (expanded || swapOpen) && 'rounded-b-none'
+                        expanded && 'rounded-b-none'
                       )}
                     >
                       {/* One tap = "I did this." Founder, 12 Aug: the tick IS
@@ -651,18 +615,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                           <div className="mt-2"><TopicInsights topic={task.topic} /></div>
                         )}
                       </div>
-                      {/* Swap today's topic — same section, student's choice. */}
-                      {!done && task.topic && (
-                        <button
-                          data-tour="swap"
-                          onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
-                          aria-label="Change today's topic"
-                          title="Change today's topic"
-                          className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-transform active:scale-95"
-                        >
-                          ⇄ Swap
-                        </button>
-                      )}
                       {isMockSitting(task) && <MockScoreButton className="mt-0.5" recorded={data.todayMock} />}
                     </div>
                     {markingTaskId === task.id && !done && (
@@ -673,32 +625,13 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                         />
                       </div>
                     )}
-                    {swapOpen && !done && task.topic && (
-                      <div className={cn('bg-stone-100/70 px-4 pb-4 pt-1', expanded ? '' : 'rounded-b-2xl')}>
-                        <p className="mb-1.5 text-[11px] font-semibold text-stone-500">
-                          Swap today&apos;s {task.section} topic — your plan, your call:
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(SECTION_TOPICS[task.section] ?? []).filter((t) => t !== task.topic).map((t) => (
-                            <button
-                              key={t}
-                              onClick={() => swapTopic(task, t)}
-                              disabled={swapBusy}
-                              className="rounded-full border border-stone-300 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 transition-transform active:scale-95 disabled:opacity-50"
-                            >
-                              {t}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               }
 
               return (
                 <div key={task.id}>
-                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', ((swapTaskId === task.id && task.topic) || markingTaskId === task.id) && !done && 'rounded-b-none')}>
+                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', markingTaskId === task.id && !done && 'rounded-b-none')}>
                     {/* Same single-state tick as the hero task. Tapping a done
                         task un-does it — a mis-tap must never be permanent. */}
                     <button
@@ -726,17 +659,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                       )}
                     </div>
                     <span className="shrink-0 text-xs text-stone-400">{task.estMinutes}m</span>
-                    {/* Swap today's topic — same section, student's choice. */}
-                    {!done && task.topic && (
-                      <button
-                        onClick={() => setSwapTaskId((cur) => (cur === task.id ? null : task.id))}
-                        aria-label="Change today's topic"
-                        title="Change today's topic"
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-transform active:scale-95"
-                      >
-                        ⇄ Swap
-                      </button>
-                    )}
                     {isMockSitting(task) && <MockScoreButton recorded={data.todayMock} />}
                   </div>
                   {markingTaskId === task.id && !done && (
@@ -745,25 +667,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                         busy={busyTaskId === task.id}
                         onPick={(portion) => { setMarkingTaskId(null); void toggleTask(task, undefined, portion); }}
                       />
-                    </div>
-                  )}
-                  {swapTaskId === task.id && !done && task.topic && (
-                    <div className="rounded-b-2xl bg-stone-100/70 px-4 pb-4 pt-1">
-                      <p className="mb-1.5 text-[11px] font-semibold text-stone-500">
-                        Swap today&apos;s {task.section} topic — your plan, your call:
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(SECTION_TOPICS[task.section] ?? []).filter((t) => t !== task.topic).map((t) => (
-                          <button
-                            key={t}
-                            onClick={() => swapTopic(task, t)}
-                            disabled={swapBusy}
-                            className="rounded-full border border-stone-300 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 transition-transform active:scale-95 disabled:opacity-50"
-                          >
-                            {t}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -777,11 +680,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
             </p>
           )}
 
-          {swapNote && (
-            <p className="mt-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-[11px] font-medium text-teal-800">
-              ✓ {swapNote}
-            </p>
-          )}
 
           {/* Footer: where the day goes next. Left, the map of what is
               covered; right, the honest exit for a day that did not happen.
