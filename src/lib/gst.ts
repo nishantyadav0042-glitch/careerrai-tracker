@@ -1,7 +1,18 @@
-// ── GST, on every rupee we take ─────────────────────────────────────────────
+// ── GST — built, and deliberately switched OFF ──────────────────────────────
 //
-// Founder, 13 Aug: 18% GST, on the ₹299 session and on ₹999 and everything
-// else going forward.
+// Founder, 13 Aug: 18% GST on everything going forward — then, on learning
+// that registration is generally required only above ~₹20 lakh of annual
+// turnover and CareerRai is at ₹5,996 lifetime: "then don't collect GST."
+//
+// That is the correct call and the reason matters more than the switch:
+// COLLECTING TAX YOU ARE NOT REGISTERED TO COLLECT IS WORSE THAN NOT
+// CHARGING IT. So GST_ENABLED is false, every price is charged exactly as
+// published, and no student is shown a tax line we are not entitled to add.
+//
+// The machinery below stays because the day registration happens it must be
+// one flag, not an archaeology project across the checkout, the stored
+// breakdown and the invoice. Flipping GST_ENABLED to true restores the
+// behaviour the tests below still pin.
 //
 // Two decisions are baked in here, and both are reversible by changing one
 // flag per plan rather than by hunting through the codebase — which is the
@@ -32,6 +43,15 @@
 // conversion into Till-CAT rather than margin. It is not a mistake, but it
 // must be a decision made with open eyes, so it is written down here.
 
+/**
+ * THE SWITCH. False until CareerRai is GST-registered.
+ *
+ * While false: nothing is added, nothing is carved out, gstPaise is 0 and the
+ * student is charged the published price. The ₹299 session therefore costs
+ * ₹299 — a cleaner number than ₹352.82, and one the pitch can say out loud.
+ */
+export const GST_ENABLED = false;
+
 export const GST_RATE = 0.18;
 
 export type TaxMode = 'inclusive' | 'exclusive';
@@ -60,6 +80,11 @@ export interface TaxBreakdown {
  */
 export function splitTax(quotedPaise: number, mode: TaxMode, rate: number = GST_RATE): TaxBreakdown {
   const quoted = Math.max(0, Math.round(quotedPaise));
+  // Not registered → not collected. The whole amount is the taxable value and
+  // the tax is zero; the mode stops mattering, so a price is never moved.
+  if (!GST_ENABLED) {
+    return { grossPaise: quoted, basePaise: quoted, gstPaise: 0, rate: 0, mode };
+  }
   if (mode === 'exclusive') {
     const gross = Math.round(quoted * (1 + rate));
     return { grossPaise: gross, basePaise: quoted, gstPaise: gross - quoted, rate, mode };
@@ -86,6 +111,10 @@ export function rupees(paise: number): string {
  * fastest way to lose the trust the diagnostic just earned.
  */
 export function taxLine(tax: TaxBreakdown): string {
+  // Say nothing about tax we are not collecting. Printing "incl. GST" while
+  // unregistered would be a false statement on the most scrutinised line of
+  // the checkout.
+  if (!GST_ENABLED || tax.gstPaise === 0) return `₹${rupees(tax.grossPaise)}`;
   return tax.mode === 'inclusive'
     ? `₹${rupees(tax.grossPaise)} (incl. 18% GST)`
     : `₹${rupees(tax.basePaise)} + 18% GST = ₹${rupees(tax.grossPaise)}`;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitTax, netToPlatformPaise, taxLine, GST_RATE } from './gst';
+import { splitTax, netToPlatformPaise, taxLine, GST_RATE, GST_ENABLED } from './gst';
 import { SESSION_PRICE_PAISE } from './session-credit';
 import { PLANS } from './plans';
 
@@ -35,65 +35,52 @@ describe('the split always balances', () => {
   });
 });
 
-describe('subscriptions are INCLUSIVE — the published price does not move', () => {
-  it('₹2,999 Till CAT stays ₹2,999 at checkout', () => {
-    const t = splitTax(PLANS.tillcat.amountPaise, 'inclusive');
-    expect(t.grossPaise).toBe(299900);
-    // Carved out, not added on: base 2541.53 -> 254153 paise, GST 45747.
-    expect(t.basePaise).toBe(254153);
-    expect(t.gstPaise).toBe(45747);
+describe('WE ARE NOT REGISTERED, SO WE DO NOT COLLECT', () => {
+  it('the switch is off', () => {
+    // Registration is generally required only above ~₹20 lakh turnover;
+    // CareerRai is at ₹5,996 lifetime. Collecting tax you are not registered
+    // to collect is worse than not charging it.
+    expect(GST_ENABLED).toBe(false);
   });
 
-  it('₹999 monthly stays ₹999', () => {
-    const t = splitTax(PLANS.monthly.amountPaise, 'inclusive');
-    expect(t.grossPaise).toBe(99900);
-    expect(t.basePaise + t.gstPaise).toBe(99900);
-  });
-
-  it('no published price is silently increased by adding GST on top', () => {
-    // 77% of our checkouts are already abandoned; a ₹540 surprise between the
-    // button and the bank would make that worse and invalidate every price we
-    // have published, including the sales script.
-    for (const plan of Object.values(PLANS)) {
-      expect(splitTax(plan.amountPaise, 'inclusive').grossPaise).toBe(plan.amountPaise);
+  it('every published price is charged EXACTLY as published', () => {
+    for (const p of [...Object.values(PLANS).map((x) => x.amountPaise), SESSION_PRICE_PAISE]) {
+      for (const mode of ['inclusive', 'exclusive'] as const) {
+        expect(splitTax(p, mode).grossPaise, `${p} ${mode}`).toBe(p);
+      }
     }
   });
-});
 
-describe('the session is EXCLUSIVE, because the mentor must receive ₹299', () => {
-  const t = splitTax(SESSION_PRICE_PAISE, 'exclusive');
-
-  it('the student pays ₹352.82 and the mentor keeps a full ₹299', () => {
+  it('the ₹299 session costs ₹299 — nothing added, nothing carved out', () => {
+    const t = splitTax(SESSION_PRICE_PAISE, 'exclusive');
+    expect(t.grossPaise).toBe(29900);
+    expect(t.gstPaise).toBe(0);
+    // And the mentor still receives the whole ₹299, which was the point.
     expect(t.basePaise).toBe(29900);
-    expect(t.grossPaise).toBe(35282);
-    expect(t.gstPaise).toBe(5382);
-  });
-
-  it('if it were inclusive the mentor would be short-paid — which is why it is not', () => {
-    const wrong = splitTax(SESSION_PRICE_PAISE, 'inclusive');
-    expect(wrong.basePaise).toBeLessThan(29900);
-  });
-
-  it('CareerRai keeps NOTHING from a session at this payout', () => {
-    // Recorded deliberately. The entire base is the mentor's and the GST is
-    // the government's, so the gateway fee comes out of our pocket. Defensible
-    // while the session's job is conversion — but never an accident.
     expect(netToPlatformPaise(t, 29900)).toBe(0);
   });
-});
 
-describe('the student can always read what they are paying', () => {
-  it('inclusive says so', () => {
-    expect(taxLine(splitTax(299900, 'inclusive'))).toContain('incl. 18% GST');
+  it('no tax is ever collected while the switch is off', () => {
+    for (const p of [100, 29900, 99900, 299900]) {
+      for (const mode of ['inclusive', 'exclusive'] as const) {
+        expect(splitTax(p, mode).gstPaise).toBe(0);
+      }
+    }
   });
 
-  it('exclusive shows the addition rather than surprising them', () => {
-    expect(taxLine(splitTax(29900, 'exclusive'))).toBe('₹299 + 18% GST = ₹352.82');
+  it('the checkout NEVER prints a tax line we are not entitled to add', () => {
+    // "incl. GST" while unregistered is a false statement on the most
+    // scrutinised line of the checkout.
+    for (const mode of ['inclusive', 'exclusive'] as const) {
+      const line = taxLine(splitTax(29900, mode));
+      expect(line).not.toMatch(/GST/i);
+    }
+    expect(taxLine(splitTax(29900, 'exclusive'))).toBe('₹299');
   });
 });
 
-describe('the rate is one constant', () => {
-  it('18%, declared once', () => {
+describe('the rate stays declared, ready for registration day', () => {
+  it('18%, in one place, so switching on is one flag', () => {
     expect(GST_RATE).toBe(0.18);
   });
 });
