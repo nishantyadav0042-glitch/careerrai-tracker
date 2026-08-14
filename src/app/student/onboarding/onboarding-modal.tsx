@@ -11,6 +11,7 @@ import ScreenAboutYou from './screens/screen-about-you';
 import ScreenRealityCheck from './screens/screen-reality-check';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
+import ScreenWeakestSection from './screens/screen-weakest-section';
 import ScreenRepeaterBuddyPitch from './screens/screen-repeater-buddy-pitch';
 import ScreenCoachingPlan from './screens/screen-coaching-plan';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
@@ -175,6 +176,15 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     // like a relief instead of a chore. sectionId null — a pattern-interrupt,
     // not a plan input.
     { key: 'reality-check', component: ScreenRealityCheck, sectionId: null },
+    // ONE TAP, and it is the highest-leverage input in the product (founder,
+    // 14 Aug: "ask weakest section in onboarding, rest in first week").
+    // weakestSection decides which section leads the day and takes the 40-55%
+    // priority slice. The planner's chain always had a rung for it and NOBODY
+    // was filling it: 78 of 326 students fell through to the hard-coded DILR
+    // default. Asked BEFORE the grid, because it is a gut answer about
+    // WEAKNESS and the grid that follows measures COVERAGE — two different
+    // questions, and this is the one the plan actually turns on.
+    { key: 'weakest-section', component: ScreenWeakestSection, sectionId: 'coverage' },
     {
       key: 'topic-coverage',
       component: ScreenTopicCoverage,
@@ -390,6 +400,20 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // constraint crash. Shape-keying makes that impossible: each save runs
       // only when its own distinctive fields are present.
 
+      // Weakest section — the single highest-leverage plan input.
+      //
+      // Keyed on the PRESENCE of the field, not its truthiness: "Not sure" is
+      // a real answer that stores null, and a truthiness check would silently
+      // drop it and leave the student on the DILR default they were about to
+      // escape. (Every other save here is shape-keyed for the same reason a
+      // reorder once set full_name = null.)
+      if (data && 'self_reported_weakest_section' in data) {
+        setIsLoading(true);
+        const { error: e } = await supabase.from('profiles')
+          .update({ self_reported_weakest_section: data.self_reported_weakest_section ?? null })
+          .eq('id', userId ?? '');
+        if (e) throw e;
+      }
       // Dream Colleges
       if (data?.dream_colleges) {
         setIsLoading(true);
