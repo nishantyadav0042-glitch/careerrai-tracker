@@ -8,10 +8,10 @@ import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-da
 import { PLAN_WINDOW_DAYS, anchorToMonth } from '@/lib/timetable-month';
 import { checkPlanIntegrity } from '@/lib/plan-integrity';
 import type { TimetableBlock } from '@/lib/timetable';
-import { weakestFromCoverage } from '@/lib/section-weakness';
+import { resolveFocusSections } from '@/lib/focus-sections';
+import type { DebriefRow } from '@/lib/mock-informed-focus';
 import { plannerRecency } from '@/lib/plan-history';
 import { getLogDateString } from '@/lib/streak-utils';
-import type { Section } from '@/lib/prep-model';
 
 // GET /api/plan/full — the student's whole plan.
 //
@@ -30,10 +30,10 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const [{ data: profile }, { data: coverageRows }, completionRecords, { data: timetable }, { data: pastRoutines }, { data: pastCompletions }] =
+  const [{ data: profile }, { data: coverageRows }, completionRecords, { data: timetable }, { data: pastRoutines }, { data: pastCompletions }, { data: debriefRows }] =
     await Promise.all([
       admin.from('profiles')
-        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name, self_reported_weakest_section, syllabus_target_date')
+        .select('is_repeater, is_working_professional, last_year_percentile, study_target_hours, hours_available, weekend_hours_available, attempt_year, plan_source, full_name, self_reported_weakest_section, self_reported_strongest_section, baseline_varc, baseline_dilr, baseline_qa, syllabus_target_date')
         .eq('id', user.id).maybeSingle(),
       admin.from('topic_coverage').select('section, topic, status, updated_at, is_priority').eq('student_id', user.id),
       buildCompletionRecords(admin, user.id, '2000-01-01'),
@@ -44,6 +44,10 @@ export async function GET() {
         .eq('student_id', user.id).order('routine_date', { ascending: false }).limit(14),
       admin.from('routine_task_completions').select('routine_date, task_id')
         .eq('student_id', user.id).order('routine_date', { ascending: false }).limit(200),
+      // The Whole Plan must lean the SAME way as Home, which means it needs
+      // the same evidence Home has — see the weakestSection note below.
+      admin.from('mock_debriefs').select('taken_on, varc, dilr, qa')
+        .eq('student_id', user.id).order('taken_on', { ascending: false }).limit(5),
     ]);
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
@@ -135,14 +139,22 @@ export async function GET() {
       .map((r: { topic: string }) => r.topic),
     ...plannerRecency(historyRows, pastCompletions ?? [], todayIso),
     todayPlan,
-    // Same weakest-section the daily plan leans on, so the mix tilts the same
-    // way on both surfaces — the self-report if given, else derived from the
-    // coverage grid, else the app-wide DILR default.
-    weakestSection: ((profile.self_reported_weakest_section as Section | null)
-      ?? weakestFromCoverage((coverageRows ?? [])
-        .filter((r) => !!r.section && !!r.status)
-        .map((r) => ({ section: String(r.section), status: String(r.status) })))
-      ?? 'DILR'),
+    // THE SAME weakest section the daily plan leans on — now literally, via
+    // the one shared resolver, not a hand-rolled lookalike.
+    //
+    // This used to be a three-link chain (self-report -> coverage -> DILR)
+    // with NO mock branch and no baseline branch, under a comment claiming it
+    // matched the daily plan. It did not. A student whose latest mock says
+    // VARC got a VARC-led Home and a DILR-led Whole Plan, on the same screen
+    // session — the exact two-writer bug that lib/focus-sections was created
+    // to kill, still alive one surface out because the guard tests only
+    // covered the two daily_routines writers.
+    weakestSection: resolveFocusSections(
+      profile,
+      (coverageRows ?? []) as { section: string; status: string }[],
+      (debriefRows ?? []) as DebriefRow[],
+      todayIso,
+    ).weakest,
   });
 
   const integrity = checkPlanIntegrity({

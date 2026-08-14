@@ -10,6 +10,7 @@ import type { TopicChoice } from './topic-selector';
 import type { Section } from '@/lib/prep-model';
 import type { CoverageStatus } from '@/lib/topic-selector';
 import { catExamDate, calendarClaim, MOCK_SIT_HOURS, MOCK_ANALYSIS_HOURS } from './exam-calendar';
+import { studyDayString } from './study-day';
 export type { Section };
 export type Phase = 'foundation' | 'intensive' | 'revision';
 
@@ -136,9 +137,36 @@ export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage |
   return calendarPhase;
 }
 
+/**
+ * Weekend, decided from the STUDY DAY — never from the host clock.
+ *
+ * This was `d.getDay()`, which reads the SERVER's local weekday. On Vercel
+ * that is UTC and happened to agree; on any other host, and in local dev in
+ * IST, it does not. Worse, it was a second answer to a question plan-day had
+ * already answered: plan-day computed `hoursToday` from the study day and
+ * persisted it as `generated_hours`, then generateRoutine recomputed the same
+ * number here and sized the day with ITS value. The hours the plan was judged
+ * stale against were not necessarily the hours it was built to.
+ *
+ * The study day rolls at 05:30 IST, so its date string IS the calendar day a
+ * student is living in; taking the weekday off that string is timezone-proof.
+ */
 function isWeekend(d: Date): boolean {
-  const day = d.getDay();
-  return day === 0 || day === 6;
+  const dow = new Date(studyDayString(d) + 'T00:00:00Z').getUTCDay();
+  return dow === 0 || dow === 6;
+}
+
+/**
+ * THE hours a day is built to. One implementation, used by the engine and by
+ * lib/plan-day (which re-exports it), so the number persisted as
+ * generated_hours and the number that sizes the tasks cannot diverge.
+ */
+export function hoursForDayOf(profile: RoutineProfile, d: Date): number {
+  const weekend = isWeekend(d);
+  return (weekend ? profile.weekendHours : profile.weekdayHours)
+    ?? (weekend
+      ? (profile.isWorkingProfessional ? 4 : 3)
+      : (profile.isWorkingProfessional ? 1.5 : 2.5));
 }
 
 // Archetype planning parameters — ONE engine, coefficients per archetype,
@@ -460,6 +488,36 @@ export function dayShape(input: DayShapeInput): DayShape {
   return { totalMinutes, closerMinutes, hasCloser, smallDay, sections };
 }
 
+/**
+ * The last line of defence against a day prescribing the same work twice.
+ *
+ * Founder, 14 Aug: "a plan cannot contain the same topic twice on the same day
+ * — test + structural invariant, not fuzz alone."
+ *
+ * The selector already refuses to return a duplicate (chooseSectionDay keeps a
+ * `taken` set on every push). This does not trust that. Taking `.slice(0, n)`
+ * of whatever the selector returned was the step that turned a duplicated
+ * CHOICE into two real tasks on a student's screen, and it is the only place
+ * the two can be separated — so the de-duplication lives here, at the boundary
+ * where choices become the plan.
+ *
+ * Returning FEWER than `limit` is correct and deliberate: a section with only
+ * two distinct topics left gets two blocks, not the same topic twice to fill a
+ * third. The day is then slightly shorter than the budget, which is honest;
+ * repeating a chapter to hit a minutes target is not.
+ */
+function distinctByTopic(choices: TopicChoice[], limit: number): TopicChoice[] {
+  const seen = new Set<string>();
+  const out: TopicChoice[] = [];
+  for (const c of choices) {
+    if (out.length >= limit) break;
+    if (seen.has(c.topic)) continue;
+    seen.add(c.topic);
+    out.push(c);
+  }
+  return out;
+}
+
 export function generateRoutine(
   profile: RoutineProfile,
   now: Date,
@@ -479,15 +537,11 @@ export function generateRoutine(
 ): GeneratedRoutine {
   const phase = getPhase(now, profile.attemptYear, profile.currentStage, profile.isRepeater);
   const weekend = isWeekend(now);
-  // Weekday and weekend fallbacks are now genuinely different per archetype
-  // (previously both used the same constant regardless of which day it
-  // was) — a working professional's realistic weekend capacity is higher
-  // than their weekday capacity, which the old single fallback couldn't
-  // express.
-  const hours = (weekend ? profile.weekendHours : profile.weekdayHours)
-    ?? (weekend
-      ? (profile.isWorkingProfessional ? 4 : 3)
-      : (profile.isWorkingProfessional ? 1.5 : 2.5));
+  // Weekday and weekend fallbacks are genuinely different per archetype — a
+  // working professional's realistic weekend capacity is higher than their
+  // weekday capacity. Read through hoursForDayOf so this is the SAME number
+  // lib/plan-day persists as generated_hours.
+  const hours = hoursForDayOf(profile, now);
   // The plan is the student's own hours, and nothing else sizes it. The
   // bad-day floor briefly did, which produced a thirty-minute plan for a
   // student who said six hours; it is gone. A heavy day is answered when it
@@ -568,7 +622,7 @@ export function generateRoutine(
   const otherMinutes = otherSlices.map((s) => s.minutes);
   const priorityMinutes = prioritySlice.minutes;
 
-  const weakPicks = extraChoices?.[weak]?.slice(0, prioritySlice.blocks) ?? [weakChoice];
+  const weakPicks = distinctByTopic(extraChoices?.[weak] ?? [weakChoice], prioritySlice.blocks);
   const weakEach = Math.round(priorityMinutes / weakPicks.length);
 
   weakPicks.forEach((choice, i) => {
@@ -591,7 +645,7 @@ export function generateRoutine(
 
   activeNonWeak.forEach((section, i) => {
     const sectionMinutes = otherMinutes[i];
-    const picks = extraChoices?.[section]?.slice(0, otherSlices[i].blocks) ?? [topicChoices[section]];
+    const picks = distinctByTopic(extraChoices?.[section] ?? [topicChoices[section]], otherSlices[i].blocks);
     const each = Math.round(sectionMinutes / picks.length);
     picks.forEach((choice, j) => {
       const minutes = j === 0 ? sectionMinutes - each * (picks.length - 1) : each;

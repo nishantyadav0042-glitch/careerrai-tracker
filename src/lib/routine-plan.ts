@@ -17,18 +17,14 @@
 // lib/day-topics — one implementation, no lockstep to maintain.
 
 import {
-  type RoutineProfile,
   type Section,
   type HistoryInput,
 } from '@/lib/routine-engine';
 import { buildDayPlan } from '@/lib/plan-day';
 import { plannerRecency } from '@/lib/plan-history';
-import { dailyHours } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
-import type { TimetableBlock } from '@/lib/timetable';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { getLogDateString } from '@/lib/streak-utils';
-import { weakestFromCoverage } from '@/lib/section-weakness';
 
 // One studyable step in the day's plan, with completion state merged in.
 export interface PlanTask {
@@ -65,6 +61,17 @@ export interface TodaysPlan {
    * reminder and a manager's update.
    */
   classTopics: string[];
+  /**
+   * The focus and hours this plan was ACTUALLY built with.
+   *
+   * Carried on the plan because the notification cron used to derive both by
+   * hand for its copy, ten lines before computing the real plan through
+   * buildDayPlan — so a student could be told "DILR is your weakest, 3h
+   * committed" above a plan that led VARC at 8h. The copy now reads what the
+   * plan was built from instead of guessing it again.
+   */
+  weakestSection: Section;
+  hoursToday: number;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -119,25 +126,10 @@ async function buildHistory(admin: any, studentId: string): Promise<
   return { daysSinceLastPracticed: daysSince, ...recency };
 }
 
-function weakestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
-  const scores = [
-    { s: 'VARC' as const, v: p.baseline_varc as number | null },
-    { s: 'DILR' as const, v: p.baseline_dilr as number | null },
-    { s: 'QA' as const, v: p.baseline_qa as number | null },
-  ].filter((x): x is { s: Section; v: number } => x.v != null);
-  if (scores.length < 2) return null;
-  return scores.reduce((a, b) => (b.v < a.v ? b : a)).s;
-}
-
-function strongestFromBaseline(p: { baseline_varc: unknown; baseline_dilr: unknown; baseline_qa: unknown }): Section | null {
-  const scores = [
-    { s: 'VARC' as const, v: p.baseline_varc as number | null },
-    { s: 'DILR' as const, v: p.baseline_dilr as number | null },
-    { s: 'QA' as const, v: p.baseline_qa as number | null },
-  ].filter((x): x is { s: Section; v: number } => x.v != null);
-  if (scores.length < 2) return null;
-  return scores.reduce((a, b) => (b.v > a.v ? b : a)).s;
-}
+// weakestFromBaseline / strongestFromBaseline used to live here as byte-copies
+// of lib/focus-sections. They were left behind by the buildDayPlan extraction
+// and had no callers — exactly the shape that grows back into a second
+// authority. Deleted; focus-sections owns the chain.
 
 // Reads (generating + persisting on first touch of the day, exactly like the
 // tracker) the student's routine for today, then merges in which tasks are
@@ -206,7 +198,7 @@ export async function computeTodaysPlan(
       today,
       now,
     });
-    const { routineProfile, hoursToday } = plan;
+    const { hoursToday } = plan;
     const todayClassTopics = plan.todayClassTopics;
 
     // Read-or-generate, through the SAME staleness rule the tracker uses.
@@ -263,6 +255,8 @@ export async function computeTodaysPlan(
       totalCount: tasks.length,
       allDone: doneCount >= tasks.length,
       classTopics: todayClassTopics,
+      weakestSection: plan.focus.weakest,
+      hoursToday: plan.hoursToday,
     };
   } catch {
     // Never let a plan-computation failure break the notification send — the

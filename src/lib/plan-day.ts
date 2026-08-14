@@ -1,5 +1,5 @@
 import {
-  generateRoutine, getPhase,
+  generateRoutine, getPhase, hoursForDayOf,
   type RoutineProfile, type Section, type Stage, type Phase, type RoutineTask,
 } from './routine-engine';
 import { buildTopicChoices, type DayTopicHistory } from './day-topics';
@@ -70,21 +70,17 @@ export interface DayPlanResult {
 }
 
 /**
- * The hours today is built to.
+ * The hours today is built to — re-exported from the engine, NOT a second copy.
  *
- * Weekday/weekend comes from the STUDY DAY, not from a server-local weekday.
- * Since the study day rolls at 05:30 IST — exactly 00:00 UTC — the study day
- * string and the UTC date are the same, so parsing it gives the right weekday
- * on any host. Reading `new Date().getDay()` on a UTC server was correct only
- * by coincidence and would break the moment the host timezone changed.
+ * This module used to own its own implementation, deriving weekend from the
+ * study-day string while generateRoutine independently derived it from
+ * `now.getDay()` (the host's local weekday). Two answers to one question: the
+ * number persisted as `generated_hours` came from here, the number that sized
+ * the tasks came from there, and they agreed only because Vercel runs UTC.
+ * One implementation now, in routine-engine, consumed by both.
  */
 export function hoursForStudyDay(profile: RoutineProfile, todayIso: string): number {
-  const dow = new Date(todayIso + 'T00:00:00Z').getUTCDay();
-  const weekend = dow === 0 || dow === 6;
-  return (weekend ? profile.weekendHours : profile.weekdayHours)
-    ?? (weekend
-      ? (profile.isWorkingProfessional ? 4 : 3)
-      : (profile.isWorkingProfessional ? 1.5 : 2.5));
+  return hoursForDayOf(profile, new Date(todayIso + 'T12:00:00Z'));
 }
 
 /** The profile the engine plans against, mapped in ONE place. */

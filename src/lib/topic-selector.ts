@@ -399,8 +399,18 @@ export function chooseSectionDay(
   const claimed = candidates.filter((c) => c.postponedBonus || c.todayClassBonus);
   const picks: TopicChoice[] = [];
   const taken = new Set<string>();
-  for (const c of claimed.slice(0, capacity)) {
+  for (const c of claimed) {
+    // STRUCTURAL, not incidental. Every other push below filters its pool by
+    // `taken`; this loop did not, so it was the one path where the same topic
+    // could enter a day twice — a duplicated candidate row, or a topic that is
+    // both postponed AND in today's class, and the day prescribes the same work
+    // twice. It is the only place that could have produced Abhishek's 12 Aug
+    // plan (Reading Comprehension 132m + 132m). Fuzzing never reproduced it,
+    // which is exactly why the guard belongs in the code rather than the test.
+    if (picks.length >= capacity) break;
+    if (taken.has(c.topic)) continue;
     const one = chooseTopicForSection([c], mult, season, pressure);
+    if (taken.has(one.topic)) continue;
     picks.push(one);
     taken.add(one.topic);
   }

@@ -234,3 +234,108 @@ describe('INVARIANT 5 — one planner, with exactly one permitted fork', () => {
     expect((s.match(/generateRoutine\(/g) ?? []).length, 'one engine call').toBe(1);
   });
 });
+
+// ── INVARIANT 6: every surface that names a weak section uses ONE chain ─────
+//
+// The two-writer bug was fixed for the two daily_routines writers, and the
+// guards above pinned exactly those two. The 14 Aug sweep found the same bug
+// still alive one surface out: /api/plan/full derived weakestSection from a
+// three-link chain with NO mock and NO baseline branch, under a comment
+// claiming it matched the daily plan. A student whose latest mock said VARC
+// got a VARC-led Home and a DILR-led Whole Plan in the same session.
+//
+// Guarding "the two writers" was too narrow. The rule is: any surface that
+// tells a student what their weakest section is must resolve it through
+// lib/focus-sections.
+describe('INVARIANT 6 — no surface re-derives the weak section by hand', () => {
+  const SURFACES = [
+    'src/app/api/plan/full/route.ts',
+    'src/app/api/cron/study-companion/route.ts',
+    'src/app/api/routine/today/route.ts',
+    'src/lib/routine-plan.ts',
+  ];
+
+  it('every student-facing surface goes through the shared resolver', () => {
+    for (const f of SURFACES) {
+      const s = readFileSync(f, 'utf8');
+      const shared = s.includes('resolveFocusSections(') || s.includes('buildDayPlan({');
+      expect(shared, `${f} must resolve focus through lib/focus-sections`).toBe(true);
+    }
+  });
+
+  it('none of them calls the coverage rule directly', () => {
+    // Calling weakestFromCoverage outside focus-sections is the signature of
+    // a copied chain: it is the LAST link, so anyone invoking it here is
+    // rebuilding the ladder above it — which is precisely how /api/plan/full
+    // ended up without a mock branch. (A bare `?? 'DILR'` is fine and is not
+    // the tell: routineProfile.weakestSection is already resolved, and the
+    // coalesce there only narrows a nullable type.)
+    for (const f of SURFACES) {
+      const s = readFileSync(f, 'utf8');
+      expect(s.includes('weakestFromCoverage('), `${f} re-implements the chain`).toBe(false);
+    }
+  });
+
+  it('the notification copy names the plan it links to', () => {
+    // The cron derived weakest and hours by hand for its copy, ten lines
+    // before computing the real plan — so it could say "DILR, 3h" above a
+    // plan that led VARC at 8h. The plan is the authority once it exists.
+    const s = readFileSync('src/app/api/cron/study-companion/route.ts', 'utf8');
+    expect(s).toContain('weakest = plan.weakestSection');
+    expect(s).toContain('hoursToday = plan.hoursToday');
+  });
+});
+
+// ── INVARIANT 7: ONE answer to "how long is today?" ────────────────────────
+//
+// plan-day computed hoursToday from the study day and persisted it as
+// generated_hours; generateRoutine independently recomputed weekend and hours
+// from `now.getDay()` — the HOST's local weekday — and sized the tasks with
+// its own value. They agreed only because Vercel runs UTC, and the hours a
+// plan was judged stale against were not necessarily the hours it was built
+// to.
+describe('INVARIANT 7 — the hours that size the day are the hours we persist', () => {
+  it('there is exactly one implementation of the weekday/weekend fallback', () => {
+    const engine = readFileSync('src/lib/routine-engine.ts', 'utf8');
+    const planDay = readFileSync('src/lib/plan-day.ts', 'utf8');
+    // The archetype fallback table appears once, in the engine.
+    expect((engine.match(/isWorkingProfessional \? 4 : 3/g) ?? []).length).toBe(1);
+    expect(planDay).not.toContain('isWorkingProfessional ? 4 : 3');
+    // ...and plan-day delegates rather than re-deriving.
+    expect(planDay).toContain('hoursForDayOf(');
+  });
+
+  it('weekend is decided from the study day, never the host clock', () => {
+    const engine = readFileSync('src/lib/routine-engine.ts', 'utf8');
+    const fn = engine.slice(engine.indexOf('function isWeekend'), engine.indexOf('export function hoursForDayOf'));
+    expect(fn).toContain('studyDayString(');
+    expect(fn, 'host-local getDay() is timezone-dependent').not.toMatch(/d\.getDay\(\)/);
+  });
+});
+
+// ── INVARIANT 8: a day cannot prescribe the same topic twice ───────────────
+//
+// Founder, 14 Aug: "test + structural invariant, not fuzz alone." The 4,000-
+// plan fuzz in INVARIANT 1 proves it does not happen; these two guards make
+// it impossible to happen, at both levels where it could.
+describe('INVARIANT 8 — duplicate topics are structurally impossible', () => {
+  it('the selector refuses a duplicate on every push, including the claimed one', () => {
+    // The claimed branch (postponed / today's coaching class) was the one
+    // push that did not consult the taken-set.
+    const s = readFileSync('src/lib/topic-selector.ts', 'utf8');
+    const claimed = s.slice(s.indexOf('const claimed = candidates.filter'), s.indexOf('const remaining = ()'));
+    expect(claimed).toContain('taken.has(');
+  });
+
+  it('the generator de-duplicates again at the boundary where choices become tasks', () => {
+    // Slicing whatever the selector returned is the step that turned a
+    // duplicated CHOICE into two real tasks on a student's screen.
+    const s = readFileSync('src/lib/routine-engine.ts', 'utf8');
+    expect(s).toContain('function distinctByTopic(');
+    expect(s).toContain('distinctByTopic(extraChoices?.[weak]');
+    expect(s).toContain('distinctByTopic(extraChoices?.[section]');
+    // The raw slice must not come back.
+    expect(s).not.toMatch(/extraChoices\?\.\[weak\]\?\.slice\(/);
+    expect(s).not.toMatch(/extraChoices\?\.\[section\]\?\.slice\(/);
+  });
+});

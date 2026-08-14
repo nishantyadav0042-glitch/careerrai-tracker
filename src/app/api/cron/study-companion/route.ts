@@ -4,7 +4,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE, BUDGET_SETUP, BUDGET_RECOVERY, dreamCollegeLabel } from '@/lib/notification-os';
 import { catExamDate } from '@/lib/routine-engine';
 import {
-  COMPANION_SLOTS, companionType, companionTip, weakestFromCoverage,
+  COMPANION_SLOTS, companionType, companionTip,
   morningCopy, factCopy, openCopy, progressCopy, logCopy, closeCopy,
   kickoffCopy, sparkCopy, windCopy, activationSlotCopy, reactivationSlotCopy,
   missedCheckInKickoffCopy,
@@ -12,6 +12,8 @@ import {
   type CompanionSlot, type SlotCopy,
 } from '@/lib/companion';
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
+import { resolveFocusSections } from '@/lib/focus-sections';
+import { getLogDateString } from '@/lib/streak-utils';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -48,6 +50,21 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
   const now = new Date();
+  // KNOWN SECOND DEFINITION OF "TODAY" — tracked, not accepted.
+  //
+  // This is IST-CALENDAR midnight. The study day rolls at 05:30 IST
+  // (lib/study-day), so the two disagree for 00:00-05:29 IST every night.
+  // It is currently masked: this cron's four scheduled slots are 08:00,
+  // 11:00, 20:30 and 21:30 IST, all outside that window, so every value
+  // derived from it happens to match the study day today.
+  //
+  // It is NOT left here because it is fine. Changing it moves todayStart,
+  // loggedToday and daysSinceLastLog together — a real behaviour change for
+  // the whole notification cadence — and that deserves its own verification
+  // rather than riding along with a focus-section fix. The plan-critical uses
+  // in this file have already been moved off it: `weakest` below resolves on
+  // getLogDateString(now), and everything about the plan comes from
+  // computeTodaysPlan, which is study-day keyed throughout.
   const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const todayStart = new Date(today + 'T00:00:00+05:30').toISOString();
   const dayOfYear = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 1)) / 86_400_000);
@@ -129,14 +146,32 @@ export async function POST(request: NextRequest) {
     const stateKind: 'active' | 'activation' | 'reactivation' =
       lastLog == null ? 'activation' : (daysSinceLastLog! >= 2 ? 'reactivation' : 'active');
 
-    const weakest = (s.self_reported_weakest_section as 'VARC' | 'DILR' | 'QA' | null)
-      ?? weakestFromCoverage(coverageById.get(s.id) ?? [])
-      ?? 'DILR';
+    // Weakest section for the COPY. Hand-rolled here it was a three-link chain
+    // (self-report -> coverage -> DILR) with no mock and no baseline branch,
+    // decided ten lines before `plan` below computes the real thing through
+    // buildDayPlan — so a student could be told "DILR is your weakest, 3h
+    // committed" above a plan that led VARC at 8h.
+    //
+    // Where a plan exists it is now the source (see `weakest`/`hoursToday`
+    // reassignment after the plan is computed). This initial value is the
+    // shared resolver, used only for students with no plan today (activation
+    // and reactivation states, whose copy names a section but never a topic) —
+    // with no debriefs fetched in this batch, so the chain resolves
+    // self-report -> baseline -> coverage -> DILR rather than a shorter copy
+    // of it.
+    let weakest = resolveFocusSections(
+      s,
+      (coverageById.get(s.id) ?? []) as { section: string; status: string }[],
+      [],
+      // The STUDY day, not this route's own `today` (which is IST-calendar
+      // midnight — a third definition, see the note at its declaration).
+      getLogDateString(now),
+    ).weakest;
     const dreamCollege = dreamCollegeLabel(s.dream_colleges);
     const hoursRaw = isWeekend
       ? (s.weekend_hours_available as number | null)
       : ((s.study_target_hours ?? s.hours_available) as number | null);
-    const hoursToday = hoursRaw
+    let hoursToday = hoursRaw
       ?? (isWeekend ? (s.is_working_professional ? 4 : 3) : (s.is_working_professional ? 1.5 : 2.5));
 
     // Topic-level plan — computed only for engaged loggers on the slots that
@@ -149,6 +184,13 @@ export async function POST(request: NextRequest) {
     let plan: TodaysPlan | null = null;
     if (stateKind === 'active' && PLAN_SLOTS.includes(slot)) {
       plan = await computeTodaysPlan(admin, s.id, now);
+    }
+    // The plan is the authority the moment it exists. Everything the copy says
+    // about focus and hours now comes from what the day was actually BUILT
+    // with, not from a second derivation that only happens to agree.
+    if (plan) {
+      weakest = plan.weakestSection;
+      hoursToday = plan.hoursToday;
     }
     const planEstHours = plan ? Math.round((plan.tasks.reduce((a, t) => a + t.estMinutes, 0) / 60) * 2) / 2 : 0;
 
