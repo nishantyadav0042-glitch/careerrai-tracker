@@ -111,9 +111,34 @@ const ARCHETYPE_PHASE_FLOOR: Phase = 'intensive';
 // CAT context card) reads the same date as the phase engine instead of each
 // screen hardcoding its own fixed year that drifts once that year's exam
 // has passed or a student's attempt_year differs from the calendar default.
+/**
+ * Calendar-day comparison, NOT instant comparison. Exam day is a DAY.
+ *
+ * catExamDate returns local MIDNIGHT of the exam date. Comparing an instant
+ * against it (`now > examDate`) is true from 00:00:01 on exam morning, so the
+ * whole of the most important day in the product read as "the exam is behind
+ * us". Two things broke together, and only on that one date:
+ *
+ *   resolveCatExamDate rolled the attempt year forward to 2027, so every
+ *   countdown — goal editor, tracker header, trajectory wall, CAT context card
+ *   — told a student sitting the exam that morning they had a year to go.
+ *
+ *   getPhase then saw a 2027 exam year, failed its `now.getFullYear() === year`
+ *   check, and returned 'foundation'. A student opening the app before leaving
+ *   for the centre was handed new topics to learn instead of a revision day.
+ *
+ * Found by the lifetime gate (plan-lifetime.gate.test.ts), which is the point
+ * of running every profile to CAT day rather than testing a Tuesday in August:
+ * no single-day test would ever have picked exam day to test.
+ */
+function isAfterExamDay(now: Date, exam: Date): boolean {
+  const asDay = (d: Date) => d.getFullYear() * 10_000 + d.getMonth() * 100 + d.getDate();
+  return asDay(now) > asDay(exam);
+}
+
 export function resolveCatExamDate(now: Date, attemptYear?: number | null): Date {
   let year = attemptYear ?? now.getFullYear();
-  if (now > catExamDate(year)) year += 1;
+  if (isAfterExamDay(now, catExamDate(year))) year += 1;
   return catExamDate(year);
 }
 
@@ -124,7 +149,9 @@ export function getPhase(now: Date, attemptYear?: number | null, stage?: Stage |
   let calendarPhase: Phase = 'foundation'; // everything else, including multi-year-out early prep
   if (now.getFullYear() === year) {
     const month = now.getMonth(); // 0-indexed
-    if (month === 10 && now <= examDate) calendarPhase = 'revision'; // Nov, up to exam day
+    // "Up to AND INCLUDING exam day" — see isAfterExamDay. This used to read
+    // `now <= examDate`, which excluded every hour of exam day but midnight.
+    if (month === 10 && !isAfterExamDay(now, examDate)) calendarPhase = 'revision';
     else if (month === 8 || month === 9) calendarPhase = 'intensive';         // Sep, Oct
   }
 
