@@ -1,4 +1,5 @@
 import { TOPIC_METADATA } from './topics-constants';
+import { COVERED_STATUSES, isCovered } from './coverage-status';
 
 // ── IS THIS TOPIC DUE FOR REVISION? ONE ANSWER ──────────────────────────────
 //
@@ -84,9 +85,17 @@ export function isRevisionDue(input: RevisionInput): boolean {
   return overdueDays(input) > 0;
 }
 
-/** Statuses for which revision is a meaningful question at all. */
-export const REVISABLE_STATUSES = ['practicing', 'revising', 'exam_ready'] as const;
+/**
+ * Statuses for which revision is a meaningful question at all.
+ *
+ * This IS the covered set, not a coincidentally-equal list: you can only be due
+ * to revise something you have studied through at least once. It used to spell
+ * the three names out, which meant the covered rule existed here as well as in
+ * the ten other places the 14 Aug sweep found — and a sixth status added above
+ * exam_ready would have been revisable in some of them and not others.
+ */
+export const REVISABLE_STATUSES = COVERED_STATUSES;
 
 export function isRevisableStatus(status: string | null | undefined): boolean {
-  return (REVISABLE_STATUSES as readonly string[]).includes(status ?? '');
+  return isCovered(status);
 }

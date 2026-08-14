@@ -60,18 +60,6 @@ export interface BuddyFeedback {
   created_at: string;
 }
 
-export interface TestResult {
-  id: string;
-  student_id: string;
-  test_type: string;
-  test_name: string;
-  attempt_date: string;
-  score: number;
-  percentile: number;
-  breakdown: Record<string, unknown> | null;
-  created_at: string;
-}
-
 export interface Notification {
   id: string;
   user_id: string;
@@ -109,35 +97,6 @@ export interface AnalyticsSummary {
   redFlags: string[];
 }
 
-export interface VideoSession {
-  id: string;
-  student_id: string;
-  buddy_id: string;
-  title?: string;
-  description?: string;
-  /** @deprecated Use google_meet_link instead */
-  gmeet_link?: string | null;
-  /** Real Google Meet link from Calendar API */
-  google_meet_link?: string | null;
-  /** Google Calendar event ID for this session */
-  google_event_id?: string | null;
-  session_status: 'scheduled' | 'active' | 'completed' | 'cancelled';
-  session_type: 'session' | 'review' | 'doubt_solving' | 'mock_review';
-  duration_minutes: number;
-  scheduled_at: string | null;
-  started_at: string | null;
-  ended_at: string | null;
-  last_session_date?: string | null;
-  days_since_last_session?: number | null;
-  student_notified?: boolean;
-  buddy_notified?: boolean;
-  reminder_sent?: boolean;
-  notes?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-// Daily Tracker Types
 export interface StreakData {
   id: string;
   student_id: string;
@@ -154,57 +113,29 @@ export interface StreakData {
   updated_at: string;
 }
 
-export interface StreakShield {
-  id: string;
-  student_id: string;
-  used_on: string | null;
-  granted_by: string | null;
-  reason: 'student_used' | 'buddy_granted';
-  created_at: string;
-}
-
-export interface DailyLrdiPuzzle {
-  id: string;
-  puzzle_date: string;
-  puzzle_type: 'seating' | 'blood_relation' | 'constraint' | 'arrangement' | 'logic';
-  puzzle_content: Record<string, unknown>;
-  difficulty: number;
-  difficulty_description?: string;
-  estimated_time_minutes: number;
-  solution?: string;
-  explanation?: string;
-  created_at: string;
-}
-
-export interface LrdiPuzzleAttempt {
-  id: string;
-  student_id: string;
-  puzzle_id: string;
-  solved: boolean;
-  time_taken_seconds?: number;
-  accuracy?: number;
-  submitted_at: string;
-}
-
-export interface TodoItem {
-  id: string;
-  student_id: string;
-  title: string;
-  description?: string;
-  category: 'buddy_suggested' | 'student_custom' | 'daily_puzzle' | 'mock_review' | 'session';
-  due_date?: string;
-  due_time?: string;
-  priority: number;
-  completed_at?: string;
-  created_by?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AnalyticsEvent {
-  id: string;
-  student_id: string;
-  event_type: string;
-  metadata?: Record<string, unknown>;
-  created_at: string;
-}
+// ── SEVEN INTERFACES WERE DELETED HERE ON 14 AUG ────────────────────────────
+//
+// TestResult, VideoSession, StreakShield, DailyLrdiPuzzle, LrdiPuzzleAttempt,
+// TodoItem, AnalyticsEvent. Every one had zero references outside this file —
+// checked by word-boundary search across src, e2e and scripts.
+//
+// They split into two groups, and the difference matters more than the deletion:
+//
+// LIVE TABLE, DEAD TYPE — test_results, video_sessions, analytics_events. The
+// app reads all three (video_sessions alone at 34 call sites) but nowhere
+// imports the type; each caller re-declares the columns it happens to need
+// inline. Deleting the interface changes nothing today, and is not a fix: the
+// real defect is 34 hand-written shapes for one table, which is how a column
+// rename becomes 34 silent `undefined`s. Worth a generated-types pass
+// (supabase gen types) rather than resurrecting a hand-maintained mirror that
+// was already out of date.
+//
+// NO APP CODE AT ALL — streak_shields, daily_lrdi_puzzles, lrdi_puzzle_attempts,
+// todo_items. Migrations create these tables and nothing in the application
+// reads or writes them. The TABLES ARE DELIBERATELY LEFT IN PLACE: dropping
+// production tables is a founder decision, not a cleanup, and their migrations
+// are history that must not be rewritten. Flagged in the audit report instead.
+//
+// Note streak_shields specifically: shields ARE a live product concept
+// (momentumStreak models decay and shielding), but the live implementation
+// keeps that state in streak_data, not in this table. One concept, one store.

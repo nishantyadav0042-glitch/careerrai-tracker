@@ -15,6 +15,7 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isValidPushEndpoint } from '@/lib/push-validate';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
+import { isCovered } from '@/lib/coverage-status';
 
 // Whitelisted answers from the pre-auth /start funnel — collected before
 // an account existed, handed over here in one shot on first signup only.
@@ -391,12 +392,11 @@ export async function POST(request: NextRequest) {
           // so revision comes due STAGGERED over the first ~2.5 weeks — timely,
           // but no day-1 flood. not_started / learning keep "now".
           const now = Date.now();
-          const COVERED = new Set(['practicing', 'revising', 'exam_ready']);
-          const coveredEntries = matrix.filter((e) => COVERED.has(e.status!));
+          const coveredEntries = matrix.filter((e) => isCovered(e.status));
           const SPREAD_DAYS = 18;
           const rows = matrix.map((e) => {
             let updatedAt = new Date(now).toISOString();
-            if (COVERED.has(e.status!)) {
+            if (isCovered(e.status)) {
               const idx = coveredEntries.indexOf(e);
               const dueInDays = coveredEntries.length > 1
                 ? Math.round((idx / (coveredEntries.length - 1)) * SPREAD_DAYS)

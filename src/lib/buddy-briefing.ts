@@ -3,6 +3,7 @@ import { liveStreak } from '@/lib/streak-utils';
 import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { isCovered } from './coverage-status';
 
 // Shared generator behind the buddy's AI facts-briefing — used by the manual
 // "Refresh" button AND by ambient auto-triggers (mock submitted, emotional flag
@@ -59,12 +60,12 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
 
   // ── Syllabus picture (founder, 21 July: buddy must see covered / remaining /
   // revision / mock count — plus detected patterns) ─────────────────────────
-  const covered = topicMemory.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready');
+  const covered = topicMemory.filter((t) => isCovered(t.status));
   const inProgress = topicMemory.filter((t) => t.status === 'learning');
   const untouched = topicMemory.filter((t) => t.status === 'not_started');
   const perSection = (['QA', 'VARC', 'DILR'] as const).map((sec) => {
     const all = topicMemory.filter((t) => TOPIC_METADATA[t.topic]?.section === sec);
-    const done = all.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
+    const done = all.filter((t) => isCovered(t.status)).length;
     return `${sec} ${done}/${all.length}`;
   }).join(', ');
   // The pattern that matters most: HIGH-WEIGHTAGE topics still untouched.

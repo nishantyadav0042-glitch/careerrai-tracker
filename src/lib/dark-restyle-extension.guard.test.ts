@@ -55,30 +55,13 @@ describe('PaceCard — the ring and pace math are untouched, only the shell', ()
 // longer exists; deleting the block beats leaving a test that reads a
 // component Home stopped rendering.
 
-describe('LockedBuddyHub — the comparison cards are dark, the wedge copy is frozen', () => {
-  const src = () => readFileSync('src/components/locked-buddy-hub.tsx', 'utf8');
-
-  it('the "right now vs with buddy" pair is unchanged in wording', () => {
-    expect(src()).toContain('Should I give another mock? Should I revise Algebra? Am I even improving?');
-    expect(src()).toContain('You know exactly what to do today. And tomorrow. All the way to CAT.');
-  });
-
-  it('the coaching-batch-vs-buddy wedge is unchanged in wording', () => {
-    const s = src();
-    expect(s).toContain('200 students, 1 teacher');
-    expect(s).toContain('Same plan for everyone');
-    expect(s).toContain('No one reviews your prep');
-    expect(s).toContain('Just you, 1-on-1');
-    expect(s).toContain('Plan built for you');
-    expect(s).toContain('Prep reviewed weekly');
-  });
-
-  it('both sections now use the dark card language', () => {
-    const s = src();
-    // At least the hero plus these two sections — four dark cards total.
-    expect((s.match(/bg-stone-900/g) ?? []).length).toBeGreaterThanOrEqual(3);
-  });
-});
+// LockedBuddyHub was retired from /student/buddy on 14 Aug, when the founder
+// cut that screen to three blocks ("your weakness, one person, one price").
+// The route renders BuddyConversionScreen, and session-booking.guard.test.ts
+// asserts the hub is NOT rendered there — so this block was pinning the
+// wording of a component no student could reach. Deleted in the same commit as
+// the component, for the same reason the ImportantDates block above was: a
+// guard over dead code is what makes the code look load-bearing.
 
 describe('RecommendedBuddies — real data, real ranking, only the card is dark', () => {
   const src = () => readFileSync('src/components/recommended-buddies.tsx', 'utf8');

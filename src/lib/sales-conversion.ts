@@ -4,6 +4,7 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { bandMeta } from '@/lib/momentum';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { SITE_URL } from '@/lib/site';
+import { isCovered } from './coverage-status';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -35,7 +36,7 @@ export interface ConversionView {
   recommendedBuddy: { name: string; percentile: number | null; college: string | null; reason: string | null } | null;
 }
 
-const FINISHED = new Set(['practicing', 'revising', 'exam_ready']);
+
 
 function waNumber(phone: string | null): string | null {
   if (!phone) return null;
@@ -73,12 +74,12 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     const untouchedByWeight: { topic: string; w: number }[] = [];
     for (const t of memory) {
       const meta = TOPIC_METADATA[t.topic];
-      if (FINISHED.has(t.status)) finished++;
+      if (isCovered(t.status)) finished++;
       else if (t.status === 'learning') started++;
       else untouched++;
       if (!meta) continue;
       agg[meta.section].total++;
-      if (FINISHED.has(t.status)) agg[meta.section].finished++;
+      if (isCovered(t.status)) agg[meta.section].finished++;
       else if (t.status === 'not_started' || t.status === 'untouched') untouchedByWeight.push({ topic: t.topic, w: meta.weightage });
     }
     sections = Object.entries(agg).filter(([, v]) => v.total > 0).map(([section, v]) => ({ section, finished: v.finished, total: v.total, pct: Math.round((v.finished / v.total) * 100) }));

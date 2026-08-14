@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  todaysTaughtTopics, timetableDailyHours, timetableHorizon, horizonDaysLeft,
-} from './timetable-align';
+import { timetableDailyHours } from './timetable-align';
 import { chooseTopicForSection } from './topic-selector';
 import type { TimetableBlock } from './timetable';
 
@@ -16,38 +14,15 @@ const block = (over: Partial<TimetableBlock>): TimetableBlock => ({
   ...over,
 });
 
-// 2026-08-07 is a Friday (day index 4 in our Monday=0 scheme).
-const TODAY = '2026-08-07';
+// The TODAY constant went with the two date-based blocks removed on 14 Aug —
+// the remaining tests price a timetable's hours, which no date can change.
 
-describe('todaysTaughtTopics', () => {
-  it('picks dated rows matching today', () => {
-    const blocks = [
-      block({ date: '2026-08-07', topic: 'Percentages' }),
-      block({ date: '2026-08-08', topic: 'Time & Work' }),
-    ];
-    expect(todaysTaughtTopics(blocks, TODAY)).toEqual(['Percentages']);
-  });
-
-  it('picks recurring-weekly rows matching the weekday', () => {
-    const blocks = [
-      block({ day: 4, topic: 'Reading Comprehension' }), // Friday
-      block({ day: 0, topic: 'Tables' }),                // Monday
-    ];
-    expect(todaysTaughtTopics(blocks, TODAY)).toEqual(['Reading Comprehension']);
-  });
-
-  it('gives Day-N plans nothing — no anchor, no guess', () => {
-    expect(todaysTaughtTopics([block({ dayIndex: 2, topic: 'Charts' })], TODAY)).toEqual([]);
-  });
-
-  it('dedupes a topic taught in two slots the same day', () => {
-    const blocks = [
-      block({ date: TODAY, topic: 'Percentages' }),
-      block({ date: TODAY, topic: 'Percentages' }),
-    ];
-    expect(todaysTaughtTopics(blocks, TODAY)).toEqual(['Percentages']);
-  });
-});
+// The todaysTaughtTopics block was deleted with the function on 14 Aug.
+// timetable-month.coachingTopicsForDate answers this question now, and its own
+// tests cover it — including the anchored-month behaviour the old function had
+// no concept of. The block below is kept and still passes, because "today's
+// class wins topic selection" is a claim about the PLANNER, and that claim
+// survived the change of which module supplies today's topics.
 
 describe("today's class actually WINS topic selection", () => {
   // The founder-visible claim. A +25 evergreen priority flag was not enough
@@ -108,20 +83,10 @@ describe('timetableDailyHours — the hours check', () => {
   });
 });
 
-describe('the horizon — when a dated plan runs out', () => {
-  it('finds the last covered day and counts what is left', () => {
-    const blocks = [block({ date: '2026-08-09' }), block({ date: '2026-08-20' })];
-    expect(timetableHorizon(blocks)).toBe('2026-08-20');
-    expect(horizonDaysLeft(blocks, '2026-08-18')).toBe(3);
-    expect(horizonDaysLeft(blocks, '2026-08-20')).toBe(1);
-    expect(horizonDaysLeft(blocks, '2026-08-25')).toBe(0);
-  });
-
-  it('never expires a recurring weekly timetable', () => {
-    expect(timetableHorizon([block({ day: 2 })])).toBeNull();
-    expect(horizonDaysLeft([block({ day: 2 })], TODAY)).toBeNull();
-  });
-});
+// The horizon block went with timetableHorizon/horizonDaysLeft. Reading the
+// max raw date out of an OCR'd sheet is the bug that told Riya her timetable
+// expired in 2023; timetable-month's anchored monthDaysLeft replaced it, and
+// its tests pin the stray-date case this pair got wrong.
 
 describe('duplicate tasks are one task', () => {
   it('collapses the same class stated twice — the live 17-hour bug', () => {

@@ -1,5 +1,6 @@
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
+import { isCovered } from './coverage-status';
 
 // ── Daily one-liner insight (founder, 21 July) ──────────────────────────────
 // One specific, data-earned sentence per student per day — "this is the
@@ -131,7 +132,7 @@ export async function computeDailyInsight(
 
   // 4 — REVISION overdue on a finished topic.
   const fading = topicMemory
-    .filter((t) => t.revisionOverdue && (t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'))
+    .filter((t) => t.revisionOverdue && isCovered(t.status))
     .sort((a, b) => (b.lastTouchedDaysAgo ?? 0) - (a.lastTouchedDaysAgo ?? 0))[0];
   if (fading) {
     return {
@@ -156,7 +157,7 @@ export async function computeDailyInsight(
   }
 
   // 6 — Progress fallback: coverage moving.
-  const finished = topicMemory.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
+  const finished = topicMemory.filter((t) => isCovered(t.status)).length;
   const remaining = topicMemory.length - finished;
   return {
     kind: 'progress',

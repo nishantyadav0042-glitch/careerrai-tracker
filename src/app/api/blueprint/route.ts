@@ -14,6 +14,7 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { selectBuddyBanner } from '@/lib/buddy-banner';
 import { buildWeekPlan } from '@/lib/study-forecast';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
+import { isCovered } from '@/lib/coverage-status';
 
 // GET /api/blueprint — the Study Blueprint: a single page that reads as "my
 // study plan," not the daily task list. Every fact here is already decided
@@ -101,7 +102,7 @@ export async function GET() {
   const learningCount = learningTopics.length;
   // Topics with a genuine study pass behind them.
   const studiedOnceCount = topicMemory.filter(
-    (t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
+    (t) => isCovered(t.status)
   ).length;
   // Everything not yet studied through — drives the finish projection and the
   // "syllabus done" gate, so neither fires while topics are still in learning.

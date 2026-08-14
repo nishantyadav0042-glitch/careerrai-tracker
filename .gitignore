@@ -58,3 +58,10 @@ android_keystore_password.txt
 *.apk
 android/app/build/
 android/build/
+
+# Dev-server / test scratch output. Regenerated on every run; a committed copy
+# is stale within the hour and only ever misleads a later reader. Ignored so
+# `npm run dev > dev-server.log` can never put them back in git.
+dev-server.log
+dev-output.log
+test-results.log

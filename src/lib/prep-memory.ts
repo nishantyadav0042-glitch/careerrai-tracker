@@ -10,6 +10,7 @@ import { isRevisionDue, isRevisableStatus } from './revision-due';
 // caller resolves "today" once and passes date-window boundaries in.
 
 import type { Section } from './routine-engine';
+import { isCovered } from './coverage-status';
 
 export interface CompletionRecord {
   routineDate: string; // YYYY-MM-DD
@@ -199,7 +200,7 @@ export function revisionDueStats(
   let due = 0;
   let completed = 0;
   for (const row of coverageRows) {
-    if (row.status !== 'practicing' && row.status !== 'revising' && row.status !== 'exam_ready') continue;
+    if (!isCovered(row.status)) continue;
     const daysSinceUpdate = Math.round((Date.parse(today) - Date.parse(row.updatedAt)) / 86_400_000);
     if (isRevisionDue({ topic: row.topic, daysSince: daysSinceUpdate, multiplier: revisionMultiplier })) {
       due += 1;

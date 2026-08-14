@@ -4,6 +4,8 @@
 // `summary` field is a plain-language paragraph written to be read/spoken by the
 // agent; the structured fields are there if Expedify wants to map them.
 
+import { isCovered } from './coverage-status';
+
 export interface OnboardingForm {
   ambition_date?: unknown;
   dream_colleges?: unknown;
@@ -38,7 +40,7 @@ export interface StudentBrief {
   summary: string;                     // human-readable, for the agent
 }
 
-const COVERED = new Set(['practicing', 'revising', 'exam_ready']);
+
 const ACADEMIC = ['VARC', 'DILR', 'QA'] as const;
 
 function humanize(code: string): string {
@@ -77,7 +79,7 @@ export function buildStudentBrief(
   for (const s of ACADEMIC) {
     const rows = matrix.filter((m) => m.section === s);
     if (!rows.length) continue;
-    const covered = rows.filter((r) => COVERED.has(r.status ?? '')).length;
+    const covered = rows.filter((r) => isCovered(r.status)).length;
     const learning = rows.filter((r) => r.status === 'learning').length;
     const notStarted = rows.filter((r) => r.status === 'not_started').length;
     coverage[s] = { total: rows.length, covered, learning, notStarted, coveredPct: Math.round((covered / rows.length) * 100) };

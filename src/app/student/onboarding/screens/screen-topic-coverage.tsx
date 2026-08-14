@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { KNOWLEDGE_GRAPH, ONBOARDING_CORE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
 import { Rai, RAI_LEVELS } from '@/components/mascots';
+import type { CoverageStatus } from '@/lib/coverage-status';
 
 // ── The companion trail ──────────────────────────────────────────────────────
 // Founder vision (drawn on a screenshot): as the student taps topics, a line
@@ -30,10 +31,16 @@ function trailPath(pts: { x: number; y: number }[]): string {
 }
 
 // Student-declared states — including 'revising' ("Revision started"), the
-// per-topic state that replaced the old Revision pseudo-section. exam_ready
-// (🟢) is earned through confidence signals, never self-assigned; revision
-// DUE is derived.
-type DeclaredStatus = 'not_started' | 'learning' | 'practicing' | 'revising';
+// per-topic state that replaced the old Revision pseudo-section. Revision DUE
+// is derived, never declared.
+//
+// This is the canonical ladder MINUS exam_ready, and it is DERIVED from the
+// canonical type rather than re-typed. exam_ready is earned from evidence and
+// can never be self-assigned (coverage-status.EXAM_READY_SOURCE), so this
+// screen genuinely offers four rungs, not five — but "four of the five" has to
+// stay defined in terms of the five. Spelled out by hand, it silently stopped
+// being a subset the moment the ladder changed; as an Exclude it cannot.
+type DeclaredStatus = Exclude<CoverageStatus, 'exam_ready'>;
 
 interface Props {
   onNext: (data?: Record<string, unknown>) => void;

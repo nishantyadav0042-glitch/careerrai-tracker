@@ -220,8 +220,19 @@ lib/admin-filters.ts → dashboard counts AND sales queue AND Expedify dispatch
 ## 5. The domain systems, and why each exists
 
 ### 5.1 Plan & Learning engine
-`blueprint-builder.ts`, `routine-engine.ts`, `study-pace.ts`,
-`syllabus-feasibility.ts`, per-section mastery engines + topic graphs.
+`plan-day.ts` (**start here** — the ONE day-builder both writers call),
+`routine-engine.ts`, `topic-selector.ts`, `day-topics.ts`, `focus-sections.ts`,
+`revision-due.ts`, `timetable-day.ts`, `blueprint-builder.ts`, `study-pace.ts`.
+
+*Updated 14 Aug.* This list used to name `syllabus-feasibility.ts`, the
+per-section mastery engines and the three topic graphs. **All of those are
+gone** — the mastery engines and `/api/mastery` in the study-plan audit, the
+graphs and `syllabus-feasibility.ts` in the dead-code sweep that followed. They
+had no callers, and the per-section graphs carried a *contradictory* weightage
+table (Para Jumbles 5 there, 3 in `TOPIC_METADATA`) that would have started
+disagreeing with the planner the moment anyone wired them back up.
+`topics-constants.TOPIC_METADATA` is the single topic authority; feasibility
+now lives in `date-feasibility.ts`.
 The student sets the finish date; the system computes feasible pace and builds
 backwards. Same-day regeneration (founder-approved 29 Jul): a check-in stamps
 `daily_reports.updated_at`; if it postdates the routine's `created_at`, the

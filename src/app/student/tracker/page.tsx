@@ -34,6 +34,7 @@ import { sessionsVisibleFrom } from '@/lib/session-window';
 import { PlanExtendedAlert } from '@/components/home/plan-extended-alert';
 import { ConfirmHoursCard } from '@/components/home/confirm-hours-card';
 import { dailyHours, needsHoursConfirmation } from '@/lib/daily-hours';
+import { isCovered } from '@/lib/coverage-status';
 
 export const metadata = {
   title: 'CareerRai',
@@ -412,7 +413,7 @@ export default async function DailyTrackerPage() {
   const SECTIONS: Array<'QA' | 'VARC' | 'DILR'> = ['QA', 'VARC', 'DILR'];
   const bySection = SECTIONS.map((sec) => {
     const entries = topicMemory.filter((t) => TOPIC_METADATA[t.topic]?.section === sec);
-    const studied = entries.filter((t) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready').length;
+    const studied = entries.filter((t) => isCovered(t.status)).length;
     const untouchedN = entries.filter((t) => t.status === 'not_started').length;
     const inProg = entries.filter((t) => t.status === 'learning').length;
     // "Remaining" = untouched + still-in-learning — a topic merely opened is

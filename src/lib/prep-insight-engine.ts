@@ -45,8 +45,14 @@
 
 import { TOPIC_METADATA, type TopicMetadata } from './topics-constants';
 import { remainingSyllabusHours, studentEffortMultiplier, computeRequiredPace, type TopicStatusRow } from './study-pace';
+import { isCovered, statusRank, type CoverageStatus } from './coverage-status';
 
-export type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising';
+// CoverageStatus is RE-EXPORTED from the module that owns the ladder, never
+// re-declared. This file used to declare its own copy — same exported name,
+// same four first rungs, exam_ready missing — so any file importing
+// `CoverageStatus` from here got a silently narrower type than the canonical
+// one, under a name that gave no hint of it.
+export type { CoverageStatus };
 export interface MatrixEntry { section: string; topic: string; status: CoverageStatus }
 
 export type SignalPolarity = 'risk' | 'pattern' | 'strength';
@@ -160,7 +166,13 @@ interface SectionStats {
   gap: number;
 }
 
-const isFinished = (s: CoverageStatus) => s === 'practicing' || s === 'revising';
+// Was `s === 'practicing' || s === 'revising'` — the one implementation of
+// this question out of eleven that dropped exam_ready, so a topic the student
+// EARNED through evidence read as never studied. Latent rather than live (this
+// engine's matrix is self-reported and exam_ready cannot be self-assigned), and
+// latent is exactly why it survived: a rule that is wrong only where it is not
+// yet used never produces a bug report.
+const isFinished = (s: CoverageStatus) => isCovered(s);
 const sumWeight = (rows: Row[]) => rows.reduce((s, r) => s + r.meta.weightage, 0);
 
 function buildSectionStats(matrix: MatrixEntry[]): SectionStats[] {
@@ -250,7 +262,10 @@ function findFoundationGap(bySection: SectionStats[], matrix: MatrixEntry[]): Fo
   if (candidates.length === 0) return null;
   // Most-advanced topic first, then deepest chain — that combination is the
   // most surprising and the most actionable.
-  const rank = (c: FoundationGap) => (c.status === 'revising' ? 3 : c.status === 'practicing' ? 2 : 1) * 10 + c.depth;
+  // Ranks by the canonical ladder rather than a hand-numbered copy of it, so
+  // exam_ready sorts above revising instead of falling into the `: 1` bucket
+  // with not_started.
+  const rank = (c: FoundationGap) => Math.max(statusRank(c.status), 1) * 10 + c.depth;
   return candidates.sort((a, b) => rank(b) - rank(a))[0];
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { STATUS_LABEL } from '@/lib/coverage-status';
+import { STATUS_LABEL, isCovered, type CoverageStatus } from '@/lib/coverage-status';
 import { Suspense, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
@@ -15,7 +15,7 @@ import { PreparationCard } from '@/components/preparation-card';
 // blueprint counts read (shared react-query cache key), so the count on the
 // door always equals the list length here.
 
-type Status = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+type Status = CoverageStatus;
 interface TopicMem { topic: string; status: Status; revisionOverdue?: boolean }
 interface BlueprintData { topicMemory: TopicMem[] }
 
@@ -56,7 +56,7 @@ const STATUS_PILL: Record<Status, { label: string; cls: string }> = Object.fromE
 ) as Record<Status, { label: string; cls: string }>;
 
 const VIEWS = {
-  finished:    { title: 'Finished',              sub: 'studied through at least once', match: (t: TopicMem) => t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready' },
+  finished:    { title: 'Finished',              sub: 'studied through at least once', match: (t: TopicMem) => isCovered(t.status) },
   learning:    { title: 'Started, not finished', sub: 'pick these up next',            match: (t: TopicMem) => t.status === 'learning' },
   not_started: { title: 'Not started',           sub: 'yet to begin',                  match: (t: TopicMem) => t.status === 'not_started' },
   remaining:   { title: 'Left to finish',        sub: 'not started + in progress',     match: (t: TopicMem) => t.status === 'not_started' || t.status === 'learning' },

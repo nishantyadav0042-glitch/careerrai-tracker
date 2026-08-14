@@ -1,4 +1,4 @@
-import { ENTITY_GRAPH, entityRoute, type EntityKind } from './entity-graph';
+import { entityRoute, type EntityKind } from './entity-graph';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Admin = any;

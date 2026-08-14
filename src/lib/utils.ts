@@ -15,24 +15,22 @@ export function formatDateLong(dateStr: string): string {
   return d.toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-export function getTodayIST(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-}
-
-export function calcStreak(reports: { report_date: string }[]): number {
-  if (!reports.length) return 0;
-  const sorted = [...reports].sort((a, b) => b.report_date.localeCompare(a.report_date));
-  let streak = 0;
-  let cursor = new Date(getTodayIST() + 'T00:00:00');
-  for (const r of sorted) {
-    const rDate = new Date(r.report_date + 'T00:00:00');
-    const diff = Math.round((cursor.getTime() - rDate.getTime()) / 86400000);
-    if (diff === 0 || diff === 1) {
-      streak++;
-      cursor = rDate;
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
+// getTodayIST and calcStreak were deleted in the 14 Aug dead-code sweep. Both
+// had zero importers; ARCHITECTURE-REVIEW-2026-07 §10 already suspected it and
+// asked for "one more dynamic-reference sweep" before deleting. That sweep has
+// now been run — nine mechanisms, including dynamic imports, barrels and bare
+// string references — and both were reachable from nothing.
+//
+// Deleted rather than reconciled, because both were WRONG as well as unused:
+//
+//   getTodayIST  returned the IST-MIDNIGHT date. The study day rolls at 05:30
+//                IST (lib/study-day), so it named the wrong day for five and a
+//                half hours out of every twenty-four. Use getLogDateString.
+//   calcStreak   was a third streak rule: it recomputed from raw report_date[]
+//                with no shield and no decay, so it disagreed with
+//                momentumStreak for any student holding a shield. lib/streak-
+//                utils owns this question — liveStreak, isStreakActive,
+//                momentumStreak.
+//
+// A dead implementation of a rule we already got right is not harmless. It is
+// the version the next person copies because it is short.

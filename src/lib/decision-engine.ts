@@ -1,4 +1,5 @@
 import { isRevisionDue, isRevisableStatus } from './revision-due';
+import type { CoverageStatus } from './coverage-status';
 // The Decision Engine — four boxes, nothing else: diff → events → priority →
 // template. No AI anywhere in this file, on purpose. Every example in the
 // founder's spec ("Geometry today. Revision is due.") is a template fill,
@@ -35,7 +36,7 @@ const PRIORITY: Record<DecisionEventType, number> = {
 
 export interface CoverageSignalRow {
   topic: string;
-  status: 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+  status: CoverageStatus;
   updatedAt: string; // ISO
 }
 

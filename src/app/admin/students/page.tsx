@@ -5,10 +5,14 @@ import { computeSummary } from '@/lib/analytics';
 import { AdminMatchPanel } from '../admin-match-panel';
 import { AdminStudentsList } from '../admin-students-list';
 import type { Profile, DailyReport } from '@/types';
+import { getLogDateString } from '@/lib/streak-utils';
 
-function getTodayIST() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-}
+// This page used to carry its own getTodayIST(), an en-CA date at IST MIDNIGHT.
+// daily_reports.report_date is written on the STUDY day (05:30 IST rollover,
+// lib/study-day), so from 00:00 to 05:30 IST every night the two disagreed by
+// one day and `submittedToday` was false for every student on the roster — a
+// zero on the founder's own screen during the hours he actually reads it, with
+// nothing wrong in the data. One rule, imported, not re-derived.
 
 // STUDENT DOSSIERS & MATCHING — moved out of the old single-scroll /admin page
 // (reorg, 14 July). The buddy dossiers and SLA that used to hide in a second
@@ -44,7 +48,7 @@ export default async function AdminStudentsPage() {
     r.status !== 'paused'
   );
 
-  const today = getTodayIST();
+  const today = getLogDateString();
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
   const weekAgoStr = weekAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });

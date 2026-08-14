@@ -9,8 +9,10 @@ import { TopicInsights } from '@/components/topic-insights';
 import { BusyDayButton } from '@/components/busy-day-button';
 import { isMockSitting } from '@/lib/mock-in-plan';
 import { FirstWeekAskCard } from '@/components/first-week-ask-card';
+import type { CoverageStatus } from '@/lib/coverage-status';
 
-type CoverageStatus = 'not_started' | 'learning' | 'practicing' | 'revising' | 'exam_ready';
+// The ladder is imported, never re-spelled — a local copy is how exam_ready
+// goes missing from one screen and nowhere else.
 
 interface RoutineTask {
   id: string;

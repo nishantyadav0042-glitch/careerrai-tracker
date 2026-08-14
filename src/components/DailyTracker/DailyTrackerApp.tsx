@@ -364,9 +364,12 @@ export function DailyTrackerApp({
       {/* The payoff replaces the old "Logged! 🎉 Your streak is now 1 day"
           modal, which celebrated the act of recording and said nothing about
           the plan the recording produced. Now the student watches the plan
-          rebuild 0 → 100% and is handed today's study. FeedbackAnimation is
-          still used for its confetti-only role elsewhere; this surface no
-          longer needs it. */}
+          rebuild 0 → 100% and is handed today's study. The old confetti
+          component it replaced is gone: this comment used to claim the
+          component was "still used elsewhere", and the 14 Aug sweep found no
+          such elsewhere — it had no import site anywhere in the repo. A
+          comment asserting a file is live is exactly what keeps a dead file
+          alive through the next three audits. */}
       {showFeedback && (
         <PlanRebuildPayoff
           source="today_sheet"

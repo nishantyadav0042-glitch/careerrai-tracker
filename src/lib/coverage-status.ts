@@ -77,6 +77,45 @@ export function isForwardMove(from: CoverageStatus, to: CoverageStatus): boolean
   return statusRank(to) >= statusRank(from);
 }
 
+// ── HAS THIS STUDENT COVERED THIS TOPIC? ONE ANSWER ─────────────────────────
+//
+// The 14 Aug dead-code sweep found this question written ELEVEN times, always
+// as the same inline triple:
+//
+//   t.status === 'practicing' || t.status === 'revising' || t.status === 'exam_ready'
+//
+// in buddy/cockpit, api/blueprint, api/auth/verify-phone-otp, student/tracker,
+// student/plan/topics, daily-insight (twice), buddy-briefing (twice),
+// student-brief (as a COVERED set) and sales-conversion (as a FINISHED set).
+//
+// Ten of the eleven agreed. The eleventh, prep-insight-engine's `isFinished`,
+// dropped exam_ready — so the instant-insight screen would count a topic the
+// student had EARNED THROUGH EVIDENCE as not yet studied, and tell them to go
+// start it. That one was latent rather than live (its matrix comes from
+// onboarding taps, and exam_ready can never be self-assigned), which is
+// precisely why nobody caught it: it was wrong everywhere it was not yet used.
+//
+// Defined by RANK, not by listing the three names. When a sixth status is
+// added above exam_ready it is covered automatically, instead of being missed
+// in eleven places — the failure mode this repo has now paid for twice, once
+// on the coverage ladder and once on the revision rule.
+//
+// Takes `unknown` and normalizes, so a legacy 'mastered' row counts as covered
+// (it means exam_ready) and an unrecognised value counts as not covered rather
+// than throwing.
+
+/** The lowest rung that counts as "studied through at least once". */
+export const COVERED_FLOOR: CoverageStatus = 'practicing';
+
+/** The statuses that count as covered, derived from the ladder — never listed. */
+export const COVERED_STATUSES: CoverageStatus[] =
+  STATUS_ORDER.filter((s) => statusRank(s) >= statusRank(COVERED_FLOOR));
+
+/** Has the student studied this topic through at least once? */
+export function isCovered(status: unknown): boolean {
+  return statusRank(normalizeStatus(status)) >= statusRank(COVERED_FLOOR);
+}
+
 // ── The one law of exam_ready ───────────────────────────────────────────────
 //
 // exam_ready is EARNED FROM EVIDENCE (all six checks in evidence.ts) and set

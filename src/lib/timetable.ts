@@ -163,14 +163,18 @@ export function topicsTaught(blocks: TimetableBlock[]): string[] {
   return [...new Set(blocks.map((b) => b.topic).filter((t): t is string => !!t))];
 }
 
-/** Today's classes — matched by real date first, then weekday. */
-export function blocksForDay(blocks: TimetableBlock[], date: Date = new Date()): TimetableBlock[] {
-  const iso = date.toISOString().slice(0, 10);
-  const dated = blocks.filter((b) => b.date === iso);
-  if (dated.length > 0) return dated;
-  const ourDay = (date.getDay() + 6) % 7; // JS 0=Sun -> ours 0=Mon
-  return blocks.filter((b) => b.date === null && b.day === ourDay);
-}
+// blocksForDay lived here until the 14 Aug sweep, which found it referenced by
+// exactly one line in the entire repository: its own definition. No import, no
+// test, no doc, no string literal, no config.
+//
+// It is not a loss. It carried both of the date defects this codebase spent
+// August removing — a raw date.toISOString() slice instead of the student's
+// study day, and date.getDay(), the HOST's local weekday, which is only right
+// because Vercel happens to run UTC. timetable-month.coachingBlocksForDate is
+// the live answer to "what does this student's sheet put on this date", and it
+// anchors to the confirmed month rather than trusting whatever dates the OCR
+// read — the fix that stopped Riya being told her timetable had run out three
+// years ago.
 
 const TARGET_KINDS = new Set<string>([
   'sectional', 'topic_test', 'mock', 'questions', 'sets', 'revision', 'classes', 'other',

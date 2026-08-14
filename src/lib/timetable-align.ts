@@ -8,44 +8,29 @@
 // the same as one taught in week twelve, and today's already-built plan never
 // regenerated at all. Uploading changed nothing a student could see.
 //
-// Three pure functions fix the three gaps:
-//   todaysTaughtTopics  — which topics the timetable puts on TODAY, so the
-//                         selector can make today's class decisive, not a tiebreak.
-//   timetableDailyHours — the hours/day the timetable actually plans, so the
-//                         student's own number can be CHECKED against it.
-//   timetableHorizon    — when a dated timetable runs out, so the student is
-//                         reminded to upload the next one instead of silently
-//                         falling off the end.
+// Three pure functions fixed the three gaps. TWO OF THEM HAVE SINCE BEEN
+// REPLACED, and on 14 Aug the replaced pair was deleted rather than left here:
+//
+//   timetableDailyHours — STILL LIVE, and still owned here. The hours/day the
+//                         timetable actually plans, so the student's own number
+//                         can be CHECKED against it. Read by api/timetable.
+//
+//   todaysTaughtTopics  — superseded by timetable-month.coachingTopicsForDate.
+//   timetableHorizon    — superseded by timetable-month.anchorToMonth +
+//   horizonDaysLeft       monthDaysLeft.
+//
+// The supersession was not a refactor, it was a bug fix, which is exactly why
+// the old pair could not stay. Both read the RAW dates found among the blocks.
+// One stray "2023-10-16" sample row in Riya's uploaded sheet put her horizon
+// three years in the past on 7 Aug and told her the timetable had run out. The
+// live pair anchors to the month we CONFIRMED with her instead. Leaving the raw
+// readers here as test-covered exports meant the buggy version was the one a
+// future caller would find first — the tests made it look maintained.
+//
+// Their tests went with them. A test for a function nobody may call is not
+// coverage; it is a reason not to delete the function.
 
 import type { TimetableBlock } from './timetable';
-
-const DAY_MS = 86_400_000;
-
-/** Monday=0..Sunday=6, matching TimetableBlock.day. */
-function dowOf(isoDate: string): number {
-  const d = new Date(isoDate + 'T00:00:00Z').getUTCDay(); // Sun=0
-  return d === 0 ? 6 : d - 1;
-}
-
-/**
- * Topics the coaching teaches on `todayIso`, from either shape:
- * dated rows matching the date, or recurring-weekly rows matching the weekday.
- * Day-N plans have no anchor to today and contribute nothing — honest, not
- * clever. Deduped, order preserved.
- */
-export function todaysTaughtTopics(blocks: TimetableBlock[], todayIso: string): string[] {
-  const dow = dowOf(todayIso);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const b of blocks) {
-    if (!b.topic) continue;
-    const isToday = b.date ? b.date === todayIso : b.date == null && b.dayIndex == null && b.day === dow;
-    if (!isToday || seen.has(b.topic)) continue;
-    seen.add(b.topic);
-    out.push(b.topic);
-  }
-  return out;
-}
 
 /**
  * The daily hours this timetable plans, from the days it actually prices.
@@ -78,25 +63,6 @@ export function timetableDailyHours(blocks: TimetableBlock[]): number | null {
   if (totals.length < 3) return null;
   const median = totals[Math.floor(totals.length / 2)];
   return Math.round((median / 60) * 2) / 2;
-}
-
-/** The last dated day this timetable covers. Null for undated shapes. */
-export function timetableHorizon(blocks: TimetableBlock[]): string | null {
-  let max: string | null = null;
-  for (const b of blocks) {
-    if (b.date && (!max || b.date > max)) max = b.date;
-  }
-  return max;
-}
-
-/**
- * Days of timetable left, counting today. 0 = ran out. Null when undated —
- * a recurring weekly timetable never runs out.
- */
-export function horizonDaysLeft(blocks: TimetableBlock[], todayIso: string): number | null {
-  const horizon = timetableHorizon(blocks);
-  if (!horizon) return null;
-  return Math.max(0, Math.round((Date.parse(horizon + 'T00:00:00Z') - Date.parse(todayIso + 'T00:00:00Z')) / DAY_MS) + 1);
 }
 
 /** Show the "upload your next timetable" nudge when this few days remain. */

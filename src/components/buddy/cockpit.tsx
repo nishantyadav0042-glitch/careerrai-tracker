@@ -6,6 +6,7 @@ import { computeRequiredPace, remainingSyllabusHours, remainingMockHours, studen
 import { CallCloseout } from './call-closeout';
 import { QuickNote } from './quick-note';
 import { joinState, canJoinNow, countdownLabel } from '@/lib/session-link';
+import { isCovered } from '@/lib/coverage-status';
 
 // ── The Buddy Cockpit ───────────────────────────────────────────────────────
 //
@@ -76,7 +77,7 @@ export async function BuddyCockpit(p: CockpitProps) {
     ]);
 
   const rows = coverage ?? [];
-  const done = rows.filter((r) => ['practicing', 'revising', 'exam_ready'].includes(r.status ?? '')).length;
+  const done = rows.filter((r) => isCovered(r.status)).length;
   // A repeater's remaining syllabus is genuinely smaller than a first-timer's;
   // the mentor needs to see the same number the student's app shows.
   const syllabusLeft = remainingSyllabusHours(rows, studentEffortMultiplier({
