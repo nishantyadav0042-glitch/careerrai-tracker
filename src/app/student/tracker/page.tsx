@@ -16,6 +16,7 @@ import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { ValueProofCard } from '@/components/value-proof-card';
 import { SetPasswordReminder } from '@/components/set-password-reminder';
+import { IndependenceStrip } from '@/components/home/independence-strip';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { MentorTeaserCard } from '@/components/home/mentor-teaser-card';
@@ -490,6 +491,10 @@ export default async function DailyTrackerPage() {
           {/* Moves with the slot, so the page reads like it knows the hour. */}
           <p className="text-[13px] text-stone-500">{slotGreeting(slot)}</p>
         </div>
+
+        {/* 15 August. Renders itself only inside its own date window and
+            disappears without anyone having to remember to remove it. */}
+        <IndependenceStrip />
 
         {/* Streak restore (founder, 23 Jul): shields no longer auto-cover a
             miss. A broken streak shows a Restore button the student taps
