@@ -10,6 +10,8 @@ const BASE = {
   isRepeater: null as boolean | null,
   lastYearPercentile: null as number | null,
   today: TODAY,
+  selfReportedWeakestSection: null as 'QA' | 'VARC' | 'DILR' | null,
+  selfReportStatus: null as 'SELECTED_SECTION' | 'NOT_SURE_YET' | null,
 };
 
 /**

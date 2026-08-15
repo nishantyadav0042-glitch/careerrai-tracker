@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, Bell, CheckCircle2, TrendingUp } from 'lucide-react';
-import { computePrepInsight, type MatrixEntry, type PrepSignal, type SectionCoverage } from '@/lib/prep-insight-engine';
+import { computePrepInsight, type MatrixEntry, type PrepSignal, type SectionCoverage, type SelfReportStatus, type SectionSource } from '@/lib/prep-insight-engine';
 
 // ── Instant Insight — the WOW moment, before the account even exists ────────
 //
@@ -12,26 +12,40 @@ import { computePrepInsight, type MatrixEntry, type PrepSignal, type SectionCove
 // nothing in CAT. His words: "no student will feel like we really recognised
 // any pattern or problem."
 //
+// Rebuilt again 15 Aug (Preparation Insight Engine, final spec) to fix a
+// second, worse bug: `self_reported_weakest_section` was collected one
+// screen earlier and never reached this one. A student who said "VARC is my
+// weakest" could be told a QA foundation gap with no acknowledgment the two
+// disagreed — CareerRai answering a question the student didn't ask. The
+// self-report now flows all the way through, is ALWAYS acknowledged, and is
+// never silently overridden or used to suppress a real finding elsewhere —
+// see prep-insight-engine.ts's Validation/Discovery split.
+//
 // All the thinking lives in src/lib/prep-insight-engine.ts. This file is
 // render-only: pass what the student answered, show what the engine found.
 //
 // ── What this screen may and may not show ────────────────────────────────
 //
-// NO CARD QUOTA. The engine returns 0-2 findings plus an optional earned
-// strength. An earlier version guaranteed three cards, which forced filler
-// ("VARC is completely untouched" — the student tapped that themselves) and
-// once printed "QA is your strongest" directly beneath "your QA foundation
-// is broken". If the evidence supports one finding, the student sees one.
+// NO CARD QUOTA. The engine returns a primary finding and an OPTIONAL
+// secondary — never three equal cards (that read as "three generic
+// observations," not as CareerRai having looked at THIS student's prep).
 //
 // NO GLOBAL COVERAGE PERCENTAGE. Coverage is shown per section only, each
 // weighted within itself, because `weightage` is defined as "relative
 // emphasis within its OWN section" — summing it across sections invents a
 // CAT mark distribution we have not measured. The word "marks" appears
-// nowhere on this screen for the same reason.
+// nowhere on this screen for the same reason, and no topic is ever called
+// "high weightage" as a stand-in for "heavily tested."
 //
-// HONEST EMPTY STATE. A barely-started student is told plainly that we
-// don't have enough history to name a weakness yet, and given a real first
-// move instead of a manufactured insight.
+// HONEST EMPTY STATE. A barely-started OR a saturated (nothing measurably
+// distinguishes the three sections) student is told plainly that we don't
+// have enough to name a weakness yet, and given a real first move instead of
+// a manufactured — or arbitrarily tie-broken — insight.
+//
+// YOU TOLD US vs WE NOTICED. Every section name on this screen is
+// attributable: `result.primarySource` says whether it came from the
+// student's own tap or from CareerRai's own look at the coverage data, and
+// the copy below must never blur the two.
 //
 // Never "AI insight" anywhere here (founder, 13 Aug) — the target feeling is
 // "CareerRai knows my prep," not "AI generated text."
@@ -50,6 +64,12 @@ interface Props {
   /** Self-study hours/day. Same null-when-not-yet-collected story as above. */
   selfStudyHours?: number | null;
   lastYearPercentile?: number | null;
+  /** What the student answered one screen earlier — perception, never
+   *  ground truth. Null section + 'NOT_SURE_YET' status is a real, honest
+   *  answer, not a skip; null + null status means we don't know why (almost
+   *  always a student who predates this question entirely). */
+  selfReportedWeakestSection?: 'VARC' | 'DILR' | 'QA' | null;
+  selfReportStatus?: SelfReportStatus;
 }
 
 const POLARITY_STYLE: Record<PrepSignal['polarity'], { icon: typeof AlertTriangle; border: string; bg: string; iconColor: string }> = {
@@ -104,6 +124,28 @@ function MinorLine({ card }: { card: PrepSignal }) {
   );
 }
 
+/** Belief acknowledgement — always renders first when a self-report exists,
+ *  never folded silently into a finding. "You told us X" only when X really
+ *  is what the student said; "You weren't sure" for NOT_SURE_YET; nothing at
+ *  all for a student who never got the question (historical null). */
+function BeliefAck({ status, section }: { status: SelfReportStatus; section: 'VARC' | 'DILR' | 'QA' | null }) {
+  if (status === 'SELECTED_SECTION' && section) {
+    return (
+      <p className="text-[13.5px] leading-relaxed text-stone-600">
+        You told us <span className="font-semibold text-stone-900">{section}</span> feels weakest.
+      </p>
+    );
+  }
+  if (status === 'NOT_SURE_YET') {
+    return (
+      <p className="text-[13.5px] leading-relaxed text-stone-600">
+        You weren&apos;t sure which section feels weakest yet — fair enough, that&apos;s exactly what we&apos;re here to help work out.
+      </p>
+    );
+  }
+  return null;
+}
+
 /** Coverage per section, weighted WITHIN each section — never summed across
  *  them, because `weightage` means "relative emphasis within its OWN
  *  section". Shows the weighted figure rather than a topic count: finishing
@@ -125,21 +167,24 @@ function SectionBars({ coverage }: { coverage: SectionCoverage[] }) {
   );
 }
 
-export default function ScreenInstantInsight({ onNext, matrix, isRepeater, ambitionDate = null, selfStudyHours = null, lastYearPercentile = null }: Props) {
+export default function ScreenInstantInsight({
+  onNext, matrix, isRepeater, ambitionDate = null, selfStudyHours = null, lastYearPercentile = null,
+  selfReportedWeakestSection = null, selfReportStatus = null,
+}: Props) {
   const today = new Date();
   const result = computePrepInsight({
     matrix, ambitionDate, selfStudyHours: selfStudyHours ?? null,
     isRepeater: isRepeater ?? null, lastYearPercentile, today,
+    selfReportedWeakestSection, selfReportStatus,
   });
-  const { state, sectionCoverage, cards, strength, startingPoints } = result;
+  const { state, sectionCoverage, primary, secondary, primarySource, strength, startingPoints } = result;
 
-  // ONE realization gets the room; everything else is a quiet line. The
-  // previous three-equal-cards grid meant the student remembered nothing —
-  // three findings of identical visual weight read as a report, not a
-  // reveal. `synthesis` is deliberately unused now: the hero's own "what
-  // we'll do" says it better than a concatenated sentence at the bottom.
-  const hero = cards[0] ?? strength ?? null;
-  const minor = [...cards.slice(1), ...(strength && hero !== strength ? [strength] : [])];
+  // ONE realization gets the room; the secondary is a quiet line, never a
+  // forced second card. `cards`/`synthesis` are deliberately unused here —
+  // primary/secondary already carry the self-report-aware selection `cards`
+  // doesn't (see prep-insight-engine.ts's Validation/Discovery split).
+  const hero = primary ?? strength ?? null;
+  const minor = [secondary, strength && hero !== strength ? strength : null].filter((c): c is PrepSignal => c != null);
 
   return (
     <div className="space-y-4 pt-1">
@@ -150,19 +195,29 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, ambit
         </h1>
       </div>
 
+      <BeliefAck status={selfReportStatus} section={selfReportedWeakestSection} />
+
       {state === 'insufficient_evidence' ? (
         <>
           {/* No manufactured insight. Telling a student we don't have enough
               to diagnose yet — and then giving them a real first move — is
               more trustworthy than dressing up "VARC is untouched" as a
-              discovery they made themselves 30 seconds ago. */}
+              discovery they made themselves 30 seconds ago. This is ALSO the
+              saturation-guard state (Scheduling ≠ Insight spec, Part E): when
+              the matrix can't distinguish sections at all, we say so instead
+              of a tie-broken guess — real production data proved that guess
+              would land on the same section almost every time, for no reason
+              but arithmetic. */}
           <div className="rounded-2xl border-2 border-stone-300 bg-stone-50 p-5">
             <h2 className="text-[18px] font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-              We won&apos;t invent a weakness you haven&apos;t shown us yet.
+              {selfReportStatus
+                ? 'We don’t have enough evidence yet to confidently call one section your weakest.'
+                : 'We won’t invent a weakness you haven’t shown us yet.'}
             </h2>
             <p className="mt-2 text-[13.5px] leading-relaxed text-stone-700">
-              You&apos;ve mapped your syllabus, but there isn&apos;t enough history yet to name a real pattern.
-              Your first job isn&apos;t fixing weaknesses — it&apos;s building a baseline worth reading.
+              {selfReportStatus === 'NOT_SURE_YET'
+                ? 'Your mocks will help us sharpen this as you go.'
+                : 'You’ve mapped your syllabus, but there isn’t enough history yet to name a real pattern. Your first job isn’t fixing weaknesses — it’s building a baseline worth reading.'}
             </p>
           </div>
           {startingPoints.length > 0 && (
@@ -216,7 +271,22 @@ export default function ScreenInstantInsight({ onNext, matrix, isRepeater, ambit
       <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         <button
           type="button"
-          onClick={() => onNext()}
+          onClick={() => onNext(primary ? {
+            // The Insight→Plan handoff (final spec, Part J): carry what was
+            // ACTUALLY shown into signup, so the real plan can later be
+            // compared against it instead of the two silently diverging.
+            // Never invented from the section alone — always the literal
+            // signal that rendered as the hero card. Only `primary` (a real
+            // risk/pattern with something to act on) is carried — a
+            // strength-only hero has no "recommended action" to align a
+            // plan against, so persisting it would manufacture a
+            // DIFFERENT_BUT_VALID disclosure that means nothing.
+            onboarding_insight_section: primary.section,
+            onboarding_insight_topic: primary.topic ?? null,
+            onboarding_insight_source: primarySource,
+            onboarding_insight_root_cause: primary.rootCause,
+            onboarding_insight_recommend: primary.recommend,
+          } : undefined)}
           className="w-full rounded-2xl bg-stone-900 py-4 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
         >
           Build my plan around this →

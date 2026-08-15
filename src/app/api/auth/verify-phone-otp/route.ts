@@ -37,6 +37,13 @@ interface OnboardingPayload {
   push_subscription?: unknown;
   push_prompted?: unknown;
   topic_matrix?: unknown;
+  self_reported_weakest_section?: unknown;
+  self_report_status?: unknown;
+  onboarding_insight_section?: unknown;
+  onboarding_insight_topic?: unknown;
+  onboarding_insight_source?: unknown;
+  onboarding_insight_root_cause?: unknown;
+  onboarding_insight_recommend?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -366,6 +373,31 @@ export async function POST(request: NextRequest) {
         const v = (onboarding as Record<string, unknown>).self_reported_weakest_section;
         profileUpdate.self_reported_weakest_section =
           v === 'VARC' || v === 'DILR' || v === 'QA' ? v : null;
+        // self_report_status makes "not sure" a first-class DB state instead
+        // of an indistinguishable null (Preparation Insight Engine final
+        // spec, Part M) — the DB CHECK constraint on profiles requires the
+        // two columns agree, so this must always be written alongside the
+        // section above, never independently.
+        const status = (onboarding as Record<string, unknown>).self_report_status;
+        profileUpdate.self_report_status =
+          status === 'SELECTED_SECTION' || status === 'NOT_SURE_YET' ? status : null;
+      }
+
+      // The Insight→Plan handoff (final spec, Part J) — what Instant Insight
+      // ACTUALLY showed this student, persisted so the real plan can later
+      // be compared against it instead of the two silently diverging. Only
+      // written when the screen actually had a real, actionable primary
+      // finding (screen-instant-insight.tsx omits this object entirely for
+      // a strength-only or insufficient-evidence hero).
+      if (onboarding && 'onboarding_insight_section' in onboarding) {
+        const o = onboarding as Record<string, unknown>;
+        const sec = o.onboarding_insight_section;
+        profileUpdate.onboarding_insight_section = sec === 'VARC' || sec === 'DILR' || sec === 'QA' ? sec : null;
+        profileUpdate.onboarding_insight_topic = typeof o.onboarding_insight_topic === 'string' ? o.onboarding_insight_topic : null;
+        const src = o.onboarding_insight_source;
+        profileUpdate.onboarding_insight_source = src === 'student' || src === 'careerrai' ? src : null;
+        profileUpdate.onboarding_insight_root_cause = typeof o.onboarding_insight_root_cause === 'string' ? o.onboarding_insight_root_cause : null;
+        profileUpdate.onboarding_insight_recommend = typeof o.onboarding_insight_recommend === 'string' ? o.onboarding_insight_recommend : null;
       }
 
       // Same canonical registration the authenticated toggle uses

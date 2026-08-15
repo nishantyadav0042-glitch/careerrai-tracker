@@ -31,7 +31,14 @@ import { cn } from '@/lib/utils';
 // exactly as it does today — no worse than before, and honest.
 
 interface Props {
-  onNext: (data: { self_reported_weakest_section: string | null }) => void;
+  onNext: (data: {
+    self_reported_weakest_section: string | null;
+    /** SELECTED_SECTION vs NOT_SURE_YET — the distinction that makes "not
+     *  sure" a first-class answer instead of an indistinguishable null.
+     *  Founder, 15 Aug: "Mandatory means MANDATORY RESPONSE, not MANDATORY
+     *  SECTION SELECTION." */
+    self_report_status: 'SELECTED_SECTION' | 'NOT_SURE_YET';
+  }) => void;
   onBack: () => void;
   canGoBack: boolean;
   isLoading: boolean;
@@ -65,7 +72,10 @@ export default function ScreenWeakestSection({ onNext, onBack, canGoBack, isLoad
   const submit = (value: string | null) => {
     setPicked(value);
     setTouched(true);
-    onNext({ self_reported_weakest_section: value });
+    onNext({
+      self_reported_weakest_section: value,
+      self_report_status: value ? 'SELECTED_SECTION' : 'NOT_SURE_YET',
+    });
   };
 
   return (

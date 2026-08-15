@@ -261,6 +261,12 @@ function StartPageInner() {
           ambitionDate={(data.ambition_date as string | undefined) ?? null}
           selfStudyHours={(data.self_study_hours as number | undefined) ?? null}
           lastYearPercentile={(data.last_year_percentile as number | undefined) ?? null}
+          // The original bug, fixed 15 Aug: this screen ran computePrepInsight
+          // without ever telling it what the student answered one screen
+          // earlier. self_report_status distinguishes an honest "not sure"
+          // from a selected section — see screen-weakest-section.tsx.
+          selfReportedWeakestSection={(data.self_reported_weakest_section as 'VARC' | 'DILR' | 'QA' | undefined) ?? null}
+          selfReportStatus={(data.self_report_status as 'SELECTED_SECTION' | 'NOT_SURE_YET' | undefined) ?? null}
         />
       );
       break;

@@ -237,6 +237,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             // than being fed a fabricated placeholder number.
             selfStudyHours: null,
             lastYearPercentile: (onboardingData.last_year_percentile as number | undefined) ?? null,
+            selfReportedWeakestSection: (onboardingData.self_reported_weakest_section as 'VARC' | 'DILR' | 'QA' | undefined) ?? null,
+            selfReportStatus: (onboardingData.self_report_status as 'SELECTED_SECTION' | 'NOT_SURE_YET' | undefined) ?? null,
           },
         } satisfies Screen]
       : []),
@@ -409,8 +411,35 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // reorder once set full_name = null.)
       if (data && 'self_reported_weakest_section' in data) {
         setIsLoading(true);
+        // self_report_status makes "not sure" first-class (Preparation
+        // Insight Engine final spec, Part M) — the DB CHECK constraint
+        // requires the two columns agree, so both are written together,
+        // never independently, on this path too.
+        const status = data.self_report_status;
         const { error: e } = await supabase.from('profiles')
-          .update({ self_reported_weakest_section: data.self_reported_weakest_section ?? null })
+          .update({
+            self_reported_weakest_section: data.self_reported_weakest_section ?? null,
+            self_report_status: status === 'SELECTED_SECTION' || status === 'NOT_SURE_YET' ? status : null,
+          })
+          .eq('id', userId ?? '');
+        if (e) throw e;
+      }
+      // The Insight→Plan handoff (final spec, Part J) — same shape-keyed
+      // save pattern, this funnel's own write path for whichever student
+      // actually reaches this screen (see the file-level comment on why
+      // that may currently be nobody).
+      if (data && 'onboarding_insight_section' in data) {
+        setIsLoading(true);
+        const sec = data.onboarding_insight_section;
+        const src = data.onboarding_insight_source;
+        const { error: e } = await supabase.from('profiles')
+          .update({
+            onboarding_insight_section: sec === 'VARC' || sec === 'DILR' || sec === 'QA' ? sec : null,
+            onboarding_insight_topic: typeof data.onboarding_insight_topic === 'string' ? data.onboarding_insight_topic : null,
+            onboarding_insight_source: src === 'student' || src === 'careerrai' ? src : null,
+            onboarding_insight_root_cause: typeof data.onboarding_insight_root_cause === 'string' ? data.onboarding_insight_root_cause : null,
+            onboarding_insight_recommend: typeof data.onboarding_insight_recommend === 'string' ? data.onboarding_insight_recommend : null,
+          })
           .eq('id', userId ?? '');
         if (e) throw e;
       }

@@ -76,6 +76,10 @@ interface RoutineResponse {
   /** Set when a recent mock DECIDED today's focus — the proof that entering
    *  a score changes the plan. Null when the usual chain decided. */
   focusBasis?: string | null;
+  /** The Insight→Plan handoff: set only when today's focus genuinely differs
+   *  from what Instant Insight showed at signup — the explanation for why,
+   *  never rendered when they agree (final spec, Part J). */
+  insightBasis?: string | null;
   /** Set only when the student's chosen finish date does not fit their own
    *  hours — see lib/date-feasibility. Null means the date is fine, or none
    *  is set; a card that speaks when it has nothing to say gets ignored. */
@@ -454,6 +458,17 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         <p className="mb-1.5 rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-medium text-indigo-800">
           <span className="mr-1 font-bold uppercase tracking-wide text-indigo-500 text-[9px]">Built from your mock</span>
           <br />{data.focusBasis}
+        </p>
+      )}
+
+      {/* The Insight→Plan handoff (founder, 15 Aug): only renders when
+          today's focus genuinely differs from what Instant Insight showed at
+          signup — the fix for "why did you just tell me QA, then start me on
+          VARC?" with no explanation anywhere. Silent when they agree. */}
+      {!fullyDone && data.insightBasis && (
+        <p className="mb-1.5 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-[11px] font-medium text-stone-700">
+          <span className="mr-1 font-bold uppercase tracking-wide text-stone-500 text-[9px]">About your first insight</span>
+          <br />{data.insightBasis}
         </p>
       )}
 

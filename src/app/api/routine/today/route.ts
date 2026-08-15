@@ -17,6 +17,10 @@ import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
+import { determineAlignment, insightDisclosure, normalizeInsight, type PersistedInsight } from '@/lib/insight-plan-handoff';
+import type { CoreSection } from '@/lib/prep-insight-engine';
+
+const VALID_CORE_SECTIONS: CoreSection[] = ['VARC', 'DILR', 'QA'];
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -52,8 +56,9 @@ export async function GET() {
       .select(`
         is_working_professional, is_repeater, target_percentile,
         hours_available, study_target_hours, weekend_hours_available, syllabus_target_date,
-        self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic,
+        self_reported_weakest_section, self_reported_strongest_section, self_reported_weak_topic, self_report_status,
         baseline_varc, baseline_dilr, baseline_qa, coaching_enrolled, attempt_year, current_stage, biggest_blocker, start_with, plan_source,
+        onboarding_insight_section, onboarding_insight_topic, onboarding_insight_source, onboarding_insight_root_cause, onboarding_insight_recommend,
         created_at
       `)
       .eq('id', user.id)
@@ -149,6 +154,29 @@ export async function GET() {
     now: new Date(),
   });
   const { routineProfile, focus, hoursToday, daysToTarget: daysToSyllabusTarget } = plan;
+
+  // The Insight→Plan handoff (final spec, Part J) — compares what Instant
+  // Insight ACTUALLY showed this student at signup (persisted, never
+  // recomputed here) against what the plan resolver already decided above.
+  // This never influences `focus` itself — resolveFocusSections' evidence
+  // hierarchy stays the sole authority for scheduling; this only decides
+  // whether an explanation is owed. `normalizeInsight` fails closed on any
+  // malformed/legacy DB value rather than trusting a raw read.
+  const persistedInsight: PersistedInsight = normalizeInsight({
+    section: profile.onboarding_insight_section,
+    topic: profile.onboarding_insight_topic,
+    source: profile.onboarding_insight_source,
+    rootCause: profile.onboarding_insight_root_cause,
+    recommend: profile.onboarding_insight_recommend,
+  });
+  const selfReportState = {
+    section: VALID_CORE_SECTIONS.includes(profile.self_reported_weakest_section as CoreSection)
+      ? (profile.self_reported_weakest_section as CoreSection) : null,
+    status: (profile.self_report_status === 'SELECTED_SECTION' || profile.self_report_status === 'NOT_SURE_YET')
+      ? profile.self_report_status : null,
+  };
+  const insightAlignment = determineAlignment(persistedInsight, focus.weakest);
+  const insightBasis = insightDisclosure(persistedInsight, focus.weakest, selfReportState);
   const weakest = focus.weakest;
   const adaptation = computeAdaptation(recentPlanFits, history.completedTasks, history.plannedTasks, history.planDays);
 
@@ -435,6 +463,12 @@ export async function GET() {
     // The same-day suppression now lives in the resolver, so both writers
     // agree about when a mock may be claimed as the reason.
     focusBasis: focus.mockBasis,
+    // The Insight→Plan handoff: ALIGNED needs no special UI (the plan is
+    // already doing what Instant Insight said); DIFFERENT_BUT_VALID carries
+    // an honest explanation in insightBasis; null means no insight was ever
+    // persisted (nothing to compare — never rendered as a disclosure).
+    insightAlignment,
+    insightBasis,
     todayMock: todayDebrief
       ? { overallPercentile: todayDebrief.overall_percentile != null ? Number(todayDebrief.overall_percentile) : null }
       : null,
