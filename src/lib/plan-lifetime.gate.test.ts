@@ -314,6 +314,121 @@ describe('THE LIFETIME GATE: the plan actually teaches the syllabus', () => {
   });
 });
 
+describe('THE LIFETIME GATE: mock cadence, over a whole life', () => {
+  const mockDays = (name: string) =>
+    RESULTS.get(name)!.days.filter((d) => d.tasks.some((t) => t.id === 'exam-mock'));
+  const analysisDays = (name: string) =>
+    RESULTS.get(name)!.days.filter((d) => d.tasks.some((t) => t.id === 'exam-mock-analysis'));
+
+  it('every mock a student sits is followed by its analysis the next day', () => {
+    // The founder's rule is that the analysis is where the marks are. A mock
+    // scheduled without its analysis is the failure this pins.
+    for (const p of PROFILES) {
+      if (p.weekday < 4) continue;              // small days cannot hold both
+      const mocks = mockDays(p.name).map((d) => d.date);
+      const analyses = new Set(analysisDays(p.name).map((d) => d.date));
+      for (const m of mocks) {
+        const next = new Date(Date.parse(m + 'T00:00:00Z') + 86_400_000).toISOString().slice(0, 10);
+        if (next > EXAM_ISO) continue;          // no day left to analyse on
+        expect(analyses.has(next), `${p.name}: mock on ${m} has no analysis on ${next}`).toBe(true);
+      }
+    }
+  });
+
+  it('mocks land on Sunday always, and Wednesday only once October opens', () => {
+    for (const p of PROFILES) {
+      for (const d of mockDays(p.name)) {
+        const dow = new Date(d.date + 'T00:00:00Z').getUTCDay();
+        expect([0, 3], `${p.name}: mock on ${d.date} (dow ${dow})`).toContain(dow);
+        if (dow === 3) {
+          const month = d.date.slice(0, 7);
+          expect(['2026-10', '2026-11'], `${p.name}: midweek mock in ${month}`).toContain(month);
+        }
+      }
+    }
+  });
+
+  it('a student with real runway sits mocks every week of the final stretch', () => {
+    // The specific regression this guards: a cadence that silently stops. Any
+    // profile that CAN hold a mock must have one in every October week.
+    for (const p of PROFILES) {
+      if (p.weekday < 4 || p.startIso) continue;
+      const octoberMocks = mockDays(p.name).filter((d) => d.date.startsWith('2026-10'));
+      expect(octoberMocks.length, `${p.name}: only ${octoberMocks.length} mocks in October`)
+        .toBeGreaterThanOrEqual(8);   // 2/week across ~4.4 weeks
+    }
+  });
+
+  it('the mock never overruns the day it sits in', () => {
+    for (const p of PROFILES) {
+      for (const d of RESULTS.get(p.name)!.days) {
+        const reserved = d.tasks
+          .filter((t) => t.id === 'exam-mock' || t.id === 'exam-mock-analysis')
+          .reduce((s, t) => s + t.estMinutes, 0);
+        expect(reserved, `${p.name} @ ${d.date}: calendar claimed ${reserved} of ${d.estMinutes}`)
+          .toBeLessThanOrEqual(d.estMinutes);
+      }
+    }
+  });
+
+  it('KNOWN AND ACCEPTED: a sub-2h student is never scheduled a mock', () => {
+    // Not a bug, and deliberately pinned so it cannot change silently. A full
+    // mock is two unbroken hours; a 1.5h student cannot sit one, and shrinking
+    // it to fit would schedule a lie (routine-engine's small-day law).
+    //
+    // It IS a product gap — those students reach CAT with no mock practice
+    // inside the plan — but the fix is a conversation about their hours, not a
+    // 90-minute "mock" the exam will not honour. Flagged to the founder rather
+    // than papered over here.
+    for (const p of PROFILES) {
+      if (p.weekday >= 2 || (p.weekend ?? p.weekday) >= 2) continue;
+      expect(mockDays(p.name).length, `${p.name} was scheduled a mock it cannot sit`).toBe(0);
+    }
+  });
+});
+
+describe('THE LIFETIME GATE: capacity and pace never invent or lose time', () => {
+  it("a student's committed hours are never silently changed by the engine", () => {
+    // Falling behind moves the DATE, never the hours (lib/daily-hours). This
+    // pins that nothing in a 108-day run quietly re-sizes the day.
+    for (const p of PROFILES) {
+      const weekdayH = p.weekday;
+      const weekendH = p.weekend ?? p.weekday;
+      for (const d of RESULTS.get(p.name)!.days) {
+        const dow = new Date(d.date + 'T00:00:00Z').getUTCDay();
+        const expected = (dow === 0 || dow === 6) ? weekendH : weekdayH;
+        expect(d.hoursToday, `${p.name} @ ${d.date} (dow ${dow})`).toBe(expected);
+      }
+    }
+  });
+
+  it('no day is padded past the budget or starved below it', () => {
+    for (const p of PROFILES) {
+      for (const d of RESULTS.get(p.name)!.days) {
+        const sum = d.tasks.reduce((s, t) => s + t.estMinutes, 0);
+        expect(sum, `${p.name} @ ${d.date}`).toBe(Math.round(d.hoursToday * 60));
+      }
+    }
+  });
+
+  it('the smallest possible day is still one finishable task, never zero', () => {
+    const tiny = RESULTS.get('first-attempt floor 0.5h')!;
+    for (const d of tiny.days) {
+      expect(d.tasks.length, `floor day ${d.date} had ${d.tasks.length} tasks`).toBeGreaterThanOrEqual(1);
+      expect(d.estMinutes, `floor day ${d.date}`).toBe(30);
+    }
+  });
+
+  it('the largest possible day does not fragment into unusable slivers', () => {
+    const big = RESULTS.get('first-attempt ceiling 16h')!;
+    for (const d of big.days) {
+      for (const t of d.tasks) {
+        expect(t.estMinutes, `16h day ${d.date}: ${t.estMinutes}m sliver`).toBeGreaterThanOrEqual(15);
+      }
+    }
+  });
+});
+
 describe('THE LIFETIME GATE: the calendar is obeyed as it turns', () => {
   it('every profile is in revision phase by CAT day', () => {
     for (const p of PROFILES) {
