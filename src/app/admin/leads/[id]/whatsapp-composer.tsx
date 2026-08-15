@@ -9,15 +9,23 @@ import { waMessages, waNumber, leadState, type WaMessage } from '@/lib/wa-messag
 // WhatsApp with the message already typed in.
 export function WhatsAppComposer({
   phone, firstName, dreamCollege, appInstalled, pushOn,
+  hasPlan, hasLogged, daysSinceLastLog,
 }: {
   phone: string;
   firstName: string;
   dreamCollege: string;
   appInstalled: boolean;
   pushOn: boolean;
+  // Read from the database by the page, never guessed here. waMessages
+  // FILTERS OUT every "tumhara plan ready hai" message when hasPlan is false —
+  // 22% of the not-installed list had no plan on 15 Aug, and that message
+  // would have been the first thing CareerRai ever told them.
+  hasPlan: boolean;
+  hasLogged: boolean;
+  daysSinceLastLog: number | null;
 }) {
   const state = leadState(appInstalled, pushOn);
-  const all = waMessages({ firstName, dreamCollege });
+  const all = waMessages({ firstName, dreamCollege, hasPlan, hasLogged, daysSinceLastLog });
   // Suggested variants first, then the rest.
   const ordered = [
     ...all.filter((m) => m.suggestedFor === state),

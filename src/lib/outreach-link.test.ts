@@ -18,7 +18,13 @@ const link = SITE_URL; // https://careerrai.in unless overridden by env
 
 describe('every wa-messages template carries the app link', () => {
   it('all lead templates include the site URL', () => {
-    const msgs = waMessages({ firstName: 'Aarav', dreamCollege: 'IIM Ahmedabad' });
+    const msgs = [
+      ...waMessages({ firstName: 'Aarav', dreamCollege: 'IIM Ahmedabad', hasPlan: true, hasLogged: false, daysSinceLastLog: null }),
+      // Every branch of the plan/log gate, so a template that only appears for
+      // one kind of student cannot dodge the link rule.
+      ...waMessages({ firstName: 'Aarav', dreamCollege: 'IIM Ahmedabad', hasPlan: false, hasLogged: false, daysSinceLastLog: null }),
+      ...waMessages({ firstName: 'Aarav', dreamCollege: 'IIM Ahmedabad', hasPlan: true, hasLogged: true, daysSinceLastLog: 6 }),
+    ];
     expect(msgs.length).toBeGreaterThan(0);
     for (const m of msgs) {
       expect(m.text, `template "${m.key}" is missing the app link`).toContain(link);

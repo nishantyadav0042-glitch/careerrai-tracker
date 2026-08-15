@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { STUDENT_BUDGET_TYPES } from '@/lib/notification-os';
 import { cn } from '@/lib/utils';
-import { waMessages, waNumber } from '@/lib/wa-messages';
+import { pushRecoveryMessage, waNumber } from '@/lib/wa-messages';
 import { getNotificationHealth, getReliabilityMetrics } from '@/lib/notification-health';
 
 export const dynamic = 'force-dynamic';
@@ -287,9 +287,7 @@ export default async function NotificationHealthPage() {
             <div className="space-y-1.5">
               {pushDeadAndWanted.map((s) => {
                 const firstName = (s.full_name || 'Student').split(' ')[0];
-                const dreamCollege = (s.dream_colleges as string[] | null)?.[0] ?? 'their dream college';
-                const msg = waMessages({ firstName, dreamCollege }).find((m) => m.key === 'push_recovery')!;
-                const waLink = s.phone ? `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(msg.text)}` : null;
+                const waLink = s.phone ? `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(pushRecoveryMessage(firstName))}` : null;
                 return (
                   <div key={s.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 border border-rose-100">
                     <div className="min-w-0">

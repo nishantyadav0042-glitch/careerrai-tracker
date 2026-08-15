@@ -144,6 +144,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     { data: outreach },
     { data: recentLogs },
     { data: mocks },
+    { data: planRows },
   ] = await Promise.all([
     computePrepMemory(admin, id, archetype, signupDate),
     computeTopicMemory(admin, id, archetype),
@@ -152,6 +153,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     admin.from('lead_outreach').select('owner, status, next_follow_up, notes').eq('student_id', id).maybeSingle(),
     admin.from('daily_reports').select('report_date, study_duration, mock_taken').eq('student_id', id).order('report_date', { ascending: false }).limit(10),
     admin.from('mock_debriefs').select('taken_on, overall_percentile').eq('student_id', id).order('taken_on', { ascending: false }),
+    // Does a plan REALLY exist? The WhatsApp composer gates every
+    // "tumhara plan ready hai" message on this. Same wave, no extra round trip.
+    admin.from('daily_routines').select('routine_date').eq('student_id', id).limit(1),
   ]);
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -300,6 +304,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             dreamCollege={dreamCollegeLabel(profile.dream_colleges)}
             appInstalled={profile.app_installed === true}
             pushOn={pushOn}
+            hasPlan={(planRows?.length ?? 0) > 0}
+            hasLogged={(recentLogs?.length ?? 0) > 0}
+            daysSinceLastLog={daysSinceLastLog}
           />
         )}
 

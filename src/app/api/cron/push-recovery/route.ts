@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { sendAdminAlert } from '@/lib/email';
-import { waMessages, waNumber } from '@/lib/wa-messages';
+import { pushRecoveryMessage, waNumber } from '@/lib/wa-messages';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -59,9 +59,7 @@ export async function GET(request: NextRequest) {
 
   const rows = fresh.map((s) => {
     const firstName = (s.full_name || 'Student').split(' ')[0];
-    const dreamCollege = (s.dream_colleges as string[] | null)?.[0] ?? 'their dream college';
-    const msg = waMessages({ firstName, dreamCollege }).find((m) => m.key === 'push_recovery')!;
-    const waLink = s.phone ? `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(msg.text)}` : null;
+    const waLink = s.phone ? `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(pushRecoveryMessage(firstName))}` : null;
     return { name: s.full_name ?? 'Unknown', phone: s.phone ?? '—', diedAt: s.push_died_at, waLink };
   });
 
