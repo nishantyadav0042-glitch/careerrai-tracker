@@ -50,6 +50,7 @@
 
 export { SITE_URL } from '@/lib/site';
 import { SITE_URL } from '@/lib/site';
+import { WHATSAPP_GROUP_URL } from '@/components/onboarding/whatsapp-optin';
 
 /** The one human who sends and answers these. Hardcoded, founder, 15 Aug. */
 export const SENDER = 'Nishant';
@@ -238,6 +239,27 @@ export function waMessages(v: WaVars): WaMessage[] {
           `${firstName}, your CareerRai account is set up.`,
           `${ME} Anything at all, message me here. ${site}`,
         ),
+  });
+
+  // ── JOIN THE CAREERRAI WHATSAPP GROUP ────────────────────────────────────
+  //
+  // Founder, 15 Aug: for students who signed up before the in-app WhatsApp
+  // ask existed (14 Aug), a push notification cannot reach the 74% of them
+  // with no push subscription — checked against production, 268 of 360.
+  // This is the only channel that reaches all of them: a direct message to
+  // their own WhatsApp, the number every one of them has.
+  //
+  // Same approved copy as the push version (cron/whatsapp-backfill/route.ts)
+  // — "we strongly recommend it" — kept as one voice, not two different asks
+  // depending on which channel happened to reach a given student.
+  out.push({
+    key: 'whatsapp_join',
+    label: 'Join the WhatsApp group',
+    suggestedFor: 'any',
+    text: two(
+      `${firstName}, join the CareerRai WhatsApp group: ${WHATSAPP_GROUP_URL}`,
+      `${ME} I strongly recommend it — 2 messages a day, for consistency. Message me if stuck. ${site}`,
+    ),
   });
 
   // ── THE BUDDY PITCH ──────────────────────────────────────────────────────
