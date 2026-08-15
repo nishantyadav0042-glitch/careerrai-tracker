@@ -31,7 +31,7 @@ describe('a plan is never claimed for a student who has none', () => {
     // row. "Tumhara plan ready hai" would have been the first thing CareerRai
     // ever told them, and it would have been false.
     for (const m of waMessages({ ...base, hasPlan: false })) {
-      expect(/plan ready|plan ban gaya|plan pada/i.test(m.text),
+      expect(/plan is ready|plan is built|plan ban gaya/i.test(m.text),
         `${m.key} claims a plan that does not exist:\n${m.text}`).toBe(false);
     }
   });
@@ -63,7 +63,7 @@ describe('a plan is never claimed for a student who has none', () => {
     expect(keys).not.toContain('setup_incomplete');     // might also be a lie
     expect(keys).not.toContain('first_log');
     for (const m of unknown) {
-      expect(/plan ready|plan pada|plan abhi bana hi nahi|setup adhoora/i.test(m.text),
+      expect(/plan is ready|plan is built|hasn't been built|setup stopped partway/i.test(m.text),
         `${m.key} makes a plan claim on unknown data:\n${m.text}`).toBe(false);
     }
   });
@@ -76,13 +76,13 @@ describe('a plan is never claimed for a student who has none', () => {
     const generic = unknown.find((m) => m.key === 'install_generic')!;
     expect(generic.suggestedFor).toBe('not_installed');
     // True for every student alive, whatever their state.
-    expect(generic.text).toContain('roz ka plan bhejta hai');
+    expect(generic.text).toContain('sends you a study plan every day');
   });
 
   it('never tells an actively-studying student they have not started', () => {
     const active = twoLiners({ hasLogged: true, daysSinceLastLog: 1 });
     for (const m of active) {
-      expect(/start nahi|shuru nahi|ek bhi din log nahi/i.test(m.text),
+      expect(/haven't logged a single day|haven't started/i.test(m.text),
         `${m.key} scolds a student who is already studying:\n${m.text}`).toBe(false);
     }
     expect(active.map((m) => m.key)).toContain('install_web_active');
@@ -121,8 +121,8 @@ describe('the buddy pitch claims nothing the roster cannot back', () => {
     // Verified 15 Aug against profiles where role='buddy': all 7 real mentors
     // have a converted IIM, and the lowest cat_percentile is 98.
     const pitch = buddy().find((m) => m.key === 'buddy_slots')!;
-    expect(pitch.text).toContain('IIM convert kiya hai');
-    expect(pitch.text).toContain('98%ile+');
+    expect(pitch.text).toContain('Every mentor converted an IIM');
+    expect(pitch.text).toContain('98+ percentile');
     // The cap is a policy we keep, not a count we read — stated as a limit on
     // the mentor, which is what makes it a promise about attention.
     expect(pitch.text).toContain('5 students');
@@ -135,6 +135,50 @@ describe('the buddy pitch claims nothing the roster cannot back', () => {
     for (const m of buddy()) {
       expect(/photo|specialis|specializ|rating|reviews|repeater too/i.test(m.text),
         `${m.key} invents a mentor attribute:\n${m.text}`).toBe(false);
+    }
+  });
+});
+
+describe('the copy is English, and stays English', () => {
+  // Reversed by the founder on 15 Aug after a full Hinglish draft: "we are not
+  // selling shampoo of 10 rupees." A CAT aspirant is a prospective MBA, VARC is
+  // literally their English paper, and this copy also carries a Rs 2,999 ask.
+  //
+  // Worth a test because the reversal is easy to forget and Hinglish is the
+  // natural thing to reach for when writing warmly — the first draft of the
+  // welcome message kept a Hindi second line through the whole translation pass
+  // and only this check found it.
+  const HINGLISH = [
+    'nahi', 'toh', 'tumhara', 'tumhare', 'tumhe', 'tum', 'bol', 'dena', 'dikkat',
+    'koi', 'kuch', 'karo', 'kya', 'mujhe', 'merko', 'hai', 'hoon', 'raha', 'rahi',
+    'jayega', 'leta', 'sirf', 'abhi', 'roz', 'naam', 'bhej', 'wo', 'yahin', 'din',
+  ];
+
+  it('no outreach message drifts back into Hinglish', () => {
+    for (const hasPlan of [true, false, undefined]) {
+      for (const hasLogged of [true, false, undefined]) {
+        for (const m of waMessages({ ...base, hasPlan, hasLogged, daysSinceLastLog: 6 })) {
+          for (const w of HINGLISH) {
+            expect(new RegExp(`\\b${w}\\b`, 'i').test(m.text),
+              `${m.key} contains "${w}":\n${m.text}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('is plain English, not corporate English', () => {
+    // The reason Hinglish was tried first: marketing English reads as a mail
+    // merge. Plain short sentences are the resolution, not a register change.
+    const CORPORATE = [
+      'we would like to', 'at your earliest', 'please be advised', 'do the needful',
+      'reach out to', 'circle back', 'as per our records', 'we regret to inform',
+      'thank you for your interest', 'looking forward to hearing',
+    ];
+    for (const m of waMessages({ ...base, daysSinceLastLog: 6 })) {
+      for (const c of CORPORATE) {
+        expect(m.text.toLowerCase(), `${m.key}: "${c}"`).not.toContain(c);
+      }
     }
   });
 });
@@ -173,7 +217,7 @@ describe('the rejected vocabulary can never come back', () => {
     // measurable promise we do not measure is the trust failure the student
     // research named as the worst one.
     for (const m of twoLiners({ daysSinceLastLog: 5 })) {
-      expect(/within \d|\d+ (hours?|hrs?|minutes?|mins?) (mein|me|within)|turnaround|24x7|24\/7/i.test(m.text),
+      expect(/within \d|\d+ (hours?|hrs?|minutes?|mins?)\b(?!.*(?:to turn on|to sign up))|turnaround|24x7|24\/7|guaranteed reply/i.test(m.text),
         `${m.key} promises a response time:\n${m.text}`).toBe(false);
     }
   });
@@ -195,7 +239,7 @@ describe('the shape the founder asked for', () => {
     for (const hasPlan of [true, false]) {
       for (const m of twoLiners({ hasPlan, daysSinceLastLog: 6 })) {
         expect(m.text, `${m.key} has no name`).toContain(SENDER);
-        expect(/bol dena|bol do|bolo/i.test(m.text), `${m.key} never invites a reply`).toBe(true);
+        expect(/message me|tell me|send me/i.test(m.text), `${m.key} never invites a reply`).toBe(true);
       }
     }
   });
@@ -204,10 +248,16 @@ describe('the shape the founder asked for', () => {
     for (const hasPlan of [true, false]) {
       for (const hasLogged of [true, false]) {
         for (const m of twoLiners({ hasPlan, hasLogged, daysSinceLastLog: 6 })) {
-          const first = m.text.split('\n')[0].toLowerCase();
-          // "You haven't downloaded our app" is our metric, and the honest
-          // student reply to it is "okay... so?".
-          expect(/you have ?n[o']t|aapne nahi|download nahi ki/i.test(first),
+          // The FIRST CLAUSE decides whose problem this is. "Your plan is
+          // ready. You haven't opened it yet." opens on their asset; the gap
+          // follows. "You haven't downloaded our app" opens on our metric, and
+          // the honest student reply to that is "okay... so?".
+          //
+          // So this bans opening on OUR funnel specifically, not the word
+          // "haven't" — a student's own unopened plan is their business, not
+          // our install count.
+          const first = m.text.split('\n')[0].split(/[.—]/)[0].toLowerCase();
+          expect(/(down)?loaded (our|the) app|installed (our|the) app|completed (our )?onboarding|signed up yet/i.test(first),
             `${m.key} opens on our funnel:\n${first}`).toBe(false);
         }
       }
@@ -216,7 +266,10 @@ describe('the shape the founder asked for', () => {
 
   it('stays short enough to be read on a lock screen', () => {
     for (const m of twoLiners({ daysSinceLastLog: 6 })) {
-      expect(m.text.length, `${m.key} is ${m.text.length} chars`).toBeLessThan(200);
+      // WhatsApp shows roughly two lines of preview on a locked phone. English
+      // runs longer than the Hinglish first draft for the same content, so the
+      // cap moved with the language — it still exists, and it still bites.
+      expect(m.text.length, `${m.key} is ${m.text.length} chars`).toBeLessThan(240);
     }
   });
 
@@ -238,7 +291,7 @@ describe('the quiet-student message only fires on a real gap', () => {
   it('states the real number of days, never a vague "a while"', () => {
     const m = twoLiners({ hasLogged: true, daysSinceLastLog: 6 }).find((x) => x.key === 'gone_quiet');
     expect(m).toBeDefined();
-    expect(m!.text).toContain('6 din');
+    expect(m!.text).toContain('6 days');
   });
 });
 

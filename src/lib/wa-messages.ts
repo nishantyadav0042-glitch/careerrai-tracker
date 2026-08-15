@@ -7,7 +7,7 @@
 // "Don't tell the student they're receiving premium service. Make them feel
 // they have direct access to a human."
 //
-//   name > designation · relationship > title · Hinglish > polished English
+//   name > designation · relationship > title · plain English > corporate English
 //   their benefit > our funnel · two lines, never three
 //
 // WHAT IS DELIBERATELY ABSENT, and why each was rejected:
@@ -24,15 +24,26 @@
 //                               think "is bande ko main directly pakad sakta
 //                               hoon". Availability is the signal, not
 //                               assignment.
-//   polished English            reads as a template — the exact thing this
-//                               copy exists to avoid.
+//   corporate English           "we would like to inform", "kindly", "at your
+//                               earliest convenience" — reads as a mail merge.
 //
-// The whole emotional payload is three beats: Tumhara plan. Main hoon.
-// Directly bol dena. That is the elder-sibling positioning the product is
-// built on, not a service desk.
+// ENGLISH, NOT HINGLISH. Reversed by the founder on 15 Aug after the first
+// Hinglish draft: "we are not selling shampoo of 10 rupees." He is right about
+// the audience. A CAT aspirant is a prospective MBA, VARC is literally their
+// English paper, and this copy also carries a Rs 2,999 ask. Casual Hinglish
+// reads as low effort against that, however warm it feels to write.
+//
+// The resolution is NOT polished marketing English, which reads as a template
+// and was the reason Hinglish was tried first. It is PLAIN English: short
+// declarative sentences, no adjectives, no softeners, the way one serious
+// person writes to another. Respect is the tone, not warmth.
+//
+// The payload is still three beats: Your plan. I'm here. Message me directly.
+// That is the elder-sibling positioning the product is built on, not a service
+// desk.
 //
 // NO TIME IS EVER PROMISED. The founder answers personally and "ASAP", which
-// is not a window. So the copy says "mujhe bol dena" and never "I'll reply in
+// is not a window. So the copy says "message me" and never "I'll reply in
 // X hours" — a promise we cannot measure is a promise we will eventually
 // break, and being promised personal attention and then treated like everyone
 // else is the single biggest trust killer in the student research.
@@ -96,7 +107,7 @@ export function leadState(appInstalled: boolean, pushOn: boolean): LeadState {
 const two = (a: string, b: string) => `${a}\n${b}`;
 
 /** The second line, identical everywhere: a name, and an open door. */
-const ME = `Main ${SENDER}, CareerRai se.`;
+const ME = `I'm ${SENDER} from CareerRai.`;
 
 export function waMessages(v: WaVars): WaMessage[] {
   const { firstName, dreamCollege, hasPlan, hasLogged, daysSinceLastLog } = v;
@@ -115,8 +126,8 @@ export function waMessages(v: WaVars): WaMessage[] {
     label: 'Not installed (safe for any state)',
     suggestedFor: 'not_installed',
     text: two(
-      `${firstName}, CareerRai roz ka plan bhejta hai — abhi tum tak pahunch hi nahi raha.`,
-      `${ME} App daal lo, dikkat ho toh mujhe bol dena. ${site}`,
+      `${firstName}, CareerRai sends you a study plan every day. It isn't reaching you.`,
+      `${ME} Install the app — message me if anything breaks. ${site}`,
     ),
   });
 
@@ -130,8 +141,8 @@ export function waMessages(v: WaVars): WaMessage[] {
       label: 'Plan ready, not opened',
       suggestedFor: 'not_installed',
       text: two(
-        `Hi ${firstName}, tumhara CareerRai plan ready hai — bas khola nahi hai.`,
-        `${ME} Koi bhi issue aaye, mujhe directly bol dena. ${site}`,
+        `${firstName}, your CareerRai plan is ready. You haven't opened it yet.`,
+        `${ME} Anything you need, message me directly. ${site}`,
       ),
     });
     out.push({
@@ -139,8 +150,8 @@ export function waMessages(v: WaVars): WaMessage[] {
       label: 'Plan ready, not opened (variant B)',
       suggestedFor: 'not_installed',
       text: two(
-        `${firstName}, CareerRai pe tumhara plan ready pada hai — ab bas start karna hai.`,
-        `${ME} Koi dikkat aaye toh seedha mujhe bol dena. ${site}`,
+        `${firstName}, your plan is built and waiting on CareerRai. All that's left is to start.`,
+        `${ME} If anything gets in the way, tell me directly. ${site}`,
       ),
     });
   }
@@ -152,8 +163,8 @@ export function waMessages(v: WaVars): WaMessage[] {
       label: 'Setup incomplete (no plan yet)',
       suggestedFor: 'not_installed',
       text: two(
-        `${firstName}, tumhara CareerRai setup adhoora reh gaya — plan abhi bana hi nahi.`,
-        `${ME} 10 min lagenge, phas jao toh mujhe bol dena. ${site}`,
+        `${firstName}, your CareerRai setup stopped partway. Your plan hasn't been built yet.`,
+        `${ME} It takes 10 minutes. Message me if you get stuck. ${site}`,
       ),
     });
   }
@@ -166,8 +177,8 @@ export function waMessages(v: WaVars): WaMessage[] {
       label: 'Active on web, no app',
       suggestedFor: 'not_installed',
       text: two(
-        `${firstName}, tum web pe chala rahe ho — app daal lo, roz ka reminder khud aa jayega.`,
-        `${ME} Kuch atke toh mujhe bol dena. ${site}`,
+        `${firstName}, you're running CareerRai on the web. Install the app and the daily reminder comes to you.`,
+        `${ME} Message me if anything gets stuck. ${site}`,
       ),
     });
   }
@@ -178,8 +189,8 @@ export function waMessages(v: WaVars): WaMessage[] {
     label: 'Turn on reminders',
     suggestedFor: 'notifications_off',
     text: two(
-      `${firstName}, notifications band hain — roz ka reminder pahunch hi nahi raha.`,
-      `${ME} On kar lo, 2 second ka kaam hai. Dikkat ho toh bolo. ${site}`,
+      `${firstName}, your notifications are off. The daily plan isn't reaching you.`,
+      `${ME} Two seconds to turn on. Tell me if it doesn't work. ${site}`,
     ),
   });
 
@@ -196,8 +207,8 @@ export function waMessages(v: WaVars): WaMessage[] {
       label: 'Never logged a day',
       suggestedFor: 'engaged',
       text: two(
-        `${firstName}, plan ready hai par ek bhi din log nahi hua.`,
-        `${ME} Aaj sirf ek task tick kar do — koi dikkat ho toh bolo. ${site}`,
+        `${firstName}, your plan is ready but you haven't logged a single day.`,
+        `${ME} Tick one task today. Tell me if something is in the way. ${site}`,
       ),
     });
   }
@@ -208,8 +219,8 @@ export function waMessages(v: WaVars): WaMessage[] {
       label: `Quiet ${daysSinceLastLog} days`,
       suggestedFor: 'engaged',
       text: two(
-        `${firstName}, ${daysSinceLastLog} din se koi log nahi aaya tumhara.`,
-        `${ME} Kya dikkat aa rahi hai — seedha bol do. ${site}`,
+        `${firstName}, no log from you in ${daysSinceLastLog} days.`,
+        `${ME} What's getting in the way? Tell me directly. ${site}`,
       ),
     });
   }
@@ -220,12 +231,12 @@ export function waMessages(v: WaVars): WaMessage[] {
     suggestedFor: 'any',
     text: hasPlan === true
       ? two(
-          `Hi ${firstName}, CareerRai pe tumhara plan ban gaya hai.`,
-          `${ME} Kuch bhi atke toh yahin bol dena, koi formality nahi. ${site}`,
+          `${firstName}, your CareerRai plan is ready.`,
+          `${ME} Anything at all, message me here. ${site}`,
         )
       : two(
-          `Hi ${firstName}, CareerRai pe tumhara account ban gaya hai.`,
-          `${ME} Kuch bhi atke toh yahin bol dena, koi formality nahi. ${site}`,
+          `${firstName}, your CareerRai account is set up.`,
+          `${ME} Anything at all, message me here. ${site}`,
         ),
   });
 
@@ -265,8 +276,8 @@ export function waMessages(v: WaVars): WaMessage[] {
     label: 'Buddy slots open',
     suggestedFor: 'engaged',
     text: two(
-      `${firstName}, CAT tak ek IIM mentor chahiye? Har mentor ne khud IIM convert kiya hai, 98%ile+ score.`,
-      `${ME} Ek mentor sirf 5 students leta hai, taki tumhe personally jaane. Chahiye toh bol do. ${site}`,
+      `${firstName}, want an IIM mentor till CAT? Every mentor converted an IIM, 98+ percentile.`,
+      `${ME} One mentor takes 5 students only, so they know you personally. Tell me if you want one. ${site}`,
     ),
   });
   out.push({
@@ -277,8 +288,8 @@ export function waMessages(v: WaVars): WaMessage[] {
     label: 'Buddy slots + ask name',
     suggestedFor: 'engaged',
     text: two(
-      `Tumne CareerRai pe plan banaya tha — par tumhara naam hamare paas save nahi hua, sirf number hai.`,
-      `${ME} Naam bhej do. Aur CAT tak IIM mentor chahiye toh wo bhi bol dena. ${site}`,
+      `You built a study plan on CareerRai, but your name was never saved — we only have your number.`,
+      `${ME} Send me your name. And tell me if you want an IIM mentor till CAT. ${site}`,
     ),
   });
 
@@ -299,8 +310,8 @@ export function waMessages(v: WaVars): WaMessage[] {
  */
 export function pushRecoveryMessage(firstName: string, siteUrl = SITE_URL): string {
   return two(
-    `${firstName}, tumhare reminders band ho gaye — tumhari koi galti nahi.`,
-    `${ME} App ek baar khol lo, apne aap jud jayega. Dikkat ho toh bolo. ${siteUrl}`,
+    `${firstName}, your reminders stopped. Nothing you did wrong.`,
+    `${ME} Open the app once and it reconnects. Tell me if it doesn't. ${siteUrl}`,
   );
 }
 
