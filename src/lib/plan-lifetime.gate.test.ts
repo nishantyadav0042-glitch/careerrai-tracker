@@ -429,6 +429,135 @@ describe('THE LIFETIME GATE: capacity and pace never invent or lose time', () =>
   });
 });
 
+describe('THE LIFETIME GATE: a student who CHANGES mid-prep', () => {
+  // Everything above holds a profile still for 108 days. Real students do not
+  // stay still: they drop their hours when college starts, raise them in
+  // October, and their weakest section moves once mocks arrive. Both are
+  // ordinary, and both change an input the planner reads every single day.
+
+  /** Re-runs the lifetime with a profile that mutates on given dates. */
+  function liveChanging(mutate: (dayIndex: number, date: string) => Partial<Profile>): {
+    days: DayReport[]; violations: Violation[];
+  } {
+    const base: Profile = { name: 'changing', weekday: 6, weekend: 8 };
+    const coverage = new Map<string, CoverageStatus>();
+    const days: DayReport[] = [];
+    const violations: Violation[] = [];
+    const dates = daysTo('2026-08-14', EXAM_ISO);
+
+    for (let i = 0; i < dates.length; i++) {
+      const today = dates[i];
+      const p = { ...base, ...mutate(i, today) };
+      const coverageRows = SECTIONS.flatMap((s) =>
+        TOPICS_BY_SECTION[s].map((topic) => ({
+          section: s, topic, status: coverage.get(topic) ?? 'not_started', is_priority: false,
+        })));
+
+      let plan;
+      try {
+        plan = buildDayPlan({
+          profile: {
+            is_working_professional: !!p.wp, is_repeater: !!p.repeater, target_percentile: 95,
+            hours_available: p.weekday, study_target_hours: String(p.weekday),
+            weekend_hours_available: p.weekend ?? p.weekday,
+            syllabus_target_date: p.targetDate === undefined ? '2026-10-15' : p.targetDate,
+            self_reported_weakest_section: p.weakest === undefined ? 'DILR' : p.weakest,
+            self_reported_strongest_section: 'QA', self_reported_weak_topic: null,
+            baseline_varc: null, baseline_dilr: null, baseline_qa: null,
+            attempt_year: 2026, current_stage: p.stage ?? null, start_with: null,
+            plan_source: 'careerrai',
+          },
+          coverageRows,
+          debriefRows: [],
+          timetableRow: null,
+          history: {
+            recentTopics: [], daysSinceLastPracticedByTopic: {}, daysSincePlannedByTopic: {},
+            timesPracticedByTopic: {}, postponedTopics: [], yesterday: null,
+            yesterdayUnfinishedTopics: [], completedTasks: 0, plannedTasks: 0, planDays: i,
+            daysSinceLastPracticed: { VARC: null, DILR: null, QA: null },
+          } as unknown as DayPlanInput['history'],
+          today,
+          now: new Date(`${today}T09:00:00Z`),
+        });
+      } catch (e) {
+        violations.push({ profile: 'changing', date: today, rule: 'THREW', detail: String(e) });
+        continue;
+      }
+
+      const committed = Math.round(plan.hoursToday * 60);
+      if (plan.tasks.length === 0) violations.push({ profile: 'changing', date: today, rule: 'EMPTY_DAY', detail: '' });
+      if (plan.estMinutes !== committed) {
+        violations.push({ profile: 'changing', date: today, rule: 'BUDGET_MISMATCH', detail: `${plan.estMinutes} vs ${committed}` });
+      }
+      const topics = plan.tasks.map((t) => t.topic).filter(Boolean) as string[];
+      if (new Set(topics).size !== topics.length) {
+        violations.push({ profile: 'changing', date: today, rule: 'DUP_TOPIC', detail: topics.join(',') });
+      }
+
+      days.push({
+        date: today,
+        tasks: plan.tasks.map((t) => ({ id: t.id, section: String(t.section), topic: t.topic ?? null, estMinutes: t.estMinutes })),
+        estMinutes: plan.estMinutes, hoursToday: plan.hoursToday, phase: plan.phase,
+      });
+
+      for (const t of plan.tasks) {
+        if (!t.topic) continue;
+        coverage.set(t.topic, applyConfidenceSignal(coverage.get(t.topic) ?? null, 'green'));
+      }
+    }
+    return { days, violations };
+  }
+
+  it('survives a student who drops their hours and later raises them', () => {
+    // 6h → 2h when college restarts on 1 Sep → 9h for the October push.
+    const r = liveChanging((_, date) => {
+      if (date >= '2026-10-01') return { weekday: 9, weekend: 9 };
+      if (date >= '2026-09-01') return { weekday: 2, weekend: 3 };
+      return {};
+    });
+    expect(r.violations, JSON.stringify(r.violations.slice(0, 10), null, 1)).toEqual([]);
+    // And the change actually took effect rather than being ignored.
+    const sep = r.days.find((d) => d.date === '2026-09-02')!;
+    const oct = r.days.find((d) => d.date === '2026-10-02')!;
+    expect(sep.hoursToday).toBe(2);
+    expect(oct.hoursToday).toBe(9);
+  });
+
+  it('survives a weakest section that moves, as mocks change the picture', () => {
+    const r = liveChanging((_, date) => {
+      if (date >= '2026-10-15') return { weakest: 'QA' };
+      if (date >= '2026-09-15') return { weakest: 'VARC' };
+      return {};
+    });
+    expect(r.violations, JSON.stringify(r.violations.slice(0, 10), null, 1)).toEqual([]);
+  });
+
+  it('survives a student who abandons their finish date entirely', () => {
+    const r = liveChanging((_, date) => (date >= '2026-09-20' ? { targetDate: null } : {}));
+    expect(r.violations, JSON.stringify(r.violations.slice(0, 10), null, 1)).toEqual([]);
+  });
+
+  it('survives a stage that advances the way a real student advances', () => {
+    const r = liveChanging((_, date) => {
+      if (date >= '2026-10-20') return { stage: 'mocks' as Stage };
+      if (date >= '2026-09-20') return { stage: 'sectionals' as Stage };
+      if (date >= '2026-09-01') return { stage: 'questions' as Stage };
+      return { stage: 'concepts' as Stage };
+    });
+    expect(r.violations, JSON.stringify(r.violations.slice(0, 10), null, 1)).toEqual([]);
+  });
+
+  it('survives every hours value the slider can produce, on a single day', () => {
+    // The slider is 0.5–16 in half steps. Each one must yield a real day.
+    for (let h = 0.5; h <= 16; h += 0.5) {
+      const r = liveChanging((_, date) => (date === '2026-08-14' ? { weekday: h, weekend: h } : {}));
+      const first = r.days[0];
+      expect(first.tasks.length, `${h}h produced no tasks`).toBeGreaterThan(0);
+      expect(first.estMinutes, `${h}h off budget`).toBe(Math.round(h * 60));
+    }
+  });
+});
+
 describe('THE LIFETIME GATE: the calendar is obeyed as it turns', () => {
   it('every profile is in revision phase by CAT day', () => {
     for (const p of PROFILES) {
