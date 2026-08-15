@@ -231,22 +231,55 @@ export function waMessages(v: WaVars): WaMessage[] {
 
   // ── THE BUDDY PITCH ──────────────────────────────────────────────────────
   //
-  // Kept in English and at length ON PURPOSE, and flagged rather than quietly
-  // rewritten. These sell the ₹999 mentor: a different job from activation,
-  // revenue-critical, and every claim in them (five IIMs, max 5 students) was
-  // checked against the mentors table. Rewriting revenue copy was not in the
-  // brief that locked the voice above. Worth a separate pass with the founder.
+  // Rewritten 15 Aug, and the reason is a live false claim, not the voice.
+  //
+  // These two messages said "every mentor is from IIM Bangalore, Lucknow,
+  // Calcutta, Kozhikode or Indore" — the BLACKI framing. Checked against the
+  // mentors table that morning, and it is not true of the current roster:
+  // Spandana converted IIM Raipur, and Siddhant converted IIM Udaipur,
+  // Kashipur, Trichy, Sirmaur, Mumbai and MDI. Two of seven mentors are
+  // outside the list the copy promises, so a student who picked either one
+  // was sold something we did not deliver — in the message that asks for
+  // money.
+  //
+  // The fix is not a longer list. A list of named institutes is FALSE THE DAY
+  // A NEW MENTOR JOINS, and nobody will remember to edit WhatsApp copy when
+  // that happens. So the claims are now roster-independent: true of every
+  // mentor we have and of every mentor we could add.
+  //
+  // VERIFIED 15 Aug against profiles where role='buddy' (7 real mentors, the
+  // test account excluded). Re-run this before changing either claim:
+  //
+  //   select full_name, iim_converted, cat_percentile from profiles
+  //   where role = 'buddy' order by cat_percentile;
+  //
+  //   · all 7 have a converted IIM        → "IIM convert kiya hai" holds
+  //   · lowest cat_percentile is 98        → "98%ile+" holds
+  //   · max students assigned today is 2   → the 5-student cap is not strained
+  //
+  // Still English-free of a designation but longer than two lines, because
+  // this one asks for money and has to carry the reason. The founder's
+  // two-line rule was written for activation nudges.
   out.push({
     key: 'buddy_slots',
-    label: 'Buddy slots open (BLACKI)',
+    label: 'Buddy slots open',
     suggestedFor: 'engaged',
-    text: `Hi ${firstName}, ${SENDER} from CareerRai. We have 1:1 buddy slots open right now — every mentor is from IIM Bangalore, Lucknow, Calcutta, Kozhikode or Indore. One buddy takes a maximum of 5 students, so they know you personally: your plan, your mocks, where you're stuck. Want one till CAT? Reply and I'll hold a slot. Your plan: ${site}`,
+    text: two(
+      `${firstName}, CAT tak ek IIM mentor chahiye? Har mentor ne khud IIM convert kiya hai, 98%ile+ score.`,
+      `${ME} Ek mentor sirf 5 students leta hai, taki tumhe personally jaane. Chahiye toh bol do. ${site}`,
+    ),
   });
   out.push({
+    // The name was never in auth.users, so it cannot be backfilled — it has to
+    // be asked. Folded into a message worth sending anyway, so the ask rides
+    // along instead of arriving as a bare form-filling request.
     key: 'buddy_slots_ask_name',
     label: 'Buddy slots + ask name',
     suggestedFor: 'engaged',
-    text: `Hi! ${SENDER} from CareerRai — you built your study plan with us. We have 1:1 buddy slots open: every mentor is from IIM Bangalore, Lucknow, Calcutta, Kozhikode or Indore, max 5 students each, so the guidance stays properly personal. Want one till CAT? Reply — and do send your name too, only your number saved on our side. Your plan: ${site}`,
+    text: two(
+      `Tumne CareerRai pe plan banaya tha — par tumhara naam hamare paas save nahi hua, sirf number hai.`,
+      `${ME} Naam bhej do. Aur CAT tak IIM mentor chahiye toh wo bhi bol dena. ${site}`,
+    ),
   });
 
   void dreamCollege; // kept on WaVars for the buddy pass; unused by the 2-liners

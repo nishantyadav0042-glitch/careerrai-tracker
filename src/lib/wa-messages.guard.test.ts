@@ -89,6 +89,56 @@ describe('a plan is never claimed for a student who has none', () => {
   });
 });
 
+describe('the buddy pitch claims nothing the roster cannot back', () => {
+  const buddy = () =>
+    waMessages({ ...base, hasLogged: true, daysSinceLastLog: 1 })
+      .filter((m) => m.key.startsWith('buddy_'));
+
+  it('never names specific IIMs', () => {
+    // The claim that was live until 15 Aug: "every mentor is from IIM
+    // Bangalore, Lucknow, Calcutta, Kozhikode or Indore". Two of seven mentors
+    // were outside that list — Spandana (IIM Raipur) and Siddhant (IIM
+    // Udaipur, Kashipur, Trichy, Sirmaur, Mumbai, MDI) — so a student who was
+    // matched with either was sold something we did not deliver, in the
+    // message that asks for money.
+    //
+    // Banning the SHAPE, not that one sentence: any list of named institutes
+    // is false the day a new mentor joins, and nobody edits WhatsApp copy when
+    // that happens. Roster-independent claims only.
+    const NAMED = [
+      'Bangalore', 'Lucknow', 'Calcutta', 'Kozhikode', 'Indore', 'Ahmedabad',
+      'Raipur', 'Udaipur', 'Kashipur', 'Trichy', 'Sirmaur', 'MDI', 'FMS', 'BLACKI',
+    ];
+    for (const m of buddy()) {
+      for (const n of NAMED) {
+        expect(m.text, `${m.key} names "${n}" — false the day the roster changes`)
+          .not.toContain(n);
+      }
+    }
+  });
+
+  it('makes only claims that hold for every mentor', () => {
+    // Verified 15 Aug against profiles where role='buddy': all 7 real mentors
+    // have a converted IIM, and the lowest cat_percentile is 98.
+    const pitch = buddy().find((m) => m.key === 'buddy_slots')!;
+    expect(pitch.text).toContain('IIM convert kiya hai');
+    expect(pitch.text).toContain('98%ile+');
+    // The cap is a policy we keep, not a count we read — stated as a limit on
+    // the mentor, which is what makes it a promise about attention.
+    expect(pitch.text).toContain('5 students');
+  });
+
+  it('invents no mentor attribute we never collected', () => {
+    // No photo, no speciality, no "I was a repeater too", no student count, no
+    // rating. The mentors table has none of those, and an invented speciality
+    // breaks in the session the student paid for.
+    for (const m of buddy()) {
+      expect(/photo|specialis|specializ|rating|reviews|repeater too/i.test(m.text),
+        `${m.key} invents a mentor attribute:\n${m.text}`).toBe(false);
+    }
+  });
+});
+
 describe('the rejected vocabulary can never come back', () => {
   const BANNED = [
     // Titles, each rejected for a stated reason in the module comment.
