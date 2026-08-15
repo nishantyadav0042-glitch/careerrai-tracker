@@ -47,9 +47,34 @@ async function reportPushDeath(userId: string): Promise<void> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * The low-level Web Push transport. Talks to the browser's push service,
+ * retries transient failures once, and marks a subscription dead on a
+ * permanent one. It does NOT create the notification row, does NOT check any
+ * budget, and does NOT stamp pushed_at — those are the ledger's job, one
+ * level up, in notification-os.dispatch().
+ *
+ * ── DO NOT CALL THIS DIRECTLY ───────────────────────────────────────────
+ *
+ * Every product surface must send through notification-os.dispatch(). This
+ * function is exported only so dispatch() can import it; a source-scan guard
+ * (send-boundary.guard.test.ts) fails the build if any other file calls it.
+ *
+ * `notifId` is REQUIRED, not optional, on purpose. It used to be optional,
+ * and on 15 Aug that turned out to be exactly how fourteen call sites sent a
+ * real, delivered push that could never be marked pushed, received, or
+ * clicked — the row existed, its id was simply never carried through. A
+ * missing id is now a compile error instead of a silent measurement gap.
+ *
+ * The 10/day hard ceiling used to live here too. It has moved to dispatch(),
+ * because a check that runs only when THIS function is called is not a
+ * ceiling if a caller can reach the push service without calling it — which,
+ * before 15 Aug, fourteen of them did. The ceiling now sits at the one point
+ * every send is structurally forced through.
+ */
 export async function sendPushToUser(
   userId: string,
-  payload: { title: string; body: string; url?: string; notifId?: string; tag?: string; senderName?: string }
+  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string }
 ): Promise<PushResult> {
   if (!(await getVapidConfigured())) {
     console.warn(`[push] VAPID not configured — skipped push to ${userId}: ${payload.title}`);
@@ -59,24 +84,6 @@ export async function sendPushToUser(
   const admin = createAdminClient();
   const { data: profile } = await admin.from('profiles').select('push_subscription').eq('id', userId).single();
   if (!profile?.push_subscription) return { ok: false, reason: 'no_subscription' };
-
-  // Absolute ceiling (founder, 21 July): no student receives more than 10
-  // pushes in a day, AT ANY COST. Enforced here — the lowest level every
-  // push path passes through — so budget-exempt sends (broadcasts, chat,
-  // session reminders) count too, not just dispatch()-gated nudges. The
-  // per-state budgets (4-8) stay the real cadence; this is the hard stop.
-  const istDayStart =
-    new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
-  const { count: pushedToday } = await admin
-    .from('notifications')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .not('pushed_at', 'is', null)
-    .gte('pushed_at', istDayStart);
-  if ((pushedToday ?? 0) >= 10) {
-    console.warn(`[push] daily hard cap (10) reached for ${userId} — push suppressed`);
-    return { ok: false, reason: 'daily_cap' };
-  }
 
   // A dead subscription (410/404) is TERMINAL — no retry can revive it, this is
   // a hard property of the Web Push standard on every platform. Anything else
@@ -98,7 +105,7 @@ async function attemptSend(
   admin: any,
   userId: string,
   subscription: webpush.PushSubscription,
-  payload: { title: string; body: string; url?: string; notifId?: string; tag?: string; senderName?: string }
+  payload: { title: string; body: string; url?: string; notifId: string; tag?: string; senderName?: string }
 ): Promise<PushResult & { terminal?: boolean }> {
   try {
     // Every push needs a UNIQUE tag. sw.js falls back to a single shared tag when
@@ -120,7 +127,7 @@ async function attemptSend(
       tag: payload.tag ?? `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       data: {
         url: payload.url ?? '/',
-        notifId: payload.notifId ?? null,
+        notifId: payload.notifId,
         ...(payload.senderName ? { senderName: payload.senderName } : {}),
       },
     };

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
-import { sendNotification } from '@/lib/notifications';
+import { dispatch } from '@/lib/notification-os';
 import { HORIZON_NUDGE_DAYS } from '@/lib/timetable-align';
 import { anchorToMonth, monthDaysLeft } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
@@ -56,13 +56,15 @@ export async function POST(request: NextRequest) {
       .limit(1);
     if (recent && recent.length > 0) continue;
 
-    await sendNotification({
+    const { data: prof } = await admin.from('profiles').select('notif_prefs').eq('id', row.student_id).single();
+    await dispatch({
       userId: row.student_id as string,
       type: 'timetable_refresh',
       title: daysLeft === 0 ? 'Your timetable has run out' : `Your timetable ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
       body: 'Upload your coaching’s next sheet and your daily plan stays matched to your classes.',
-      channels: ['in_app', 'push'],
-      data: { url: '/student/tracker' },
+      url: '/student/tracker',
+      reason: `Uploaded timetable horizon ${daysLeft === 0 ? 'passed' : `in ${daysLeft}d`}`, expectedAction: 'open_plan',
+      prefs: (prof?.notif_prefs as Record<string, unknown>) ?? {},
     }).catch((e) => console.error('[timetable-horizon] notify failed', row.student_id, String(e)));
     nudged++;
   }

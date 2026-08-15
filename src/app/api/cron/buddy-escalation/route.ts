@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 
 // Minimal 1-level escalation: student message OR mock debrief unanswered by buddy for 48h
@@ -90,25 +90,22 @@ export async function POST(request: NextRequest) {
   const toEscalate = [...chatResults, ...mockResults].filter((r): r is EscalationItem => r !== null);
   if (!toEscalate.length) return NextResponse.json({ escalated: 0, issues: [] });
 
-  // Batch insert all notifications in one round-trip instead of N×M sequential inserts
-  const notifRows = toEscalate.flatMap(r =>
-    admins.map(a => ({
-      user_id: a.id, type: 'escalation', title: r.title, body: r.body,
-      data: { key: r.key, url: '/admin', student_id: r.student_id, buddy_id: r.buddy_id },
-      read: false, channel: 'in_app',
-    }))
+  // One dispatch() per (issue, admin) pair — was a single batch insert
+  // followed by pushes with no id linking a send back to its row at all, not
+  // even incidentally. Low volume (single digits/day), so trading the one
+  // round-trip for a real ledger entry and cap enforcement per admin costs
+  // nothing real.
+  await Promise.all(
+    toEscalate.flatMap(r =>
+      admins.map(a => dispatch({
+        userId: a.id, type: 'escalation', title: r.title, body: r.body, url: '/admin',
+        data: { key: r.key, student_id: r.student_id, buddy_id: r.buddy_id },
+        reason: `Unanswered ${r.key.includes('mock') ? 'mock debrief' : 'chat message'} — 48h+`,
+        expectedAction: 'acknowledge',
+        prefs: (a.notif_prefs as Record<string, unknown>) ?? {},
+      }))
+    )
   );
-  await admin.from('notifications').insert(notifRows);
-
-  // Fire all push notifications concurrently
-  const pushAdmins = admins.filter(a => (a.notif_prefs as Record<string, unknown>)?.push === true);
-  if (pushAdmins.length > 0) {
-    await Promise.all(
-      toEscalate.flatMap(r =>
-        pushAdmins.map(a => sendPushToUser(a.id, { title: r.title, body: r.body, url: '/admin' }))
-      )
-    );
-  }
 
   return NextResponse.json({ escalated: toEscalate.length, issues: toEscalate.map(r => r.key) });
 }

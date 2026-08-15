@@ -9,10 +9,11 @@ import { isAdminPhoneE164 } from '@/lib/admin-config';
 import { clientIp } from '@/lib/request-ip';
 import { registerAttemptAndCheck, clearAttempts } from '@/lib/attempt-throttle';
 import { logSecurityEvent } from '@/lib/security-log';
-import { sendNotification } from '@/lib/notifications';
+import { dispatch } from '@/lib/notification-os';
 import { validateCoverageMatrix, type MatrixEntry } from '@/lib/coverage-validate';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isValidPushEndpoint } from '@/lib/push-validate';
+import { registerSubscription } from '@/lib/push-subscription-registry';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { isCovered } from '@/lib/coverage-status';
@@ -367,10 +368,23 @@ export async function POST(request: NextRequest) {
           v === 'VARC' || v === 'DILR' || v === 'QA' ? v : null;
       }
 
+      // Same canonical registration the authenticated toggle uses
+      // (lib/push-subscribe.ts). This is the exact write that used to skip
+      // push_subscribed_at — the field the health engine's subscription-age
+      // math depends on — because this branch hand-wrote `{ push: true }` as
+      // the whole notif_prefs column instead of going through it. Fixed 15
+      // Aug. A brand-new signup has no existing prefs/subscribedAt to
+      // preserve, so the merge is a no-op today, but it is no longer a
+      // SEPARATE definition that could silently drift from the other one.
       const subscription = onboarding.push_subscription as { endpoint?: unknown } | null | undefined;
       if (subscription?.endpoint && isValidPushEndpoint(subscription.endpoint)) {
-        profileUpdate.push_subscription = subscription;
-        profileUpdate.notif_prefs = { push: true };
+        const reg = registerSubscription(
+          { notifPrefs: null, pushSubscribedAt: null },
+          subscription,
+          new Date().toISOString(),
+          (onboarding as Record<string, unknown>).push_context
+        );
+        Object.assign(profileUpdate, reg);
       } else if (onboarding.push_prompted === true) {
         profileUpdate.notif_prefs = { push_prompted: true };
       }
@@ -471,16 +485,17 @@ export async function POST(request: NextRequest) {
     if ((isStub || !existing) && role === 'student' && signupSource === 'self_serve') {
       try {
         const newName = entry?.full_name ?? selfName ?? 'A new student';
-        const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+        const { data: admins } = await admin.from('profiles').select('id, notif_prefs').eq('role', 'admin');
         await Promise.all(
           (admins ?? []).map((a) =>
-            sendNotification({
-              userId: a.id,
+            dispatch({
+              userId: a.id as string,
               type: 'new_signup',
               title: '🎉 New student joined CareerRai',
               body: `${newName} (${e164}) just signed up — tap to add them on WhatsApp.`,
-              data: { url: '/admin', phone: e164 },
-              channels: ['in_app', 'push'],
+              url: '/admin', data: { phone: e164 },
+              reason: 'New self-serve student signup', expectedAction: 'acknowledge',
+              prefs: (a.notif_prefs as Record<string, unknown>) ?? {},
             })
           )
         );

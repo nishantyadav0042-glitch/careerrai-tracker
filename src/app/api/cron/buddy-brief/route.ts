@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { buddyBriefCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
 
@@ -87,13 +87,12 @@ export async function POST(request: NextRequest) {
 
     const { title, body } = buddyBriefCopy(loggedYesterday, roster.length, atRisk);
 
-    await admin.from('notifications').insert({
-      user_id: buddyId, type: 'buddy_brief', title, body,
-      data: { url: '/buddy/home' }, read: false, channel: 'in_app',
-    });
     const prefs = (buddy.notif_prefs ?? {}) as Record<string, unknown>;
-    if (prefs.push === true) await sendPushToUser(buddyId, { title, body, url: '/buddy/home' });
-    sent++;
+    const outcome = await dispatch({
+      userId: buddyId, type: 'buddy_brief', title, body, url: '/buddy/home',
+      reason: 'Daily 9am roster brief — who logged, who is at risk', expectedAction: 'acknowledge', prefs,
+    });
+    if (outcome === 'sent') sent++;
   }
 
   return NextResponse.json({ sent, buddies: byBuddy.size });

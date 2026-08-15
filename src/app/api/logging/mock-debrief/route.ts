@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { getLogDateString } from '@/lib/streak-utils';
 
 interface DebriefRequest {
@@ -187,16 +187,13 @@ export async function POST(request: NextRequest) {
         const title = `${studentFirst} submitted a mock${percentileStr} — they're waiting for your feedback.`;
         const notifBody = 'Mock debrief submitted — feedback within 24h keeps the momentum.';
 
-        await admin.from('notifications').insert({
-          user_id: buddyId, type: 'mock_submitted',
-          title, body: notifBody,
-          data: { url: `/buddy/students/${user.id}`, student_id: user.id }, read: false, channel: 'in_app',
-        });
-
         const { data: buddyPrefs } = await admin.from('profiles').select('notif_prefs').eq('id', buddyId).single();
-        if ((buddyPrefs?.notif_prefs as Record<string, unknown>)?.push === true) {
-          await sendPushToUser(buddyId, { title, body: notifBody, url: `/buddy/students/${user.id}` });
-        }
+        await dispatch({
+          userId: buddyId, type: 'mock_submitted', title, body: notifBody,
+          url: `/buddy/students/${user.id}`, data: { student_id: user.id },
+          reason: 'Student submitted a mock debrief — awaiting buddy feedback', expectedAction: 'acknowledge',
+          prefs: (buddyPrefs?.notif_prefs as Record<string, unknown>) ?? {},
+        });
       } catch {
         // non-fatal
       }

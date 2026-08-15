@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { momentumStreak } from '@/lib/streak-utils';
 import { authorizedCron } from '@/lib/cron-auth';
 
@@ -35,12 +35,20 @@ async function runBroadcast() {
       .not('is_test_account', 'is', true)
       .not('is_demo', 'is', true),
     admin.from('streak_data').select('student_id, current_streak, shields, last_log_date'),
-    admin.from('notifications').select('user_id, type').in('type', ['streak_restored', 'streak_restored_push']),
+    admin.from('notifications').select('user_id, type, pushed_at').in('type', ['streak_restored', 'streak_restored_push']),
   ]);
 
   const streakById = new Map((streaks ?? []).map((s) => [s.student_id as string, s]));
   const hasInApp = new Set((markers ?? []).filter((n) => n.type === 'streak_restored').map((n) => n.user_id as string));
-  const hasPush = new Set((markers ?? []).filter((n) => n.type === 'streak_restored_push').map((n) => n.user_id as string));
+  // Was row EXISTENCE. dispatch() now creates a streak_restored_push row for
+  // every ATTEMPT, not only successful ones (that used to be this script's own
+  // job — it inserted the marker itself, and only after res.ok). Filtering on
+  // pushed_at keeps the original meaning: "already confirmed delivered",
+  // so a failed attempt is still retried on the next sweep instead of being
+  // mistaken for done.
+  const hasPush = new Set(
+    (markers ?? []).filter((n) => n.type === 'streak_restored_push' && n.pushed_at != null).map((n) => n.user_id as string)
+  );
 
   let inApp = 0;
   let pushed = 0;
@@ -83,21 +91,19 @@ async function runBroadcast() {
       if (!error) inApp++;
     }
 
-    // Web push, once ever — only where notifications are on.
+    // Web push, once ever — only where notifications are on. dispatch() now
+    // creates its own real streak_restored_push row (title/body = the actual
+    // message, not a placeholder marker) and stamps pushed_at on success —
+    // the ledger entry IS the record of "this was sent", replacing the
+    // separate marker insert this file used to write by hand.
     const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
     if (prefs.push === true && s.push_subscription != null && !hasPush.has(s.id)) {
-      const res = await sendPushToUser(s.id, { title, body, url: '/student/tracker' }).catch(() => null);
-      if (res?.ok) {
-        pushed++;
-        await admin.from('notifications').insert({
-          user_id: s.id,
-          type: 'streak_restored_push',
-          title: 'marker',
-          body: 'push sent',
-          read: true,
-          channel: 'push',
-        });
-      }
+      const outcome = await dispatch({
+        userId: s.id, type: 'streak_restored_push', title, body, url: '/student/tracker',
+        reason: 'Momentum Shields launch — one-time streak-restored announcement', expectedAction: 'log_today',
+        prefs,
+      }).catch(() => null);
+      if (outcome === 'sent') pushed++;
     } else if (hasInApp.has(s.id) && (hasPush.has(s.id) || prefs.push !== true)) {
       skipped++;
     }

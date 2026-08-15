@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { isRequestAdmin } from '@/lib/require-admin';
 
 export const dynamic = 'force-dynamic';
@@ -30,27 +30,24 @@ export async function GET(request: NextRequest) {
   // accepted) → received_at (device got it, app still closed) → clicked_at.
   const target = request.nextUrl.searchParams.get('student');
   if (target) {
-    const { data: row } = await admin
-      .from('notifications')
-      .insert({
-        user_id: target, type: 'e2e_test',
-        title: 'CareerRai delivery test',
-        body: 'If you can read this with the app closed, the push pipeline to this device is fully working.',
-        data: { url: '/student/tracker' }, read: false, channel: 'in_app',
-        reason: 'Founder-ordered end-to-end delivery test on a specific device',
-        expected_action: 'open_plan',
-      })
-      .select('id')
-      .single();
-    const res = await sendPushToUser(target, {
+    // Founder-ordered device test — force push:true regardless of the
+    // student's stored preference, matching this route's original behaviour
+    // (it always sent, unconditionally; this is a deliberate admin override,
+    // not a bypass of student consent, since it is invoked BY an admin AT a
+    // specific student on request).
+    const outcome = await dispatch({
+      userId: target, type: 'e2e_test',
       title: 'CareerRai delivery test',
       body: 'If you can read this with the app closed, the push pipeline to this device is fully working.',
-      url: '/student/tracker', notifId: row?.id as string,
+      url: '/student/tracker',
+      reason: 'Founder-ordered end-to-end delivery test on a specific device', expectedAction: 'open_plan',
+      prefs: { push: true },
     });
-    if (res.ok && row?.id) {
-      await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
-    }
-    return NextResponse.json({ target, pushAccepted: res.ok, reason: res.reason ?? null, notifId: row?.id ?? null });
+    const { data: sentRow } = await admin
+      .from('notifications').select('id, pushed_at')
+      .eq('user_id', target).eq('type', 'e2e_test')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    return NextResponse.json({ target, pushAccepted: outcome === 'sent', reason: outcome, notifId: sentRow?.id ?? null });
   }
 
   const { data: students } = await admin
@@ -79,24 +76,16 @@ export async function GET(request: NextRequest) {
       outcomes.already_sent = (outcomes.already_sent ?? 0) + 1;
       continue;
     }
-    const { data: row } = await admin
-      .from('notifications')
-      .insert({
-        user_id: s.id, type: 'kohli_18', title, body,
-        data: { url }, read: false, channel: 'in_app',
-        reason: 'Founder-ordered live delivery test to every reachable student (21 July)',
-        expected_action: 'log_today',
-      })
-      .select('id')
-      .single();
-    const res = await sendPushToUser(s.id, { title, body, url, notifId: row?.id as string });
-    if (res.ok && row?.id) {
-      await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
+    const outcome = await dispatch({
+      userId: s.id, type: 'kohli_18', title, body, url,
+      reason: 'Founder-ordered live delivery test to every reachable student (21 July)',
+      expectedAction: 'log_today', prefs: { push: true },
+    });
+    if (outcome === 'sent') {
       pushed++;
       outcomes.pushed = (outcomes.pushed ?? 0) + 1;
     } else {
-      const reason = res.reason ?? 'failed';
-      outcomes[reason] = (outcomes[reason] ?? 0) + 1;
+      outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
     }
   }
 

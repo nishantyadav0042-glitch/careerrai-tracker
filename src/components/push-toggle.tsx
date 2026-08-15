@@ -55,7 +55,11 @@ export function PushToggle({
       const res = await fetch('/api/push/test', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.ok) {
-        setTestMsg('Sent! You should see a notification in a second.');
+        // The id is a real notifications.id now (15 Aug fix) — received_at and
+        // clicked_at for this exact row fill in from the device as the service
+        // worker's beacons fire, so it is checkable, not just a toast.
+        const idNote = data.notificationId ? ` (id: ${String(data.notificationId).slice(0, 8)}…)` : '';
+        setTestMsg(`Sent! You should see a notification in a second.${idNote}`);
       } else {
         // Surface the server's exact reason (no_subscription / vapid_not_configured /
         // send_failed_<code>) so a failed delivery is diagnosable, not silent.

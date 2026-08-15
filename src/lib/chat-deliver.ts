@@ -10,7 +10,7 @@
 // So the insert-and-notify lives here once, and both routes call it.
 
 import type { createAdminClient } from '@/lib/supabase/admin';
-import { sendNotification } from '@/lib/notifications';
+import { dispatch } from '@/lib/notification-os';
 import { isBlockedPair } from '@/lib/chat-safety';
 import type { ResolvedPair } from '@/lib/chat';
 
@@ -86,33 +86,30 @@ export async function deliverPairMessage(input: DeliverInput) {
   const hasAttachment = !!attachmentColumns && Object.keys(attachmentColumns).length > 0;
   void (async () => {
     try {
-      const { data: sender } = await admin
-        .from('profiles')
-        .select('full_name')
-        .eq('id', senderId)
-        .single();
+      const [{ data: sender }, { data: recipient }] = await Promise.all([
+        admin.from('profiles').select('full_name').eq('id', senderId).single(),
+        admin.from('profiles').select('notif_prefs').eq('id', recipientId).single(),
+      ]);
       const senderName = sender?.full_name?.split(' ')[0] ?? 'your buddy';
       const preview =
         body.length > 80 ? `${body.slice(0, 80)}…` : body || (hasAttachment ? '📎 Sent you a file' : '');
       // Deep-link each side to THEIR chat screen — a buddy tapping the push
       // must land on the buddy chat, not the student page.
       const recipientIsBuddy = recipientId === pair.buddyId;
-      await sendNotification({
+      await dispatch({
         userId: recipientId,
         type: 'chat',
         title: `${senderName} sent you a message 💬`,
         body: preview,
-        channels: ['in_app', 'push'],
+        url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy?tab=chat',
         // ONE tray notification per conversation: every DM in this pair shares
         // a tag, so the device collapses them ("Shreya · 3 new messages")
         // instead of stacking one entry per message (Shreya's ask, 12 Aug).
-        pushTag: `chat-${pair.studentId}-${pair.buddyId}`,
-        pushSenderName: senderName,
-        data: {
-          url: recipientIsBuddy ? `/buddy/chat/${pair.studentId}` : '/student/buddy?tab=chat',
-          student_id: pair.studentId,
-          buddy_id: pair.buddyId,
-        },
+        tag: `chat-${pair.studentId}-${pair.buddyId}`,
+        senderName,
+        data: { student_id: pair.studentId, buddy_id: pair.buddyId },
+        reason: 'New chat message from the other side of the pair', expectedAction: 'view_chat',
+        prefs: (recipient?.notif_prefs as Record<string, unknown>) ?? {},
       });
     } catch {
       // non-blocking

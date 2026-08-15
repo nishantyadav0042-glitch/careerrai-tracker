@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
-import { sendNotification } from '@/lib/notifications';
+import { dispatch } from '@/lib/notification-os';
 import { resolveCatExamDate } from '@/lib/routine-engine';
 import { reconcileWeek } from '@/lib/plan-extension';
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   const { data: students, error } = await admin
     .from('profiles')
-    .select('id, full_name, study_target_hours, weekend_hours_available, syllabus_target_date, attempt_year, created_at')
+    .select('id, full_name, study_target_hours, weekend_hours_available, syllabus_target_date, attempt_year, created_at, notif_prefs')
     .eq('role', 'student')
     .not('is_demo', 'is', true)  // test accounts stay IN: this cron IS the student experience (founder tests as a student); demo accounts are shared logins and stay out
     .not('syllabus_target_date', 'is', null);
@@ -145,13 +145,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await sendNotification({
+    await dispatch({
       userId: s.id,
       type: 'plan_extended',
       title: result.hitExamWall ? 'Your date cannot move again' : 'Your finish date has moved',
       body: result.warning,
-      channels: ['in_app', 'push'],
-      data: { url: '/student/tracker', newDate: result.newDate, daysAdded: result.daysAdded },
+      url: '/student/tracker', data: { newDate: result.newDate, daysAdded: result.daysAdded },
+      reason: `Weekly pace reconcile — fell behind, date moved ${result.daysAdded}d`, expectedAction: 'open_plan',
+      prefs: (s as { notif_prefs?: Record<string, unknown> | null }).notif_prefs ?? {},
     }).catch((e) => console.error('[weekly-reconcile] notify failed', s.id, String(e)));
 
     warned++;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
-import { sendNotification } from '@/lib/notifications';
+import { dispatch } from '@/lib/notification-os';
 import { campaignState, CAMPAIGN, mayShowSeatsLeft } from '@/lib/campaign';
 import { campaignSeatsSold } from '@/lib/pricing';
 
@@ -103,17 +103,16 @@ export async function POST(request: NextRequest) {
   }
 
   let sent = 0;
-  for (const r of audience as { id: string }[]) {
+  for (const r of audience as { id: string; notif_prefs?: Record<string, unknown> | null }[]) {
     try {
-      await sendNotification({
-        userId: r.id,
-        type: 'broadcast',
-        title: COPY[wave].title,
-        body: COPY[wave].body(state.seatsLeft),
-        channels: ['in_app', 'push'],
-        data: { url: '/offer', campaign: CAMPAIGN.id, wave },
+      const outcome = await dispatch({
+        userId: r.id, type: 'broadcast',
+        title: COPY[wave].title, body: COPY[wave].body(state.seatsLeft),
+        url: '/offer', data: { campaign: CAMPAIGN.id, wave },
+        reason: `Campaign broadcast — ${CAMPAIGN.id}, wave ${wave}`, expectedAction: 'acknowledge',
+        prefs: r.notif_prefs ?? {},
       });
-      sent++;
+      if (outcome === 'sent') sent++;
     } catch {
       // One student's dead subscription must never stop the wave.
     }

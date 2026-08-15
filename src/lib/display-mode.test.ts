@@ -54,7 +54,13 @@ describe('the referrer no longer stands in for a wrapper launch', () => {
 
   it('the new mode survives the ingest allowlists', () => {
     // A value the door drops is a value that does not exist.
-    for (const f of ['src/app/api/events/track/route.ts', 'src/app/api/push/subscribe/route.ts']) {
+    //
+    // push/subscribe's own allowlist moved on 15 Aug into
+    // push-subscription-registry.ts (registerSubscription/normalisePushContext)
+    // — the same validation, shared with the pre-auth signup path, not a
+    // weaker one. The route itself no longer names the values; the file that
+    // now decides them does, so the guard follows the logic, not the route.
+    for (const f of ['src/app/api/events/track/route.ts', 'src/lib/push-subscription-registry.ts']) {
       expect(readFileSync(f, 'utf8'), `${f} would drop ios_app`).toContain('ios_app');
     }
   });

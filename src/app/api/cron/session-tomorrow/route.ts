@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 import { reminderNotificationBody, sessionNotificationUrl } from '@/lib/session-link';
 
@@ -66,14 +66,13 @@ export async function POST(request: NextRequest) {
     ] as const) {
       if (!userId) continue;
       const url = sessionNotificationUrl(role);
-      await admin.from('notifications').insert({
-        user_id: userId, type: 'session_reminder',
-        title, body, data: { url, session_id: session.id, meetLink }, read: false, channel: 'in_app',
-      });
       const { data: p } = await admin.from('profiles').select('notif_prefs').eq('id', userId).single();
-      if ((p?.notif_prefs as Record<string, unknown>)?.push === true) {
-        await sendPushToUser(userId, { title, body, url });
-      }
+      await dispatch({
+        userId, type: 'session_reminder', title, body, url,
+        data: { session_id: session.id, meetLink },
+        reason: `1:1 session at ${time} tomorrow, IST`, expectedAction: 'view_session',
+        prefs: (p?.notif_prefs as Record<string, unknown>) ?? {},
+      });
     }
 
     notified++;

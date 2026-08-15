@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { serverError } from '@/lib/api-error';
 
 export async function POST(request: NextRequest) {
@@ -91,15 +91,12 @@ export async function POST(request: NextRequest) {
   // Notify student — in-app + push
   const notifTitle = 'Tere buddy ne reply kiya 🎯';
   const notifBody = feedback_text.trim().slice(0, 120);
-  await admin.from('notifications').insert({
-    user_id: student_id, type: 'feedback_received',
-    title: notifTitle, body: notifBody,
-    data: { url: '/student/buddy' }, read: false, channel: 'in_app',
-  });
   const { data: studentPrefs } = await admin.from('profiles').select('notif_prefs').eq('id', student_id).single();
-  if ((studentPrefs?.notif_prefs as Record<string, unknown>)?.push === true) {
-    await sendPushToUser(student_id, { title: notifTitle, body: notifBody, url: '/student/buddy' });
-  }
+  await dispatch({
+    userId: student_id, type: 'feedback_received', title: notifTitle, body: notifBody,
+    url: '/student/buddy', reason: 'Buddy replied with feedback', expectedAction: 'open_buddy',
+    prefs: (studentPrefs?.notif_prefs as Record<string, unknown>) ?? {},
+  });
 
   return NextResponse.json({ feedback: data });
 }

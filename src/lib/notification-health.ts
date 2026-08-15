@@ -9,14 +9,42 @@ import { studyDayStart } from '@/lib/study-day';
 // This computes, for every real student, exactly one health state — so the
 // funnel opted-in → subscribed → delivery-verified → healthy is a number we
 // watch, not a guess.
+//
+// ── STATES RENAMED 15 AUG — "opted_out" WAS NEVER A REAL MEASUREMENT ────────
+//
+// `notif_prefs` has a DATABASE DEFAULT of `{"push": false, ...}`. Every
+// profile is born with it. `notif_prefs->>'push' = 'false'` is therefore true
+// for EVERY student who has never touched the setting AND every student who
+// was actually asked and said no — one column value, two entirely different
+// facts, and the old code called both of them "opted out". Checked against
+// production: of 248 students in that bucket, only 24 (9.7%) have any record
+// of ever seeing a real push prompt (push-gate.tsx stamps `push_prompted` or
+// `push_reprompted` on decline — the one place a genuine "no" gets written
+// down). The other 224 are honestly UNKNOWN: this data cannot tell you
+// whether they were asked and ignored it, or never reached the screen that
+// asks at all. `never_opted_in` was worse — dead code. `notif_prefs` is never
+// null (the default fires first), so `p.notif_prefs && push===false` was
+// always true whenever push was false, and the branch beneath it was
+// unreachable. It reported 0 because it could never report anything else.
+//
+// `disconnected` also collapsed two different populations into one number —
+// see the split below, and getReliabilityMetrics' deathsWithoutBirth for the
+// production audit that found it.
+//
+// What is NOT distinguishable from current data, stated rather than guessed:
+// a student who explicitly turned push OFF after having it on (REVOKED) looks
+// identical to one who was never asked — /api/profiles/notif-prefs overwrites
+// the column with no history of the previous value. Do not invent that
+// distinction; there is nothing in the data to earn it.
 
 export type NotifHealthState =
-  | 'healthy'       // sub live + a device confirmed delivery in the last 3 days
-  | 'unverified'    // sub live, pushes accepted, but no device beacon yet (new instrumentation, or delivery genuinely not landing)
-  | 'stale'         // sub live but last verified delivery is 7+ days old despite pushes since — suspect
-  | 'disconnected'  // wants push (prefs on) but NO live subscription — the reconnect flow's job
-  | 'never_opted_in'// no push preference — the install/permission funnel's job
-  | 'opted_out';    // explicitly turned push off
+  | 'healthy'                   // sub live + a device confirmed delivery in the last 3 days
+  | 'unverified'                // sub live, pushes accepted, but no device beacon yet
+  | 'stale'                     // sub live but last verified delivery is 7+ days old despite pushes since
+  | 'disconnected_dead'         // wants push, subscription genuinely died (has a recorded birth) — real churn, cause open
+  | 'disconnected_unexplained'  // wants push, subscription missing with NO recorded birth — the 12–21 Jul instrumentation gap, closed 15 Aug
+  | 'declined'                  // push off, AND a real prompt is on record (push_prompted/push_reprompted) — a genuine "no"
+  | 'not_asked';                // push off, and nothing in the data proves a prompt was ever shown — was mislabeled "opted out"/"never opted in"
 
 export interface StudentHealth {
   id: string;
@@ -34,17 +62,25 @@ const daysAgo = (iso: string | null | undefined, now: number): number | null =>
   iso ? Math.max(0, Math.floor((now - new Date(iso).getTime()) / DAY)) : null;
 
 export function scoreStudent(p: any, now: number): { state: NotifHealthState; score: number } {
-  const prefsPush = (p.notif_prefs as { push?: boolean } | null)?.push === true;
+  const prefs = (p.notif_prefs ?? {}) as Record<string, unknown>;
+  const prefsPush = prefs.push === true;
   const hasSub = p.push_subscription != null;
   const verifiedDays = daysAgo(p.push_verified_at, now);
 
   if (!prefsPush && !hasSub) {
-    // Distinguish "never asked / never granted" from "deliberately off".
-    return p.notif_prefs && (p.notif_prefs as any).push === false
-      ? { state: 'opted_out', score: 0 }
-      : { state: 'never_opted_in', score: 0 };
+    const wasPrompted = prefs.push_prompted === true || prefs.push_reprompted === true;
+    return wasPrompted ? { state: 'declined', score: 0 } : { state: 'not_asked', score: 0 };
   }
-  if (prefsPush && !hasSub) return { state: 'disconnected', score: 10 };
+  if (prefsPush && !hasSub) {
+    // The 15 Aug forensic split: a subscription with no push_subscribed_at
+    // was never actually MISSING a birth — the pre-auth signup path just
+    // never wrote one (fixed in lib/push-subscription-registry.ts). Every
+    // instance is dated 12–21 July; this classification does not improve as
+    // new students arrive, because the write path that caused it is closed.
+    return p.push_subscribed_at != null
+      ? { state: 'disconnected_dead', score: 10 }
+      : { state: 'disconnected_unexplained', score: 10 };
+  }
   // Has a live subscription from here down.
   if (verifiedDays != null && verifiedDays <= 3) return { state: 'healthy', score: 100 };
   if (verifiedDays != null && verifiedDays >= 7) return { state: 'stale', score: 45 };
@@ -84,22 +120,24 @@ export async function getNotificationHealth(admin?: any): Promise<{
   });
 
   const byState = {
-    healthy: 0, unverified: 0, stale: 0, disconnected: 0, never_opted_in: 0, opted_out: 0,
+    healthy: 0, unverified: 0, stale: 0,
+    disconnected_dead: 0, disconnected_unexplained: 0,
+    declined: 0, not_asked: 0,
   } as Record<NotifHealthState, number>;
   for (const s of students) byState[s.state]++;
 
   const funnel = {
     total: students.length,
-    optedIn: students.filter((s) => s.state !== 'never_opted_in' && s.state !== 'opted_out').length,
+    optedIn: students.filter((s) => s.state !== 'not_asked' && s.state !== 'declined').length,
     subscribed: students.filter((s) => ['healthy', 'unverified', 'stale'].includes(s.state)).length,
     verified: byState.healthy,
     healthy: byState.healthy,
-    disconnected: byState.disconnected,
+    disconnected: byState.disconnected_dead + byState.disconnected_unexplained,
   };
 
   // Worst first — the students who need action lead the list.
   const order: Record<NotifHealthState, number> = {
-    disconnected: 0, stale: 1, unverified: 2, healthy: 3, never_opted_in: 4, opted_out: 5,
+    disconnected_dead: 0, disconnected_unexplained: 1, stale: 2, unverified: 3, healthy: 4, declined: 5, not_asked: 6,
   };
   students.sort((a, b) => order[a.state] - order[b.state] || (a.full_name ?? '').localeCompare(b.full_name ?? ''));
 

@@ -56,7 +56,14 @@ export const STUDENT_BUDGET_TYPES = [
   'buddy_evening',
 ];
 
-export type ExpectedAction = 'log_today' | 'finish_builder' | 'open_plan' | 'open_buddy';
+// Widened 15 Aug when transactional/buddy/admin sends were folded into this
+// one gate — the four original values described only student-nudge outcomes.
+// view_session/view_chat/acknowledge are honest about the rest: the admin
+// health page's "did they act on it" read only special-cases the first four
+// and buckets everything else sensibly, so adding names here never breaks it.
+export type ExpectedAction =
+  | 'log_today' | 'finish_builder' | 'open_plan' | 'open_buddy'
+  | 'view_session' | 'view_chat' | 'acknowledge';
 
 export type StudentState =
   | 'building_plan'   // Builder unfinished — blocked from the tracker; only builder-recovery may speak
@@ -95,31 +102,78 @@ export interface DispatchOptions {
   prefs: Record<string, unknown>; // the caller already holds notif_prefs
   email?: { to: string; send: () => Promise<void> } | null;
   dailyBudget?: number;     // state-based cap; callers pass BUDGET_ACTIVE/SETUP/RECOVERY
+  /**
+   * Extra fields merged into the row's `data` column alongside `url`.
+   * session-tomorrow needs this: its own dedup check reads `data->>session_id`
+   * back out to stop the Vercel cron and its GitHub Actions fallback from
+   * double-reminding the same session if both fire the same day. Without a
+   * way to carry that field through, the honest options were duplicate
+   * reminders or a second send path outside this one — this is the one that
+   * keeps the guarantee "every push has exactly one path" true.
+   */
+  data?: Record<string, unknown>;
+  /** Stable push tag: same tag = tray entries COLLAPSE (chat threads). */
+  tag?: string;
+  /** Sender's display name — the SW uses it for "N new messages" titles. */
+  senderName?: string;
 }
 
-export type DispatchOutcome = 'sent' | 'budget_exhausted';
+export type DispatchOutcome = 'sent' | 'budget_exhausted' | 'daily_cap';
 
-// Budget check + insert aren't atomic, but the state machine makes callers
-// target disjoint states, so no two crons race on the same student — the
-// gate is the backstop, not the only line of defence.
+// ── THE ONE SEND BOUNDARY ────────────────────────────────────────────────
+//
+// Every push CareerRai sends passes through this function. Nothing else in
+// the codebase may import sendPushToUser — a source-scan guard
+// (send-boundary.guard.test.ts) fails the build if it finds one that does.
+//
+// 15 Aug: fourteen call sites reached the transport directly — inserted a
+// notification row, threw its id away, and sent with no way for the service
+// worker to ever report a receipt or a click back to it. The same fourteen
+// also skipped BOTH volume controls below, because both lived in code paths
+// those callers never touched: the 10/day hard ceiling lived inside the
+// transport itself (push.ts), reachable only by calling it; the state budget
+// lived here, reachable only by calling here. A cap that only some callers
+// can find is not a cap. It is now impossible to send a push without both
+// checks running, because it is now impossible to reach the transport
+// without going through them.
+//
+// TWO SEPARATE LIMITS, not one:
+//
+//   THE STATE BUDGET (soft, per-type) governs how many of the app's OWN
+//   nudges — the daily activation/recovery/companion ladder — a student sees
+//   in one day. It applies only to STUDENT_BUDGET_TYPES: a reply from a
+//   buddy or a reminder for a session the student booked is a consequence of
+//   something the student did, not an interruption CareerRai initiated, and
+//   was always deliberately exempt (see that constant's own comment). When
+//   this budget is hit, NOTHING is created for that call — not the push, not
+//   even the in-app row — because the point is total daily volume in the
+//   tray, not just the push channel.
+//
+//   THE HARD CEILING (10/day, every type, every recipient, "at any cost" —
+//   founder, 21 July) exists so that no combination of features can bury one
+//   student. It runs only when a push is actually about to be attempted, so
+//   a capped push still leaves its in-app row behind — the student still
+//   sees it in the tray, they just don't get buzzed for the eleventh time.
 export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> {
   const admin = createAdminClient();
   const todayStart =
     new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
-  const { count } = await admin
-    .from('notifications')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', opts.userId)
-    .in('type', STUDENT_BUDGET_TYPES)
-    .gte('created_at', todayStart);
-  if ((count ?? 0) >= (opts.dailyBudget ?? DAILY_BUDGET)) return 'budget_exhausted';
+  if (STUDENT_BUDGET_TYPES.includes(opts.type)) {
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', opts.userId)
+      .in('type', STUDENT_BUDGET_TYPES)
+      .gte('created_at', todayStart);
+    if ((count ?? 0) >= (opts.dailyBudget ?? DAILY_BUDGET)) return 'budget_exhausted';
+  }
 
   const { data: row } = await admin
     .from('notifications')
     .insert({
       user_id: opts.userId, type: opts.type, title: opts.title, body: opts.body,
-      data: { url: opts.url }, read: false, channel: 'in_app',
+      data: { url: opts.url, ...opts.data }, read: false, channel: 'in_app',
       reason: opts.reason, expected_action: opts.expectedAction,
     })
     .select('id')
@@ -129,12 +183,29 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
   // every state — the whole growth thesis is that ignored ≠ stop-trying for the
   // dormant/never-active students we most need to reach. The budget is the only
   // volume control now.
+  let outcome: DispatchOutcome = 'sent';
   if (opts.prefs.push === true && row?.id) {
-    const res = await sendPushToUser(opts.userId, {
-      title: opts.title, body: opts.body, url: opts.url, notifId: row.id as string,
-    });
-    if (res.ok) {
-      await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
+    // The hard ceiling. Counts PUSHES (pushed_at), not notifications
+    // (created_at) — a budget-exhausted call above never reaches here, and an
+    // in-app-only row (push pref off) never counted against it either, both
+    // exactly as before this refactor.
+    const { count: pushedToday } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', opts.userId)
+      .not('pushed_at', 'is', null)
+      .gte('pushed_at', todayStart);
+    if ((pushedToday ?? 0) >= 10) {
+      console.warn(`[notif-os] daily hard cap (10) reached for ${opts.userId} — push suppressed, in-app row kept`);
+      outcome = 'daily_cap';
+    } else {
+      const res = await sendPushToUser(opts.userId, {
+        title: opts.title, body: opts.body, url: opts.url, notifId: row.id as string,
+        tag: opts.tag, senderName: opts.senderName,
+      });
+      if (res.ok) {
+        await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
+      }
     }
   }
 
@@ -149,7 +220,7 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
     }
   }
 
-  return 'sent';
+  return outcome;
 }
 
 // ─── Builder recovery ladder: 30min → 24h → 72h, then the human queue ───────

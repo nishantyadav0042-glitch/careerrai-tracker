@@ -11,7 +11,7 @@ import {
 } from '@/lib/streak-utils';
 import { MILESTONE_MESSAGES } from '@/lib/messages';
 import { onboardingCopy } from '@/lib/notification-engine';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 
 interface LoggingRequest {
@@ -207,12 +207,12 @@ export async function POST(request: NextRequest) {
         const dayNumber = loggedDayCount ?? 0;
         const copy = onboardingCopy(dayNumber, 'done', profile.full_name?.split(' ')[0] ?? 'there');
         if (!copy) return;
-        await admin.from('notifications').insert({
-          user_id: user.id, type: 'onboarding_done', title: copy.title, body: copy.body,
-          data: { url: '/student/tracker' }, read: false, channel: 'in_app',
-        });
         const prefs = (profile.notif_prefs ?? {}) as Record<string, unknown>;
-        if (prefs.push === true) await sendPushToUser(user.id, { ...copy, url: '/student/tracker' });
+        await dispatch({
+          userId: user.id, type: 'onboarding_done', title: copy.title, body: copy.body,
+          url: '/student/tracker', reason: `Day ${dayNumber} log completed — first-week celebration`,
+          expectedAction: 'log_today', prefs,
+        });
       })().catch(console.error);
     }
 

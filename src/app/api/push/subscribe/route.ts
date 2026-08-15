@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidPushEndpoint } from '@/lib/push-validate';
+import { registerSubscription } from '@/lib/push-subscription-registry';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -20,31 +21,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
   }
 
-  // Context of the grant: 'standalone' = real installed-app push (deliverable),
-  // 'browser'/'twa' = browser-tab push (often undeliverable, esp. iOS Safari).
-  // This is the field that finally distinguishes the two — the root cause of
-  // "permission on, notifications never arrive".
-  const rawCtx = typeof body?.context === 'string' ? body.context : null;
-  const pushContext = rawCtx && ['standalone', 'twa', 'ios_app', 'browser', 'unknown'].includes(rawCtx) ? rawCtx : null;
-
   const admin = createAdminClient();
-  // Merge push:true into existing prefs — never clobber daily_reminder/email/time.
   const { data: profile } = await admin.from('profiles').select('notif_prefs, push_subscribed_at').eq('id', user.id).single();
-  const notif_prefs = { ...(profile?.notif_prefs as Record<string, unknown> ?? {}), push: true };
-  const now = new Date().toISOString();
-  // A fresh subscription resurrects the channel — clear the death stamp.
-  // push_subscribed_at is set ONCE (first-ever sub) so we can measure true
-  // subscription lifetime; push_resubscribed_at moves on every (re)persist.
-  await admin.from('profiles')
-    .update({
-      push_subscription: subscription,
-      notif_prefs,
-      push_died_at: null,
-      push_subscribed_at: (profile?.push_subscribed_at as string | null) ?? now,
-      push_resubscribed_at: now,
-      ...(pushContext ? { push_context: pushContext } : {}),
-    })
-    .eq('id', user.id);
+
+  // The one canonical definition of "a subscription was registered" — see
+  // lib/push-subscribe.ts. Also used by the pre-auth signup path, so
+  // push_subscribed_at can never again be skipped by one of the two callers.
+  const update = registerSubscription(
+    { notifPrefs: profile?.notif_prefs as Record<string, unknown> | null, pushSubscribedAt: profile?.push_subscribed_at as string | null },
+    subscription,
+    new Date().toISOString(),
+    body?.context
+  );
+
+  await admin.from('profiles').update(update).eq('id', user.id);
 
   return NextResponse.json({ ok: true });
 }

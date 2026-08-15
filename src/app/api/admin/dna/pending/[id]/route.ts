@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isRequestAdmin } from '@/lib/require-admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch, type ExpectedAction } from '@/lib/notification-os';
 
 // The one action that actually lets a Brain-queued message reach a student.
 // Reject just closes it out; nothing is ever sent on rejection.
@@ -28,17 +28,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'No content to send' }, { status: 400 });
   }
 
-  const { data: row } = await admin.from('notifications').insert({
-    user_id: decision.student_id, type: `brain_${decision.action_id}`, title: copy.title, body: copy.body,
-    data: { url: copy.url }, read: false, channel: 'in_app',
-    reason: `Approved Brain recommendation: ${decision.action_id}`, expected_action: decision.action_id,
-  }).select('id').single();
-  const notificationId = (row?.id as string) ?? null;
+  const { data: studentProfile } = await admin.from('profiles').select('notif_prefs').eq('id', decision.student_id).single();
+  // decision.action_id is a DecisionEventType, and decision-engine's own
+  // EXPECTED map (api/cron/decision-engine/route.ts) already constrains every
+  // DecisionEventType to a valid ExpectedAction — the cast is asserting a
+  // relationship the pipeline already enforces upstream, not inventing one.
+  await dispatch({
+    userId: decision.student_id as string, type: `brain_${decision.action_id}`,
+    title: copy.title, body: copy.body, url: copy.url,
+    reason: `Approved Brain recommendation: ${decision.action_id}`,
+    expectedAction: decision.action_id as unknown as ExpectedAction,
+    prefs: (studentProfile?.notif_prefs as Record<string, unknown>) ?? {},
+  });
 
-  if (notificationId) {
-    const res = await sendPushToUser(decision.student_id as string, { title: copy.title, body: copy.body, url: copy.url, notifId: notificationId });
-    if (res.ok) await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', notificationId);
-  }
+  const { data: sentRow } = await admin
+    .from('notifications').select('id')
+    .eq('user_id', decision.student_id).eq('type', `brain_${decision.action_id}`)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const notificationId = sentRow?.id ?? null;
 
   await admin.from('decision_log').update({ send_status: 'sent', notification_id: notificationId }).eq('id', id);
   return NextResponse.json({ ok: true, status: 'sent', notificationId });

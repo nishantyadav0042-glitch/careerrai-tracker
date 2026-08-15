@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToUser } from '@/lib/push';
+import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 
 // Every invocation of this route walks the whole student roster. Vercel's
@@ -44,18 +44,11 @@ export async function POST(request: NextRequest) {
   let sent = 0;
   for (const s of eligible) {
     const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
-
-    await admin.from('notifications').insert({
-      user_id: s.id, type: 'founder_ping',
-      title, body,
-      data: { url: '/student/buddy', from: 'nishant' }, read: false, channel: 'in_app',
+    const outcome = await dispatch({
+      userId: s.id, type: 'founder_ping', title, body, url: '/student/buddy',
+      reason: 'Weekly personal check-in from the founder — no reply in the last 6 days', expectedAction: 'open_buddy', prefs,
     });
-
-    if (prefs.push === true) {
-      await sendPushToUser(s.id, { title, body, url: '/student/buddy' });
-    }
-
-    sent++;
+    if (outcome === 'sent') sent++;
   }
 
   return NextResponse.json({ sent, total: students.length });

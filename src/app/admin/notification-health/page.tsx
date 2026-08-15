@@ -206,12 +206,13 @@ export default async function NotificationHealthPage() {
             <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">✅ healthy {h.healthy}</span>
             <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">delivery not yet confirmed {h.unverified}</span>
             <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">⚠ stale {h.stale}</span>
-            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">🔌 disconnected {h.disconnected}</span>
-            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">never opted in {h.never_opted_in}</span>
-            {h.opted_out > 0 && <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-500">opted out {h.opted_out}</span>}
+            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">🔌 disconnected — real churn {h.disconnected_dead}</span>
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-500">🔌 disconnected — 12–21 Jul gap, closed {h.disconnected_unexplained}</span>
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">no active subscription, never asked {h.not_asked}</span>
+            {h.declined > 0 && <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-500">asked, declined {h.declined}</span>}
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-stone-400">
-            Disconnected = wants push but the subscription died (the reconnect screen recovers these on next open). “Delivery not yet confirmed” shrinks as service workers update and start beaconing back device-level receipts.
+            Renamed 15 Aug: “opted out” used to mean the database DEFAULT (push:false from birth), not a real refusal — checked against production, only 9.7% of that bucket ever saw an actual prompt. “Declined” now means exactly that: a real push_prompted/push_reprompted record exists. Disconnected splits real churn (has a subscription birth date) from the 12–21 Jul instrumentation gap (never had one) — the gap is closed, not ongoing. “Delivery not yet confirmed” shrinks as service workers update and start beaconing back device-level receipts.
           </p>
         </div>
 
