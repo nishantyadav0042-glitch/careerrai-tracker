@@ -85,11 +85,13 @@ describe('reach decides the weight of the ask', () => {
     expect(s).toContain('Want your plan on WhatsApp too?');
   });
 
-  it('reads install and push state rather than a student self-report', () => {
+  it('reads install state rather than a student self-report', () => {
     // "Done — continue" on the openApp screen proves nothing; the install
-    // hook's own signal does.
+    // hook's own signal does. pushOn is always false as of 15 Aug — push
+    // permission is no longer decided in this ceremony at all (see below), so
+    // "not yet asked" is the honest value, not a guess.
     const s = readFileSync(SEQUENCE, 'utf8');
-    expect(s).toContain('reachOf({ installed, pushOn: pushState === \'granted\' })');
+    expect(s).toContain('reachOf({ installed, pushOn: false })');
     expect(s).toContain('const { ui: installUi, installed } = useInstall();');
   });
 
@@ -100,21 +102,31 @@ describe('reach decides the weight of the ask', () => {
   });
 });
 
-describe('a student push did not reach sees WhatsApp on the very next screen', () => {
-  it('the not-granted branch of the reminders step goes straight to it', () => {
+describe('WhatsApp is the ceremony\'s one ask now — every student, same order', () => {
+  // Founder, 15 Aug: "even if someone is dead in app we can revive them from
+  // WhatsApp — but if someone didn't join WhatsApp and just added the app, we
+  // can't revive them." That ranked WhatsApp above push, not alongside it.
+  // The reach-weighted two-order dance this used to test (push declined →
+  // WhatsApp first; push granted → WhatsApp last) is gone along with the
+  // reason for it: push permission is no longer asked in this ceremony at
+  // all, so there is nothing left to branch the order on.
+
+  it('promises hands off straight to whatsapp, unconditionally', () => {
     const s = readFileSync(SEQUENCE, 'utf8');
-    // The granted branch keeps the original order (log tour, then WhatsApp);
-    // the branch below the push button is the declined/skipped one.
-    const declineBranch = s.slice(s.indexOf("pushState ? 'Last thing →' : 'Maybe later'") - 600);
-    expect(declineBranch).toContain("onClick={() => setStep('whatsapp')}");
+    expect(s).toContain("setStep('whatsapp'); }} />");
   });
 
-  it('the log tour is moved, never dropped', () => {
-    // Reordering must not cost the declining cohort a screen: whichever of the
-    // two ran first hands off to the other, and only the second one closes.
+  it('the reminders / push-permission step no longer exists in this file', () => {
     const s = readFileSync(SEQUENCE, 'utf8');
-    expect(s).toContain('if (waSeen) finishCommitment(); else setStep(\'whatsapp\');');
-    expect(s).toContain('if (tourSeen) finishCommitment(); else setStep(\'logTour\');');
+    expect(s).not.toContain("step === 'reminders'");
+    expect(s).not.toContain('Turn on reminders');
+    expect(s).not.toContain('turnOnReminders');
+  });
+
+  it('whatsapp hands off to logTour with no branching left to test', () => {
+    const s = readFileSync(SEQUENCE, 'utf8');
+    expect(s).toContain("onDone={() => setStep('logTour')}");
+    expect(s).toContain("onNext={async () => finishCommitment()}");
   });
 
   it('nothing after it gates Home', () => {

@@ -5,7 +5,6 @@ import { InstallButton } from '@/components/install/install-button';
 import { AndroidInstallGuide } from '@/components/install/android-install-guide';
 import { useInstall } from '@/lib/install/use-install';
 import { trackMeta } from '@/lib/track';
-import { enablePush, type EnablePushResult } from '@/lib/push-subscribe';
 import { SixPromises } from '@/components/six-promises';
 import ScreenLogTour from '@/app/student/onboarding/screens/screen-log-tour';
 import { WhatsAppOptIn, reachOf } from '@/components/onboarding/whatsapp-optin';
@@ -13,9 +12,10 @@ import { PlanSnapshot } from '@/components/onboarding/plan-snapshot';
 
 // The setup journey, made visible (founder, 21 July: "it should feel like a
 // journey, not a boring job — sticky like a magnet till app notifications are
-// on"). Five stations, always on screen: what's done gets a tick, the current
-// one pulses, and the unfinished ones PULL — the student can see exactly how
-// close the finish line is, and the finish line is reminders ON in the app.
+// on"). Stations, always on screen: what's done gets a tick, the current one
+// pulses, and the unfinished ones PULL — the student can see exactly how
+// close the finish line is. The finish line moved 15 Aug from "reminders ON"
+// to WhatsApp joined — see the note above the whatsapp step for why.
 // iPhone has one fewer station than Android, and that is the point (10 Aug):
 // the App Store hands the app over in one tap, so there is no "here is how to
 // add it to your Home Screen" step to walk through. Showing a station we then
@@ -59,7 +59,7 @@ function JourneyRail({ current, stations }: { current: number; stations: readonl
 // here needs it any more.
 
 
-type Step = 'promises' | 'reminders' | 'logTour' | 'whatsapp' | 'installFirst' | 'openApp';
+type Step = 'promises' | 'logTour' | 'whatsapp' | 'installFirst' | 'openApp';
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -85,29 +85,31 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
   const { ui: installUi, installed } = useInstall();
   const isIphone = installUi === 'ios-app-store';
   const stations = isIphone ? JOURNEY_IPHONE : JOURNEY;
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushState, setPushState] = useState<EnablePushResult | null>(null);
 
-  // ── Reach decides where WhatsApp sits, and how hard it asks ───────────────
+  // ── WhatsApp is now the ceremony's ONE ask, unconditional ─────────────────
   //
-  // Founder, 14 Aug: a student who never installs the app is dead to us — no
-  // channel reaches them once the tab closes — so WhatsApp must be the ask they
-  // cannot miss. Someone who DID install can be asked afterwards, gently. And
-  // anyone who just closed notifications gets WhatsApp as the very next screen,
-  // everything else pushed aside.
+  // Founder, 15 Aug: "even if someone is dead in app we can revive them from
+  // WhatsApp — but if someone didn't join WhatsApp and just added the app, we
+  // can't revive them." That ranks WhatsApp above push, not alongside it. The
+  // reach-weighted two-order dance this used to run (push declined → WhatsApp
+  // first; push granted → WhatsApp last, light-touch) is gone along with the
+  // reason for it: push permission is no longer asked in this ceremony at
+  // all, so there is nothing left to branch the order on. Every student sees
+  // WhatsApp, right after the six promises, every time.
   //
-  // So the sequence has two orders, not one:
-  //   push granted     → log tour → WhatsApp (light ask; they are already covered)
-  //   push not granted → WhatsApp FIRST → log tour
-  // Neither drops a screen: whichever of the two ran first hands off to the
-  // other, and only the second one closes the sequence. The order changes; the
-  // content a student gets does not.
-  const [tourSeen, setTourSeen] = useState(false);
-  const [waSeen, setWaSeen] = useState(false);
-  // `installed` is the honest read, not a self-report: it comes from the
-  // appinstalled event, the native shell, getInstalledRelatedApps() and
-  // display-mode — never from the student tapping "Done — continue".
-  const reach = reachOf({ installed, pushOn: pushState === 'granted' });
+  // Push permission moved fully in-app — StandaloneNotifAsk
+  // (src/components/standalone-notif-ask.tsx, wired in student/layout.tsx)
+  // already asks for it post-signup, inside the installed app, at the exact
+  // "peak intent, permanent home" moment the old comment on this file
+  // described. That component did not need building; it already existed and
+  // already ran after this ceremony finished — the fix here is only to stop
+  // ALSO asking a second time, earlier, in the browser.
+  //
+  // `reachOf` still shapes the WORDING (a student who has installed reads
+  // softer copy than one who hasn't), just no longer the ORDER. pushOn is
+  // always false here on purpose: at this exact point in the ceremony push
+  // has definitionally not been asked yet, so this is accurate, not a guess.
+  const reach = reachOf({ installed, pushOn: false });
 
   // A new student has completed onboarding — the signup conversion for ad
   // campaigns. MUST fire once per student, but this sequence re-renders on
@@ -182,19 +184,6 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
   // overlay and reveals the tracker underneath.
   const finishCommitment = () => {
     setVisible(false);
-  };
-
-  // The whole point of the sequence: ask for push permission at peak intent,
-  // right after the commitment ceremony — not deferred to a later gate most
-  // students never reach. enablePush() subscribes AND flips notif_prefs.push on
-  // the server, so a granted student is immediately reachable by dispatch().
-  // A denial / iOS-needs-install / error never blocks the flow — we show the
-  // note and let them continue.
-  const turnOnReminders = async () => {
-    setPushBusy(true);
-    const result = await enablePush();
-    setPushState(result);
-    setPushBusy(false);
   };
 
   if (!visible) return null;
@@ -288,101 +277,26 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
                 asked the student for a promise before we had named a single
                 thing we do for them. Backwards. The app commits first, out
                 loud; the student's one job is named last. */}
-            <SixPromises onNext={() => { void persist({ done: true }); setStep('reminders'); }} />
+            <SixPromises onNext={() => { void persist({ done: true }); setStep('whatsapp'); }} />
           </div>
         )}
 
-        {step === 'reminders' && (
-          <div className="space-y-6 text-center">
-            <JourneyRail current={isIphone ? 2 : 3} stations={stations} />
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-3xl shadow-lg shadow-orange-200">🔔</div>
-            <div>
-              <h1 className="text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-                Now let us do the six.
-              </h1>
-              <p className="mt-2 text-sm leading-relaxed text-stone-500">
-                A separate step on purpose — the six are yours whether you tap this or not. But this is
-                how they reach you.
-              </p>
-            </div>
-
-            {/* Three concrete jobs, in the founder's own order: what to do,
-                what you missed, what's done. A permission ask that lists what
-                the notification will SAY is answerable; "allow notifications"
-                is not. */}
-            <ul className="mx-auto max-w-xs space-y-2 text-left">
-              {[
-                { t: 'What to do today', s: 'Your plan, the moment it\u2019s ready' },
-                { t: 'What you missed', s: 'Revision due, mock day, plan running out' },
-                { t: 'What\u2019s done', s: 'Day closed, and what it means for your date' },
-              ].map((x) => (
-                <li key={x.t} className="flex gap-2.5 rounded-xl bg-stone-50 px-3 py-2.5">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500" />
-                  <div>
-                    <p className="text-[13.5px] font-bold leading-tight text-stone-900">{x.t}</p>
-                    <p className="text-[12px] leading-tight text-stone-500">{x.s}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-
-            <div>
-              <p className="text-[12px] font-medium text-stone-400">
-                <b className="text-stone-600">Never spam, never marketing</b> — only your own preparation.
-              </p>
-            </div>
-
-            {pushState === 'granted' ? (
-              <div className="mx-auto flex max-w-xs flex-col items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-lg text-white">✓</span>
-                <p className="text-sm font-semibold text-emerald-700">Done. We&apos;ve got you from here.</p>
-                <button
-                  type="button"
-                  onClick={() => setStep('logTour')}
-                  className="mt-1 w-full rounded-2xl bg-stone-900 py-3.5 text-sm font-semibold text-white transition-all hover:bg-stone-800 active:scale-[0.98]"
-                >
-                  Last thing →
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2 pt-1">
-                <button
-                  type="button"
-                  disabled={pushBusy}
-                  onClick={turnOnReminders}
-                  className="w-full rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 py-4 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
-                >
-                  {pushBusy ? 'Turning on…' : '🔔 Turn on reminders'}
-                </button>
-
-                {pushState === 'denied' && (
-                  <p className="px-2 text-[11px] leading-snug text-rose-500">
-                    Blocked in your browser settings. Allow notifications for this site and you&apos;re set.
-                  </p>
-                )}
-                {pushState === 'ios_needs_install' && (
-                  <p className="px-2 text-[11px] leading-snug text-stone-500">
-                    On iPhone, reminders switch on once the app is installed — we&apos;ll ask again inside the app.
-                  </p>
-                )}
-                {(pushState === 'unsupported' || pushState === 'error') && (
-                  <p className="px-2 text-[11px] leading-snug text-stone-500">
-                    Couldn&apos;t turn them on here — installing the app fixes it. Keep going.
-                  </p>
-                )}
-
-                {/* Push did NOT come on — so this student is one closed tab
-                    away from unreachable, and the next screen is the one that
-                    fixes that. Not the log tour: that runs after. */}
-                <button
-                  type="button"
-                  onClick={() => setStep('whatsapp')}
-                  className="w-full py-2.5 text-xs font-medium text-stone-400 hover:text-stone-600"
-                >
-                  {pushState ? 'Last thing →' : 'Maybe later'}
-                </button>
-              </div>
-            )}
+        {/* ── WhatsApp — the ceremony's one ask, right after the six promises.
+            Founder, 15 Aug: "even if someone is dead in app we can revive
+            them from WhatsApp — but if someone didn't join WhatsApp and just
+            added the app, we can't revive them." Every phone number can be
+            reached this way; not every install stays reachable. Skippable —
+            nothing here gates Home (the Incident #2 shape: a hard gate on an
+            action once cost a whole cohort's logging). */}
+        {step === 'whatsapp' && (
+          <div className="space-y-4">
+            {/* Same final rail position "reminders" used to occupy — WhatsApp
+                is now the ceremony's finishing ask in its place. */}
+            <JourneyRail current={stations.length - 1} stations={stations} />
+            <WhatsAppOptIn
+              reach={reach}
+              onDone={() => setStep('logTour')}
+            />
           </div>
         )}
 
@@ -399,36 +313,10 @@ export default function PostSignupSequence({ regEventId }: { regEventId?: string
           <div className="space-y-4">
             <JourneyRail current={stations.length - 1} stations={stations} />
             <ScreenLogTour
-              onNext={async () => {
-                setTourSeen(true);
-                if (waSeen) finishCommitment(); else setStep('whatsapp');
-              }}
-              onBack={() => setStep(waSeen ? 'whatsapp' : 'reminders')}
+              onNext={async () => finishCommitment()}
+              onBack={() => setStep('whatsapp')}
               canGoBack
               isLoading={false}
-            />
-          </div>
-        )}
-
-        {/* ── WhatsApp, positioned by reach ──────────────────────────────
-            Reach, not onboarding: 87% finish the sequence, but 64% never log
-            a day, 49% never return after day one, and only 31% have working
-            push. Every student has a phone number, so WhatsApp is the only
-            channel that covers the two-thirds push cannot.
-
-            It runs FIRST for a student push didn't reach — the moment after
-            the decline is the moment it matters — and last for one it did.
-            Whichever ran first hands off to the other; the second one closes.
-            Skippable in every variant; nothing here gates Home. */}
-        {step === 'whatsapp' && (
-          <div className="space-y-4">
-            <JourneyRail current={stations.length - 1} stations={stations} />
-            <WhatsAppOptIn
-              reach={reach}
-              onDone={() => {
-                setWaSeen(true);
-                if (tourSeen) finishCommitment(); else setStep('logTour');
-              }}
             />
           </div>
         )}
