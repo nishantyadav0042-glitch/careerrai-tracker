@@ -34,6 +34,12 @@ export const START_STEP_KEYS = [
   'dream-percentile',
   'quick-facts',
   'reality-check',
+  // Founder, 15 Aug: right after the gut-check names the "weakest topics"
+  // blind spot, ask it directly — one tap, three options. Same question, same
+  // component (screen-weakest-section) the post-login modal already asks;
+  // this funnel had never asked it, so every pre-auth signup fell through to
+  // the DILR default (see that component's own header for the 14 Aug audit).
+  'weakest-section',
   'topic-coverage',
   'instant-insight',
   'mentor',

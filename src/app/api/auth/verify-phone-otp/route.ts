@@ -355,6 +355,18 @@ export async function POST(request: NextRequest) {
       }
       if (typeof onboarding.wants_mentor === 'boolean') profileUpdate.wants_mentor = onboarding.wants_mentor;
 
+      // Weakest section — screen-weakest-section.tsx, added to THIS funnel
+      // 15 Aug. Keyed on PRESENCE, not truthiness: "Not sure yet" is a real,
+      // honest answer that submits null, and a truthiness check would drop it
+      // silently and leave the student on the DILR default it exists to
+      // replace (same rule the post-login modal already applies to this
+      // exact field — onboarding-modal.tsx).
+      if (onboarding && 'self_reported_weakest_section' in onboarding) {
+        const v = (onboarding as Record<string, unknown>).self_reported_weakest_section;
+        profileUpdate.self_reported_weakest_section =
+          v === 'VARC' || v === 'DILR' || v === 'QA' ? v : null;
+      }
+
       const subscription = onboarding.push_subscription as { endpoint?: unknown } | null | undefined;
       if (subscription?.endpoint && isValidPushEndpoint(subscription.endpoint)) {
         profileUpdate.push_subscription = subscription;

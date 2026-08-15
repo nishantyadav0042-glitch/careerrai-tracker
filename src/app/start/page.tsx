@@ -9,6 +9,9 @@ import ScreenTargetDate from './screens/screen-target-date';
 import ScreenDreamPercentile from './screens/screen-dream-percentile';
 import ScreenQuickFacts from './screens/screen-quick-facts';
 import ScreenRealityCheck from '@/app/student/onboarding/screens/screen-reality-check';
+// Shared with the post-login onboarding modal — the SAME question, not a
+// second implementation of "which section is weakest, three buttons".
+import ScreenWeakestSection from '@/app/student/onboarding/screens/screen-weakest-section';
 import ScreenTopicCoverage from '@/app/student/onboarding/screens/screen-topic-coverage';
 import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
@@ -123,7 +126,10 @@ function stepKeysFor(): readonly string[] {
 // v8: pain-points screen removed (founder, 13 Aug: too much text, nobody
 //     would read it) — a saved v7 draft's stepIdx would otherwise point at
 //     the wrong screen for everyone after it in the list.
-const DRAFT_KEY = 'cr_preauth_draft_v8';
+// v9: weakest-section inserted after reality-check (founder, 15 Aug) — same
+//     bump reason as v8: a v8 draft's stepIdx would land on the wrong screen
+//     for everyone past reality-check once the list gained a member.
+const DRAFT_KEY = 'cr_preauth_draft_v9';
 // A draft older than this is an abandoned lead, not a session to resume —
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
@@ -226,6 +232,9 @@ function StartPageInner() {
       break;
     case 'reality-check':
       content = <ScreenRealityCheck onNext={advance} {...shared} />;
+      break;
+    case 'weakest-section':
+      content = <ScreenWeakestSection onNext={advance} {...shared} />;
       break;
     case 'topic-coverage':
       content = (
