@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scoreStudent, type NotifHealthState } from './notification-health';
+import { scoreStudent, getRecoveryQueue, type NotifHealthState } from './notification-health';
 
 // ── THE HONEST CLASSIFICATION, PROVEN STATE BY STATE ────────────────────────
 //
@@ -116,6 +116,96 @@ describe('a live subscription — healthy / unverified / stale', () => {
     expect(scoreStudent(withSub(4), NOW).state).toBe('unverified');
     expect(scoreStudent(withSub(6), NOW).state).toBe('unverified');
     expect(scoreStudent(withSub(null), NOW).state).toBe('unverified');
+  });
+});
+
+describe('getRecoveryQueue — Installment 3 Batch 15: the specific worklist, not a generic count', () => {
+  function fakeAdmin(opts: {
+    profiles: Record<string, unknown>[];
+    notifications?: Record<string, unknown>[];
+    events?: Record<string, unknown>[];
+  }) {
+    return {
+      from(table: string) {
+        if (table === 'profiles') {
+          const q = {
+            select: () => q, eq: () => q, not: () => q, is: () => q,
+            then: (resolve: (v: { data: unknown }) => void) => resolve({ data: opts.profiles }),
+          };
+          return q;
+        }
+        if (table === 'notifications') {
+          const filters: { requireField?: string; likePrefix?: string } = {};
+          const q = {
+            select: () => q,
+            in: () => q,
+            not: (col: string) => { filters.requireField = col; return q; },
+            ilike: (_col: string, pattern: string) => { filters.likePrefix = pattern.replace('%', ''); return q; },
+            then: (resolve: (v: { data: unknown }) => void) => {
+              let rows = opts.notifications ?? [];
+              if (filters.requireField) rows = rows.filter((r) => (r as Record<string, unknown>)[filters.requireField!] != null);
+              if (filters.likePrefix) rows = rows.filter((r) => String((r as Record<string, unknown>).send_error ?? '').startsWith(filters.likePrefix!));
+              resolve({ data: rows });
+            },
+          };
+          return q;
+        }
+        if (table === 'student_events') {
+          const q = {
+            select: () => q, in: () => q,
+            then: (resolve: (v: { data: unknown }) => void) => resolve({ data: opts.events ?? [] }),
+          };
+          return q;
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+  }
+
+  it('returns permission-granted, subscription-missing students only', async () => {
+    const admin = fakeAdmin({
+      profiles: [
+        { id: 's1', full_name: 'A', push_died_at: '2026-08-01T00:00:00Z', push_recovery_attempted_at: null, push_recovery_last_error: null },
+      ],
+    });
+    const queue = await getRecoveryQueue(admin);
+    expect(queue).toHaveLength(1);
+    expect(queue[0].id).toBe('s1');
+    expect(queue[0].subscriptionState).toBe('provider_dead');
+    expect(queue[0].recoveryState).toBe('recovery_required');
+  });
+
+  it('classifies recovery_attempted vs recovery_failed correctly from the two new columns', async () => {
+    const admin = fakeAdmin({
+      profiles: [
+        { id: 's_attempted', full_name: 'B', push_died_at: '2026-08-01T00:00:00Z', push_recovery_attempted_at: '2026-08-16T00:00:00Z', push_recovery_last_error: null },
+        { id: 's_failed', full_name: 'C', push_died_at: '2026-08-01T00:00:00Z', push_recovery_attempted_at: '2026-08-16T00:00:00Z', push_recovery_last_error: 'subscribe_threw:AbortError' },
+      ],
+    });
+    const queue = await getRecoveryQueue(admin);
+    expect(queue.find((e) => e.id === 's_attempted')!.recoveryState).toBe('recovery_attempted');
+    expect(queue.find((e) => e.id === 's_failed')!.recoveryState).toBe('recovery_failed');
+    expect(queue.find((e) => e.id === 's_failed')!.recoveryLastError).toBe('subscribe_threw:AbortError');
+  });
+
+  it('surfaces the LATEST death reason by failed_at, not just whichever row the query happened to return last', async () => {
+    const admin = fakeAdmin({
+      profiles: [{ id: 's1', full_name: 'A', push_died_at: '2026-08-10T00:00:00Z', push_recovery_attempted_at: null, push_recovery_last_error: null }],
+      notifications: [
+        { user_id: 's1', send_error: 'send_failed_500', failed_at: '2026-08-05T00:00:00Z' },
+        { user_id: 's1', send_error: 'send_failed_410', failed_at: '2026-08-10T00:00:00Z' }, // the real, later death
+      ],
+    });
+    const queue = await getRecoveryQueue(admin);
+    expect(queue[0].deathReason).toBe('send_failed_410');
+  });
+
+  it('missing (no push_died_at) vs provider_dead are distinguished', async () => {
+    const admin = fakeAdmin({
+      profiles: [{ id: 's1', full_name: 'A', push_died_at: null, push_recovery_attempted_at: null, push_recovery_last_error: null }],
+    });
+    const queue = await getRecoveryQueue(admin);
+    expect(queue[0].subscriptionState).toBe('missing');
   });
 });
 

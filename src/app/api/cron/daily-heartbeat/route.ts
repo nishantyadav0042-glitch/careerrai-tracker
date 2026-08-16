@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_RECOVERY } from '@/lib/notification-os';
 import { getLogDateString } from '@/lib/streak-utils';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -20,6 +21,10 @@ export async function GET(request: NextRequest) {
   if (!authorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return withCronTracking('/api/cron/daily-heartbeat', async () => dailyHeartbeatRun());
+}
+
+async function dailyHeartbeatRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const logDay = getLogDateString();
   const todayStart =

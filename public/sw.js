@@ -115,16 +115,37 @@ self.addEventListener('push', (event) => {
   const work = [showPromise];
   const notifId = notificationData.data && notificationData.data.notifId;
   if (notifId) {
+    // Best-effort — must never delay or block showNotification above — but
+    // "best-effort" used to mean "vanishes with zero trace on ANY failure",
+    // including a momentary network blip right as the device wakes from
+    // Doze to process this exact push (the most likely moment for one).
+    // One retry, and a console line so a failure is at least visible if
+    // DevTools is ever open — matching push.ts's own transient-failure
+    // retry, not inventing a new pattern.
     work.push(
-      fetch('/api/push/received', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: notifId }),
-      }).catch(() => {})
+      beaconWithRetry('/api/push/received', notifId).catch(function (e) {
+        console.warn('[Service Worker] received beacon failed after retry:', e);
+      })
     );
   }
   event.waitUntil(Promise.all(work));
 });
+
+function beaconWithRetry(path, notifId) {
+  function attempt() {
+    return fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: notifId }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error('beacon status ' + res.status);
+      return res;
+    });
+  }
+  return attempt().catch(function () {
+    return new Promise(function (resolve) { setTimeout(resolve, 1000); }).then(attempt);
+  });
+}
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
@@ -143,11 +164,9 @@ self.addEventListener('notificationclick', (event) => {
   // must never block opening the app.
   if (data.notifId) {
     work.push(
-      fetch('/api/push/click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: data.notifId }),
-      }).catch(() => {})
+      beaconWithRetry('/api/push/click', data.notifId).catch(function (e) {
+        console.warn('[Service Worker] click beacon failed after retry:', e);
+      })
     );
   }
 

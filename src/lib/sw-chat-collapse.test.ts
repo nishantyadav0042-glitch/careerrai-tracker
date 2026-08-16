@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 // ── The REAL service worker, executed — not a re-implementation ─────────────
@@ -14,9 +14,10 @@ import { readFileSync } from 'node:fs';
 
 type Shown = { title: string; opts: { tag?: string; data?: Record<string, unknown>; body?: string } };
 
-function bootSw() {
+function bootSw(fetchImpl?: (url: string) => Promise<{ ok: boolean; status?: number }>) {
   const shown: Shown[] = [];
   const beacons: string[] = [];
+  const warnings: unknown[][] = [];
   // The OS tray: same tag replaces the previous entry — Web Push semantics.
   // Mutated in place, never reassigned — tests hold a reference to it.
   const tray: { title: string; tag?: string; data?: Record<string, unknown> }[] = [];
@@ -39,12 +40,15 @@ function bootSw() {
     skipWaiting: () => {},
     clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve([]), openWindow: () => Promise.resolve() },
   };
-  const fetchStub = (url: string) => { beacons.push(String(url)); return Promise.resolve({ ok: true }); };
+  const fetchStub = fetchImpl ?? ((url: string) => { beacons.push(String(url)); return Promise.resolve({ ok: true }); });
+  const trackedFetch = fetchImpl
+    ? (url: string) => { beacons.push(String(url)); return fetchImpl(url); }
+    : fetchStub;
   const src = readFileSync('public/sw.js', 'utf8');
   // Execute the worker with its global names bound to our stubs.
   new Function('self', 'clients', 'fetch', 'caches', 'console', src)(
-    self, self.clients, fetchStub, { keys: () => Promise.resolve([]) },
-    { log: () => {}, warn: () => {}, error: () => {} },
+    self, self.clients, trackedFetch, { keys: () => Promise.resolve([]) },
+    { log: () => {}, warn: (...a: unknown[]) => warnings.push(a), error: () => {} },
   );
 
   const push = async (payload: Record<string, unknown>) => {
@@ -55,7 +59,15 @@ function bootSw() {
     });
     await settled;
   };
-  return { shown, beacons, tray, push };
+  const click = async (data: Record<string, unknown>) => {
+    let settled: Promise<unknown> = Promise.resolve();
+    listeners['notificationclick']({
+      notification: { close: () => {}, data },
+      waitUntil: (p: Promise<unknown>) => { settled = p; },
+    });
+    await settled;
+  };
+  return { shown, beacons, warnings, tray, push, click };
 }
 
 const chatPayload = (body: string, notifId: string) => ({
@@ -111,5 +123,54 @@ describe('chat notifications collapse to one tray entry (sw.js v8, executed)', (
     await sw.push(chatPayload('three', 'n3'));
     expect(sw.shown[2].title).toBe('Shreya sent you a message 💬');
     expect(sw.shown[2].opts.data?.chatCount).toBe(1);
+  });
+});
+
+// ── Installment 3, Batch 5: the received/click beacons used to be
+// `.catch(() => {})` — a failed beacon vanished with zero trace anywhere,
+// including the exact moment a beacon is most likely to blip (the device
+// waking from Doze to process the push at all). Proven here: the beacon
+// retries once, showing the notification / opening the app is NEVER
+// blocked by it either way, and a failure that survives the retry is at
+// least visible (console.warn), not silent.
+describe('push/click beacons — retried, never blocking, never silent (sw.js, executed)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('a received beacon that fails once succeeds on retry — the notification always shows regardless', async () => {
+    let calls = 0;
+    const sw = bootSw(() => {
+      calls++;
+      return calls === 1 ? Promise.resolve({ ok: false, status: 503 }) : Promise.resolve({ ok: true });
+    });
+    const pushPromise = sw.push({ title: 'Streak at risk', body: 'x', tag: 'cr-1', data: { url: '/', notifId: 'n1' } });
+    await vi.advanceTimersByTimeAsync(1500);
+    await pushPromise;
+    expect(sw.shown).toHaveLength(1); // never blocked on the beacon
+    expect(calls).toBe(2); // one retry, not more
+    expect(sw.warnings).toHaveLength(0); // recovered — nothing to warn about
+  });
+
+  it('a received beacon that fails twice is visible via console.warn, and still never blocks showing the notification', async () => {
+    const sw = bootSw(() => Promise.resolve({ ok: false, status: 500 }));
+    const pushPromise = sw.push({ title: 'Streak at risk', body: 'x', tag: 'cr-2', data: { url: '/', notifId: 'n2' } });
+    await vi.advanceTimersByTimeAsync(1500);
+    await pushPromise;
+    expect(sw.shown).toHaveLength(1);
+    expect(sw.warnings.length).toBeGreaterThan(0);
+    expect(String(sw.warnings[0][0])).toContain('received beacon failed');
+  });
+
+  it('a click beacon is fired with the tapped notification\'s own id, retried on failure, and never blocks opening the app', async () => {
+    let calls = 0;
+    const sw = bootSw(() => {
+      calls++;
+      return calls === 1 ? Promise.resolve({ ok: false, status: 500 }) : Promise.resolve({ ok: true });
+    });
+    const clickPromise = sw.click({ url: '/student/tracker', notifId: 'n3' });
+    await vi.advanceTimersByTimeAsync(1500);
+    await clickPromise;
+    expect(sw.beacons.filter((u) => u.includes('/api/push/click'))).toHaveLength(2); // original + retry
+    expect(calls).toBe(2);
   });
 });

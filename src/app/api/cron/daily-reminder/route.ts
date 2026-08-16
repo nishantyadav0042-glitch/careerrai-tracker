@@ -6,6 +6,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { ACTIVATION_DAYS, activationCopy, dispatch, BUDGET_ACTIVE, BUDGET_SETUP, dreamCollegeLabel } from '@/lib/notification-os';
 import { sweep, chunked, incompleteWarning } from '@/lib/cron-sweep';
 import { sendAdminAlert } from '@/lib/email';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -34,7 +35,10 @@ export const maxDuration = 300;
 // slot — the state split is what makes the two crons collision-free.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/daily-reminder', async () => dailyReminderRun());
+}
 
+async function dailyReminderRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const todayStart = new Date(today + 'T00:00:00+05:30').toISOString();

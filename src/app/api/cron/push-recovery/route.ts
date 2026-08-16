@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { sendAdminAlert } from '@/lib/email';
 import { pushRecoveryMessage, waNumber } from '@/lib/wa-messages';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -29,7 +30,10 @@ export const maxDuration = 300;
 // (tracked via a 'push_recovery_digested' marker on the notifications table).
 export async function GET(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/push-recovery', async () => pushRecoveryRun());
+}
 
+async function pushRecoveryRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const todayStart = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 

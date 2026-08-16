@@ -8,6 +8,7 @@ import {
   selectEvents, templateFor, reasonFor, type CoverageSignalRow, type DecisionEventType,
 } from '@/lib/decision-engine';
 import { computeStudentState, dispatch, BUDGET_ACTIVE, BUDGET_RECOVERY, type ExpectedAction } from '@/lib/notification-os';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -46,7 +47,10 @@ const EXPECTED: Record<DecisionEventType, ExpectedAction> = {
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/decision-engine', async () => decisionEngineRun());
+}
 
+async function decisionEngineRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const yesterday = new Date(Date.now() - 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });

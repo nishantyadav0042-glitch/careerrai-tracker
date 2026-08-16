@@ -14,6 +14,7 @@ import {
 import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
 import { resolveFocusSections } from '@/lib/focus-sections';
 import { getLogDateString } from '@/lib/streak-utils';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -47,7 +48,10 @@ export async function POST(request: NextRequest) {
   if (!slot || !COMPANION_SLOTS.includes(slot)) {
     return NextResponse.json({ error: 'Unknown slot' }, { status: 400 });
   }
+  return withCronTracking(`/api/cron/study-companion?slot=${slot}`, async () => studyCompanionRun(slot));
+}
 
+async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
   const admin = createAdminClient();
   const now = new Date();
   // KNOWN SECOND DEFINITION OF "TODAY" — tracked, not accepted.

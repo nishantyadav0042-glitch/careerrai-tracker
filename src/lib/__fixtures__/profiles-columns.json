@@ -99,6 +99,8 @@
   "profile_completed_at",
   "push_context",
   "push_died_at",
+  "push_recovery_attempted_at",
+  "push_recovery_last_error",
   "push_resubscribed_at",
   "push_subscribed_at",
   "push_subscription",

@@ -156,6 +156,95 @@ export async function getNotificationHealth(admin?: any): Promise<{
   return { students, funnel, byState };
 }
 
+// ── The recovery queue (Installment 3, Batch 15) ─────────────────────────
+//
+// "Disconnected" used to be one generic number. This is the specific,
+// operational population the founder actually needs to see: permission
+// granted, no live channel to reach them through, with everything known
+// about why and what's been tried — not a count, a worklist.
+export interface RecoveryQueueEntry {
+  id: string;
+  full_name: string | null;
+  subscriptionState: 'missing' | 'provider_dead';
+  diedAt: string | null;
+  deathReason: string | null;       // the real push.ts PushResult.reason, from the notification row that killed it — null if not recoverable from history
+  lastReceiptAt: string | null;     // most recent notifications.received_at for this student
+  lastAppActivityAt: string | null; // most recent student_events.created_at
+  recoveryAttemptedAt: string | null;
+  recoveryLastError: string | null; // null = last attempt succeeded, or none attempted
+  recoveryState: 'recovery_required' | 'recovery_attempted' | 'recovery_failed';
+}
+
+export async function getRecoveryQueue(admin?: any): Promise<RecoveryQueueEntry[]> {
+  const db = admin ?? createAdminClient();
+  const { data: students } = await db
+    .from('profiles')
+    .select('id, full_name, push_died_at, push_recovery_attempted_at, push_recovery_last_error')
+    .eq('role', 'student')
+    .not('is_test_account', 'is', true)
+    .not('is_demo', 'is', true)
+    .eq('notif_prefs->>push', 'true')
+    .is('push_subscription', null);
+
+  if (!students?.length) return [];
+  const ids = students.map((s: any) => s.id);
+
+  const [{ data: receipts }, { data: activity }, { data: deathNotifs }] = await Promise.all([
+    db.from('notifications').select('user_id, received_at').in('user_id', ids).not('received_at', 'is', null),
+    db.from('student_events').select('user_id, created_at').in('user_id', ids),
+    // The exact provider reason (send_failed_410, etc.) that produced this
+    // death — persisted per-notification since Installment 1's dispatch()
+    // fix; older deaths predate that column and honestly have none.
+    db.from('notifications').select('user_id, send_error, failed_at').in('user_id', ids).not('send_error', 'is', null).ilike('send_error', 'send_failed_%'),
+  ]);
+
+  const maxByUser = (rows: any[], valueCol: string) => {
+    const m = new Map<string, string>();
+    for (const r of rows ?? []) {
+      const v = r[valueCol];
+      if (!v) continue;
+      const cur = m.get(r.user_id);
+      if (!cur || v > cur) m.set(r.user_id, v);
+    }
+    return m;
+  };
+  const lastReceiptByUser = maxByUser(receipts ?? [], 'received_at');
+  const lastActivityByUser = maxByUser(activity ?? [], 'created_at');
+  // The LATEST failure per student — tracked by its own failed_at, not by
+  // string-comparing the reason text (which was the bug: comparing a reason
+  // string against '' is always true, so it kept overwriting with whichever
+  // row happened to come back last from the query, not the truly latest one).
+  const deathReasonByUser = new Map<string, string>();
+  const deathReasonAtByUser = new Map<string, string>();
+  for (const r of (deathNotifs ?? []) as any[]) {
+    if (!r.failed_at) continue;
+    const curAt = deathReasonAtByUser.get(r.user_id);
+    if (!curAt || r.failed_at > curAt) {
+      deathReasonAtByUser.set(r.user_id, r.failed_at);
+      deathReasonByUser.set(r.user_id, r.send_error);
+    }
+  }
+
+  return students.map((s: any) => {
+    const subscriptionState: RecoveryQueueEntry['subscriptionState'] = s.push_died_at != null ? 'provider_dead' : 'missing';
+    const recoveryState: RecoveryQueueEntry['recoveryState'] = s.push_recovery_attempted_at == null
+      ? 'recovery_required'
+      : (s.push_recovery_last_error != null ? 'recovery_failed' : 'recovery_attempted');
+    return {
+      id: s.id,
+      full_name: s.full_name ?? null,
+      subscriptionState,
+      diedAt: s.push_died_at ?? null,
+      deathReason: deathReasonByUser.get(s.id) ?? null,
+      lastReceiptAt: lastReceiptByUser.get(s.id) ?? null,
+      lastAppActivityAt: lastActivityByUser.get(s.id) ?? null,
+      recoveryAttemptedAt: s.push_recovery_attempted_at ?? null,
+      recoveryLastError: s.push_recovery_last_error ?? null,
+      recoveryState,
+    };
+  }).sort((a: RecoveryQueueEntry, b: RecoveryQueueEntry) => (a.diedAt ?? '').localeCompare(b.diedAt ?? ''));
+}
+
 export interface SurvivalPoint { ageDays: number; cohort: number; alive: number; pct: number | null }
 export interface ReliabilityMetrics {
   survival: SurvivalPoint[];               // 7/14/28-day subscription survival
