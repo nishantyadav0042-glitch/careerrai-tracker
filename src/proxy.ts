@@ -92,11 +92,29 @@ export async function proxy(request: NextRequest) {
   // instead of resolving — without this catch that's an unhandled 500 for the
   // visitor. Treat it exactly like "not logged in": the existing redirect-to-
   // login below already handles that correctly.
+  //
+  // ONE RETRY before giving up (16 Aug, real-student incident: a genuinely
+  // logged-in student was silently bounced to /login with no recovery path
+  // — root-caused to a refresh-token race between independent browser
+  // Supabase clients, since fixed at the source in lib/supabase/client.ts).
+  // That fix removes the main source of the race, but this catch has no way
+  // to tell "the session is truly dead" apart from "that one attempt hit a
+  // transient hiccup" — a network blip, a GoTrue reuse-interval edge, or a
+  // cause we haven't found yet. A single retry turns a one-off failure into
+  // a successful request instead of an unexplained logout, at the cost of
+  // one extra round-trip PAID ONLY WHEN THE FIRST ATTEMPT FAILS — every
+  // normal request still makes exactly one call, same as before. If the
+  // session really is dead, the retry fails identically and the existing
+  // redirect-to-login below is unchanged.
   let user = null;
   try {
     ({ data: { user } } = await supabase.auth.getUser());
   } catch {
-    user = null;
+    try {
+      ({ data: { user } } = await supabase.auth.getUser());
+    } catch {
+      user = null;
+    }
   }
 
   // Store-wrapper marker, set server-side so it CANNOT be lost.
