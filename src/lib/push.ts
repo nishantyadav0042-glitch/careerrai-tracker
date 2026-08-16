@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getServerConfig } from '@/lib/server-config';
+import { logConsentEvent } from '@/lib/consent-history';
 
 // VAPID keypair is sourced from the server_config table (DB-authoritative) so the
 // public key the client subscribes with and the private key the server signs with
@@ -160,6 +161,12 @@ async function attemptSend(
       // reach this student at all, and nothing else will notice unless we
       // say so right now. Fire-and-forget: never let alerting break the send path.
       void reportPushDeath(userId).catch((e) => console.error('[push] death report failed:', e));
+      // Two distinct facts for the consent history, even though they land
+      // at the same instant: the technical event (the endpoint is
+      // confirmed dead) and the business-state consequence (this student
+      // now needs recovery). Both real, both worth their own row.
+      void logConsentEvent(admin, userId, 'subscription_died', `status_${statusCode ?? 'unknown'}`);
+      void logConsentEvent(admin, userId, 'recovery_required');
     }
     console.error(`[push] send failed (status ${statusCode}) for ${userId}`);
     return { ok: false, reason: `send_failed_${statusCode ?? 'unknown'}`, terminal };

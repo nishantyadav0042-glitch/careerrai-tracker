@@ -3,11 +3,15 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 import { reminderNotificationBody, sessionNotificationUrl } from '@/lib/session-link';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Runs at 06:00 UTC (11:30 AM IST) — catches sessions scheduled for tomorrow IST.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/session-tomorrow', async () => sessionTomorrowRun());
+}
 
+async function sessionTomorrowRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
   // IST CALENDAR tomorrow's [00:00, +24h) window (bug audit, 14 July) — the

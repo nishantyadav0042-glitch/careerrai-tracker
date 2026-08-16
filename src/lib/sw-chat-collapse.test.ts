@@ -14,10 +14,16 @@ import { readFileSync } from 'node:fs';
 
 type Shown = { title: string; opts: { tag?: string; data?: Record<string, unknown>; body?: string } };
 
-function bootSw(fetchImpl?: (url: string) => Promise<{ ok: boolean; status?: number }>) {
+function bootSw(
+  fetchImpl?: (url: string) => Promise<{ ok: boolean; status?: number }>,
+  opts: { existingClientUrl?: string } = {}
+) {
   const shown: Shown[] = [];
   const beacons: string[] = [];
   const warnings: unknown[][] = [];
+  const openedWindows: string[] = [];
+  const postMessages: unknown[] = [];
+  let focused = false;
   // The OS tray: same tag replaces the previous entry — Web Push semantics.
   // Mutated in place, never reassigned — tests hold a reference to it.
   const tray: { title: string; tag?: string; data?: Record<string, unknown> }[] = [];
@@ -33,12 +39,22 @@ function bootSw(fetchImpl?: (url: string) => Promise<{ ok: boolean; status?: num
     getNotifications: ({ tag }: { tag?: string } = {}) =>
       Promise.resolve(tray.filter((n) => !tag || n.tag === tag)),
   };
+  // An "already open" tab is simulated by seeding existingClientUrl — its
+  // url must exactly match the notification's own url for sw.js's focus
+  // branch to take (this is the real matching logic under test).
+  const existingClient = opts.existingClientUrl
+    ? { url: opts.existingClientUrl, focus: () => { focused = true; return Promise.resolve(); }, postMessage: (m: unknown) => { postMessages.push(m); } }
+    : null;
   const self = {
     addEventListener: (t: string, fn: (e: unknown) => void) => { listeners[t] = fn; },
     registration,
     location: { origin: 'https://careerrai.in' },
     skipWaiting: () => {},
-    clients: { claim: () => Promise.resolve(), matchAll: () => Promise.resolve([]), openWindow: () => Promise.resolve() },
+    clients: {
+      claim: () => Promise.resolve(),
+      matchAll: () => Promise.resolve(existingClient ? [existingClient] : []),
+      openWindow: (url: string) => { openedWindows.push(String(url)); return Promise.resolve(); },
+    },
   };
   const fetchStub = fetchImpl ?? ((url: string) => { beacons.push(String(url)); return Promise.resolve({ ok: true }); });
   const trackedFetch = fetchImpl
@@ -67,7 +83,7 @@ function bootSw(fetchImpl?: (url: string) => Promise<{ ok: boolean; status?: num
     });
     await settled;
   };
-  return { shown, beacons, warnings, tray, push, click };
+  return { shown, beacons, warnings, tray, push, click, openedWindows, postMessages, wasFocused: () => focused };
 }
 
 const chatPayload = (body: string, notifId: string) => ({
@@ -172,5 +188,45 @@ describe('push/click beacons — retried, never blocking, never silent (sw.js, e
     await clickPromise;
     expect(sw.beacons.filter((u) => u.includes('/api/push/click'))).toHaveLength(2); // original + retry
     expect(calls).toBe(2);
+  });
+});
+
+// ── Installment 4, Batch A: app-open attribution ────────────────────────
+// The two paths sw.js's notificationclick handler must support, proven
+// against the REAL executed file — cold start carries the notification id
+// on the opened URL; an already-open tab gets it via postMessage instead,
+// because mutating the URL used for the "is a tab already open" match
+// would silently break that match and open a needless second window.
+describe('app-open attribution — notifId survives both the cold-start and already-open paths (sw.js, executed)', () => {
+  it('cold start (no matching tab open): the id rides the openWindow URL as src_notif', async () => {
+    const sw = bootSw();
+    await sw.click({ url: '/student/tracker', notifId: 'n1' });
+    expect(sw.openedWindows).toHaveLength(1);
+    const opened = new URL(sw.openedWindows[0]);
+    expect(opened.pathname).toBe('/student/tracker');
+    expect(opened.searchParams.get('src_notif')).toBe('n1');
+  });
+
+  it('already-open tab (exact URL match): focused, NOT reopened, id delivered via postMessage instead of the URL', async () => {
+    const sw = bootSw(undefined, { existingClientUrl: 'https://careerrai.in/student/tracker' });
+    await sw.click({ url: '/student/tracker', notifId: 'n2' });
+    expect(sw.wasFocused()).toBe(true);
+    expect(sw.openedWindows).toHaveLength(0); // never opens a second window
+    expect(sw.postMessages).toEqual([{ type: 'NOTIFICATION_APP_OPEN', notifId: 'n2' }]);
+  });
+
+  it('a click with no notifId never postMessages or mutates the URL — nothing to attribute', async () => {
+    const sw = bootSw();
+    await sw.click({ url: '/student/tracker' });
+    const opened = new URL(sw.openedWindows[0]);
+    expect(opened.searchParams.has('src_notif')).toBe(false);
+  });
+
+  it('query strings already on the notification URL survive alongside src_notif', async () => {
+    const sw = bootSw();
+    await sw.click({ url: '/student/tracker?log=yesterday', notifId: 'n4' });
+    const opened = new URL(sw.openedWindows[0]);
+    expect(opened.searchParams.get('log')).toBe('yesterday');
+    expect(opened.searchParams.get('src_notif')).toBe('n4');
   });
 });

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { buddyBriefCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -18,7 +19,10 @@ export const maxDuration = 300;
 // entire buddy-side surface. Sent only to buddies with at least one student.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/buddy-brief', async () => buddyBriefRun());
+}
 
+async function buddyBriefRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const yesterday = new Date(new Date(todayIST + 'T00:00:00+05:30').getTime() - 86_400_000)

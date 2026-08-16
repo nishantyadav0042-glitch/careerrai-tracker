@@ -4,6 +4,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { sendBuilderRecovery } from '@/lib/email';
 import { BUILDER_STEPS, stepLabel } from '@/lib/lead-intel';
 import { builderRecoveryCopy, dispatch, BUDGET_SETUP } from '@/lib/notification-os';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -36,7 +37,10 @@ export const maxDuration = 300;
 // 2/day budget and measurement columns apply.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/builder-recovery', async () => builderRecoveryRun());
+}
 
+async function builderRecoveryRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();

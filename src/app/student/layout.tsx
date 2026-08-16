@@ -13,6 +13,7 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { DailyBuddyNudge } from '@/components/daily-buddy-nudge';
 import { InstallJourney } from '@/components/install-journey';
 import { PushHealer } from '@/components/push-healer';
+import { NotificationAttribution } from '@/components/notification-attribution';
 import { pushHealth } from '@/lib/push-state';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
@@ -164,6 +165,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           everyone else. */}
       <BuddyDemoTour />
       <PushHealer serverPushDead={!!profile?.push_died_at || !profile?.push_subscription} />
+      <NotificationAttribution />
       <InstallPing />
       <StoreBuildDetector />
       <div className="max-w-2xl mx-auto px-3 pt-2 pb-16">

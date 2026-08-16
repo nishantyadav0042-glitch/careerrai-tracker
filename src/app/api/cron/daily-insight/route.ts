@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { computeDailyInsight } from '@/lib/daily-insight';
 import { dispatch } from '@/lib/notification-os';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -16,6 +17,10 @@ export const maxDuration = 300;
 // shared notification budget in dispatch().
 export async function GET(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/daily-insight', async () => dailyInsightRun());
+}
+
+async function dailyInsightRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
   const todayStart =

@@ -170,18 +170,38 @@ self.addEventListener('notificationclick', (event) => {
     );
   }
 
+  // App-open attribution (Installment 4, Batch A): two different paths need
+  // two different mechanisms, because they can't share one.
+  //
+  //   COLD START (openWindow): the new page has nothing else to read from —
+  //   so the notification id rides the URL itself, in a query param the
+  //   client strips right after reading it (see the attribution capture
+  //   component). A SEPARATE url object, never the one used for the match
+  //   check below: mutating urlToOpen itself would change client.url ===
+  //   urlToOpen.href for an ALREADY-open tab and silently break the
+  //   "already open" branch's matching (opening a needless second window).
+  //
+  //   ALREADY OPEN (focus): the page is already loaded and won't re-read
+  //   its URL, so postMessage is the only channel — the attribution
+  //   component listens for it.
+  const urlWithAttribution = new URL(urlToOpen.href);
+  if (data.notifId) urlWithAttribution.searchParams.set('src_notif', data.notifId);
+
   work.push(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Check if we already have a window open
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
         if (client.url === urlToOpen.href && 'focus' in client) {
+          if (data.notifId && 'postMessage' in client) {
+            client.postMessage({ type: 'NOTIFICATION_APP_OPEN', notifId: data.notifId });
+          }
           return client.focus();
         }
       }
       // If not, open a new window
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(urlWithAttribution);
       }
     })
   );

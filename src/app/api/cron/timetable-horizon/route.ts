@@ -5,6 +5,7 @@ import { dispatch } from '@/lib/notification-os';
 import { HORIZON_NUDGE_DAYS } from '@/lib/timetable-align';
 import { anchorToMonth, monthDaysLeft } from '@/lib/timetable-month';
 import type { TimetableBlock } from '@/lib/timetable';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,10 @@ export const dynamic = 'force-dynamic';
 // to ask for — not at midnight when nothing can be done about it.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/timetable-horizon', async () => timetableHorizonRun());
+}
 
+async function timetableHorizonRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 

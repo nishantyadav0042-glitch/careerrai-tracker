@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_RECOVERY } from '@/lib/notification-os';
 import { getLogDateString } from '@/lib/streak-utils';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -28,6 +29,10 @@ export async function GET(request: NextRequest) {
   if (!authorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return withCronTracking('/api/cron/log-yesterday-reminder', async () => logYesterdayReminderRun());
+}
+
+async function logYesterdayReminderRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
   // At 08:00 IST the log-day is today (past the 3 AM cutoff); "yesterday" is the

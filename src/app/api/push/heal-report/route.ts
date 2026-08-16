@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { logConsentEvent } from '@/lib/consent-history';
 
 // The Phase 8 fix for the exact gap found investigating Installment 1's 49
 // provider-dead students: 7 of them genuinely reopened the app since their
@@ -37,6 +38,9 @@ export async function POST(request: NextRequest) {
     push_recovery_attempted_at: new Date().toISOString(),
     push_recovery_last_error: ok ? null : (reason ?? 'unknown'),
   }).eq('id', user.id);
+
+  await logConsentEvent(admin, user.id, 'recovery_attempted', reason);
+  await logConsentEvent(admin, user.id, ok ? 'recovery_succeeded' : 'recovery_failed', reason);
 
   return NextResponse.json({ ok: true });
 }

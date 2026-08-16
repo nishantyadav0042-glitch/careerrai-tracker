@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidPushEndpoint } from '@/lib/push-validate';
 import { registerSubscription } from '@/lib/push-subscription-registry';
+import { logConsentEvent } from '@/lib/consent-history';
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -35,6 +36,13 @@ export async function POST(request: NextRequest) {
   );
 
   await admin.from('profiles').update(update).eq('id', user.id);
+
+  // First-ever subscription for this student vs. a resubscribe (refresh or
+  // recovery) are two different facts worth telling apart in the history —
+  // pushSubscribedAt being null means this is the first one.
+  const isFirstEver = profile?.push_subscribed_at == null;
+  await logConsentEvent(admin, user.id, isFirstEver ? 'subscription_created' : 'subscription_refreshed', body?.context ?? null);
+  if (isFirstEver) await logConsentEvent(admin, user.id, 'permission_granted');
 
   return NextResponse.json({ ok: true });
 }

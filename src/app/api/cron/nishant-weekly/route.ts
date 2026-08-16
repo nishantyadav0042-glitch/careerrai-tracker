@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -16,7 +17,10 @@ export const maxDuration = 300;
 // At 20 users, sends to all. Scale: move to random 10% once >50 students.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/nishant-weekly', async () => nishantWeeklyRun());
+}
 
+async function nishantWeeklyRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
   const { data: students } = await admin

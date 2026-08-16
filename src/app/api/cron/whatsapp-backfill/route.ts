@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 import { WHATSAPP_GROUP_URL } from '@/components/onboarding/whatsapp-optin';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -47,7 +48,10 @@ const BODY = "We strongly recommend it — 2 messages a day, to keep your prep c
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/whatsapp-backfill', async () => whatsappBackfillRun());
+}
 
+async function whatsappBackfillRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
   const { data: students } = await admin

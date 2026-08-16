@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Minimal 1-level escalation: student message OR mock debrief unanswered by buddy for 48h
 // → notify admin. Makes the "buddy responds within 24h" promise real.
 // Runs at 15:30 UTC (9 PM IST) daily.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/buddy-escalation', async () => buddyEscalationRun());
+}
 
+async function buddyEscalationRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const since48h = new Date(Date.now() - 48 * 3_600_000).toISOString();
   const dedup24h = new Date(Date.now() - 24 * 3_600_000).toISOString();

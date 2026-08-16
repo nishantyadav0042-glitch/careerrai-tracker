@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
 import { rankBuddies, type MatchBuddy, type MatchStudent } from '@/lib/buddy-match';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -20,7 +21,10 @@ export const maxDuration = 300;
 // capped and measured like every other nudge. Idempotent per IST day.
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/buddy-evening', async () => buddyEveningRun());
+}
 
+async function buddyEveningRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const todayStart = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
