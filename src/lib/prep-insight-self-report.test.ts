@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePrepInsight, type MatrixEntry } from './prep-insight-engine';
+import { computePrepInsight, discoverySection, type MatrixEntry } from './prep-insight-engine';
 import { TOPIC_METADATA, MOCK_PREP_UNITS, READING_HABIT_UNITS } from './topics-constants';
 
 // ── Preparation Insight Engine — self-report, saturation guard, foundation
@@ -207,5 +207,82 @@ describe('no cross-section weightage number ever appears in generated copy', () 
     const text = r.cards.flatMap((c) => [c.headline, c.note ?? '', c.action ?? '', ...(c.stats ?? [])]).join(' ');
     expect(text.toLowerCase()).not.toContain('weightage');
     expect(text).not.toMatch(/\d+%\s*(weightage|of the paper|of marks)/i);
+  });
+});
+
+// ── discoverySection — 16 Aug founder review ─────────────────────────────────
+//
+// A real student self-reported QA; the Instant Insight hero card was a real,
+// correct DILR foundation gap (Caselets, revising, sitting on an untouched
+// Tables — confirmed against real production topic_coverage during the
+// investigation this fixes). The architecture was right: self-report doesn't
+// suppress a genuine cross-section discovery. But the screen never disclosed
+// WHICH section the discovery was in, so a real "we looked beyond QA and
+// found something" moment read as a flat, same-topic restatement.
+//
+// `discoverySection` is the entire fix: given the winning primary and the
+// `primarySource` the engine already computed, decide whether to name the
+// section. No detector, ranking, or Validation/Discovery selection logic
+// changes here — every fixture below reuses the exact selection behaviour
+// proven above; these tests only check the disclosure decision layered on
+// top of it.
+function allSectionOverrides(section: 'QA' | 'DILR' | 'VARC', status: MatrixEntry['status']): Record<string, MatrixEntry['status']> {
+  const out: Record<string, MatrixEntry['status']> = {};
+  for (const [topic, meta] of Object.entries(TOPIC_METADATA)) {
+    if (meta.section === section) out[topic] = status;
+  }
+  return out;
+}
+
+describe('discoverySection — names the section only when it genuinely differs from the self-report', () => {
+  it('QA self-report, QA coverage clean (no unmet prereq, no untouched heavy topic), real DILR foundation gap: names DILR', () => {
+    const overrides = { ...allSectionOverrides('QA', 'revising'), Caselets: 'practicing' as const, Tables: 'not_started' as const };
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix(overrides), selfReportedWeakestSection: 'QA', selfReportStatus: 'SELECTED_SECTION' });
+    expect(r.primary?.key).toBe('foundation-gap');
+    expect(r.primary?.section).toBe('DILR');
+    expect(r.primarySource).toBe('careerrai'); // no QA-sectioned risk fired — validation pool was genuinely empty
+    expect(discoverySection(r.primary, r.primarySource)).toBe('DILR');
+  });
+
+  it('VARC self-report, real fea4a910 production data: the true finding is in QA — names QA', () => {
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix(FEA4A910), selfReportedWeakestSection: 'VARC', selfReportStatus: 'SELECTED_SECTION' });
+    expect(r.primary?.section).toBe('QA');
+    expect(r.primarySource).toBe('careerrai');
+    expect(discoverySection(r.primary, r.primarySource)).toBe('QA');
+  });
+
+  it('QA self-report, same real fea4a910 data: the finding IS in QA — same-section validation, never repeats the section', () => {
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix(FEA4A910), selfReportedWeakestSection: 'QA', selfReportStatus: 'SELECTED_SECTION' });
+    expect(r.primary?.section).toBe('QA');
+    expect(r.primarySource).toBe('student');
+    expect(discoverySection(r.primary, r.primarySource)).toBeNull();
+  });
+
+  it('NOT_SURE_YET, same clean-QA/DILR-gap matrix: still names DILR — nothing to differ FROM, but the section is real', () => {
+    const overrides = { ...allSectionOverrides('QA', 'revising'), Caselets: 'practicing' as const, Tables: 'not_started' as const };
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix(overrides), selfReportedWeakestSection: null, selfReportStatus: 'NOT_SURE_YET' });
+    expect(r.primary?.section).toBe('DILR');
+    expect(r.primarySource).toBe('careerrai');
+    expect(discoverySection(r.primary, r.primarySource)).toBe('DILR');
+  });
+
+  it('same-section suppression is generic, not foundation-specific: an imbalance finding in the self-reported section is also never disclosed', () => {
+    // QA and DILR driven to full mastery, VARC left untouched — VARC is both
+    // the real weakest section AND the self-report, so detectImbalance fires
+    // with section: 'VARC' on its own merits (a genuine validation finding,
+    // not a foundation gap).
+    const overrides = { ...allSectionOverrides('QA', 'revising'), ...allSectionOverrides('DILR', 'revising') };
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix(overrides), selfReportedWeakestSection: 'VARC', selfReportStatus: 'SELECTED_SECTION' });
+    expect(r.primary?.key).toBe('imbalance-strategic');
+    expect(r.primary?.section).toBe('VARC');
+    expect(r.primarySource).toBe('student');
+    expect(discoverySection(r.primary, r.primarySource)).toBeNull();
+  });
+
+  it('saturated / insufficient-evidence: no primary exists, so there is nothing to disclose', () => {
+    const r = computePrepInsight({ ...BASE, matrix: fullMatrix({}), selfReportedWeakestSection: 'QA', selfReportStatus: 'SELECTED_SECTION' });
+    expect(r.state).toBe('insufficient_evidence');
+    expect(r.primary).toBeNull();
+    expect(discoverySection(r.primary, r.primarySource)).toBeNull();
   });
 });

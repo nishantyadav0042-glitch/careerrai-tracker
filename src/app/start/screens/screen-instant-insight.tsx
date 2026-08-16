@@ -1,7 +1,7 @@
 'use client';
 
-import { AlertTriangle, Bell, CheckCircle2, TrendingUp } from 'lucide-react';
-import { computePrepInsight, type MatrixEntry, type PrepSignal, type SectionCoverage, type SelfReportStatus, type SectionSource } from '@/lib/prep-insight-engine';
+import { AlertTriangle, CheckCircle2, TrendingUp } from 'lucide-react';
+import { computePrepInsight, discoverySection, type MatrixEntry, type PrepSignal, type SectionCoverage, type SelfReportStatus } from '@/lib/prep-insight-engine';
 
 // ── Instant Insight — the WOW moment, before the account even exists ────────
 //
@@ -72,10 +72,10 @@ interface Props {
   selfReportStatus?: SelfReportStatus;
 }
 
-const POLARITY_STYLE: Record<PrepSignal['polarity'], { icon: typeof AlertTriangle; border: string; bg: string; iconColor: string }> = {
-  risk: { icon: AlertTriangle, border: 'border-red-300', bg: 'bg-red-50', iconColor: 'text-red-600' },
-  pattern: { icon: TrendingUp, border: 'border-orange-300', bg: 'bg-orange-50', iconColor: 'text-orange-600' },
-  strength: { icon: CheckCircle2, border: 'border-emerald-300', bg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
+const POLARITY_STYLE: Record<PrepSignal['polarity'], { icon: typeof AlertTriangle; border: string; bg: string; badgeBg: string }> = {
+  risk: { icon: AlertTriangle, border: 'border-red-300', bg: 'bg-red-50', badgeBg: 'bg-red-600' },
+  pattern: { icon: TrendingUp, border: 'border-orange-300', bg: 'bg-orange-50', badgeBg: 'bg-orange-600' },
+  strength: { icon: CheckCircle2, border: 'border-emerald-300', bg: 'bg-emerald-50', badgeBg: 'bg-emerald-600' },
 };
 
 /** The hero. One realization, its evidence, the feeling it names, and what
@@ -87,7 +87,9 @@ function HeroCard({ card }: { card: PrepSignal }) {
   return (
     <div className={`rounded-2xl border-2 ${style.border} ${style.bg} p-5`}>
       <div className="flex items-start gap-3">
-        <Icon className={`mt-1 h-5 w-5 shrink-0 ${style.iconColor}`} />
+        <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow-sm ${style.badgeBg}`}>
+          <Icon className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+        </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[19px] font-bold leading-[1.25] text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
             {card.headline}
@@ -132,7 +134,7 @@ function BeliefAck({ status, section }: { status: SelfReportStatus; section: 'VA
   if (status === 'SELECTED_SECTION' && section) {
     return (
       <p className="text-[13.5px] leading-relaxed text-stone-600">
-        You told us <span className="font-semibold text-stone-900">{section}</span> feels weakest.
+        You told us <span className="font-semibold text-orange-700">{section}</span> feels weakest.
       </p>
     );
   }
@@ -144,6 +146,47 @@ function BeliefAck({ status, section }: { status: SelfReportStatus; section: 'VA
     );
   }
   return null;
+}
+
+/** The section-disclosure line — only rendered when `discoverySection`
+ *  returns non-null. Names where the finding actually came from without
+ *  claiming it's now "the real weakness" (never "actually your weakness
+ *  is..."), and without any causal or weightage language the evidence
+ *  doesn't support — it states the one fact the student needs to feel the
+ *  discovery: CareerRai looked somewhere they didn't mention. */
+function DiscoveryAck({ section }: { section: 'VARC' | 'DILR' | 'QA' }) {
+  return (
+    <p className="text-[13.5px] leading-relaxed text-stone-600">
+      We noticed something in <span className="font-semibold text-orange-700">{section}</span> you may not have been watching:
+    </p>
+  );
+}
+
+// ── The daily-insight promise ────────────────────────────────────────────
+//
+// Founder, 16 Aug: this line — "you'll get one of these every evening" — is
+// the actual habit-loop pitch (Duolingo/Reddit, not a one-time quiz), and it
+// used to be quiet gray text after a full scroll, indistinguishable from any
+// other utility line on the screen. It now gets the one deliberate accent
+// color on this screen (a dusk gradient — the sky the evening insight
+// actually arrives under), used ONLY here and at the bottom callout and CTA
+// caption below, so it's recognized as the same promise every time it
+// appears rather than blending into everything else.
+const DUSK_GRADIENT = 'linear-gradient(115deg, #2E1F66 0%, #7C3AED 45%, #EA8A2B 100%)';
+const DUSK_GRADIENT_SOFT = 'linear-gradient(150deg, #241A54 0%, #6D2FA8 52%, #D9791F 100%)';
+
+/** The top badge — same promise as the bottom callout, compact, so it's
+ *  seen within the first screenful instead of only after scrolling past
+ *  the hero card. */
+function DailyInsightBadge() {
+  return (
+    <div
+      className="inline-flex self-start rounded-full px-3.5 py-1.5 text-[12px] font-semibold text-orange-50"
+      style={{ backgroundImage: DUSK_GRADIENT }}
+    >
+      One insight like this — every evening
+    </div>
+  );
 }
 
 /** Coverage per section, weighted WITHIN each section — never summed across
@@ -185,17 +228,31 @@ export default function ScreenInstantInsight({
   // doesn't (see prep-insight-engine.ts's Validation/Discovery split).
   const hero = primary ?? strength ?? null;
   const minor = [secondary, strength && hero !== strength ? strength : null].filter((c): c is PrepSignal => c != null);
+  const disclosedSection = discoverySection(primary, primarySource);
 
   return (
     <div className="space-y-4 pt-1">
       <div>
         <p className="text-[11px] font-bold uppercase tracking-widest text-orange-500">Your first insight — free, before signup</p>
         <h1 className="mt-1 text-2xl font-bold leading-snug text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
-          {state === 'insufficient_evidence' ? 'You\u2019re right at the start.' : 'We found something in your prep.'}
+          {state === 'insufficient_evidence' ? (
+            'You\u2019re right at the start.'
+          ) : (
+            <>
+              We{' '}
+              <span style={{ backgroundImage: 'linear-gradient(180deg, transparent 62%, #FED7AA 62%)' }}>found something</span>
+              {' '}in your prep.
+            </>
+          )}
         </h1>
       </div>
 
-      <BeliefAck status={selfReportStatus} section={selfReportedWeakestSection} />
+      <DailyInsightBadge />
+
+      <div className="space-y-1.5">
+        <BeliefAck status={selfReportStatus} section={selfReportedWeakestSection} />
+        {disclosedSection && <DiscoveryAck section={disclosedSection} />}
+      </div>
 
       {state === 'insufficient_evidence' ? (
         <>
@@ -252,12 +309,15 @@ export default function ScreenInstantInsight({
         </>
       )}
 
-      {/* The hook: this is what CareerRai does daily — one line, not a pitch.
-          Never "AI" anywhere here (founder, 13 Aug) — the target feeling is
-          "CareerRai knows my prep," not "AI generated some text." */}
-      <div className="flex items-center gap-2.5 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-        <Bell className="h-4 w-4 shrink-0 text-stone-900" />
-        <p className="text-sm text-stone-600">You&apos;ll get one insight like this every evening, once you start.</p>
+      {/* The hook: this is what CareerRai does daily — restyled 16 Aug in the
+          same dusk accent as DailyInsightBadge above, so a student who
+          scrolled past the badge recognizes this as the same promise, not a
+          second unrelated line. Never "AI" anywhere here (founder, 13 Aug) —
+          the target feeling is "CareerRai knows my prep," not "AI generated
+          some text." */}
+      <div className="rounded-2xl p-4" style={{ backgroundImage: DUSK_GRADIENT_SOFT }}>
+        <p className="text-[14.5px] font-bold leading-snug text-orange-50">You&apos;ll get one insight like this every evening, once you start.</p>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-purple-100">Not a one-time score — a fresh read on your prep, every night.</p>
       </div>
 
       {/* Sticky, like every other decision screen in this funnel.
@@ -269,6 +329,7 @@ export default function ScreenInstantInsight({
           diagnosis screen, the moment the pitch lands, and the last thing
           between an ad click and the signup form. */}
       <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <p className="mb-1.5 text-center text-[11.5px] font-semibold text-purple-700">Then: a fresh insight every evening.</p>
         <button
           type="button"
           onClick={() => onNext(primary ? {

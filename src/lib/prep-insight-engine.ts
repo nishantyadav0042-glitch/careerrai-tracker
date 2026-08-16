@@ -850,6 +850,28 @@ function sourceOf(signal: PrepSignal | null, selfReportedWeakestSection: CoreSec
   return selfReportStatus === 'SELECTED_SECTION' && signal.section === selfReportedWeakestSection ? 'student' : 'careerrai';
 }
 
+/**
+ * Whether the primary finding should be disclosed as coming from a
+ * DIFFERENT section than the one the student actually named — and if so,
+ * which section to say. Founder review, 16 Aug: `primarySource` already
+ * carried this fact ('careerrai' = a cross-section or unprompted discovery,
+ * 'student' = a finding IN the section the student named) but no screen
+ * ever read it — a QA self-reporter whose hero card was a real DILR
+ * foundation gap saw a plain headline with no indication CareerRai had
+ * looked anywhere but QA. The finding itself was correct; only the
+ * disclosure was missing, which made a genuine discovery read as a flat
+ * restatement.
+ *
+ * Pure disclosure, not a new claim: returns null (nothing to say) whenever
+ * there's no section-level finding, or the finding IS the section the
+ * student named — repeating "in QA" right after "you told us QA" would be
+ * noise, not insight.
+ */
+export function discoverySection(primary: PrepSignal | null, primarySource: SectionSource): CoreSection | null {
+  if (!primary || !primary.section || primarySource !== 'careerrai') return null;
+  return primary.section;
+}
+
 export function computePrepInsight(input: PrepInsightInput): PrepInsightResult {
   // Two views of the same declaration, deliberately: `matrix` is exam topics
   // only (everything carrying TOPIC_METADATA) for the section maths, while
