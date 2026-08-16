@@ -264,6 +264,23 @@ export async function proxy(request: NextRequest) {
     return redirectWithSession(homeUrl);
   }
 
+  // Real student incident, 16 Aug: a student logged in successfully (server
+  // logs: clean 200s on every request, a brand-new never-touched session) and
+  // was looking at the login form again 13 seconds later with NO matching
+  // GET /login in the server logs at all — meaning no request reached us.
+  // The browser was showing a CACHED /login page from before he logged in
+  // (back-forward cache / router cache on a back-navigation), and this app
+  // sent no header telling it not to. He wasn't logged out; he was looking
+  // at a stale screenshot of the moment before he logged in, re-entered an
+  // already-used OTP (the 401 in the logs 16s later), and had to log in a
+  // second time for a session that was never actually broken.
+  // Never let the browser cache this specific response: a back-navigation
+  // must always be a real round-trip through this exact check, not a replay
+  // of whatever /login looked like before the student authenticated.
+  if (pathname === '/login') {
+    response.headers.set('Cache-Control', 'no-store, must-revalidate');
+  }
+
   return response;
 }
 
