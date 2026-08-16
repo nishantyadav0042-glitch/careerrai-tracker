@@ -222,7 +222,19 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
     // fix working, not a real failure. Anything else is a genuine insert
     // failure that used to be silently swallowed (row === undefined, the
     // function fell through and still returned 'sent'); it is now reported.
-    if ((insertError as { code?: string }).code === '23505') return 'duplicate_suppressed';
+    if ((insertError as { code?: string }).code === '23505') {
+      // 16 Aug, Installment 5 Phase 6: log the PREVENTED duplicate. The
+      // notifications row deliberately does not exist (that is the whole
+      // point of the suppression), so without this row a real, successful
+      // suppression left no trace anywhere and the production duplicate
+      // rate could only ever be inferred from an absence. Never allowed to
+      // break the send path — its own failure is logged, not thrown.
+      const { error: logError } = await admin.from('notification_duplicate_suppressions').insert({
+        student_id: opts.userId, notification_type: opts.type, detected_by: 'db_unique_index',
+      });
+      if (logError) console.error('[notif-os] duplicate-suppression log failed:', logError.message);
+      return 'duplicate_suppressed';
+    }
     console.error('[notif-os] notification insert failed:', insertError.message);
     return 'failed';
   }

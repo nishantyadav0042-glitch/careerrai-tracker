@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { METRIC_DEFINITIONS, computeReachabilitySnapshot } from './notification-metrics';
+import { METRIC_DEFINITIONS, computeReachabilitySnapshot, zeroLabelFor } from './notification-metrics';
 
 describe('METRIC_DEFINITIONS — the one canonical registry, every metric fully specified', () => {
   it('every metric has all required fields, none blank', () => {
@@ -26,6 +26,29 @@ describe('METRIC_DEFINITIONS — the one canonical registry, every metric fully 
 
   it('action_completed is explicit about never claiming "acted"', () => {
     expect(METRIC_DEFINITIONS.action_completed.knownLimitations).toMatch(/acted/i);
+  });
+
+  // Installment 5 Phase 5, founder verbatim: "Do not report '0 observed'
+  // when the actual claim is 'impossible by current code path.'"
+  it('every metric declares whether it is runtime-measured or an architectural guarantee', () => {
+    for (const [key, def] of Object.entries(METRIC_DEFINITIONS)) {
+      expect(['runtime_measured', 'architectural_guarantee'], key).toContain(def.evidenceType);
+    }
+  });
+
+  it('the two guarantee-based metrics name what actually enforces them', () => {
+    for (const key of ['untracked_send', 'consent_violation']) {
+      expect(METRIC_DEFINITIONS[key].evidenceType, key).toBe('architectural_guarantee');
+      expect(METRIC_DEFINITIONS[key].enforcedBy, key).toBeTruthy();
+    }
+  });
+
+  it('a zero on a guarantee metric is NEVER labelled as a production observation', () => {
+    expect(zeroLabelFor(METRIC_DEFINITIONS.untracked_send)).toBe('PREVENTED BY DESIGN (not a production observation)');
+    expect(zeroLabelFor(METRIC_DEFINITIONS.consent_violation)).toBe('PREVENTED BY DESIGN (not a production observation)');
+    // …while a genuinely counted metric still reads as the observation it is.
+    expect(zeroLabelFor(METRIC_DEFINITIONS.provider_failed)).toBe('0 observed');
+    expect(zeroLabelFor(METRIC_DEFINITIONS.clicked)).toBe('0 observed');
   });
 });
 

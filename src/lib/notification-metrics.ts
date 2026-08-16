@@ -17,6 +17,20 @@
 
 import { classifyNotificationState, classifyRecovery, type NotificationStateInput } from './notification-state';
 
+// 16 Aug, Installment 5 (founder review of Installment 4): "0 observed" and
+// "impossible by current code path" are DIFFERENT CLAIMS and must never be
+// displayed as the same thing. A metric derived from counting real rows is
+// runtime evidence; a metric that is zero because the code physically
+// cannot produce it is an architectural guarantee proven by a build-time
+// guard test, not an observation. Any surface rendering these must label
+// them differently — see evidenceType.
+export type MetricEvidenceType =
+  /** Counted from real production rows. A number here is an observation. */
+  | 'runtime_measured'
+  /** Zero because the code path cannot exist, enforced by a guard test.
+   *  NOT an observation — never render this as "0 observed in production". */
+  | 'architectural_guarantee';
+
 export interface MetricDefinition {
   name: string;
   formula: string;
@@ -25,6 +39,9 @@ export interface MetricDefinition {
   timezone: string;
   window: string;
   knownLimitations: string;
+  evidenceType: MetricEvidenceType;
+  /** For architectural_guarantee metrics: what actually enforces it. */
+  enforcedBy?: string;
 }
 
 export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
@@ -36,6 +53,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'n/a (point-in-time count)',
     window: 'current state, no time window',
     knownLimitations: 'A stored preference, not live browser Notification.permission — see classifyNotificationState doc comment for why that is deliberate, not a gap.',
+    evidenceType: 'runtime_measured',
   },
   active_subscription: {
     name: 'active_subscription',
@@ -45,6 +63,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'n/a',
     window: 'current state',
     knownLimitations: 'A stored subscription blob existing does not itself prove the endpoint is still valid at the provider — only a real send attempt (accepted or 410/404) proves that.',
+    evidenceType: 'runtime_measured',
   },
   reachable: {
     name: 'reachable',
@@ -53,7 +72,8 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     denominator: 'permission_granted count',
     timezone: 'n/a',
     window: 'current state',
-    knownLimitations: 'Same caveat as active_subscription — this is "has a stored, unproven-dead subscription", not a delivery guarantee.',
+    knownLimitations: 'Same caveat as active_subscription — this is "has a stored, unproven-dead subscription", not a delivery guarantee. RECONCILED 16 Aug against the first real cron run post-deploy: /api/cron/daily-heartbeat reported reachable=111 where this metric says 110. Not a bug in either — that cron deliberately KEEPS test accounts in scope (its own comment: "this cron IS the student experience", the founder tests as a student) while this metric excludes them, and exactly 1 test account currently holds a live subscription. Any surface showing both numbers must label them differently; they answer different questions.',
+    evidenceType: 'runtime_measured',
   },
   provider_dead: {
     name: 'provider_dead',
@@ -63,6 +83,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'n/a',
     window: 'current state (push_died_at is a lifetime marker, cleared on resubscribe)',
     knownLimitations: 'Requires a real HTTP 410/404 on record — NEVER inferred from subscription absence alone (see notification-state.ts, Installment 1/4 fix).',
+    evidenceType: 'runtime_measured',
   },
   recovery_required: {
     name: 'recovery_required',
@@ -72,6 +93,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'n/a',
     window: 'current state',
     knownLimitations: 'None known — this is the P0 number per the founder\'s own priority order and is deliberately never allowed to auto-resolve to healthy.',
+    evidenceType: 'runtime_measured',
   },
   eligible: {
     name: 'eligible',
@@ -81,6 +103,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata for all cron-window logic',
     window: 'per cron invocation',
     knownLimitations: 'Not centrally computed — each cron\'s own eligibility logic is the source of truth for what "eligible" means for that cron, and cron_runs.result now records the count where the cron reports one.',
+    evidenceType: 'runtime_measured',
   },
   send_attempted: {
     name: 'send_attempted',
@@ -90,6 +113,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata for window filters',
     window: 'caller-specified',
     knownLimitations: 'send_status only exists on rows created after the Installment 1 dispatch() fix (16 Aug) — earlier rows have send_status = null and are excluded, not miscounted as failures.',
+    evidenceType: 'runtime_measured',
   },
   provider_accepted: {
     name: 'provider_accepted',
@@ -99,6 +123,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'caller-specified',
     knownLimitations: 'This is PROVIDER acceptance, not device delivery — never call this "delivered".',
+    evidenceType: 'runtime_measured',
   },
   provider_failed: {
     name: 'provider_failed',
@@ -108,6 +133,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'caller-specified',
     knownLimitations: 'send_error carries the real reason (send_failed_410, vapid_not_configured, etc.) — always break down by reason, never report this as one undifferentiated number.',
+    evidenceType: 'runtime_measured',
   },
   device_received: {
     name: 'device_received',
@@ -117,6 +143,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'caller-specified',
     knownLimitations: 'Requires the device to be online and the SW to successfully beacon back (retried once as of Installment 3) — absence does NOT mean failed delivery, see delivery_unknown.',
+    evidenceType: 'runtime_measured',
   },
   delivery_unknown: {
     name: 'delivery_unknown',
@@ -126,6 +153,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'caller-specified',
     knownLimitations: 'This is the honest bucket for "we cannot prove either way" — NEVER collapsed into provider_accepted="delivered" and never called "failed".',
+    evidenceType: 'runtime_measured',
   },
   clicked: {
     name: 'clicked',
@@ -135,6 +163,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'caller-specified',
     knownLimitations: 'The click-race fix (Installment 1) means clicked_at no longer requires pushed_at to already be set — a small number of clicks may now be recorded with pushed_at still null in a genuine race; this is correct, not a bug.',
+    evidenceType: 'runtime_measured',
   },
   app_opened: {
     name: 'app_opened',
@@ -144,6 +173,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'caller-specified',
     knownLimitations: 'Only set by an explicit signal carrying this notification\'s own id (Installment 4) — never inferred from generic app activity. A student who tapped but whose browser session never re-delivered the postMessage/URL param (e.g. a crashed cold start) will show clicked without app_opened — an honest gap, not miscounted.',
+    evidenceType: 'runtime_measured',
   },
   action_completed: {
     name: 'action_completed',
@@ -153,6 +183,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata',
     window: 'a 30-minute default correlation window past app_opened_at',
     knownLimitations: 'NOT MEASURABLE as a hard causal number for any expected_action type — this codebase does not thread the notification id through action-completion call sites. Only "correlated" (strong temporal link) is ever reported; "acted" is never claimed.',
+    evidenceType: 'runtime_measured',
   },
   duplicate_suppressed: {
     name: 'duplicate_suppressed',
@@ -162,6 +193,7 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'Asia/Kolkata (the unique index is keyed on IST calendar day)',
     window: 'caller-specified',
     knownLimitations: 'Not currently written to its own table — only observable via each cron\'s own returned counts, or cron_runs.result where wired. A dedicated duplicate-attempt log is not built this pass.',
+    evidenceType: 'runtime_measured',
   },
   untracked_send: {
     name: 'untracked_send',
@@ -171,6 +203,8 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'n/a',
     window: 'n/a',
     knownLimitations: 'Proven by static analysis (the guard test), not by a runtime count — there is nothing to count because the code path cannot exist.',
+    evidenceType: 'architectural_guarantee',
+    enforcedBy: 'src/lib/send-boundary.guard.test.ts — source-scan guard: exactly one file may import the push transport, and its notifId parameter is required, not optional. Build fails otherwise.',
   },
   consent_violation: {
     name: 'consent_violation',
@@ -180,8 +214,23 @@ export const METRIC_DEFINITIONS: Record<string, MetricDefinition> = {
     timezone: 'n/a',
     window: 'n/a',
     knownLimitations: 'The remaining risk is a CALLER passing a stale or hard-coded prefs object into dispatch() — Installment 1 removed the two hard-coded push:true overrides found; no runtime audit re-scans for a new one being reintroduced. A guard test for this specific pattern is not built this pass.',
+    evidenceType: 'architectural_guarantee',
+    enforcedBy: "notification-os.ts dispatch(): the push branch is gated on opts.prefs.push === true, so a send cannot occur without consent in the prefs object handed to it. NOT a runtime audit of callers — see knownLimitations.",
   },
 };
+
+/**
+ * The founder's Installment 5 rule, enforced in code rather than in a
+ * convention nobody can check: a surface rendering an
+ * architectural_guarantee metric must never label it "0 observed in
+ * production". This returns the honest label for a metric whose computed
+ * value is zero, so every dashboard says the same true thing.
+ */
+export function zeroLabelFor(metric: MetricDefinition): string {
+  return metric.evidenceType === 'architectural_guarantee'
+    ? 'PREVENTED BY DESIGN (not a production observation)'
+    : '0 observed';
+}
 
 export interface ReachabilitySnapshot {
   totalStudents: number;

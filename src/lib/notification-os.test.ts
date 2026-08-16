@@ -38,10 +38,18 @@ let sendCalls: { userId: string; notifId: string }[] = [];
 // error code (used to test the Phase 11 duplicate-suppression path and
 // Phase 5's generic-insert-failure path without a real unique constraint).
 let insertErrorCode: string | null = null;
+let suppressionLog: Record<string, unknown>[] = [];
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
     from: (table: string) => {
+      // Installment 5 Phase 6: dispatch() now logs every PREVENTED duplicate
+      // to its own table, so the production duplicate rate is a measured
+      // number rather than inferred from an absence. Captured here so the
+      // duplicate-suppression test can assert the row is actually written.
+      if (table === 'notification_duplicate_suppressions') {
+        return { insert: async (row: Record<string, unknown>) => { suppressionLog.push(row); return { error: null }; } };
+      }
       if (table !== 'notifications') throw new Error(`unexpected table ${table}`);
       const filters: { userId?: string; types?: string[]; pushedNotNull?: boolean; createdGte?: string; pushedGte?: string } = {};
       const q = {
@@ -109,6 +117,7 @@ beforeEach(() => {
   sendResult = { ok: true };
   sendCalls = [];
   insertErrorCode = null;
+  suppressionLog = [];
 });
 
 const opts = (over: Partial<Parameters<typeof dispatch>[0]> = {}) => ({
@@ -257,6 +266,24 @@ describe('Notification Reliability V2, Phase 11 — duplicate suppression and in
     expect(outcome).toBe('duplicate_suppressed');
     expect(sendCalls).toHaveLength(0);
     expect(rows).toHaveLength(0); // the DB rejected the row; nothing was created
+  });
+
+  it('the PREVENTED duplicate is logged, so the production rate is measured rather than inferred from an absence', async () => {
+    // Installment 5 Phase 6. Without this row, a real suppression left zero
+    // trace anywhere — the notifications row deliberately doesn't exist —
+    // so "0 duplicates in production" could only ever mean "we found none",
+    // never "we prevented N".
+    insertErrorCode = '23505';
+    await dispatch(opts({ userId: 'u9', type: 'inactive_recovery' }));
+    expect(suppressionLog).toEqual([
+      { student_id: 'u9', notification_type: 'inactive_recovery', detected_by: 'db_unique_index' },
+    ]);
+  });
+
+  it('a non-duplicate insert failure logs NO suppression — it was not a prevented duplicate', async () => {
+    insertErrorCode = '23P01';
+    await dispatch(opts());
+    expect(suppressionLog).toHaveLength(0);
   });
 
   it('a genuine insert failure (not 23505) reports failed instead of silently returning sent', async () => {
