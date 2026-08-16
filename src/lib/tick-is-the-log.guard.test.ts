@@ -110,10 +110,12 @@ describe('one door, not two', () => {
 
   it('new students are told how to log, on the plan itself', () => {
     // Reworded 13 Aug (founder: no jargon — "log" isn't a word students use;
-    // say it in plain words). The hint must still exist and still point at
-    // the circle; the exact phrasing is the plain-words version.
+    // say it in plain words). Reworded again 16 Aug: the tap target grew from
+    // the small circle to the whole card, so the hint must say so — telling
+    // a student to "tap the circle" when the circle is no longer the only
+    // (or even the primary) target would be actively wrong, not just stale.
     const card = readFileSync(CARD, 'utf8');
-    expect(card).toContain('Tap the circle');
+    expect(card).toContain('Tap anywhere on it');
     expect(card).toContain('your day is marked');
   });
 });

@@ -642,7 +642,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               furniture. */}
           {doneCount === 0 && (
             <p className="mb-1.5 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white">
-              Finished a task? Tap the circle — that&apos;s it, your day is marked.
+              Finished a task? Tap anywhere on it — that&apos;s it, your day is marked.
             </p>
           )}
 
@@ -658,12 +658,28 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
               // skip ahead is making a real choice, not cheating), just not
               // shouting for the same attention as the one thing to do now.
               if (isStart || expanded) {
+                const openPicker = () => {
+                  if (busyTaskId === task.id) return;
+                  reportStart();
+                  setMarkingTaskId((cur) => (cur === task.id ? null : task.id));
+                };
                 return (
                   <div key={task.id}>
+                    {/* Founder, 16 Aug: the tap target used to be the small
+                        circle alone — easy to miss, especially on the taller
+                        hero card. The WHOLE card is now the target; only
+                        MockScoreButton (a genuinely separate action) opts out
+                        via stopPropagation below. */}
                     <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Mark progress: ${taskTitle(task)}`}
+                      onClick={openPicker}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } }}
                       className={cn(
-                        'w-full flex items-start gap-2.5 rounded-2xl bg-stone-100/70 p-2.5 transition-all',
-                        expanded && 'rounded-b-none'
+                        'w-full flex items-start gap-2.5 rounded-2xl bg-stone-100/70 p-2.5 transition-all cursor-pointer active:scale-[0.99]',
+                        expanded && 'rounded-b-none',
+                        busyTaskId === task.id && 'opacity-60 pointer-events-none'
                       )}
                     >
                       {/* One tap = "I did this." Founder, 12 Aug: the tick IS
@@ -674,13 +690,12 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                           The log sheet stays fully usable for off-plan study
                           and rest days: this is additive, never the only path
                           (Incident #2, where requiring a plan-tick made an
-                          honest day impossible and cost a whole cohort). */}
-                      <button
-                        type="button"
-                        aria-label={`Mark progress: ${taskTitle(task)}`}
-                        disabled={busyTaskId === task.id}
-                        onClick={() => { reportStart(); setMarkingTaskId((cur) => (cur === task.id ? null : task.id)); }}
-                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300 transition-colors hover:border-stone-900 active:scale-90 disabled:opacity-50"
+                          honest day impossible and cost a whole cohort). Now
+                          purely the visual indicator — the click lives on the
+                          card above, see the 16 Aug comment. */}
+                      <span
+                        aria-hidden="true"
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300 transition-colors"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
@@ -700,7 +715,11 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                           <div className="mt-2"><TopicInsights topic={task.topic} /></div>
                         )}
                       </div>
-                      {isMockSitting(task) && <MockScoreButton className="mt-0.5" recorded={data.todayMock} />}
+                      {isMockSitting(task) && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <MockScoreButton className="mt-0.5" recorded={data.todayMock} />
+                        </div>
+                      )}
                     </div>
                     {markingTaskId === task.id && !done && (
                       <div className="rounded-b-2xl bg-stone-100/70">
@@ -714,27 +733,38 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                 );
               }
 
+              const toggleOrOpen = () => {
+                if (busyTaskId === task.id) return;
+                if (done) { void toggleTask(task); return; }
+                reportStart();
+                setMarkingTaskId((cur) => (cur === task.id ? null : task.id));
+              };
               return (
                 <div key={task.id}>
-                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', markingTaskId === task.id && !done && 'rounded-b-none')}>
-                    {/* Same single-state tick as the hero task. Tapping a done
-                        task un-does it — a mis-tap must never be permanent. */}
-                    <button
-                      type="button"
-                      aria-label={done ? `Undo: ${taskTitle(task)}` : `Mark progress: ${taskTitle(task)}`}
-                      disabled={busyTaskId === task.id}
-                      onClick={() => {
-                        if (done) { void toggleTask(task); return; }
-                        reportStart();
-                        setMarkingTaskId((cur) => (cur === task.id ? null : task.id));
-                      }}
+                  {/* Same "whole card is the target" change as the hero task
+                      above — a mis-tap on a done task un-does it, same as
+                      before, just reachable from anywhere on the row now. */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={done ? `Undo: ${taskTitle(task)}` : `Mark progress: ${taskTitle(task)}`}
+                    onClick={toggleOrOpen}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleOrOpen(); } }}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3 cursor-pointer active:scale-[0.99]',
+                      markingTaskId === task.id && !done && 'rounded-b-none',
+                      busyTaskId === task.id && 'opacity-60 pointer-events-none'
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
                       className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors active:scale-90 disabled:opacity-50',
-                        done ? 'border-stone-900 bg-stone-900' : 'border-stone-300 hover:border-stone-900'
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                        done ? 'border-stone-900 bg-stone-900' : 'border-stone-300'
                       )}
                     >
                       {done && <Check className="w-3 h-3 text-white" />}
-                    </button>
+                    </span>
                     <div className="min-w-0 flex-1">
                       <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
                         {taskTitle(task)}
@@ -744,7 +774,11 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                       )}
                     </div>
                     <span className="shrink-0 text-xs text-stone-400">{task.estMinutes}m</span>
-                    {isMockSitting(task) && <MockScoreButton recorded={data.todayMock} />}
+                    {isMockSitting(task) && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <MockScoreButton recorded={data.todayMock} />
+                      </div>
+                    )}
                   </div>
                   {markingTaskId === task.id && !done && (
                     <div className="rounded-b-xl bg-stone-100/70">
