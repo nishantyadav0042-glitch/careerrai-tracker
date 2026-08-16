@@ -38,6 +38,16 @@ export interface SubscriptionRegistration {
   push_died_at: null;
   push_subscribed_at: string;
   push_resubscribed_at: string;
+  /**
+   * Installment 5: a successful registration RESOLVES whatever the last
+   * recovery attempt failed on, so the stale reason must not linger — a
+   * student showing `recovery_failed: browser_permission_default` while
+   * holding a live subscription is a lie the dashboard would repeat.
+   * `push_recovery_attempted_at` is deliberately NOT cleared: it is real
+   * history, and classifyRecovery() reads it together with an active
+   * subscription to report 'recovered' rather than 'not_applicable'.
+   */
+  push_recovery_last_error: null;
   push_context?: 'standalone' | 'twa' | 'ios_app' | 'browser' | 'unknown';
 }
 
@@ -77,6 +87,7 @@ export function registerSubscription(
     push_died_at: null,
     push_subscribed_at: existing.pushSubscribedAt ?? now,
     push_resubscribed_at: now,
+    push_recovery_last_error: null,
     ...(push_context ? { push_context } : {}),
   };
 }

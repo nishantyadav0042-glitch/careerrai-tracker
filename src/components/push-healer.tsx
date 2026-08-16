@@ -29,11 +29,19 @@ let healedThisSession = false;
 // real recovery attempt again. Investigating Installment 1's 49
 // provider-dead students found 7 who genuinely reopened the app since
 // dying and still didn't heal; the reason was invisible because this
-// function's own catch block discarded it. reportOutcome fires ONLY when
-// serverPushDead was true — i.e. this run was an actual recovery attempt,
-// not the routine "keep the server's copy fresh" reuse path — and it never
-// throws itself, so a reporting failure can't mask (or be mistaken for) the
-// original one.
+// function's own catch block discarded it.
+//
+// INSTALLMENT 5 CORRECTION, found by real production data within 15 minutes
+// of the Installment 4 deploy: this used to report whenever `serverPushDead`
+// was true — but that flag is `push_died_at || !push_subscription`, which is
+// ALSO true for every student who simply never turned notifications on (236
+// of them). Result: 3 students got recovery telemetry written who were never
+// in the recovery population at all, including one fully reachable student
+// with a live subscription who was stamped recovery_failed. Recovery
+// reporting is now gated on `inRecoveryQueue` — permission actually granted
+// AND no working subscription, i.e. needsRecovery() from notification-state.ts
+// — while `serverPushDead` keeps its separate, correct job of deciding
+// whether to ROTATE the endpoint. Two different questions, two flags.
 async function reportOutcome(ok: boolean, reason?: string) {
   try {
     await fetch('/api/push/heal-report', {
@@ -49,14 +57,27 @@ async function reportOutcome(ok: boolean, reason?: string) {
   }
 }
 
-export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolean }) {
+export function PushHealer({
+  serverPushDead = false,
+  inRecoveryQueue = false,
+}: {
+  /** Should we ROTATE the endpoint? True when the server holds a dead or
+   *  absent subscription — a technical question about the endpoint. */
+  serverPushDead?: boolean;
+  /** Is this student genuinely OWED a working subscription? True only when
+   *  permission is granted AND there is no working subscription — the
+   *  needsRecovery() population. Gates telemetry ONLY; never gates healing,
+   *  because silently re-persisting a fresh subscription for anyone is still
+   *  correct behaviour, it just isn't a "recovery" worth recording. */
+  inRecoveryQueue?: boolean;
+}) {
   useEffect(() => {
     if (healedThisSession) return;
     healedThisSession = true;
     (async () => {
       try {
         if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-          if (serverPushDead) void reportOutcome(false, 'push_unsupported');
+          if (inRecoveryQueue) void reportOutcome(false, 'push_unsupported');
           return;
         }
         if (Notification.permission !== 'granted') {
@@ -66,7 +87,7 @@ export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolea
           // prompt, which this component deliberately never shows. Reported
           // so this doesn't look identical to "subscribe() threw" in the
           // data — never PROMPTED here either way, only recorded.
-          if (serverPushDead) void reportOutcome(false, `browser_permission_${Notification.permission}`);
+          if (inRecoveryQueue) void reportOutcome(false, `browser_permission_${Notification.permission}`);
           return;
         }
 
@@ -76,12 +97,12 @@ export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolea
 
         const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
         if (!keyRes.ok) {
-          if (serverPushDead) void reportOutcome(false, `vapid_key_fetch_${keyRes.status}`);
+          if (inRecoveryQueue) void reportOutcome(false, `vapid_key_fetch_${keyRes.status}`);
           return;
         }
         const { key } = await keyRes.json();
         if (!key) {
-          if (serverPushDead) void reportOutcome(false, 'vapid_key_missing');
+          if (inRecoveryQueue) void reportOutcome(false, 'vapid_key_missing');
           return;
         }
 
@@ -100,20 +121,20 @@ export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolea
           // healed: pushManager.subscribe() can throw for real device-level
           // reasons (FCM/Play Services trouble on Android is the common
           // one) even with OS permission still granted.
-          if (serverPushDead) void reportOutcome(false, `subscribe_threw:${err instanceof Error ? err.name : 'unknown'}`);
+          if (inRecoveryQueue) void reportOutcome(false, `subscribe_threw:${err instanceof Error ? err.name : 'unknown'}`);
           return;
         }
         const persisted = await persistSubscription(sub, displayMode);
-        if (serverPushDead) void reportOutcome(persisted.ok, persisted.ok ? undefined : persisted.reason);
+        if (inRecoveryQueue) void reportOutcome(persisted.ok, persisted.ok ? undefined : persisted.reason);
       } catch (err) {
         // Still never breaks the app over a push heal — but the reason is no
         // longer thrown away. Only reported when this WAS a recovery
         // attempt; a routine reuse-path failure (permission check, SW
         // registration on an unrelated page) isn't a "recovery" fact.
-        if (serverPushDead) void reportOutcome(false, `unexpected:${err instanceof Error ? err.name : 'unknown'}`);
+        if (inRecoveryQueue) void reportOutcome(false, `unexpected:${err instanceof Error ? err.name : 'unknown'}`);
       }
     })();
-  }, [serverPushDead]);
+  }, [serverPushDead, inRecoveryQueue]);
 
   return null;
 }

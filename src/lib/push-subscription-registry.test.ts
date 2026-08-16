@@ -106,4 +106,17 @@ describe('both write paths actually use the shared function — not just a same-
       expect(src, f).not.toMatch(/push_subscribed_at:\s*\(/);
     }
   });
+
+  // Installment 5, from real production data: a student was observed holding
+  // a live subscription while still carrying push_recovery_last_error =
+  // 'browser_permission_default' from a heal attempt that ran moments before
+  // they subscribed. A resolved failure must not survive its own resolution.
+  it('a successful registration clears the last recovery error, but KEEPS the attempt timestamp as history', () => {
+    const reg = registerSubscription({ notifPrefs: { push: false }, pushSubscribedAt: null }, { endpoint: 'x' }, '2026-08-16T15:00:00Z');
+    expect(reg.push_recovery_last_error).toBeNull();
+    // classifyRecovery() needs push_recovery_attempted_at to survive so an
+    // active subscription that came FROM a recovery reports 'recovered'
+    // rather than 'not_applicable' — so this function must not touch it.
+    expect(reg).not.toHaveProperty('push_recovery_attempted_at');
+  });
 });

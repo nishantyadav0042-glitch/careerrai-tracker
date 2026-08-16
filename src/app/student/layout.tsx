@@ -164,7 +164,18 @@ export default async function StudentLayout({ children }: { children: React.Reac
           cookie set at login for buddydemo@careerrai.in. Renders null for
           everyone else. */}
       <BuddyDemoTour />
-      <PushHealer serverPushDead={!!profile?.push_died_at || !profile?.push_subscription} />
+      {/* Two different questions, deliberately two different flags (see
+          push-healer.tsx's own header for the production incident that
+          forced the split): serverPushDead decides whether to ROTATE the
+          endpoint; inRecoveryQueue decides whether this run counts as a
+          RECOVERY worth recording — which requires the student to have
+          actually granted permission, not merely to lack a subscription. */}
+      <PushHealer
+        serverPushDead={!!profile?.push_died_at || !profile?.push_subscription}
+        inRecoveryQueue={
+          (profile?.notif_prefs as Record<string, unknown> | null)?.push === true && !profile?.push_subscription
+        }
+      />
       <NotificationAttribution />
       <InstallPing />
       <StoreBuildDetector />
