@@ -1,7 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { METRIC_DEFINITIONS, computeReachabilitySnapshot, zeroLabelFor } from './notification-metrics';
+import { AUDIENCES, CRON_AUDIENCE } from './notification-audience';
 
 describe('METRIC_DEFINITIONS — the one canonical registry, every metric fully specified', () => {
+  // Installment 6 P3, from the real 111-vs-110 production discrepancy: a
+  // metric that does not state its population is how two dashboards end up
+  // "both correct" and disagreeing. Required field, enforced here.
+  it('every metric names the exact population it counts', () => {
+    for (const [key, def] of Object.entries(METRIC_DEFINITIONS)) {
+      expect(AUDIENCES, `${key}.audience`).toHaveProperty(def.audience);
+    }
+  });
+
+  it('the student-population metrics all count production_students — one population, one word', () => {
+    for (const key of ['permission_granted', 'active_subscription', 'reachable', 'provider_dead', 'recovery_required']) {
+      expect(METRIC_DEFINITIONS[key].audience, key).toBe('production_students');
+    }
+  });
+
+  it('every notification-producing cron has a declared audience — none silently unclassified', () => {
+    // The audit that motivated this found 7 of 14 excluding neither test nor
+    // demo accounts. That may be intentional per cron, but it must never be
+    // invisible: a cron missing from this map is an unreviewed population.
+    for (const [cron, audience] of Object.entries(CRON_AUDIENCE)) {
+      expect(AUDIENCES, `${cron} declares a real audience`).toHaveProperty(audience);
+    }
+    expect(Object.keys(CRON_AUDIENCE).length).toBeGreaterThanOrEqual(14);
+  });
+
   it('every metric has all required fields, none blank', () => {
     for (const [key, def] of Object.entries(METRIC_DEFINITIONS)) {
       expect(def.name, `${key}.name`).toBe(key);
