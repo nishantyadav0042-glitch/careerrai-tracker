@@ -180,10 +180,20 @@ export default async function DailyTrackerPage() {
     : null;
   // The most recent weekly extension, if the reconcile job moved this
   // student's date. Shown once, dismissible — never a daily banner.
+  //
+  // `dismissed_at is null` is the actual "shown once" guarantee (16 Aug —
+  // the X button used to only set local component state, which reset to
+  // visible on every reload; see plan-extended-alert.tsx and
+  // /api/plan/dismiss-extension). Excluding dismissed rows here, rather than
+  // just filtering client-side, means a dismissed extension stays gone
+  // permanently and on every device — and a genuinely NEW extension (a
+  // different week, a different date) still surfaces normally, because it's
+  // a different row with its own dismissed_at.
   const { data: latestExtensionRow } = await admin
     .from('plan_extensions')
-    .select('week_start, expected_hours, actual_hours, deficit_hours, days_added, previous_date, new_date, hit_exam_wall')
+    .select('id, week_start, expected_hours, actual_hours, deficit_hours, days_added, previous_date, new_date, hit_exam_wall')
     .eq('student_id', user.id)
+    .is('dismissed_at', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -196,6 +206,7 @@ export default async function DailyTrackerPage() {
     && (latestExtensionRow.new_date as string) === targetIso;
   const latestExtension = latestExtensionRow && extensionStillInEffect
     ? {
+        id: latestExtensionRow.id as string,
         weekStart: latestExtensionRow.week_start as string,
         expectedHours: Number(latestExtensionRow.expected_hours),
         actualHours: Number(latestExtensionRow.actual_hours),

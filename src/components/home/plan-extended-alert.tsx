@@ -16,8 +16,14 @@ import { AlertTriangle, X } from 'lucide-react';
 //
 // Dismissible on purpose. They have read it; making them read it again on
 // Tuesday is the exact nagging this replaced.
+//
+// The dismiss must outlive this component. Local state alone (16 Aug bug
+// report) resets on every reload, so the X persists to the row itself via
+// /api/plan/dismiss-extension — the server-side query in tracker/page.tsx
+// then excludes it permanently, not just for this tab.
 
 export interface PlanExtension {
+  id: string;
   weekStart: string;
   expectedHours: number;
   actualHours: number;
@@ -39,6 +45,16 @@ export function PlanExtendedAlert({ extension }: { extension: PlanExtension }) {
 
   const { hitExamWall, daysAdded } = extension;
 
+  const dismiss = () => {
+    setDismissed(true); // optimistic — the tap must feel instant
+    fetch('/api/plan/dismiss-extension', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: extension.id }),
+      keepalive: true,
+    }).catch(() => { /* best-effort; worst case it reappears next load and can be dismissed again */ });
+  };
+
   return (
     <section
       className={`mb-3 rounded-2xl border-2 p-4 ${
@@ -54,7 +70,7 @@ export function PlanExtendedAlert({ extension }: { extension: PlanExtension }) {
             </p>
             <button
               type="button"
-              onClick={() => setDismissed(true)}
+              onClick={dismiss}
               aria-label="Dismiss"
               className="-mt-1 shrink-0 rounded-lg p-1 text-stone-400 hover:bg-black/5 hover:text-stone-700"
             >
