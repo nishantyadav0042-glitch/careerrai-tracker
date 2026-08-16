@@ -355,15 +355,28 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         setTickError(body.error ?? 'Could not save that — check your connection and tap again.');
         return;
       }
-      setTickError(null);
       // Server state changed — the 30s GET cache must never serve
       // pre-completion data.
       routineTodayCache = null;
-      const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean };
+      const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; dayClosed: boolean };
       setCompletedIds(new Set(json.completedTaskIds));
       setExpandedTaskId(null);
       if (confidence && task.topic) setConfidenceTaps((prev) => [...prev, { topic: task.topic!, confidence }]);
-      if (json.fullyDone) { setFullyDone(true); reportComplete(); }
+      // dayClosed is what actually writes daily_reports/streak_data — this
+      // tick's OWN circle is already saved regardless, but close_day is sent
+      // on every tick (including a single one-off tap), so any tick could be
+      // the one that was supposed to count today. Trusting fullyDone alone
+      // here is exactly the bug the 13 Aug Backbone audit's own comment on
+      // the server predicted and never wired a client check for: the card
+      // showing "Ready for tomorrow ✅" while nothing was actually counted.
+      // The server now retries once before giving up, so this should be
+      // rare — but rare must still tell the truth, not stay silent.
+      if (!json.dayClosed) {
+        setTickError('Saved your tick, but today isn’t counted yet — tap once more to finish it off.');
+      } else {
+        setTickError(null);
+      }
+      if (json.fullyDone && json.dayClosed) { setFullyDone(true); reportComplete(); }
     } finally {
       setBusyTaskId(null);
     }

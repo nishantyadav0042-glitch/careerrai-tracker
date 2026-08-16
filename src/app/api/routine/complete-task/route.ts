@@ -5,6 +5,7 @@ import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
 import { creditedHours } from '@/lib/study-credit';
+import { recordSacredFailure } from '@/lib/os/sacred-failure';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
     const mergedNotes = existingLog?.notes
       ?? (emergencyMinimumDone && !fullyDone ? 'Less time today — did the essentials.' : null);
 
-    const { error: rpcError } = await admin.rpc('upsert_log_and_streak', {
+    const rpcArgs = {
       p_student_id: user.id,
       p_report_date: today,
       p_study_duration: mergedHours,
@@ -192,7 +193,16 @@ export async function POST(request: NextRequest) {
       p_mock_taken: mergedMockTaken,
       p_notes: mergedNotes,
       p_emotional_chips: [],
-    });
+    };
+    let { error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs);
+    // ONE RETRY before giving up (16 Aug — same principle as the auth-session
+    // retry in src/proxy.ts): this RPC is what makes a tick count as a
+    // studied day, so a one-off transient failure here must not become a
+    // silent, permanent "the day never happened." The retry is idempotent
+    // (upsert), so trying again cannot double-count or corrupt anything.
+    if (rpcError) {
+      ({ error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs));
+    }
     dayClosed = !rpcError;
     if (rpcError) {
       // This RPC is what makes a tick count as a studied day — it writes the
@@ -201,7 +211,15 @@ export async function POST(request: NextRequest) {
       // while the day never happened as far as every other surface is
       // concerned. The tick itself is already saved, so we report the partial
       // truth rather than pretending either way.
+      //
+      // Both attempts failed — this is now the same class of failure
+      // log-daily's route already reports via recordSacredFailure (Incident
+      // #30: "alert me always if I face any errors"). This route wrote to the
+      // exact same daily_reports/streak_data as that one but was never wired
+      // into that alert, so a failure here was invisible to the one system
+      // built specifically to catch it.
       console.error('[complete-task] day close failed', rpcError.message);
+      void recordSacredFailure(admin, 'log_daily', user.id, rpcError);
     }
   }
 
