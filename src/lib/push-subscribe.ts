@@ -35,7 +35,7 @@ export async function enablePush(): Promise<EnablePushResult> {
     const sub = await getLiveSubscription(reg, key);
 
     const context = isStandalone() ? 'standalone' : 'browser';
-    const ok = await persistSubscription(sub, context);
+    const { ok } = await persistSubscription(sub, context);
     if (ok) {
       // Record WHERE push was granted — a browser-context grant is the tell for
       // a subscription that usually can't deliver.

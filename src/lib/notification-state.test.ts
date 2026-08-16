@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyNotificationState, needsRecovery } from './notification-state';
+import { classifyNotificationState, needsRecovery, classifyRecovery } from './notification-state';
 
 describe('classifyNotificationState — the one place permission/subscription logic lives', () => {
   it('never asked: no preference, no prompt, no subscription', () => {
@@ -57,5 +57,59 @@ describe('needsRecovery — the Phase 17 priority queue predicate', () => {
     expect(needsRecovery({ permission: 'not_requested', subscription: 'missing' })).toBe(false);
     expect(needsRecovery({ permission: 'denied', subscription: 'missing' })).toBe(false);
     expect(needsRecovery({ permission: 'not_requested', subscription: 'active' })).toBe(false);
+  });
+});
+
+describe('classifyRecovery — Installment 2 Part 1/6: the exact lifecycle the founder specified', () => {
+  it('permission not granted: not_applicable regardless of subscription or recovery history', () => {
+    expect(classifyRecovery({
+      permission: 'not_requested', subscription: 'missing', recoveryAttemptedAt: null, recoveryLastError: null,
+    })).toBe('not_applicable');
+    expect(classifyRecovery({
+      permission: 'denied', subscription: 'provider_dead', recoveryAttemptedAt: '2026-08-01T00:00:00Z', recoveryLastError: 'x',
+    })).toBe('not_applicable');
+  });
+
+  it('granted + active, never known broken: not_applicable — nothing to recover', () => {
+    expect(classifyRecovery({
+      permission: 'granted', subscription: 'active', recoveryAttemptedAt: null, recoveryLastError: null,
+    })).toBe('not_applicable');
+  });
+
+  it('granted + active, WITH a recovery attempt on record: recovered', () => {
+    // The exact case the healer's fix produces: subscription is live again,
+    // and it's on record that it got there via a recovery attempt — not
+    // just "was always fine".
+    expect(classifyRecovery({
+      permission: 'granted', subscription: 'active', recoveryAttemptedAt: '2026-08-01T00:00:00Z', recoveryLastError: null,
+    })).toBe('recovered');
+  });
+
+  it('granted + unusable, never attempted: recovery_required — the priority queue', () => {
+    expect(classifyRecovery({
+      permission: 'granted', subscription: 'provider_dead', recoveryAttemptedAt: null, recoveryLastError: null,
+    })).toBe('recovery_required');
+    expect(classifyRecovery({
+      permission: 'granted', subscription: 'missing', recoveryAttemptedAt: null, recoveryLastError: null,
+    })).toBe('recovery_required');
+  });
+
+  it('granted + unusable, attempted, real reason captured: recovery_failed', () => {
+    // This is the exact fix for the 7 students found returning to the app
+    // with no visible trace of what happened — now the reason is captured
+    // instead of being an indistinguishable silent no-op.
+    expect(classifyRecovery({
+      permission: 'granted', subscription: 'provider_dead',
+      recoveryAttemptedAt: '2026-08-16T00:00:00Z', recoveryLastError: 'subscribe_threw:AbortError',
+    })).toBe('recovery_failed');
+  });
+
+  it('granted + unusable, attempted, but no reason captured: recovery_attempted (honest UNKNOWN, not invented)', () => {
+    // e.g. the report beacon itself failed after a real attempt — we know
+    // an attempt happened (attemptedAt is set) but not why it didn't work.
+    // Must never be silently promoted to recovery_failed OR recovered.
+    expect(classifyRecovery({
+      permission: 'granted', subscription: 'missing', recoveryAttemptedAt: '2026-08-16T00:00:00Z', recoveryLastError: null,
+    })).toBe('recovery_attempted');
   });
 });

@@ -105,8 +105,8 @@ export function StandaloneNotifAsk({ pushEnabled, serverSubDead = false }: { pus
       // Reuse a healthy sub, rotate only if the key changed — never the blind
       // unsubscribe()+subscribe() that stranded endpoints (21 July fix).
       const sub = await getLiveSubscription(reg, publicKey);
-      const ok = await persistSubscription(sub, detectDisplayMode());
-      if (!ok) throw new Error('subscribe failed');
+      const { ok, reason } = await persistSubscription(sub, detectDisplayMode());
+      if (!ok) throw new Error(`subscribe failed: ${reason}`);
       track('push_enabled', { context: detectDisplayMode(), source: 'standalone_ask' });
       // Verification loop: prove the brand-new subscription delivers end to end.
       // Fire-and-forget — the reload below shouldn't wait on it, and the beacon

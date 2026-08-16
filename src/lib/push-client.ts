@@ -36,6 +36,16 @@ function keyMatches(sub: PushSubscription, keyBytes: Uint8Array): boolean {
 // when forced (a confirmed 410/404 death) or when the key genuinely changed —
 // and even then, the old sub is unsubscribed only as we immediately mint a new
 // one, so there is no window where the browser holds nothing.
+//
+// 16 Aug, Notification Reliability V2 Installment 2 Part 8: throws on failure
+// (unchanged) — but its ONE caller (push-healer.tsx) used to catch this with
+// zero observability. Investigating the 49 provider-dead students from
+// Installment 1 found 7 who genuinely reopened the app since their
+// subscription died and still never healed — this is very likely why:
+// `reg.pushManager.subscribe()` can throw for real, device-level reasons
+// (FCM/Play Services issues on Android WebAPKs are the common one) even with
+// OS permission still granted, and that failure had nowhere to go. The throw
+// itself is unchanged; what changed is that the caller no longer swallows it.
 export async function getLiveSubscription(
   reg: ServiceWorkerRegistration,
   publicKey: string,
@@ -53,11 +63,17 @@ export async function getLiveSubscription(
   });
 }
 
+export interface PersistResult { ok: boolean; reason?: string }
+
 // Persist to the server with ONE retry. A subscription the server never learns
 // about is worthless, and a single failed POST used to strand a valid sub while
-// the old one lay dead — the exact same-day-death tail. Returns whether the
-// server now holds this subscription.
-export async function persistSubscription(sub: PushSubscription, context: string): Promise<boolean> {
+// the old one lay dead — the exact same-day-death tail.
+//
+// 16 Aug: used to return a bare boolean, discarding exactly why a failure
+// happened (network error vs. the server rejecting the subscription vs.
+// something else) — the same observability gap as getLiveSubscription above.
+export async function persistSubscription(sub: PushSubscription, context: string): Promise<PersistResult> {
+  let lastReason = 'unknown';
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const res = await fetch('/api/push/subscribe', {
@@ -65,9 +81,12 @@ export async function persistSubscription(sub: PushSubscription, context: string
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub.toJSON(), context }),
       });
-      if (res.ok) return true;
-    } catch { /* fall through to retry */ }
+      if (res.ok) return { ok: true };
+      lastReason = `server_${res.status}`;
+    } catch (err) {
+      lastReason = `network_error:${err instanceof Error ? err.message : String(err)}`;
+    }
     if (attempt < 2) await new Promise((r) => setTimeout(r, 1200));
   }
-  return false;
+  return { ok: false, reason: lastReason };
 }

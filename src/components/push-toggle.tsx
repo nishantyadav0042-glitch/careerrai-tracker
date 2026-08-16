@@ -154,8 +154,8 @@ export function PushToggle({
 
     // 4. Persist (retried).
     startStep('Saving to your account');
-    const ok = await persistSubscription(sub, detectDisplayMode());
-    if (!ok) { endStep('fail', 'Could not save to the server.'); throw new Error('persist failed'); }
+    const { ok, reason } = await persistSubscription(sub, detectDisplayMode());
+    if (!ok) { endStep('fail', 'Could not save to the server.'); throw new Error(`persist failed: ${reason}`); }
     track('push_enabled', { context: detectDisplayMode(), source: 'push_toggle' });
     endStep('ok', 'Subscribed — now tap “Send a test alert”.');
     setEnabled(true);

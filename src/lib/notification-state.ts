@@ -79,3 +79,63 @@ export function classifyNotificationState(input: NotificationStateInput): Notifi
 export function needsRecovery(state: NotificationState): boolean {
   return state.permission === 'granted' && state.subscription !== 'active';
 }
+
+// ── The recovery lifecycle (Installment 2, Part 1) ──────────────────────
+//
+// Investigating the 49 provider-dead students from Installment 1 found the
+// real reason recovery wasn't visible: 7 of the 49 actually returned to the
+// app since their subscription died (real /student/* visits, standalone
+// PWA, real device) and NONE of them healed — because push-healer.tsx's
+// catch block was `/* silent — never break the app over a push heal */`.
+// The healer running and failing looked IDENTICAL to the healer never
+// running at all. This type makes that distinction a first-class,
+// queryable fact instead of an invisible one.
+
+export type RecoveryState =
+  | 'not_applicable'    // permission isn't granted, or the subscription is
+                         // healthy and was never known to be broken
+  | 'recovery_required' // permission granted, subscription unusable, no
+                         // recovery attempt on record yet
+  | 'recovery_attempted' // an attempt ran, subscription is still not active,
+                         // and we don't have a captured reason why (the
+                         // attempt itself, or the report of it, was lost —
+                         // an honest UNKNOWN, not invented as a failure)
+  | 'recovery_failed'   // an attempt ran, subscription is still not active,
+                         // and we DO have the actual reason
+  | 'recovered';         // subscription is active AND a recovery attempt is
+                         // on record — the subscription that's live now is
+                         // the healer's doing, not one that was never broken
+
+export interface RecoveryInput {
+  permission: PermissionState;
+  subscription: SubscriptionState;
+  /** profiles.push_recovery_attempted_at — stamped by the healer on every
+   *  attempt, success or failure, never left silent. */
+  recoveryAttemptedAt: string | null;
+  /** profiles.push_recovery_last_error — the real reason the LAST attempt
+   *  didn't leave the student with an active subscription. Null if the
+   *  last attempt succeeded, or if no attempt is on record. */
+  recoveryLastError: string | null;
+}
+
+export function classifyRecovery(input: RecoveryInput): RecoveryState {
+  if (input.permission !== 'granted') return 'not_applicable';
+
+  if (input.subscription === 'active') {
+    // Deliberately NOT ordering-sensitive (comparing timestamps against
+    // subscriptionEstablishedAt): push-healer.tsx reports the recovery
+    // outcome as a SEPARATE beacon after persistSubscription's own write,
+    // so recoveryAttemptedAt can land a moment after the subscription's own
+    // timestamp even on success — a strict ">=" check would misclassify a
+    // real recovery as "not_applicable". Presence is enough: an active
+    // subscription with any recorded recovery attempt is a recovered one —
+    // PushHealer only force-rotates when the server already believes the
+    // subscription is dead, so a healthy subscription with no history of
+    // dying never accumulates an attempt in the first place.
+    return input.recoveryAttemptedAt != null ? 'recovered' : 'not_applicable';
+  }
+
+  // subscription is 'missing' or 'provider_dead' from here down.
+  if (input.recoveryAttemptedAt == null) return 'recovery_required';
+  return input.recoveryLastError != null ? 'recovery_failed' : 'recovery_attempted';
+}

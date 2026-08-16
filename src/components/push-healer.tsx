@@ -25,23 +25,65 @@ import { getLiveSubscription, persistSubscription } from '@/lib/push-client';
 //    installed app's, not the doomed browser-tab one.
 let healedThisSession = false;
 
+// 16 Aug, Notification Reliability V2 Installment 2 Part 8 — never swallow a
+// real recovery attempt again. Investigating Installment 1's 49
+// provider-dead students found 7 who genuinely reopened the app since
+// dying and still didn't heal; the reason was invisible because this
+// function's own catch block discarded it. reportOutcome fires ONLY when
+// serverPushDead was true — i.e. this run was an actual recovery attempt,
+// not the routine "keep the server's copy fresh" reuse path — and it never
+// throws itself, so a reporting failure can't mask (or be mistaken for) the
+// original one.
+async function reportOutcome(ok: boolean, reason?: string) {
+  try {
+    await fetch('/api/push/heal-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok, reason }),
+    });
+  } catch {
+    /* the report itself failing is not the story — the original outcome,
+       captured above, already reached the server if this succeeds, and if
+       it doesn't, push_recovery_attempted_at simply stays at its last
+       value, which is an honest (if stale) fact, not a fabricated one. */
+  }
+}
+
 export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolean }) {
   useEffect(() => {
     if (healedThisSession) return;
     healedThisSession = true;
     (async () => {
       try {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
-        if (Notification.permission !== 'granted') return; // only heal — never prompt here
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+          if (serverPushDead) void reportOutcome(false, 'push_unsupported');
+          return;
+        }
+        if (Notification.permission !== 'granted') {
+          // A genuinely different, valuable fact from a technical subscribe
+          // failure below: the browser/OS permission itself isn't granted
+          // right now — recovery structurally cannot proceed without a
+          // prompt, which this component deliberately never shows. Reported
+          // so this doesn't look identical to "subscribe() threw" in the
+          // data — never PROMPTED here either way, only recorded.
+          if (serverPushDead) void reportOutcome(false, `browser_permission_${Notification.permission}`);
+          return;
+        }
 
         const displayMode = detectDisplayMode();
         await navigator.serviceWorker.register('/sw.js');
         const reg = await navigator.serviceWorker.ready;
 
         const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
-        if (!keyRes.ok) return;
+        if (!keyRes.ok) {
+          if (serverPushDead) void reportOutcome(false, `vapid_key_fetch_${keyRes.status}`);
+          return;
+        }
         const { key } = await keyRes.json();
-        if (!key) return;
+        if (!key) {
+          if (serverPushDead) void reportOutcome(false, 'vapid_key_missing');
+          return;
+        }
 
         // The 21 July fix: we ROTATE the endpoint only when the server has
         // confirmed the current one dead (410/404). Every other open — including
@@ -50,10 +92,25 @@ export function PushHealer({ serverPushDead = false }: { serverPushDead?: boolea
         // context. The old code force-rotated on first standalone open, which
         // unsubscribed a working sub and (on a failed persist) stranded it as a
         // corpse — the same-day death we were seeing. Reuse can't strand.
-        const sub = await getLiveSubscription(reg, key, { forceRotate: serverPushDead });
-        await persistSubscription(sub, displayMode);
-      } catch {
-        /* silent — never break the app over a push heal */
+        let sub;
+        try {
+          sub = await getLiveSubscription(reg, key, { forceRotate: serverPushDead });
+        } catch (err) {
+          // The actual, most likely reason the 7 returning students never
+          // healed: pushManager.subscribe() can throw for real device-level
+          // reasons (FCM/Play Services trouble on Android is the common
+          // one) even with OS permission still granted.
+          if (serverPushDead) void reportOutcome(false, `subscribe_threw:${err instanceof Error ? err.name : 'unknown'}`);
+          return;
+        }
+        const persisted = await persistSubscription(sub, displayMode);
+        if (serverPushDead) void reportOutcome(persisted.ok, persisted.ok ? undefined : persisted.reason);
+      } catch (err) {
+        // Still never breaks the app over a push heal — but the reason is no
+        // longer thrown away. Only reported when this WAS a recovery
+        // attempt; a routine reuse-path failure (permission check, SW
+        // registration on an unrelated page) isn't a "recovery" fact.
+        if (serverPushDead) void reportOutcome(false, `unexpected:${err instanceof Error ? err.name : 'unknown'}`);
       }
     })();
   }, [serverPushDead]);

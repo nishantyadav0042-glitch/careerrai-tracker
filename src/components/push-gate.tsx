@@ -138,7 +138,7 @@ export function PushGate({ mode, notifPrefs }: PushGateProps) {
 
       // Sets notif_prefs.push = true server-side (merge-safe) — the gate
       // never renders again once this succeeds, on either mode. Retried persist.
-      const ok = await persistSubscription(sub, detectDisplayMode());
+      const { ok } = await persistSubscription(sub, detectDisplayMode());
       if (!ok) { setError('Couldn’t save your subscription. Please try again.'); setPhase('intro'); return; }
       track('push_enabled', { context: detectDisplayMode(), source: 'push_gate' });
 
