@@ -25,19 +25,17 @@ import { cn } from '@/lib/utils';
 // better evidence than a completion matrix. That is why the chain already
 // placed self-report above the grid; until today nothing was filling it.
 //
-// "Not sure" is a real answer, not a skip. A student who genuinely does not
-// know is telling us something true, and guessing would poison the strongest
-// input we have. It stores null and the chain falls through to the grid
-// exactly as it does today — no worse than before, and honest.
+// Founder, 16 Aug, reversing the above: mandatory means the student picks a
+// section, full stop. "Not sure yet" is no longer offered — one tap on
+// VARC/DILR/QA is now the only way off this screen. The null-safe plumbing
+// downstream (self_report_status, the DILR fallback) stays as-is for any
+// legacy rows that already recorded NOT_SURE_YET; this screen just never
+// produces a new one.
 
 interface Props {
   onNext: (data: {
-    self_reported_weakest_section: string | null;
-    /** SELECTED_SECTION vs NOT_SURE_YET — the distinction that makes "not
-     *  sure" a first-class answer instead of an indistinguishable null.
-     *  Founder, 15 Aug: "Mandatory means MANDATORY RESPONSE, not MANDATORY
-     *  SECTION SELECTION." */
-    self_report_status: 'SELECTED_SECTION' | 'NOT_SURE_YET';
+    self_reported_weakest_section: string;
+    self_report_status: 'SELECTED_SECTION';
   }) => void;
   onBack: () => void;
   canGoBack: boolean;
@@ -69,12 +67,12 @@ export default function ScreenWeakestSection({ onNext, onBack, canGoBack, isLoad
   const [picked, setPicked] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
 
-  const submit = (value: string | null) => {
+  const submit = (value: string) => {
     setPicked(value);
     setTouched(true);
     onNext({
       self_reported_weakest_section: value,
-      self_report_status: value ? 'SELECTED_SECTION' : 'NOT_SURE_YET',
+      self_report_status: 'SELECTED_SECTION',
     });
   };
 
@@ -110,16 +108,6 @@ export default function ScreenWeakestSection({ onNext, onBack, canGoBack, isLoad
           </button>
         ))}
       </div>
-
-      {/* An honest answer, not an escape hatch — see the header note. */}
-      <button
-        type="button"
-        disabled={isLoading}
-        onClick={() => submit(null)}
-        className="w-full py-2 text-[12.5px] font-medium text-stone-400 hover:text-stone-600 disabled:opacity-60"
-      >
-        Not sure yet — decide it from my mocks
-      </button>
 
       {canGoBack && !touched && (
         <button

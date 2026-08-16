@@ -62,12 +62,16 @@ describe('the weakest section is ASKED, not defaulted', () => {
     expect(s).toContain("'self_reported_weakest_section' in data");
   });
 
-  it('offers all three sections and an honest "not sure"', () => {
+  it('offers all three sections, and selection is mandatory', () => {
     const s = readFileSync(SCREEN, 'utf8');
     for (const sec of ['VARC', 'DILR', 'QA']) expect(s, sec).toContain(`value: '${sec}'`);
-    // Not sure stores null and falls through to the grid — no worse than
-    // before, and it never poisons the strongest input with a guess.
-    expect(s).toContain('submit(null)');
+    // Founder, 16 Aug: the "not sure yet" escape hatch is no longer offered
+    // — a student must tap a real section to advance. No null/skip path
+    // should exist in the render output (the header comment above may still
+    // reference the phrase historically, so match the removed button text
+    // exactly rather than scanning the whole file).
+    expect(s).not.toContain('submit(null)');
+    expect(s).not.toContain('decide it from my mocks');
   });
 
   it('is asked BEFORE the coverage grid', () => {
