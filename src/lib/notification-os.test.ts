@@ -25,12 +25,19 @@ interface FakeRow {
   expected_action: string;
   created_at: string;
   pushed_at: string | null;
+  send_status?: string;
+  send_error?: string | null;
+  failed_at?: string | null;
 }
 
 let rows: FakeRow[] = [];
 let nextId = 1;
 let sendResult: { ok: boolean; reason?: string } = { ok: true };
 let sendCalls: { userId: string; notifId: string }[] = [];
+// null = normal insert; a string = every insert fails with that Postgres
+// error code (used to test the Phase 11 duplicate-suppression path and
+// Phase 5's generic-insert-failure path without a real unique constraint).
+let insertErrorCode: string | null = null;
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
@@ -60,15 +67,18 @@ vi.mock('@/lib/supabase/admin', () => ({
         },
         then: (resolve: (v: { count: number }) => void) => resolve({ count: q.count }),
         insert: (row: Partial<FakeRow>) => {
+          if (insertErrorCode != null) {
+            return { select: () => ({ single: async () => ({ data: null, error: { code: insertErrorCode, message: 'simulated insert failure' } }) }) };
+          }
           const created: FakeRow = {
             id: `row-${nextId++}`, user_id: row.user_id as string, type: row.type as string,
             title: row.title as string, body: row.body as string, data: (row.data as Record<string, unknown>) ?? {},
             reason: row.reason as string, expected_action: row.expected_action as string,
-            created_at: new Date().toISOString(), pushed_at: null,
+            created_at: new Date().toISOString(), pushed_at: null, send_status: row.send_status,
           };
           rows.push(created);
           return {
-            select: () => ({ single: async () => ({ data: { id: created.id } }) }),
+            select: () => ({ single: async () => ({ data: { id: created.id }, error: null }) }),
           };
         },
         update: (patch: Partial<FakeRow>) => ({
@@ -91,13 +101,14 @@ vi.mock('@/lib/push', () => ({
   },
 }));
 
-import { dispatch, STUDENT_BUDGET_TYPES, DAILY_BUDGET } from './notification-os';
+import { dispatch, isStudentBudgetType, STUDENT_BUDGET_TYPES, DAILY_BUDGET } from './notification-os';
 
 beforeEach(() => {
   rows = [];
   nextId = 1;
   sendResult = { ok: true };
   sendCalls = [];
+  insertErrorCode = null;
 });
 
 const opts = (over: Partial<Parameters<typeof dispatch>[0]> = {}) => ({
@@ -127,6 +138,25 @@ describe('every send carries the row it belongs to', () => {
     expect(rows).toHaveLength(1);
     expect(sendCalls).toHaveLength(0);
     expect(rows[0].pushed_at).toBeNull();
+  });
+
+  // Notification Reliability V2, Phase 6: "every real push attempt has
+  // exactly one notification ID" — proven across MULTIPLE attempts, not
+  // just the single-call case above, since the actual failure mode this
+  // guards (14 call sites reaching the transport with no id at all, 15 Aug)
+  // was only visible across a whole run of real traffic, not one send.
+  it('across many attempts, every push carries a distinct, non-empty, correctly-correlated id', async () => {
+    for (let i = 0; i < 8; i++) await dispatch(opts({ type: `t${i}` }));
+    expect(sendCalls).toHaveLength(8);
+    for (const call of sendCalls) {
+      expect(call.notifId).toBeTruthy();
+      expect(typeof call.notifId).toBe('string');
+    }
+    // one id per attempt, no id reused across two different pushes
+    const ids = sendCalls.map((c) => c.notifId);
+    expect(new Set(ids).size).toBe(ids.length);
+    // every id sent to the transport actually belongs to a real row
+    for (const id of ids) expect(rows.some((r) => r.id === id)).toBe(true);
   });
 });
 
@@ -190,6 +220,62 @@ describe('the soft state budget — opt-in by type, never a silent global gate',
       expect(await dispatch(opts({ type: kind, dailyBudget: 2 }))).toBe('sent');
     }
     expect(await dispatch(opts({ type: kind, dailyBudget: 2 }))).toBe('budget_exhausted');
+  });
+});
+
+describe('Notification Reliability V2, Phase 5 — dispatch() reports the REAL transport outcome', () => {
+  it('a failed push reports "failed", never the old optimistic "sent"', async () => {
+    sendResult = { ok: false, reason: 'send_failed_500' };
+    const outcome = await dispatch(opts());
+    expect(outcome).toBe('failed');
+  });
+
+  it('a failed push stamps send_status/send_error/failed_at on the row via update', async () => {
+    sendResult = { ok: false, reason: 'send_failed_410' };
+    await dispatch(opts());
+    expect(rows[0].send_status).toBe('failed');
+    expect(rows[0].send_error).toBe('send_failed_410');
+    expect(rows[0].failed_at).not.toBeNull();
+  });
+
+  it('a successful push stamps send_status = provider_accepted alongside pushed_at', async () => {
+    await dispatch(opts());
+    expect(rows[0].send_status).toBe('provider_accepted');
+    expect(rows[0].pushed_at).not.toBeNull();
+  });
+
+  it('an in-app-only student (push:false) is still "sent" — no transport was ever supposed to run', async () => {
+    const outcome = await dispatch(opts({ prefs: { push: false } }));
+    expect(outcome).toBe('sent');
+  });
+});
+
+describe('Notification Reliability V2, Phase 11 — duplicate suppression and insert-failure reporting', () => {
+  it('a unique-constraint violation (23505) on insert reports duplicate_suppressed, never attempts a push', async () => {
+    insertErrorCode = '23505';
+    const outcome = await dispatch(opts());
+    expect(outcome).toBe('duplicate_suppressed');
+    expect(sendCalls).toHaveLength(0);
+    expect(rows).toHaveLength(0); // the DB rejected the row; nothing was created
+  });
+
+  it('a genuine insert failure (not 23505) reports failed instead of silently returning sent', async () => {
+    insertErrorCode = '23P01'; // any non-duplicate Postgres error
+    const outcome = await dispatch(opts());
+    expect(outcome).toBe('failed');
+    expect(sendCalls).toHaveLength(0);
+  });
+});
+
+describe('Notification Reliability V2, Phase 12 — isStudentBudgetType closes the brain_* gap', () => {
+  it('a dynamically-named brain_<action_id> type is recognized without being in the static list', () => {
+    expect(STUDENT_BUDGET_TYPES).not.toContain('brain_activate_first_value');
+    expect(isStudentBudgetType('brain_activate_first_value')).toBe(true);
+  });
+
+  it('a genuinely transactional type is still exempt', () => {
+    expect(isStudentBudgetType('chat')).toBe(false);
+    expect(isStudentBudgetType('session_reminder')).toBe(false);
   });
 });
 

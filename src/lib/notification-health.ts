@@ -67,21 +67,33 @@ export function scoreStudent(p: any, now: number): { state: NotifHealthState; sc
   const hasSub = p.push_subscription != null;
   const verifiedDays = daysAgo(p.push_verified_at, now);
 
-  if (!prefsPush && !hasSub) {
+  // 16 Aug, Notification Reliability V2 Phase 1/4 — gate on prefsPush FIRST,
+  // unconditionally. This used to be `!prefsPush && !hasSub` here, so a
+  // student with push=false but a leftover live subscription blob fell
+  // through to the healthy/unverified/stale branch below and was counted
+  // as opted-in — the exact contradiction the forensic audit found between
+  // this file and push-state.ts's pushHealth(), which already enforced the
+  // right rule ("a live endpoint is not consent; their choice governs").
+  // Zero students are in that exact state as of the 16 Aug snapshot, but
+  // the rule now holds by construction, not by current data being lucky.
+  if (!prefsPush) {
     const wasPrompted = prefs.push_prompted === true || prefs.push_reprompted === true;
     return wasPrompted ? { state: 'declined', score: 0 } : { state: 'not_asked', score: 0 };
   }
-  if (prefsPush && !hasSub) {
-    // The 15 Aug forensic split: a subscription with no push_subscribed_at
-    // was never actually MISSING a birth — the pre-auth signup path just
-    // never wrote one (fixed in lib/push-subscription-registry.ts). Every
-    // instance is dated 12–21 July; this classification does not improve as
-    // new students arrive, because the write path that caused it is closed.
-    return p.push_subscribed_at != null
+  if (!hasSub) {
+    // 16 Aug: disconnected_dead now REQUIRES push_died_at — actual evidence
+    // of an HTTP 410/404 from the push provider, not an inference from
+    // subscription absence. Verified against production before this change:
+    // every current disconnected_dead row already carries a real
+    // push_died_at (48/48) — this makes that a guarantee instead of a
+    // coincidence. A missing subscription with no provider-confirmed death
+    // is disconnected_unexplained: real (permission granted, unreachable),
+    // just not provably a permanent provider rejection.
+    return p.push_died_at != null
       ? { state: 'disconnected_dead', score: 10 }
       : { state: 'disconnected_unexplained', score: 10 };
   }
-  // Has a live subscription from here down.
+  // prefsPush && hasSub from here down.
   if (verifiedDays != null && verifiedDays <= 3) return { state: 'healthy', score: 100 };
   if (verifiedDays != null && verifiedDays >= 7) return { state: 'stale', score: 45 };
   // Live sub, no recent device confirmation. Not yet proven unhealthy —
@@ -98,7 +110,7 @@ export async function getNotificationHealth(admin?: any): Promise<{
   const db = admin ?? createAdminClient();
   const { data } = await db
     .from('profiles')
-    .select('id, full_name, phone, notif_prefs, push_subscription, push_context, push_verified_at, push_subscribed_at')
+    .select('id, full_name, phone, notif_prefs, push_subscription, push_context, push_verified_at, push_subscribed_at, push_died_at')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true);

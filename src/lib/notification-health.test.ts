@@ -18,6 +18,7 @@ const base = {
   push_subscription: null,
   push_subscribed_at: null,
   push_verified_at: null,
+  push_died_at: null,
 };
 
 describe('the "opted out" / "never opted in" split is gone', () => {
@@ -44,19 +45,52 @@ describe('the "opted out" / "never opted in" split is gone', () => {
   });
 });
 
-describe('the "disconnected" split — real churn vs. the closed instrumentation gap', () => {
-  it('has a subscription birth date → disconnected_dead', () => {
+describe('the "disconnected" split — Notification Reliability V2 Phase 4: provider_dead requires PROOF', () => {
+  it('a real push_died_at (an actual 410/404 from the provider) → disconnected_dead', () => {
     const { state } = scoreStudent(
-      { ...base, notif_prefs: { push: true }, push_subscription: null, push_subscribed_at: day(5) }, NOW
+      { ...base, notif_prefs: { push: true }, push_subscription: null, push_subscribed_at: day(5), push_died_at: day(2) }, NOW
     );
     expect(state).toBe('disconnected_dead');
   });
 
-  it('no subscription birth date at all → disconnected_unexplained', () => {
+  it('a subscription birth date ALONE, with NO push_died_at, is disconnected_unexplained — not proof of death', () => {
+    // 16 Aug fix: this used to be disconnected_dead purely because
+    // push_subscribed_at was set — an inference, not a provider-confirmed
+    // rejection. The forensic audit's whole point: a missing subscription
+    // is a different, less certain fact than a proven 410/404, and the
+    // dashboard must never blur them into "dead" on inference alone.
     const { state } = scoreStudent(
-      { ...base, notif_prefs: { push: true }, push_subscription: null, push_subscribed_at: null }, NOW
+      { ...base, notif_prefs: { push: true }, push_subscription: null, push_subscribed_at: day(5), push_died_at: null }, NOW
     );
     expect(state).toBe('disconnected_unexplained');
+  });
+
+  it('no subscription birth date and no death record → disconnected_unexplained', () => {
+    const { state } = scoreStudent(
+      { ...base, notif_prefs: { push: true }, push_subscription: null, push_subscribed_at: null, push_died_at: null }, NOW
+    );
+    expect(state).toBe('disconnected_unexplained');
+  });
+});
+
+describe('a live subscription is never read as consent — Phase 1/4 fix for the exact contradiction the audit found', () => {
+  it('push:false with a leftover LIVE subscription is still not_asked/declined, never healthy', () => {
+    // Before 16 Aug: only `!prefsPush && !hasSub` was checked, so this exact
+    // input fell through to the healthy/unverified/stale branch below and
+    // was counted opted-in — the contradiction with push-state.ts's
+    // pushHealth(), which already enforced "a live endpoint is not
+    // consent; their choice governs" for the same two columns.
+    const { state } = scoreStudent(
+      { ...base, notif_prefs: { push: false }, push_subscription: { endpoint: 'x' }, push_verified_at: day(0) }, NOW
+    );
+    expect(state).toBe('not_asked');
+  });
+
+  it('same case, but with a real prompt on record → declined, not healthy', () => {
+    const { state } = scoreStudent(
+      { ...base, notif_prefs: { push: false, push_prompted: true }, push_subscription: { endpoint: 'x' }, push_verified_at: day(0) }, NOW
+    );
+    expect(state).toBe('declined');
   });
 });
 
@@ -90,7 +124,7 @@ describe('every state is reachable — the exact bug that let never_opted_in go 
     const seen = new Set<NotifHealthState>();
     seen.add(scoreStudent({ ...base }, NOW).state);
     seen.add(scoreStudent({ ...base, notif_prefs: { push: false, push_prompted: true } }, NOW).state);
-    seen.add(scoreStudent({ ...base, notif_prefs: { push: true }, push_subscribed_at: day(5) }, NOW).state);
+    seen.add(scoreStudent({ ...base, notif_prefs: { push: true }, push_subscribed_at: day(5), push_died_at: day(2) }, NOW).state);
     seen.add(scoreStudent({ ...base, notif_prefs: { push: true } }, NOW).state);
     seen.add(scoreStudent({ ...base, notif_prefs: { push: true }, push_subscription: { endpoint: 'x' }, push_verified_at: day(0) }, NOW).state);
     seen.add(scoreStudent({ ...base, notif_prefs: { push: true }, push_subscription: { endpoint: 'x' }, push_verified_at: day(7) }, NOW).state);

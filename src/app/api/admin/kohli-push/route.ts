@@ -30,11 +30,17 @@ export async function GET(request: NextRequest) {
   // accepted) → received_at (device got it, app still closed) → clicked_at.
   const target = request.nextUrl.searchParams.get('student');
   if (target) {
-    // Founder-ordered device test — force push:true regardless of the
-    // student's stored preference, matching this route's original behaviour
-    // (it always sent, unconditionally; this is a deliberate admin override,
-    // not a bypass of student consent, since it is invoked BY an admin AT a
-    // specific student on request).
+    // 16 Aug, Notification Reliability V2 Phase 13: this remains the ONE
+    // deliberate, narrow exception to "never hard-code push:true" — a
+    // single-target, admin-only, explicitly-invoked device diagnostic whose
+    // entire purpose is confirming the push PIPELINE itself works on one
+    // named device, independent of that student's stored app-level
+    // preference (an admin testing their own device, or a specific
+    // student's, on request). It is exactly the "separately named,
+    // explicitly documented mechanism" Phase 13 allows in place of a hidden
+    // push:true — distinct type ('e2e_test'), admin-gated, single-target
+    // only, never reaches a student who didn't ask. The BULK path below is
+    // the one Phase 13 actually targets, and it no longer does this.
     const outcome = await dispatch({
       userId: target, type: 'e2e_test',
       title: 'CareerRai delivery test',
@@ -52,7 +58,7 @@ export async function GET(request: NextRequest) {
 
   const { data: students } = await admin
     .from('profiles')
-    .select('id')
+    .select('id, notif_prefs')
     .eq('role', 'student')
     .not('is_test_account', 'is', true)
     .not('is_demo', 'is', true)
@@ -76,10 +82,17 @@ export async function GET(request: NextRequest) {
       outcomes.already_sent = (outcomes.already_sent ?? 0) + 1;
       continue;
     }
+    // 16 Aug, Phase 13: was hard-coded { push: true } — a bulk send that
+    // ignored every student's actual stored preference. This is exactly the
+    // "admin tool silently overriding consent" case Phase 13 targets; the
+    // query already filters to students holding a live subscription, so in
+    // practice this changes nothing for anyone today (every such student
+    // currently also has push=true — verified in production), but it stops
+    // being true by accident and starts being true by construction.
     const outcome = await dispatch({
       userId: s.id, type: 'kohli_18', title, body, url,
       reason: 'Founder-ordered live delivery test to every reachable student (21 July)',
-      expectedAction: 'log_today', prefs: { push: true },
+      expectedAction: 'log_today', prefs: (s.notif_prefs as Record<string, unknown>) ?? {},
     });
     if (outcome === 'sent') {
       pushed++;

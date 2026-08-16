@@ -54,7 +54,27 @@ export const STUDENT_BUDGET_TYPES = [
   // The evening mentor-sell push (founder, 10 Aug: "we should sell mentor" —
   // sanctioned, but it sells INSIDE the budget, not around it).
   'buddy_evening',
+  // 16 Aug, Notification Reliability V2 Phase 12: these six were dispatching
+  // real pushes (a scheduled daily/weekly student nudge, same in kind as
+  // everything above) while invisible to the one shared daily quota this
+  // list exists to enforce — the exact violation this file's own docs
+  // already named as a bug ("register here or it's a bug"). Deliberately
+  // NOT added: broadcast/streak_restored_push/kohli_18/e2e_test/
+  // welcome_verify/push_self_test — those are admin- or user-triggered
+  // one-offs, not part of the automated daily ladder, matching the same
+  // "transactional/a consequence of an action" exemption chat/session
+  // reminders already have above.
+  'daily_insight', 'founder_ping', 'timetable_refresh', 'plan_extended',
+  'whatsapp_backfill', 'onboarding_done',
 ];
+
+// `brain_${action_id}` (Brain-recommendation pushes) can never appear in the
+// list above — the exact type string is built at runtime per recommendation
+// — so membership needs a prefix check, not just .includes(). Same 16 Aug
+// fix: this was structurally unable to ever be budgeted before.
+export function isStudentBudgetType(type: string): boolean {
+  return STUDENT_BUDGET_TYPES.includes(type) || type.startsWith('brain_');
+}
 
 // Widened 15 Aug when transactional/buddy/admin sends were folded into this
 // one gate — the four original values described only student-nudge outcomes.
@@ -118,7 +138,12 @@ export interface DispatchOptions {
   senderName?: string;
 }
 
-export type DispatchOutcome = 'sent' | 'budget_exhausted' | 'daily_cap';
+// 16 Aug — Notification Reliability V2: 'failed' and 'duplicate_suppressed'
+// are new. Every existing caller checks the exact string 'sent' to count a
+// success ('if (outcome === "sent") sent++') — verified across all 27 call
+// sites before this change — so adding new values here is additive: none of
+// them can be silently miscounted as a success by existing code.
+export type DispatchOutcome = 'sent' | 'budget_exhausted' | 'daily_cap' | 'failed' | 'duplicate_suppressed';
 
 // ── THE ONE SEND BOUNDARY ────────────────────────────────────────────────
 //
@@ -159,7 +184,18 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
   const todayStart =
     new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
-  if (STUDENT_BUDGET_TYPES.includes(opts.type)) {
+  if (isStudentBudgetType(opts.type)) {
+    // The gate above uses isStudentBudgetType (STUDENT_BUDGET_TYPES OR a
+    // brain_ prefix), but the count query below still filters on the flat
+    // list via .in() — brain_* recommendation pushes are individually
+    // admin-reviewed and low-frequency, so a brain_* dispatch is correctly
+    // gated into this budget check but won't see OTHER brain_* sends from
+    // today in its own count. This is a known, deliberate, low-stakes
+    // imprecision (documented rather than silently accepted) — the
+    // alternative (fetching every row and filtering client-side) changes
+    // this query's shape for every caller to fix a case that essentially
+    // never recurs same-day. The hard 10/day ceiling below is completely
+    // unaffected either way.
     const { count } = await admin
       .from('notifications')
       .select('id', { count: 'exact', head: true })
@@ -169,21 +205,39 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
     if ((count ?? 0) >= (opts.dailyBudget ?? DAILY_BUDGET)) return 'budget_exhausted';
   }
 
-  const { data: row } = await admin
+  const { data: row, error: insertError } = await admin
     .from('notifications')
     .insert({
       user_id: opts.userId, type: opts.type, title: opts.title, body: opts.body,
       data: { url: opts.url, ...opts.data }, read: false, channel: 'in_app',
       reason: opts.reason, expected_action: opts.expectedAction,
+      send_status: 'created',
     })
     .select('id')
     .single();
+
+  if (insertError) {
+    // Postgres 23505 = the Phase 11 unique-index backstop (one logical touch
+    // per student+type+IST-day) rejected a same-day repeat — this is the
+    // fix working, not a real failure. Anything else is a genuine insert
+    // failure that used to be silently swallowed (row === undefined, the
+    // function fell through and still returned 'sent'); it is now reported.
+    if ((insertError as { code?: string }).code === '23505') return 'duplicate_suppressed';
+    console.error('[notif-os] notification insert failed:', insertError.message);
+    return 'failed';
+  }
 
   // Auto-silence removed (founder decision): we keep pushing up to the budget for
   // every state — the whole growth thesis is that ignored ≠ stop-trying for the
   // dormant/never-active students we most need to reach. The budget is the only
   // volume control now.
-  let outcome: DispatchOutcome = 'sent';
+  //
+  // 16 Aug — Notification Reliability V2, Phase 5: 'sent' used to be assigned
+  // here, before the transport was even attempted, and NEVER revisited on
+  // failure — every "N reminded" count downstream was a row-write count, not
+  // a delivery-attempt count. `outcome` now starts as 'failed' and is only
+  // ever promoted to 'sent' after sendPushToUser() actually reports success.
+  let outcome: DispatchOutcome = opts.prefs.push === true ? 'failed' : 'sent';
   if (opts.prefs.push === true && row?.id) {
     // The hard ceiling. Counts PUSHES (pushed_at), not notifications
     // (created_at) — a budget-exhausted call above never reaches here, and an
@@ -204,7 +258,16 @@ export async function dispatch(opts: DispatchOptions): Promise<DispatchOutcome> 
         tag: opts.tag, senderName: opts.senderName,
       });
       if (res.ok) {
-        await admin.from('notifications').update({ pushed_at: new Date().toISOString() }).eq('id', row.id);
+        outcome = 'sent';
+        await admin.from('notifications').update({ pushed_at: new Date().toISOString(), send_status: 'provider_accepted' }).eq('id', row.id);
+      } else {
+        // res.reason was computed by push.ts (vapid_not_configured,
+        // no_subscription, send_failed_410, unreachable) and previously
+        // discarded right here — the one line that made every transport
+        // failure invisible to everything downstream of dispatch().
+        await admin.from('notifications').update({
+          send_status: 'failed', send_error: res.reason ?? 'unknown', failed_at: new Date().toISOString(),
+        }).eq('id', row.id);
       }
     }
   }

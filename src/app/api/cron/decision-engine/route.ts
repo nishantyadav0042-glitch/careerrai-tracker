@@ -100,9 +100,29 @@ export async function POST(request: NextRequest) {
     loggedDaysByStudent.get(r.student_id)!.add(r.report_date);
   }
 
+  // 16 Aug, Notification Reliability V2 Phase 11: this route had NO same-day
+  // dedup at all — proven in production to duplicate-send inactive_recovery
+  // (~10-20 students/day) whenever the GitHub Actions cron fallback and
+  // Vercel's own scheduler both fired the 20:00 IST slot. Every other cron
+  // in this file's own family (daily-reminder, study-companion,
+  // onboarding-morning) already checks "did I send this type to this
+  // student today" before dispatching — this brings decision-engine in
+  // line with its siblings. The migration's unique index is the hard
+  // backstop; this is the cheap check that avoids hitting it in the first
+  // place.
+  const todayStartIso = today + 'T00:00:00+05:30';
+  const { data: alreadySentRows } = await admin
+    .from('notifications')
+    .select('user_id, type')
+    .in('user_id', studentIds)
+    .in('type', ['revision_due', 'topic_earned', 'mission_changed', 'weekly_evolved', 'inactive_recovery'])
+    .gte('created_at', todayStartIso);
+  const alreadySentToday = new Set((alreadySentRows ?? []).map((r) => `${r.user_id}:${r.type}`));
+
   let notified = 0;
   let silent = 0;
   let ownedElsewhere = 0;
+  let dedupSuppressed = 0;
 
   for (const s of students) {
     const prefs = (s.notif_prefs ?? {}) as Record<string, unknown>;
@@ -156,6 +176,7 @@ export async function POST(request: NextRequest) {
     if (events.length === 0) { silent++; continue; }
 
     for (const event of events) {
+      if (alreadySentToday.has(`${s.id}:${event.type}`)) { dedupSuppressed++; continue; }
       const { title, body, url } = templateFor(event);
       const outcome = await dispatch({
         userId: s.id, type: event.type, title, body, url,
@@ -171,7 +192,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ notified, silent, ownedElsewhere, total: students.length });
+  return NextResponse.json({ notified, silent, ownedElsewhere, dedupSuppressed, total: students.length });
 }
 
 export { POST as GET };
