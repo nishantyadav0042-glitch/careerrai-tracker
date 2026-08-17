@@ -257,7 +257,11 @@ export type EventName =
   // The payoff stage of the loop: the rebuilt timetable handed back after the
   // check-in. payoff_shown vs completed measures how often a check-in actually
   // produced a plan to show; payoff_start is the student accepting it.
-  | 'checkin_payoff_shown' | 'checkin_payoff_start';
+  | 'checkin_payoff_shown' | 'checkin_payoff_start'
+  // In-app store-rating ask (founder reminder, 11 Aug), targeted at happy
+  // moments — streak milestone, mock completed, onboarding Blueprint reveal.
+  | 'rating_prompt_shown' | 'rating_prompt_rated' | 'rating_prompt_dismissed'
+  | 'rating_prompt_never_ask_again';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {

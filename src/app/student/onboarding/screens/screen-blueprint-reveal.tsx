@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { RatingPromptSheet } from '@/components/rating-prompt-sheet';
 
 interface ScreenBlueprintRevealProps {
   onNext: (data?: Record<string, unknown>) => Promise<void>;
@@ -261,6 +262,13 @@ export default function ScreenBlueprintReveal({ onNext, isLoading, successGoal =
           {isLoading ? 'Finishing up…' : 'See Day 1 of my plan →'}
         </button>
       </div>
+
+      {/* Rate-us ask (founder reminder, 11 Aug). Wired for real, but the
+          shared eligibility check (rating-prompt.ts, RATING_PROMPT_MIN_
+          ACCOUNT_AGE_DAYS) structurally keeps this a no-op on day 0 — asking
+          before a student has used the product is the one thing every
+          platform's own guidance warns against. Does not block "Continue". */}
+      <RatingPromptSheet trigger="blueprint_reveal" />
     </div>
   );
 }
