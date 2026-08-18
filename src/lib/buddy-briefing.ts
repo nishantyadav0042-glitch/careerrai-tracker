@@ -98,12 +98,17 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   const avgHours = daysLogged > 0
     ? ((logs ?? []).reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
     : '0';
-  const avgStress = daysLogged > 0
-    ? ((logs ?? []).reduce((s, r) => s + (r.stress ?? 3), 0) / daysLogged).toFixed(1)
-    : 'n/a';
-  const avgConfidence = daysLogged > 0
-    ? ((logs ?? []).reduce((s, r) => s + (r.confidence ?? 3), 0) / daysLogged).toFixed(1)
-    : 'n/a';
+// J3 (18 Aug) — wellbeing is NOT presented as measurement.
+//
+// This block used to state "Avg confidence: X/5, avg stress: Y/5" in the facts
+// a human mentor reads before a paid session. Neither number came from the
+// student: upsert_log_and_streak hard-codes confidence = 4 and stress = 2 on
+// every write and takes no parameter for either, so 282 of 320 rows carry the
+// same constants and `stress` has two distinct values in the whole table.
+//
+// It is omitted rather than filtered, because a filter cannot be written: a
+// genuine student 2 is byte-identical to the RPC's 2. Nothing replaces it —
+// there is no truthful wellbeing figure to put in its place.
 
   const topicsFlat = (logs ?? []).flatMap((r) => (r.topics_covered ?? []) as string[]);
   const topicCounts: Record<string, number> = {};
@@ -133,7 +138,6 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   const factsContext = [
     `Streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
     `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
-    `Avg confidence: ${avgConfidence}/5, avg stress: ${avgStress}/5`,
     topTopics ? `Topics covered: ${topTopics}` : 'No topics logged',
     ...syllabusFacts,
     debriefs?.length ? `Recent mocks:\n${mocksText}` : 'No mocks logged recently',
@@ -157,10 +161,10 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
       summaryText = stripNames(aiResult, [student.full_name]);
       source = 'ai';
     } else {
-      summaryText = fallbackBriefing(daysLogged, avgHours, avgStress, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
+      summaryText = fallbackBriefing(daysLogged, avgHours, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
     }
   } else {
-    summaryText = fallbackBriefing(daysLogged, avgHours, avgStress, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
+    summaryText = fallbackBriefing(daysLogged, avgHours, liveStreak(student.current_streak, student.last_log_date), (debriefs ?? []) as MockDebrief[], syllabusFacts);
   }
 
   const generated_at = new Date().toISOString();
@@ -187,13 +191,12 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
 function fallbackBriefing(
   daysLogged: number,
   avgHours: string,
-  avgStress: string,
   streak: number,
   debriefs: MockDebrief[],
   syllabusFacts: string[] = []
 ): string {
   const lines = [
-    `• Logged ${daysLogged}/7 days, averaging ${avgHours} hrs/day. Streak: ${streak} days. Avg stress: ${avgStress}/5.`,
+    `• Logged ${daysLogged}/7 days, averaging ${avgHours} hrs/day. Streak: ${streak} days.`,
     ...syllabusFacts.map((f) => `• ${f}`),
   ];
   if (debriefs.length > 0 && debriefs[0].overall_percentile != null) {
