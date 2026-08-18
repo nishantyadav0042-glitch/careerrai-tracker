@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { callGemini, geminiEnabled } from '@/lib/gemini';
+import { fullyDoneTaskIds } from './completion-portion';
 
 // ── Mentor Doors (founder, 21 July) ──────────────────────────────────────────
 // Two ways a free student earns 3 messages with ONE matched IIM buddy:
@@ -153,7 +154,18 @@ async function generateOpenerDraft(admin: Admin, studentId: string): Promise<str
   ]);
 
   // Served vs completed per section — the avoidance signal.
-  const doneIds = new Set((completions ?? []).map((c) => `${c.routine_date}:${c.task_id}`));
+  //
+  // P0-2.3f — `served` stays a touched-question denominator. `done` feeds both
+  // the "N/M planned tasks completed" facts line and the ratio-based fallback
+  // chat message below, and both say "completed"/"done" — a FINISHED
+  // question, so it is built from the authority's finished set, not bare
+  // membership. `completions` already selects `confidence`.
+  const finishedTaskIds = fullyDoneTaskIds(completions ?? []);
+  const finishedIds = new Set(
+    (completions ?? [])
+      .filter((c) => finishedTaskIds.has(c.task_id))
+      .map((c) => `${c.routine_date}:${c.task_id}`)
+  );
   const served: Record<string, number> = {};
   const done: Record<string, number> = {};
   for (const r of routines ?? []) {
@@ -161,7 +173,7 @@ async function generateOpenerDraft(admin: Admin, studentId: string): Promise<str
     for (const t of (Array.isArray(r.tasks) ? (r.tasks as any[]) : [])) {
       const sec = (t.section as string) ?? 'General';
       served[sec] = (served[sec] ?? 0) + 1;
-      if (doneIds.has(`${r.routine_date}:${t.id}`)) done[sec] = (done[sec] ?? 0) + 1;
+      if (finishedIds.has(`${r.routine_date}:${t.id}`)) done[sec] = (done[sec] ?? 0) + 1;
     }
   }
   const struggles = (completions ?? []).filter((c) => c.confidence === 'red').length;

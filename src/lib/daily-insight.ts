@@ -1,6 +1,7 @@
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { isCovered } from './coverage-status';
+import { fullyDoneTaskIds } from './completion-portion';
 
 // ── Daily one-liner insight (founder, 21 July) ──────────────────────────────
 // One specific, data-earned sentence per student per day — "this is the
@@ -71,8 +72,15 @@ export async function computeDailyInsight(
       if (sec !== 'General') served[sec] = (served[sec] ?? 0) + 1;
     }
   }
+  // P0-2.3f — the printed "N of M {section} tasks done" answers a FINISHED
+  // question, so a PARTIAL must not count. The threshold below (served >= 3)
+  // stays touched-question and stays bare membership; only this numerator
+  // changes. `completions` already selects `confidence`, which is why the
+  // old code was discarding data it had already fetched.
+  const finishedIds = fullyDoneTaskIds(completions ?? []);
   const doneBySec: Record<string, number> = {};
   for (const c of completions ?? []) {
+    if (!finishedIds.has(String(c.task_id))) continue;
     const sec = taskMeta.get(String(c.task_id))?.section;
     if (sec && sec !== 'General') doneBySec[sec] = (doneBySec[sec] ?? 0) + 1;
   }

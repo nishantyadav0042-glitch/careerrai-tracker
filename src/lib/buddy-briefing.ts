@@ -4,6 +4,7 @@ import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gem
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isCovered } from './coverage-status';
+import { fullyDoneTaskIds } from './completion-portion';
 
 // Shared generator behind the buddy's AI facts-briefing — used by the manual
 // "Refresh" button AND by ambient auto-triggers (mock submitted, emotional flag
@@ -77,7 +78,18 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   const revisionDue = covered.filter((t) => t.revisionOverdue).slice(0, 5).map((t) => t.topic);
 
   // Plan avoidance pattern (last 14 days): served vs completed per section.
-  const doneIds = new Set((completions ?? []).map((c) => `${c.routine_date}:${c.task_id}`));
+  //
+  // P0-2.3f — "N/M completed" is a FINISHED question, so it is built from the
+  // authority's finished set, not bare membership. `completions` already
+  // selects `confidence`, so the old code was discarding data it had already
+  // fetched. The `served` denominator below is the touched-question part of
+  // this signal and is untouched.
+  const finishedTaskIds = fullyDoneTaskIds(completions ?? []);
+  const finishedIds = new Set(
+    (completions ?? [])
+      .filter((c) => finishedTaskIds.has(c.task_id))
+      .map((c) => `${c.routine_date}:${c.task_id}`)
+  );
   const served: Record<string, number> = {};
   const doneCount: Record<string, number> = {};
   for (const r of routines ?? []) {
@@ -86,7 +98,7 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
       const sec = (t.section as string) ?? 'General';
       if (sec === 'General') continue;
       served[sec] = (served[sec] ?? 0) + 1;
-      if (doneIds.has(`${r.routine_date}:${t.id}`)) doneCount[sec] = (doneCount[sec] ?? 0) + 1;
+      if (finishedIds.has(`${r.routine_date}:${t.id}`)) doneCount[sec] = (doneCount[sec] ?? 0) + 1;
     }
   }
   const avoidance = Object.keys(served)
