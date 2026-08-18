@@ -175,7 +175,6 @@ export default async function DailyTrackerPage() {
           targetDate: new Date(targetIso + 'T00:00:00'),
           committedPerDay: (profile?.study_target_hours as number | null) ?? null,
         }),
-        completedPct: completedByTopics,
       }
     : null;
   // The most recent weekly extension, if the reconcile job moved this
@@ -549,7 +548,7 @@ export default async function DailyTrackerPage() {
             once. Reschedule is unchanged. */}
         {pace && targetIso && (
           <PaceCard
-            pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels}
+            pace={pace} completedPct={completedByTopics} targetIso={targetIso} week={week} weekLabels={weekLabels}
             streak={currentStreak} shields={momentum.shields}
             gain={prepGain} isPremium={!!profile?.is_premium}
             mocksLabel={mockLabel} revisionLabel={revLabel}

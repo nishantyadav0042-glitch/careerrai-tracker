@@ -60,6 +60,16 @@ function Sparkline({ week, labels, color }: { week: number[]; labels: string[]; 
 
 interface PaceCardProps {
   pace: PaceResult;
+  /**
+   * How much of the exam syllabus is actually covered, 0–100.
+   *
+   * Supplied explicitly rather than read off `pace` (P0-C-B/C, 18 Aug). The
+   * pace engine used to carry a completedPct of its own, computed from hours
+   * on a mismatched scale; the tracker already overrode it with this
+   * topic-count value before render. One claim, one producer — so the ring
+   * now receives the canonical number instead of patching a second one.
+   */
+  completedPct: number;
   targetIso: string;
   week: number[];
   weekLabels: string[];
@@ -91,7 +101,7 @@ interface PaceCardProps {
 // untouched. Nothing was dropped: streak, shields, hours-today, coverage
 // ring, pace verdict, days left, the week sparkline, the finish date, mocks
 // and revision anchors are all still on screen — each said exactly once.
-export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel }: PaceCardProps) {
+export function PaceCard({ pace, completedPct, targetIso, week, weekLabels, streak, shields, gain, isPremium, mocksLabel, revisionLabel }: PaceCardProps) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
@@ -111,7 +121,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, g
 
   const tone = TONE[pace.status];
   const R = 30, C = 2 * Math.PI * R;
-  const offset = C * (1 - pace.completedPct / 100);
+  const offset = C * (1 - completedPct / 100);
   const todayIso = new Date().toISOString().split('T')[0];
 
   // Reschedule negotiation (founder, 23 July): moving the date must TELL the
@@ -276,7 +286,7 @@ export function PaceCard({ pace, targetIso, week, weekLabels, streak, shields, g
               strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 36 36)" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[15px] font-extrabold leading-none text-white">{pace.completedPct}<span className="text-[9px] font-bold">%</span></span>
+            <span className="text-[15px] font-extrabold leading-none text-white">{completedPct}<span className="text-[9px] font-bold">%</span></span>
             {/* "Covered", not "Progress". This ring is built from statuses the
                 student declared — it measures what they say they have been
                 through, which is not the same claim as knowing it. The

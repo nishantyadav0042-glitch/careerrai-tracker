@@ -33,7 +33,17 @@ describe('PaceCard — the ring and pace math are untouched, only the shell', ()
   it('none of the pace formula changed — same ring, same TONE import', () => {
     // The ring and the verdict are the pace engine's output; the restyle was
     // only ever allowed to change how they look.
-    expect(src()).toContain('pace.completedPct');
+    //
+    // UPDATED P0-C-B/C (18 Aug), intent unchanged: this pinned
+    // `pace.completedPct` to prove the restyle had not touched the ring's
+    // input. The pace engine no longer produces a completion percentage at
+    // all — it carried an effort-scaled figure the tracker always overrode
+    // before render, and by founder ruling completion % has exactly one
+    // producer, the topic-count authority. The ring now takes that canonical
+    // value as its own prop. Still the same ring, still fed from outside,
+    // still nothing the restyle may touch.
+    expect(src()).toContain('completedPct');
+    expect(src()).not.toContain('pace.completedPct');
     expect(src()).toContain('TONE[pace.status]');
     expect(src()).toContain("from '@/lib/pace-tone'");
   });

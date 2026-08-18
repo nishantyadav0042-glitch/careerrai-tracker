@@ -132,7 +132,20 @@ export type PaceStatus = 'ahead' | 'on_pace' | 'behind' | 'unrealistic' | 'done'
 export interface PaceResult {
   remainingHours: number;
   totalHours: number;
-  completedPct: number;      // 0–100, by HOURS of work, not topic count
+  // NOTE (P0-C-B/C, 18 Aug): there is deliberately NO completedPct here.
+  //
+  // This engine used to return one, computed as
+  //   (totalSyllabusHours() − remainingHours) / totalSyllabusHours()
+  // with an UNSCALED denominator while every caller passed an effort-SCALED
+  // numerator — so a repeater at 0.55 effort with zero coverage priced out at
+  // 45% complete. It was also never displayed: pace-card was its only reader,
+  // the tracker its only renderer, and the tracker overrode it with the
+  // canonical topic-count percentage before render.
+  //
+  // Founder ruling: completion % means ACTUAL demonstrated exam-syllabus
+  // coverage, and has exactly one producer. A pace calculator answers "how
+  // much per day from here"; how much is DONE is a coverage fact, owned by the
+  // topic-count computation the Blueprint and the Home ring already share.
   daysLeft: number;
   requiredPerDay: number;    // the true number: remaining / daysLeft
   committedPerDay: number | null; // the pace the student chose
@@ -157,13 +170,12 @@ export function computeRequiredPace(input: {
 }): PaceResult {
   const { remainingHours, today, targetDate, committedPerDay } = input;
   const totalHours = totalSyllabusHours();
-  const completedPct = totalHours > 0 ? Math.min(100, Math.round(((totalHours - remainingHours) / totalHours) * 100)) : 0;
 
   const msLeft = targetDate.getTime() - today.getTime();
   const daysLeft = Math.max(1, Math.ceil(msLeft / 86_400_000));
 
   if (remainingHours <= 0) {
-    return { remainingHours: 0, totalHours, completedPct: 100, daysLeft, requiredPerDay: 0, committedPerDay, catchUpPerDay: 0, aheadPerDay: 0, status: 'done' };
+    return { remainingHours: 0, totalHours, daysLeft, requiredPerDay: 0, committedPerDay, catchUpPerDay: 0, aheadPerDay: 0, status: 'done' };
   }
 
   const requiredPerDay = HALF((remainingHours + (input.mockHours ?? 0)) / daysLeft);
@@ -187,5 +199,5 @@ export function computeRequiredPace(input: {
     status = 'on_pace';
   }
 
-  return { remainingHours, totalHours, completedPct, daysLeft, requiredPerDay, committedPerDay, catchUpPerDay, aheadPerDay, status };
+  return { remainingHours, totalHours, daysLeft, requiredPerDay, committedPerDay, catchUpPerDay, aheadPerDay, status };
 }
