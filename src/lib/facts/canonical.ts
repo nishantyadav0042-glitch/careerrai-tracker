@@ -38,7 +38,8 @@ export type CanonicalQuestion =
   | 'syllabusCoverage'
   | 'generatedPlan'
   | 'mockResults'
-  | 'recommendationsShown';
+  | 'recommendationsShown'
+  | 'selfReportedDeclaration';
 
 export interface CanonicalSource {
   /** The table that owns the answer. */
@@ -112,6 +113,32 @@ export const CANONICAL_SOURCES: Readonly<Record<CanonicalQuestion, CanonicalSour
       'src/app/api/next-action/route.ts',
       'src/app/api/next-action/ack/route.ts',
       'src/app/api/cron/reconcile-actions/route.ts',
+    ],
+  },
+  // ── ADDED 0C.2.2, and worth stating why ──────────────────────────────────
+  //
+  // 0B enumerated the six sources that record what HAPPENED. It did not
+  // declare the source of what the student SAID — and that gap surfaced the
+  // moment the registry tried to give the repeater facts a provenance: they
+  // were about to be labelled `dailyLogState`, which would have made every
+  // self-report claim cite the wrong table.
+  //
+  // Declarations are a distinct kind of evidence and the distinction is
+  // load-bearing for the whole repeater thesis: a student's account of their
+  // own past ("DILR was my weakness") is a FACT about what they said, never
+  // evidence about what is true, and it must survive whatever the data later
+  // shows. Observed counterparts get separate keys; the Insight Engine may
+  // reconcile them and may never overwrite one with the other.
+  //
+  // Not a new data source: `profiles` was already read everywhere. What is new
+  // is naming it, so provenance stops lying.
+  selfReportedDeclaration: {
+    table: 'profiles',
+    answers: 'What did the student declare about themselves, once, at onboarding?',
+    identity: ['id'],
+    writtenBy: [
+      'src/app/api/auth/verify-phone-otp/route.ts',
+      'src/app/student/onboarding/onboarding-modal.tsx',
     ],
   },
 } as const;
