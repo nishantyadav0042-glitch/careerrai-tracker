@@ -92,6 +92,17 @@ above are the event log.
 
 ## 0C — Fact Registry
 
+> **Boundary between 0B and 0C (founder, 18 Aug — do not duplicate work across them):**
+> **0B owns STRUCTURAL WRITE-BOUNDARY INTEGRITY** — *the fact layer cannot reach a
+> database at all.* Proven by `canonical-boundary.guard.test.ts` (transitive closure, two
+> barriers). **0C owns FACT COMPUTATIONAL INTEGRITY** — *this particular producer computes
+> its fact correctly, from the approved source, with an honest denominator and an explicit
+> temporal definition.* Two different guarantees.
+>
+> 0C therefore does **not** re-implement DB-write or client-import guards; 0B already
+> makes those structurally impossible. 0C **does** own the semantic correctness tests for
+> every producer it registers. Purity is inherited; correctness is earned per fact.
+
 **Contract:** every measurable quantity the product will ever state to a student has
 exactly one producer, registered once. A component that needs a number asks the registry;
 it never computes one.
