@@ -92,6 +92,12 @@ export async function POST(request: NextRequest) {
     : null;
   const transition = resolveTransition(currentPortion, intent);
 
+  // Set by either advanceCoverage call site below. A coverage advance is a
+  // derived write on top of the tick that already succeeded — its failure
+  // must reach the response truthfully, the same way dayClosed does for the
+  // RPC below, rather than being swallowed as a console.error nobody reads.
+  let coverageAdvanceFailed = false;
+
   if (transition.action === 'none') {
     // Nothing to write. Three cases reach here and all three are correct
     // outcomes rather than errors: re-marking a FULL task (idempotent),
@@ -116,7 +122,8 @@ export async function POST(request: NextRequest) {
     // coverage exactly as a first-time green tap would. Without this, half-then-
     // full would leave a topic at `practicing` while a single full tap reaches
     // `revising` — the same end state by two paths, two different matrices.
-    await advanceCoverage(admin, user.id, tasks, taskId, effectiveConfidence);
+    const upgradeAdvanced = await advanceCoverage(admin, user.id, tasks, taskId, effectiveConfidence);
+    if (!upgradeAdvanced) coverageAdvanceFailed = true;
   } else if (transition.action === 'delete') {
     // Delete by the NATURAL key, not by the row id read a moment ago. A
     // concurrent request may already have removed that row, in which case
@@ -167,7 +174,8 @@ export async function POST(request: NextRequest) {
     // status twice for one student action — two derived writes for one event,
     // which is precisely the duplication the memory architecture forbids.
     if (!converged) {
-      await advanceCoverage(admin, user.id, tasks, taskId, effectiveConfidence);
+      const insertAdvanced = await advanceCoverage(admin, user.id, tasks, taskId, effectiveConfidence);
+      if (!insertAdvanced) coverageAdvanceFailed = true;
     } // end if (!converged) — the losing racer skips the derived write
   }
 
@@ -274,6 +282,7 @@ export async function POST(request: NextRequest) {
     fullyDone,
     emergencyMinimumDone,
     dayClosed,
+    coverageAdvanceFailed,
   });
 }
 
@@ -294,9 +303,9 @@ async function advanceCoverage(
   tasks: RoutineTaskShape[],
   taskId: string,
   effectiveConfidence: string | undefined
-): Promise<void> {
+): Promise<boolean> {
   const completedTask = tasks.find((t) => t.id === taskId);
-  if (!effectiveConfidence || !completedTask?.topic) return;
+  if (!effectiveConfidence || !completedTask?.topic) return true;
 
   const { data: coverageRow, error: readErr } = await admin
     .from('topic_coverage')
@@ -313,7 +322,7 @@ async function advanceCoverage(
   // (Backbone audit, 13 Aug.)
   if (readErr) {
     console.error('[complete-task] coverage read failed, skipping advance', readErr.message);
-    return;
+    return false;
   }
 
   const current = (coverageRow?.status as CoverageStatus | undefined) ?? null;
@@ -327,5 +336,9 @@ async function advanceCoverage(
     { student_id: studentId, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
     { onConflict: 'student_id,section,topic' }
   );
-  if (upsertErr) console.error('[complete-task] coverage upsert failed', upsertErr.message);
+  if (upsertErr) {
+    console.error('[complete-task] coverage upsert failed', upsertErr.message);
+    return false;
+  }
+  return true;
 }
