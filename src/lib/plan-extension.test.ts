@@ -48,9 +48,14 @@ describe('missed hours move the date, priced at the student’s own rate', () =>
   });
 
   it('counts a silent day as a full miss', () => {
-    // Founder's call: no log means no study. A student who never opens the app
-    // must still see their date move, or the mechanism does nothing.
-    const silent = reconcileWeek({ ...base, loggedHoursByDay: [null, null, null, null, null, null, null] });
+    // Founder's call, 6 Aug: no log means no study. A student who never opens
+    // the app must still see their date move, or the mechanism does nothing.
+    // THIS RULING IS UNCHANGED — only the sentinel moved. Q5 (18 Aug) gave
+    // `null` the meaning "unmeasured, do not judge", so a SILENT day is now
+    // expressed as 0, which is what the route passes for a day with no row.
+    // `null` is reserved for a row that told us work happened while we never
+    // asked how long. See unmeasured-day-not-zero.test.ts for that half.
+    const silent = reconcileWeek({ ...base, loggedHoursByDay: [0, 0, 0, 0, 0, 0, 0] });
     expect(silent.actualHours).toBe(0);
     expect(silent.deficitHours).toBe(FULL_WEEK);
     expect(silent.daysAdded).toBe(8); // 37 / 5, rounded up

@@ -4,6 +4,7 @@ import { authorizedCron } from '@/lib/cron-auth';
 import { sendNotification } from '@/lib/notifications';
 import { resolveCatExamDate } from '@/lib/routine-engine';
 import { reconcileWeek } from '@/lib/plan-extension';
+import { durationIsUnknown } from '@/lib/check-in';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -68,14 +69,21 @@ export async function POST(request: NextRequest) {
 
   const { data: reports } = await admin
     .from('daily_reports')
-    .select('student_id, report_date, study_duration')
+    .select('student_id, report_date, study_duration, day_outcome, study_duration_source')
     .in('student_id', ids)
     .gte('report_date', week.start)
     .lte('report_date', week.end);
 
-  const hoursByStudentDay = new Map<string, number>();
+  // Q5 — null means UNMEASURED, and reconcileWeek will not judge that day.
+  // A row whose duration we never asked for is not evidence of zero hours; 58
+  // such days across 35 students were pushing finish dates out. The pair
+  // decides, never the source alone (G6: source-only overstates by 29%).
+  const hoursByStudentDay = new Map<string, number | null>();
   for (const r of reports ?? []) {
-    hoursByStudentDay.set(`${r.student_id}|${r.report_date}`, Number(r.study_duration ?? 0));
+    hoursByStudentDay.set(
+      `${r.student_id}|${r.report_date}`,
+      durationIsUnknown(r) ? null : Number(r.study_duration ?? 0)
+    );
   }
 
   const isWeekendByDay = week.days.map((d) => {
@@ -94,7 +102,13 @@ export async function POST(request: NextRequest) {
     const result = reconcileWeek({
       weekdayHours,
       weekendHours: s.weekend_hours_available as number | null,
-      loggedHoursByDay: week.days.map((d) => hoursByStudentDay.get(`${s.id}|${d}`) ?? 0),
+      // `?? 0` still applies to a day with NO ROW — the 6 Aug ruling that a
+      // student who never opens the app still sees their date move. Only a row
+      // we stored as unknown comes through as null.
+      loggedHoursByDay: week.days.map((d) => {
+        const key = `${s.id}|${d}`;
+        return hoursByStudentDay.has(key) ? hoursByStudentDay.get(key)! : 0;
+      }),
       isWeekendByDay,
       currentTargetDate: s.syllabus_target_date as string,
       examDate: iso(resolveCatExamDate(now, s.attempt_year as number | null)),

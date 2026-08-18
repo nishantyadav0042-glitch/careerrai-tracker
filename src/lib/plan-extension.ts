@@ -26,7 +26,19 @@ export interface WeekInput {
   weekdayHours: number;
   /** Their weekend figure; falls back to the weekday one. */
   weekendHours?: number | null;
-  /** study_duration for each of the 7 days, indexed Mon..Sun. Missing = 0. */
+  /**
+   * Hours for each of the 7 days, indexed Mon..Sun.
+   *
+   *   a number → measured. 0 is a REAL zero (rest, or an explicit "didn't
+   *              study"), and it counts against the student.
+   *   null     → UNMEASURED. The student told us something happened but we
+   *              never asked how long, so we have no standing to judge the
+   *              day. Q5, founder 18 Aug: "not measured" is not "0 hours".
+   *
+   * A day with NO ROW AT ALL is still 0, not null — the caller decides. The
+   * 6 Aug ruling stands: a student who never opens the app still sees the date
+   * move. Only a day where we cut our own question short is exempt.
+   */
   loggedHoursByDay: (number | null)[];
   /** Which of those 7 days were Saturday/Sunday. Same Mon..Sun indexing. */
   isWeekendByDay: boolean[];
@@ -82,21 +94,39 @@ export function reconcileWeek(input: WeekInput): WeekResult {
   // wearing a coach's voice, and it is the first thing they would ever hear
   // from us.
   const joined = input.joinedOn ?? null;
+
+  // TWO reasons a day cannot be judged, and they are the same reason.
+  //
+  // A pre-join day was already exempt, because "a warning that blames someone
+  // for time before they arrived is not a coach, it is a bug wearing a coach's
+  // voice." An UNMEASURED day is that same sentence with one word changed:
+  // blaming someone for hours we never asked them for. So it takes the same
+  // exemption rather than a parallel mechanism of its own.
+  //
+  // It must remove the day from BOTH sides. Dropping it from `actual` alone
+  // would grow the deficit and make the harm worse than doing nothing.
+  const notJudged = (i: number): boolean => {
+    if (joined && input.daysInWeek && input.daysInWeek[i] < joined) return true;
+    return input.loggedHoursByDay[i] === null || input.loggedHoursByDay[i] === undefined;
+  };
+
   let expected = 0;
   let countedDays = 0;
   for (let i = 0; i < 7; i++) {
-    if (joined && input.daysInWeek && input.daysInWeek[i] < joined) continue;
+    if (notJudged(i)) continue;
     expected += input.isWeekendByDay[i] ? weekend : weekday;
     countedDays++;
   }
 
-  // A day with no log is a day with no study. Founder's call, and it is what
-  // actually happened — counting only logged days would mean a student who
+  // A day with no log is a day with no study. Founder's call, 6 Aug, and it is
+  // what actually happened — counting only logged days would mean a student who
   // never opens the app never sees their date move, which defeats the point.
+  // That ruling is UNCHANGED: the caller still passes 0 for a day with no row.
+  // Only a day that we ourselves left half-asked arrives here as null.
   const actual = input.loggedHoursByDay
     .slice(0, 7)
     .reduce((sum: number, h, i) => {
-      if (joined && input.daysInWeek && input.daysInWeek[i] < joined) return sum;
+      if (notJudged(i)) return sum;
       return sum + Math.max(0, Number(h ?? 0));
     }, 0);
 

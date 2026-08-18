@@ -125,6 +125,31 @@ export function outcomeNeedsDuration(o: DayOutcome): boolean {
 }
 
 /**
+ * G6's pair rule — is this row's DURATION unknown?
+ *
+ * `study_duration_source` records how a number was produced. It does NOT record
+ * whether the duration is knowable, and those differ in the common case: the
+ * check-in gate stamps `not_collected` for all four outcomes because it never
+ * asks how long, but when the outcome is 'not_studied' or 'skipped' the outcome
+ * has ALREADY answered the duration question — that is a real zero.
+ *
+ * Reading the source alone and dropping every `not_collected` row discards 68
+ * genuine zeros and overstates average study by 29% (G6, measured). Reading the
+ * value alone understates it by 28%. Only the pair is right.
+ *
+ * Legacy rows (source NULL) are NOT unknown by this rule: their value is the
+ * best evidence we hold and J6-A forbids reinterpreting it. Unknown here means
+ * specifically "we asked whether, never how long, and they said work happened".
+ */
+export function durationIsUnknown(row: {
+  day_outcome?: string | null;
+  study_duration_source?: string | null;
+}): boolean {
+  if (row.study_duration_source !== 'not_collected') return false;
+  return !isDayOutcome(row.day_outcome) || WORK_HAPPENED.includes(row.day_outcome);
+}
+
+/**
  * A3 — was this a study day?
  *
  * ONE authority, because four consumers were answering this from
