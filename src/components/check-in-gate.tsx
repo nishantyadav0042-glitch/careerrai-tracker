@@ -55,6 +55,7 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
   const [reason, setReason] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [noticed, setNoticed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const askWhy = outcome != null && outcomeAsksWhy(outcome);
@@ -98,6 +99,14 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
         }),
       });
       if (!res.ok) throw new Error('save failed');
+      // The guaranteed insight (founder, 17 Aug): the same server line the
+      // full log sheet shows — a check-in is a log too, and no log ends
+      // empty-handed. Best-effort parse; a body we can't read never blocks
+      // the payoff.
+      try {
+        const data = (await res.json()) as { milestone?: string | null; daily_nudge?: string | null };
+        setNoticed(data.milestone ?? data.daily_nudge ?? null);
+      } catch { /* payoff simply shows no noticed line */ }
       track('checkin_completed', { outcome: finalOutcome, reason: finalReason, forDate: yesterdayStr, variant });
       // Hand over to the shared payoff: it narrates the rebuild 0 -> 100% and
       // then shows the plan that came out of this answer. The rebuild it
@@ -124,6 +133,7 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
       <PlanRebuildPayoff
         source="check_in"
         forLabel={yesterdayLabel}
+        noticed={noticed}
         onDone={finish}
       />
     );

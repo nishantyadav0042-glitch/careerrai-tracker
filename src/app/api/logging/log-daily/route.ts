@@ -13,6 +13,7 @@ import { MILESTONE_MESSAGES } from '@/lib/messages';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { sendPushToUser } from '@/lib/push';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
+import { coverageInsight } from '@/lib/log-insight';
 
 interface LoggingRequest {
   hours: number;
@@ -178,7 +179,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const dailyNudge = await computePrescriptiveLine(user.id, body.sections, isNewLog, admin, body.emotional_chips);
+    let dailyNudge = await computePrescriptiveLine(user.id, body.sections, isNewLog, admin, body.emotional_chips);
+
+    // The guaranteed floor (founder, 17 Aug): NO log ends empty-handed. When
+    // the behavioral rules above had nothing to notice (the common case), the
+    // student still gets one true number from their own coverage — "QA: 12 of
+    // 27 topics opened", "just 3 DILR topics left untouched". The consequence
+    // of the log is the product; "saved" is not a consequence. Best-effort:
+    // a failure here must never break the sacred log path.
+    if (!dailyNudge) {
+      try {
+        const [{ data: coverageRows }, { count: totalLogged }, { data: recentDays }] = await Promise.all([
+          admin.from('topic_coverage').select('section, status').eq('student_id', user.id),
+          admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id),
+          admin.from('daily_reports').select('report_date').eq('student_id', user.id)
+            .gte('report_date', new Date(todayDate.getTime() - 6 * 86_400_000).toISOString().split('T')[0]),
+        ]);
+        dailyNudge = coverageInsight({
+          coverage: (coverageRows ?? []) as { section: string; status: string }[],
+          todaySections: body.sections,
+          isRest: body.hours === 0 && body.sections.length === 0,
+          loggedDayCount: totalLogged ?? 1,
+          loggedDaysLast7: new Set((recentDays ?? []).map((r: { report_date: string }) => r.report_date)).size,
+        });
+      } catch (e) {
+        console.error('[log] coverage insight failed (non-fatal)', e);
+      }
+    }
 
     // Milestone message beats the random bonus — milestone days are rare and meaningful.
     const newStreak = (streakUpdated as { current_streak: number }).current_streak;

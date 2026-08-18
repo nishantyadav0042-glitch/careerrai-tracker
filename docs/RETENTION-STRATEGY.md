@@ -66,18 +66,20 @@ mock-informed focus (`mock-informed-focus.ts`, fully built) is starving.
 | Verified receipts, last 7 days | 124 students |
 | Duplicate push (same user+type+day), last 7d | 0 detected |
 
-**One structural blind spot found:** the `notifications` table has recorded only **66
-`channel='push'` rows in 30 days, none since 4 Aug**, while `in_app` recorded 40,220.
-Push sends flow through `sendPushToUser` without writing a per-send push row, so
-**"notification → app open → log" cannot currently be computed from the database.** The
-receipt-verification system (`push_verified_at`) proves delivery *capability* for 124
-students, but per-send outcome measurement doesn't exist. This is a P0 measurement fix
-(one insert per send), not a delivery fix — delivery itself appears healthy.
+**CORRECTION (same day, re-verified):** an earlier draft of this section claimed the
+send-ledger was missing, based on `channel='push'` rows. Wrong column — the real ledger
+is the **`pushed_at` stamp** dispatch() writes on each notification row. Verified live:
+**3,753 pushes stamped in the last 7 days to 135 students, 2,701 (72%) receipt-confirmed
+(`received_at`), 40 clicked (1.1% CTR).** Measurement of notification → open → log is
+possible *today* with a standing query — no schema work needed. The remaining gap is only
+direct `sendPushToUser` callers that bypass a notification row (chat pushes etc.), a
+minor completeness issue, not a blind spot.
 
-[INF] The honest summary: consent is clean, delivery is alive for ~110–124 students,
-duplicates are controlled — the 12-Aug audit's problems are genuinely fixed. What's
-missing is (a) the 55 opted-in-but-unsubscribed students, and (b) a send-ledger that
-would let us measure whether any of it drives logging.
+[INF] The honest summary: consent is clean, delivery is alive and *measured* (72%
+receipt), duplicates are controlled — the 12-Aug audit's problems are genuinely fixed.
+What remains: (a) the 55 opted-in-but-unsubscribed students, and (b) the **1.1% click
+rate** — delivery works, the *content* doesn't pull. That number is the strongest
+internal evidence for information-rich noticing over generic nudges.
 
 ---
 
@@ -517,7 +519,12 @@ Sequencing: 1, 2, 3, 9 immediately (all small); 4–5 next (they build the memor
 # PART XII — P0 / P1 / P2
 
 **P0 (next 30 days):**
-1. Push send-ledger row per send (measurement precondition, ~hours of work).
+1. ~~Push send-ledger~~ **DONE — already exists** (`pushed_at`/`received_at`/`clicked_at`;
+   verified 3,753 sends / 72% receipt / 1.1% CTR in last 7d). Replace with: a standing
+   notification→open→log query on the admin analytics page.
+1b. **Guaranteed log insight — SHIPPED 17 Aug** (`src/lib/log-insight.ts`): every log now
+   returns a real coverage/consistency fact as the "CareerRai noticed" line — milestone >
+   behavioral notice > coverage floor. No log ends empty-handed.
 2. "+ Add Mock" door on Home + instant-consequence card (experiments 3–4).
 3. Day-1 information-rich push (experiment 1).
 4. "Because yesterday" line on the plan card (experiment 2).
