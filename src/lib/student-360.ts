@@ -7,6 +7,7 @@ import { getPhase } from '@/lib/routine-engine';
 import { weeksToExam } from '@/lib/study-plan';
 import type { Blocker } from '@/lib/mission-engine';
 import { getEntityTimeline } from '@/lib/os/timeline';
+import { completionWeight } from './completion-portion';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -53,7 +54,7 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
     admin.from('mentor_grants').select('door, created_at').eq('student_id', id),
     // Adaptation + intelligence input: plan-day completion + per-section recency.
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', id).gte('routine_date', windowStart),
-    admin.from('routine_task_completions').select('routine_date, task_id').eq('student_id', id).gte('routine_date', windowStart),
+    admin.from('routine_task_completions').select('routine_date, task_id, confidence').eq('student_id', id).gte('routine_date', windowStart),
     // Constraint / Performance input: syllabus coverage snapshot.
     admin.from('topic_coverage').select('section, topic, status').eq('student_id', id),
     // Mock-pending signal: mocks analysed (debriefs) vs mocks logged.
@@ -107,9 +108,13 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
   const capacity = computeCapacity(hrs, winReports.length, dailyHours(p).weekday);
 
   const completedByDate = new Map<string, Set<string>>();
+  const weightByDate = new Map<string, number>();
   for (const c of winCompletions ?? []) {
     if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
     completedByDate.get(c.routine_date)!.add(c.task_id);
+    // Weighted total for the plan-completion ratio only; the id set stays
+    // whole-task and every other reading below still uses it.
+    weightByDate.set(c.routine_date, (weightByDate.get(c.routine_date) ?? 0) + completionWeight(c.confidence));
   }
   let completedTasks = 0, plannedTasks = 0, planDays = 0;
   const daysSinceSection: Record<string, number> = {};
@@ -118,7 +123,8 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
     if (r.routine_date < todayStr && tasks.length > 0) {
       planDays++;
       plannedTasks += tasks.length;
-      completedTasks += Math.min(tasks.length, (completedByDate.get(r.routine_date) ?? new Set()).size);
+      // P0-2.3b — a PARTIAL weighs 0.5 in this ratio only.
+      completedTasks += Math.min(tasks.length, weightByDate.get(r.routine_date) ?? 0);
     }
     const done = completedByDate.get(r.routine_date) ?? new Set();
     const ago = Math.round((Date.parse(todayStr) - Date.parse(r.routine_date)) / DAY);

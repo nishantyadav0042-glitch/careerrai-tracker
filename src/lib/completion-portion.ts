@@ -150,3 +150,35 @@ export function resolveTransition(
     ? { action: 'none', reason: 'regression_refused' }
     : { action: 'none', reason: 'already_full' };
 }
+
+// ── The plan-completion weight (P0-2.3b) ────────────────────────────────────
+//
+// Founder ruling G3, 18 Aug: "PARTIAL contributes 0.5 ONLY to the
+// plan-completion ratio. Do not propagate 0.5 into coverage, touched-task
+// counts, streaks, day closure, emergency minimums, or other whole-task
+// metrics."
+//
+// WHY HERE AND NOWHERE ELSE. `completionRatio` (adaptation-engine.ts) is a LOAD
+// proxy: it drives "your days are running heavy", the 'speed' constraint push
+// and the coaching decision. Load is the one question where half-finishing is
+// genuinely half — a student who half-finishes every task is not running a
+// balanced day, and counting those as whole tasks tells them their load is
+// fine. Every other metric asks a binary question (finished? touched?) and a
+// half belongs wholly on one side of it; spreading 0.5 into a count of whole
+// tasks would invent a third unit.
+//
+// `plan-completion-ratio.test.ts` asserts that exactly three files import this
+// — the three accumulators that feed the one ratio — and that day closure, the
+// coverage ladder and the Fact Registry never see it.
+//
+// NOT unified with creditedHours' own 0.5, deliberately: that one prices HOURS
+// from coverage and this one weighs a TASK COUNT. Same number, different
+// question, and merging them would be the umbrella-fact mistake in arithmetic.
+
+export const FULL_WEIGHT = 1;
+export const PARTIAL_WEIGHT = 0.5;
+
+/** How much of one planned task this completion represents, for the load ratio only. */
+export function completionWeight(confidence: string | null | undefined): number {
+  return portionOf(confidence) === 'half' ? PARTIAL_WEIGHT : FULL_WEIGHT;
+}

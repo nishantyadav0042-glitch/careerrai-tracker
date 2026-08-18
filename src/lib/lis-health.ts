@@ -8,6 +8,7 @@ import { daysSinceLastLog } from '@/lib/streak-utils';
 import type { DecisionType } from '@/lib/coach-decision';
 import type { ConstraintKey } from '@/lib/constraint-engine';
 import type { Blocker } from '@/lib/mission-engine';
+import { completionWeight } from './completion-portion';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -80,7 +81,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken').gte('report_date', windowStart),
     admin.from('daily_routines').select('student_id, routine_date, tasks').gte('routine_date', windowStart),
-    admin.from('routine_task_completions').select('student_id, routine_date, task_id').gte('routine_date', windowStart),
+    admin.from('routine_task_completions').select('student_id, routine_date, task_id, confidence').gte('routine_date', windowStart),
     admin.from('topic_coverage').select('student_id, status'),
     admin.from('mock_debriefs').select('student_id, taken_on'),
     admin.from('streak_data').select('student_id, last_log_date'),
@@ -124,6 +125,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
     const rts = routinesBy.get(p.id) ?? [];
     const completedByDate = groupBy(completionsBy.get(p.id) ?? [], (c: any) => c.routine_date);
     const doneSet = (d: string) => new Set((completedByDate.get(d) ?? []).map((c: any) => c.task_id));
+    const doneWeight = (d: string) => (completedByDate.get(d) ?? []).reduce((sum: number, c: any) => sum + completionWeight(c.confidence), 0);
 
     let completedTasks = 0, plannedTasks = 0, planDays = 0;
     const daysSinceSection: Record<string, number> = {};
@@ -132,7 +134,9 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
       const done = doneSet(r.routine_date);
       if (r.routine_date < todayStr && tasks.length > 0) {
         planDays++; plannedTasks += tasks.length;
-        completedTasks += Math.min(tasks.length, done.size);
+        // P0-2.3b — a PARTIAL weighs 0.5 in this ratio only. The whole-task
+        // `done` set above is unchanged and still drives every other reading.
+        completedTasks += Math.min(tasks.length, doneWeight(r.routine_date));
       }
       const ago = Math.round((Date.parse(todayStr) - Date.parse(r.routine_date)) / DAY);
       for (const t of tasks) {

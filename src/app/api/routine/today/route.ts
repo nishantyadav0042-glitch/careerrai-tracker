@@ -17,7 +17,7 @@ import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
-import { toClientCompletions } from '@/lib/completion-portion';
+import { toClientCompletions, completionWeight } from '@/lib/completion-portion';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -539,16 +539,20 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       .limit(14),
     admin
       .from('routine_task_completions')
-      .select('routine_date, task_id')
+      .select('routine_date, task_id, confidence')
       .eq('student_id', studentId)
       .order('routine_date', { ascending: false })
       .limit(200),
   ]);
 
   const completedByDate = new Map<string, Set<string>>();
+  // Weighted totals for the plan-completion ratio only; the id set above stays
+  // whole-task and every other reader of it is unchanged.
+  const weightByDate = new Map<string, number>();
   for (const c of pastCompletions ?? []) {
     if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
     completedByDate.get(c.routine_date)!.add(c.task_id);
+    weightByDate.set(c.routine_date, (weightByDate.get(c.routine_date) ?? 0) + completionWeight(c.confidence));
   }
 
   // Topics swapped OUT of the most recent past day — "never delete, always
@@ -596,7 +600,12 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
     if (r.routine_date < today && taskCount > 0) {
       planDays++;
       plannedTasks += taskCount;
-      completedTasks += Math.min(taskCount, completedTaskIds.size);
+      // P0-2.3b — the ratio is a LOAD proxy, so a PARTIAL weighs 0.5 here and
+      // nowhere else. Summing `.size` counted a half-finished task as a whole
+      // one, which told a student half-finishing everything that their load was
+      // fine. Capped at taskCount for the same reason as before: completions
+      // can outlive a task removed from the plan, and the ratio may not exceed 1.
+      completedTasks += Math.min(taskCount, weightByDate.get(r.routine_date) ?? 0);
     }
     // Guard against legacy/corrupt rows where tasks is null or not an array
     // (bug audit, 14 July) — an unguarded for-of here throws, rejecting the
