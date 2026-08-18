@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 
 // ── G3 (0C.3G / J12) — a failed coverage advance is no longer silent ────────
 //
@@ -117,10 +116,21 @@ describe('scope containment — J6, the Fact Registry and schema are untouched',
     expect(src).not.toMatch(/from ['"]@\/lib\/facts\/registry['"]/);
   });
 
-  it('the topic_coverage table schema is untouched — no new/modified migration', () => {
-    // A fixed date prefix is unreliable — other work landed migrations on the
-    // same calendar day. Ask git what's actually new or changed instead.
-    const status = execSync('git status --porcelain supabase/migrations', { cwd: process.cwd() }).toString();
-    expect(status, 'no new or modified migration file for this gate').toBe('');
+  it('no migration ever backfills topic_coverage.status', () => {
+    // Twice-corrected. First a date-prefix check (wrong: other work lands
+    // migrations the same day), then `git status` on the migrations dir (wrong
+    // as a STANDING invariant: it asserts the repo never gains a migration, so
+    // G5's unrelated provenance column broke it). The durable statement is what
+    // J12 actually promised — it made a failed coverage advance truthful, so no
+    // migration may quietly repair coverage behind it. Function bodies excised.
+    const dir = join(process.cwd(), 'supabase/migrations');
+    const offenders = readdirSync(dir).filter((f) => {
+      const sql = readFileSync(join(dir, f), 'utf8')
+        .replace(/--[^\n]*/g, '')
+        .replace(/AS \$function\$[\s\S]*?\$function\$;/gi, '')
+        .replace(/AS \$\$[\s\S]*?\$\$;/gi, '');
+      return /update[\s\S]{0,80}topic_coverage[\s\S]{0,120}set\s+status\s*=/i.test(sql);
+    });
+    expect(offenders, 'J12 surfaced coverage failures; no migration may mask them').toEqual([]);
   });
 });

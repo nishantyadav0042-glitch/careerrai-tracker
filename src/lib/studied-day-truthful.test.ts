@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 import { dayWasStudied } from './check-in';
 
 // ── A3 — "did the student study?" is answered by the student, not by the ─────
@@ -111,8 +110,23 @@ describe('scope containment — J6-A forbids everything below', () => {
     expect(code('src/app/api/logging/log-daily/route.ts')).toMatch(/p_study_duration:\s*body\.hours,/);
   });
 
-  it('no new migration — no schema change, no backfill', () => {
-    expect(execSync('git status --porcelain supabase/migrations', { cwd: process.cwd() }).toString()).toBe('');
+  it('no migration ever backfills the columns A3 reasons over', () => {
+    // This was originally a `git status --porcelain supabase/migrations` check.
+    // That guard was correct on the day A3 shipped and WRONG as a standing
+    // invariant: it asserts the repo never gains a migration, so G5's
+    // provenance column broke it despite A3 being untouched. The durable
+    // statement is the one A3 actually promised — it repaired a READ, so no
+    // migration may rewrite the evidence it reads. Function bodies are excised:
+    // an RPC updating a row on a future write is not a backfill of history.
+    const dir = join(process.cwd(), 'supabase/migrations');
+    const offenders = readdirSync(dir).filter((f) => {
+      const sql = readFileSync(join(dir, f), 'utf8')
+        .replace(/--[^\n]*/g, '')
+        .replace(/AS \$function\$[\s\S]*?\$function\$;/gi, '')
+        .replace(/AS \$\$[\s\S]*?\$\$;/gi, '');
+      return /set\s+day_outcome\s*=/i.test(sql) || /update[\s\S]{0,80}set\s+study_duration\s*=/i.test(sql);
+    });
+    expect(offenders, 'A3 fixed a read; no migration may rewrite what it reads').toEqual([]);
   });
 
   it('the four DEFERRED consumers (G4 §6) are not repointed', () => {

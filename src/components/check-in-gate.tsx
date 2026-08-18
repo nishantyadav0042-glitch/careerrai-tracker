@@ -94,6 +94,8 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
           // A check-in is not a study claim. Hours and sections stay empty;
           // the full sheet is where a student describes what they actually did.
           hours: 0,
+          // J6-A: this 0 means "never asked", not "studied zero hours".
+          hours_source: 'not_collected',
           sections: [],
           energy: '💪',
         }),

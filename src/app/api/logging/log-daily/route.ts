@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { VALID_BLOCKER_REASONS, VALID_DAY_OUTCOMES, dayWasStudied } from '@/lib/check-in';
+import { isStudyDurationSource } from '@/lib/study-duration-source';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -28,6 +29,8 @@ interface LoggingRequest {
   confidence?: number; // single-tap 1-5 "how confident about CAT right now"
   log_date?: string; // optional backdate — must be today or yesterday (IST)
   day_outcome?: string; // 'studied' | 'partial' | 'not_studied' | 'skipped'
+  /** J6-A provenance the CLIENT declares for `hours`. Absent/unknown -> NULL. */
+  hours_source?: string;
 }
 
 // The shape of the day, asked first in the log sheet. 'not_studied' and
@@ -178,10 +181,19 @@ export async function POST(request: NextRequest) {
     // existingLog fetch above; no new query.
     const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...body.sections])];
 
+    // J6-A — provenance is DECLARED by the writer, never inferred here.
+    // `body.hours` reaches this route as a bare number: the log sheet computes
+    // creditedHours() client-side, so the server genuinely cannot tell a
+    // credited value from a typed one. A client that does not declare (or
+    // declares something outside the vocabulary) leaves this NULL — unknown,
+    // which is the truth, rather than a guess dressed as evidence.
+    const declaredSource = isStudyDurationSource(body.hours_source) ? body.hours_source : null;
+
     const { data: rpcResult, error: rpcError } = await admin.rpc('upsert_log_and_streak', {
       p_student_id:      user.id,
       p_report_date:     dateStr,
       p_study_duration:  body.hours,
+      p_study_duration_source: declaredSource,
       p_topics_covered:  mergedSections,
       p_mood_emoji:      body.energy,
       p_mock_taken:      body.sections.includes('Mock'),

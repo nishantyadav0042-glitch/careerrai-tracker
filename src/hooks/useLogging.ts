@@ -13,6 +13,7 @@ interface LoggingPayload {
   emotional_chips?: string[];
   log_date?: string; // optional backdate — server validates must be today or yesterday
   day_outcome?: string; // how the day actually went — asked first in the sheet
+  hours_source?: string; // J6-A: what `hours` above actually is
 }
 
 interface LoggingResponse {

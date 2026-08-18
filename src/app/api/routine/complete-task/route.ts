@@ -5,6 +5,7 @@ import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
 import { creditedHours } from '@/lib/study-credit';
+import { sourceForMergedDuration, isStudyDurationSource } from '@/lib/study-duration-source';
 import {
   HALF_TICK_SIGNAL, countsAsFullyDone, portionOf, resolveTransition,
   type CompletionIntent,
@@ -226,7 +227,7 @@ export async function POST(request: NextRequest) {
     // never let the routine's write shrink what's already recorded.
     const { data: existingLog } = await admin
       .from('daily_reports')
-      .select('study_duration, topics_covered, mock_taken, notes')
+      .select('study_duration, study_duration_source, topics_covered, mock_taken, notes')
       .eq('student_id', user.id)
       .eq('report_date', today)
       .maybeSingle();
@@ -250,6 +251,17 @@ export async function POST(request: NextRequest) {
     });
     // Never shrink a log the student already made by hand.
     const mergedHours = Math.max(earned, existingLog?.study_duration ?? 0);
+    // J6-A — STAMP THE WINNER, not the intent. This request ran the credit
+    // path, but the max above may well have kept the PRE-EXISTING number.
+    // Stamping that 'credited' would assert a hand-made 6h log was priced from
+    // coverage. The authority decides from which value actually survived; a
+    // legacy NULL that wins stays NULL rather than being upgraded to a guess.
+    const existingSourceRaw = existingLog?.study_duration_source;
+    const mergedSource = sourceForMergedDuration({
+      earned,
+      existing: existingLog ? (existingLog.study_duration ?? 0) : null,
+      existingSource: isStudyDurationSource(existingSourceRaw) ? existingSourceRaw : null,
+    });
     const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...routineSections])];
     const mergedMockTaken = routineMockTaken || !!existingLog?.mock_taken;
     const mergedNotes = existingLog?.notes
@@ -259,6 +271,7 @@ export async function POST(request: NextRequest) {
       p_student_id: user.id,
       p_report_date: today,
       p_study_duration: mergedHours,
+      p_study_duration_source: mergedSource,
       p_topics_covered: mergedSections,
       p_mood_emoji: '💪',
       p_mock_taken: mergedMockTaken,

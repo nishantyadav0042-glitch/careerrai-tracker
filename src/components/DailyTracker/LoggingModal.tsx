@@ -25,6 +25,9 @@ interface LoggingModalProps {
 
 export interface LoggingData {
   hours: number;
+  /** J6-A: what `hours` is. The sheet derives it from coverage ('credited');
+   *  the Rest toggle declares a real zero ('declared_zero'). */
+  hours_source?: string;
   sections: string[];
   energy: string; // kept for the log RPC contract; defaulted, not asked
   plan_fit?: string;        // legacy field on the API; no longer collected
@@ -151,7 +154,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
       // An honest rest day: 0 hours, no topics, marked not-studied. Still a log,
       // so the streak (which now counts logged days) survives it.
       if (rest) {
-        await onSubmit({ hours: 0, sections: [], energy: '💪', completedTasks: [], mock: null, day_outcome: 'not_studied' });
+        await onSubmit({ hours: 0, hours_source: 'declared_zero', sections: [], energy: '💪', completedTasks: [], mock: null, day_outcome: 'not_studied' });
         setRest(false);
         savedRef.current = true;
         onClose();
@@ -204,6 +207,8 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
       // declared: the check-in gate's tap, or the Rest toggle above.
       await onSubmit({
         hours: derivedHours,
+        // Priced from plan coverage by creditedHours above, not typed.
+        hours_source: 'credited',
         sections: finalSections,
         energy: '💪', // defaulted — no longer asked
         completedTasks,
