@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
-import { VALID_BLOCKER_REASONS, VALID_DAY_OUTCOMES } from '@/lib/check-in';
+import { VALID_BLOCKER_REASONS, VALID_DAY_OUTCOMES, dayWasStudied } from '@/lib/check-in';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -386,7 +386,7 @@ async function computePrescriptiveLine(
   try {
     const { data: recent } = await admin
       .from('daily_reports')
-      .select('topics_covered, report_date, mock_taken, emotional_chips, study_duration')
+      .select('topics_covered, report_date, mock_taken, emotional_chips, study_duration, day_outcome')
       .eq('student_id', studentId)
       .order('report_date', { ascending: false })
       .limit(14);
@@ -432,7 +432,11 @@ async function computePrescriptiveLine(
 
     // Rule 3: consistency signal — logged fewer than 4 of last 7 days
     const last7 = recent.slice(0, 7);
-    const studyDaysIn7 = last7.filter((r) => (r.study_duration as number) > 0).length;
+    // A3 — the student's own answer outranks the hours column here. This used
+    // to be `study_duration > 0`, which reads a check-in day (hours never
+    // asked, stored as 0) as a non-study day and then tells the student they
+    // lack consistency. 62 real rows across 38 students were mis-read this way.
+    const studyDaysIn7 = last7.filter((r) => dayWasStudied(r)).length;
     if (last7.length >= 7 && studyDaysIn7 < 4) {
       return `${studyDaysIn7}/7 study days last week. CAT rewards consistency more than intensity.`;
     }

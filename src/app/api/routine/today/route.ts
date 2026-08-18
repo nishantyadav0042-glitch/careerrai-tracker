@@ -9,6 +9,7 @@ import { type CoverageStatus } from '@/lib/topic-selector';
 import { plannerRecency } from '@/lib/plan-history';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
+import { dayWasStudied } from '@/lib/check-in';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -307,12 +308,19 @@ export async function GET() {
   // — composed from both — the Coaching Decision: the single highest-leverage
   // call for today that frames the plan below it. All from data already
   // fetched; purely additive to the response (does not reshape the task list).
-  const activeDays21 = recentStudyHours.filter((h: number) => h > 0).length;
+  // A3 — "was the day active" is answered by dayWasStudied, not by the hours
+  // column alone. A check-in day stores 0 hours because the gate never asks,
+  // so the old `h > 0` test read a student who said "Studied" as inactive.
+  // Note this is deliberately NOT applied to `recentStudyHours` above: that
+  // array feeds computeCapacity, which asks a MAGNITUDE question and is one of
+  // the four consumers deferred until the J6-A model is locked.
+  const activeRows = (recentReports ?? []) as { study_duration: number | string | null; report_date: string; day_outcome?: string | null }[];
+  const activeDays21 = activeRows.filter((r) => dayWasStudied(r)).length;
   const tenAgoStr = new Date(Date.now() - 10 * 86_400_000).toISOString().slice(0, 10);
   const twentyAgoStr = new Date(Date.now() - 20 * 86_400_000).toISOString().slice(0, 10);
   let recentActive10 = 0, priorActive10 = 0;
-  for (const r of (recentReports ?? []) as { study_duration: unknown; report_date: string }[]) {
-    if ((Number(r.study_duration) || 0) <= 0) continue;
+  for (const r of activeRows) {
+    if (!dayWasStudied(r)) continue;
     if (r.report_date > tenAgoStr) recentActive10++;
     else if (r.report_date > twentyAgoStr) priorActive10++;
   }
