@@ -73,6 +73,49 @@ export const KNOWLEDGE_GRAPH: KnowledgeSection[] = [
   { id: 'READING', label: 'Reading Habit', groups: [{ label: null, units: READING_HABIT_UNITS }] },
 ];
 
+// ── THE EXAM SYLLABUS BOUNDARY (founder ruling D1, 18 Aug) ─────────────────
+//
+// "Do NOT count MOCKS or READING/habit-support activities inside syllabus
+//  coverage. The canonical exam syllabus is 46 units: QA 28 + VARC 9 + DILR 9.
+//  46 is the denominator for syllabus coverage."
+//
+// The graph holds 53 units; only 46 of them are syllabus. Taking a mock is
+// preparation ACTIVITY — it can never make "syllabus covered" go up. Reading
+// the same. Letting them into the denominator produces claims like "you are
+// 72% through the CAT syllabus" where part of the 72% is mocks, which is not
+// confusing UX, it is false measurement.
+//
+// Declared here, in the taxonomy that owns the units, and DERIVED from the
+// graph rather than re-listed — the same law coverage-status.ts applies to the
+// ladder. A unit added to VARC/DILR/QA becomes syllabus automatically; a unit
+// added to MOCKS/READING never does.
+//
+// This exists because its absence was a live defect: prep-memory-data.ts
+// counted a numerator over all 53 rows against a denominator of 46, and on
+// 18 Aug four students carried a "Knowledge" percentage above 100 (max 111).
+// signal-engine.ts had documented the intent correctly the whole time — "% of
+// the 46 exam topics past not_started" — with nothing to enforce it.
+
+/** The three sections that are actually examined. */
+export const EXAM_SECTION_IDS: CoverageSectionId[] = ['VARC', 'DILR', 'QA'];
+
+/** The 46 examined units. Everything else in the graph is preparation activity. */
+export const EXAM_SYLLABUS_TOPICS: string[] = KNOWLEDGE_GRAPH
+  .filter((s) => (EXAM_SECTION_IDS as string[]).includes(s.id))
+  .flatMap((s) => s.groups.flatMap((g) => g.units));
+
+const EXAM_SYLLABUS_SET = new Set(EXAM_SYLLABUS_TOPICS);
+
+/**
+ * Is this unit part of the examined syllabus?
+ *
+ * Fails closed: an unrecognised name is NOT syllabus. Admitting unknowns by
+ * default is exactly how a 47th unit would slip into a 46-denominator ratio.
+ */
+export function isExamSyllabusTopic(topic: unknown): boolean {
+  return typeof topic === 'string' && EXAM_SYLLABUS_SET.has(topic);
+}
+
 // Canonical position of every unit — coverage rows sort by this, so the
 // grid always renders in graph order regardless of DB row order.
 export const UNIT_ORDER: Record<string, number> = Object.fromEntries(

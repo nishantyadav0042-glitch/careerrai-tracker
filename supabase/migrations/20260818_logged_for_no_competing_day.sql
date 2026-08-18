@@ -1,0 +1,49 @@
+-- ── 0C.1(B) — the database stops having an opinion about what day it is ────
+--
+-- VERIFIED PRODUCTION DEFECT, 18 Aug 2026. Queried from information_schema:
+--
+--   topic_evidence.logged_for DEFAULT =
+--     ((now() AT TIME ZONE 'Asia/Kolkata') - '03:00:00'::interval)::date
+--
+-- That is the 03:00 IST rule. The application moved its day boundary to
+-- 05:30 IST on 14 Aug (src/lib/study-day.ts). So for 2.5 hours every night —
+-- 03:00 to 05:29 IST — a direct insert was dated TODAY by the database and
+-- YESTERDAY by every application read of the same row.
+--
+-- The migration that installed this default (20260725_topic_evidence_day_
+-- boundary.sql) argued, correctly, that "a safety net that disagrees with the
+-- system it backs is worse than none." It was right, and then the system moved
+-- underneath it.
+--
+-- WHY DROP RATHER THAN RE-ALIGN (founder ruling 8: do not repair a magic
+-- constant by installing another one):
+--
+--   1. The default is already dead on every application path. Both writers
+--      pass the value explicitly — api/evidence/route.ts:58 and
+--      api/challenge/attempt/route.ts:68, each `logged_for: getLogDateString()`.
+--   2. The column is already NOT NULL (verified), so with no default a direct
+--      insert that omits the date now FAILS LOUDLY instead of silently
+--      inventing one. That is the same "fail closed" rule ruling 9 applies to
+--      ratios, applied to dates.
+--   3. Re-aligning to 05:30 IST would mean writing `- interval '5 hours 30
+--      minutes'`, or exploiting the fact that 05:30 IST is exactly 00:00 UTC.
+--      Both encode a constant that lives in TypeScript into SQL, where nothing
+--      keeps the two in step. The coincidence "05:30 IST = 00:00 UTC" is a
+--      property we currently enjoy, not an invariant we declared — and the
+--      whole point of this phase is to stop depending on alignments nobody
+--      wrote down.
+--
+-- After this, there is exactly ONE producer of a CareerRai date:
+-- getLogDateString() in src/lib/study-day.ts. The database no longer competes.
+--
+-- Guarded by src/lib/exam-syllabus-boundary.guard.test.ts, which fails the
+-- build if any later migration re-installs a date default on this column.
+--
+-- Reversible: `alter table public.topic_evidence alter column logged_for
+-- set default ((now() at time zone 'Asia/Kolkata') - interval '3 hours')::date;`
+-- restores the prior state exactly — though restoring it would reinstate the
+-- defect, so the down path exists for mechanical completeness, not as advice.
+
+alter table public.topic_evidence
+  alter column logged_for
+  drop default;

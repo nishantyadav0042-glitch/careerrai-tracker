@@ -4,7 +4,7 @@
 
 import { archetypeRevisionMultiplier, type Section } from './routine-engine';
 import { getLogDateString } from './streak-utils';
-import { TOPIC_METADATA } from './topics-constants';
+import { TOPIC_METADATA, isExamSyllabusTopic } from './topics-constants';
 import {
   windowStats, mockTrend, weeklyEvolutionLines,
   consistencyBreakdown, sectionGapDays, revisionDueStats, computeHealthScore,
@@ -132,8 +132,21 @@ export async function computePrepMemory(
   const trend = mockTrend((debriefs ?? []).map((d: { overall_percentile: number | null }) => ({ overallPercentile: d.overall_percentile })));
 
   // Student State V1 — see signal-engine.ts for why only these four fields.
+  // NUMERATOR AND DENOMINATOR MUST RANGE OVER THE SAME SET (0C.1, 18 Aug).
+  //
+  // This filtered by status alone, so it counted all 53 topic_coverage rows —
+  // including the 7 habit-track units — against a denominator of 46. Four
+  // students carried a Knowledge percentage above 100 in production that day,
+  // the highest at 111. The type's own contract (signal-engine.ts:100) had
+  // always said "% of the 46 exam topics past not_started"; nothing enforced it.
+  //
+  // Fixed by membership, not by Math.min(100, …): a clamp is presentation
+  // logic and would have hidden a 53-basis numerator still flowing into a
+  // 46-basis world (founder ruling 9 — the producer fails closed instead).
   const inMotionTopics = new Set(
-    (coverageRows ?? []).filter((r: { status: string }) => r.status !== 'not_started').map((r: { topic: string }) => r.topic)
+    (coverageRows ?? [])
+      .filter((r: { status: string; topic: string }) => r.status !== 'not_started' && isExamSyllabusTopic(r.topic))
+      .map((r: { topic: string }) => r.topic)
   ).size;
   const totalTopics = Object.keys(TOPIC_METADATA).length;
   const lastActivityDate = completionRecords.length
