@@ -98,7 +98,16 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
           energy: '💪',
         }),
       });
-      if (!res.ok) throw new Error('save failed');
+      if (!res.ok) {
+        // P0-1: never invent a failure the server did not report. A 429 here
+        // means the check-in is already saved and only a too-fast EDIT was
+        // declined — telling the student to "check your connection" is a lie
+        // about their own data.
+        const serverMessage = await res.json()
+          .then((b: { error?: string }) => (typeof b?.error === 'string' ? b.error : null))
+          .catch(() => null);
+        throw new Error(serverMessage ?? 'save failed');
+      }
       // The guaranteed insight (founder, 17 Aug): the same server line the
       // full log sheet shows — a check-in is a log too, and no log ends
       // empty-handed. Best-effort parse; a body we can't read never blocks
@@ -113,8 +122,10 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
       // narrates is real — /api/routine/today recomputes from the row just
       // written and plan-reason.ts names what changed.
       setRebuilding(true);
-    } catch {
-      setError("Couldn't save that. Check your connection and try again.");
+    } catch (e) {
+      setError(e instanceof Error && e.message !== 'save failed'
+        ? e.message
+        : "Couldn't save that. Check your connection and try again.");
       setSaving(false);
     }
   }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { HALF_TICK_SIGNAL } from './completion-portion';
 
 // ── The tick on Home IS the log ─────────────────────────────────────────────
 //
@@ -75,8 +76,16 @@ describe('three states, and half means half', () => {
 
   it('uses the SAME representation the log sheet already uses', () => {
     // full -> green, half -> blue. One concept, one encoding, no new column.
+    //
+    // The route's half literal moved behind HALF_TICK_SIGNAL on 18 Aug (P0-2),
+    // which strengthens this rule rather than relaxing it: there is now ONE
+    // authority for what 'blue' means, and completion-portion.test.ts asserts
+    // the route carries no bare 'blue' of its own. The intent this guard has
+    // always protected — one concept, one encoding — is unchanged; only the
+    // place the encoding is spelled has.
     const route = readFileSync(ROUTE, 'utf8');
-    expect(route).toMatch(/portion === 'half' \? 'blue'/);
+    expect(route).toMatch(/portion === 'half' \? HALF_TICK_SIGNAL/);
+    expect(HALF_TICK_SIGNAL, 'the encoding itself must not drift').toBe('blue');
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
     expect(modal).toContain("choice === 'full' ? 'green' : 'blue'");
   });

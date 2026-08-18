@@ -5,6 +5,7 @@ import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
 import { creditedHours } from '@/lib/study-credit';
+import { HALF_TICK_SIGNAL, countsAsFullyDone, portionOf } from '@/lib/completion-portion';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
   // confidence control, so there is nothing for this to collide with, and a
   // migration for a two-value flag the sheet already encodes would be adding a
   // second representation of one concept (Incident #23).
-  const effectiveConfidence = confidence ?? (portion === 'half' ? 'blue' : portion === 'full' ? 'green' : undefined);
+  const effectiveConfidence = confidence ?? (portion === 'half' ? HALF_TICK_SIGNAL : portion === 'full' ? 'green' : undefined);
   if (!taskId || typeof taskId !== 'string') return NextResponse.json({ error: 'task_id required' }, { status: 400 });
   if (confidence !== undefined && !VALID_CONFIDENCE.includes(confidence as ConfidenceSignal)) {
     return NextResponse.json({ error: 'confidence must be green, blue, yellow, or red' }, { status: 400 });
@@ -170,10 +171,25 @@ export async function POST(request: NextRequest) {
 
   const completedIds = new Set((completions ?? []).map((c) => c.task_id));
   const emergencyDay = (completions ?? []).some((c) => c.is_emergency);
-  const fullyDone = tasks.every((t) => completedIds.has(t.id));
+  // P0-2 — a tick and a FULLY-done tick are different questions.
+  //
+  // This used to be `completedIds.has(t.id)`: set membership, never reading
+  // `confidence`. A student who marked every task "Got halfway" closed the day
+  // as fully done and advanced the streak, while creditedHours four lines
+  // below counted the same taps as half. One tap, two answers.
+  //
+  // The portion authority is completion-portion.ts, which also carries the
+  // historical rule for the 29 legacy null-confidence rows (they are full).
+  const confidenceByTask = new Map(
+    (completions ?? []).map((c) => [c.task_id as string, (c.confidence as string | null) ?? null])
+  );
+  const isFullyDone = (taskId: string) =>
+    completedIds.has(taskId) && countsAsFullyDone(confidenceByTask.get(taskId));
+  const fullyDone = tasks.every((t) => isFullyDone(t.id));
   // Emergency Mode: completing just the single highest-priority task counts
-  // as the day's minimum — distinct from full completion, never disguised as it.
-  const emergencyMinimumDone = emergencyDay && completedIds.has(tasks[0].id);
+  // as the day's minimum — distinct from full completion, never disguised as
+  // it. Half of the one essential task is not the essential task done.
+  const emergencyMinimumDone = emergencyDay && isFullyDone(tasks[0].id);
 
   let dayClosed = false;
   if ((fullyDone || emergencyMinimumDone || closeDay === true) && completions && completions.length > 0 && !skipDayClose) {
@@ -203,7 +219,7 @@ export async function POST(request: NextRequest) {
     // state now reachable from the plan card that divergence would also make
     // the number wrong — half a task credited as a whole one is the log lying
     // about time, which is what Incident #30 was about.
-    const halfDone = (completions ?? []).filter((c) => c.confidence === 'blue' && completedIds.has(c.task_id)).length;
+    const halfDone = (completions ?? []).filter((c) => portionOf(c.confidence as string | null) === 'half' && completedIds.has(c.task_id)).length;
     const fullDone = completedTasks.length - halfDone;
     const generatedHours = (routine.generated_hours as number | null) ?? routineMinutes / 60;
     const earned = creditedHours({

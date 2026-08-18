@@ -14,6 +14,7 @@ import { onboardingCopy } from '@/lib/notification-engine';
 import { sendPushToUser } from '@/lib/push';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 import { coverageInsight } from '@/lib/log-insight';
+import { isAlreadyPersisted, EDIT_TOO_FAST_MESSAGE, type LoggedState } from '@/lib/log-acknowledgement';
 
 interface LoggingRequest {
   hours: number;
@@ -95,9 +96,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Can only log today or yesterday' }, { status: 400 });
     }
 
+    // The whole persisted payload, not just its timestamp (P0-1). The rate
+    // limit below needs to answer "is this the same log you already have?",
+    // and `id, updated_at` cannot answer it — which is why the route used to
+    // tell a student their saved log had failed.
     const { data: existingLog } = await admin
       .from('daily_reports')
-      .select('id, updated_at')
+      .select('id, updated_at, study_duration, topics_covered, mock_taken, notes, mood_emoji, emotional_chips')
       .eq('student_id', user.id)
       .eq('report_date', dateStr)
       .maybeSingle();
@@ -110,11 +115,55 @@ export async function POST(request: NextRequest) {
       .eq('student_id', user.id)
       .maybeSingle();
 
-    // Rate limit: block hammering (same report updated within last 15 seconds)
+    // Rate limit: block hammering (same report updated within last 15 seconds).
+    //
+    // P0-1 — THE ACKNOWLEDGEMENT MUST MATCH WHAT IS COMMITTED.
+    //
+    // This branch used to answer 429 "Too many requests" and nothing else, so
+    // the sheet showed "Too many requests" and check-in-gate showed "Couldn't
+    // save that. Check your connection and try again." — both while the log
+    // was safely saved. A student who believes their log was lost resubmits,
+    // and is rate-limited again.
+    //
+    // The block itself is unchanged: a genuine edit inside the window is still
+    // declined, and nothing is written. What changed is that the route now
+    // distinguishes the two things the old code collapsed:
+    //
+    //   · the same payload again  → it IS saved. Say so, and fire no side
+    //     effect twice (no second buddy ping, no duplicate analytics, no
+    //     second push).
+    //   · a different payload     → the log is saved AND this change did not
+    //     land. Both halves are true and neither may be dropped.
+    const incoming: LoggedState = {
+      hours: body.hours,
+      sections: body.sections,
+      mockTaken: body.sections.includes('Mock'),
+      notes: body.notes || null,
+      energy: body.energy,
+      emotionalChips: body.emotional_chips ?? [],
+    };
     if (existingLog?.updated_at) {
       const secsSinceUpdate = (Date.now() - new Date(existingLog.updated_at).getTime()) / 1000;
       if (secsSinceUpdate < 15) {
-        return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+        const persisted: LoggedState = {
+          hours: Number(existingLog.study_duration ?? 0),
+          sections: (existingLog.topics_covered as string[] | null) ?? [],
+          mockTaken: !!existingLog.mock_taken,
+          notes: (existingLog.notes as string | null) ?? null,
+          energy: (existingLog.mood_emoji as string | null) ?? null,
+          emotionalChips: (existingLog.emotional_chips as string[] | null) ?? [],
+        };
+        if (isAlreadyPersisted(incoming, persisted)) {
+          return NextResponse.json({
+            success: true,
+            already_saved: true,
+            streak: prevStreak,
+            report_date: dateStr,
+            daily_nudge: null,
+            milestone: null,
+          }, { status: 200 });
+        }
+        return NextResponse.json({ error: EDIT_TOO_FAST_MESSAGE, log_saved: true }, { status: 429 });
       }
     }
 
