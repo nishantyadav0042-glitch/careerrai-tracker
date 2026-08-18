@@ -225,7 +225,7 @@ function MockScoreButton({ className, recorded }: {
   return (
     <button
       type="button"
-      onClick={() => { try { window.dispatchEvent(new Event('cr-open-mock-log')); } catch { /* noop */ } }}
+      onClick={() => { try { window.dispatchEvent(new CustomEvent('cr-open-log', { detail: { withMock: true, via: 'mock_card' } })); } catch { /* noop */ } }}
       className={cn(
         'inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition-transform active:scale-95',
         className
@@ -821,7 +821,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                 record study that was not on the plan. Incident #2 is this door
                 closing, so it must not be removed without another one opening. */}
             <button type="button" data-tour="log"
-              onClick={() => { try { window.dispatchEvent(new Event('cr-open-off-plan-log')); } catch { /* noop */ } }}
+              onClick={() => { try { window.dispatchEvent(new CustomEvent('cr-open-log', { detail: { via: 'off_plan' } })); } catch { /* noop */ } }}
               className="text-xs font-semibold text-stone-900">
               Studied off-plan →
             </button>

@@ -130,32 +130,21 @@ export function DailyTrackerApp({
   // (it owns submitLog and the debrief POST), so the tap crosses the gap the
   // same way a completed task already tells the plan card to refresh: a
   // window event. Opening it here — not there — keeps one log sheet on Home.
+  // ONE event opens the log sheet. There were three — cr-open-mock-log,
+  // cr-open-off-plan-log and cr-open-log-for-date — with three handlers that
+  // differed only in two parameters, which is the duplication this codebase
+  // exists to refuse. A fourth caller would have added a fourth. The detail
+  // carries the differences: which date, and whether a mock is already known.
   useEffect(() => {
-    const open = () => { setLogDateOverride(null); setLogWithMock(true); setIsLogOpen(true); };
-    // Same crossing, different day. The off-plan door opens the SAME sheet with
-    // the mock question unanswered rather than pre-answered — a student who
-    // studied off-plan has not told us anything about a mock yet.
-    const openOffPlan = () => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); };
-    // The check-in gate hands off here: it recorded "studied"/"studied a bit"
-    // for YESTERDAY and cannot ask how long, so the sheet opens on that date to
-    // finish the answer. The date rides on the event — opening without it would
-    // silently log today instead.
-    const openForDate = (e: Event) => {
-      const date = (e as CustomEvent<{ date?: string }>).detail?.date;
-      if (!date) return;
-      track('log_open', { via: 'checkin_handoff' });
-      setLogDateOverride(date);
-      setLogWithMock(false);
+    const openLog = (e: Event) => {
+      const d = (e as CustomEvent<{ date?: string; withMock?: boolean; via?: string } | undefined>).detail;
+      track('log_open', { via: d?.via ?? 'event' });
+      setLogDateOverride(d?.date ?? null);
+      setLogWithMock(d?.withMock === true);
       setIsLogOpen(true);
     };
-    window.addEventListener('cr-open-mock-log', open);
-    window.addEventListener('cr-open-off-plan-log', openOffPlan);
-    window.addEventListener('cr-open-log-for-date', openForDate);
-    return () => {
-      window.removeEventListener('cr-open-mock-log', open);
-      window.removeEventListener('cr-open-off-plan-log', openOffPlan);
-      window.removeEventListener('cr-open-log-for-date', openForDate);
-    };
+    window.addEventListener('cr-open-log', openLog);
+    return () => window.removeEventListener('cr-open-log', openLog);
   }, []);
 
   const {

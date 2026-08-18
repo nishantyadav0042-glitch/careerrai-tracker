@@ -63,7 +63,7 @@ describe('the gate hands the unfinished answers to the log sheet', () => {
   it('records the outcome BEFORE handing off — an abandoned log must not cost the day', () => {
     const g = code(GATE);
     const fetchIdx = g.indexOf("fetch('/api/logging/log-daily'");
-    const handoffIdx = g.indexOf('cr-open-log-for-date');
+    const handoffIdx = g.indexOf("'cr-open-log'");
     expect(fetchIdx, 'the gate must still save').toBeGreaterThan(-1);
     expect(handoffIdx, 'the gate must hand off').toBeGreaterThan(-1);
     expect(handoffIdx, 'the save has to come first, or a dropped log loses the streak day')
@@ -79,12 +79,12 @@ describe('the gate hands the unfinished answers to the log sheet', () => {
     // The gate is always about YESTERDAY. Opening the sheet without the date
     // would silently log the wrong day.
     const g = code(GATE);
-    expect(g).toMatch(/cr-open-log-for-date[\s\S]{0,220}yesterdayStr/);
+    expect(g).toMatch(/cr-open-log'[\s\S]{0,220}yesterdayStr/);
   });
 
   it('the app answers the handoff by opening the sheet on that date', () => {
     const a = code(APP);
-    expect(a).toMatch(/addEventListener\('cr-open-log-for-date'/);
+    expect(a).toMatch(/addEventListener\('cr-open-log'/);
     expect(a).toMatch(/setLogDateOverride\([\s\S]{0,120}setIsLogOpen\(true\)/);
   });
 

@@ -204,7 +204,13 @@ describe('a mock must always have a door of its own', () => {
 
   it('the mock entry opens the sheet already on the mock', () => {
     const app = readFileSync(APP, 'utf8');
-    expect(app).toContain('setLogWithMock(true)');
+    // The chain is pinned end to end rather than on one literal call. After the
+    // three log-open events were collapsed into one (18 Aug), the app sets this
+    // from the event's detail — `setLogWithMock(true)` no longer appears
+    // anywhere, but the mock entry still arrives on the mock question.
+    expect(readFileSync(CARD_SRC, 'utf8'), 'the card asks for it')
+      .toMatch(/cr-open-log'[\s\S]{0,90}withMock: true/);
+    expect(app, 'the app honours it').toContain("setLogWithMock(d?.withMock === true)");
     expect(app).toContain('openWithMock={logWithMock}');
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
     expect(modal).toContain('if (openWithMock) setMockTaken(true)');
@@ -231,8 +237,11 @@ describe('a mock must always have a door of its own', () => {
   it('the plan card and the sheet are wired to the same event name', () => {
     // They are siblings, not parent and child — a typo in either string
     // would silently produce a button that does nothing at all.
-    expect(readFileSync(CARD_SRC, 'utf8')).toContain("new Event('cr-open-mock-log')");
-    expect(readFileSync(APP, 'utf8')).toContain("addEventListener('cr-open-mock-log'");
+    // ONE event now (18 Aug): three near-identical events differing only in two
+    // parameters were collapsed, so the wiring is pinned on the shared name plus
+    // the detail that distinguishes this caller.
+    expect(readFileSync(CARD_SRC, 'utf8')).toMatch(/cr-open-log'[\s\S]{0,90}withMock: true/);
+    expect(readFileSync(APP, 'utf8')).toContain("addEventListener('cr-open-log'");
   });
 
   it('off-plan study keeps its own separate door', () => {
@@ -246,11 +255,11 @@ describe('a mock must always have a door of its own', () => {
     // would have passed a deletion that merely moved the label elsewhere.
     const card = readFileSync(CARD_SRC, 'utf8');
     expect(card, 'the visible door').toContain('Studied off-plan');
-    expect(card, 'it must actually signal the app').toContain("new Event('cr-open-off-plan-log')");
+    expect(card, 'it must actually signal the app').toMatch(/cr-open-log'[\s\S]{0,90}off_plan/);
     const app = readFileSync(APP, 'utf8');
     expect(app, 'and the app must answer that signal by opening the sheet')
-      .toMatch(/addEventListener\('cr-open-off-plan-log'/);
-    expect(app).toMatch(/openOffPlan[\s\S]{0,160}setIsLogOpen\(true\)/);
+      .toMatch(/addEventListener\('cr-open-log'/);
+    expect(app).toMatch(/openLog[\s\S]{0,300}setIsLogOpen\(true\)/);
   });
 
   it('a mock alone is still a complete log', () => {

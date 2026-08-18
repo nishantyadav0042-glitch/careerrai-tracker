@@ -135,7 +135,7 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
       if (outcomeNeedsDuration(finalOutcome)) {
         track('checkin_handoff_to_log', { outcome: finalOutcome, forDate: yesterdayStr });
         try {
-          window.dispatchEvent(new CustomEvent('cr-open-log-for-date', { detail: { date: yesterdayStr } }));
+          window.dispatchEvent(new CustomEvent('cr-open-log', { detail: { date: yesterdayStr, via: 'checkin_handoff' } }));
         } catch { /* if the handoff cannot fire, the answer is still saved */ }
         finish();
         return;
