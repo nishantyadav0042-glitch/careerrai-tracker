@@ -26,6 +26,14 @@ export interface DailyReport {
   student_id: string;
   report_date: string;
   study_duration: number;
+  /**
+   * J6-A provenance for `study_duration` (G5). NULL on every historical row —
+   * legacy/unknown — and never rewritten. Read WITH `day_outcome`, never alone:
+   * the source says how a number was made, not whether the duration is knowable.
+   */
+  study_duration_source?: string | null;
+  /** The student's own declaration for the day: studied | partial | not_studied | skipped. */
+  day_outcome?: string | null;
   topics_covered: string[];
   quality_focus: number;
   difficulty: number;
@@ -79,7 +87,12 @@ export interface Notification {
 }
 
 export interface AnalyticsSummary {
-  avgStudy: number;
+  /**
+   * Mean hours over days we could actually measure — or NULL when there are
+   * none. Q3: no usable duration evidence is UNKNOWN, never 0h. A real zero
+   * (rest, explicit "didn't study") IS measured and still averages in as 0.
+   */
+  avgStudy: number | null;
   totalStudy: number;
   totalMocks: number;
   avgMockScore: number;

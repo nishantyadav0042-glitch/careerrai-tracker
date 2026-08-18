@@ -167,10 +167,19 @@ describe('both writers stamp atomically, in the same statement as the value', ()
 });
 
 describe('scope containment — G5 is the column and nothing else', () => {
-  it('no consumer is migrated: study_duration reads are unchanged', () => {
-    expect(code('src/lib/analytics.ts')).toContain('avg(reports.map((r) => r.study_duration))');
-    expect(code('src/lib/student-360.ts')).toContain('computeCapacity(hrs,');
-    expect(code('src/app/api/cron/weekly-plan-reconcile/route.ts')).toContain('study_duration');
+  it('the consumers still awaiting a ruling are untouched', () => {
+    // G5 itself migrated no consumer, and this guard held that. Three of the
+    // named ones have since been migrated under EXPLICIT founder rulings —
+    // analytics.ts (Q3), the capacity callers (Q4), weekly-plan-reconcile (Q5)
+    // — so pinning them here would now assert the opposite of what was decided.
+    // The invariant that survives is the one that still matters: a consumer
+    // moves only when it has been ruled on. These two have not been.
+    expect(code('src/lib/buddy-case-data.ts')).toContain('Number(r.study_duration) || 0');
+    expect(code('src/lib/prep-gain.ts')).toContain('Number(row.study_duration)');
+    for (const p of ['src/lib/buddy-case-data.ts', 'src/lib/prep-gain.ts']) {
+      expect(code(p), `${p} must not have quietly become source-aware`)
+        .not.toContain('durationIsUnknown');
+    }
   });
 
   it('credited_study_duration is still not created', () => {

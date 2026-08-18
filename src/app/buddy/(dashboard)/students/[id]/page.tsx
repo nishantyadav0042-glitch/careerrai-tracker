@@ -466,7 +466,12 @@ export default async function BuddyStudentDetailPage({
           { label: 'Total study', val: `${summary.totalStudy.toFixed(1)}`, unit: 'hrs' },
           { label: 'Days logged', val: `${summary.daysSubmitted}`, unit: `/ ${period}` },
           { label: 'Mocks taken', val: `${debriefs.length}`, unit: 'total' },
-          { label: 'Avg hours/day', val: summary.daysSubmitted > 0 ? (summary.totalStudy / summary.daysSubmitted).toFixed(1) : '—', unit: 'hrs' },
+          // Q3 — the shared average, which counts only days we could measure.
+          // This used to divide totalStudy by EVERY logged day, so a student
+          // who checked in without recording hours was shown a lower average
+          // than they earned. Null means we have nothing to average, and the
+          // buddy is told that rather than shown a fabricated number.
+          { label: 'Avg hours/day', val: summary.avgStudy !== null ? summary.avgStudy.toFixed(1) : 'Not enough data yet', unit: summary.avgStudy !== null ? 'hrs' : '' },
         ].map(({ label, val, unit }) => (
           <Card key={label} className="p-4">
             <div className="text-xs text-stone-500 font-medium uppercase tracking-wide">{label}</div>
