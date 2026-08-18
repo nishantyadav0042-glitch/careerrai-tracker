@@ -189,18 +189,29 @@ export async function POST(request: NextRequest) {
     // a failure here must never break the sacred log path.
     if (!dailyNudge) {
       try {
-        const [{ data: coverageRows }, { count: totalLogged }, { data: recentDays }] = await Promise.all([
-          admin.from('topic_coverage').select('section, status').eq('student_id', user.id),
-          admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id),
-          admin.from('daily_reports').select('report_date').eq('student_id', user.id)
-            .gte('report_date', new Date(todayDate.getTime() - 6 * 86_400_000).toISOString().split('T')[0]),
+        // 0C.3a: this route now hands the Fact Registry its inputs and nothing
+        // else. Two changes from the pre-migration fetch, both load-bearing:
+        //
+        //   · `topic` joins the select. The registry is membership-scoped and
+        //     can only refuse an out-of-universe row if it can see which topic
+        //     the row names. Section alone cannot tell a retired topic from a
+        //     live one.
+        //   · the day count is a list of DATES, not `count(*)`. That count was
+        //     only ever a day count because (student_id, report_date) is
+        //     UNIQUE; logged_days_total counts dates, so the guarantee stops
+        //     depending on a constraint nobody re-checks. At 30 logs for the
+        //     most active student today — and ~1k for a three-year student at
+        //     100k scale — this is a few KB of short strings.
+        const [{ data: coverageRows }, { data: logDays }] = await Promise.all([
+          admin.from('topic_coverage').select('topic, section, status').eq('student_id', user.id),
+          admin.from('daily_reports').select('report_date').eq('student_id', user.id),
         ]);
         dailyNudge = coverageInsight({
-          coverage: (coverageRows ?? []) as { section: string; status: string }[],
+          coverage: (coverageRows ?? []) as { topic: string; section: string; status: string }[],
           todaySections: body.sections,
           isRest: body.hours === 0 && body.sections.length === 0,
-          loggedDayCount: totalLogged ?? 1,
-          loggedDaysLast7: new Set((recentDays ?? []).map((r: { report_date: string }) => r.report_date)).size,
+          logDates: (logDays ?? []).map((r: { report_date: string }) => r.report_date),
+          today: todayStr,
         });
       } catch (e) {
         console.error('[log] coverage insight failed (non-fatal)', e);

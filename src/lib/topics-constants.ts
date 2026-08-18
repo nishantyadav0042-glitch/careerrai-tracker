@@ -116,6 +116,34 @@ export function isExamSyllabusTopic(topic: unknown): boolean {
   return typeof topic === 'string' && EXAM_SYLLABUS_SET.has(topic);
 }
 
+const ALL_GRAPH_UNITS = new Set(
+  KNOWLEDGE_GRAPH.flatMap((s) => s.groups).flatMap((g) => g.units)
+);
+
+/**
+ * Is this a unit we recognise AT ALL — exam syllabus or preparation track?
+ *
+ * The complement matters more than the predicate. `topic_coverage` holds two
+ * universes: the 46 examined units and the 7 habit tracks (MOCKS/READING). A
+ * habit row is not bad evidence, it is evidence about a different question, so
+ * a syllabus producer may legitimately scope it out.
+ *
+ * A name in NEITHER set is different in kind: a retired topic, a typo, a row
+ * from a taxonomy we no longer run. Scoping THAT out silently would move a
+ * denominator without anybody noticing — so consumers must pass it through to
+ * the registry, which fails the fact closed. (0C.3a, 18 Aug: the first draft of
+ * the log-insight migration filtered on isExamSyllabusTopic and swallowed
+ * unrecognised rows. Its own parity test caught it.)
+ */
+export function isKnownTopic(topic: unknown): boolean {
+  return typeof topic === 'string' && ALL_GRAPH_UNITS.has(topic);
+}
+
+/** A unit we recognise that is preparation activity rather than examined syllabus. */
+export function isPreparationTrackTopic(topic: unknown): boolean {
+  return isKnownTopic(topic) && !isExamSyllabusTopic(topic);
+}
+
 // Canonical position of every unit — coverage rows sort by this, so the
 // grid always renders in graph order regardless of DB row order.
 export const UNIT_ORDER: Record<string, number> = Object.fromEntries(

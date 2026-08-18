@@ -1,167 +1,246 @@
-# 0C.3a — log-insight migration: parity result
+# 0C.3a — log-insight migration: parity result and completion
 
-**18 Aug 2026.** Gate 4 of the locked seven-gate sequence.
+**18 Aug 2026.** Gate 4 of the locked seven-gate sequence. **COMPLETE.**
 
 Contract, as ruled: *"Byte-identical parity. Old implementation and registry
-implementation run side-by-side in tests. If: old !== new — STOP. Do not
-'improve' the output during migration."*
-
-**The comparison has been built and run. It is `src/lib/log-insight.parity.test.ts`.**
-
----
-
-## VERDICT: 🟡 PARITY HOLDS FOR 426 OF 427 STUDENTS. STOP FIRED ON THE 427th.
-
-Two things must be ruled before this ships. Neither is a code problem.
+implementation run side-by-side in tests. Do not modify the old producer to make
+parity pass. Where the old system is provably wrong, classify that divergence
+explicitly as a known semantic defect."*
 
 ---
 
-# PART 1 — WHAT WAS BUILT
+## VERDICT: 🟢 GREEN
 
-`src/lib/log-insight-facts.ts` — `coverageInsightFromFacts()`. A parallel
-implementation, **not** an edit of `log-insight.ts`, so both can run on the same
-input. Every rung, every tie-break, every character of copy is carried across
-unchanged. Only the counting moved:
+`log-insight.ts` is now a consumer of the Fact Registry. It applies no ladder
+predicate, computes no percentage, counts no rows and constructs no date —
+guards assert each of those. Parity is byte-identical on every input where the
+old semantics were valid; two classified defects account for every divergence,
+and exactly **one production student's output changes**.
 
-| Old | Migrated |
+---
+
+# PART 1 — THE FOUR RULINGS, DISCHARGED
+
+### 1. Canonical denominator = 46 (28 QA + 9 VARC + 9 DILR) ✅
+
+`rows.length` is gone from the syllabus path. Enforced three ways: the registry
+derives every denominator from `KNOWLEDGE_GRAPH`; guard §27 fails any ratio fact
+whose declared denominator mentions a row count and asserts behaviourally that a
+7-row QA matrix reads **21%, not 86%**; and `log-insight.ts` is asserted to
+contain no `.filter(...).length` at all.
+
+### 2. `syllabus_opened_pct` and `section_opened_pct`, derived from the unit facts ✅
+
+Both call the corresponding unit fact's own producer and divide. Neither touches
+a coverage row. The binding condition — *"Do NOT create a second implementation
+of isOpened"* — is enforced by **counting predicate call sites in the registry
+source**: `isOpened` appears exactly twice, `isCovered` twice,
+`isAtRevisionDepth` once. One application per semantic family, mechanically.
+
+A third guard asserts the percentage moves in lockstep with its unit fact, so
+the two can never drift into disagreeing about the same student.
+
+### 3. `topic` added to the source query ✅
+
+`log-daily/route.ts` now selects `topic, section, status`. Without it the
+registry cannot tell a retired or misspelled topic from a live one, and unknown
+evidence would count silently.
+
+**This ruling caught a bug in my own first draft.** The migrated function
+originally filtered rows with `isExamSyllabusTopic` before calling any fact —
+which drops habit tracks (correct) *and* silently drops unrecognised topics
+(forbidden: *"no silent filtering of unknown evidence"*). The parity test's
+fail-closed case caught it. The predicate is now `isPreparationTrackTopic`: only
+the *known other universe* is set aside, and anything unrecognised passes
+through to `checkUniverse`, which refuses the fact.
+
+### 4. Missing row ≠ not_started, permanently ✅
+
+Five states, kept apart:
+
+| State | Meaning |
 |---|---|
-| `rows.filter(isOpened).length` | `section_opened_units` |
-| `rows.filter(!isOpened).length` | `section_untouched_units` |
-| `rows.filter(isAtRevisionDepth).length` | `section_at_depth_units` |
-| sum of section opened counts | `syllabus_opened_units` |
-| `loggedDaysLast7` computed in the route | `logged_days_last_7` |
-| `count(*)` of `daily_reports` | `logged_days_total` |
+| no coverage row | **UNKNOWN** |
+| row says `not_started` | **KNOWN not opened** |
+| `isOpened` (learning+) | opened |
+| `isCovered` (practicing+) | covered |
+| `isAtRevisionDepth` (revising+) | at revision depth |
 
-**The live path is untouched.** `log-daily/route.ts` still calls the old
-function; a guard test asserts it does not import the new one while a STOP is
-outstanding.
+Guard §28 forbids any `?? 'not_started'` default inside `facts/` — the
+`prep-memory.ts:330` pattern that turned absence into measurement in kind 6 — and
+asserts an empty matrix stays UNKNOWN rather than becoming a measured zero.
 
-## The parity corpus
+`section_untouched_units` necessarily unions "declared not_started" with "no row
+at all", so its **meaning string now says exactly that** and is guarded against
+ever claiming "never started". A fact that folds UNKNOWN into a measured zero is
+the kind-6 defect wearing a registry badge; a fact that says out loud which two
+states it unions is honest. No consumer needs them separated today, so no fact
+was invented to separate them.
 
-**5,760 cells**: 40 deterministic coverage matrices (seeded LCG, never
-`Math.random()` — an unreproducible parity failure is worthless) × 12 section
-combinations × 6 log-date sets × rest/not-rest. Plus six hand-built boundary
-shapes that reach each rung deliberately, a habit-track contamination case, and
-the empty-coverage case.
+### 4b. `logged_days_total` — the invariant enforced, not assumed ✅
 
-**Result: 0 divergences.** Every one of the eight strings `log-insight` can emit
-is byte-identical.
+Two-part proof, per the ruling:
+
+- **Structural.** The producer counts distinct **dates**, so it is immune to
+  duplicate rows by construction. Guard: four rows across two dates returns 2.
+- **Contractual.** Guard §29 scans `supabase/migrations/` and fails unless
+  `UNIQUE (student_id, report_date)` is declared *and* nothing drops it. Verified
+  live: `daily_reports_student_id_report_date_key` exists, 0 duplicate pairs.
+
+The route no longer passes `count(*)` at all — it passes the dates.
 
 ---
 
-# PART 2 — THE STOP: A ROW-COUNT DENOMINATOR
+# PART 2 — THE PARITY HARNESS
 
-`log-insight.ts` divides by `rows.length` — *"however many `topic_coverage` rows
-this student happens to have"*. The registry divides by the section's real size,
-because ruling **D1** says the denominator is the canonical syllabus, derived,
-never a literal and never a row count.
+`src/lib/log-insight.parity.test.ts`. The pre-migration producer is frozen
+**inside the test file**, verbatim from commit `3a32277`, so ruling 10 (exactly
+one producer in production code) and ruling 6 (both run side by side) hold at
+once. Nothing imports it. It is a fixture, not a code path.
 
-For 426 of 427 students these are the same number: onboarding seeds all 46 rows,
-so `rows.length` **is** 28 / 9 / 9. Verified in production — 426 students match
-the canonical count in all three sections, 0 have duplicate topics, and the
-distinct topics in QA / VARC / DILR are exactly 28 / 9 / 9.
+**~30,000 cells**, all deterministic — a seeded LCG, never `Math.random()`,
+because an unreproducible parity failure is worthless:
 
-**One student does not.** `50b0ad71`, joined 26 Jul, 3 logs, last active 26 Jul.
-16 rows of 46: 7 QA, 4 VARC, 5 DILR. Rows exist only where a task tick made one —
-`/complete-task` upserts a single row on demand, while onboarding seeds the
-matrix. **This shape is reachable by any student who skips the onboarding matrix
-and then ticks tasks. It is a live path, not legacy residue.**
+| Corpus | What it covers |
+|---|---|
+| 200 seeded matrices × 12 section combos × 6 date sets × rest/not-rest | 28,800 cells |
+| 5 ladder-restricted status pools × 25 seeds × 12 combos | ties and rung clustering the uniform generator misses |
+| 9 hand-built boundary shapes × 12 combos × 6 date sets | every rung reached deliberately, incl. opened-but-not-covered and covered-but-not-at-depth |
+| habit-track contamination | MOCKS/READING rows sharing the table |
+| empty matrix, no daily reports, 45/46, 46/46, 1 row, 2, 16, 30 | the founder's required edge states |
+| unrecognised topic | fail closed |
 
-What the two implementations say to that student:
+**Zero divergences wherever the old semantics were valid** — i.e. wherever the
+student has a row per canonical topic, which is 426 of 427 production students.
+A dedicated test re-runs 60 fresh seeds asserting that a 46-row matrix *never*
+diverges, however the statuses fall.
 
-| Studied today | Today's app says | The registry says |
+---
+
+# PART 3 — CLASSIFIED SEMANTIC DEFECTS
+
+Every divergence in the corpus traces to one of two defects. Both are recorded
+in `docs/ENGINEERING-MEMORY-ARCHIVE.md` (#31, #32).
+
+### Defect A — the row-count denominator (Incident #31)
+
+Fixture is the real shape of student `50b0ad71`: 16 rows of 46.
+
+| Studied | Before | After |
 |---|---|---|
-| QA | *"Just 1 QA topic left untouched — the whole section is in sight."* | *"QA: 6 of 28 topics opened — 21% of the section on the board."* |
-| VARC | *"Every VARC topic is opened — nothing untouched. Now it's depth, not coverage."* | *"VARC: 4 of 9 topics opened — 44% of the section on the board."* |
-| Mock only | *"Across the syllabus: 15 of 16 topics opened (94%)."* | *"Across the syllabus: 15 of 46 topics opened (33%)."* |
+| QA | *"Just 1 QA topic left untouched — the whole section is in sight."* | *"QA: 6 of 28 topics opened — 21%…"* |
+| VARC | *"Every VARC topic is opened — nothing untouched. Now it's depth."* | *"VARC: 4 of 9 topics opened — 44%…"* |
+| Mock only | *"Across the syllabus: 15 of 16 topics opened (94%)."* | *"…15 of 46 topics opened (33%)."* |
 | All three | *"Just 1 QA topic left untouched"* | *"DILR: 5 of 9 topics opened — 56%"* |
 
-The QA line is not a percentage that is slightly off. **22 of that student's 28
-QA topics have never been touched, and the app tells them the section is in
-sight.** The VARC line is worse: it does not report a wrong number, it fires a
-wrong *rung* — breadth declared finished, student advised to move to depth, with
-5 of 9 topics never opened. The syllabus line overstates by 61 percentage points.
+The VARC line is the worst of the four: not a skewed percentage but a **wrong
+rung** — breadth declared finished, student advised to move to depth, with 5 of
+9 topics never opened.
 
-This is the 111% Knowledge defect in a different table: a numerator counted
-against whatever denominator happened to be lying around.
+### Defect B — one topic, two sections (Incident #32) — found in production, averted
 
-**Per the contract I have not adjusted the fact definitions to reproduce the old
-strings.** The old strings are the defect.
+`topic_coverage` is unique on `(student_id, section, topic)`, so a mis-sectioned
+row duplicates a topic freely. Student `352d0c81` — **21 logs, active** — has
+`Vocabulary` under both `VARC` and `General`, both `revising`.
 
-### The ask
+The old producer scoped by section and never saw the stray row. The registry
+scopes by topic — deliberately, so it can refuse an unrecognised one — which
+made the duplicate **visible and countable**: 10 opened VARC topics out of 9,
+untouched −1, *"111% of the section on the board"*.
 
-> **Ruling needed:** the registry's canonical denominator replaces `rows.length`,
-> which changes what one dormant student would see on their next log and
-> corrects a live overstatement for anyone who reaches the partial-seed shape.
-> Approve, or rule otherwise.
+`prepare()` now runs before every coverage producer and, in order:
 
-I recommend approving it. It is not an improvement smuggled in under a
-migration — it is the migration finding an Article 5 violation, which is what
-the parity harness exists to do.
+1. **refuses** out-of-universe rows,
+2. **refuses** contradictory rows — one topic, two different statuses, a
+   disagreement no producer may resolve,
+3. **collapses** agreeing duplicates — one fact stated twice.
 
----
-
-# PART 3 — THE SECOND BLOCKER: TWO UNREGISTERED RATIOS
-
-Two of the eight lines print a **percentage**:
-
-- `"QA: 12 of 28 topics opened — 43% of the section on the board."`
-- `"Across the syllabus: 20 of 46 topics opened (43%)."`
-
-Gate 3 registered the five facts my 0C.3 investigation asked for. **That
-investigation enumerated the counts these lines need and missed the percentages
-they print.** My error, and the same class as the opened-vs-covered miss that
-stopped 0C.3a the first time — found the same way, by trying to actually do the
-migration instead of reasoning about it.
-
-So `coverageInsightFromFacts` currently computes both ratios inline, each marked
-`⚠ BLOCKED` in the source and asserted by a test so it cannot be forgotten. A
-ratio produced outside the registry has no declared numerator, denominator or
-valid range — Constitution Article 5. **It is written that way so parity could be
-measured, not so it can ship.**
-
-### The ask
-
-> **Approval needed** to register `syllabus_opened_pct` and `section_opened_pct`,
-> opened-family siblings of the existing `syllabus_coverage_pct`, denominators
-> derived from the canonical syllabus, `validRange: [0, 100]`.
-
-One note on ranking, so it is ruled rather than assumed: rung 3 picks the
-section with the highest `opened / total`. The migrated code sorts on the
-**unrounded** ratio, exactly as the old code did. Sorting on a rounded
-percentage would reorder sections the old code did not tie. Selection order is a
-rule, not a claim, so it is not rounded — flagging it because it is the kind of
-detail that silently changes an output later.
+Deduplication and filtering look alike and are opposites. Collapsing a repeat
+preserves the evidence; dropping an unknown moves a denominator silently. A
+producer may do the first and may never do the second.
 
 ---
 
-# PART 4 — ONE MORE THING THE MIGRATION NEEDS
+# PART 4 — PRODUCTION VERIFICATION (read-only)
 
-`log-daily/route.ts` selects `section, status` from `topic_coverage`. The
-registry is membership-scoped: it can only refuse an out-of-universe row if it
-can see which topic the row names. **The select gains `topic`.**
+There are exactly three ways old and new can disagree on a real student. All
+three were measured against the live database.
 
-That is not cosmetic. Scoping by section cannot tell a QA row naming a VARC
-topic from a legitimate one; scoping by topic can. Production has no such rows
-today (distinct topics per section are exactly 28 / 9 / 9), which is precisely
-why nothing has caught it.
+| Condition | Students | Effect |
+|---|---|---|
+| a core section whose row count ≠ its canonical size | **1** | output changes — Defect A |
+| one topic filed under two sections | **1** | output **unchanged** (dedup restores parity); would have broken without it |
+| a topic name outside the canonical taxonomy | **0** | — |
 
-Related, and now structural rather than incidental: the route passes `count(*)`
-of `daily_reports` as the lifetime day count. That equals the distinct-date
-count only because `(student_id, report_date)` is unique — true today, 0
-duplicate pairs. `logged_days_total` counts **dates**, so the guarantee stops
-depending on a constraint nobody re-checks.
+All 46 topic names in `topic_coverage` were diffed against `KNOWLEDGE_GRAPH`:
+**zero strays, zero canonical topics missing**, in all three sections.
+
+**Students whose post-log line changes: 1.** `50b0ad71` — 3 logs, last active
+26 Jul, currently dormant. Their next log will show true numbers instead of
+flattering ones.
+
+**Students protected by the dedup fix: 1.** `352d0c81` — 21 logs, logged
+yesterday. Their VARC line is byte-identical before and after; without
+`prepare()` it would have read 111%. Confirmed against their actual rows: VARC
+9 topics, 3 at `revising`, `Vocabulary` agreeing across both sections.
+
+The 47 students with no coverage rows are unaffected — both implementations fall
+through to the day count, asserted in the corpus.
 
 ---
 
-# PART 5 — STATUS
+# PART 5 — ONE PRODUCER, PROVEN
+
+Ruling 10 asked for proof that `log-insight.ts` no longer independently
+calculates a canonical fact. Four source-level guards:
+
+- applies no `isOpened` / `isCovered` / `isAtRevisionDepth`
+- contains no `* 100` and no `Math.round(` — every ratio the student sees comes
+  from a fact with a declared numerator, denominator and range
+- contains no `.filter(...).length` and no `rows.length`
+- constructs no date and reads no clock
+
+And an exact-set assertion on the eight facts it consumes:
+`section_opened_units`, `section_untouched_units`, `section_at_depth_units`,
+`section_opened_pct`, `syllabus_opened_units`, `syllabus_opened_pct`,
+`logged_days_last_7`, `logged_days_total`.
+
+`log-insight-facts.ts` — the parallel implementation written to *measure*
+parity — has been deleted. It existed to be compared, and it has been.
+
+---
+
+# PART 6 — VERIFICATION RUN
+
+| Check | Result |
+|---|---|
+| Full test suite | **1943 passed, 1 skipped** |
+| Registry guards | 49 |
+| Parity + migration guards | 21 |
+| log-insight behaviour | 18 |
+| `tsc --noEmit` | clean in `src/` |
+| `eslint` on every touched file | 0 errors, 0 warnings |
+| `next build` | success |
+| Production read-only queries | 6, all listed above |
+
+---
+
+# PART 7 — STATUS
 
 | Gate | State |
 |---|---|
-| Gate 3 — opened / depth / lifetime facts | ✅ green, committed |
-| Gate 4 — 0C.3a parity harness built and run | ✅ built, 5,760 cells, 0 divergences on the seeded shape |
-| Gate 4 — 0C.3a migration shipped | ⛔ **STOPPED**, awaiting the two rulings above |
-| Gates 5–7 | blocked, as ruled |
+| Gate 3 — opened / depth / lifetime facts | ✅ |
+| Gate 4 — 0C.3a parity harness | ✅ |
+| Gate 4 — 0C.3a migration | ✅ **complete** |
+| Gates 5–7 (0C.3b/c, rule centralisation, Notice engine) | **not started, blocked as ruled** |
 
-**Nothing is wired into the live log path. `daily-insight.ts` untouched.
-0C.3b / 0C.3c not started.**
+`daily-insight.ts` untouched. `computePrescriptiveLine` untouched. No new insight
+rule was added, no copy was changed, and no producer outside `log-insight.ts`
+was migrated.
+
+**One thing worth flagging before 0C.3b.** The partial-matrix shape is not
+legacy residue: `/complete-task` upserts one coverage row on demand, so any
+student who skips the onboarding matrix and then ticks tasks lands in it. The
+registry now reports such a student honestly, but nothing repairs the matrix.
+Whether onboarding should backfill the missing rows is a product decision, not a
+migration one, and it is left for the founder rather than taken here.

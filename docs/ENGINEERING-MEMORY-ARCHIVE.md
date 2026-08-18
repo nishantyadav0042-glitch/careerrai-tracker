@@ -1112,3 +1112,75 @@ route sends hours unrounded, the migration declares NUMERIC and DROPs the old
 integer overload (leaving both would let Postgres still pick the broken one),
 and it restores the grants the DROP removes. Verified in production: the RPC
 called with 4.6 stores 4.6, one function version present.
+
+---
+
+## Incident #31 — log-insight divided by row count, not by the syllabus (2026-08-18)
+
+**Symptom.** For a student with a partial coverage matrix, the post-log line
+claimed *"Just 1 QA topic left untouched — the whole section is in sight"* when
+22 of their 28 QA topics had never been touched; *"Every VARC topic is opened —
+nothing untouched. Now it's depth, not coverage"* with 5 of 9 never touched; and
+*"Across the syllabus: 15 of 16 topics opened (94%)"* against a true 33%.
+
+**Root cause.** `log-insight.ts` computed `total: rows.length` — the number of
+`topic_coverage` rows the student happened to have — and divided by it. For 426
+of 427 students that equals the canonical section size, because
+`verify-phone-otp` seeds all 46 rows from the onboarding matrix. But
+`/complete-task` upserts a **single row on demand**, so a student who skips the
+onboarding matrix and then ticks tasks accumulates a partial one, and every
+denominator shrinks with them. Same family as the 111% Knowledge percentage:
+a numerator counted against whatever denominator was lying around.
+
+**Cost.** One student today (`50b0ad71`, 3 logs, dormant since 26 Jul). The
+shape is reachable by any future student on the same path, and the failure is
+silent and flattering — it tells a student who has barely started that they are
+nearly finished.
+
+**How it was found.** Not by reading the code — by *attempting the migration*.
+The 0C.3a parity harness ran the old and registry-backed producers side by side
+over ~30,000 fixture cells; every fully-seeded cell matched, and the partial
+shape did not. The harness was built to refuse the migration, and refusing is
+what surfaced the defect.
+
+**Prevention.**
+- Denominator ruled canonical: 46 = QA 28 + VARC 9 + DILR 9, derived from
+  `KNOWLEDGE_GRAPH`, never a literal and never a row count (founder, 18 Aug).
+- `registry.guard.test.ts` §27 fails if any ratio fact declares a row-count
+  denominator, and asserts behaviourally that a 7-row QA matrix reads 21%, not 86%.
+- `log-insight.ts` no longer calculates: §"one producer" guards assert it applies
+  no ladder predicate, computes no percentage, and counts no rows.
+
+---
+
+## Incident #32 — a topic filed under two sections counted twice (2026-08-18)
+
+**Symptom.** None shipped — caught during 0C.3a, before the migration landed.
+
+**Root cause.** `topic_coverage` is unique on `(student_id, section, topic)`, so
+one topic filed under two sections duplicates freely. Production carries exactly
+one such pair: student `352d0c81` (21 logs, active) has `Vocabulary` under both
+`VARC` and `General`, both `revising`.
+
+The pre-migration producer scoped rows by **section**, so the stray `General`
+row was invisible to it. The registry scopes by **topic** — deliberately, so it
+can refuse an unrecognised one — which made the duplicate visible and countable.
+Counting rows would have given that student **10 opened VARC topics out of 9**,
+an untouched count of **−1**, and *"111% of the section on the board"*. The
+exact defect this registry exists to end, arriving through the door opened by
+fixing a different one.
+
+**Cost.** Zero — found by querying the production table instead of trusting the
+fixture, while verifying an unrelated claim about section membership.
+
+**Prevention.** `prepare()` in `facts/registry.ts` now runs before every coverage
+producer and does three things, in order: refuses out-of-universe rows, refuses
+*contradictory* rows (one topic, two different statuses — a disagreement no
+producer may resolve), and collapses agreeing duplicates (one fact stated
+twice). `registry.guard.test.ts` §30 pins all three, including that no coverage
+count can exceed its membership universe however many rows arrive, and that
+untouched/remaining can never go negative.
+
+**The general lesson.** Deduplication and filtering look alike and are opposites.
+Collapsing a repeat preserves the evidence; dropping an unknown moves a
+denominator silently. A producer may do the first and may never do the second.

@@ -36,7 +36,7 @@ import {
 import { isCovered, isOpened, isAtRevisionDepth } from '../coverage-status';
 import type { CanonicalQuestion } from './canonical';
 import {
-  type FactDef, type FactResult, type Provenance, known, unknown,
+  type FactDef, type FactResult, type Provenance, type UnknownReason, known, unknown,
 } from './contract';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,20 +51,64 @@ function prov(
 }
 
 /**
- * Every coverage producer runs this first.
+ * Every coverage producer runs this first. It answers one question — "is this
+ * evidence fit to count?" — and refuses rather than repairs.
  *
- * A row naming something outside the exam syllabus is not a row to skip — it
- * means the caller's universe disagrees with ours, and a number computed on a
- * disagreed universe is exactly the 111% Knowledge defect. So it is reported
- * and the fact goes UNKNOWN. The producer does NOT filter the row out and
- * carry on: silently discarding bad evidence is the same laundering as
- * silently clamping it.
+ * TWO ways it refuses:
+ *
+ * 1. OUT OF UNIVERSE. A row naming something outside the exam syllabus is not
+ *    a row to skip — it means the caller's universe disagrees with ours, and a
+ *    number computed on a disagreed universe is exactly the 111% Knowledge
+ *    defect. The producer does NOT filter the row out and carry on: silently
+ *    discarding bad evidence is the same laundering as silently clamping it.
+ *
+ * 2. CONTRADICTORY. Two rows for one topic saying different things is not
+ *    evidence, it is a disagreement, and no producer may pick a winner. The
+ *    caller is told and the fact goes UNKNOWN.
+ *
+ * And ONE thing it collapses: two rows for one topic saying the SAME thing are
+ * one fact stated twice. Counting them twice is how a numerator climbs past its
+ * denominator.
+ *
+ * That last case is live, not theoretical. Production carries exactly one such
+ * pair today — student 352d0c81 has 'Vocabulary' filed under both VARC and
+ * General, both `revising`, because the table's uniqueness is
+ * (student_id, section, topic) and a mis-sectioned row therefore duplicates
+ * freely. Counting rows would have given that student 10 opened VARC topics out
+ * of 9, an untouched count of −1, and "111% of the section on the board".
+ * Found during 0C.3a by reading the production table rather than trusting the
+ * fixture. (18 Aug.)
  */
-function checkUniverse(rows: CoverageRow[]): string[] {
+type Prepared =
+  | { ok: true; rows: CoverageRow[] }
+  | { ok: false; reason: UnknownReason; violations: string[] };
+
+function prepare(rows: CoverageRow[]): Prepared {
   const strays = rows.filter((r) => !isExamSyllabusTopic(r.topic)).map((r) => r.topic);
-  return strays.length
-    ? [`${strays.length} row(s) outside the exam syllabus universe: ${strays.slice(0, 3).join(', ')}`]
-    : [];
+  if (strays.length) {
+    return {
+      ok: false,
+      reason: 'out_of_universe',
+      violations: [`${strays.length} row(s) outside the exam syllabus universe: ${strays.slice(0, 3).join(', ')}`],
+    };
+  }
+
+  const byTopic = new Map<string, CoverageRow>();
+  const conflicts: string[] = [];
+  for (const r of rows) {
+    const seen = byTopic.get(r.topic);
+    if (!seen) { byTopic.set(r.topic, r); continue; }
+    if (seen.status !== r.status) conflicts.push(`${r.topic}: '${seen.status}' vs '${r.status}'`);
+  }
+  if (conflicts.length) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      violations: [`${conflicts.length} topic(s) with contradictory rows: ${conflicts.slice(0, 3).join('; ')}`],
+    };
+  }
+
+  return { ok: true, rows: [...byTopic.values()] };
 }
 
 // ── Coverage ────────────────────────────────────────────────────────────────
@@ -79,13 +123,13 @@ const syllabusCoverageUnits: FactDef<{ coverage: CoverageRow[] }, number> = {
   timeBasis: 'point_in_time',
   membershipUniverse: 'EXAM_SYLLABUS_TOPICS (46: QA 28 + VARC 9 + DILR 9)',
   numerator: 'topics at isCovered (practicing or beyond)',
-  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe'],
+  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe', 'two rows contradict each other about one topic'],
   produce: ({ coverage }) => {
     const p = prov('syllabus_coverage_units', 'v1', 'syllabusCoverage', { rows: coverage.length });
-    const violations = checkUniverse(coverage);
-    if (violations.length) return unknown('out_of_universe', p, violations);
-    if (coverage.length === 0) return unknown('no_evidence', p);
-    return known(coverage.filter((r) => isCovered(r.status)).length, p);
+    const prep = prepare(coverage);
+    if (!prep.ok) return unknown(prep.reason, p, prep.violations);
+    if (prep.rows.length === 0) return unknown('no_evidence', p);
+    return known(prep.rows.filter((r) => isCovered(r.status)).length, p);
   },
 };
 
@@ -98,10 +142,10 @@ const syllabusCoveragePct: FactDef<{ coverage: CoverageRow[] }, number> = {
   unit: 'ratio_pct',
   timeBasis: 'point_in_time',
   membershipUniverse: 'EXAM_SYLLABUS_TOPICS',
-  numerator: 'topics at isCovered',
+  numerator: 'topics at isCovered, via syllabus_coverage_units — never recounted here',
   denominator: 'EXAM_SYLLABUS_TOPICS.length — derived, never a literal',
   validRange: [0, 100],
-  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe'],
+  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe', 'two rows contradict each other about one topic'],
   produce: ({ coverage }) => {
     const p = prov('syllabus_coverage_pct', 'v1', 'syllabusCoverage', { rows: coverage.length });
     const inner = syllabusCoverageUnits.produce({ coverage });
@@ -122,7 +166,7 @@ const sectionCoverageUnits: FactDef<{ coverage: CoverageRow[]; section: string }
   timeBasis: 'point_in_time',
   membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
   numerator: 'topics in that section at isCovered',
-  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it', 'two rows contradict each other about one topic'],
   // The section is a PARAMETER, not three separate facts — one definition
   // cannot drift from itself the way qa_/varc_/dilr_ producers would.
   produce: ({ coverage, section }) => {
@@ -130,9 +174,9 @@ const sectionCoverageUnits: FactDef<{ coverage: CoverageRow[]; section: string }
     if (!(EXAM_SECTION_IDS as string[]).includes(section)) {
       return unknown('out_of_universe', p, [`'${section}' is not an exam section`]);
     }
-    const violations = checkUniverse(coverage);
-    if (violations.length) return unknown('out_of_universe', p, violations);
-    const inSection = coverage.filter((r) => sectionOf(r.topic) === section);
+    const prep = prepare(coverage);
+    if (!prep.ok) return unknown(prep.reason, p, prep.violations);
+    const inSection = prep.rows.filter((r) => sectionOf(r.topic) === section);
     if (inSection.length === 0) return unknown('no_evidence', p);
     return known(inSection.filter((r) => isCovered(r.status)).length, p);
   },
@@ -147,7 +191,7 @@ const sectionTopicsRemaining: FactDef<{ coverage: CoverageRow[]; section: string
   unit: 'count',
   timeBasis: 'point_in_time',
   membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
-  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it', 'two rows contradict each other about one topic'],
   produce: ({ coverage, section }) => {
     const p = prov('section_topics_remaining', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
     const covered = sectionCoverageUnits.produce({ coverage, section });
@@ -182,13 +226,13 @@ const syllabusOpenedUnits: FactDef<{ coverage: CoverageRow[] }, number> = {
   timeBasis: 'point_in_time',
   membershipUniverse: 'EXAM_SYLLABUS_TOPICS (46: QA 28 + VARC 9 + DILR 9)',
   numerator: 'topics at isOpened (learning or beyond)',
-  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe'],
+  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe', 'two rows contradict each other about one topic'],
   produce: ({ coverage }) => {
     const p = prov('syllabus_opened_units', 'v1', 'syllabusCoverage', { rows: coverage.length });
-    const violations = checkUniverse(coverage);
-    if (violations.length) return unknown('out_of_universe', p, violations);
-    if (coverage.length === 0) return unknown('no_evidence', p);
-    return known(coverage.filter((r) => isOpened(r.status)).length, p);
+    const prep = prepare(coverage);
+    if (!prep.ok) return unknown(prep.reason, p, prep.violations);
+    if (prep.rows.length === 0) return unknown('no_evidence', p);
+    return known(prep.rows.filter((r) => isOpened(r.status)).length, p);
   },
 };
 
@@ -202,15 +246,15 @@ const sectionOpenedUnits: FactDef<{ coverage: CoverageRow[]; section: string }, 
   timeBasis: 'point_in_time',
   membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
   numerator: 'topics in that section at isOpened (learning or beyond)',
-  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it', 'two rows contradict each other about one topic'],
   produce: ({ coverage, section }) => {
     const p = prov('section_opened_units', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
     if (!(EXAM_SECTION_IDS as string[]).includes(section)) {
       return unknown('out_of_universe', p, [`'${section}' is not an exam section`]);
     }
-    const violations = checkUniverse(coverage);
-    if (violations.length) return unknown('out_of_universe', p, violations);
-    const inSection = coverage.filter((r) => sectionOf(r.topic) === section);
+    const prep = prepare(coverage);
+    if (!prep.ok) return unknown(prep.reason, p, prep.violations);
+    const inSection = prep.rows.filter((r) => sectionOf(r.topic) === section);
     if (inSection.length === 0) return unknown('no_evidence', p);
     return known(inSection.filter((r) => isOpened(r.status)).length, p);
   },
@@ -220,15 +264,29 @@ const sectionUntouchedUnits: FactDef<{ coverage: CoverageRow[]; section: string 
   key: 'section_untouched_units',
   version: 'v1',
   semanticType: 'DERIVED_FACT',
-  meaning: 'How many topics in one exam section the student has never started.',
+  meaning:
+    'How many topics in one exam section are not known to be opened — '
+    + 'either declared not_started, or carrying no coverage row at all.',
   canonicalSource: 'syllabusCoverage',
   unit: 'count',
   timeBasis: 'point_in_time',
   membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
-  // The exact complement of section_opened_units, and computed AS that
-  // complement rather than by a second pass over the rows — two independent
-  // counts of the same ladder is how the eleven coverage producers began.
-  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  numerator: 'section size minus the isOpened count — the complement, never a second pass',
+  // MISSING ROW != not_started (founder ruling, 18 Aug). This fact is the
+  // complement of opened within the CANONICAL universe, so it necessarily
+  // unions two different states:
+  //
+  //   · a row that says not_started     → KNOWN not opened
+  //   · no row for that topic at all    → UNKNOWN
+  //
+  // The meaning string says so rather than claiming "never started", because a
+  // fact that quietly folds UNKNOWN into a measured zero is the kind-6 defect
+  // wearing a registry badge. Consumers that need the two apart must ask for a
+  // fact that separates them — none exists yet, because nothing consumes it.
+  //
+  // Computed AS the complement rather than by a second pass over the rows: two
+  // independent counts of one ladder is how eleven coverage producers began.
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it', 'two rows contradict each other about one topic'],
   produce: ({ coverage, section }) => {
     const p = prov('section_untouched_units', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
     const opened = sectionOpenedUnits.produce({ coverage, section });
@@ -248,17 +306,78 @@ const sectionAtDepthUnits: FactDef<{ coverage: CoverageRow[]; section: string },
   timeBasis: 'point_in_time',
   membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
   numerator: 'topics in that section at isAtRevisionDepth (revising or beyond)',
-  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it', 'two rows contradict each other about one topic'],
   produce: ({ coverage, section }) => {
     const p = prov('section_at_depth_units', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
     if (!(EXAM_SECTION_IDS as string[]).includes(section)) {
       return unknown('out_of_universe', p, [`'${section}' is not an exam section`]);
     }
-    const violations = checkUniverse(coverage);
-    if (violations.length) return unknown('out_of_universe', p, violations);
-    const inSection = coverage.filter((r) => sectionOf(r.topic) === section);
+    const prep = prepare(coverage);
+    if (!prep.ok) return unknown(prep.reason, p, prep.violations);
+    const inSection = prep.rows.filter((r) => sectionOf(r.topic) === section);
     if (inSection.length === 0) return unknown('no_evidence', p);
     return known(inSection.filter((r) => isAtRevisionDepth(r.status)).length, p);
+  },
+};
+
+// ── Opened, as a share ──────────────────────────────────────────────────────
+//
+// Approved 18 Aug with one binding condition: "They must be derived from the
+// canonical opened-unit facts. Do NOT create a second implementation of
+// isOpened."
+//
+// So each of these calls the unit fact's own producer and divides. Neither
+// touches a coverage row, neither applies the ladder predicate, and
+// `registry.guard.test.ts` counts the predicate call sites in this file to
+// keep it that way: isOpened appears exactly twice, isCovered twice,
+// isAtRevisionDepth once — one application per semantic family.
+//
+// The denominator is the CANONICAL universe in both cases, never the number of
+// rows the student happens to have. That distinction is the whole of the 0C.3a
+// STOP: 15 of 16 rows is 94%, 15 of 46 topics is 33%, and only the second is
+// an answer to "how much of the syllabus have you opened?".
+
+const syllabusOpenedPct: FactDef<{ coverage: CoverageRow[] }, number> = {
+  key: 'syllabus_opened_pct',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'What share of the exam syllabus the student has started at all.',
+  canonicalSource: 'syllabusCoverage',
+  unit: 'ratio_pct',
+  timeBasis: 'point_in_time',
+  membershipUniverse: 'EXAM_SYLLABUS_TOPICS',
+  numerator: 'topics at isOpened, via syllabus_opened_units — never recounted here',
+  denominator: 'EXAM_SYLLABUS_TOPICS.length — the canonical universe, derived, never a literal',
+  validRange: [0, 100],
+  unknownWhen: ['syllabus_opened_units is UNKNOWN'],
+  produce: ({ coverage }) => {
+    const p = prov('syllabus_opened_pct', 'v1', 'syllabusCoverage', { rows: coverage.length });
+    const inner = syllabusOpenedUnits.produce({ coverage });
+    if (!inner.known) return unknown(inner.reason, p, inner.violations);
+    return known(Math.round((inner.value / EXAM_SYLLABUS_TOPICS.length) * 100), p);
+  },
+};
+
+const sectionOpenedPct: FactDef<{ coverage: CoverageRow[]; section: string }, number> = {
+  key: 'section_opened_pct',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'What share of one exam section the student has started at all.',
+  canonicalSource: 'syllabusCoverage',
+  unit: 'ratio_pct',
+  timeBasis: 'point_in_time',
+  membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
+  numerator: 'topics at isOpened in that section, via section_opened_units — never recounted here',
+  denominator: "the section's canonical size — derived from the taxonomy",
+  validRange: [0, 100],
+  unknownWhen: ['section_opened_units is UNKNOWN'],
+  produce: ({ coverage, section }) => {
+    const p = prov('section_opened_pct', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
+    const inner = sectionOpenedUnits.produce({ coverage, section });
+    if (!inner.known) return unknown(inner.reason, p, inner.violations);
+    const total = (TOPICS_BY_SECTION[section] ?? []).length;
+    if (total === 0) return unknown('out_of_universe', p, [`'${section}' has no canonical topics`]);
+    return known(Math.round((inner.value / total) * 100), p);
   },
 };
 
@@ -432,7 +551,9 @@ export const FACTS: AnyFact[] = [
   sectionCoverageUnits,
   sectionTopicsRemaining,
   syllabusOpenedUnits,
+  syllabusOpenedPct,
   sectionOpenedUnits,
+  sectionOpenedPct,
   sectionUntouchedUnits,
   sectionAtDepthUnits,
   loggedToday,
