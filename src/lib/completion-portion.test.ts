@@ -46,8 +46,11 @@ describe('the three portions a stored completion can carry', () => {
     expect(portionOf('green')).toBe('full');
   });
 
-  it('a legacy null-confidence tick is FULL, by explicit historical rule', () => {
-    // 29 rows, 12 students, 12–15 Jul, before the half option existed.
+  it('a null-confidence tick is FULL — two provenances, one meaning', () => {
+    // 1. historical: 29 rows, 12 students, 12–15 Jul, before the half option.
+    // 2. still live: a topicless task (Mock/General block) offers no portion
+    //    choice, so a bare toggle inserts null today. 255 of 900 stored
+    //    routines carry one. Both mean "no partiality was ever expressed".
     expect(portionOf(null)).toBe('full');
     expect(portionOf(undefined)).toBe('full');
   });

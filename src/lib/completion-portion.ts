@@ -14,14 +14,23 @@
 // (correct), and day closure counted it FULLY DONE (wrong, undocumented, and
 // contradicting the label the student reads).
 //
-// THE HISTORICAL RULE — stated here, not only in a commit message:
+// THE NULL RULE — `portionOf(null)` is `'full'`, and there are TWO reasons,
+// not one. Stated here rather than only in a commit message:
 //
-//   A completion with `confidence = null` PREDATES the portion control. All 29
-//   such rows in production are 12–15 Jul; the first green tick is 13 Jul.
-//   When they were written the UI had no half option, so "ticked" meant
-//   "done". They are FULL. They are not silently upgraded into a semantic they
-//   never carried, and this is why `portionOf(null)` is `'full'` rather than
-//   `'unknown'` — the provenance is known, and it is known to be full.
+//   1. HISTORICAL. All 29 null rows in production are 12–15 Jul, before the
+//      portion control existed (the first green tick is 13 Jul). When they were
+//      written the UI had no half option, so "ticked" meant "done".
+//
+//   2. STILL LIVE, and my earlier note in P0-2 was wrong to call this rule
+//      purely historical. A task with no topic (a Mock or General block) offers
+//      no portion choice at all: `handleTaskTap` sends a bare toggle and the
+//      row is inserted with `confidence: null`. 255 of 900 stored routines
+//      carry at least one topicless task, with routines through 18 Aug — so
+//      this path is current, not residue.
+//
+// Both provenances mean the same thing: NO PARTIALITY WAS EVER EXPRESSED. That
+// is why the answer is `'full'` and not `'unknown'` — this is not absence of
+// evidence, it is a complete tick from a control that has only one option.
 //
 // NOT ruled here, and deliberately unchanged: `yellow` and `red` mark a
 // COMPLETED task the student found hard. They keep counting as done. Ruling
@@ -79,4 +88,65 @@ export function toClientCompletions(rows: CompletionRow[]): ClientCompletion[] {
     is_emergency: !!r.is_emergency,
     portion: portionOf(r.confidence),
   }));
+}
+
+// ── The transition (P0-2.3a) ────────────────────────────────────────────────
+//
+// `complete-task` used to be a pure toggle keyed on row EXISTENCE:
+//
+//     if (existingCompletion) { DELETE } else { INSERT }
+//
+// It never looked at the portion, so a student who marked a task "Got halfway",
+// finished it later and tapped "Done" did not upgrade anything — the completion
+// was DELETED and the task became untouched. PARTIAL -> FULL was not
+// unimplemented, it was impossible, and attempting it destroyed the evidence
+// that the student had done half.
+//
+// Founder rulings, 18 Aug (P0-2.2):
+//   G7  PARTIAL -> FULL is an UPDATE to the existing row, never a second one.
+//       One student + one task + one day = one canonical completion record.
+//   G4  Re-marking an existing PARTIAL means "still PARTIAL". It must never
+//       delete the evidence.
+//   G2  FULL -> PARTIAL is prohibited. Correction goes through the untick,
+//       exactly as the coverage ladder refuses a regression and offers the
+//       explicit path instead.
+//
+// THE INTENT SIGNAL ALREADY EXISTS in the request — no new API shape was
+// invented for this:
+//   · carries `portion`/`confidence` → MARK it that way
+//   · carries neither                → TOGGLE, which is both the untick gesture
+//     and the mark-done gesture for a task that offers no portion choice.
+
+export type CompletionIntent = 'mark_full' | 'mark_half' | 'toggle';
+
+export type TransitionAction =
+  | { action: 'insert'; portion: CompletionPortion }
+  | { action: 'upgrade' }
+  | { action: 'delete' }
+  | { action: 'none'; reason: 'already_full' | 'already_half' | 'regression_refused' };
+
+/**
+ * `current` is the stored portion, or null when no completion row exists.
+ *
+ * Total by construction: every one of the nine cells is decided here rather
+ * than in a route, so the matrix can be read in one place and tested without a
+ * database.
+ */
+export function resolveTransition(
+  current: CompletionPortion | null,
+  intent: CompletionIntent
+): TransitionAction {
+  if (current === null) {
+    // Nothing recorded yet. A bare toggle marks it done: no partial was ever
+    // expressed, which is the same reasoning the historical rule applies to a
+    // stored null.
+    return { action: 'insert', portion: intent === 'mark_half' ? 'half' : 'full' };
+  }
+  if (intent === 'toggle') return { action: 'delete' };
+  if (current === 'half') {
+    return intent === 'mark_full' ? { action: 'upgrade' } : { action: 'none', reason: 'already_half' };
+  }
+  return intent === 'mark_half'
+    ? { action: 'none', reason: 'regression_refused' }
+    : { action: 'none', reason: 'already_full' };
 }

@@ -5,7 +5,10 @@ import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
 import { creditedHours } from '@/lib/study-credit';
-import { HALF_TICK_SIGNAL, countsAsFullyDone, portionOf } from '@/lib/completion-portion';
+import {
+  HALF_TICK_SIGNAL, countsAsFullyDone, portionOf, resolveTransition,
+  type CompletionIntent,
+} from '@/lib/completion-portion';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
@@ -62,16 +65,59 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown task for today\'s routine' }, { status: 400 });
   }
 
-  // Toggle: if already complete, un-complete it (a mis-tap shouldn't be permanent).
+  // P0-2.3a — the transition is resolved from the STORED PORTION and the
+  // request's intent, not from row existence.
+  //
+  // This read used to select only `id`, and the branch below was a pure
+  // toggle: a row exists, so delete it. That made PARTIAL -> FULL impossible —
+  // a student who marked a task "Got halfway", finished it and tapped "Done"
+  // had their completion DELETED and the task returned to untouched, losing
+  // the evidence that they had done half.
+  //
+  // The intent already lives in the request and needed no new API shape:
+  // a portion/confidence means "mark it this way", its absence means "toggle".
   const { data: existingCompletion } = await admin
     .from('routine_task_completions')
-    .select('id')
+    .select('id, confidence')
     .eq('student_id', user.id)
     .eq('routine_date', today)
     .eq('task_id', taskId)
     .maybeSingle();
 
-  if (existingCompletion) {
+  const intent: CompletionIntent = effectiveConfidence
+    ? (portionOf(effectiveConfidence) === 'half' ? 'mark_half' : 'mark_full')
+    : 'toggle';
+  const currentPortion = existingCompletion
+    ? portionOf((existingCompletion.confidence as string | null) ?? null)
+    : null;
+  const transition = resolveTransition(currentPortion, intent);
+
+  if (transition.action === 'none') {
+    // Nothing to write. Three cases reach here and all three are correct
+    // outcomes rather than errors: re-marking a FULL task (idempotent),
+    // re-marking a PARTIAL as partial (G4 — the evidence is preserved, never
+    // deleted), and a refused FULL -> PARTIAL regression (G2 — the coverage
+    // ladder's law, applied to completions). The response below is read back
+    // from the table, so the student is told the state that actually holds.
+  } else if (transition.action === 'upgrade') {
+    // G7 — one student, one task, one day, ONE row. An upgrade is an UPDATE.
+    // By natural key, not by the id read a moment ago: a concurrent untick may
+    // already have removed that row, and updating zero rows is convergence —
+    // the student asked for "full" and the row they were upgrading is gone.
+    const { error: upErr } = await admin.from('routine_task_completions')
+      .update({ confidence: effectiveConfidence })
+      .eq('student_id', user.id)
+      .eq('routine_date', today)
+      .eq('task_id', taskId);
+    if (upErr) {
+      return NextResponse.json({ error: 'Could not save that tick — try again.' }, { status: 500 });
+    }
+    // The upgrade is a genuine new signal ("I finished it"), so it advances
+    // coverage exactly as a first-time green tap would. Without this, half-then-
+    // full would leave a topic at `practicing` while a single full tap reaches
+    // `revising` — the same end state by two paths, two different matrices.
+    await advanceCoverage(admin, user.id, tasks, taskId, effectiveConfidence);
+  } else if (transition.action === 'delete') {
     // Delete by the NATURAL key, not by the row id read a moment ago. A
     // concurrent request may already have removed that row, in which case
     // delete-by-id would silently target nothing while delete-by-key states
@@ -121,42 +167,7 @@ export async function POST(request: NextRequest) {
     // status twice for one student action — two derived writes for one event,
     // which is precisely the duplication the memory architecture forbids.
     if (!converged) {
-    // Confidence-aware planning: a real 🟢/🟡/🔴 tap on a topic-bearing task
-    // feeds straight back into the Coverage Matrix — the same table the
-    // Topic Selector reads for tomorrow's choice — rather than only ever
-    // being editable from a separate self-audit screen.
-    const completedTask = tasks.find((t) => t.id === taskId);
-    if (effectiveConfidence && completedTask?.topic) {
-      const { data: coverageRow, error: readErr } = await admin
-        .from('topic_coverage')
-        .select('status')
-        .eq('student_id', user.id)
-        .eq('topic', completedTask.topic)
-        .maybeSingle();
-
-      // A FAILED READ IS NOT A BLANK ROW. This error was unchecked, so any
-      // transient failure produced `coverageRow === undefined`, which the
-      // line below read as "never started" — and a student's 'revising'
-      // topic was rewritten to 'learning' by the act of ticking it off.
-      // Losing the update is recoverable; corrupting the matrix the whole
-      // planner reads is not. (Backbone audit, 13 Aug.)
-      if (readErr) {
-        console.error('[complete-task] coverage read failed, skipping advance', readErr.message);
-      } else {
-        const current = (coverageRow?.status as CoverageStatus | undefined) ?? null;
-        const advanced = applyConfidenceSignal(current, effectiveConfidence as ConfidenceSignal);
-        // Green/blue are ADVANCING signals and must never move a topic down.
-        // applyConfidenceSignal caps them, but the floor belongs here too:
-        // this is the one writer that bypasses isForwardMove, which every
-        // other student-facing path honours.
-        const newStatus = current ? highestStatus(normalizeStatus(current), advanced) : advanced;
-        const { error: upsertErr } = await admin.from('topic_coverage').upsert(
-          { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
-          { onConflict: 'student_id,section,topic' }
-        );
-        if (upsertErr) console.error('[complete-task] coverage upsert failed', upsertErr.message);
-      }
-    }
+      await advanceCoverage(admin, user.id, tasks, taskId, effectiveConfidence);
     } // end if (!converged) — the losing racer skips the derived write
   }
 
@@ -264,4 +275,57 @@ export async function POST(request: NextRequest) {
     emergencyMinimumDone,
     dayClosed,
   });
+}
+
+/**
+ * Confidence-aware planning: a real 🟢/🔵/🟡/🔴 tap on a topic-bearing task
+ * feeds straight back into the Coverage Matrix — the same table the Topic
+ * Selector reads for tomorrow's choice — rather than only ever being editable
+ * from a separate self-audit screen.
+ *
+ * Extracted in P0-2.3a so the first mark and a PARTIAL -> FULL upgrade apply
+ * the ladder through ONE implementation. Two copies of an advance rule is how
+ * a sixth status gets missed in one of them, which this repo has paid for on
+ * the coverage ladder twice.
+ */
+async function advanceCoverage(
+  admin: ReturnType<typeof createAdminClient>,
+  studentId: string,
+  tasks: RoutineTaskShape[],
+  taskId: string,
+  effectiveConfidence: string | undefined
+): Promise<void> {
+  const completedTask = tasks.find((t) => t.id === taskId);
+  if (!effectiveConfidence || !completedTask?.topic) return;
+
+  const { data: coverageRow, error: readErr } = await admin
+    .from('topic_coverage')
+    .select('status')
+    .eq('student_id', studentId)
+    .eq('topic', completedTask.topic)
+    .maybeSingle();
+
+  // A FAILED READ IS NOT A BLANK ROW. This error was unchecked, so any
+  // transient failure produced `coverageRow === undefined`, which the line
+  // below read as "never started" — and a student's 'revising' topic was
+  // rewritten to 'learning' by the act of ticking it off. Losing the update is
+  // recoverable; corrupting the matrix the whole planner reads is not.
+  // (Backbone audit, 13 Aug.)
+  if (readErr) {
+    console.error('[complete-task] coverage read failed, skipping advance', readErr.message);
+    return;
+  }
+
+  const current = (coverageRow?.status as CoverageStatus | undefined) ?? null;
+  const advanced = applyConfidenceSignal(current, effectiveConfidence as ConfidenceSignal);
+  // Green/blue are ADVANCING signals and must never move a topic down.
+  // applyConfidenceSignal caps them, but the floor belongs here too: this is
+  // the one writer that bypasses isForwardMove, which every other
+  // student-facing path honours.
+  const newStatus = current ? highestStatus(normalizeStatus(current), advanced) : advanced;
+  const { error: upsertErr } = await admin.from('topic_coverage').upsert(
+    { student_id: studentId, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
+    { onConflict: 'student_id,section,topic' }
+  );
+  if (upsertErr) console.error('[complete-task] coverage upsert failed', upsertErr.message);
 }

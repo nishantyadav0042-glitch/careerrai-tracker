@@ -156,7 +156,13 @@ describe('the mutating routes go through it', () => {
       const path = `${dir}/${name}/route.ts`;
       let src: string;
       try { src = readFileSync(path, 'utf8'); } catch { continue; }
-      if (!/\.update\(\s*\{[\s\S]*?tasks:/.test(src)) continue;
+      // Scoped to the object literal being written. The old lazy `[\s\S]*?`
+      // spanned the WHOLE file, so any `.update({ ... })` anywhere matched as
+      // soon as a later line happened to contain `tasks:` — which a function
+      // signature does. It flagged complete-task for writing
+      // routine_task_completions.confidence, a different table and column
+      // entirely. Same rule, no false positive.
+      if (!/\.update\(\s*\{[^}]*\btasks\s*:/.test(src)) continue;
       expect(src, `${path} mutates tasks without plan-mutate`).toContain('mutatePlanTasks');
     }
   });

@@ -81,7 +81,7 @@ describe('the untick is idempotent', () => {
     // delete().eq('id', ...) targets a row that a concurrent request may have
     // already removed. The natural key states the intent — "this task must end
     // up un-ticked" — so deleting zero rows is success, not a silent miss.
-    const deleteBlock = code.slice(code.indexOf('existingCompletion) {'), code.indexOf('} else {'));
+    const deleteBlock = code.slice(code.indexOf("transition.action === 'delete'"), code.indexOf("transition.action === 'delete'") + 700);
     expect(deleteBlock).toContain("eq('task_id', taskId)");
     expect(deleteBlock).not.toMatch(/delete\(\)\s*\.eq\('id'/);
   });
