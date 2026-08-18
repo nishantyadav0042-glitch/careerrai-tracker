@@ -34,6 +34,7 @@ import {
   EXAM_SYLLABUS_TOPICS, isExamSyllabusTopic, EXAM_SECTION_IDS, KNOWLEDGE_GRAPH,
 } from '../topics-constants';
 import { isCovered, isOpened, isAtRevisionDepth } from '../coverage-status';
+import { fullyDoneTaskIds } from '../completion-portion';
 import type { CanonicalQuestion } from './canonical';
 import {
   type FactDef, type FactResult, type Provenance, type UnknownReason, known, unknown,
@@ -456,6 +457,66 @@ const loggedDaysTotal: FactDef<{ logDates: string[] }, number> = {
   },
 };
 
+// ── Observed day outcome (0C.3G / J1) ───────────────────────────────────────
+//
+// docs/0C-3G-DAILY-EVIDENCE-CONTRACT.md: day_outcome is TWO facts.
+// self_reported_day_outcome is what the student declared — the check-in gate
+// and the log sheet's own Rest toggle, both untouched by this fact and both
+// still writing the daily_reports.day_outcome column directly. This is the
+// OTHER one: what CareerRai's own tick records show, independent of anything
+// the student said.
+//
+// PARITY, not a new design. LoggingModal.tsx's deriveOutcome() computed this
+// exact question client-side, from in-session tap state, and its output used
+// to be written into the SAME column self-reported values occupy — the
+// violation this contract exists to end. The implementation-surface audit
+// found deriveOutcome() is already a pure function of data that persists
+// independently (routine_task_completions + the day's planned task ids +
+// daily_reports.mock_taken), because DailyTrackerApp's integrated flow POSTs
+// every ticked task to complete-task in the same submission. So this fact
+// reproduces deriveOutcome()'s branches exactly — the caller supplies
+// persisted rows, nothing here constructs a date or touches a database — and
+// the only thing that changes is WHERE the computation runs, never what it
+// means. See observed-day-outcome.test.ts for the branch-by-branch parity
+// proof against the frozen legacy logic.
+//
+// Can only ever answer 'studied' or 'partial' — never 'skipped' or
+// 'not_studied', because those are claims about ABSENCE ("I rested", "I
+// didn't study") that no tick record can support. An observed fact has
+// evidence of presence or it has none; it never has evidence of a deliberate
+// absence, which is exactly why that half of the ladder stays exclusively
+// self-reported.
+
+interface ObservedOutcomeCompletion { task_id: string; confidence: string | null }
+
+const observedDayOutcome: FactDef<
+  { completions: ObservedOutcomeCompletion[]; plannedTaskIds: string[]; mockTaken: boolean },
+  'studied' | 'partial'
+> = {
+  key: 'observed_day_outcome',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: "What CareerRai's own tick records show happened on a day — never what the student declared.",
+  canonicalSource: 'observedBehaviour',
+  unit: 'outcome',
+  timeBasis: 'point_in_time',
+  unknownWhen: ['no completion rows exist for the day and no mock was taken'],
+  produce: ({ completions, plannedTaskIds, mockTaken }) => {
+    const p = prov('observed_day_outcome', 'v1', 'observedBehaviour', {
+      completions: completions.length, planned: plannedTaskIds.length, mockTaken,
+    });
+    const finished = fullyDoneTaskIds(completions);
+    // Mirrors deriveOutcome() exactly, including its edge case: a plan of
+    // zero tasks makes `>= plannedTaskIds.length` vacuously true. Reproduced,
+    // not "fixed" — that is what parity means.
+    if (completions.length > 0 && completions.length >= plannedTaskIds.length && finished.size === completions.length) {
+      return known('studied', p);
+    }
+    if (completions.length > 0 || mockTaken) return known('partial', p);
+    return unknown('no_evidence', p);
+  },
+};
+
 // ── Repeater self-report ────────────────────────────────────────────────────
 //
 // These are what the student SAID, recorded once. They are immutable: the
@@ -550,6 +611,7 @@ export const FACTS: AnyFact[] = [
   syllabusCoveragePct,
   sectionCoverageUnits,
   sectionTopicsRemaining,
+  observedDayOutcome,
   syllabusOpenedUnits,
   syllabusOpenedPct,
   sectionOpenedUnits,

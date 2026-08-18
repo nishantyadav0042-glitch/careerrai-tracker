@@ -38,7 +38,12 @@ export type SemanticType =
   | 'RECOMMENDATION'; // a suggested student action
 
 export type Unit =
-  | 'count' | 'ratio_pct' | 'days' | 'percentile' | 'section' | 'boolean';
+  | 'count' | 'ratio_pct' | 'days' | 'percentile' | 'section' | 'boolean'
+  // 0C.3G/J1: a small closed set of outcome labels ('studied' | 'partial'),
+  // narrower than the self-reported day_outcome's four values because an
+  // observed fact can never claim 'skipped' or 'not_studied' — it has no
+  // evidence of absence, only evidence of presence.
+  | 'outcome';
 
 /**
  * How the fact is anchored in time.

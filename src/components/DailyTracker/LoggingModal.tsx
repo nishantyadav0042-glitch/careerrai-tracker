@@ -136,15 +136,6 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
   const missingHint = (): string =>
     'Mark how far you got on a plan topic — or tell us you gave a mock.';
 
-  // Derived outcome for the coach-facing signals (plan-reason, adaptation). Not
-  // shown to the student; inferred from what they marked, never guessed.
-  const deriveOutcome = (): DayOutcome | null => {
-    const marks = [...taskChoice.values()];
-    if (marks.length > 0 && marks.length >= planTasks.length && marks.every((m) => m === 'full')) return 'studied';
-    if (marks.length > 0 || mockTaken === true) return 'partial';
-    return null;
-  };
-
   const handleSubmit = async () => {
     if (!isValid) {
       const hint = missingHint();
@@ -204,13 +195,19 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
         offPlanCount: 0,
       });
 
+      // 0C.3G/J1: no longer sending a derived day_outcome here. What this
+      // computed — "did the student finish everything they ticked" — is now
+      // observed_day_outcome, a Fact Registry DERIVED_FACT computed server-side
+      // from the SAME persisted completion rows this submission's own tick
+      // fan-out just wrote, independent of what gets sent in this payload. The
+      // self-reported column stays exclusively for what the student actually
+      // declared: the check-in gate's tap, or the Rest toggle above.
       await onSubmit({
         hours: derivedHours,
         sections: finalSections,
         energy: '💪', // defaulted — no longer asked
         completedTasks,
         mock,
-        day_outcome: deriveOutcome() ?? undefined,
       });
 
       // Reset
