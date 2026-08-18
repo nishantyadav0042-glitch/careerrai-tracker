@@ -25,6 +25,7 @@ import { plannerRecency } from '@/lib/plan-history';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { getLogDateString } from '@/lib/streak-utils';
+import { countsAsFullyDone } from './completion-portion';
 
 // One studyable step in the day's plan, with completion state merged in.
 export interface PlanTask {
@@ -168,7 +169,7 @@ export async function computeTodaysPlan(
         .eq('student_id', studentId)
         .eq('routine_date', today)
         .maybeSingle(),
-      admin.from('routine_task_completions').select('task_id').eq('student_id', studentId).eq('routine_date', today),
+      admin.from('routine_task_completions').select('task_id, confidence').eq('student_id', studentId).eq('routine_date', today),
       admin.from('student_timetables').select('blocks, confirmed_at').eq('student_id', studentId).maybeSingle(),
       admin
         .from('mock_debriefs')
@@ -205,7 +206,15 @@ export async function computeTodaysPlan(
     // A plan built earlier today is only rebuilt when the student changed
     // their own hours, and never over completed work.
     let routine = existing as { phase: string; tasks: unknown; est_minutes: number; generated_hours: number | null; created_at?: string | null } | null;
+    // Two sets, two questions. `completedIds` answers "was this plan touched?"
+    // and still drives planStaleReason; `fullyDoneIds` answers "was this task
+    // finished?" and drives the flag below.
     const completedIds = new Set((completions ?? []).map((c: { task_id: string }) => c.task_id));
+    const fullyDoneIds = new Set(
+      (completions ?? [])
+        .filter((c: { confidence?: string | null }) => countsAsFullyDone(c.confidence ?? null))
+        .map((c: { task_id: string }) => c.task_id)
+    );
     if (routine && planStaleReason({
       completionCount: completedIds.size,
       routineCreatedAt: routine.created_at ?? null,
@@ -236,7 +245,12 @@ export async function computeTodaysPlan(
       label: String(t.label ?? ''),
       target: (t.target as string | null) ?? null,
       estMinutes: Number(t.estMinutes ?? 0),
-      done: completedIds.has(String(t.id)),
+      // P0-2.3e — FINISHED, not merely ticked. doneCount, allDone and
+      // nextTask all read this flag, and study-companion turns them into
+      // pushes: a half-done task used to read as finished, so the 20:30 push
+      // overstated "N of M done" and nextTask skipped the one task most
+      // deserving of a nudge.
+      done: fullyDoneIds.has(String(t.id)),
     }));
     if (tasks.length === 0) return null;
 

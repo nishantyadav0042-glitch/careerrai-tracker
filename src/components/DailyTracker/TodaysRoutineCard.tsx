@@ -456,7 +456,15 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
 
   const { routine } = data;
   const tasks = routine.tasks;
-  const doneCount = routine.tasks.filter((t) => completedIds.has(t.id)).length;
+  // P0-2.3e — "N of M done" is a FINISHED-question, so a PARTIAL does not
+  // count. It used to read `completedIds.has(t.id)`, which counted a
+  // half-ticked task as done on the same card that labels it "Halfway".
+  // `partialIds` carries the canonical portion the server sent (P0-2.1), so
+  // this consults the authority's answer rather than re-deciding it.
+  const isFinished = (id: string) => completedIds.has(id) && !partialIds.has(id);
+  const doneCount = routine.tasks.filter((t) => isFinished(t.id)).length;
+  // TOUCHED-question, deliberately unchanged: a half-tick really did update
+  // the plan — coverage advanced on it.
   const completedWithTopic = routine.tasks.filter((t) => completedIds.has(t.id) && t.topic);
 
   return (
@@ -568,7 +576,10 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
           {routine.tasks.map((t) => (
             <span
               key={t.id}
-              className={cn('h-1.5 w-1.5 rounded-full', completedIds.has(t.id) ? 'bg-stone-900' : 'bg-stone-200')}
+              className={cn('h-1.5 w-1.5 rounded-full',
+                isFinished(t.id) ? 'bg-stone-900'
+                  : partialIds.has(t.id) ? 'bg-amber-400'
+                  : 'bg-stone-200')}
             />
           ))}
           <span className="text-[11px] text-stone-400 ml-1">{doneCount} of {routine.tasks.length} done</span>
