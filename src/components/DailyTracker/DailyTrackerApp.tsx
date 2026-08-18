@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-import { Video, Star } from 'lucide-react';
+import { Video } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
@@ -86,7 +86,6 @@ interface DailyTrackerAppProps {
   initialLogging?: InitialLogging | null;
   hasLoggedYesterday?: boolean;
   yesterdayStr?: string;   // ISO date for the API
-  yesterdayLabel?: string; // "Jun 16" for the UI
   firstLogNudge?: boolean; // student has NEVER logged — auto-open the log once after tour + notif ask
 }
 
@@ -100,7 +99,6 @@ export function DailyTrackerApp({
   initialLogging = null,
   hasLoggedYesterday = true,
   yesterdayStr = '',
-  yesterdayLabel = '',
   firstLogNudge = false,
 }: DailyTrackerAppProps) {
   const [isLogOpen, setIsLogOpen] = useState(false);
@@ -134,8 +132,16 @@ export function DailyTrackerApp({
   // window event. Opening it here — not there — keeps one log sheet on Home.
   useEffect(() => {
     const open = () => { setLogDateOverride(null); setLogWithMock(true); setIsLogOpen(true); };
+    // Same crossing, different day. The off-plan door opens the SAME sheet with
+    // the mock question unanswered rather than pre-answered — a student who
+    // studied off-plan has not told us anything about a mock yet.
+    const openOffPlan = () => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); };
     window.addEventListener('cr-open-mock-log', open);
-    return () => window.removeEventListener('cr-open-mock-log', open);
+    window.addEventListener('cr-open-off-plan-log', openOffPlan);
+    return () => {
+      window.removeEventListener('cr-open-mock-log', open);
+      window.removeEventListener('cr-open-off-plan-log', openOffPlan);
+    };
   }, []);
 
   const {
@@ -320,54 +326,18 @@ export function DailyTrackerApp({
         <Card className="p-2.5">
           {todaySession && <div className={hasLoggedToday ? undefined : 'mb-2'}><SessionStrip session={todaySession} /></div>}
 
-          {!hasLoggedToday && (
-            <>
-              {/* Kept full-width rather than beside the text: a long label
-                  crushed the focus line into four overlapping rows at 360px
-                  when these sat side by side. That was verified in a render,
-                  not assumed, and the constraint still holds for whatever
-                  label lives here. */}
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-semibold uppercase tracking-widest text-stone-400">How to log</p>
-                  <p className="text-[13px] font-extrabold leading-tight text-stone-900">Tap a task above as you finish it.</p>
-                </div>
-              </div>
-
-              {/* ONE door here, not two. The big black primary action went
-                  first (13 Aug: two doors to one action is a fork, not a
-                  convenience); the standalone mock button went with it,
-                  because a mock happens about once a week and that button was
-                  on screen every day — and on the day it mattered it sat two
-                  cards away from the mock it was about. The score is now
-                  asked for by the mock task itself, in the plan.
-                  What is left is the escape hatch, not a call to action: the
-                  day that happened OFF the plan, or a rest day. That path must
-                  never close (Incident #2: requiring a plan-tick to submit
-                  took a whole cohort's logging to 0/29). */}
-              <div className="mt-2.5">
-                <button
-                  data-tour="log"
-                  onClick={() => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); }}
-                  disabled={isSubmitting}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-[12px] font-semibold text-stone-600 transition-all active:scale-[0.99] disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Saving…' : 'Studied off-plan'}
-                </button>
-                {!hasLoggedYesterday && yesterdayStr && (
-                  <button
-                    onClick={() => { setLogDateOverride(yesterdayStr); setIsLogOpen(true); }}
-                    className="mt-1 block w-full text-center text-[10px] text-stone-400 hover:text-stone-600"
-                  >
-                    Add {yesterdayLabel} too
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+          {/* The how-to-log strip is gone (founder, 18 Aug: "this is useless").
+              It said "Tap a task above as you finish it" directly beneath the
+              tasks it described — a card that exists to confirm what the screen
+              already shows is furniture, the same judgement that cut the
+              tick-confirmation line on 13 Aug.
+              THE DOOR IT CARRIED DID NOT GO WITH IT. "Studied off-plan" was the
+              only home-screen entrance to the log sheet, and Incident #2 is
+              exactly that entrance closing (a plan-tick requirement took a
+              cohort to 0/29). It now lives in the plan card's own footer beside
+              "Busy day", where it costs no vertical space and sits with the day
+              it describes. "Add yesterday too" is not reinstated: check-in-gate
+              already asks for yesterday on open whenever it has no entry. */}
         </Card>
       )}
 

@@ -23,6 +23,10 @@ interface LoggingModalProps {
   isSubmitting?: boolean;
 }
 
+// The J7 vocabulary, minus 'Mock' (asked separately below). Kept as an
+// explicit list so adding a section is a reviewable change, not a typo.
+const OFF_PLAN_SECTIONS = ['VARC', 'DILR', 'QA', 'Revision'] as const;
+
 export interface LoggingData {
   hours: number;
   /** J6-A: what `hours` is. The sheet derives it from coverage ('credited');
@@ -55,6 +59,11 @@ type TaskState = 'half' | 'full';
 
 export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, openWithMock }: LoggingModalProps) {
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
+  // 0C.3G/J7 locked topics_covered to ONE vocabulary. Off-plan study enters
+  // through that same vocabulary or the ruling re-opens. 'Mock' is deliberately
+  // absent: the sheet asks about mocks separately a few lines below, and
+  // offering it twice would let one mock be counted as two signals.
+  const [offPlanSections, setOffPlanSections] = useState<Set<string>>(new Set());
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
   const [initialPortions, setInitialPortions] = useState<Map<string, 'full' | 'half'>>(new Map());
   // The third thing: an honest rest day. It's a real log — showing up counts,
@@ -130,14 +139,22 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
   }); };
 
   // Toggling a rest day clears any study marks — it's one or the other.
-  const toggleRest = () => setRest((r) => { const next = !r; if (next) { setTaskChoice(new Map()); setMockTaken(null); } return next; });
+  const toggleRest = () => setRest((r) => { const next = !r; if (next) { setTaskChoice(new Map()); setMockTaken(null); setOffPlanSections(new Set()); } return next; });
+
+  // Marking off-plan study clears a rest day, mirroring how marking a plan
+  // topic does — you cannot have both rested and studied.
+  const toggleOffPlan = (section: string) => { setRest(false); setOffPlanSections((prev) => {
+    const n = new Set(prev);
+    if (n.has(section)) n.delete(section); else n.add(section);
+    return n;
+  }); };
 
   // Valid the moment there's a real signal: a plan topic marked, a mock, or an
   // honest rest day. All three are a log — showing up.
-  const isValid = taskChoice.size > 0 || mockTaken === true || rest;
+  const isValid = taskChoice.size > 0 || offPlanSections.size > 0 || mockTaken === true || rest;
 
   const missingHint = (): string =>
-    'Mark how far you got on a plan topic — or tell us you gave a mock.';
+    'Tell us what you did — a plan topic, something else you studied, or a mock.';
 
   const handleSubmit = async () => {
     if (!isValid) {
@@ -162,7 +179,13 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
       }
 
       const coveredTasks = planTasks.filter((t) => taskChoice.has(t.id));
-      const derived = [...new Set(coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
+      // What the student covered = the plan topics they marked PLUS the
+      // sections they studied off-plan. Both are real coverage; only one of
+      // them used to be recordable.
+      const derived = [...new Set([
+        ...coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)),
+        ...offPlanSections,
+      ])];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
 
       // One authority decides what to send, shared with the server's
@@ -195,7 +218,10 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
         plannedTasks: planTasks.length,
         fullDone: marks.filter((m) => m === 'full').length,
         halfDone: marks.filter((m) => m === 'half').length,
-        offPlanCount: 0,
+        // The input study-credit.ts has declared since it was written — 'off-plan
+        // sections the student also studied, coverage still counts' — finally fed
+        // by a UI that can collect it.
+        offPlanCount: offPlanSections.size,
       });
 
       // 0C.3G/J1: no longer sending a derived day_outcome here. What this
@@ -218,6 +244,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
       // Reset
       setTaskChoice(new Map());
       setInitialPortions(new Map());
+      setOffPlanSections(new Set());
       setRest(false);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');
@@ -294,6 +321,31 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
                 })}
               </div>
             )}
+          </div>
+
+          {/* 1b — Studied something that wasn't on the plan.
+              Production, 18 Aug: 153 of 199 log dismissals touched NOTHING
+              before closing, most after 11-30 seconds with plan topics on
+              screen. They had studied — just not this. Without this row their
+              only honest move was to close the sheet. */}
+          <div>
+            {label('Studied something else?')}
+            <div className="grid grid-cols-4 gap-2">
+              {OFF_PLAN_SECTIONS.map((sec) => {
+                const on = offPlanSections.has(sec);
+                return (
+                  <button key={sec} type="button" onClick={() => toggleOffPlan(sec)}
+                    aria-pressed={on}
+                    className={cn('rounded-xl py-2.5 text-xs font-bold transition-all active:scale-95',
+                      on ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                    {sec}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[11.5px] leading-snug text-zinc-500">
+              Coaching sheet, a chapter your class is on, anything off today&rsquo;s plan. It still counts.
+            </p>
           </div>
 
           {/* 2 — Mock (folded in, no second screen) */}

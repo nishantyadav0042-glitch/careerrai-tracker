@@ -117,10 +117,16 @@ describe('one door, not two', () => {
   });
 
   it('what replaced it reads as an escape hatch, not a call to action', () => {
-    const app = readFileSync('src/components/DailyTracker/DailyTrackerApp.tsx', 'utf8');
-    // Muted, not the black primary button competing with the plan above it.
-    expect(app).toMatch(/data-tour="log"[\s\S]{0,400}bg-stone-50/);
-    expect(app).not.toMatch(/data-tour="log"[\s\S]{0,400}bg-stone-900 px-3 py-3/);
+    // The door moved into the plan card's footer on 18 Aug, so this now reads
+    // the card. It is quieter there than it was before — a text link beside
+    // "Busy day", not a bordered full-width button — which is MORE of an escape
+    // hatch, so the rule holds in the direction it was written to hold.
+    const card = readFileSync(CARD, 'utf8');
+    expect(card).toMatch(/data-tour="log"[\s\S]{0,400}text-xs font-semibold text-stone-900/);
+    expect(card, 'never the black primary button competing with the plan above it')
+      .not.toMatch(/data-tour="log"[\s\S]{0,400}bg-stone-900 px-3 py-3/);
+    // And it must sit with the day it describes, next to the other honest exit.
+    expect(card).toMatch(/data-tour="log"[\s\S]{0,600}<BusyDayButton/);
   });
 
   it('the strip says nothing once the day is already recorded', () => {
@@ -143,8 +149,16 @@ describe('one door, not two', () => {
 
 describe('the log sheet survives — Incident #2 must not repeat', () => {
   it('the modal is still valid without any plan-task ticked', () => {
+    // THE Incident #2 invariant: a plan tick must never be required to submit.
+    // Asserted structurally rather than as a literal string — the literal broke
+    // on 18 Aug when a fourth valid path (off-plan sections) was added, which
+    // strengthens the invariant rather than weakening it. A guard that fails
+    // when the thing it protects gets MORE true is testing the wrong thing.
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
-    expect(modal).toContain('taskChoice.size > 0 || mockTaken === true || rest');
+    const isValid = modal.slice(modal.indexOf('const isValid ='), modal.indexOf('const isValid =') + 200);
+    expect(isValid, 'off-plan study alone must submit').toContain('offPlanSections.size > 0');
+    expect(isValid, 'a mock alone must submit').toContain('mockTaken === true');
+    expect(isValid, 'an honest rest day alone must submit').toContain('rest');
   });
 
   it('an honest zero-hour rest day is still submittable', () => {
@@ -224,11 +238,31 @@ describe('a mock must always have a door of its own', () => {
   it('off-plan study keeps its own separate door', () => {
     // Two different days. The off-plan sheet still carries the mock section
     // inside it, so an UNPLANNED mock is never unrecordable.
-    expect(readFileSync(APP, 'utf8')).toContain('Studied off-plan');
+    //
+    // The door MOVED on 18 Aug: the how-to-log strip that carried it was cut as
+    // furniture, and the button now lives in the plan card's own footer beside
+    // "Busy day". What this guard protects is that the door EXISTS and reaches
+    // the log sheet — not which component renders it. Asserting the old file
+    // would have passed a deletion that merely moved the label elsewhere.
+    const card = readFileSync(CARD_SRC, 'utf8');
+    expect(card, 'the visible door').toContain('Studied off-plan');
+    expect(card, 'it must actually signal the app').toContain("new Event('cr-open-off-plan-log')");
+    const app = readFileSync(APP, 'utf8');
+    expect(app, 'and the app must answer that signal by opening the sheet')
+      .toMatch(/addEventListener\('cr-open-off-plan-log'/);
+    expect(app).toMatch(/openOffPlan[\s\S]{0,160}setIsLogOpen\(true\)/);
   });
 
   it('a mock alone is still a complete log', () => {
+    // Pinned as an INVARIANT, not a literal expression. The old assertion
+    // matched the exact isValid string, so adding a fourth valid path (off-plan
+    // sections, 18 Aug) broke it even though every original path still worked.
+    // What must stay true: a mock alone submits, and no plan tick is required.
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
-    expect(modal).toContain('taskChoice.size > 0 || mockTaken === true || rest');
+    const isValid = modal.slice(modal.indexOf('const isValid ='), modal.indexOf('const isValid =') + 200);
+    expect(isValid).toContain('mockTaken === true');
+    expect(isValid).toContain('rest');
+    expect(isValid, 'a plan tick must never be the ONLY way in')
+      .toMatch(/\|\|/);
   });
 });

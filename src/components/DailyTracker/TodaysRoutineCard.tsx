@@ -816,7 +816,15 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
             {/* "My CAT Plan" said nothing about what is behind it — the page
                 is the topic-coverage map. Founder, 13 Aug: name it after what
                 it shows. */}
-            <Link href="/student/blueprint" className="text-xs font-semibold text-stone-900">Topics covered →</Link>
+            {/* Moved here 18 Aug when the how-to-log strip was cut. This is the
+                only entrance to the log sheet — the one place a student can
+                record study that was not on the plan. Incident #2 is this door
+                closing, so it must not be removed without another one opening. */}
+            <button type="button" data-tour="log"
+              onClick={() => { try { window.dispatchEvent(new Event('cr-open-off-plan-log')); } catch { /* noop */ } }}
+              className="text-xs font-semibold text-stone-900">
+              Studied off-plan →
+            </button>
             <BusyDayButton planSource={planSource} />
           </div>
         </>
