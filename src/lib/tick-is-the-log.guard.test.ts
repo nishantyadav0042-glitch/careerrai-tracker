@@ -48,7 +48,15 @@ describe('the tick records the day', () => {
   });
 
   it('a mis-tap is reversible', () => {
-    expect(readFileSync(CARD, 'utf8')).toMatch(/aria-label=\{done \? `Undo:/);
+    // Still true, by two paths since P0-2.3c. A FULL task unticks on tap, as
+    // it always has. A PARTIAL opens the chooser instead — so a stray tap
+    // cannot erase the evidence that half the work happened — and gets an
+    // explicit "Didn't do it" removal there. The rule this guard protects is
+    // reversibility, not one particular aria-label.
+    const src = readFileSync(CARD, 'utf8');
+    expect(src, 'a full tick still unticks on tap').toMatch(/if \(done && !partial\) \{ void toggleTask\(task\); return; \}/);
+    expect(src, 'a partial has an explicit removal').toMatch(/onRemove=\{\(\) => \{[^}]*toggleTask\(task\)/);
+    expect(src).toMatch(/`Undo:/);
   });
 });
 
@@ -86,8 +94,14 @@ describe('three states, and half means half', () => {
     const route = readFileSync(ROUTE, 'utf8');
     expect(route).toMatch(/portion === 'half' \? HALF_TICK_SIGNAL/);
     expect(HALF_TICK_SIGNAL, 'the encoding itself must not drift').toBe('blue');
+    // The sheet's inline mapping moved behind completionRequestFor in
+    // P0-2.3c — the same authority the card and the server share. That
+    // strengthens "one concept, one encoding": the sheet no longer spells the
+    // encoding at all, and completion-interaction.test.ts walks all nine
+    // client cells through the server's resolveTransition to prove they agree.
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
-    expect(modal).toContain("choice === 'full' ? 'green' : 'blue'");
+    expect(modal).toContain('completionRequestFor');
+    expect(modal, 'the sheet must not re-spell the encoding').not.toMatch(/'green'\s*:\s*'blue'/);
   });
 
   it('never shrinks a log the student already made by hand', () => {

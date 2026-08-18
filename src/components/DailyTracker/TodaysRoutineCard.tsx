@@ -149,8 +149,14 @@ const clockMs = () => Date.now();
 // credits half the block's hours (creditedHours, the same formula the log
 // sheet uses), so the number stays true either way.
 function ProgressChoice({
-  onPick, busy,
-}: { onPick: (portion: 'full' | 'half') => void; busy: boolean }) {
+  onPick, onRemove, busy, marked,
+}: {
+  onPick: (portion: 'full' | 'half') => void;
+  onRemove?: () => void;
+  busy: boolean;
+  /** True when a completion already exists — adds the explicit removal path. */
+  marked?: boolean;
+}) {
   return (
     <div className="flex gap-1.5 px-1 pb-2 pt-1.5">
       <button
@@ -169,6 +175,16 @@ function ProgressChoice({
       >
         Finished it
       </button>
+    {marked && onRemove && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onRemove}
+          className="rounded-lg px-2 py-2 text-[11px] font-semibold text-stone-500 hover:text-stone-900 disabled:opacity-50"
+        >
+          Didn&apos;t do it
+        </button>
+      )}
     </div>
   );
 }
@@ -223,6 +239,8 @@ function MockScoreButton({ className, recorded }: {
 export function TodaysRoutineCard({ planSource = null }: { planSource?: string | null }) {
   const [data, setData] = useState<RoutineResponse | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  // P0-2.3c — which of those are PARTIAL. A completion is not a boolean.
+  const [partialIds, setPartialIds] = useState<Set<string>>(new Set());
   const [fullyDone, setFullyDone] = useState(false);
   const [addingBlock, setAddingBlock] = useState(false);
   const [addBlockError, setAddBlockError] = useState<string | null>(null);
@@ -293,6 +311,7 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
       }
       setData(json);
       setCompletedIds(new Set(json.completions.map((c) => c.task_id)));
+      setPartialIds(new Set(json.completions.filter((c) => c.portion === 'half').map((c) => c.task_id)));
       if (viewedAt.current == null) {
         viewedAt.current = Date.now();
         fetch('/api/routine/engagement', {
@@ -366,6 +385,14 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
       routineTodayCache = null;
       const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean };
       setCompletedIds(new Set(json.completedTaskIds));
+      // The tick response carries ids only, so the portion is applied from the
+      // intent this request just expressed rather than guessed. A removed task
+      // drops out of both sets; a full mark or an upgrade clears the partial.
+      setPartialIds((prev) => {
+        const next = new Set([...prev].filter((id) => json.completedTaskIds.includes(id)));
+        if (portion === 'half') next.add(task.id); else if (portion === 'full') next.delete(task.id);
+        return next;
+      });
       setExpandedTaskId(null);
       if (confidence && task.topic) setConfidenceTaps((prev) => [...prev, { topic: task.topic!, confidence }]);
       if (json.fullyDone) { setFullyDone(true); reportComplete(); }
@@ -630,6 +657,9 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
           <div className="space-y-1">
             {tasks.map((task, idx) => {
               const done = completedIds.has(task.id);
+              // PARTIAL is not a lesser FULL: work happened and the task is not
+              // finished. It must never read as completed (P0-2.3c).
+              const partial = done && partialIds.has(task.id);
               const isStart = idx === 0 && !done;
               const expanded = expandedTaskId === task.id && !done;
 
@@ -683,10 +713,12 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                       </div>
                       {isMockSitting(task) && <MockScoreButton className="mt-0.5" recorded={data.todayMock} />}
                     </div>
-                    {markingTaskId === task.id && !done && (
+                    {markingTaskId === task.id && (!done || partial) && (
                       <div className="rounded-b-2xl bg-stone-100/70">
                         <ProgressChoice
                           busy={busyTaskId === task.id}
+                          marked={partial}
+                          onRemove={() => { setMarkingTaskId(null); void toggleTask(task); }}
                           onPick={(portion) => { setMarkingTaskId(null); void toggleTask(task, undefined, portion); }}
                         />
                       </div>
@@ -697,29 +729,45 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
 
               return (
                 <div key={task.id}>
-                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', markingTaskId === task.id && !done && 'rounded-b-none')}>
+                  <div className={cn('w-full flex items-center gap-2.5 rounded-xl bg-stone-50 px-3.5 py-3', markingTaskId === task.id && (!done || partial) && 'rounded-b-none')}>
                     {/* Same single-state tick as the hero task. Tapping a done
                         task un-does it — a mis-tap must never be permanent. */}
                     <button
                       type="button"
-                      aria-label={done ? `Undo: ${taskTitle(task)}` : `Mark progress: ${taskTitle(task)}`}
+                      aria-label={partial ? `Halfway — update: ${taskTitle(task)}` : done ? `Undo: ${taskTitle(task)}` : `Mark progress: ${taskTitle(task)}`}
                       disabled={busyTaskId === task.id}
                       onClick={() => {
-                        if (done) { void toggleTask(task); return; }
+                        // A FULL task unticks on tap, as it always has. A
+                        // PARTIAL opens the chooser instead, so "Finished it"
+                        // is reachable and a stray tap cannot erase the
+                        // evidence that half the work happened (G4).
+                        if (done && !partial) { void toggleTask(task); return; }
                         reportStart();
                         setMarkingTaskId((cur) => (cur === task.id ? null : task.id));
                       }}
                       className={cn(
                         'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors active:scale-90 disabled:opacity-50',
-                        done ? 'border-stone-900 bg-stone-900' : 'border-stone-300 hover:border-stone-900'
+                        partial ? 'border-amber-500 bg-white'
+                          : done ? 'border-stone-900 bg-stone-900'
+                          : 'border-stone-300 hover:border-stone-900'
                       )}
                     >
-                      {done && <Check className="w-3 h-3 text-white" />}
+                      {partial
+                        ? <span className="h-2.5 w-2.5 rounded-full bg-amber-500" style={{ clipPath: 'inset(0 50% 0 0)' }} />
+                        : done && <Check className="w-3 h-3 text-white" />}
                     </button>
                     <div className="min-w-0 flex-1">
-                      <span className={cn('text-sm font-semibold', done ? 'text-stone-400 line-through' : 'text-stone-800')}>
+                      <span className={cn('text-sm font-semibold',
+                        partial ? 'text-stone-800' : done ? 'text-stone-400 line-through' : 'text-stone-800')}>
                         {taskTitle(task)}
                       </span>
+                      {/* A word, not a colour alone — the state has to be
+                          readable, and "halfway" is what the student chose. */}
+                      {partial && (
+                        <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">
+                          Halfway
+                        </span>
+                      )}
                       {!done && task.reason && (
                         <p className="mt-0.5 text-[11px] leading-snug text-stone-500">{task.reason}</p>
                       )}
@@ -727,10 +775,12 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
                     <span className="shrink-0 text-xs text-stone-400">{task.estMinutes}m</span>
                     {isMockSitting(task) && <MockScoreButton recorded={data.todayMock} />}
                   </div>
-                  {markingTaskId === task.id && !done && (
+                  {markingTaskId === task.id && (!done || partial) && (
                     <div className="rounded-b-xl bg-stone-100/70">
                       <ProgressChoice
                         busy={busyTaskId === task.id}
+                        marked={partial}
+                        onRemove={() => { setMarkingTaskId(null); void toggleTask(task); }}
                         onPick={(portion) => { setMarkingTaskId(null); void toggleTask(task, undefined, portion); }}
                       />
                     </div>

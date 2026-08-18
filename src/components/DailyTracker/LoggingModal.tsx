@@ -8,6 +8,7 @@ import { setLogModalOpen } from '@/lib/first-run-events';
 import type { MockDebriefData } from './MockDebriefModal';
 import type { DayOutcome } from '@/lib/check-in';
 import { creditedHours } from '@/lib/study-credit';
+import { completionRequestFor } from '@/lib/completion-portion';
 
 // Today's plan tasks, pulled into the log so "what did you cover" IS the plan.
 interface PlanTask { id: string; section: string; topic: string | null; label: string; target: string | null; }
@@ -31,7 +32,7 @@ export interface LoggingData {
   confidence?: number;      // legacy; no longer collected
   // Plan tasks to complete, with how far they got: 'green' = fully done,
   // 'blue' = half done. Absent = uncover a previously-done task.
-  completedTasks?: { id: string; confidence?: 'green' | 'blue' }[];
+  completedTasks?: { id: string; confidence?: string }[];
   // Mock debrief captured INLINE on this same sheet (null when no mock today).
   mock?: MockDebriefData | null;
   // Derived silently from plan completion for the coach-facing signals; the
@@ -52,7 +53,7 @@ type TaskState = 'half' | 'full';
 export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, openWithMock }: LoggingModalProps) {
   const [planTasks, setPlanTasks] = useState<PlanTask[]>([]);
   const [taskChoice, setTaskChoice] = useState<Map<string, TaskState>>(new Map());
-  const [initialDoneIds, setInitialDoneIds] = useState<Set<string>>(new Set());
+  const [initialPortions, setInitialPortions] = useState<Map<string, 'full' | 'half'>>(new Map());
   // The third thing: an honest rest day. It's a real log — showing up counts,
   // and the streak now counts logged days — so it never breaks a streak.
   const [rest, setRest] = useState(false);
@@ -99,9 +100,20 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
         // The day's planned hours — the ceiling that coverage is credited against.
         setGeneratedHours(Number(json?.routine?.generated_hours ?? json?.todayBudget?.hours ?? 0) || 0);
         setPlanTasks(rawTasks.map((t) => ({ id: String(t.id), section: t.section, topic: t.topic ?? null, label: String(t.label ?? ''), target: t.target ?? null })));
+        // P0-2.3c — seed each task from its REAL portion.
+        //
+        // This used to seed every existing completion as 'full', so a task the
+        // student had marked "Got halfway" opened showing "Done" — a display
+        // lie — and submitting it sent nothing, because the old
+        // `choice && !wasDone` gate dropped the upgrade before it left the
+        // browser. The wire has carried `portion` since P0-2.1.
+        const wire = (json?.completions ?? []) as { task_id: string; portion?: 'full' | 'half' }[];
+        const portionById = new Map<string, 'full' | 'half'>(
+          wire.map((c) => [String(c.task_id), c.portion === 'half' ? 'half' : 'full'])
+        );
         const done = new Set<string>(rawTasks.filter((t) => doneIds.has(String(t.id))).map((t) => String(t.id)));
-        setInitialDoneIds(done);
-        setTaskChoice(new Map([...done].map((id) => [id, 'full' as const])));
+        setInitialPortions(portionById);
+        setTaskChoice(new Map([...done].map((id) => [id, portionById.get(id) ?? 'full'])));
       } catch { /* best effort */ }
     })();
     return () => { cancelled = true; };
@@ -159,12 +171,12 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
       const derived = [...new Set(coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
 
-      const completedTasks: { id: string; confidence?: 'green' | 'blue' }[] = [];
+      // One authority decides what to send, shared with the server's
+      // resolveTransition so the two halves of the contract cannot drift.
+      const completedTasks: { id: string; confidence?: string }[] = [];
       for (const t of planTasks) {
-        const choice = taskChoice.get(t.id);
-        const wasDone = initialDoneIds.has(t.id);
-        if (choice && !wasDone) completedTasks.push({ id: t.id, confidence: choice === 'full' ? 'green' : 'blue' });
-        else if (!choice && wasDone) completedTasks.push({ id: t.id });
+        const req = completionRequestFor(t.id, initialPortions.get(t.id) ?? null, taskChoice.get(t.id) ?? null);
+        if (req) completedTasks.push(req);
       }
 
       const num = (s: string): number | null => {
@@ -203,7 +215,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
 
       // Reset
       setTaskChoice(new Map());
-      setInitialDoneIds(new Set());
+      setInitialPortions(new Map());
       setRest(false);
       setMockTaken(null);
       setMockOverall(''); setMockVarc(''); setMockDilr(''); setMockQa(''); setMockNote('');

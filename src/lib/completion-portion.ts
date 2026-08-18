@@ -182,3 +182,40 @@ export const PARTIAL_WEIGHT = 0.5;
 export function completionWeight(confidence: string | null | undefined): number {
   return portionOf(confidence) === 'half' ? PARTIAL_WEIGHT : FULL_WEIGHT;
 }
+
+// ── The client half of the transition (P0-2.3c) ─────────────────────────────
+//
+// `resolveTransition` above decides what the SERVER does with a request. This
+// decides what the CLIENT sends in the first place, and it lives in the same
+// module on purpose: two files deciding one tap is how they drift into
+// disagreeing, and `completion-interaction.test.ts` walks all nine cells
+// through both to prove they agree.
+//
+// Before this existed, LoggingModal decided with `if (choice && !wasDone)` —
+// which silently dropped a FULL choice on a task already marked PARTIAL, so
+// the upgrade never left the browser.
+
+export type TaskChoice = 'full' | 'half' | null;
+
+/** A `complete-task` payload: a bare id means "toggle", a confidence means "mark". */
+export interface CompletionRequest { id: string; confidence?: string }
+
+/**
+ * What to send for one task, given what is already stored and what the student
+ * chose. `null` means send nothing — which is a real outcome three times over:
+ * an untouched task left alone, a PARTIAL re-marked as partial (the evidence is
+ * already correct), and a FULL offered a downgrade the contract prohibits.
+ */
+export function completionRequestFor(
+  id: string,
+  prior: CompletionPortion | null,
+  choice: TaskChoice
+): CompletionRequest | null {
+  if (choice === null) return prior ? { id } : null;
+  if (prior === null) {
+    return { id, confidence: choice === 'half' ? HALF_TICK_SIGNAL : 'green' };
+  }
+  // Only one transition remains once something is stored: half -> full.
+  if (prior === 'half' && choice === 'full') return { id, confidence: 'green' };
+  return null;
+}
