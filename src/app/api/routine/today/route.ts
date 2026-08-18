@@ -17,7 +17,7 @@ import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
-import { toClientCompletions, completionWeight } from '@/lib/completion-portion';
+import { toClientCompletions, completionWeight, fullyDoneTaskIds } from '@/lib/completion-portion';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -545,15 +545,22 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       .limit(200),
   ]);
 
+  // THREE maps, three different questions, deliberately not merged:
+  //   completedByDate  — was this task TOUCHED? (recency, timesPracticed)
+  //   fullyDoneByDate  — was this task FINISHED? (yesterday.done, unfinished)
+  //   weightByDate     — how much of the plan got done? (the load ratio)
+  // A half-tick answers yes, no and 0.5 respectively (P0-2.3b/d).
   const completedByDate = new Map<string, Set<string>>();
-  // Weighted totals for the plan-completion ratio only; the id set above stays
-  // whole-task and every other reader of it is unchanged.
+  const rowsByDate = new Map<string, { task_id: string; confidence: string | null }[]>();
   const weightByDate = new Map<string, number>();
   for (const c of pastCompletions ?? []) {
     if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
     completedByDate.get(c.routine_date)!.add(c.task_id);
+    if (!rowsByDate.has(c.routine_date)) rowsByDate.set(c.routine_date, []);
+    rowsByDate.get(c.routine_date)!.push({ task_id: c.task_id, confidence: c.confidence ?? null });
     weightByDate.set(c.routine_date, (weightByDate.get(c.routine_date) ?? 0) + completionWeight(c.confidence));
   }
+  const fullyDoneByDate = (date: string): Set<string> => fullyDoneTaskIds(rowsByDate.get(date) ?? []);
 
   // Topics swapped OUT of the most recent past day — "never delete, always
   // postpone" — come from plannerRecency below, with the rest of the planner's
@@ -562,21 +569,26 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
   const lastPastDay = (pastRoutines ?? []).find((r: { routine_date: string }) => r.routine_date < today);
   // Yesterday's score — powers the "1 of 3 done -> today's plan already
   // adjusted" narration that makes the daily auto-adjustment VISIBLE.
+  // "Done" here means FINISHED, not "has a row". The card renders
+  // "⚡ Yesterday: all N done" off this, so a half-tick counted here would be a
+  // false claim to the student about their own work (P0-2.3d).
+  const yesterdayFullyDone = lastPastDay ? fullyDoneByDate(lastPastDay.routine_date) : new Set<string>();
   const yesterday = lastPastDay
     ? {
         total: Array.isArray(lastPastDay.tasks) ? (lastPastDay.tasks as unknown[]).length : 0,
-        done: (completedByDate.get(lastPastDay.routine_date) ?? new Set()).size,
+        done: yesterdayFullyDone.size,
       }
     : null;
   // Topic names on yesterday's plan whose task never got completed — the raw
   // material of the because-line ("Geometry first — it didn't get finished
   // yesterday"). Legacy rows without a topic field simply don't contribute,
   // the same honest scoping as the recency signals below.
-  const yesterdayDoneIds = lastPastDay ? (completedByDate.get(lastPastDay.routine_date) ?? new Set()) : new Set();
+  // Same set, same question: a half-ticked topic IS unfinished, and is exactly
+  // the one the because-line should carry into today.
   const yesterdayUnfinishedTopics: string[] = lastPastDay && Array.isArray(lastPastDay.tasks)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? (lastPastDay.tasks as any[])
-        .filter((t) => t && typeof t.topic === 'string' && t.topic.length > 0 && !yesterdayDoneIds.has(t.id))
+        .filter((t) => t && typeof t.topic === 'string' && t.topic.length > 0 && !yesterdayFullyDone.has(t.id))
         .map((t) => t.topic as string)
     : [];
 

@@ -219,3 +219,21 @@ export function completionRequestFor(
   if (prior === 'half' && choice === 'full') return { id, confidence: 'green' };
   return null;
 }
+
+// ── Which completions count as FINISHED (P0-2.3d) ───────────────────────────
+//
+// The closure audit found `routine/today` answering "was this finished?" with
+// task-id membership: `yesterday.done` counted rows, and
+// `yesterdayUnfinishedTopics` excluded any task with a row. Both counted a
+// PARTIAL as finished, so a day of half-ticks rendered "⚡ Yesterday: all 4
+// done" and the half-finished topic — the one most deserving of returning
+// tomorrow — was silently dropped from the because-line.
+//
+// This is the set form of `countsAsFullyDone`, so a caller asking the
+// finished-question gets one answer from one place. Callers asking whether a
+// task was TOUCHED (per-section recency, timesPracticed, plannerRecency) must
+// keep using plain membership — a half-tick genuinely touched the topic.
+
+export function fullyDoneTaskIds(rows: CompletionRow[]): Set<string> {
+  return new Set(rows.filter((r) => countsAsFullyDone(r.confidence)).map((r) => r.task_id));
+}
