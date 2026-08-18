@@ -3,7 +3,10 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { FACTS, factKeys, getFact } from './registry';
 import { CANONICAL_SOURCES } from './canonical';
-import { EXAM_SYLLABUS_TOPICS, MOCK_PREP_UNITS } from '../topics-constants';
+import { EXAM_SYLLABUS_TOPICS, MOCK_PREP_UNITS, KNOWLEDGE_GRAPH } from '../topics-constants';
+
+const SECTION_FIXTURE_QA: string[] =
+  KNOWLEDGE_GRAPH.find((s) => s.id === 'QA')!.groups.flatMap((g) => g.units);
 
 // ── 0C.2.2 — THE FACT REGISTRY'S OWN LAWS ───────────────────────────────────
 //
@@ -233,5 +236,63 @@ describe('12 — infrastructure only: nothing consumes the registry yet', () => 
     };
     for (const d of ['app', 'components']) if (existsSync(join(SRC, d))) walk(join(SRC, d));
     expect(offenders, '0C.2.2 is infrastructure — consumers migrate in 0C.3').toEqual([]);
+  });
+});
+
+describe('25 — opened, covered and revision-depth are permanently separate families', () => {
+  // Founder law, 18 Aug: "Opened != Covered." They are different rungs of one
+  // ladder and no producer may substitute one for another. This is the law that
+  // stopped 0C.3a: log-insight speaks the opened family, and the registry had
+  // registered only the covered family.
+  it('an *_opened_* fact uses isOpened, never isCovered', () => {
+    for (const f of FACTS.filter((x) => x.key.includes('_opened_'))) {
+      expect(f.numerator?.toLowerCase(), `${f.key}`).toContain('isopened');
+      expect(f.numerator?.toLowerCase(), `${f.key} must not claim isCovered`).not.toContain('iscovered');
+    }
+  });
+
+  it('a *_coverage_* fact uses isCovered, never isOpened', () => {
+    for (const f of FACTS.filter((x) => x.key.includes('_coverage_'))) {
+      expect(f.numerator?.toLowerCase(), `${f.key}`).toContain('iscovered');
+    }
+  });
+
+  it('the three bars produce genuinely different counts on the same rows', () => {
+    // 'learning' is opened but not covered; 'revising' is all three. If any two
+    // families ever agree on this fixture, one has silently adopted the other.
+    const rows = [
+      { topic: EXAM_SYLLABUS_TOPICS[0], status: 'learning' },
+      { topic: EXAM_SYLLABUS_TOPICS[1], status: 'practicing' },
+      { topic: EXAM_SYLLABUS_TOPICS[2], status: 'revising' },
+      ...EXAM_SYLLABUS_TOPICS.slice(3).map((topic) => ({ topic, status: 'not_started' })),
+    ];
+    const opened = getFact('syllabus_opened_units').produce({ coverage: rows });
+    const covered = getFact('syllabus_coverage_units').produce({ coverage: rows });
+    expect(opened.known && covered.known).toBe(true);
+    if (opened.known && covered.known) {
+      expect(opened.value).toBe(3);   // learning + practicing + revising
+      expect(covered.value).toBe(2);  // practicing + revising
+      expect(opened.value).not.toBe(covered.value);
+    }
+  });
+
+  it('untouched is the exact complement of opened within a section', () => {
+    const qa = EXAM_SYLLABUS_TOPICS.filter((t) => SECTION_FIXTURE_QA.includes(t));
+    const rows = qa.map((topic, i) => ({ topic, status: i < 5 ? 'learning' : 'not_started' }));
+    const openedR = getFact('section_opened_units').produce({ coverage: rows, section: 'QA' });
+    const untouchedR = getFact('section_untouched_units').produce({ coverage: rows, section: 'QA' });
+    expect(openedR.known && untouchedR.known).toBe(true);
+    if (openedR.known && untouchedR.known) {
+      expect(openedR.value + untouchedR.value).toBe(qa.length);
+    }
+  });
+
+  it('logged_days_total is lifetime and declares no window', () => {
+    const f = getFact('logged_days_total');
+    expect(f.timeBasis).toBe('point_in_time');
+    expect(f.validRange).toBeUndefined();
+    const r = f.produce({ logDates: ['2026-08-18', '2026-08-18', '2026-08-01'] });
+    expect(r.known).toBe(true);
+    if (r.known) expect(r.value).toBe(2); // distinct dates, never rows
   });
 });

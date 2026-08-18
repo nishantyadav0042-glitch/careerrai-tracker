@@ -22,6 +22,8 @@
 //   · hours / weightage coverage — different facts needing different keys
 //                              (Constitution S3); no Phase-1 consumer
 //   · study_days_last_7      — clean and ruled, but nothing consumes it yet
+//                              (distinct from logged_days_total, which now has
+//                              one: log-insight's "N logged days on record")
 //   · self_reported_had_buddy — no Phase-1 consumer; not invented for symmetry
 //
 // Producers are PURE: no database, no clock, no model. Data arrives as
@@ -31,7 +33,7 @@
 import {
   EXAM_SYLLABUS_TOPICS, isExamSyllabusTopic, EXAM_SECTION_IDS, KNOWLEDGE_GRAPH,
 } from '../topics-constants';
-import { isCovered } from '../coverage-status';
+import { isCovered, isOpened, isAtRevisionDepth } from '../coverage-status';
 import type { CanonicalQuestion } from './canonical';
 import {
   type FactDef, type FactResult, type Provenance, known, unknown,
@@ -155,6 +157,111 @@ const sectionTopicsRemaining: FactDef<{ coverage: CoverageRow[]; section: string
   },
 };
 
+// ── Opened, and revision depth ──────────────────────────────────────────────
+//
+// Constitution S4, and the law that stopped 0C.3a: "'Covered' means isCovered
+// (practicing+). 'Opened' means isOpened (learning+). They are different bars
+// and may never share a fact key."
+//
+// A topic at `learning` is OPENED and NOT COVERED. `log-insight.ts` has always
+// counted the opened bar — "QA: 12 of 28 topics opened" — while 0C.2.2
+// registered only the covered bar. Migrating it onto the covered family would
+// have changed every number it displays under the cover of a refactor. These
+// facts exist so the migration can be arithmetic-preserving instead.
+//
+// The three bars are separate FAMILIES, permanently. No producer may satisfy a
+// request for one by answering with another.
+
+const syllabusOpenedUnits: FactDef<{ coverage: CoverageRow[] }, number> = {
+  key: 'syllabus_opened_units',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'How many exam-syllabus topics the student has started at all.',
+  canonicalSource: 'syllabusCoverage',
+  unit: 'count',
+  timeBasis: 'point_in_time',
+  membershipUniverse: 'EXAM_SYLLABUS_TOPICS (46: QA 28 + VARC 9 + DILR 9)',
+  numerator: 'topics at isOpened (learning or beyond)',
+  unknownWhen: ['the student has no coverage rows', 'any row falls outside the syllabus universe'],
+  produce: ({ coverage }) => {
+    const p = prov('syllabus_opened_units', 'v1', 'syllabusCoverage', { rows: coverage.length });
+    const violations = checkUniverse(coverage);
+    if (violations.length) return unknown('out_of_universe', p, violations);
+    if (coverage.length === 0) return unknown('no_evidence', p);
+    return known(coverage.filter((r) => isOpened(r.status)).length, p);
+  },
+};
+
+const sectionOpenedUnits: FactDef<{ coverage: CoverageRow[]; section: string }, number> = {
+  key: 'section_opened_units',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'How many topics in one exam section the student has started at all.',
+  canonicalSource: 'syllabusCoverage',
+  unit: 'count',
+  timeBasis: 'point_in_time',
+  membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
+  numerator: 'topics in that section at isOpened (learning or beyond)',
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  produce: ({ coverage, section }) => {
+    const p = prov('section_opened_units', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
+    if (!(EXAM_SECTION_IDS as string[]).includes(section)) {
+      return unknown('out_of_universe', p, [`'${section}' is not an exam section`]);
+    }
+    const violations = checkUniverse(coverage);
+    if (violations.length) return unknown('out_of_universe', p, violations);
+    const inSection = coverage.filter((r) => sectionOf(r.topic) === section);
+    if (inSection.length === 0) return unknown('no_evidence', p);
+    return known(inSection.filter((r) => isOpened(r.status)).length, p);
+  },
+};
+
+const sectionUntouchedUnits: FactDef<{ coverage: CoverageRow[]; section: string }, number> = {
+  key: 'section_untouched_units',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'How many topics in one exam section the student has never started.',
+  canonicalSource: 'syllabusCoverage',
+  unit: 'count',
+  timeBasis: 'point_in_time',
+  membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
+  // The exact complement of section_opened_units, and computed AS that
+  // complement rather than by a second pass over the rows — two independent
+  // counts of the same ladder is how the eleven coverage producers began.
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  produce: ({ coverage, section }) => {
+    const p = prov('section_untouched_units', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
+    const opened = sectionOpenedUnits.produce({ coverage, section });
+    if (!opened.known) return unknown(opened.reason, p, opened.violations);
+    const total = (TOPICS_BY_SECTION[section] ?? []).length;
+    return known(total - opened.value, p);
+  },
+};
+
+const sectionAtDepthUnits: FactDef<{ coverage: CoverageRow[]; section: string }, number> = {
+  key: 'section_at_depth_units',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'How many topics in one exam section have reached revision depth or beyond.',
+  canonicalSource: 'syllabusCoverage',
+  unit: 'count',
+  timeBasis: 'point_in_time',
+  membershipUniverse: 'the named exam section within EXAM_SYLLABUS_TOPICS',
+  numerator: 'topics in that section at isAtRevisionDepth (revising or beyond)',
+  unknownWhen: ['the section is not an exam section', 'the student has no rows in it'],
+  produce: ({ coverage, section }) => {
+    const p = prov('section_at_depth_units', 'v1', 'syllabusCoverage', { section, rows: coverage.length });
+    if (!(EXAM_SECTION_IDS as string[]).includes(section)) {
+      return unknown('out_of_universe', p, [`'${section}' is not an exam section`]);
+    }
+    const violations = checkUniverse(coverage);
+    if (violations.length) return unknown('out_of_universe', p, violations);
+    const inSection = coverage.filter((r) => sectionOf(r.topic) === section);
+    if (inSection.length === 0) return unknown('no_evidence', p);
+    return known(inSection.filter((r) => isAtRevisionDepth(r.status)).length, p);
+  },
+};
+
 // ── Daily log ───────────────────────────────────────────────────────────────
 //
 // FOUNDER CONTRACT, preserved deliberately: a section/task TAP is not a Daily
@@ -207,6 +314,26 @@ const loggedDaysLast7: FactDef<{ logDates: string[]; today: string }, number> = 
       if (daysBack >= 0 && daysBack <= 6) window.add(d);
     }
     return known(window.size, p);
+  },
+};
+
+const loggedDaysTotal: FactDef<{ logDates: string[] }, number> = {
+  key: 'logged_days_total',
+  version: 'v1',
+  semanticType: 'DERIVED_FACT',
+  meaning: 'Distinct CareerRai days on which the student has ever submitted a Daily Log.',
+  canonicalSource: 'dailyLogState',
+  unit: 'days',
+  timeBasis: 'point_in_time',
+  numerator: 'distinct log dates, lifetime',
+  // No window, therefore no validRange: a lifetime count has no ceiling to
+  // declare, and inventing one would be the "8 days in a 7-day window" defect
+  // running in reverse.
+  unknownWhen: [],
+  produce: ({ logDates }) => {
+    const p = prov('logged_days_total', 'v1', 'dailyLogState', { rows: logDates.length });
+    // Distinct DATES, never rows — two submissions on one day is one logged day.
+    return known(new Set(logDates.filter(Boolean)).size, p);
   },
 };
 
@@ -304,8 +431,13 @@ export const FACTS: AnyFact[] = [
   syllabusCoveragePct,
   sectionCoverageUnits,
   sectionTopicsRemaining,
+  syllabusOpenedUnits,
+  sectionOpenedUnits,
+  sectionUntouchedUnits,
+  sectionAtDepthUnits,
   loggedToday,
   loggedDaysLast7,
+  loggedDaysTotal,
   selfReportedLastYearPercentile,
   selfReportedWeakestSection,
   isRepeaterFact,
