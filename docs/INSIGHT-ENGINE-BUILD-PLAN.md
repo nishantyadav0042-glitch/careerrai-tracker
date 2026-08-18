@@ -502,3 +502,16 @@ every other number in the product.
 
 *Build starts on the founder's go, phase 1 first, on the working branch. This document
 is the contract; deviations get written back into it, not around it.*
+
+---
+
+# SUPERSEDED — 18 Aug 2026
+
+Phase 0 of this document is **superseded by `docs/PHASE-0-INTEGRITY-SPEC.md`**, which is
+the binding contract. The hostile audit (`docs/INSIGHT-ENGINE-AUDIT.md`) returned
+12 FAIL / 7 RISK / 1 PASS against this plan; the identity, provenance, history and
+lifecycle designs in Parts 1–3 above are **known-wrong** and are retained only as the
+record of what was corrected and why.
+
+Still valid from this document: the phase sequencing rationale (Part 4), the Section-30
+architecture audit answers (Part 2), and the planner-boundary rule (§1.7).
