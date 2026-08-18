@@ -61,6 +61,26 @@
 
 ---
 
+## CareerRai engineering laws
+
+Laws outrank incidents: an incident teaches one lesson, a law refuses a whole
+class of them. Both are binding.
+
+**L1 — A trustworthy UNKNOWN is infinitely more valuable than a precise lie.**
+(Founder, 18 Aug 2026.) CareerRai Notice only works if the student comes to
+believe *"CareerRai notices things about me I didn't notice myself."* That
+belief survives a silence. It does not survive one discovery of *"wait —
+CareerRai made that number up."* Insufficient evidence produces UNKNOWN or
+silence, never a weaker guess, never a default, never a flattering one.
+
+**L2 — No claim about product behaviour from code location alone.**
+(Founder, 18 Aug 2026.) Trace PRODUCER → WRITE → CONSUMER → SURFACE → REAL
+DATA before asserting what the product does. Every 0C.3 investigation found a
+defect this way that reading the code had missed — and one investigation found
+a defect in its own first pass the same way.
+
+---
+
 ## How prevention becomes permanent
 
 An incident is only closed when its lesson is encoded somewhere with teeth — a
