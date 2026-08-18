@@ -17,6 +17,8 @@
 // Pure function, no I/O — the route fetches, this decides. Testable without a
 // database.
 
+import { isOpened, isAtRevisionDepth } from './coverage-status';
+
 export interface CoverageRow {
   section: string;
   status: string;
@@ -39,8 +41,11 @@ export interface LogInsightInput {
 // tracks, not syllabus — a "% of syllabus" claim must never count them.
 const CORE_SECTIONS = ['VARC', 'DILR', 'QA'] as const;
 
-const OPENED_STATUSES = new Set(['learning', 'practicing', 'revising', 'exam_ready']);
-const DEPTH_STATUSES = new Set(['revising', 'exam_ready']);
+// Ladder predicates come from coverage-status.ts — the single authority — and
+// are never re-spelled here. Re-listing the statuses is what
+// covered-authority.guard.test.ts forbids, and it caught this file doing
+// exactly that on 18 Aug: a sixth status added above exam_ready would have
+// been counted by the ladder and missed by this copy.
 
 interface SectionTally {
   section: string;
@@ -52,13 +57,12 @@ interface SectionTally {
 
 function tally(coverage: CoverageRow[], section: string): SectionTally {
   const rows = coverage.filter((r) => r.section === section);
-  const opened = rows.filter((r) => OPENED_STATUSES.has(r.status)).length;
   return {
     section,
     total: rows.length,
-    opened,
-    untouched: rows.filter((r) => r.status === 'not_started').length,
-    atDepth: rows.filter((r) => DEPTH_STATUSES.has(r.status)).length,
+    opened: rows.filter((r) => isOpened(r.status)).length,
+    untouched: rows.filter((r) => !isOpened(r.status)).length,
+    atDepth: rows.filter((r) => isAtRevisionDepth(r.status)).length,
   };
 }
 

@@ -116,6 +116,36 @@ export function isCovered(status: unknown): boolean {
   return statusRank(normalizeStatus(status)) >= statusRank(COVERED_FLOOR);
 }
 
+// ── Two more ladder predicates, same law: derived by RANK, never listed ─────
+//
+// "Opened" and "covered" are different questions and both get asked. A student
+// insight says "12 of 28 QA topics opened" — that is anything past
+// not_started, a lower bar than covered (practicing+), because the honest
+// claim there is about what has been STARTED, not what has been finished.
+//
+// These live here rather than in the caller for the reason
+// covered-authority.guard.test.ts enforces: the moment a predicate over this
+// ladder is re-spelled somewhere else, the two copies drift, and a sixth
+// status added above exam_ready gets missed in one of them. This repo has
+// already paid for that failure twice. (Added 18 Aug after log-insight.ts
+// re-spelled the set and the guard caught it.)
+
+/** The lowest rung that counts as "started at all". */
+export const OPENED_FLOOR: CoverageStatus = 'learning';
+
+/** The lowest rung that counts as "being actively revised". */
+export const DEPTH_FLOOR: CoverageStatus = 'revising';
+
+/** Has the student started this topic at all? */
+export function isOpened(status: unknown): boolean {
+  return statusRank(normalizeStatus(status)) >= statusRank(OPENED_FLOOR);
+}
+
+/** Has this topic reached revision depth or beyond? */
+export function isAtRevisionDepth(status: unknown): boolean {
+  return statusRank(normalizeStatus(status)) >= statusRank(DEPTH_FLOOR);
+}
+
 // ── The one law of exam_ready ───────────────────────────────────────────────
 //
 // exam_ready is EARNED FROM EVIDENCE (all six checks in evidence.ts) and set

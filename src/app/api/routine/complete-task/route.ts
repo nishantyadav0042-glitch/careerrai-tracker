@@ -71,7 +71,16 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (existingCompletion) {
-    const { error: delErr } = await admin.from('routine_task_completions').delete().eq('id', existingCompletion.id);
+    // Delete by the NATURAL key, not by the row id read a moment ago. A
+    // concurrent request may already have removed that row, in which case
+    // delete-by-id would silently target nothing while delete-by-key states
+    // the intent: "this task must end up un-ticked." Deleting zero rows is
+    // success — the desired state already holds (idempotent untick).
+    const { error: delErr } = await admin.from('routine_task_completions')
+      .delete()
+      .eq('student_id', user.id)
+      .eq('routine_date', today)
+      .eq('task_id', taskId);
     if (delErr) {
       // The tick IS the log. Reporting success on a write that did not happen
       // leaves the card green over an empty table, and the student finds out
@@ -83,10 +92,34 @@ export async function POST(request: NextRequest) {
       student_id: user.id, routine_date: today, task_id: taskId, is_emergency: !!isEmergency,
       confidence: effectiveConfidence ?? null,
     });
-    if (insErr) {
+
+    // ── IDEMPOTENT TICK (18 Aug) ────────────────────────────────────────────
+    //
+    // The read above (maybeSingle) and this insert are two statements, not one
+    // transaction, so two taps racing on the same task BOTH read null and BOTH
+    // insert. `routine_task_completions` carries
+    // UNIQUE (student_id, routine_date, task_id), so the loser used to receive
+    // a unique violation and this route returned HTTP 500 — a hard error for a
+    // student whose tick had, in fact, been recorded perfectly by the winner.
+    // Double-taps and offline retries both hit this.
+    //
+    // 23505 is unique_violation. Here it does not mean failure; it means
+    // CONVERGENCE: the row exists, the task is ticked, which is exactly what
+    // this request asked for. The invariant is the one that matters at scale —
+    // N concurrent requests representing the same logical completion converge
+    // to ONE completion row and ONE canonical event, never an error, never a
+    // duplicate. Any OTHER insert error is still a real failure and still 500s.
+    const converged = insErr?.code === '23505';
+    if (insErr && !converged) {
       return NextResponse.json({ error: 'Could not save that tick — try again.' }, { status: 500 });
     }
 
+    // Coverage advance belongs to the request that actually CREATED the row.
+    // The converged request must not run it again: the winner has already
+    // applied this signal, and re-applying it would write the same monotonic
+    // status twice for one student action — two derived writes for one event,
+    // which is precisely the duplication the memory architecture forbids.
+    if (!converged) {
     // Confidence-aware planning: a real 🟢/🟡/🔴 tap on a topic-bearing task
     // feeds straight back into the Coverage Matrix — the same table the
     // Topic Selector reads for tomorrow's choice — rather than only ever
@@ -123,8 +156,12 @@ export async function POST(request: NextRequest) {
         if (upsertErr) console.error('[complete-task] coverage upsert failed', upsertErr.message);
       }
     }
+    } // end if (!converged) — the losing racer skips the derived write
   }
 
+  // The response is read back from the table, NOT assembled from what this
+  // request believed it wrote. A converged racer therefore returns the same
+  // truthful state as the winner: one completion, one state, no error.
   const { data: completions } = await admin
     .from('routine_task_completions')
     .select('task_id, is_emergency, confidence')
