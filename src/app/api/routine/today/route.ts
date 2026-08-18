@@ -17,6 +17,7 @@ import { planReason } from '@/lib/plan-reason';
 import { planStaleReason } from '@/lib/plan-freshness';
 import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
+import { toClientCompletions } from '@/lib/completion-portion';
 
 // GET /api/routine/today — fetch (generating on first call of the day) the
 // student's prescriptive routine + which tasks are already ticked, plus
@@ -75,7 +76,9 @@ export async function GET() {
       .maybeSingle(),
     admin
       .from('routine_task_completions')
-      .select('task_id, completed_at, is_emergency')
+      // `confidence` carries the portion (P0-2.1). Without it the response
+      // could only say "ticked", and the card rendered a half-tick as done.
+      .select('task_id, completed_at, is_emergency, confidence')
       .eq('student_id', user.id)
       .eq('routine_date', today),
     admin
@@ -487,7 +490,10 @@ export async function GET() {
     whySummary,
     mission,
     roadmap,
-    completions: completions ?? [],
+    // Mapped through the completion-portion authority, never re-interpreted
+    // here: the response carries a canonical `portion` and the raw signal
+    // stays server-side (P0-2.1).
+    completions: toClientCompletions(completions ?? []),
     currentStreak: streak?.current_streak ?? 0,
     isCatchUp: gapDays != null && gapDays >= 2,
     yesterday: history.yesterday,

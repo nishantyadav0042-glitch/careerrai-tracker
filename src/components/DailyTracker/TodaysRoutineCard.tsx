@@ -56,7 +56,16 @@ type ConfidenceSignal = 'green' | 'blue' | 'yellow' | 'red';
 
 interface RoutineResponse {
   routine: { phase: string; tasks: RoutineTask[]; est_minutes: number; calibration?: string | null };
-  completions: { task_id: string; is_emergency: boolean }[];
+  // `portion` is the canonical completion portion from the server (P0-2.1):
+  // 'full' or 'half'. It is declared here so the truth cannot be silently
+  // dropped at this boundary.
+  //
+  // ⚠️ NOT YET RENDERED. The card still shows a 'half' completion the same way
+  // it shows a 'full' one, because what PARTIAL should LOOK like — half-filled
+  // control, different copy, its own progress weight — is a product decision
+  // that has not been made. Exposing the truth and stopping here is deliberate;
+  // inventing the visual would not be. See docs/0C-3F1-EVIDENCE-PROVENANCE.md.
+  completions: { task_id: string; is_emergency: boolean; portion: 'full' | 'half' }[];
   currentStreak: number;
   isCatchUp: boolean;
   yesterday?: { total: number; done: number } | null;

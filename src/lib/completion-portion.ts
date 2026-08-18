@@ -48,3 +48,35 @@ export function portionOf(confidence: string | null | undefined): CompletionPort
 export function countsAsFullyDone(confidence: string | null | undefined): boolean {
   return portionOf(confidence) === 'full';
 }
+
+// ── The wire shape (P0-2.1) ─────────────────────────────────────────────────
+//
+// The server knowing a tick is partial is worth nothing if the client is handed
+// a bare "done". `/api/routine/today` used to select `task_id, completed_at,
+// is_emergency` and never `confidence`, so both consumers collapsed every
+// completion into one done-set and rendered a half-tick as fully done.
+//
+// The route maps through THIS function rather than reading `confidence` and
+// deciding for itself, and the raw signal never crosses the wire: a copy of the
+// meaning on the client is a second place for it to drift, which is the
+// eleven-coverage-producers failure one layer out.
+
+export interface CompletionRow {
+  task_id: string;
+  is_emergency?: boolean | null;
+  confidence?: string | null;
+}
+
+export interface ClientCompletion {
+  task_id: string;
+  is_emergency: boolean;
+  portion: CompletionPortion;
+}
+
+export function toClientCompletions(rows: CompletionRow[]): ClientCompletion[] {
+  return rows.map((r) => ({
+    task_id: r.task_id,
+    is_emergency: !!r.is_emergency,
+    portion: portionOf(r.confidence),
+  }));
+}
