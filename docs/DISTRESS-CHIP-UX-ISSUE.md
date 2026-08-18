@@ -73,6 +73,45 @@ The founder's Hindi/English draft is the right register. Exact copy should
 follow the existing tone rules rather than be invented here, and `family_pressure`
 needs a line of its own — it is currently offered and ignored.
 
+---
+
+## Smallest client-side routing fix — investigated, NOT started
+
+Founder authorised investigating the smallest fix. This is what it is, and
+nothing has been built.
+
+**Shape:** a chip → copy map on the client, rendered by the log sheet
+immediately on submit, for every student including log #1. The server rule's
+chip branch is deleted so the two cannot both answer.
+
+**Where it lands:** `LoggingModal` already knows `emotional_chips` at submit
+time — it sends them. The acknowledgement can render from local state before
+the response returns, which is also why it needs no history: the student's own
+input is already in the component.
+
+**What it must NOT touch, per the ruling:** no Fact Registry entry, no Insight
+Rule, no history gate, no wellbeing score, no AI inference, no percentage, no
+count, no pattern language, no schema change. Six chips, six strings.
+
+**`family_pressure` gets its own line.** It is currently offered in the UI and
+has no branch at all — it must not be folded into `burned_out` or
+`feeling_behind`, which mean different things.
+
+**One collision to decide:** the acknowledgement and the post-log noticed line
+would both want the same slot. Options are (a) the acknowledgement replaces the
+noticed line when a distress chip is present, or (b) it renders above it as a
+separate element. **(a) is the safer default** — one line, one voice, and it
+avoids a warm acknowledgement sitting next to a number. This is a copy/layout
+decision, not an engineering one.
+
+**Open, and required before any code:** the six strings themselves. They should
+come from the existing tone rules rather than be invented here. The founder's
+Hindi/English draft is the right register.
+
+**Status: NOT STARTED.** Awaiting copy.
+
+---
+
 ## Scope
 
 Small and self-contained: a chip → copy map on the client, and the removal of
