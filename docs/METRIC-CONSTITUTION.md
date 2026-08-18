@@ -149,16 +149,22 @@ here as that phase's acceptance criterion.
 |---|---|---|---|
 | **A** | `studentState.knowledge` counted a 53-row numerator against a 46 denominator | 4 students >100% (max 111); **197 of 421 overstated**, mean +2.7 pts | **FIXED 0C.1** — numerator filtered by `isExamSyllabusTopic`. Not clamped. |
 | **B** | `topic_evidence.logged_for` DB default on the 03:00 IST rule vs app at 05:30 IST | `information_schema` query | **FIXED 0C.1** — default **dropped**, not re-aligned. Column is NOT NULL, so a direct insert omitting the date now fails loudly instead of inventing one. |
-| **C** | `coverage_total = 53` fed into an hours model calibrated on 46 | code path traced | **OPEN — needs founder approval.** See below. |
+| **C** | `coverage_total = 53` fed into an hours model calibrated on 46 (457h vs 397h, quoted finish dates 8–15 days late) | P0-C audit: **3 accounts**, all named "New User", all 11 Aug | **FIXED P0-C-A** — producer scoped to exam units, model clamped to its own domain, `coverage_total` renamed `exam_syllabus_unit_count`. |
+| **C2** | `study-pace.completedPct` divided an effort-scaled numerator by an unscaled 397h denominator — effort scaling manufacturing completion | P0-C audit: computed always, **displayed nowhere** | **FIXED P0-C-B/C** — field removed; the ring takes the canonical topic-count percentage as its own prop. |
 
-**Defect C is the one this constitution rules on but 0C.1 did not fix**, and the reason
-matters: ruling S1 determines the correct value (46), but applying it **changes the
-finish-date options quoted to every new student** — a user-facing behaviour change, which
-the Phase-0 rule ("zero user-facing change") forbids without an explicit decision.
-Today every new student is priced at `53 × 8.6h ≈ 456h` against a 397h syllabus, ~15%
-high, and Home prices the same syllabus correctly the next morning. It is a real defect
-affecting **every new signup**, larger in reach than defect A — and it cannot be fixed
-quietly.
+**Correction to an earlier version of this Article.** It stated that Defect C affects
+*"every new signup"* and is *"larger in reach than defect A."* **Both claims were wrong**,
+and the P0-C audit was commissioned precisely to check them:
+
+- **`/start`, which carries 90% of the base, never invoked the hours model.**
+  `verify-phone-otp/route.ts:311` persists `syllabus_target_date` from the student's own
+  `ambition_date`. Only the `OnboardingModal` fallback path computed it.
+- Measured cohorts: 423 `self_serve` students (415 with target dates, **all unaffected**)
+  versus 45 null-source (3 with target dates, all empty "New User" records).
+
+The error was methodological, not arithmetic: a code path was traced without checking
+which path students actually take. It is recorded here rather than quietly overwritten,
+because a constitution that hides its own corrections teaches nothing.
 
 ---
 
