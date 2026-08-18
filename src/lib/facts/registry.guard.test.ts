@@ -221,8 +221,22 @@ describe('11 — no accidental new data source', () => {
   });
 });
 
-describe('12 — infrastructure only: nothing consumes the registry yet', () => {
-  it('no route or component imports it', () => {
+describe('12 — only APPROVED surfaces consume the registry', () => {
+  // This was "nothing consumes it yet" while 0C.2.2 was pure infrastructure.
+  // That premise is exactly what 0C.3 supersedes: log-insight.ts migrated in
+  // 0C.3a, and log-daily's first-log rule in 0C.3b-i. The guard is not
+  // removed, it is tightened — an ALLOWLIST is stronger than "none", because
+  // "none" would have to be deleted the moment a consumer was approved, taking
+  // all control with it.
+  //
+  // Adding a route or component here means a founder ruling cleared it. The
+  // Fact Registry is not a library anyone may reach for; every consumer is a
+  // migration with a parity proof behind it.
+  const APPROVED = [
+    'src/app/api/logging/log-daily/route.ts', // 0C.3b-i — rule 1, first log
+  ];
+
+  it('no unapproved route or component imports it', () => {
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -235,7 +249,17 @@ describe('12 — infrastructure only: nothing consumes the registry yet', () => 
       }
     };
     for (const d of ['app', 'components']) if (existsSync(join(SRC, d))) walk(join(SRC, d));
-    expect(offenders, '0C.2.2 is infrastructure — consumers migrate in 0C.3').toEqual([]);
+    expect(offenders.filter((f) => !APPROVED.includes(f)),
+      'a new registry consumer needs a ruling and a parity proof').toEqual([]);
+  });
+
+  it('every approved consumer actually exists and still consumes it', () => {
+    // A stale allowlist entry would silently widen the gate.
+    for (const f of APPROVED) {
+      expect(existsSync(join(process.cwd(), f)), `${f} is listed but missing`).toBe(true);
+      expect(readFileSync(join(process.cwd(), f), 'utf8'), `${f} no longer consumes the registry`)
+        .toMatch(/from ['"][^'"]*facts\/registry['"]/);
+    }
   });
 });
 

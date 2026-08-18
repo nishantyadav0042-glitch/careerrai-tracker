@@ -15,6 +15,7 @@ import { sendPushToUser } from '@/lib/push';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 import { coverageInsight } from '@/lib/log-insight';
 import { isAlreadyPersisted, EDIT_TOO_FAST_MESSAGE, type LoggedState } from '@/lib/log-acknowledgement';
+import { getFact } from '@/lib/facts/registry';
 
 interface LoggingRequest {
   hours: number;
@@ -228,7 +229,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    let dailyNudge = await computePrescriptiveLine(user.id, body.sections, isNewLog, admin, body.emotional_chips);
+    // Fetched once and shared by both noticing producers below: the
+    // prescriptive line's first-log fact (0C.3b-i) and the coverage insight's
+    // logged-day facts (0C.3a). This replaces the second daily_reports read
+    // the coverage block used to make, so the log path issues no extra query.
+    const { data: logDayRows } = await admin
+      .from('daily_reports').select('report_date').eq('student_id', user.id);
+    const logDates = (logDayRows ?? []).map((r: { report_date: string }) => r.report_date);
+
+    let dailyNudge = await computePrescriptiveLine(user.id, body.sections, isNewLog, admin, logDates, body.emotional_chips);
 
     // The guaranteed floor (founder, 17 Aug): NO log ends empty-handed. When
     // the behavioral rules above had nothing to notice (the common case), the
@@ -251,15 +260,13 @@ export async function POST(request: NextRequest) {
         //     depending on a constraint nobody re-checks. At 30 logs for the
         //     most active student today — and ~1k for a three-year student at
         //     100k scale — this is a few KB of short strings.
-        const [{ data: coverageRows }, { data: logDays }] = await Promise.all([
-          admin.from('topic_coverage').select('topic, section, status').eq('student_id', user.id),
-          admin.from('daily_reports').select('report_date').eq('student_id', user.id),
-        ]);
+        const { data: coverageRows } = await admin
+          .from('topic_coverage').select('topic, section, status').eq('student_id', user.id);
         dailyNudge = coverageInsight({
           coverage: (coverageRows ?? []) as { topic: string; section: string; status: string }[],
           todaySections: body.sections,
           isRest: body.hours === 0 && body.sections.length === 0,
-          logDates: (logDays ?? []).map((r: { report_date: string }) => r.report_date),
+          logDates,
           today: todayStr,
         });
       } catch (e) {
@@ -364,6 +371,8 @@ async function computePrescriptiveLine(
   todaySections: string[],
   isNewLogForDate: boolean,
   admin: ReturnType<typeof createAdminClient>,
+  /** Every CareerRai day this student has logged. Fetched once by the caller. */
+  logDates: string[],
   emotionalChips?: string[]
 ): Promise<string | null> {
   try {
@@ -374,9 +383,22 @@ async function computePrescriptiveLine(
       .order('report_date', { ascending: false })
       .limit(14);
 
-    // Rule 1: first-ever log
-    const priorCount = (recent ?? []).length - (isNewLogForDate ? 1 : 0);
-    if (priorCount <= 0) {
+    // Rule 1: first-ever log — 0C.3b-i, the ONE behaviour of this producer
+    // cleared to migrate (docs/0C-3B-PRODUCER-INVESTIGATION.md, Part 8).
+    //
+    // It asks an EVENT STATE question — "has this student logged before?" —
+    // which logged_days_total answers canonically by counting distinct
+    // CareerRai days. The old expression counted ROWS from a `.limit(14)`
+    // query; rows are date-unique by constraint, so the two agree exactly
+    // under the cap, and above it both stay > 0. The branch outcome cannot
+    // change for any student.
+    //
+    // Rules 2-6 below are deliberately untouched: they sit on the ambiguous
+    // daily-report evidence the 0C.3d/0C.3f audits documented, and migrating
+    // them would give a wrong claim provenance without making it true.
+    const totalLoggedDays = getFact('logged_days_total').produce({ logDates });
+    const priorLoggedDays = (totalLoggedDays.known ? totalLoggedDays.value : 0) - (isNewLogForDate ? 1 : 0);
+    if (priorLoggedDays <= 0) {
       return "First log done. Do this daily and in 2 weeks you'll see a pattern you can't see now.";
     }
     if (!recent || recent.length < 3) return null;
