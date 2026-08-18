@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { KNOWLEDGE_GRAPH, ONBOARDING_CORE_GRAPH, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
+import { KNOWLEDGE_GRAPH, ONBOARDING_CORE_GRAPH, isExamSyllabusTopic, type CoverageSectionId, type KnowledgeSection } from '@/lib/topics-constants';
 import { Rai, RAI_LEVELS } from '@/components/mascots';
 import type { CoverageStatus } from '@/lib/coverage-status';
 
@@ -303,14 +303,34 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     const matrix = KNOWLEDGE_GRAPH.flatMap((s) =>
       s.groups.flatMap((g) => g.units.map((unit) => ({ section: s.id, topic: unit, status: statuses[unit] ?? 'not_started' })))
     );
+
+    // THE COUNTS HANDED TO THE HOURS MODEL ARE EXAM-SCOPED (P0-C, 18 Aug).
+    //
+    // `matrix` is the whole Knowledge Graph — 53 units, including the 7
+    // mock-prep and reading-habit units. Sending `matrix.length` downstream as
+    // the syllabus size fed a rate calibrated per EXAM unit (397h ÷ 46) a count
+    // that included seven units the curated model had explicitly declined to
+    // estimate: 457h against a 397h syllabus, and quoted finish dates 8–15 days
+    // late.
+    //
+    // All three counts move together: `coverage_practicing` and
+    // `coverage_learning` were counted over the same 53 rows, so a habit unit
+    // marked 'practicing' inflated them too. Numerator and denominator must
+    // range over the same set — the rule the 111% Knowledge defect was born of.
+    //
+    // The full 53-row matrix still goes to /api/coverage and onMatrixReady:
+    // habit tracks ARE declared and tracked. They are simply not syllabus.
+    const examUnits = matrix.filter((m) => isExamSyllabusTopic(m.topic));
+    const declaredCounts = {
+      coverage_practicing: examUnits.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
+      coverage_learning: examUnits.filter((m) => m.status === 'learning').length,
+      exam_syllabus_unit_count: examUnits.length,
+    };
+
     if (deferSave) {
       onMatrixReady?.(matrix);
       try { window.localStorage.removeItem(DRAFT_KEY); } catch { /* best-effort */ }
-      onNext({
-        coverage_practicing: matrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
-        coverage_learning: matrix.filter((m) => m.status === 'learning').length,
-        coverage_total: matrix.length,
-      });
+      onNext(declaredCounts);
       return;
     }
     setSaving(true);
@@ -326,11 +346,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         throw new Error((json as { error?: string })?.error ?? 'Could not save your preparation map.');
       }
       try { window.localStorage.removeItem(DRAFT_KEY); } catch { /* best-effort */ }
-      onNext({
-        coverage_practicing: matrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
-        coverage_learning: matrix.filter((m) => m.status === 'learning').length,
-        coverage_total: matrix.length,
-      });
+      onNext(declaredCounts);
     } catch (err) {
       setError((err as { message?: string })?.message ?? 'Could not save your preparation map.');
     } finally {

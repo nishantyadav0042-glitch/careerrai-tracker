@@ -56,7 +56,21 @@ export interface BlueprintPreviewInput {
   weekendHours?: number | null;
   coverage_practicing?: number | null;
   coverage_learning?: number | null;
-  coverage_total?: number | null;
+  /**
+   * How many EXAM SYLLABUS units the student declared against — never the
+   * size of the Knowledge Graph.
+   *
+   * Renamed from `coverage_total` (P0-C, 18 Aug). That name read as "the
+   * syllabus total" while it carried `matrix.length` = 53, the size of the
+   * whole graph including the 7 habit/support units. The hours model below is
+   * calibrated per EXAM unit (397h ÷ 46), so the mismatch charged seven units
+   * the curated model had explicitly declined to estimate — 457h against a
+   * 397h syllabus, and quoted finish dates 8–15 days late.
+   *
+   * The name now states the domain, so a caller passing a graph-sized count
+   * is visibly wrong at the call site rather than silently wrong 60 hours later.
+   */
+  exam_syllabus_unit_count?: number | null;
 }
 
 export interface BlueprintPreview {
@@ -133,8 +147,16 @@ export interface CoverageProjection {
 // finish-date chooser's "4h/day → 12 Sept" options both call this, so the
 // two can never disagree).
 export function remainingPrepHours(input: BlueprintPreviewInput): number {
-  const total = input.coverage_total ?? EXAM_UNIT_COUNT;
-  const declared = input.coverage_total != null;
+  // CLAMPED TO THE MODEL'S OWN DOMAIN (P0-C, 18 Aug). AVG_UNIT_HOURS is
+  // hours-per-EXAM-unit; pricing more units than the syllabus contains invents
+  // hours that totalSyllabusHours() never measured. The producer is fixed too
+  // — this is the second line of defence, so a future caller holding a
+  // graph-sized count cannot reintroduce the fault silently.
+  //
+  // A ceiling, never a floor: a student who declared only part of the grid
+  // keeps their smaller count.
+  const declared = input.exam_syllabus_unit_count != null;
+  const total = Math.min(input.exam_syllabus_unit_count ?? EXAM_UNIT_COUNT, EXAM_UNIT_COUNT);
   const practicing = declared ? (input.coverage_practicing ?? 0) : 0;
   const learning = declared ? (input.coverage_learning ?? 0) : 0;
   const untouched = Math.max(0, total - practicing - learning);
@@ -155,7 +177,7 @@ export function remainingPrepHours(input: BlueprintPreviewInput): number {
 export function projectCoverageWeeks(input: BlueprintPreviewInput): CoverageProjection | null {
   const load = weeklyLoadHours(input);
   if (load == null || load <= 0) return null;
-  const declared = input.coverage_total != null;
+  const declared = input.exam_syllabus_unit_count != null;
   const hoursLeft = remainingPrepHours(input);
   return { weeks: Math.max(1, Math.ceil(hoursLeft / load)), basedOnDeclared: declared };
 }
@@ -171,14 +193,14 @@ function projectionBadge(input: BlueprintPreviewInput): string | null {
 // grid — the exact per-unit statuses they tapped, never an inferred count.
 // Feeds topic-selector.ts's coverage-status scoring.
 function coverageBadge(input: BlueprintPreviewInput): string | null {
-  if (input.coverage_total == null) return null;
+  if (input.exam_syllabus_unit_count == null) return null;
   const practicing = input.coverage_practicing ?? 0;
   const learning = input.coverage_learning ?? 0;
-  if (practicing === 0 && learning === 0) return `Starting fresh — all ${input.coverage_total} units ahead`;
+  if (practicing === 0 && learning === 0) return `Starting fresh — all ${input.exam_syllabus_unit_count} units ahead`;
   const parts: string[] = [];
   if (practicing > 0) parts.push(`${practicing} practicing`);
   if (learning > 0) parts.push(`${learning} learning`);
-  return `Coverage: ${parts.join(' · ')} of ${input.coverage_total}`;
+  return `Coverage: ${parts.join(' · ')} of ${input.exam_syllabus_unit_count}`;
 }
 
 export function computeBlueprintPreview(input: BlueprintPreviewInput): BlueprintPreview {

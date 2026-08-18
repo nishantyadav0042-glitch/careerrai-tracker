@@ -29,7 +29,7 @@ describe('the two hours models agree, at every effort', () => {
 
   it('per-topic and count-based produce the same total for a first-timer', () => {
     const perTopic = remainingSyllabusHours(untouched, 1);
-    const countBased = remainingPrepHours({ coverage_total: EXAM_UNIT_COUNT, is_repeater: false });
+    const countBased = remainingPrepHours({ exam_syllabus_unit_count: EXAM_UNIT_COUNT, is_repeater: false });
     expect(Math.round(countBased)).toBe(perTopic);
     expect(perTopic).toBe(totalSyllabusHours());
   });
@@ -39,7 +39,7 @@ describe('the two hours models agree, at every effort', () => {
     const effort = studentEffortMultiplier({ isRepeater: true, lastYearPercentile: 88 });
     const perTopic = remainingSyllabusHours(untouched, effort);
     const countBased = remainingPrepHours({
-      coverage_total: EXAM_UNIT_COUNT, is_repeater: true, last_year_percentile: 88,
+      exam_syllabus_unit_count: EXAM_UNIT_COUNT, is_repeater: true, last_year_percentile: 88,
     });
     expect(Math.round(countBased)).toBe(perTopic);
     expect(perTopic).toBeLessThan(totalSyllabusHours());
@@ -50,7 +50,7 @@ describe('the two hours models agree, at every effort', () => {
       const effort = studentEffortMultiplier({ isRepeater: true, lastYearPercentile: pct });
       const perTopic = remainingSyllabusHours(untouched, effort);
       const countBased = remainingPrepHours({
-        coverage_total: EXAM_UNIT_COUNT, is_repeater: true, last_year_percentile: pct,
+        exam_syllabus_unit_count: EXAM_UNIT_COUNT, is_repeater: true, last_year_percentile: pct,
       });
       expect(Math.abs(Math.round(countBased) - perTopic)).toBeLessThanOrEqual(1);
     }
@@ -60,7 +60,7 @@ describe('the two hours models agree, at every effort', () => {
     // last_year_percentile can be non-null on a non-repeater row (they toggled
     // the answer). is_repeater is the gate; the percentile only picks the band.
     const countBased = remainingPrepHours({
-      coverage_total: EXAM_UNIT_COUNT, is_repeater: false, last_year_percentile: 95,
+      exam_syllabus_unit_count: EXAM_UNIT_COUNT, is_repeater: false, last_year_percentile: 95,
     });
     expect(Math.round(countBased)).toBe(totalSyllabusHours());
   });

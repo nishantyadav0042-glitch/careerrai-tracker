@@ -152,7 +152,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     weekendHours: onboardingData.weekendHours as number | undefined,
     coverage_practicing: onboardingData.coverage_practicing as number | undefined,
     coverage_learning: onboardingData.coverage_learning as number | undefined,
-    coverage_total: onboardingData.coverage_total as number | undefined,
+    exam_syllabus_unit_count: onboardingData.exam_syllabus_unit_count as number | undefined,
   });
 
   // No single-topic self-report screens (weakest section/topic, stage,
@@ -251,7 +251,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       extraProps: {
         coveragePracticing: (onboardingData.coverage_practicing as number | undefined) ?? null,
         coverageLearning: (onboardingData.coverage_learning as number | undefined) ?? null,
-        coverageTotal: (onboardingData.coverage_total as number | undefined) ?? null,
+        examSyllabusUnitCount: (onboardingData.exam_syllabus_unit_count as number | undefined) ?? null,
         attemptYear: (onboardingData.attempt_year as number | undefined) ?? null,
         isRepeater: (onboardingData.is_repeater as boolean | undefined) ?? null,
         lastYearPercentile: (onboardingData.last_year_percentile as number | undefined) ?? null,
