@@ -9,7 +9,7 @@ import type { DecisionType } from '@/lib/coach-decision';
 import type { ConstraintKey } from '@/lib/constraint-engine';
 import type { Blocker } from '@/lib/mission-engine';
 import { completionWeight } from './completion-portion';
-import { dayWasStudied } from '@/lib/check-in';
+import { dayWasStudied, durationIsUnknown } from '@/lib/check-in';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -80,7 +80,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
     admin.from('profiles')
       .select('id, full_name, study_target_hours, hours_available, baseline_varc, baseline_dilr, baseline_qa, target_percentile, biggest_blocker, attempt_year, current_stage, is_repeater, is_working_professional')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
-    admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken, day_outcome').gte('report_date', windowStart),
+    admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken, day_outcome, study_duration_source').gte('report_date', windowStart),
     admin.from('daily_routines').select('student_id, routine_date, tasks').gte('routine_date', windowStart),
     admin.from('routine_task_completions').select('student_id, routine_date, task_id, confidence').gte('routine_date', windowStart),
     admin.from('topic_coverage').select('student_id, status'),
@@ -120,7 +120,9 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
 
     const hrs = rep.map((r: any) => Number(r.study_duration) || 0);
     const claimed = dailyHours(p).weekday;
-    const capacity = computeCapacity(hrs, rep.length, claimed);
+    // Q4 — see student-360: unmeasured days are not behaviour evidence.
+    const measuredDays = rep.filter((r: any) => !durationIsUnknown(r)).length;
+    const capacity = computeCapacity(hrs, measuredDays, claimed);
     if (capacity.trust === 'behaviour') h.capacityBehaviourCapped++;
 
     const rts = routinesBy.get(p.id) ?? [];

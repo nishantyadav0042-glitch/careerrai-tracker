@@ -9,7 +9,7 @@ import { type CoverageStatus } from '@/lib/topic-selector';
 import { plannerRecency } from '@/lib/plan-history';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
-import { dayWasStudied } from '@/lib/check-in';
+import { dayWasStudied, durationIsUnknown } from '@/lib/check-in';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -94,7 +94,7 @@ export async function GET() {
     // the recent window.
     admin
       .from('daily_reports')
-      .select('study_duration, plan_fit, report_date, mock_taken, day_outcome, blocker_reason, updated_at')
+      .select('study_duration, study_duration_source, plan_fit, report_date, mock_taken, day_outcome, blocker_reason, updated_at')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
     // The coaching timetable, so TODAY's class topics can lead today's plan —
@@ -137,7 +137,10 @@ export async function GET() {
   const biggestBlocker = profile.biggest_blocker as Blocker | null;
   const claimedHours = dailyHours(profile).weekday;
   const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
-  const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
+  // Q4 — see student-360: unmeasured days are not behaviour evidence.
+  const measuredDays = (recentReports ?? [])
+    .filter((r: { day_outcome?: string | null; study_duration_source?: string | null }) => !durationIsUnknown(r)).length;
+  const capacity = computeCapacity(recentStudyHours, measuredDays, claimedHours);
 
   const recentPlanFits = (recentReports ?? [])
     .map((r: { plan_fit: unknown }) => r.plan_fit)
