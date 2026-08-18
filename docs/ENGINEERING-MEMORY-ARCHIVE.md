@@ -1184,3 +1184,60 @@ untouched/remaining can never go negative.
 **The general lesson.** Deduplication and filtering look alike and are opposites.
 Collapsing a repeat preserves the evidence; dropping an unknown moves a
 denominator silently. A producer may do the first and may never do the second.
+
+---
+
+## Incident #33 — burnout/sleep red flags retired: fabricated input, plus a second bug (2026-08-18)
+
+**Symptom.** Two red-flag rules in `computeSummary` — `avgStress >= 4`
+("burnout risk") and `avgSleep < 3` ("Sleep quality below 3/5 — affects
+retention") — had never produced a trustworthy signal, and one of them was
+actively sending buddies a false alarm.
+
+**Root cause, part one (why neither COULD be trustworthy).**
+`upsert_log_and_streak` — the sole writer of `daily_reports` — hard-codes
+`confidence = 4, stress = 2, sleep_quality = 3` on every INSERT and UPDATE and
+takes no parameter for either. Stress has two distinct values in the entire
+table. Burnout's threshold (`>= 4`) is mathematically unreachable while stress
+is pinned at 2, and measured: **0 burnout notifications, ever.**
+
+**Root cause, part two — the one the founder's own premise ("neither has ever
+fired") did not anticipate, found by verifying production rather than trusting
+the stated assumption.** `avgSleep < 3` HAD fired — **26 times.** Not from a
+real measurement: `avg()` returns `0` for an empty array, and a student with
+zero reports in the trailing 7-day window produces `avgSleep = 0`, and
+`0 < 3` is true. **All 26 firings coincided exactly with "Fewer than 4 reports
+this week"** — a student who had logged nothing was told their SLEEP was the
+problem, a more specific and more alarming claim than the honest one already
+sitting beside it in the same array. Absence of evidence, presented as a
+measured `0/5`.
+
+**Cost.** Zero students harmed by the burnout branch (unreachable). 26 buddy
+notifications carried a fabricated sleep claim over two weeks, though in every
+case a truthful flag ("going quiet") was already present in the same
+notification, so the buddy's correct next action was never obscured — the
+notification was redundant-and-wrong, not the only signal.
+
+**Why retirement, not repair.** Fixing part one requires collecting real
+stress/sleep data, which is a product decision (J1/data-collection), not a
+threshold change. Fixing part two (`avg([]) === 0`) would still leave a rule
+built on evidence that does not exist. Retiring loses no real signal — every
+week that would have fired sleep is already caught, correctly, by going-quiet.
+
+**Prevention.** `j2-retire-wellbeing-flags.test.ts` proves no report shape
+reaches either rule (including a maximal, never-observed stress of 5, so the
+guard is retirement, not a raised threshold) and that a zero-report week fires
+`going_quiet` without also fabricating a sleep claim. `redFlags.push` count is
+pinned at exactly 3, so a silent fourth push cannot reappear.
+
+**The general lesson.** `avg(empty array) = 0` is UNKNOWN read as a measured
+zero — the same law this project has enforced everywhere else — and it hid
+inside a helper function nobody had re-examined once the fabricated-RPC
+explanation seemed sufficient. **A rule can be wrong for a different reason
+than the one you already found.** Verify production before writing the
+retirement, even when the founder has already stated the conclusion — this
+project has now paid for skipping that step at least once.
+
+**Explicitly not solved.** CareerRai currently has no trustworthy burnout or
+sleep-quality detection, because these signals are not meaningfully collected
+from real students. Retiring the rule is honest; it is not a capability.

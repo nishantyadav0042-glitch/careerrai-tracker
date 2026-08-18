@@ -39,10 +39,30 @@ export function computeSummary(reports: DailyReport[], period: number): Analytic
   else if (overallScore >= 50) band = 'Needs nudging';
   else band = 'Needs intervention';
 
+  // J2 (18 Aug) — burnout and sleep red flags RETIRED, not re-thresholded.
+  //
+  // Both depended on evidence CareerRai does not collect: upsert_log_and_streak
+  // hard-codes stress=2 and sleep_quality=3 on every write, so neither rule
+  // could ever fire from a real measurement. avgStress >= 4 genuinely never
+  // fired — 0 notifications, ever, and it is mathematically impossible while
+  // stress is pinned below 4.
+  //
+  // avgSleep < 3 DID fire — 26 times in production — but not from a real
+  // signal. `avg([])` returns 0 for a student with zero reports in the
+  // window, and 0 < 3. Every one of those 26 firings coincided exactly with
+  // "Fewer than 4 reports this week": a student who logged nothing was told
+  // their SLEEP was the problem. Retiring the rule loses no real signal — the
+  // going-quiet flag already, correctly, covers every one of those weeks —
+  // and it removes a second, independent defect (absence of evidence read as
+  // a specific, alarming number) along with the fabricated-input one.
+  //
+  // This is a retirement, not a repair: CareerRai currently has no
+  // trustworthy burnout or sleep-quality detection, because these signals are
+  // not meaningfully collected from real students. See ENGINEERING-MEMORY.
+  // avgStress/avgSleep remain computed above — moodScore still needs them,
+  // and that is a separate scoring-scale decision, not this gate.
   const redFlags: string[] = [];
-  if (avgStress >= 4) redFlags.push(`Avg stress ${avgStress.toFixed(1)}/5 — burnout risk`);
   if (avgStudy < 3) redFlags.push('Avg study below 3 hrs/day — momentum dropping');
-  if (avgSleep < 3) redFlags.push('Sleep quality below 3/5 — affects retention');
   if (reports.length < 4 && period === 7) redFlags.push('Fewer than 4 reports this week — going quiet');
   if (mockScores.length >= 2 && mockScores[mockScores.length - 1] < mockScores[0]) {
     redFlags.push('Mock accuracy declining');

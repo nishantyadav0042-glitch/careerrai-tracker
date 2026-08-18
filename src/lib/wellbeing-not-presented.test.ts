@@ -129,10 +129,17 @@ describe('nothing was invented to replace it', () => {
     }
   });
 
-  it('the writer and the red flags are untouched — J1 and J2 are separate gates', () => {
+  it('the writer is untouched — J1 is a separate gate', () => {
     const rpc = readRaw('supabase/migrations/20260812_log_daily_hours_accept_decimals.sql');
     expect(rpc, 'J1 is not this gate').toContain('confidence = 4, stress = 2');
+  });
+
+  it('the burnout/sleep red flags are retired — J2, 18 Aug', () => {
+    // This assertion inverted on purpose: at J3 time the flags were still
+    // live and this file pinned "J2 is not this gate" by requiring the rule
+    // text to still exist. J2 has since retired them — see
+    // j2-retire-wellbeing-flags.test.ts for the full case.
     const analytics = readRaw('src/lib/analytics.ts');
-    expect(analytics, 'J2 is not this gate').toContain('burnout risk');
+    expect(analytics).not.toContain('burnout risk');
   });
 });

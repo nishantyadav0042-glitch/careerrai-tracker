@@ -45,6 +45,7 @@
 | 30 | 2026-08-12 | Daily log rejected fractional hours — students could not log | Learning (P0) | all who marked a task "Half" |
 | 31 | 2026-08-18 | log-insight divided by row count, not by the syllabus | Learning / Analytics (P0) | 1 today; any student with a partial matrix |
 | 32 | 2026-08-18 | A topic filed under two sections counted twice — 111%, again | Analytics (P0, averted) | 1 (caught before it shipped) |
+| 33 | 2026-08-18 | Burnout/sleep red flags retired — fabricated input, and a second bug where absence of data read as a specific alarming number | Trust OS / Analytics (P1, resolved) | 0 harmed by burnout; 26 students falsely told "sleep quality" was the problem when they simply had not logged |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
