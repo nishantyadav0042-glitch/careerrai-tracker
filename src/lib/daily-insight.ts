@@ -143,10 +143,15 @@ export async function computeDailyInsight(
   }
 
   // 5 — CONSISTENCY worth naming.
+  // FIVE days means five (founder law: a window is as long as its copy says).
+  // This filtered `>= today − 5` INCLUSIVE, which spans SIX calendar days, so
+  // a student logging six days running could be told "6 of the last 5 days
+  // studied." today−4 … today is the five the sentence promises. The claim and
+  // the threshold below are unchanged — only the arithmetic was wrong.
   const last5 = new Set(
     (reports ?? [])
       .map((r: any) => r.report_date as string)
-      .filter((d: string) => d >= new Date(Date.now() - 5 * 86_400_000).toISOString().split('T')[0])
+      .filter((d: string) => d >= new Date(Date.now() - 4 * 86_400_000).toISOString().split('T')[0])
   ).size;
   if (last5 >= 4) {
     return {
@@ -157,8 +162,19 @@ export async function computeDailyInsight(
   }
 
   // 6 — Progress fallback: coverage moving.
-  const finished = topicMemory.filter((t) => isCovered(t.status)).length;
-  const remaining = topicMemory.length - finished;
+  //
+  // UNKNOWN ≠ ZERO (founder law, 18 Aug). buildTopicMemory fills every topic
+  // the student has no row for with 'not_started', so a student whose coverage
+  // we have never been told anything about used to render here as
+  // "0 topics done, 46 to go" — absence of evidence dressed as measurement.
+  //
+  // `declared` separates the two: a student who tapped "haven't started" has
+  // given us a real zero and still gets this line; a student who was never
+  // asked gets silence, which is the honest answer.
+  const declaredTopics = topicMemory.filter((t) => t.declared);
+  if (declaredTopics.length === 0) return null;
+  const finished = declaredTopics.filter((t) => isCovered(t.status)).length;
+  const remaining = declaredTopics.length - finished;
   return {
     kind: 'progress',
     title: '📈 Your map is filling in',

@@ -310,6 +310,20 @@ export function computeBlueprintConfidence(input: {
 export interface TopicMemoryEntry {
   topic: string;
   status: string; // CoverageStatus, or 'not_started' when the topic has no row at all
+  /**
+   * Did a coverage row actually exist for this topic?
+   *
+   * UNKNOWN ≠ ZERO (founder law, 18 Aug). `status` alone cannot tell these
+   * apart, and its own comment above admits it: a student who declared
+   * "haven't started" and a student who was never asked both read
+   * 'not_started'. The first is a measured zero; the second is an absence of
+   * evidence, and a consumer that counts it produces "0 topics done" about a
+   * student it knows nothing about.
+   *
+   * Added rather than changing `status`, so every existing reader is
+   * untouched — only consumers that need the distinction ask for it.
+   */
+  declared: boolean;
   firstTouchedDaysAgo: number | null;
   timesTouched: number;
   lastTouchedDaysAgo: number | null;
@@ -328,6 +342,7 @@ export function buildTopicMemory(
   return allTopics.map((topic) => {
     const coverageRow = coverageByTopic.get(topic);
     const status = coverageRow?.status ?? 'not_started';
+    const declared = coverageRow !== undefined;
 
     const dates = allCompletions.filter((c) => c.topic === topic).map((c) => c.routineDate).sort();
     const firstDate = dates[0] ?? null;
@@ -352,6 +367,7 @@ export function buildTopicMemory(
 
     return {
       topic,
+      declared,
       status,
       firstTouchedDaysAgo: firstDate ? Math.round((Date.parse(today) - Date.parse(firstDate)) / 86_400_000) : null,
       timesTouched: dates.length,
