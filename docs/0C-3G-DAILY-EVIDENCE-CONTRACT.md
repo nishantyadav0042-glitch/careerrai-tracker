@@ -1,6 +1,7 @@
 # The Daily Evidence Contract — 0C.3G
 
 **Locked 18 Aug 2026 by founder ruling. Binding.**
+**AMENDED 18 Aug 2026 — J6 is superseded by [J6-A](#ruling-j6-a--provenance-must-be-legible-amendment-18-aug-2026).**
 
 > This document does not choose a storage shape, propose a migration, or touch
 > a single row. It defines what four facts *mean*, so that whichever shape
@@ -83,6 +84,13 @@ is `observed_day_outcome`, full stop, whatever the eventual storage shape.**
 
 ## Ruling J6 — `study_duration` is two facts, not one
 
+> ### ⚠️ AMENDED 18 Aug 2026 — read `J6-A` below before acting on this section
+>
+> J6 as originally written ("two facts, never merged") is **superseded by J6-A**.
+> The original text is preserved unchanged below because the amendment cannot be
+> understood without it, and because the reasoning that produced it was sound on
+> the evidence available at the time. **It is no longer the operative rule.**
+
 **GO. Two facts.**
 
 | | `self_reported_study_duration` | `credited_study_duration` |
@@ -107,6 +115,92 @@ the two facts, not an anonymous maximum of both. **Not fixed here** — this
 contract names the violation so the next gate has an exact target, per
 0C.3F1's K7 (provenance columns) or an equivalent shape. No column is added
 in this document.
+
+---
+
+## Ruling J6-A — provenance must be legible (AMENDMENT, 18 Aug 2026)
+
+**This is the operative rule. It supersedes J6 above.**
+
+> **A duration value may be presented as self-reported or as credited ONLY when
+> its provenance is actually established. Historical values whose provenance
+> cannot be established retain their historical value and are explicitly marked
+> legacy/unknown provenance. Never represent an inferred or credited value as
+> self-reported.**
+
+### Why J6 was amended rather than enforced
+
+J6 was ruled on the belief that `study_duration` carried two facts. The G4 audit
+(`docs/0C-3G-G4-STUDY-DURATION-AUDIT.md`, `fc38554`) and the J6 decision memo
+(`docs/0C-3G-J6-DECISION-MEMO.md`, `aeabac3`) established that it carries **four**,
+produced by four deploy-bounded write eras:
+
+| Era | What the number means | Real rows | Hours |
+|---|---|---|---|
+| E1 — before 9 Aug | Typed by the student | 167 | 373.5 |
+| **E2 — 9–12 Aug** | **`max(1, round(min/60), existing)` — a 1-hour floor, whole-hour rounded** | **30** | **33.6** |
+| E3 — 13–17 Aug | `creditedHours`, no half-tick | 79 | 102.0 |
+| E4 — 18 Aug onward | Current semantics | 17 | 33.5 |
+
+**E2 is the decisive case.** Its value is neither self-reported nor credited.
+Forcing it into either fact would *manufacture provenance* — the precise failure
+this contract's naming law exists to prevent. A two-fact model has nowhere
+truthful to put 30 real rows belonging to 18 students.
+
+The second reason is that historical credited duration **cannot be safely
+back-calculated**: `daily_routines` is `UNIQUE (student_id, routine_date)` and
+carries no `updated_at`, so a plan regeneration overwrites the denominator in
+place and the overwrite is undetectable. A recomputation reproduces 39 of 293
+real rows and runs *higher* than stored on 21 — proving the inputs have already
+drifted from what was written.
+
+### What J6-A requires
+
+**Future data**
+- Self-reported duration → recorded as explicitly self-reported.
+- Credited duration → recorded as explicitly credited.
+- No evidence → recorded as unknown. **Not as `0`.**
+- One is never silently substituted for another.
+
+**Historical data**
+- The existing numeric value is **preserved**.
+- The strongest provenance classification that can actually be *proven* is attached.
+- The historical number is **never recomputed and overwritten.**
+
+### What J6-A explicitly forbids
+
+1. **Rewriting any historical duration value.** Not by backfill, not by
+   recomputation, not by migration. The G4 evidence is that recomputation is
+   wrong on 87% of rows it can even be attempted on.
+2. **Redefining `study_duration` as a permanently merged value and declaring the
+   problem solved.** Legibility is the requirement; a merged number that admits
+   nothing about itself does not satisfy this contract.
+3. **The shape G5 must not take:** *"add `credited_study_duration`, backfill 293
+   rows, migrate all 30 consumers."* This is precisely what the G4 evidence says
+   cannot be done safely, and it is prohibited by name so it cannot be
+   rediscovered as a good idea later.
+
+### Sequencing locked by this amendment
+
+- **A3 is fixed independently and FIRST**, ahead of any storage work. `day_outcome ∈
+  {studied, partial}` with `study_duration = 0` is a live truthfulness defect
+  affecting 62 real rows across 38 students. It does not depend on this ruling.
+  **The A3 fix must stay narrow** — it is not a licence to redesign duration
+  semantics.
+- **The four unclassified consumers (G4 §6) are DEFERRED.** No consumer is
+  repointed until the semantic model is locked. Under this amendment none needs to be.
+- **E2's 30 rows are preserved as historical legacy evidence**, classified as E2/legacy
+  where the era can be established. Their values are not rewritten and not nulled.
+- **G5 opens only after this amendment is locked**, and its first implementation
+  question is exactly: *what is the minimum provenance representation that makes
+  future duration truth legible without rewriting historical values?*
+
+### Status of the original J6 violation
+
+The violation J6 named — `mergedHours = Math.max(earned, existingLog?.study_duration ?? 0)`
+writing one column with either value and no record of which — **remains a real
+violation under J6-A.** What changed is the remedy: it is cured by making the
+provenance legible, not by splitting the column into two facts.
 
 ---
 
@@ -176,7 +270,8 @@ them, and none is being added.
 
 | Item | Status |
 |---|---|
-| **Storage shape** for the two-fact splits (J1, J6) — per-field provenance column, separate table, or another shape entirely (0C.3F1's O1/O2/O3) | Not decided here. Implementation question for the next gate. |
+| **Storage shape** for J1's split | Not decided here. Implementation question for the next gate. |
+| **Storage shape for `study_duration`** | **Superseded by J6-A.** No split is to be implemented. The open question is now narrower and stated in J6-A: the *minimum provenance representation* that makes future duration truth legible without rewriting historical values. |
 | **J2's transactional half** — moving `day_outcome`/`confidence`/`plan_fit` off the fire-and-forget write | Semantically required by J1 (see above); *how* is implementation, not decided here. |
 | **`REST` vs `NOT_STUDIED`** as distinct product states | Still a founder call, independent of this contract. |
 | **J10 — the evidence model's concrete shape** | Was blocked on J1 and J6 being ruled. **Both are now ruled.** J10 is therefore the next open question, not this contract's job to answer. |
@@ -195,6 +290,19 @@ them, and none is being added.
 > of "syllabus coverage" happened the first time. This contract is that
 > lesson, applied before the daily-report fields make the same mistake at
 > Fact Registry scale.
+
+### The amendment's addition to that law (J6-A, 18 Aug)
+
+> **Where provenance has already been erased, it may not be invented to satisfy
+> a model.** The remedy for a column with lost provenance is to make what we
+> actually know legible — including "we do not know" — never to recompute the
+> past into a shape the rule prefers. A value whose origin cannot be proven is
+> legacy evidence, and saying so is more truthful than assigning it a fact it
+> may not belong to.
+
+This is the same discipline as the rest of the contract, applied one level
+deeper: J1/J7/J8 stop provenance being erased *going forward*; J6-A governs what
+is owed to data whose provenance was *already* erased before the rule existed.
 
 ---
 
