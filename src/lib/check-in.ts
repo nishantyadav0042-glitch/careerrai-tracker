@@ -91,8 +91,38 @@ export function outcomeAsksWhy(o: DayOutcome): boolean {
   return OUTCOME_OPTIONS.find((x) => x.id === o)?.asksWhy === true;
 }
 
-/** The two outcomes that mean the student sat down and did work. */
-const STUDIED_OUTCOMES: readonly DayOutcome[] = ['studied', 'partial'];
+/**
+ * The two outcomes that mean the student sat down and did work.
+ *
+ * ONE constant, deliberately: `dayWasStudied` and `outcomeNeedsDuration` ask
+ * different questions ("did work happen?" / "is a duration still owed?") but
+ * both are answered by the same set, because a day with work in it is exactly
+ * the day that has a length worth telling us. Two arrays with identical
+ * contents is how the fifth value gets added to one and missed in the other —
+ * the failure class this whole module was created to prevent.
+ */
+const WORK_HAPPENED: readonly DayOutcome[] = ['studied', 'partial'];
+
+/**
+ * Does this answer leave a duration unanswered?
+ *
+ * The check-in gate never asks "how long" — it posts hours: 0 with
+ * `not_collected` for every outcome. For 'not_studied' and 'skipped' that is a
+ * COMPLETE answer: the student has said there was nothing to measure, so the
+ * outcome already answers the duration question. For 'studied' and 'partial'
+ * it is a question left hanging, and the resulting row is one no consumer can
+ * interpret — 62 of them across 38 students, which weekly-plan-reconcile reads
+ * as a literal zero and uses to push the student's syllabus finish date out.
+ *
+ * This is the same pair rule G6 derived for READING the data, applied at the
+ * writing end: rather than teach every consumer to interpret an unanswerable
+ * row, stop creating it. The gate keeps what it can finish and hands the rest
+ * to the log sheet, which has had somewhere truthful to put off-plan study
+ * since 9a66322.
+ */
+export function outcomeNeedsDuration(o: DayOutcome): boolean {
+  return WORK_HAPPENED.includes(o);
+}
 
 /**
  * A3 — was this a study day?
@@ -121,6 +151,6 @@ export function dayWasStudied(row: {
   day_outcome?: string | null;
   study_duration?: number | string | null;
 }): boolean {
-  if (isDayOutcome(row.day_outcome) && STUDIED_OUTCOMES.includes(row.day_outcome)) return true;
+  if (isDayOutcome(row.day_outcome) && WORK_HAPPENED.includes(row.day_outcome)) return true;
   return (Number(row.study_duration) || 0) > 0;
 }

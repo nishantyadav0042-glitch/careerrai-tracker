@@ -6,7 +6,7 @@ import { track } from '@/lib/journey';
 import { PlanRebuildPayoff } from '@/components/plan-rebuild-payoff';
 import { tourDone, notifAskVisible, insightVisible } from '@/lib/first-run-events';
 import {
-  OUTCOME_OPTIONS, BLOCKER_REASONS, outcomeAsksWhy, type DayOutcome,
+  OUTCOME_OPTIONS, BLOCKER_REASONS, outcomeAsksWhy, outcomeNeedsDuration, type DayOutcome,
 } from '@/lib/check-in';
 
 // ── The daily check-in gate ─────────────────────────────────────────────────
@@ -119,6 +119,27 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
         setNoticed(data.milestone ?? data.daily_nudge ?? null);
       } catch { /* payoff simply shows no noticed line */ }
       track('checkin_completed', { outcome: finalOutcome, reason: finalReason, forDate: yesterdayStr, variant });
+
+      // Q5 (founder ruling, 18 Aug) — the gate does not pretend to have
+      // finished an answer it never asked. "Studied" and "Studied a bit" mean
+      // work happened, and the gate has no field for how much; posting hours: 0
+      // produced 62 rows nobody could read, which weekly-plan-reconcile treated
+      // as a literal zero and used to push the student's finish date out.
+      //
+      // The outcome is already SAVED at this point, deliberately. A student who
+      // abandons the sheet still keeps the day and the streak, stamped
+      // `not_collected` — the honest state, and strictly better than today
+      // where they get the same row with no invitation to finish it. Completing
+      // the sheet upserts this same (student, date) row to real hours and
+      // `credited`, so the unanswered state is transient rather than terminal.
+      if (outcomeNeedsDuration(finalOutcome)) {
+        track('checkin_handoff_to_log', { outcome: finalOutcome, forDate: yesterdayStr });
+        try {
+          window.dispatchEvent(new CustomEvent('cr-open-log-for-date', { detail: { date: yesterdayStr } }));
+        } catch { /* if the handoff cannot fire, the answer is still saved */ }
+        finish();
+        return;
+      }
       // Hand over to the shared payoff: it narrates the rebuild 0 -> 100% and
       // then shows the plan that came out of this answer. The rebuild it
       // narrates is real — /api/routine/today recomputes from the row just

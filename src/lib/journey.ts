@@ -199,6 +199,9 @@ let seq = 0;
 export type EventName =
   | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
+  // Q5: the check-in recorded studied/partial and handed off to the full sheet,
+  // because it has no field for how long. Pairs with log_open via:'checkin_handoff'.
+  | 'checkin_handoff_to_log'
   | 'first_log_prompt'
   // Onboarding's closing log-practice screen (13 Aug): props carry how many of
   // the 3 practice tasks were marked and whether it was skipped — the cohort

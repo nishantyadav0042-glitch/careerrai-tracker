@@ -136,11 +136,25 @@ export function DailyTrackerApp({
     // the mock question unanswered rather than pre-answered — a student who
     // studied off-plan has not told us anything about a mock yet.
     const openOffPlan = () => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); };
+    // The check-in gate hands off here: it recorded "studied"/"studied a bit"
+    // for YESTERDAY and cannot ask how long, so the sheet opens on that date to
+    // finish the answer. The date rides on the event — opening without it would
+    // silently log today instead.
+    const openForDate = (e: Event) => {
+      const date = (e as CustomEvent<{ date?: string }>).detail?.date;
+      if (!date) return;
+      track('log_open', { via: 'checkin_handoff' });
+      setLogDateOverride(date);
+      setLogWithMock(false);
+      setIsLogOpen(true);
+    };
     window.addEventListener('cr-open-mock-log', open);
     window.addEventListener('cr-open-off-plan-log', openOffPlan);
+    window.addEventListener('cr-open-log-for-date', openForDate);
     return () => {
       window.removeEventListener('cr-open-mock-log', open);
       window.removeEventListener('cr-open-off-plan-log', openOffPlan);
+      window.removeEventListener('cr-open-log-for-date', openForDate);
     };
   }, []);
 
