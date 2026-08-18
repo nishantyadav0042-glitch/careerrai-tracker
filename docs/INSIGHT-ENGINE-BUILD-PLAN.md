@@ -13,28 +13,72 @@ drifts.
 
 ---
 
-## PART 0 — The locked contract (non-negotiable, from the founder)
+## PART 0 — THE EIGHT LAWS (locked by the founder, 18 Aug — non-negotiable)
 
-1. **Insight at every tap.** A single task tick on Home produces an immediate,
-   tick-scoped insight. A full log submission produces ONE combined insight — never a
-   stack of per-task lines repeated at submit time.
-2. **Zero duplication.** The same claim never reaches the same student twice inside its
-   cooldown, across ALL surfaces (payoff card, push, weekly story). Dedup is a backend
-   state, not a UI check.
-3. **No fake insights, no percentage games.** Every number has exactly one definition,
-   one source, one rounding rule. A student must never see a percentage move for any
-   reason other than their own actions.
+These govern every insight feature CareerRai will ever ship. Each is stated with its
+mechanical enforcement, so a law that cannot be enforced by code or test is not a law.
 
-Plus the three laws locked in discussion:
+| # | Law | How it is enforced (not just documented) |
+|---|---|---|
+| **1** | **Every tap has payoff.** Every successful section/topic log produces an immediate, evidence-backed insight. | Tap path returns a claim synchronously; guard test asserts a valid tick always yields a non-null L1 insight when coverage exists. |
+| **2** | **Complete log gets synthesis.** A finished daily plan produces ONE combined insight, not a replay of the individual lines. | `supersedes` on combined rules absorbs the day's tap insights; guard test forbids two live claims on one subject. |
+| **3** | **One event, one truth.** Each student action creates one canonical event; every downstream system references it. No parallel truths. | Insight Engine holds zero write paths to canonical stores; it reads and references by row id. See §0.2 for the one honest tension. |
+| **4** | **Evidence before insight.** No insight without identifiable evidence refs. | Integrity Gate refuses; partial index + `evidence` NOT NULL; test #2. |
+| **5** | **Precision must be earned.** No percentage/trend/comparison/diagnosis unless numerator, denominator, definition and source are unambiguous. | `safeRatio()` is the ONLY producer of any ratio; returns `null` (not a number) on an uncertain denominator. |
+| **6** | **No fake precision.** Known count + unsafe denominator ⇒ show the count. "8 topics completed" beats an invented 25%. | Claim templates carry a `countFallback` variant; when `safeRatio()` returns null the template renders counts only. |
+| **7** | **Explain what actually happened.** A "your plan changed because…" claim requires the plan to actually contain that change, traceable. | `plan_change_ref` required for `kind='adapt'`; Gate resolves it against `daily_routines` or refuses; test #4. |
+| **8** | **The existing system is sacred.** The Insight Engine never creates a competing planner, progress calculator, memory store, or notification truth. | `planner-unification.test.ts` (existing) + a new grep test forbidding insight code from writing canonical tables. |
 
-- **Law 1:** Every successful log produces at least one earned insight — but the insight
-  level may never exceed the evidence level. (L1 facts are always earned; that is why
-  "always show" and "never manufacture" are compatible.)
-- **Law 2:** Never show an insight merely because we need to show something. Evidence
-  earns the level; silence beats an unearned claim.
-- **Law 3 (explain = act):** Every actionable claim references the exact system action
-  that occurred. No action reference → the language must say "we recommend", never "we
-  changed". The claim and the plan-write must be the same object.
+**The standard all eight serve, in the founder's words:** *CareerRai may be silent when
+evidence is insufficient, but it must never be confidently wrong.*
+
+### 0.1 Law 5 & 6 — verified against production, 18 Aug
+
+The denominator question is not hypothetical, so it was measured before being designed
+around:
+
+| Section | Distinct denominators across 415 students | Value |
+|---|---|---|
+| QA | **1** | 28 |
+| VARC | **1** | 9 |
+| DILR | **1** | 9 |
+
+**[verified]** Every student shares one denominator per section, and it matches the code
+constant `EXAM_UNIT_COUNT = 46 // VARC 9 + DILR 9 + QA 28` (`blueprint-builder.ts:120`)
+exactly. So section-coverage percentages are safe to show **today** — Law 5 is satisfiable
+by construction, not aspiration.
+
+Two real exposures remain, and both get handled rather than assumed away:
+
+1. **42 students have no coverage rows at all** (457 total − 415 with coverage). For them
+   every denominator is 0. Law 6 governs: show counts or say nothing. *The 17-Aug
+   `log-insight.ts` floor already degrades correctly here* **[verified]** — it falls
+   through to the logged-days line rather than dividing by zero.
+2. **The denominator lives in code, so a syllabus edit moves every student's percentage
+   at once.** This is exactly the founder's "no silent metric change" concern, and it is
+   a live risk, not a theoretical one. Mechanism: every stored ratio snapshot carries
+   `syllabus_version`; a delta is only rendered when both sides share it; on a version
+   change the student sees a fresh baseline ("QA: 8 of 34 topics") and **never** a
+   phantom jump. The version bump also invalidates in-flight insights (state
+   `invalidated`) instead of silently restating them.
+
+### 0.2 Law 3 — the one honest tension in the current system
+
+Law 3 is right, and the architecture mostly already complies: a tick writes the **event**
+(`routine_task_completions`) and the **derived state** (`topic_coverage` via
+`applyConfidenceSignal`) — that is Event → State, not two truths.
+
+But there is a genuine second source for one specific question — *"which sections did
+this student touch today?"* — answerable from either `daily_reports.topics_covered` (what
+the log recorded) or from task completions joined to the day's plan. These can legitimately
+disagree: an off-plan study day writes sections with no matching completions. Left alone,
+this is precisely how "Insight says 3, Notification says 2" happens.
+
+**Decision required before Phase 2 (flagged, not silently resolved):** nominate ONE of
+these as canonical for behavioural facts. Recommendation: **task completions are canonical
+for per-topic/per-section behaviour** (they carry topic identity and plan intent), while
+`daily_reports` stays canonical for *"did the student show up"* (streak, consistency).
+Every fact producer then declares which of the two it reads, in the registry, once.
 
 ---
 
@@ -290,14 +334,35 @@ combined pass finds nothing above the tap insights already shown, it emits the L
 from a DIFFERENT subject (the 17-Aug ladder logic, now expressed as low-priority rules)
 — Law 1 holds, duplication cannot happen because the index blocks it.
 
-**Percentage integrity (the founder's "no confusing percentage games"):** one fact
-producer owns every ratio. `qa_opened_pct` = opened/total from `topic_coverage`, core
-sections only, `Math.round`, computed in exactly one function **[the 17-Aug module
-already establishes this]**. Deltas ("18% → 21%") only ever compare two stored snapshots
-of the SAME fact_key + rule_version — never a live number against a differently-computed
-old one. If the syllabus graph ever changes size, rule_version bumps, old deltas retire,
-and the student sees a fresh baseline instead of a phantom drop. A metric-registry-style
-test asserts every percentage in every claim template traces to a registered fact.
+**Percentage integrity (Laws 5 & 6), mechanically:**
+
+```ts
+// The ONLY function in the product allowed to produce a ratio for a student claim.
+// Returns null — never a number — when the denominator cannot be trusted.
+// Callers MUST handle null by rendering counts (Law 6), never by substituting 0.
+export function safeRatio(num: number, denom: number, opts: {
+  definition: string;          // 'qa_syllabus_coverage' — registered, never generic
+  source: string;              // 'topic_coverage'
+  syllabusVersion: string;     // stamped into every snapshot
+}): { pct: number; num: number; denom: number; definition: string } | null
+```
+
+Rules it enforces: denominator must be > 0 and equal to the registered expected size for
+that definition (28/9/9 today, **[verified]**) — a student whose row count disagrees gets
+`null`, not a wrong percentage; one rounding rule (`Math.round`) in one place; and the
+returned object always carries its own numerator, denominator and definition so a claim
+template physically cannot print a bare percentage without them.
+
+**Named definitions, never a generic `completion_percentage`** (the founder's misleading-
+denominator law). Registered separately, and a test forbids any two from sharing a name:
+`qa_syllabus_coverage` · `daily_plan_completion` · `weekly_plan_adherence` ·
+`section_topic_completion`. "5 of 10 planned topics done" is *daily_plan_completion = 50%*
+and may never be rendered in a sentence about syllabus coverage.
+
+**Deltas** ("18% → 21%") only ever compare two stored snapshots sharing BOTH `rule_version`
+and `syllabus_version`. Mismatch ⇒ no delta rendered, fresh baseline shown instead. This
+is what makes a definition correction structurally incapable of masquerading as student
+progress.
 
 ---
 
@@ -367,6 +432,17 @@ Pulse already owns that domain with its own density gates).
 9. Replay: `rebuildInsightState` from canonical events reproduces the snapshot table
    byte-for-byte on fixtures (determinism proof).
 10. Metric-registry extension: every fact_key registered once, with source + meaning.
+11. `insight-ratio.guard` (Law 5/6): `safeRatio` returns null for denom=0, for a
+    denominator ≠ the registered size, and for NaN/negative inputs; no claim template
+    anywhere prints `%` without a matching numerator+denominator in scope; no two
+    registered definitions share a name; a generic `completion_percentage` key is
+    rejected outright.
+12. `insight-version.guard` (Law 6 / no silent metric change): a delta across mismatched
+    `syllabus_version` or `rule_version` renders no delta; bumping `EXAM_UNIT_COUNT` in a
+    fixture invalidates affected live insights rather than restating them.
+13. `insight-tap-payoff.guard` (Law 1): a valid tick by a student with coverage rows
+    always produces exactly one L1 insight — and a student with zero coverage rows
+    produces a count-based line or silence, never a division by zero.
 
 ---
 
@@ -409,6 +485,18 @@ every other number in the product.
    (Candidates we already suspect: mock edit/delete propagation into already-surfaced
    insights → 'invalidated' state exists but the UX of retracting a shown claim is
    undesigned.)
+10. **Law 3's open decision (§0.2):** task completions vs `daily_reports.topics_covered`
+    as canonical for "which sections did the student touch today". Off-plan study is the
+    case that splits them. Is the recommended split (completions = behaviour,
+    daily_reports = showing-up) right, or does it create a class of insight that
+    under-counts genuine off-plan work?
+11. **Law 6 versus Law 1:** when `safeRatio` returns null AND the count itself is
+    uninteresting (0 topics), Law 1 still demands an insight. Is falling back to a
+    different subject the right answer, or is that the "manufacturing" Law 2 forbids?
+12. **Syllabus versioning UX:** on a genuine syllabus correction, the honest reset shows
+    a student a *lower* percentage than yesterday through no fault of theirs. Is a fresh
+    baseline enough, or does that moment need explicit copy ("we corrected the syllabus
+    count — your work is unchanged")?
 
 ---
 
