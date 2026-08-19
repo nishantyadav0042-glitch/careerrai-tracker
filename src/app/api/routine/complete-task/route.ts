@@ -63,6 +63,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown task for today\'s routine' }, { status: 400 });
   }
 
+  // Set by either coverage-advance failure branch below (G3/J12). Declared at
+  // function scope because the advance happens inside the toggle branches while
+  // the response is assembled much later -- the same reach dayClosed needs.
+  let coverageAdvanceFailed = false;
+
   // Toggle: if already complete, un-complete it (a mis-tap shouldn't be permanent).
   const { data: existingCompletion } = await admin
     .from('routine_task_completions')
@@ -89,6 +94,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not save that tick — try again.' }, { status: 500 });
     }
 
+    // G3 (J12) -- a coverage advance is a derived write on top of a tick that
+    // already succeeded. Both of its failure branches were console.error'd and
+    // discarded, so the route could not tell the caller anything had gone
+    // wrong: the student's tick was saved, the Coverage Matrix silently was
+    // not, and tomorrow's Topic Selector read stale state. Surfaced the same
+    // way dayClosed already surfaces the RPC's failure -- reported, never
+    // repaired by pretending it worked.
     // Confidence-aware planning: a real 🟢/🟡/🔴 tap on a topic-bearing task
     // feeds straight back into the Coverage Matrix — the same table the
     // Topic Selector reads for tomorrow's choice — rather than only ever
@@ -110,6 +122,7 @@ export async function POST(request: NextRequest) {
       // planner reads is not. (Backbone audit, 13 Aug.)
       if (readErr) {
         console.error('[complete-task] coverage read failed, skipping advance', readErr.message);
+        coverageAdvanceFailed = true;
       } else {
         const current = (coverageRow?.status as CoverageStatus | undefined) ?? null;
         const advanced = applyConfidenceSignal(current, effectiveConfidence as ConfidenceSignal);
@@ -122,7 +135,10 @@ export async function POST(request: NextRequest) {
           { student_id: user.id, section: completedTask.section, topic: completedTask.topic, status: newStatus, updated_at: new Date().toISOString() },
           { onConflict: 'student_id,section,topic' }
         );
-        if (upsertErr) console.error('[complete-task] coverage upsert failed', upsertErr.message);
+        if (upsertErr) {
+          console.error('[complete-task] coverage upsert failed', upsertErr.message);
+          coverageAdvanceFailed = true;
+        }
       }
     }
   }
@@ -241,5 +257,8 @@ export async function POST(request: NextRequest) {
     fullyDone,
     emergencyMinimumDone,
     dayClosed,
+    // G3 -- reported, never repaired by pretending it worked. The tick IS
+    // saved; what failed is the derived coverage write on top of it.
+    coverageAdvanceFailed,
   });
 }

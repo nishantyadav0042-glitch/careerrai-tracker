@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existingLog } = await admin
       .from('daily_reports')
-      .select('id, updated_at')
+      .select('id, updated_at, topics_covered')
       .eq('student_id', user.id)
       .eq('report_date', dateStr)
       .maybeSingle();
@@ -121,11 +121,22 @@ export async function POST(request: NextRequest) {
 
     // Atomic: both daily_reports and streak_data are updated inside a single Postgres
     // transaction so a mid-flight server crash cannot leave them out of sync.
+    // 0C.3G/J8 -- never shrink a section a prior write already established.
+    // complete-task has always merged this way; the RPC's own UPDATE branch
+    // does not (an unconditional replace), which is the violation this closes.
+    // The union happens here, in application code, not in the stored procedure
+    // -- no migration, no schema change. Reuses the existingLog fetch above, so
+    // no new query.
+    const mergedSections = [...new Set([
+      ...((existingLog as { topics_covered?: string[] } | null)?.topics_covered ?? []),
+      ...body.sections,
+    ])];
+
     const { data: rpcResult, error: rpcError } = await admin.rpc('upsert_log_and_streak', {
       p_student_id:      user.id,
       p_report_date:     dateStr,
       p_study_duration:  body.hours,
-      p_topics_covered:  body.sections,
+      p_topics_covered:  mergedSections,
       p_mood_emoji:      body.energy,
       p_mock_taken:      body.sections.includes('Mock'),
       p_notes:           body.notes || null,
