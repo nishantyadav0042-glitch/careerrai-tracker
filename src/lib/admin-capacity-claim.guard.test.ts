@@ -24,12 +24,27 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 const ADMIN = 'src/app/admin/student/[id]/page.tsx';
 const ENGINE = 'src/lib/capacity-engine.ts';
 
-/** Non-test, non-definition callers of capBudget across the source tree. */
+/**
+ * Strip line and block comments before scanning.
+ *
+ * These source-reading guards cannot tell code from prose, and this file has
+ * now been tripped by its own explanatory comments twice: once by a comment
+ * naming the retired badge text, once by a comment naming capBudget itself.
+ * Stripping is the general fix -- dodging it by not writing the word would
+ * mean the code cannot explain itself.
+ */
+function codeOnly(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((l) => l.replace(/\/\/.*$/, ''))
+    .join('\n');
+}
+
+/** Non-definition callers of capBudget in actual code. */
 function capBudgetIsWired(): boolean {
-  const engine = read(ENGINE);
-  // Its own definition never counts as a caller.
   const defLine = /export function capBudget\(/;
-  const engineCalls = engine
+  const engineCalls = codeOnly(read(ENGINE))
     .split('\n')
     .filter((l) => /\bcapBudget\s*\(/.test(l) && !defLine.test(l));
   return engineCalls.length > 0;
@@ -45,7 +60,7 @@ describe('the admin capacity card cannot claim what the product does not do', ()
   it('the false "plan sized to" claim is gone while nothing consumes capacity', () => {
     const admin = read(ADMIN);
     if (!capBudgetIsWired()) {
-      expect(admin, 'the plan is sized by dailyHours(profile), not by capacity')
+      expect(codeOnly(admin), 'the plan is sized by dailyHours(profile), not by capacity')
         .not.toMatch(/plan sized to/i);
     }
   });
@@ -59,6 +74,32 @@ describe('the admin capacity card cannot claim what the product does not do', ()
     expect(admin, 'observed typical hours must still show').toContain('typicalStudyHours');
     expect(admin, 'the trust signal must still colour the card').toMatch(/s\.capacity\.trust === 'behaviour'/);
     expect(admin, "the engine's own explanation must still render").toContain('s.capacity.note');
+  });
+
+  it('the note does not repeat the claim the badge was removed for', () => {
+    // The first pass removed the badge and left this sentence directly beneath
+    // it, which moved the falsehood rather than removing it. The guard now
+    // covers the whole capacity surface, not one JSX element.
+    const engine = read(ENGINE);
+    if (!capBudgetIsWired()) {
+      expect(codeOnly(engine), 'capacity.note must not claim it sizes the plan either')
+        .not.toMatch(/[Pp]lan sized to/);
+    }
+  });
+
+  it('the note never renders a null as a number', () => {
+    // `typical` is null when no day was productive; `claimedHours` is nullable
+    // too. Unguarded, either printed a literal "nullh" at the founder.
+    const engine = read(ENGINE);
+    const notes = engine.split('\n').filter((l) => l.includes('note:') || l.trim().startsWith('?') || l.trim().startsWith(':'));
+    for (const line of notes) {
+      const interps = [...line.matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1]);
+      for (const i of interps) {
+        if (/\btypical\b|\bclaimedHours\b/.test(i)) {
+          expect(i, `nullable interpolation must be guarded: ${i}`).toMatch(/\?\?/);
+        }
+      }
+    }
   });
 
   it('plan sizing itself is untouched', () => {

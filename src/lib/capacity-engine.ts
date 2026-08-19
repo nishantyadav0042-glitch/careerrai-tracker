@@ -52,9 +52,23 @@ export function computeCapacity(recentStudyHours: number[], loggedDays: number, 
 
   return {
     claimedHours, loggedDays, typicalStudyHours: typical, sustainableHours: sustainable, trust,
+    // TWO fixes in one string, because they were one string.
+    //
+    // 1. It repeated the sizing claim the admin badge was removed for. Nothing
+    //    applies sustainableHours to a plan -- capBudget() has no caller, and
+    //    the day is sized by dailyHours(profile). Taking the badge out while
+    //    leaving the sentence underneath it would have moved the falsehood, not
+    //    removed it. What survives is the OBSERVATION, which is true.
+    //
+    // 2. It interpolated TWO nullable values unguarded. `typical` is the median
+    //    of productive days and is null when that set is empty; `claimedHours`
+    //    is nullable too. Either rendered a literal "nullh" at the founder. The
+    //    adjacent too-early branch already used the `?? '?'` guard, so the file
+    //    had the pattern -- two interpolations in one expression simply never
+    //    received it.
     note: trust === 'behaviour'
-      ? `Studies ~${typical}h on active days (entered ${claimedHours}h). Plan sized to ${sustainable}h so it's completable — behaviour, not the claim.`
-      : `Behaviour matches the ${claimedHours}h entered.`,
+      ? `Studies ~${typical ?? '?'}h on active days (entered ${claimedHours ?? '?'}h) — believe the behaviour, not the claim.`
+      : `Behaviour matches the ${claimedHours ?? '?'}h entered.`,
   };
 }
 
