@@ -153,6 +153,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     coverage_practicing: onboardingData.coverage_practicing as number | undefined,
     coverage_learning: onboardingData.coverage_learning as number | undefined,
     coverage_total: onboardingData.coverage_total as number | undefined,
+    coverage_exam_total: onboardingData.coverage_exam_total as number | undefined,
+    coverage_exam_practicing: onboardingData.coverage_exam_practicing as number | undefined,
+    coverage_exam_learning: onboardingData.coverage_exam_learning as number | undefined,
   });
 
   // No single-topic self-report screens (weakest section/topic, stage,
@@ -254,6 +257,9 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         coveragePracticing: (onboardingData.coverage_practicing as number | undefined) ?? null,
         coverageLearning: (onboardingData.coverage_learning as number | undefined) ?? null,
         coverageTotal: (onboardingData.coverage_total as number | undefined) ?? null,
+        coverageExamTotal: (onboardingData.coverage_exam_total as number | undefined) ?? null,
+        coverageExamPracticing: (onboardingData.coverage_exam_practicing as number | undefined) ?? null,
+        coverageExamLearning: (onboardingData.coverage_exam_learning as number | undefined) ?? null,
         attemptYear: (onboardingData.attempt_year as number | undefined) ?? null,
         isRepeater: (onboardingData.is_repeater as boolean | undefined) ?? null,
         lastYearPercentile: (onboardingData.last_year_percentile as number | undefined) ?? null,
