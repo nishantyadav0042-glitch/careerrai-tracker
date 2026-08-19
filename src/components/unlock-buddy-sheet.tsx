@@ -376,8 +376,17 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
         <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
       </PlanCta>
 
+      {/* "Verified IIM alumni" stood here until 19 Aug. It was a claim about
+          VERIFICATION, and iim_verified_at is null for all eight buddies --
+          the column exists because someone intended to verify and never did.
+          A promise of verification, made to a student at the moment they are
+          about to pay, with nothing verified behind it.
+          The percentile floor below is a real stored number for every mentor
+          (98 to 99.5), so this line is now true as written. When the founder
+          verifies the institutes, iim-claim.ts lets the stronger claim back
+          in -- per mentor, automatically, and only for the ones checked. */}
       <p className="mt-2.5 text-center text-[11px] text-stone-400">
-        Verified IIM alumni · no auto-debit, ever · full refund in your first month if you&apos;ve logged 20+ study days
+        Every buddy cleared CAT at 98+ percentile · no auto-debit, ever · full refund in your first month if you&apos;ve logged 20+ study days
       </p>
       {message && <p className="mt-2 text-center text-xs text-stone-600">{message}</p>}
       {manualUrl && <ManualPayLink url={manualUrl} />}
