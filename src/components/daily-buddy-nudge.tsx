@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { claimDailyModal } from '@/lib/daily-modal';
+import { track } from '@/lib/journey';
 import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone, notifAskVisible, insightVisible, logModalOpen } from '@/lib/first-run-events';
 
 // A gentle once-a-day nudge for students who don't have an IIM buddy yet.
@@ -16,8 +17,23 @@ import { TOUR_DONE_EVENT, NOTIF_ASK_SETTLED_EVENT, INSIGHT_DONE_EVENT, tourDone,
 // to settle, (2) the app tour to be completed, and (3) the log modal to not
 // be open — and only THEN claims the daily-modal slot, so a blocked attempt
 // doesn't burn today's slot.
+
+// Which control closed it. A tap on the backdrop is a reflex; "Maybe tomorrow"
+// is a considered no. Reading them as one number loses the only interesting
+// thing about a dismissal. Closed union so the call sites cannot drift into
+// free text.
+type DismissVia = 'backdrop' | 'close' | 'maybe_tomorrow';
+
 export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
   const [show, setShow] = useState(false);
+
+  // The ₹299 rung also calls setShow(false) and is NOT one of these — it is a
+  // conversion, and counting it as an exit would make the rung look like it
+  // repels students.
+  const dismiss = (via: DismissVia) => {
+    track('buddy_nudge_dismissed', { via });
+    setShow(false);
+  };
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -30,7 +46,11 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       timer = setTimeout(() => {
         if (shown || !tourDone() || notifAskVisible() || insightVisible() || logModalOpen()) return;
          
-        if (claimDailyModal()) { shown = true; setShow(true); }
+        // Emitted here because this is where the modal actually becomes
+        // visible. Claiming the daily slot is an INTENT to show; an impression
+        // count that can exceed the impressions is precisely the overstatement
+        // this codebase has spent the week removing.
+        if (claimDailyModal()) { shown = true; setShow(true); track('buddy_nudge_shown', {}); }
       }, 1400);
     };
     attempt();
@@ -52,7 +72,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       className="fixed inset-0 z-[70] flex items-end justify-center bg-stone-900/50 backdrop-blur-sm sm:items-center"
       role="dialog"
       aria-modal="true"
-      onClick={() => setShow(false)}
+      onClick={() => dismiss('backdrop')}
     >
       <div
         className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-xl sm:rounded-3xl"
@@ -60,7 +80,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       >
         <button
           type="button"
-          onClick={() => setShow(false)}
+          onClick={() => dismiss('close')}
           aria-label="Close"
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100"
         >
@@ -89,7 +109,16 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
           <li className="flex gap-2"><span>🎥</span> A weekly 1-on-1 video session</li>
         </ul>
 
-        <div className="mt-5">
+        {/* Fires alongside the sheet's own `buddy_unlock_open`, which carries no
+            source and is mounted from three places — so today nobody can say
+            which surface produced any of it. This does not fix that (see
+            G12-A); it does let a `buddy_unlock_open` preceded by
+            `buddy_nudge_cta` in the same session be attributed to the nudge.
+            Capture phase on the wrapper rather than a prop on the shared button:
+            this gate does not change a component two other surfaces mount. The
+            button is w-full inside a div with no padding, so the dead zone that
+            could over-count is effectively nil. */}
+        <div className="mt-5" onClickCapture={() => track('buddy_nudge_cta', {})}>
           <UnlockBuddyButton fullName={fullName} className="w-full">
             See how a buddy helps →
           </UnlockBuddyButton>
@@ -104,7 +133,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
             cannot give, which is precisely what that card exists to prevent. */}
         <Link
           href="/student/buddy"
-          onClick={() => setShow(false)}
+          onClick={() => { track('buddy_nudge_rung', {}); setShow(false); }}
           className="mt-3 block rounded-xl border border-stone-200 px-4 py-2.5 text-center text-[13px] text-stone-700 transition-colors hover:border-stone-400"
         >
           Not ready for that? <span className="font-semibold text-stone-900">Try one session — ₹299</span>
@@ -112,7 +141,7 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
 
         <button
           type="button"
-          onClick={() => setShow(false)}
+          onClick={() => dismiss('maybe_tomorrow')}
           className="mt-2 w-full text-center text-xs text-stone-400 hover:text-stone-600"
         >
           Maybe tomorrow

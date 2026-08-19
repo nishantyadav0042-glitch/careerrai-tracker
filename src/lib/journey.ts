@@ -262,7 +262,16 @@ export type EventName =
   // The payoff stage of the loop: the rebuilt timetable handed back after the
   // check-in. payoff_shown vs completed measures how often a check-in actually
   // produced a plan to show; payoff_start is the student accepting it.
-  | 'checkin_payoff_shown' | 'checkin_payoff_start';
+  | 'checkin_payoff_shown' | 'checkin_payoff_start'
+  // G12 (19 Aug): the daily Buddy nudge, which emitted NOTHING until now. It
+  // is shown to ~349 eligible students at most once per student per study-day,
+  // and it competes with every other auto-modal for a single daily slot — a
+  // trade we have been making on assertion. `_rung` is deliberately separate
+  // from `_dismissed`: four controls on that modal call the same setShow(false),
+  // and folding the ₹299 link in with them would record the deepest
+  // engagement on the screen as an abandonment.
+  | 'buddy_nudge_shown' | 'buddy_nudge_dismissed'
+  | 'buddy_nudge_cta' | 'buddy_nudge_rung';
 
 export function track(event: EventName, props: Record<string, unknown> = {}): void {
   try {
