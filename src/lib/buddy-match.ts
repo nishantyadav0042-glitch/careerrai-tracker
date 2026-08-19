@@ -116,8 +116,15 @@ export interface RecommendedBuddyResult extends MatchBuddy {
 }
 
 // Server-only: fetches this student's profile + all showcase-eligible buddies
-// (real, setup-complete, non-demo) and returns the ranked top 4 with match
-// reasons. Shared by every screen that shows the buddy showcase to a free
+// (real, setup-complete, non-demo) and returns the ranked top 5 with match
+// reasons.
+//
+// FIVE, not four, and not one (founder, 19 Aug): CareerRai still does the
+// matching and still names a recommendation, but the student gets the final
+// choice. Picking a person to talk to about being stuck is not a thing to be
+// assigned. Four alternatives is enough to feel like a choice and few enough
+// that it does not become a mentor marketplace to shop in -- which is exactly
+// the category the founder does not want to be in. Shared by every screen that shows the buddy showcase to a free
 // student — profile page, and the paywall screens (buddy tab, chat tab).
 export async function getRecommendedBuddiesForStudent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,6 +145,6 @@ export async function getRecommendedBuddiesForStudent(
 
   const matchStudent = student as MatchStudent;
   return rankBuddies(matchStudent, buddies as MatchBuddy[])
-    .slice(0, 4)
+    .slice(0, 5)
     .map((b) => ({ ...b, reason: matchReason(matchStudent, b) }));
 }

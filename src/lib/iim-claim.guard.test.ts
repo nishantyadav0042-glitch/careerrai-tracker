@@ -39,7 +39,11 @@ describe('the IIM claim is gated, not asserted', () => {
   it('no component hard-codes a verification claim', () => {
     // "Verified IIM", "IIM-verified", "verified alumni" — any assertion that
     // the credential has been checked.
-    const re = /verified\s+iim|iim[- ]verified|verified\s+alumni|verified\s+mentors?/i;
+    // Widened 19 Aug: the first version required "verified" and "IIM" to be
+    // adjacent, and missed `Verified ${pct}%ile IIM alumni mentor` in the
+    // buddy showcase — a live false claim sitting one interpolation away from
+    // the pattern. Anything asserting a checked credential now trips it.
+    const re = /verified[^.<>{}]{0,40}(iim|alumni|mentor)/i;
     const offenders = SURFACES.filter((f) => re.test(code(f))).map((f) => f.replace(`${ROOT}/`, ''));
     expect(
       offenders,
