@@ -19,7 +19,7 @@ import { dailyHours, hoursForDay } from '@/lib/daily-hours';
 import type { DebriefRow } from '@/lib/mock-informed-focus';
 import { determineAlignment, insightDisclosure, normalizeInsight, type PersistedInsight } from '@/lib/insight-plan-handoff';
 import type { CoreSection } from '@/lib/prep-insight-engine';
-import { dayWasStudied } from '@/lib/check-in';
+import { dayWasStudied, durationIsUnknown } from '@/lib/check-in';
 
 const VALID_CORE_SECTIONS: CoreSection[] = ['VARC', 'DILR', 'QA'];
 
@@ -96,7 +96,7 @@ export async function GET() {
     // the recent window.
     admin
       .from('daily_reports')
-      .select('study_duration, plan_fit, report_date, mock_taken, day_outcome, blocker_reason, updated_at')
+      .select('study_duration, study_duration_source, plan_fit, report_date, mock_taken, day_outcome, blocker_reason, updated_at')
       .eq('student_id', user.id)
       .gte('report_date', new Date(Date.now() - CAPACITY_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)),
     // The coaching timetable, so TODAY's class topics can lead today's plan —
@@ -139,7 +139,14 @@ export async function GET() {
   const biggestBlocker = profile.biggest_blocker as Blocker | null;
   const claimedHours = dailyHours(profile).weekday;
   const recentStudyHours = (recentReports ?? []).map((r: { study_duration: unknown }) => Number(r.study_duration) || 0);
-  const capacity = computeCapacity(recentStudyHours, recentStudyHours.length, claimedHours);
+  // Q4 -- a day we never measured is not evidence of BEHAVIOUR. It already
+  // contributes nothing to the magnitude (the engine filters h > 0), but it
+  // must not count toward MIN_DAYS_FOR_BEHAVIOUR either, or a student gets
+  // judged against their own stated hours on the strength of days nobody
+  // measured. A declared zero still counts -- that IS behaviour (Q2).
+  const measuredDays = (recentReports ?? [])
+    .filter((r: { day_outcome?: string | null; study_duration?: number | null; study_duration_source?: string | null }) => !durationIsUnknown(r)).length;
+  const capacity = computeCapacity(recentStudyHours, measuredDays, claimedHours);
 
   const recentPlanFits = (recentReports ?? [])
     .map((r: { plan_fit: unknown }) => r.plan_fit)
