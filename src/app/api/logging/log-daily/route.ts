@@ -15,6 +15,9 @@ import { dispatch } from '@/lib/notification-os';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
 import { sourceForLoggedDuration } from '@/lib/study-duration-source';
 import { dayWasStudied } from '@/lib/check-in';
+import { postLogInsight, type PostLogEvidence } from '@/lib/post-log-insight';
+import { weightedCompletedForDay } from '@/lib/completion-portion';
+import { type CoverageStatus } from '@/lib/coverage-status';
 
 interface LoggingRequest {
   hours: number;
@@ -337,6 +340,23 @@ async function computePrescriptiveLine(
       }
     }
 
+    // Rule 2.5: WHAT JUST HAPPENED (post-log-insight.ts).
+    //
+    // Placed here on purpose. It outranks every corrective rule below, because
+    // this line is read in the second after the student finished working and
+    // scolding is the wrong register for that instant. It does NOT outrank the
+    // emotional-chip rule above: a student who just told us they are burned
+    // out should hear about that, not about a topic rung.
+    //
+    // It also answers the case the rules below structurally cannot. They all
+    // sit behind `recent.length < 3`, so a student's SECOND log was guaranteed
+    // to produce nothing -- and production says the average logging student has
+    // 2.3 logs. The one moment most students decide whether this app does
+    // anything was the one moment it said nothing.
+    const postLog = await computePostLogEvidence(studentId, todaySections, recent.length, admin);
+    const postLogLine = postLog ? postLogInsight(postLog) : null;
+    if (postLogLine) return postLogLine.text;
+
     // Rule 3: consistency signal — logged fewer than 4 of last 7 days
     const last7 = recent.slice(0, 7);
     // A3 — the student's own answer outranks the hours column here. This used
@@ -392,6 +412,69 @@ async function computePrescriptiveLine(
     }
 
     return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Evidence for postLogInsight, read from committed rows only.
+ *
+ * Every field is something the student caused. Nothing is estimated, and any
+ * query failing simply drops that rule rather than substituting a default --
+ * a zero here would become a false statement on screen.
+ */
+async function computePostLogEvidence(
+  studentId: string,
+  todaySections: string[],
+  logCount: number,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<PostLogEvidence | null> {
+  try {
+    const today = getLogDateString();
+    const fourteenAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
+
+    const [{ data: coverage }, { data: routine }, { data: completions }, { data: history }] = await Promise.all([
+      // Rows written today. `updated_at` is stamped by complete-task's upsert,
+      // so this is "a tick touched this topic today".
+      admin.from('topic_coverage').select('topic, status, updated_at')
+        .eq('student_id', studentId).gte('updated_at', `${today}T00:00:00Z`),
+      admin.from('daily_routines').select('tasks')
+        .eq('student_id', studentId).eq('routine_date', today).maybeSingle(),
+      admin.from('routine_task_completions').select('task_id, confidence')
+        .eq('student_id', studentId).eq('routine_date', today),
+      admin.from('daily_reports').select('report_date, topics_covered')
+        .eq('student_id', studentId).gte('report_date', fourteenAgo)
+        .lt('report_date', today).order('report_date', { ascending: false }),
+    ]);
+
+    const plannedToday = Array.isArray(routine?.tasks) ? (routine!.tasks as unknown[]).length : 0;
+    const weightedDoneToday = weightedCompletedForDay(
+      (completions ?? []) as { task_id: string; confidence?: string | null }[],
+      plannedToday,
+    );
+
+    // Days since each section logged today was last seen. null = never before,
+    // which is NOT a gap and must not be rendered as one.
+    const daysSinceSection: Record<string, number | null> = {};
+    for (const section of todaySections) {
+      const prior = (history ?? []).find((r) =>
+        ((r.topics_covered as string[]) ?? []).includes(section));
+      daysSinceSection[section] = prior
+        ? Math.round((Date.parse(today) - Date.parse(prior.report_date as string)) / 86_400_000)
+        : null;
+    }
+
+    return {
+      advancedToday: (coverage ?? []).map((c) => ({
+        topic: c.topic as string, status: c.status as CoverageStatus,
+      })),
+      sectionsToday: todaySections,
+      daysSinceSection,
+      plannedToday,
+      weightedDoneToday,
+      logCount,
+    };
   } catch {
     return null;
   }
