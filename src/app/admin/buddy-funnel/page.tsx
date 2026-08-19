@@ -29,7 +29,7 @@ export default async function BuddyFunnelPage() {
 
   const [{ data: events }, { data: payments }] = await Promise.all([
     admin.from('student_events')
-      .select('event, user_id, anon_id, created_at')
+      .select('event, user_id, anon_id, created_at, props')
       .in('event', keys as unknown as string[]),
     admin.from('student_payments').select('plan, status, amount, created_at'),
   ]);
@@ -45,6 +45,15 @@ export default async function BuddyFunnelPage() {
       lastSeen: times[times.length - 1] ?? null,
     };
   });
+
+  // Which finding produced the click. book-session-card stamps `finding` on
+  // session_book_click, so this is the founder's "which trigger produced the
+  // highest intent" — already recorded, never surfaced.
+  const byTrigger = new Map<string, number>();
+  for (const e of (events ?? []).filter((x) => x.event === 'session_book_click')) {
+    const t = ((e.props as Record<string, unknown> | null)?.finding as string) ?? 'no finding recorded';
+    byTrigger.set(t, (byTrigger.get(t) ?? 0) + 1);
+  }
 
   const paid = (payments ?? []).filter((p) => p.status === 'paid');
   const paidSessions = paid.filter((p) => p.plan === 'session').length;
@@ -104,6 +113,31 @@ export default async function BuddyFunnelPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* WHICH FINDING PRODUCED THE CLICK. */}
+      <div className="mt-6 rounded-xl border border-stone-200 bg-white p-4">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+          ₹299 clicks by trigger
+        </p>
+        {byTrigger.size === 0 ? (
+          <p className="mt-2 text-[13px] text-stone-500">No ₹299 clicks recorded yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {[...byTrigger.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+              <li key={t} className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-mono text-[12px] text-stone-700">{t}</span>
+                <span className="font-bold tabular-nums text-stone-900">{n}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2 text-[11px] leading-snug text-stone-500">
+          Only the session card carries a finding. The daily buddy nudge counted above is
+          <strong> not an intervention</strong> — it fires once a day for any student without a
+          buddy, regardless of what their preparation looks like, so its shown/clicked numbers
+          say nothing about which diagnosis moves a student.
+        </p>
       </div>
 
       {/* Money comes from the ledger, never from client events. The client
