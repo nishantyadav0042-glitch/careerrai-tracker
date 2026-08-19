@@ -62,7 +62,17 @@ export function matchReason(student: MatchStudent, buddy: MatchBuddy): string | 
   }
 
   const types = buddy.student_types_helped ?? [];
-  if (student.is_working_professional && types.includes('Working Professionals')) return 'Mentors working professionals like you';
+  // Describes what the MENTOR has done, not a category the student is filed
+  // under. Every other rung on this ladder does that -- "Strong in DILR, your
+  // weakest section", "Improved 91->98%ile, been where you are" -- and this one
+  // used to break the pattern by telling a student they were a "working
+  // professional" on a product whose audience is students, some of whom happen
+  // to also have a job. The trigger is unchanged and the signal behind it was
+  // audited: is_working_professional is an explicit, mandatory signup answer,
+  // and all 53 students carrying it completed onboarding.
+  if (student.is_working_professional && types.includes('Working Professionals')) {
+    return 'Has mentored students balancing work and CAT prep';
+  }
   if (student.is_repeater && types.includes('Repeaters')) return 'Specialises in repeaters';
   // A buddy who herself needed a second attempt isn't a "first-timer success
   // story" — only claim this for buddies who cracked it on their first try,
