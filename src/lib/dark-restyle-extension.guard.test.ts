@@ -68,12 +68,19 @@ describe('RecommendedBuddies — real data, real ranking, only the card is dark'
 
   it('still shows the real match reason and the honest fallback for a fresh signup', () => {
     const s = src();
-    expect(s).toContain('Verified ${Number(b.cat_percentile)}%ile IIM alumni mentor');
-    expect(s).toContain("'Handpicked IIM alumni mentor'");
+    // Literals updated 19 Aug. The INVARIANT is unchanged and is what this
+    // asserts: the reason always falls back to something honest rather than
+    // rendering blank for a data-thin fresh signup. What changed is the text —
+    // the old fallback said "Verified N%ile IIM alumni mentor", and nothing was
+    // verified (iim_verified_at is null for all eight buddies). It now states
+    // the percentile, which is a real stored number, and lets iim-claim.ts
+    // decide per mentor whether the institute may be named.
+    expect(s).toContain('Cleared CAT at ${credential}');
+    expect(s).toContain("'Handpicked by CareerRai'");
   });
 
   it('"Best match" still marks only the top-ranked buddy, never invented for the rest', () => {
-    expect(src()).toContain('i === 0 &&');
+    expect(src()).toContain('const isPick = i === 0');
   });
 
   it('LinkedIn verification link is still real and still opt-in per buddy', () => {

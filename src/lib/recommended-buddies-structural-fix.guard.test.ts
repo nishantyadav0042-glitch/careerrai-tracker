@@ -44,8 +44,15 @@ describe('every field is still real — structure changed, data did not', () => 
 
   it('the match reason still has its honest fallback for a data-thin fresh signup', () => {
     const src = readFileSync(FILE, 'utf8');
-    expect(src).toContain('Verified ${Number(b.cat_percentile)}%ile IIM alumni mentor');
-    expect(src).toContain("'Handpicked IIM alumni mentor'");
+    // Literals updated 19 Aug. The INVARIANT is unchanged and is what this
+    // asserts: the reason always falls back to something honest rather than
+    // rendering blank for a data-thin fresh signup. What changed is the text —
+    // the old fallback said "Verified N%ile IIM alumni mentor", and nothing was
+    // verified (iim_verified_at is null for all eight buddies). It now states
+    // the percentile, which is a real stored number, and lets iim-claim.ts
+    // decide per mentor whether the institute may be named.
+    expect(src).toContain('Cleared CAT at ${credential}');
+    expect(src).toContain("'Handpicked by CareerRai'");
   });
 
   it('LinkedIn verification and the real buy CTA are both still wired', () => {
@@ -55,6 +62,6 @@ describe('every field is still real — structure changed, data did not', () => 
   });
 
   it('"Best match" still only marks the top-ranked buddy', () => {
-    expect(readFileSync(FILE, 'utf8')).toContain('i === 0 &&');
+    expect(readFileSync(FILE, 'utf8')).toContain('const isPick = i === 0');
   });
 });
