@@ -47,6 +47,10 @@ export interface LoggingData {
 // (lib/study-credit), never typed.
 export type { DayOutcome };
 
+// The J7 vocabulary, minus 'Mock' (asked separately below). Kept as an explicit
+// list so adding a section is a reviewable change, not a typo.
+const OFF_PLAN_SECTIONS = ['VARC', 'DILR', 'QA', 'Revision'] as const;
+
 type TaskState = 'half' | 'full';
 
 export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, openWithMock }: LoggingModalProps) {
@@ -56,6 +60,11 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
   // The third thing: an honest rest day. It's a real log — showing up counts,
   // and the streak now counts logged days — so it never breaks a streak.
   const [rest, setRest] = useState(false);
+  // 0C.3G/J7 locked topics_covered to ONE vocabulary. Off-plan study enters
+  // through that same vocabulary or the ruling re-opens. 'Mock' is deliberately
+  // absent: the sheet asks about mocks separately below, and offering it twice
+  // would let one mock be counted as two signals.
+  const [offPlanSections, setOffPlanSections] = useState<Set<string>>(new Set());
   // The hours the day's plan was built to — derived credit is a fraction of it.
   const [generatedHours, setGeneratedHours] = useState<number>(0);
   const [mockTaken, setMockTaken] = useState<boolean | null>(null);
@@ -115,21 +124,29 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
   }); };
 
   // Toggling a rest day clears any study marks — it's one or the other.
-  const toggleRest = () => setRest((r) => { const next = !r; if (next) { setTaskChoice(new Map()); setMockTaken(null); } return next; });
+  const toggleRest = () => setRest((r) => { const next = !r; if (next) { setTaskChoice(new Map()); setMockTaken(null); setOffPlanSections(new Set()); } return next; });
+
+  // Marking off-plan study clears a rest day, mirroring how marking a plan
+  // topic does -- you cannot have both rested and studied.
+  const toggleOffPlan = (section: string) => { setRest(false); setOffPlanSections((prev) => {
+    const n = new Set(prev);
+    if (n.has(section)) n.delete(section); else n.add(section);
+    return n;
+  }); };
 
   // Valid the moment there's a real signal: a plan topic marked, a mock, or an
   // honest rest day. All three are a log — showing up.
-  const isValid = taskChoice.size > 0 || mockTaken === true || rest;
+  const isValid = taskChoice.size > 0 || offPlanSections.size > 0 || mockTaken === true || rest;
 
   const missingHint = (): string =>
-    'Mark how far you got on a plan topic — or tell us you gave a mock.';
+    'Tell us what you did — a plan topic, something else you studied, or a mock.';
 
   // Derived outcome for the coach-facing signals (plan-reason, adaptation). Not
   // shown to the student; inferred from what they marked, never guessed.
   const deriveOutcome = (): DayOutcome | null => {
     const marks = [...taskChoice.values()];
     if (marks.length > 0 && marks.length >= planTasks.length && marks.every((m) => m === 'full')) return 'studied';
-    if (marks.length > 0 || mockTaken === true) return 'partial';
+    if (marks.length > 0 || offPlanSections.size > 0 || mockTaken === true) return 'partial';
     return null;
   };
 
@@ -156,7 +173,13 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
       }
 
       const coveredTasks = planTasks.filter((t) => taskChoice.has(t.id));
-      const derived = [...new Set(coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)))];
+      // What the student covered = the plan topics they marked PLUS the
+      // sections they studied off-plan. Both are real coverage; only one of
+      // them used to be recordable.
+      const derived = [...new Set([
+        ...coveredTasks.map((t) => (t.section === 'General' ? 'Revision' : t.section)),
+        ...offPlanSections,
+      ])];
       const finalSections = mockTaken ? [...derived.filter((s) => s !== 'Mock'), 'Mock'] : derived;
 
       const completedTasks: { id: string; confidence?: 'green' | 'blue' }[] = [];
@@ -189,7 +212,10 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
         plannedTasks: planTasks.length,
         fullDone: marks.filter((m) => m === 'full').length,
         halfDone: marks.filter((m) => m === 'half').length,
-        offPlanCount: 0,
+        // The input study-credit.ts has declared since it was written --
+        // "off-plan sections the student also studied, coverage still counts"
+        // -- finally fed by a UI that can collect it.
+        offPlanCount: offPlanSections.size,
       });
 
       await onSubmit({
@@ -203,6 +229,7 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
 
       // Reset
       setTaskChoice(new Map());
+      setOffPlanSections(new Set());
       setInitialDoneIds(new Set());
       setRest(false);
       setMockTaken(null);
@@ -280,6 +307,32 @@ export function LoggingModal({ isOpen, onClose, onSubmit, isSubmitting = false, 
                 })}
               </div>
             )}
+          </div>
+
+          {/* 1b — Studied something that wasn't on the plan.
+              Production, re-measured 19 Aug: 518 log opens, 217 dismissals
+              (41.9%). A student who studied real material the planner did not
+              pick -- a coaching sheet, the chapter their class is on -- had no
+              truthful option here. Their choices were to lie, to claim a rest
+              day they did not take, or to close the sheet. */}
+          <div>
+            {label('Studied something else?')}
+            <div className="grid grid-cols-4 gap-2">
+              {OFF_PLAN_SECTIONS.map((sec) => {
+                const on = offPlanSections.has(sec);
+                return (
+                  <button key={sec} type="button" onClick={() => toggleOffPlan(sec)}
+                    aria-pressed={on}
+                    className={cn('rounded-xl py-2.5 text-xs font-bold transition-all active:scale-95',
+                      on ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700')}>
+                    {sec}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[11.5px] leading-snug text-zinc-500">
+              Coaching sheet, a chapter your class is on, anything off today&rsquo;s plan. It still counts.
+            </p>
           </div>
 
           {/* 2 — Mock (folded in, no second screen) */}

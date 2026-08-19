@@ -122,8 +122,18 @@ describe('one door, not two', () => {
 
 describe('the log sheet survives — Incident #2 must not repeat', () => {
   it('the modal is still valid without any plan-task ticked', () => {
+    // Asserts the INVARIANT, not the literal expression. This test pinned the
+    // exact string and therefore failed when off-plan study was added as a
+    // fourth way to log a day -- i.e. it broke because the sheet became MORE
+    // able to record the truth, which is the wrong reason for a guard to fail.
+    // What must hold is that ticking a plan task is not the ONLY route.
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
-    expect(modal).toContain('taskChoice.size > 0 || mockTaken === true || rest');
+    const isValid = modal.match(/const isValid = ([^;]+);/);
+    expect(isValid, 'isValid must exist').toBeTruthy();
+    const alternatives = isValid![1].split('||').map((x) => x.trim());
+    expect(alternatives.length, 'a plan tick cannot be the only way to log a day')
+      .toBeGreaterThan(1);
+    expect(alternatives.some((a) => /rest/.test(a)), 'a rest day must stay loggable').toBe(true);
   });
 
   it('an honest zero-hour rest day is still submittable', () => {
@@ -208,6 +218,10 @@ describe('a mock must always have a door of its own', () => {
 
   it('a mock alone is still a complete log', () => {
     const modal = readFileSync('src/components/DailyTracker/LoggingModal.tsx', 'utf8');
-    expect(modal).toContain('taskChoice.size > 0 || mockTaken === true || rest');
+    const isValid = modal.match(/const isValid = ([^;]+);/);
+    expect(isValid, 'isValid must exist').toBeTruthy();
+    const alternatives = isValid![1].split('||').map((x) => x.trim());
+    expect(alternatives.some((a) => /mockTaken\s*===\s*true/.test(a)),
+      'declaring a mock must remain sufficient on its own').toBe(true);
   });
 });
