@@ -52,9 +52,24 @@ export function computeCapacity(recentStudyHours: number[], loggedDays: number, 
 
   return {
     claimedHours, loggedDays, typicalStudyHours: typical, sustainableHours: sustainable, trust,
+    // COPY ONLY — every number above is unchanged.
+    //
+    // `typical` is the median of PRODUCTIVE days, so it is null when none of
+    // the measured days had any study hours, and `~${typical}h` rendered
+    // "Studies ~nullh on active days" to the founder. One student is in that
+    // state today.
+    //
+    // The null case is NOT "unknown". Since Q4 `loggedDays` counts only days we
+    // could measure, so this is five-or-more measured days with zero study
+    // hours in all of them — a known finding. It says that plainly instead of
+    // borrowing the "not enough data yet" wording, which would claim an
+    // ignorance we do not have. `claimedHours` takes the `?? '?'` guard the
+    // too-early branch above has always used.
     note: trust === 'behaviour'
-      ? `Studies ~${typical}h on active days (entered ${claimedHours}h). Plan sized to ${sustainable}h so it's completable — behaviour, not the claim.`
-      : `Behaviour matches the ${claimedHours}h entered.`,
+      ? (typical == null
+          ? `No study hours recorded on any of the ${loggedDays} measured days (entered ${claimedHours ?? '?'}h). Plan sized to ${sustainable}h until there is something to go on.`
+          : `Studies ~${typical}h on active days (entered ${claimedHours ?? '?'}h). Plan sized to ${sustainable}h so it's completable — behaviour, not the claim.`)
+      : `Behaviour matches the ${claimedHours ?? '?'}h entered.`,
   };
 }
 
