@@ -255,13 +255,30 @@ export function DailyTrackerApp({
     // log above already wrote today's daily_report (real hours/mood). Only for
     // today's log, never a backdate (the plan tasks are today's).
     if (!backdated && data.completedTasks && data.completedTasks.length > 0) {
-      await Promise.all(data.completedTasks.map((t) =>
-        fetch('/api/routine/complete-task', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: t.id, ...(t.confidence ? { confidence: t.confidence } : {}), skip_day_close: true }),
-        }).catch(() => {})
-      ));
+      // G10B — RECORD the outcome of each call. Behaviour is unchanged: the
+      // log is already saved, a failure still does not block it, and nothing
+      // retries. What changes is that a failure stops being invisible.
+      //
+      // `fetch` RESOLVES on 400/404/500 and only REJECTS on a network fault,
+      // so the two need separate labels — without that, "never arrived" and
+      // "arrived and was refused" are the same event, which is the exact
+      // question G9 could not answer. `clientDate` is carried because
+      // complete-task resolves the routine by its OWN getLogDateString(),
+      // independently of the date this log used; a mismatch is a named
+      // suspect for the silent 404/400.
+      const clientDate = getLogDateString();
+      await Promise.all(data.completedTasks.map(async (t) => {
+        try {
+          const res = await fetch('/api/routine/complete-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id: t.id, ...(t.confidence ? { confidence: t.confidence } : {}), skip_day_close: true }),
+          });
+          track('completion_write', { taskId: t.id, ok: res.ok, status: res.status, kind: 'http', clientDate });
+        } catch {
+          track('completion_write', { taskId: t.id, ok: false, status: 0, kind: 'network', clientDate });
+        }
+      }));
       // Tell the plan card to re-pull so the marked topics show as done.
       try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* noop */ }
     }
