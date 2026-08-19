@@ -133,19 +133,15 @@ export function DailyTrackerApp({
   }, []);
 
   // Q5 -- the check-in gate saved a work outcome it could not price and handed
-  // the student here to finish it. Same window-event pattern as the mock log
-  // above, but carrying the DATE, because the gate always asks about
-  // yesterday: the sheet must upsert that row, not create a second one for
-  // today. logDateOverride is the existing backdating path, not a new one.
+  // the student here to finish it. Opens TODAY's sheet: the gate's answer about
+  // yesterday is already written, and this sheet only ever renders today's
+  // routine, so anything ticked here is legitimately today's completion and
+  // flows through the normal path (including the completion fan-out, which a
+  // backdated open would correctly skip).
   useEffect(() => {
-    const openForDate = (e: Event) => {
-      const date = (e as CustomEvent<{ date?: string }>).detail?.date ?? null;
-      setLogDateOverride(date);
-      setLogWithMock(false);
-      setIsLogOpen(true);
-    };
-    window.addEventListener('cr-open-log-for-date', openForDate);
-    return () => window.removeEventListener('cr-open-log-for-date', openForDate);
+    const open = () => { setLogDateOverride(null); setLogWithMock(false); setIsLogOpen(true); };
+    window.addEventListener('cr-open-log', open);
+    return () => window.removeEventListener('cr-open-log', open);
   }, []);
 
   const {

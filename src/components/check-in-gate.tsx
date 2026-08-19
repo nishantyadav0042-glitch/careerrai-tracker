@@ -115,7 +115,24 @@ export function CheckInGate({ yesterdayStr, yesterdayLabel, variant = 'A' }: Pro
       if (outcomeNeedsDuration(finalOutcome)) {
         track('checkin_handoff_to_log', { outcome: finalOutcome, forDate: yesterdayStr, variant });
         try {
-          window.dispatchEvent(new CustomEvent('cr-open-log-for-date', { detail: { date: yesterdayStr } }));
+          // TODAY's sheet, deliberately -- NOT the day being checked in for.
+          //
+          // The first version carried yesterdayStr, which produced a real
+          // defect: LoggingModal always fetches /api/routine/today, so the
+          // student was shown TODAY's plan tasks while their log was dated
+          // yesterday. Their ticks were priced against a plan that was never
+          // yesterday's, and complete-task -- which resolves the routine by its
+          // OWN getLogDateString() -- would have written them as today's
+          // completions. The !backdated guard on the fan-out was correctly
+          // preventing exactly that, which is why completion_write never fired
+          // for a handoff.
+          //
+          // The system has a valid task-completion path for today's routine and
+          // no safe way to represent yesterday's, so the handoff must not offer
+          // a historical task surface at all. Yesterday's answer is already
+          // saved above and still counts as a study day through A3; what the
+          // student does next belongs to today.
+          window.dispatchEvent(new Event('cr-open-log'));
         } catch { /* if the handoff cannot fire, the answer is still saved */ }
         finish();
         return;

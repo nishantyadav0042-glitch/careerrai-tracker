@@ -79,23 +79,33 @@ describe('the handoff is wired end to end', () => {
     expect(handoff, 'the handoff must come after the save').toBeGreaterThan(save);
   });
 
-  it('the handoff carries the DATE the gate asked about', () => {
-    // The gate always asks about yesterday. Without the date the sheet would
-    // create a second row for today instead of finishing yesterday's.
+  it('the handoff opens TODAY, not the day being checked in for', () => {
+    // CORRECTED 19 Aug. The first version carried yesterdayStr, which produced
+    // a real defect: LoggingModal always fetches /api/routine/today, so the
+    // student saw TODAY's plan tasks while their log was dated yesterday, and
+    // the fan-out's !backdated guard then correctly refused to record the
+    // ticks -- which is why completion_write never fired for a handoff. The
+    // system has no safe representation of yesterday's task completions, so
+    // the handoff must not present a historical task surface at all.
     const s = read(GATE);
-    expect(s).toMatch(/cr-open-log-for-date/);
-    expect(s).toMatch(/detail: \{ date: yesterdayStr \}/);
+    expect(s).not.toMatch(/cr-open-log-for-date/);
+    expect(s).toMatch(/dispatchEvent\(new Event\('cr-open-log'\)\)/);
   });
 
-  it('the sheet listens for it and backdates to that date', () => {
+  it('the sheet opens for today and clears any backdate', () => {
     const s = read(APP);
-    expect(s).toContain("'cr-open-log-for-date'");
-    expect(s, 'must reuse the existing backdating path').toMatch(/setLogDateOverride\(date\)/);
+    expect(s).toContain("'cr-open-log'");
+    expect(s).toMatch(/const open = \(\) => \{ setLogDateOverride\(null\)/);
+  });
+
+  it("the historical day's answer is still written for THAT day", () => {
+    // Opening today's sheet must not change what the gate recorded.
+    expect(read(GATE)).toMatch(/log_date: yesterdayStr/);
   });
 
   it('a failed handoff cannot lose the answer', () => {
     const s = read(GATE);
-    expect(s, 'the dispatch must be guarded').toMatch(/try \{[\s\S]{0,200}cr-open-log-for-date[\s\S]{0,200}\} catch/);
+    expect(s, 'the dispatch must be guarded').toMatch(/try \{[\s\S]{0,1400}cr-open-log'\)\);[\s\S]{0,80}\} catch/);
   });
 
   it('the handoff is a distinct event from a completed check-in', () => {
