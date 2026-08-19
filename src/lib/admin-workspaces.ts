@@ -166,6 +166,11 @@ export const WORKSPACES: AdminWorkspace[] = [
       { label: 'Operations', href: '/admin/revenue', status: 'live' },
       { label: 'All payments', href: '/admin/payments', status: 'live' },
       { label: 'Coupons', href: '/admin/coupons', status: 'live' },
+      // The IIM Buddy funnel lives under Revenue rather than Analytics on
+      // purpose: it is the path to a payment, and its last two rows come from
+      // the payment ledger. Keeping it beside the money stops a second,
+      // event-only revenue picture growing in the analytics workspace.
+      { label: 'IIM Buddy funnel', href: '/admin/buddy-funnel', status: 'live' },
       { label: 'Scholarships', href: '/admin/scholarships', status: 'live' },
       { label: 'MRR & cashflow', href: null, status: 'planned', blockedOn: 'Needs a subscription-ledger view; today only one-off payment rows exist.' },
     ],
