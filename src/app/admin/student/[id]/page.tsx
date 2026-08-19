@@ -176,7 +176,19 @@ export default async function Student360Page({ params }: { params: Promise<{ id:
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="rounded bg-white px-2 py-0.5 font-semibold text-stone-700 ring-1 ring-stone-200">entered {s.capacity.claimedHours ?? '?'}h</span>
             {s.capacity.typicalStudyHours != null && <span className="rounded bg-white px-2 py-0.5 font-semibold text-stone-700 ring-1 ring-stone-200">studies ~{s.capacity.typicalStudyHours}h</span>}
-            <span className={cn('rounded px-2 py-0.5 font-bold', s.capacity.trust === 'behaviour' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white')}>plan sized to {s.capacity.sustainableHours ?? '?'}h</span>
+            {/* A third badge stood here asserting that this student's plan was
+                sized to sustainableHours. It was false: capBudget() -- the only
+                function that applies that number to a proposed plan -- has no
+                caller, and the day is sized by dailyHours(profile) in
+                plan-day.ts. Removed rather than relabelled, so no new claim
+                replaces it. Nothing is lost but the sentence: the engine's
+                reading is still above (entered / studies ~), the trust signal
+                still colours this card, and capacity.note still explains it in
+                words. If capBudget is ever wired in, the assertion becomes true
+                and the badge may return -- admin-capacity-claim.guard.test.ts
+                encodes that coupling rather than banning the wording outright.
+                The retired sentence is deliberately NOT quoted here: that guard
+                reads this file as text and cannot tell a comment from JSX. */}
           </div>
           <p className="mt-1.5 text-[12px] text-stone-600">{s.capacity.note}</p>
         </div>
