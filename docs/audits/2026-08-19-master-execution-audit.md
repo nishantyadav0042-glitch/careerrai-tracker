@@ -138,4 +138,73 @@ home for that logic rather than a precondition for it.
 
 ---
 
-## NEXT GATE: Q3
+## G13-A3 — VALIDATED on real traffic
+
+**19 Aug 12:05 UTC**, unprompted, no test write manufactured. `[PRODUCTION]`
+
+| | |
+|---|---|
+| `daily_reports` | 342 → **343** |
+| `study_duration_source` non-NULL | 0 → **1** |
+| The value | **`credited`** |
+
+`credited` is the strongest possible confirmation: it is the `complete-task`
+stamp, produced by `sourceForMergedDuration` from hours the SERVER computed
+via `creditedHours()` — not a client assertion. The row carries 1.6h, one
+topic, `mood_emoji 💪` and `created_at = updated_at`, which is the routine-tick
+signature exactly as designed.
+
+The three-stage record for G13-A now reads **DEPLOYED ✅ · OBSERVED ✅ ·
+VALIDATED ✅**. That closes the item that was left open several gates ago
+without polling for it or manufacturing an event.
+
+One honest note: `day_outcome` is NULL on this row, because `complete-task`
+does not write it — the structural gap G14-4A classified, not a failure.
+
+---
+
+## Gates executed this pass
+
+| Gate | Change | Deployed | Measured effect `[PRODUCTION]` |
+|---|---|---|---|
+| **Gate 1** | admin badge claim removed | `61a6c17` | founder-facing falsehood gone |
+| **Q3** | unmeasured duration ≠ 0 hours | `83519e3` | 65 rows / 40 students excluded; avg 2.13 → **2.84 h/day** |
+| **Q4** | capacity ignores unmeasured days | `b438887` | 59 days dropped; behaviour tier 10 → **7**; 3 students back to input |
+| **G7** | neutral prior; moodScore out | `a495143` | "On track" **reachable again**; perfect week now scores 100 |
+| **capacity note** | same claim + `nullh` | `2ec159d` | my own Gate 1 was incomplete |
+| **off-plan** | log sheet accepts off-plan study | `934f4a7` | addresses **41.9%** dismiss rate (518 opens, 217 dismissals) |
+| **G2 + G3** | topics never shrink; coverage failure surfaced | `c460222` | silent data loss closed |
+
+**G6** required no code — its verdict was "do not repoint yet", and Q3/Q4 have
+now done that repointing under a model that exists.
+
+**G1 is BLOCKED, not skipped.** It implements `observed_day_outcome` inside
+`src/lib/facts/`, which is workstream (b), on hold pending a founder ruling.
+
+---
+
+## Two findings about my own work, recorded rather than buried
+
+**Gate 1 was incomplete.** I removed the badge claiming the plan was sized to
+`sustainableHours` and deliberately kept `capacity.note` rendering beneath it —
+while that note contained the same claim word for word. Removing the badge and
+leaving the sentence under it moved the falsehood rather than removing it.
+Caught and fixed in `2ec159d`.
+
+**Q5 shipped before its own dependency.** Q5 hands a student who answered
+"Studied" to the log sheet to finish the duration. Until `934f4a7` that sheet
+could not accept the answer of anyone who studied off-plan, so they would land
+back on zero hours. Q5 was partially effective rather than wrong, but the
+ordering was mine and the gap was real in production between the two deploys.
+
+**A recurring guard defect, five times now.** Source-reading guards cannot tell
+code from commentary, and were tripped repeatedly by comments that named the
+very string they ban. The general fix — strip comments before scanning — is now
+applied in `admin-capacity-claim.guard.test.ts` rather than dodged by not
+writing the word. A separate pre-existing guard pinned the literal `isValid`
+expression and failed when the log sheet became MORE able to record the truth;
+it now asserts the invariant instead.
+
+---
+
+## NEXT GATE: founder ruling on workstream (b)/(c), then G15
