@@ -46,6 +46,49 @@ export function isFullyDone(confidence: string | null | undefined): boolean {
 }
 
 /**
+ * What a stored completion is WORTH when counting how much of a plan got done.
+ *
+ * A full tick is a whole task; a half tick is half of one. Derived from
+ * portionOf so there is never a second opinion about what a half-tick means --
+ * the plan-completion ratio used to count database ROWS, so a student who got
+ * halfway through every task showed as finishing 100% of the plan.
+ */
+export function completionWeight(confidence: string | null | undefined): number {
+  return portionOf(confidence) === 'half' ? 0.5 : 1;
+}
+
+/**
+ * How much of ONE day's plan the student actually finished.
+ *
+ * Two properties carried over from the set-of-task-ids code this replaces, both
+ * load-bearing:
+ *
+ *   · a task counts ONCE however many rows it has, so an untick/retick cannot
+ *     inflate the ratio;
+ *   · the total is capped at the day's planned count, so completions left
+ *     behind by a regenerated routine cannot push a day above 100%.
+ *
+ * Where one task has conflicting rows, the STRONGEST evidence wins: a half row
+ * and a full row for the same task means the task was finished. Taking the
+ * weaker one would let a stale half-tick erase a real completion.
+ */
+export function weightedCompletedForDay(
+  rows: { task_id: string; confidence?: string | null }[],
+  plannedTaskCount: number,
+): number {
+  if (plannedTaskCount <= 0) return 0;
+  const best = new Map<string, number>();
+  for (const r of rows) {
+    const w = completionWeight(r.confidence);
+    const prev = best.get(r.task_id);
+    if (prev === undefined || w > prev) best.set(r.task_id, w);
+  }
+  let total = 0;
+  for (const w of best.values()) total += w;
+  return Math.min(plannedTaskCount, total);
+}
+
+/**
  * Did the student finish EVERY planned task outright?
  *
  * The question day-closure actually needs, and the one it was getting wrong:

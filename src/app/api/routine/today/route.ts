@@ -9,6 +9,7 @@ import { type CoverageStatus } from '@/lib/topic-selector';
 import { plannerRecency } from '@/lib/plan-history';
 import { computeCapacity, CAPACITY_WINDOW_DAYS } from '@/lib/capacity-engine';
 import { computeAdaptation } from '@/lib/adaptation-engine';
+import { weightedCompletedForDay } from '@/lib/completion-portion';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { ROADMAP_PHASES, currentRoadmapIndex, weeksToExam } from '@/lib/study-plan';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
@@ -582,16 +583,29 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
       .limit(14),
     admin
       .from('routine_task_completions')
-      .select('routine_date, task_id')
+      .select('routine_date, task_id, confidence')
       .eq('student_id', studentId)
       .order('routine_date', { ascending: false })
       .limit(200),
   ]);
 
+  // TWO groupings, deliberately.
+  //
+  // completedByDate is a plain id set and stays that way: it answers "was this
+  // task touched" for yesterday's done-count and the unfinished-topic list,
+  // both of which a student reads. A half-tick is a touched task there.
+  //
+  // completedRowsByDate keeps `confidence`, and feeds ONLY the plan-completion
+  // ratio, where a half-tick is worth 0.5. That is the whole scope of the
+  // weighting -- "PARTIAL weighs 0.5 in the plan-completion ratio, and only
+  // there".
   const completedByDate = new Map<string, Set<string>>();
+  const completedRowsByDate = new Map<string, { task_id: string; confidence?: string | null }[]>();
   for (const c of pastCompletions ?? []) {
     if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
     completedByDate.get(c.routine_date)!.add(c.task_id);
+    if (!completedRowsByDate.has(c.routine_date)) completedRowsByDate.set(c.routine_date, []);
+    completedRowsByDate.get(c.routine_date)!.push({ task_id: c.task_id, confidence: c.confidence });
   }
 
   // Topics swapped OUT of the most recent past day — "never delete, always
@@ -639,7 +653,7 @@ async function buildHistory(admin: any, studentId: string): Promise<HistoryInput
     if (r.routine_date < today && taskCount > 0) {
       planDays++;
       plannedTasks += taskCount;
-      completedTasks += Math.min(taskCount, completedTaskIds.size);
+      completedTasks += weightedCompletedForDay(completedRowsByDate.get(r.routine_date) ?? [], taskCount);
     }
     // Guard against legacy/corrupt rows where tasks is null or not an array
     // (bug audit, 14 July) — an unguarded for-of here throws, rejecting the

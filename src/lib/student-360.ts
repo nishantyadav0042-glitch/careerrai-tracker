@@ -2,6 +2,7 @@ import { getStudentMomentum, type StudentMomentum } from '@/lib/momentum';
 import { dailyHours } from '@/lib/daily-hours';
 import { computeCapacity, type Capacity } from '@/lib/capacity-engine';
 import { computeAdaptation, type Adaptation, ADAPTATION_WINDOW_DAYS } from '@/lib/adaptation-engine';
+import { weightedCompletedForDay } from '@/lib/completion-portion';
 import { assembleIntelligence, type StudentIntelligence } from '@/lib/intelligence';
 import { getPhase } from '@/lib/routine-engine';
 import { weeksToExam } from '@/lib/study-plan';
@@ -54,7 +55,7 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
     admin.from('mentor_grants').select('door, created_at').eq('student_id', id),
     // Adaptation + intelligence input: plan-day completion + per-section recency.
     admin.from('daily_routines').select('routine_date, tasks').eq('student_id', id).gte('routine_date', windowStart),
-    admin.from('routine_task_completions').select('routine_date, task_id').eq('student_id', id).gte('routine_date', windowStart),
+    admin.from('routine_task_completions').select('routine_date, task_id, confidence').eq('student_id', id).gte('routine_date', windowStart),
     // Constraint / Performance input: syllabus coverage snapshot.
     admin.from('topic_coverage').select('section, topic, status').eq('student_id', id),
     // Mock-pending signal: mocks analysed (debriefs) vs mocks logged.
@@ -109,10 +110,13 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
   const measuredDays = winReports.filter((r: any) => !durationIsUnknown(r)).length;
   const capacity = computeCapacity(hrs, measuredDays, dailyHours(p).weekday);
 
-  const completedByDate = new Map<string, Set<string>>();
+  // Rows, not a Set of ids: the plan-completion ratio weighs a half-tick 0.5
+  // (completion-portion.weightedCompletedForDay), so confidence has to survive
+  // the grouping. Dedup and the per-day cap now live in that authority.
+  const completedByDate = new Map<string, { task_id: string; confidence?: string | null }[]>();
   for (const c of winCompletions ?? []) {
-    if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, new Set());
-    completedByDate.get(c.routine_date)!.add(c.task_id);
+    if (!completedByDate.has(c.routine_date)) completedByDate.set(c.routine_date, []);
+    completedByDate.get(c.routine_date)!.push({ task_id: c.task_id, confidence: c.confidence });
   }
   let completedTasks = 0, plannedTasks = 0, planDays = 0;
   const daysSinceSection: Record<string, number> = {};
@@ -121,9 +125,12 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
     if (r.routine_date < todayStr && tasks.length > 0) {
       planDays++;
       plannedTasks += tasks.length;
-      completedTasks += Math.min(tasks.length, (completedByDate.get(r.routine_date) ?? new Set()).size);
+      completedTasks += weightedCompletedForDay(completedByDate.get(r.routine_date) ?? [], tasks.length);
     }
-    const done = completedByDate.get(r.routine_date) ?? new Set();
+    // Recency only asks WHETHER a task was touched, so a half-tick counts here
+    // exactly like a full one -- the 0.5 weighting belongs to the completion
+    // ratio and only there.
+    const done = new Set((completedByDate.get(r.routine_date) ?? []).map((c) => c.task_id));
     const ago = Math.round((Date.parse(todayStr) - Date.parse(r.routine_date)) / DAY);
     for (const t of tasks) {
       if (!done.has(t.id)) continue;
