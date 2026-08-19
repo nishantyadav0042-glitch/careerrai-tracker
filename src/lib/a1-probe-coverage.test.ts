@@ -72,13 +72,17 @@ describe('scope containment', () => {
       .toMatch(/Saved your tick, but today isn’t counted yet/);
   });
 
-  it('the missing network handler is RECORDED, not silently added', () => {
-    // toggleTask has only a `finally`. Adding a catch would swallow a throw
-    // that currently escapes -- a behaviour change, out of scope for an
-    // instrumentation gate, and a named A1 suspect in its own right.
+  it('a network fault is now recorded, attributed AND shown to the student', () => {
+    // The upstream audit found crash-reporter DOES catch the escaping throw
+    // (70 "Load failed" rows since 26 Jul) -- but client_errors has no user_id,
+    // drops where/detail after fingerprinting, dedupes per session, and the
+    // student was told nothing. Caught is not handled.
     const s = read(CARD);
-    expect(s, 'the gap must be documented at the site').toMatch(/no `catch`/);
-    expect(s, "and must NOT have been quietly filled")
-      .not.toMatch(/setBusyTaskId\(task\.id\);[\s\S]{0,600}\} catch \{[\s\S]{0,200}setTickError/);
+    expect(s, 'the network branch must emit the probe event')
+      .toMatch(/\} catch \(e\) \{[\s\S]{0,1400}kind: 'network', surface: 'plan_card'/);
+    expect(s, 'and must locate the failure for client_errors')
+      .toMatch(/reportHandledError\(e, \{ where: 'plan-card:tick', detail: task\.id \}\)/);
+    expect(s, 'and must tell the student the tick did not save')
+      .toMatch(/\} catch \(e\) \{[\s\S]{0,1600}setTickError\(/);
   });
 });

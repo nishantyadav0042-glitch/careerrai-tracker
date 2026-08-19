@@ -11,6 +11,7 @@ import { isMockSitting } from '@/lib/mock-in-plan';
 import { FirstWeekAskCard } from '@/components/first-week-ask-card';
 import type { CoverageStatus } from '@/lib/coverage-status';
 import { track } from '@/lib/journey';
+import { reportHandledError } from '@/lib/report-error';
 
 // The ladder is imported, never re-spelled — a local copy is how exam_ready
 // goes missing from one screen and nowhere else.
@@ -337,12 +338,6 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal, portion?: 'full' | 'half') {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
-    // NOTE (G15): this try has only a `finally`, no `catch`. A network fault
-    // here therefore propagates instead of being recorded, so the 'network'
-    // half of completion_write cannot fire from this surface. Adding a catch
-    // would CHANGE behaviour (it would swallow a throw that currently
-    // escapes), so it is reported rather than done inside an instrumentation
-    // gate. That gap is a named A1 suspect in its own right.
     try {
       const res = await fetch('/api/routine/complete-task', {
         method: 'POST',
@@ -399,6 +394,26 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         setTickError(null);
       }
       if (json.fullyDone && json.dayClosed) { setFullyDone(true); reportComplete(); }
+    } catch (e) {
+      // A network fault REJECTS; a 4xx/5xx resolves and is handled above.
+      //
+      // This used to have no catch at all, so the throw escaped to
+      // crash-reporter's unhandledrejection listener. That was not nothing --
+      // 70 "Load failed" rows since 26 Jul -- but it could not answer A1 and
+      // it left the student in the dark:
+      //   · client_errors has no user_id, so no failure is attributable
+      //   · where/detail are used to fingerprint and then dropped, so the row
+      //     cannot say the tick was what failed
+      //   · it dedupes per session, so a student retrying looks like one event
+      //   · setTickError never ran: the circle stayed as it was and nothing
+      //     told them the day had not been recorded
+      //
+      // report-error.ts exists for exactly this and states the principle: an
+      // error shown to a student is the one kind of error we KNOW a student
+      // saw. Incident #14 is the recorded cost of not doing it.
+      track('completion_write', { taskId: task.id, ok: false, status: 0, kind: 'network', surface: 'plan_card' });
+      reportHandledError(e, { where: 'plan-card:tick', detail: task.id });
+      setTickError('Could not save that — check your connection and tap again.');
     } finally {
       setBusyTaskId(null);
     }
