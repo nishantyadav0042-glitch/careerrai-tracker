@@ -1,0 +1,28 @@
+-- The financial ledger stops depending on a single mechanism
+--
+-- FOUND BY THE TASK-5 SWEEP, not by a report of harm. student_payments still
+-- carries INSERT, UPDATE and DELETE for anon and authenticated. Nothing can
+-- actually use them: RLS is enabled and the table has exactly one policy,
+-- "student sees own payments" (SELECT), so every write is denied by
+-- deny-by-default. Probed as both roles before writing this -- both INSERTs
+-- failed. The ledger is protected TODAY.
+--
+-- What it is not is protected TWICE. daily_reports, routine_task_completions,
+-- topic_coverage and streak_data all have the grant revoked AND RLS on, so a
+-- single mistaken `create policy ... for insert` cannot open them. On
+-- student_payments that one mistake is the whole distance between "denied" and
+-- "any logged-in student can write rows into the financial ledger". For the
+-- one table where the blast radius is money, the weaker arrangement was the
+-- one still in place.
+--
+-- SAFE BECAUSE THE WRITE PATH DOES NOT GO THROUGH THESE ROLES. Every writer in
+-- src/ -- payments/webhook, payments/create-order, sessions/book,
+-- cron/reconcile-payments, admin/retry-unlock, lib/activate-payment -- uses
+-- lib/supabase/admin (service_role), which bypasses RLS and grants alike.
+-- SELECT is deliberately untouched, so "student sees own payments" keeps
+-- working exactly as before.
+--
+-- This removes a permission that is already unusable. It cannot change
+-- behaviour; it removes a way for a future change to become a breach.
+
+REVOKE INSERT, UPDATE, DELETE ON public.student_payments FROM anon, authenticated;
