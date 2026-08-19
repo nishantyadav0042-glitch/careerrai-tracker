@@ -199,6 +199,11 @@ let seq = 0;
 export type EventName =
   | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
+  // G10B: the outcome of every complete-task call made by the INTEGRATED log
+  // fan-out. That call site is the only one that cannot tell success from an
+  // HTTP error — the plan-card tick already checks res.ok and shows the
+  // student the failure. Observability only; nothing retries or reorders.
+  | 'completion_write'
   | 'first_log_prompt'
   // Onboarding's closing log-practice screen (13 Aug): props carry how many of
   // the 3 practice tasks were marked and whether it was skipped — the cohort
