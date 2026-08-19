@@ -214,19 +214,20 @@ A positioning change is a monetisation feature and must be labelled one.
 
 ---
 
-## 6. State of the parked branch
+## 6. State of the branch
 
 `claude/buddy-entry-rung` holds the ₹299 rung on both screens plus the rewritten
-claim, per the two rulings of 19 Aug. `src/lib/buddy-entry-rung.test.ts` is at
-11 passing / 2 failing. Neither failure is in the shipped behaviour:
+claim, per the two rulings of 19 Aug, guarded by 13 tests. Full suite 1987
+passing, tsc / eslint / build clean.
 
-- **My test bug.** The slice window anchors on `s.indexOf('299')`, which finds
-  `₹2,999` (tillcat) first and lands on the wrong element, so it never sees the
-  new rung's `href`.
-- **The guard being right.** The retired claim *is* gone from the rendered copy,
-  but I quoted it verbatim inside an explanatory code comment, and a
-  source-level guard cannot tell comment from JSX. Quoting the exact string a
-  guard forbids makes that guard fail forever — the comment should describe the
-  retired claim without reproducing it.
+Two failures surfaced while writing that guard, and both had **one root cause
+worth remembering**: a source-level guard reads the file as text and cannot
+tell rendered JSX from a comment. It first anchored on the first `299` in the
+file, which is `₹2,999` (tillcat) — the window landed on the wrong element and
+the assertion silently tested nothing. Re-anchoring on `₹299` then landed on my
+own explanatory comment, which mentions the price. The fix is to assert the
+claim that is actually true — *some* occurrence of the price sits inside a link
+to the gated card — rather than to keep chasing an exact offset.
 
-Nothing is committed pending the founder's call on §4.
+**This does not change the ranking in §4.** The rung is honest and complete;
+it is P3, not the lever. Nothing here moves revenue until iOS can pay.
