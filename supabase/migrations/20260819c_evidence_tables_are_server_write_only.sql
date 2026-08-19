@@ -1,0 +1,42 @@
+-- G13-A4 (A') — the three evidence tables become server-write-only
+--
+-- FINDING. anon and authenticated hold the Supabase default `arwdDxtm` on
+-- every table, so RLS is the ONLY control, and daily_reports,
+-- routine_task_completions and topic_coverage each carry an `ALL` policy
+-- scoped to ownership with no column restriction. An authenticated student can
+-- therefore PATCH their own rows directly through PostgREST and write ANY
+-- column -- including study_duration (which has no CHECK, so 500 hours is
+-- accepted) and study_duration_source (so a client can stamp its own number
+-- 'credited'). G13-A made provenance PERSISTENT; it could not make it
+-- TRUSTWORTHY while this stood.
+--
+-- WHY THIS IS SAFE, established by tracing rather than grepping. All 18
+-- importers of the browser Supabase client were enumerated along with every
+-- mutation in each. The complete browser-write inventory is `profiles`
+-- (dream_colleges, buddy_tour_completed, onboarding fields, target_percentile,
+-- buddy setup) and `notifications` (read). There are ZERO client writes to
+-- these three tables. Also verified: no client-side .rpc(), no
+-- createBrowserClient outside the singleton, and the one edge function
+-- (create-bucket) does not touch them.
+--
+-- SELECT IS DELIBERATELY UNTOUCHED. Two client READS exist and must keep
+-- working: useLogging.ts (has-logged-today) and profile/history-section.tsx
+-- (last 30 reports). This revokes writes only, so both are unaffected -- and
+-- the ownership RLS policies stay in place to keep those reads scoped.
+--
+-- SERVER PATHS ARE UNAFFECTED. Every write to these tables goes through an API
+-- route using the service_role key, whose grants are not touched here.
+-- upsert_log_and_streak is SECURITY DEFINER and runs as its owner, so it is
+-- likewise unaffected.
+--
+-- NOT IN SCOPE, deliberately: profiles and streak_data (legitimate client
+-- writes exist and need a column-scoped policy, not a revoke -- a separate
+-- founder decision), student_payments (already has no write policy at all),
+-- resolvePair's trust in profiles.buddy_id (the higher-severity finding, held
+-- for a ruling), and every schema object. No data is read or written.
+--
+-- ROLLBACK: re-GRANT the three verbs. Nothing else to undo.
+
+REVOKE INSERT, UPDATE, DELETE ON public.daily_reports            FROM anon, authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.routine_task_completions FROM anon, authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.topic_coverage           FROM anon, authenticated;
