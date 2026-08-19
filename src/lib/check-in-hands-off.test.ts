@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 import { OUTCOME_OPTIONS, outcomeNeedsDuration, type DayOutcome } from './check-in';
 
 // ── Q5 — the check-in stops asking a question it cannot finish ───────────────
@@ -110,6 +109,21 @@ describe('what this gate must NOT do', () => {
   });
 
   it('no historical row is rewritten', () => {
-    expect(execSync('git status --porcelain supabase/migrations', { cwd: process.cwd() }).toString()).toBe('');
+    // Was `git status --porcelain supabase/migrations`. That guard is correct on
+    // the day a gate ships and WRONG as a standing invariant — it asserts the
+    // repo never gains a migration, so an unrelated later gate breaks it. (Third
+    // time this pattern has needed correcting; the durable form is below.)
+    // What this gate actually promised: no migration rewrites stored evidence.
+    // Function bodies are excised — an RPC updating a row on a future write is
+    // the function doing its job, not a migration touching history.
+    const dir = join(process.cwd(), 'supabase/migrations');
+    const offenders = readdirSync(dir).filter((f) => {
+      const sql = readFileSync(join(dir, f), 'utf8')
+        .replace(/--[^\n]*/g, '')
+        .replace(/AS \$function\$[\s\S]*?\$function\$;/gi, '')
+        .replace(/AS \$\$[\s\S]*?\$\$;/gi, '');
+      return /\b(update|delete\s+from)\s+(public\.)?(daily_reports|routine_task_completions)\b/i.test(sql);
+    });
+    expect(offenders, 'no migration may rewrite stored evidence').toEqual([]);
   });
 });
