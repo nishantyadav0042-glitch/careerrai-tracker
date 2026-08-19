@@ -9,6 +9,8 @@ import { Card } from '@/components/ui/card';
 import type { LoggingData } from './LoggingModal';
 import { useLogging, type InitialLogging } from '@/hooks/useLogging';
 import { getLogDateString } from '@/lib/streak-utils';
+import { RatingPromptSheet } from '@/components/rating-prompt-sheet';
+import type { RatingPromptTrigger } from '@/lib/rating-prompt';
 import { track } from '@/lib/journey';
 import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
@@ -107,6 +109,11 @@ export function DailyTrackerApp({
   const [logWithMock, setLogWithMock] = useState(false);
   const [logDateOverride, setLogDateOverride] = useState<string | null>(null);
   const [lastNudge, setLastNudge] = useState<string | null>(null);
+  // The store-rating ask. Queued here and rendered only AFTER the celebration
+  // closes, never alongside it -- two sheets over one moment is how a happy
+  // moment becomes an interruption. A streak milestone outranks a same-day
+  // mock: it is the rarer and more emotionally charged of the two.
+  const [pendingRatingTrigger, setPendingRatingTrigger] = useState<RatingPromptTrigger | null>(null);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -279,8 +286,12 @@ export function DailyTrackerApp({
       // Tell the plan card to re-pull so the marked topics show as done.
       try { window.dispatchEvent(new Event('cr-routine-updated')); } catch { /* noop */ }
     }
-    if (result?.milestone) setLastNudge(result.milestone);
-    else if (result?.daily_nudge) setLastNudge(result.daily_nudge);
+    if (result?.milestone) {
+      setLastNudge(result.milestone);
+      setPendingRatingTrigger('streak_milestone');
+    } else if (result?.daily_nudge) {
+      setLastNudge(result.daily_nudge);
+    }
     const mockSelected = data.sections.includes('Mock');
     // Single-sheet log (24 Jul): the mock percentiles are captured INLINE on the
     // log and arrive as data.mock — save the debrief right here, no second
@@ -298,6 +309,8 @@ export function DailyTrackerApp({
         if (response.ok) {
           const json = (await response.json()) as { insight?: string | null };
           if (json.insight) setDebriefInsight(json.insight);
+          // A milestone already queued wins -- see the note on the state.
+          setPendingRatingTrigger((prev) => prev ?? 'mock_completed');
         }
       } catch { /* best-effort — the log itself already saved */ }
       queryClient.invalidateQueries({ queryKey: ['pending-debrief'] });
@@ -399,6 +412,13 @@ export function DailyTrackerApp({
           such elsewhere — it had no import site anywhere in the repo. A
           comment asserting a file is live is exactly what keeps a dead file
           alive through the next three audits. */}
+      {!showFeedback && pendingRatingTrigger && (
+        <RatingPromptSheet
+          trigger={pendingRatingTrigger}
+          onDone={() => setPendingRatingTrigger(null)}
+        />
+      )}
+
       {showFeedback && (
         <PlanRebuildPayoff
           source="today_sheet"

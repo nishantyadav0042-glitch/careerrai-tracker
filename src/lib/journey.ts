@@ -263,6 +263,11 @@ export type EventName =
   // to the full sheet. Distinct from checkin_completed, which means the gate
   // finished the answer by itself.
   | 'checkin_handoff_to_log'
+  // The store-rating ask. Shown is recorded server-side too (rating_prompts),
+  // but the client event is what ties an impression to the surface and session
+  // it appeared in -- the row alone cannot say that.
+  | 'rating_prompt_shown' | 'rating_prompt_rated'
+  | 'rating_prompt_dismissed' | 'rating_prompt_never_ask_again'
   // The payoff stage of the loop: the rebuilt timetable handed back after the
   // check-in. payoff_shown vs completed measures how often a check-in actually
   // produced a plan to show; payoff_start is the student accepting it.
