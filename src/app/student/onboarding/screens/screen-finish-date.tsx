@@ -13,6 +13,10 @@ interface Props {
   coveragePracticing: number | null;
   coverageLearning: number | null;
   coverageTotal: number | null;
+  // Exam-scoped counts for the hours model; see blueprint-builder.
+  coverageExamTotal?: number | null;
+  coverageExamPracticing?: number | null;
+  coverageExamLearning?: number | null;
   attemptYear: number | null;
   // The date the student picked at the very start (screen 2) — this screen
   // now reconciles that ambition against the real per-day cost.
@@ -51,7 +55,7 @@ function toIsoDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, attemptYear, ambitionDate, isRepeater, lastYearPercentile }: Props) {
+export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading, coveragePracticing, coverageLearning, coverageTotal, coverageExamTotal, coverageExamPracticing, coverageExamLearning, attemptYear, ambitionDate, isRepeater, lastYearPercentile }: Props) {
   const [selected, setSelected] = useState<number | 'custom' | null>(null);
   const [customDate, setCustomDate] = useState<string>('');
 
@@ -63,6 +67,9 @@ export default function ScreenFinishDate({ onNext, onBack, canGoBack, isLoading,
     coverage_practicing: coveragePracticing,
     coverage_learning: coverageLearning,
     coverage_total: coverageTotal,
+    coverage_exam_total: coverageExamTotal,
+    coverage_exam_practicing: coverageExamPracticing,
+    coverage_exam_learning: coverageExamLearning,
     is_repeater: isRepeater,
     last_year_percentile: lastYearPercentile,
   };

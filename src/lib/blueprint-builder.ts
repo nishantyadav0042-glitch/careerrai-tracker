@@ -57,6 +57,24 @@ export interface BlueprintPreviewInput {
   coverage_practicing?: number | null;
   coverage_learning?: number | null;
   coverage_total?: number | null;
+  /**
+   * The same three counts, restricted to the EXAM sections (VARC/DILR/QA).
+   *
+   * The hours model below is calibrated per EXAM unit (397h / 46), but
+   * KNOWLEDGE_GRAPH has 53 -- it also carries MOCKS and READING habit units the
+   * curated per-topic model deliberately declines to estimate. Onboarding used
+   * to pass the full 53 as coverage_total, so a fresh student was quoted 457h
+   * against a 397h syllabus: 60 phantom hours, a finish date 15 days late at
+   * 4h/day, at the exact moment activation depends on.
+   *
+   * Additive rather than a redefinition of coverage_total, deliberately. The
+   * hours question has one right denominator; whether the student's coverage
+   * BADGE should read "of 46" or "of 53" is a product decision and is left
+   * alone -- coverageBadge still reads coverage_total.
+   */
+  coverage_exam_total?: number | null;
+  coverage_exam_practicing?: number | null;
+  coverage_exam_learning?: number | null;
 }
 
 export interface BlueprintPreview {
@@ -133,10 +151,19 @@ export interface CoverageProjection {
 // finish-date chooser's "4h/day → 12 Sept" options both call this, so the
 // two can never disagree).
 export function remainingPrepHours(input: BlueprintPreviewInput): number {
-  const total = input.coverage_total ?? EXAM_UNIT_COUNT;
-  const declared = input.coverage_total != null;
-  const practicing = declared ? (input.coverage_practicing ?? 0) : 0;
-  const learning = declared ? (input.coverage_learning ?? 0) : 0;
+  // Prefer the exam-scoped counts; fall back to the graph-scoped ones so a
+  // caller that predates this field keeps its current behaviour exactly.
+  const examScoped = input.coverage_exam_total != null;
+  const total = examScoped
+    ? (input.coverage_exam_total as number)
+    : (input.coverage_total ?? EXAM_UNIT_COUNT);
+  const declared = examScoped || input.coverage_total != null;
+  const practicing = !declared ? 0 : examScoped
+    ? (input.coverage_exam_practicing ?? 0)
+    : (input.coverage_practicing ?? 0);
+  const learning = !declared ? 0 : examScoped
+    ? (input.coverage_exam_learning ?? 0)
+    : (input.coverage_learning ?? 0);
   const untouched = Math.max(0, total - practicing - learning);
   const raw = untouched * HOURS_PER_UNTOUCHED_UNIT + learning * HOURS_PER_LEARNING_UNIT + practicing * HOURS_PER_PRACTICING_UNIT;
   // The SAME per-student effort scaling the tracker's pace card applies

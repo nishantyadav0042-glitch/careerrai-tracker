@@ -303,6 +303,18 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
     const matrix = KNOWLEDGE_GRAPH.flatMap((s) =>
       s.groups.flatMap((g) => g.units.map((unit) => ({ section: s.id, topic: unit, status: statuses[unit] ?? 'not_started' })))
     );
+    // The hours model is calibrated per EXAM unit (397h / 46). The matrix above
+    // is the WHOLE graph (53) -- it also carries MOCKS and READING habit units
+    // the curated model declines to estimate. Emit both: coverage_* stays the
+    // full-grid figure the badge shows, coverage_exam_* is what the hours model
+    // is allowed to see. See blueprint-builder.remainingPrepHours.
+    const EXAM_SECTIONS = ['VARC', 'DILR', 'QA'];
+    const examMatrix = matrix.filter((m) => EXAM_SECTIONS.includes(m.section));
+    const examCounts = {
+      coverage_exam_total: examMatrix.length,
+      coverage_exam_practicing: examMatrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
+      coverage_exam_learning: examMatrix.filter((m) => m.status === 'learning').length,
+    };
     if (deferSave) {
       onMatrixReady?.(matrix);
       try { window.localStorage.removeItem(DRAFT_KEY); } catch { /* best-effort */ }
@@ -310,6 +322,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         coverage_practicing: matrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
         coverage_learning: matrix.filter((m) => m.status === 'learning').length,
         coverage_total: matrix.length,
+        ...examCounts,
       });
       return;
     }
@@ -330,6 +343,7 @@ export default function ScreenTopicCoverage({ onNext, onBack, canGoBack, isLoadi
         coverage_practicing: matrix.filter((m) => m.status === 'practicing' || m.status === 'revising').length,
         coverage_learning: matrix.filter((m) => m.status === 'learning').length,
         coverage_total: matrix.length,
+        ...examCounts,
       });
     } catch (err) {
       setError((err as { message?: string })?.message ?? 'Could not save your preparation map.');
