@@ -6,9 +6,17 @@ ChatGPT positioning memo was tabled for comparison.
 
 **One-line finding:** the positioning memo answers a question our data says is
 not currently the binding constraint. **30% of students who open the pricing
-sheet click a plan. 80% of the ones who reach checkout abandon it. iOS has
-taken 27 plan clicks and produced ₹0, ever.** The words are working better
-than the checkout is.
+sheet click a plan, and most of the loss is at checkout.** The words are
+working better than the checkout is.
+
+> **CORRECTION, same day, before this memo was acted on.** My first pass said
+> "iOS has produced ₹0, ever" and "100% of revenue is Android." **Both are
+> wrong.** See §1a — the true statement is narrower and more useful: no payment
+> has ever completed **inside the iOS app shell**, while iOS Safari has
+> collected at least one. I also built the funnel on client-side
+> `pay_success_callback`, which misses **2 of the 4 real payments** because the
+> webhook, not the browser, recorded them. Terminal rates below are therefore
+> soft; `student_payments` is the authority, not the event stream.
 
 Everything below is graded. `[MEASURED]` = queried production today.
 `[WEAK]` = real but n is too small to lean on. `[UNEVIDENCED]` = plausible,
@@ -36,27 +44,41 @@ viewers into a plan click is not a sheet with a messaging problem. The message
 is getting people to reach for their wallet. The wallet step is where they are
 lost.
 
-### 1a. The single largest fact in this dataset `[MEASURED]`
+### 1a. iOS — corrected, and narrower than I first wrote `[MEASURED]`
 
-Split the same funnel by platform:
+| Surface | Plan clicks | Escapes | Orders | Checkout | Dismissed | Paid (client) |
+|---|---|---|---|---|---|---|
+| Android standalone | 17 | 0 | 16 | 17 | 10 | 2 |
+| **iOS standalone (installed)** | 24 | 17 | 7 | 7 | **7** | **0** |
+| **iOS app shell** | 3 | 3 | 0 | 0 | 0 | **0** |
+| **iOS Safari (plain browser)** | 2 | 0 | 1 | 1 | 0 | **0*** |
 
-| Platform / mode | Plan clicks | Checkout | Dismissed | `pay_escape_browser` | **Paid** |
-|---|---|---|---|---|---|
-| Android standalone | 17 | 17 | 10 | 0 | **2** |
-| iOS standalone | 24 | 7 | 7 | 17 | **0** |
-| iOS app shell | 3 | 0 | 0 | 3 | **0** |
-| Everything else | 2 | 1 | 0 | 0 | 0 |
+`*` — and this asterisk is the whole correction. On **4 Aug 15:23** an iOS
+Safari student clicked `monthly`, an order was created, checkout opened, and
+then **nothing**: no dismiss, no success callback. `student_payments` has a
+**paid ₹999 monthly row for that student that day**. The payment went through;
+the client never saw it. That student's entire surface history is
+`desktop/browser, desktop/standalone, ios/browser, ios/standalone` — **no
+Android at all.**
 
-**iOS: 27 plan clicks, 20 escape-to-browser events, zero rupees. Not once.**
-100% of revenue this company has ever collected came from Android.
+So the corrected statements are:
 
-iOS is **26% of the active base** (760 of 2,928 people active in 14 days).
-Roughly a quarter of our students are structurally unable to pay us, and the
-`pay_escape_browser` instrumentation says we already knew the mechanism —
-Razorpay does not complete inside the iOS shell, so we punt to a browser tab
-and the payment dies there.
+- **We do collect payments on iOS — in a real browser.** At least one, confirmed.
+- **The iOS app shell has never completed a payment: 27 plan clicks, 0.**
+- "100% of revenue is Android" was **false**. Retracted.
 
-No sentence, in any language, fixes that.
+**The hand-off is deliberate, not a bug.** `unlock-buddy-sheet.tsx` routes store
+builds out to the real browser because an in-app card sheet for a live
+mentorship service would be rejected by Apple. The code already carries the
+prior measurement of the alternative: *"Measured result of falling through: 0
+payments in 21 attempts."* Someone already found this, already fixed the
+routing, and already replaced a two-tap escape with a one-tap anchor. What is
+unproven is whether students **survive the hand-off** — 17 escapes from the
+installed iOS PWA, and only 2 clicks ever recorded on the far side in Safari.
+
+**That is the open question, and it is not "is iOS broken".** It is: *how many
+students fall into the gap between tapping in the app and arriving in the
+browser?* Nothing currently measures the far side of that jump.
 
 ### 1b. The repeat-click signature `[MEASURED]`
 
@@ -158,18 +180,24 @@ whether it worked.
 
 ## 4. What I would actually do, ranked by measured leverage
 
-**P0 — Make iOS able to pay.** 26% of the base, 27 plan clicks, ₹0. This is
-worth more than every word on both screens combined, and it is an engineering
-problem with a measurable pass/fail. Needs its own audit gate; do not bundle it
-with copy.
+**P0 — Measure the iOS hand-off, then decide.** 26% of the base, 27 clicks
+inside the app, 0 completions there — but the hand-off to Safari is
+Apple-required and demonstrably *can* complete. The actionable gap is that
+nothing measures survival across the jump. Instrument the far side (a marked
+return URL, so an arrival in Safari can be tied to the tap that sent it) before
+proposing any fix. Do not bundle with copy.
 
 **P1 — Instrument the nudge before touching its copy.** `nudge_shown`,
 `nudge_dismissed`, `nudge_cta_click`, `nudge_rung_click`. One commit, no
 behaviour change. Without it, every subsequent positioning decision is taste.
 
-**P2 — Fix the checkout-abandon rate on Android.** 10 open, 8 dismiss. We have
-`pay_dismissed` but not *why*. Worth a read of the Razorpay failure props
-before assuming it is price.
+**P2 — Reconcile the payment funnel against `student_payments`.**
+`pay_success_callback` fired twice; four payments are real. Every abandonment
+number in §1 is inflated by that gap, mine included. Until the event stream and
+the payments table agree, we cannot tell a lost sale from an untracked one —
+and one Android payer on 4 Aug ground through **six** checkout attempts across
+27 minutes before succeeding, so repeat-clicking is not reliably a dead button
+either.
 
 **P3 — Ship the ₹299 rung and the honest claim.** Already built on
 `claude/buddy-entry-rung` (see §6). It is right on the merits — the cheapest
