@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString, VALID_SECTIONS } from '@/lib/streak-utils';
 import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } from '@/lib/topic-selector';
 import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
+import { planFullyDone, portionOf } from '@/lib/completion-portion';
 import { creditedHours } from '@/lib/study-credit';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { sourceForMergedDuration, isStudyDurationSource } from '@/lib/study-duration-source';
@@ -151,7 +152,14 @@ export async function POST(request: NextRequest) {
 
   const completedIds = new Set((completions ?? []).map((c) => c.task_id));
   const emergencyDay = (completions ?? []).some((c) => c.is_emergency);
-  const fullyDone = tasks.every((t) => completedIds.has(t.id));
+  // A HALF-TICK IS PARTIAL, NEVER FULLY COMPLETE (founder ruling, 18 Aug).
+  // This was `tasks.every((t) => completedIds.has(t.id))` -- membership in the
+  // completed set, which a "Got halfway" tap also earns. So a student who
+  // marked every task halfway closed the day, advanced the streak and was told
+  // "Ready for tomorrow", having just said they only got halfway. Twelve lines
+  // below, creditedHours counted those same taps at 0.5. One tap, two meanings,
+  // in one function.
+  const fullyDone = planFullyDone(tasks.map((t) => t.id), completions ?? []);
   // Emergency Mode: completing just the single highest-priority task counts
   // as the day's minimum — distinct from full completion, never disguised as it.
   const emergencyMinimumDone = emergencyDay && completedIds.has(tasks[0].id);
@@ -184,7 +192,7 @@ export async function POST(request: NextRequest) {
     // state now reachable from the plan card that divergence would also make
     // the number wrong — half a task credited as a whole one is the log lying
     // about time, which is what Incident #30 was about.
-    const halfDone = (completions ?? []).filter((c) => c.confidence === 'blue' && completedIds.has(c.task_id)).length;
+    const halfDone = (completions ?? []).filter((c) => portionOf(c.confidence) === 'half' && completedIds.has(c.task_id)).length;
     const fullDone = completedTasks.length - halfDone;
     const generatedHours = (routine.generated_hours as number | null) ?? routineMinutes / 60;
     const earned = creditedHours({
