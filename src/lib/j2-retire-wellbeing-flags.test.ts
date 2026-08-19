@@ -129,11 +129,23 @@ describe('shared infrastructure is preserved — retirement is deletion of the R
     expect(code('src/lib/email.ts')).toContain('flags.map');
   });
 
-  it('avgStress and avgSleep remain computed — moodScore needs them, out of scope for J2', () => {
+  it('avgStress and avgSleep remain computed and returned — the pipeline survives the retirement', () => {
+    // J2's invariant is that retiring the FLAGS does not retire the wellbeing
+    // DATA. It used to prove that via moodScore, which consumed those averages.
+    // G7 (18 Aug) removed moodScore from the composite after measuring that it
+    // was a constant 20.0 for every student — and the founder ruled explicitly
+    // that this is a score-composition decision, NOT a wellbeing-data
+    // retirement, which is J2's own distinction restated.
+    //
+    // So the invariant is unchanged and still holds; only its former witness is
+    // gone. Assert the thing itself: the averages are computed and they reach
+    // the caller.
     const src = code('src/lib/analytics.ts');
     expect(src).toContain('const avgStress');
     expect(src).toContain('const avgSleep');
-    expect(src).toContain('moodScore');
+    const returned = src.slice(src.lastIndexOf('return {'));
+    expect(returned, 'and they must still be handed to callers').toContain('avgStress');
+    expect(returned).toContain('avgSleep');
   });
 
   it('the RPC fabricated-constants writer is untouched — J1 is a separate gate', () => {

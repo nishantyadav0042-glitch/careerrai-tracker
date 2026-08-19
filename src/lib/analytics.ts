@@ -47,15 +47,41 @@ export function computeSummary(reports: DailyReport[], period: number): Analytic
   const avgMockScore = avg(mockScores);
 
   const consistency = (reports.length / period) * 25;
-  // UNRULED GAP, recorded not invented: with avgStudy unknown there is no
-  // decided answer for what this 0-25 component should contribute, so it keeps
-  // its existing arithmetic and scores 0. overallScore is admin/founder-facing
-  // (the students list and the weekly digest), not student-facing, so the
-  // ruling's "never show a fabricated 0h to a student" is not breached here.
-  const studyScore = Math.min(25, ((avgStudy ?? 0) / 6) * 25);
+  // G7 ruling 1 — an unmeasured duration takes the NEUTRAL half of its
+  // component, not the worst. Scoring 0 punished a student for a question we
+  // never finished asking, and it was inconsistent with the line below, where
+  // a student with no mock has always been given a neutral 12 rather than a 0.
+  //
+  // The neutral lives HERE, in the scoring layer, and nowhere else: avgStudy
+  // stays null and no hours are written back. J6-A forbids inventing the
+  // measurement; it does not forbid declining to punish its absence.
+  const STUDY_NEUTRAL = 12.5;
+  const studyScore = avgStudy === null ? STUDY_NEUTRAL : Math.min(25, (avgStudy / 6) * 25);
   const mockScore = mockScores.length ? Math.min(25, (avgMockScore / 100) * 25) : 12;
-  const moodScore = Math.min(25, ((avgConfidence + (6 - avgStress) + avgEnergy) / 15) * 25);
-  const overallScore = Math.round(consistency + studyScore + mockScore + moodScore);
+
+  // G7 ruling 2 — moodScore is OUT of the composite.
+  //
+  // Measured, not assumed: across 110 real reports in one week, confidence,
+  // stress and overall_energy each held exactly ONE distinct value (4, 2, 4),
+  // because upsert_log_and_streak hard-codes them on every write. moodScore's
+  // minimum and maximum were both 20.0 — a constant offset wearing the costume
+  // of a signal, which is the same defect J2 retired the sleep/burnout FLAGS
+  // for while the SCORE went on reading the same fabricated fields.
+  //
+  // The mood DATA is untouched and still returned (avgConfidence, avgStress,
+  // avgSleep, avgEnergy). This is a composition decision, not a wellbeing-data
+  // retirement — the J2/J3 distinction, kept deliberately.
+  //
+  // SCALE: dropping a 25-point component leaves 75 scorable points while the
+  // admin UI renders "{score}/100". Reporting a score that cannot reach its own
+  // stated maximum would be a fresh instance of exactly what this workstream
+  // removes — and it would be a de-facto threshold change harsher than any
+  // explicit one, since every student would lose ~20 points at once. So the
+  // score is expressed as a percentage of what can actually be scored. The
+  // 70/50 thresholds are NOT touched here (ruling 3); they are measured and
+  // ruled separately.
+  const SCORABLE_POINTS = 75; // consistency 25 + study 25 + mock 25
+  const overallScore = Math.round(((consistency + studyScore + mockScore) / SCORABLE_POINTS) * 100);
 
   let band: AnalyticsSummary['band'];
   if (overallScore >= 70) band = 'On track';
