@@ -6,6 +6,7 @@ import { applyConfidenceSignal, type CoverageStatus, type ConfidenceSignal } fro
 import { highestStatus, normalizeStatus } from '@/lib/coverage-status';
 import { creditedHours } from '@/lib/study-credit';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
+import { sourceForMergedDuration, isStudyDurationSource } from '@/lib/study-duration-source';
 
 const VALID_CONFIDENCE: ConfidenceSignal[] = ['green', 'blue', 'yellow', 'red'];
 
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
     // never let the routine's write shrink what's already recorded.
     const { data: existingLog } = await admin
       .from('daily_reports')
-      .select('study_duration, topics_covered, mock_taken, notes')
+      .select('study_duration, study_duration_source, topics_covered, mock_taken, notes')
       .eq('student_id', user.id)
       .eq('report_date', today)
       .maybeSingle();
@@ -179,6 +180,17 @@ export async function POST(request: NextRequest) {
     });
     // Never shrink a log the student already made by hand.
     const mergedHours = Math.max(earned, existingLog?.study_duration ?? 0);
+    // STAMP THE WINNER, not the write that ran. mergedHours is a Math.max, so
+    // the number that lands is not always the credited one — stamping every
+    // such write 'credited' would assert that a pre-existing value was priced
+    // from coverage. Where credit loses or ties, the surviving value keeps
+    // whatever it already meant, including a legacy NULL.
+    const existingSourceRaw = (existingLog as { study_duration_source?: unknown } | null)?.study_duration_source;
+    const mergedSource = sourceForMergedDuration({
+      earned,
+      existing: existingLog ? Number(existingLog.study_duration) : null,
+      existingSource: isStudyDurationSource(existingSourceRaw) ? existingSourceRaw : null,
+    });
     const mergedSections = [...new Set([...(existingLog?.topics_covered ?? []), ...routineSections])];
     const mergedMockTaken = routineMockTaken || !!existingLog?.mock_taken;
     const mergedNotes = existingLog?.notes
@@ -193,6 +205,7 @@ export async function POST(request: NextRequest) {
       p_mock_taken: mergedMockTaken,
       p_notes: mergedNotes,
       p_emotional_chips: [],
+      p_study_duration_source: mergedSource,
     };
     let { error: rpcError } = await admin.rpc('upsert_log_and_streak', rpcArgs);
     // ONE RETRY before giving up (16 Aug — same principle as the auth-session

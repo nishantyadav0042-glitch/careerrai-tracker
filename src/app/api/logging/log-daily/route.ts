@@ -13,6 +13,7 @@ import { MILESTONE_MESSAGES } from '@/lib/messages';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { dispatch } from '@/lib/notification-os';
 import { checkHistoryDoorAfterLog } from '@/lib/mentor-doors';
+import { sourceForLoggedDuration } from '@/lib/study-duration-source';
 
 interface LoggingRequest {
   hours: number;
@@ -128,6 +129,17 @@ export async function POST(request: NextRequest) {
       p_mock_taken:      body.sections.includes('Mock'),
       p_notes:           body.notes || null,
       p_emotional_chips: body.emotional_chips ?? [],
+      // G13-A2. The sheet does NOT collect self-reported hours — it posts
+      // creditedHours() computed on the client — so the server can only stamp
+      // what it can actually establish: a declared rest day, or a day where no
+      // duration was captured at all. A positive number it did not compute
+      // stays NULL, which honestly means "provenance unknown". Asserting
+      // 'credited' for a value we cannot demonstrate is the false claim J6-A
+      // forbids; complete-task computes creditedHours() itself and can.
+      p_study_duration_source: sourceForLoggedDuration({
+        hours: body.hours,
+        dayOutcome: typeof body.day_outcome === 'string' ? body.day_outcome : null,
+      }),
     });
     if (rpcError) throw rpcError;
 
