@@ -10,6 +10,7 @@ import { BusyDayButton } from '@/components/busy-day-button';
 import { isMockSitting } from '@/lib/mock-in-plan';
 import { FirstWeekAskCard } from '@/components/first-week-ask-card';
 import type { CoverageStatus } from '@/lib/coverage-status';
+import { track } from '@/lib/journey';
 
 // The ladder is imported, never re-spelled — a local copy is how exam_ready
 // goes missing from one screen and nowhere else.
@@ -336,6 +337,12 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
   async function toggleTask(task: RoutineTask, confidence?: ConfidenceSignal, portion?: 'full' | 'half') {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
+    // NOTE (G15): this try has only a `finally`, no `catch`. A network fault
+    // here therefore propagates instead of being recorded, so the 'network'
+    // half of completion_write cannot fire from this surface. Adding a catch
+    // would CHANGE behaviour (it would swallow a throw that currently
+    // escapes), so it is reported rather than done inside an instrumentation
+    // gate. That gap is a named A1 suspect in its own right.
     try {
       const res = await fetch('/api/routine/complete-task', {
         method: 'POST',
@@ -348,6 +355,13 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
         body: JSON.stringify({ task_id: task.id, close_day: true, ...(confidence ? { confidence } : {}), ...(portion ? { portion } : {}) }),
       });
       if (!res.ok) {
+        // G15 -- the SAME event the integrated log fan-out emits, from the
+        // path students actually use. The A1 probe was placed only on the log
+        // sheet's fan-out, which has not been exercised once since it deployed
+        // (last daily_log: 18 Aug; probe live 19 Aug 06:47). Meanwhile every
+        // real completion arrives here, uninstrumented. The probe was not
+        // broken -- it was watching the wrong door.
+        track('completion_write', { taskId: task.id, ok: false, status: res.status, kind: 'http', surface: 'plan_card' });
         // A tick that silently does nothing is worse than one that fails
         // loudly: the circle filled in, the student moved on, and the day was
         // never recorded. Say so and leave the circle empty.
@@ -358,7 +372,15 @@ export function TodaysRoutineCard({ planSource = null }: { planSource?: string |
       // Server state changed — the 30s GET cache must never serve
       // pre-completion data.
       routineTodayCache = null;
-      const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; dayClosed: boolean };
+      const json = (await res.json()) as { completedTaskIds: string[]; fullyDone: boolean; dayClosed: boolean; coverageAdvanceFailed?: boolean };
+      // Success is recorded too: a failure rate needs a denominator, and the
+      // A1 question is "how often does a tick fail to become a study day", not
+      // "how many failures were there". coverageAdvanceFailed rides along --
+      // G3 made it truthful, and this is the only surface that can observe it.
+      track('completion_write', {
+        taskId: task.id, ok: true, status: res.status, kind: 'http', surface: 'plan_card',
+        dayClosed: json.dayClosed, coverageAdvanceFailed: json.coverageAdvanceFailed ?? false,
+      });
       setCompletedIds(new Set(json.completedTaskIds));
       setExpandedTaskId(null);
       if (confidence && task.topic) setConfidenceTaps((prev) => [...prev, { topic: task.topic!, confidence }]);
