@@ -132,7 +132,16 @@ export type PaceStatus = 'ahead' | 'on_pace' | 'behind' | 'unrealistic' | 'done'
 export interface PaceResult {
   remainingHours: number;
   totalHours: number;
-  completedPct: number;      // 0–100, by HOURS of work, not topic count
+  // completedPct is NOT returned here (P0-C-B/C, re-cut).
+  //
+  // This function computes an HOURS-based percentage; the Home ring shows a
+  // COVERAGE-based one. Both were called "completedPct", which is the Metric
+  // Constitution's one-meaning-one-fact rule broken inside a single object.
+  // The only consumer (tracker/page.tsx) already discarded the hours figure and
+  // substituted completedByTopics, so the student never saw it -- but any new
+  // caller reading `computeRequiredPace(...).completedPct` would have silently
+  // got the other meaning and disagreed with the ring. Callers that want a
+  // completion percentage must state which one they mean.
   daysLeft: number;
   requiredPerDay: number;    // the true number: remaining / daysLeft
   committedPerDay: number | null; // the pace the student chose
@@ -157,13 +166,12 @@ export function computeRequiredPace(input: {
 }): PaceResult {
   const { remainingHours, today, targetDate, committedPerDay } = input;
   const totalHours = totalSyllabusHours();
-  const completedPct = totalHours > 0 ? Math.min(100, Math.round(((totalHours - remainingHours) / totalHours) * 100)) : 0;
 
   const msLeft = targetDate.getTime() - today.getTime();
   const daysLeft = Math.max(1, Math.ceil(msLeft / 86_400_000));
 
   if (remainingHours <= 0) {
-    return { remainingHours: 0, totalHours, completedPct: 100, daysLeft, requiredPerDay: 0, committedPerDay, catchUpPerDay: 0, aheadPerDay: 0, status: 'done' };
+    return { remainingHours: 0, totalHours, daysLeft, requiredPerDay: 0, committedPerDay, catchUpPerDay: 0, aheadPerDay: 0, status: 'done' };
   }
 
   const requiredPerDay = HALF((remainingHours + (input.mockHours ?? 0)) / daysLeft);
@@ -187,5 +195,5 @@ export function computeRequiredPace(input: {
     status = 'on_pace';
   }
 
-  return { remainingHours, totalHours, completedPct, daysLeft, requiredPerDay, committedPerDay, catchUpPerDay, aheadPerDay, status };
+  return { remainingHours, totalHours, daysLeft, requiredPerDay, committedPerDay, catchUpPerDay, aheadPerDay, status };
 }

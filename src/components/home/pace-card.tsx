@@ -59,7 +59,16 @@ function Sparkline({ week, labels, color }: { week: number[]; labels: string[]; 
 }
 
 interface PaceCardProps {
-  pace: PaceResult;
+  /**
+   * The pace result PLUS the completion percentage, which the CALLER supplies.
+   *
+   * completedPct is deliberately not part of PaceResult (P0-C-B/C): that
+   * function measures HOURS, this ring shows COVERAGE, and one name for two
+   * meanings is the Metric Constitution violation the split exists to prevent.
+   * tracker/page.tsx passes completedByTopics, which is what the ring has
+   * always actually rendered.
+   */
+  pace: PaceResult & { completedPct: number };
   targetIso: string;
   week: number[];
   weekLabels: string[];
