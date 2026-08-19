@@ -471,6 +471,26 @@ export function UnlockBuddyButton({
                 </div>
                 <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
               </PlanCta>
+
+              {/* The entry rung (19 Aug). Both upsell screens used to jump from
+                  free to ₹999 with nothing in between, while a ₹299 single
+                  session already existed — payments, booking route and a
+                  capacity-gated card — but appeared on neither screen.
+                  It LINKS rather than charging here: BookSessionCard fetches
+                  mentor availability before rendering a button, and capacity is
+                  21 sessions a week. Selling inline would take money for time
+                  the mentors cannot give, which that card exists to prevent. */}
+              <a
+                href="/student/buddy"
+                onClick={() => setOpen(false)}
+                className="block w-full rounded-2xl border border-dashed border-stone-300 px-4 py-3 text-left transition-colors hover:border-stone-400"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-stone-900">Just one session first</span>
+                  <span className="text-sm font-bold text-stone-900">₹299</span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-stone-500">One 1-on-1 with an IIM senior · no subscription</p>
+              </a>
             </div>
 
             <p className="mt-3 text-center text-[11px] text-stone-400">

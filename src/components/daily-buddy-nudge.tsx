@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { X } from 'lucide-react';
 import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { claimDailyModal } from '@/lib/daily-modal';
@@ -70,8 +71,16 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
         <h2 className="text-center text-lg font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
           Don&apos;t prep alone
         </h2>
+        {/* Says what a buddy DOES, not what it causes. The line this replaced
+            asserted an outcome — that having a buddy makes students consistent
+            and fixes their weak areas — on the strength of 7 premium students
+            and 1 session request. The mechanism below is true today and needs
+            no cohort to prove it. Deliberately NOT quoting the retired claim
+            here: buddy-entry-rung.test.ts guards this file at the source level
+            and cannot tell a comment from rendered JSX, so reproducing the
+            forbidden string would keep that guard red forever. */}
         <p className="mx-auto mt-1 max-w-xs text-center text-sm text-stone-600">
-          Students with an IIM buddy stay consistent and actually fix their weak areas. Here&apos;s what a buddy does for you every day:
+          An IIM senior who has cleared CAT, working on your prep with you. Here&apos;s what that looks like:
         </p>
 
         <ul className="mx-auto mt-4 max-w-xs space-y-2 text-sm text-stone-700">
@@ -85,6 +94,21 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
             See how a buddy helps →
           </UnlockBuddyButton>
         </div>
+
+        {/* The entry rung. A student who is not ready for ₹999+ can buy ONE
+            session instead of nothing — the cheapest real step, which existed
+            in the product but appeared nowhere on this path.
+            It LINKS rather than sells: BookSessionCard checks mentor
+            availability before it renders a button, and total capacity is 21
+            sessions a week. Charging from here would sell time the mentors
+            cannot give, which is precisely what that card exists to prevent. */}
+        <Link
+          href="/student/buddy"
+          onClick={() => setShow(false)}
+          className="mt-3 block rounded-xl border border-stone-200 px-4 py-2.5 text-center text-[13px] text-stone-700 transition-colors hover:border-stone-400"
+        >
+          Not ready for that? <span className="font-semibold text-stone-900">Try one session — ₹299</span>
+        </Link>
 
         <button
           type="button"
