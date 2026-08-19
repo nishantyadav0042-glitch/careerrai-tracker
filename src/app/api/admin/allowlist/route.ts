@@ -53,8 +53,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Keep profile buddy assignment in sync if they've already logged in.
+    //
+    // Matched on the VERIFIED phone, never profiles.phone. That column is
+    // editable by the student in onboarding, and 36 already diverge from the
+    // number they passed an OTP on -- so matching it would let a student who
+    // set their phone to a pending entry collect that entry's mentor, and
+    // resolvePair() grants chat access on buddy_id alone.
     if (type === 'student' && assigned_buddy_id) {
-      await admin.from('profiles').update({ buddy_id: assigned_buddy_id }).eq('phone', phone);
+      const { data: verifiedId } = await admin.rpc('profile_id_for_verified_phone', { p_phone: phone });
+      if (verifiedId) {
+        await admin.from('profiles').update({ buddy_id: assigned_buddy_id }).eq('id', verifiedId);
+      }
     }
 
     return NextResponse.json({ ok: true });
@@ -96,9 +105,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Could not update.' }, { status: 500 });
     }
 
-    // Keep profile buddy assignment in sync for students (look up by phone now).
+    // Same rule as POST: resolve through the verified phone, never the
+    // student-editable profiles.phone.
     if (assigned_buddy_id !== undefined && row?.phone && row.person_type !== 'buddy') {
-      await admin.from('profiles').update({ buddy_id: assigned_buddy_id || null }).eq('phone', row.phone);
+      const { data: verifiedId } = await admin.rpc('profile_id_for_verified_phone', { p_phone: row.phone });
+      if (verifiedId) {
+        await admin.from('profiles').update({ buddy_id: assigned_buddy_id || null }).eq('id', verifiedId);
+      }
     }
 
     return NextResponse.json({ ok: true });
