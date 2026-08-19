@@ -181,3 +181,31 @@ export function durationIsUnknown(row: {
   if ((Number(row.study_duration) || 0) > 0) return false;
   return isDayOutcome(row.day_outcome) && WORK_HAPPENED.includes(row.day_outcome);
 }
+
+/**
+ * Q5 — does this answer leave a duration still owed?
+ *
+ * The check-in gate never asks "how long". It posts hours: 0 for all four
+ * outcomes because a check-in is not a study claim. For 'not_studied' and
+ * 'skipped' that is a COMPLETE answer -- the student has said there was
+ * nothing to measure, and G13-A stamps it declared_zero. For 'studied' and
+ * 'partial' it is a question left hanging: the row says work happened and
+ * zero hours, which no consumer can interpret and which
+ * weekly-plan-reconcile reads as a literal zero, using it to push the
+ * student's syllabus finish date out.
+ *
+ * 48 such rows across 32 students, still accruing at ~2.2 a day.
+ *
+ * G6 proposed teaching 30 consumers to interpret those rows. The ruling is
+ * better: stop creating them. The gate keeps the two answers it can finish
+ * and hands the other two to the full sheet.
+ *
+ * Deliberately shares WORK_HAPPENED with dayWasStudied. The two ask different
+ * questions -- "did work happen?" and "is a duration still owed?" -- but a day
+ * with work in it is exactly the day that has a length worth telling us, and
+ * two arrays with identical contents is how a fifth value gets added to one
+ * and missed in the other.
+ */
+export function outcomeNeedsDuration(o: DayOutcome): boolean {
+  return WORK_HAPPENED.includes(o);
+}

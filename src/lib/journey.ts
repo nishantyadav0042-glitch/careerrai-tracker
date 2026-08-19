@@ -259,6 +259,10 @@ export type EventName =
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
   | 'channel_referred'
   | 'checkin_shown' | 'checkin_answered' | 'checkin_completed'
+  // Q5: the gate saved a work outcome it cannot price and handed the student
+  // to the full sheet. Distinct from checkin_completed, which means the gate
+  // finished the answer by itself.
+  | 'checkin_handoff_to_log'
   // The payoff stage of the loop: the rebuilt timetable handed back after the
   // check-in. payoff_shown vs completed measures how often a check-in actually
   // produced a plan to show; payoff_start is the student accepting it.
