@@ -7,6 +7,7 @@ import { getPhase } from '@/lib/routine-engine';
 import { weeksToExam } from '@/lib/study-plan';
 import type { Blocker } from '@/lib/mission-engine';
 import { getEntityTimeline } from '@/lib/os/timeline';
+import { dayWasStudied } from '@/lib/check-in';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -47,7 +48,7 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
   const [{ data: p }, momentum, { data: reports }, { data: notifs }, { data: eng }, { data: grants }, { data: winRoutines }, { data: winCompletions }, { data: coverageRows }, { data: debriefs }, decisions] = await Promise.all([
     admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, app_installed, created_at, premium_since, notif_prefs, push_subscription, push_context, push_verified_at, push_died_at, study_target_hours, hours_available, baseline_varc, baseline_dilr, baseline_qa, target_percentile, biggest_blocker, attempt_year, current_stage, is_repeater, is_working_professional').eq('id', id).single(),
     getStudentMomentum(admin, id),
-    admin.from('daily_reports').select('report_date, created_at, study_duration, plan_fit, mock_taken').eq('student_id', id).order('report_date', { ascending: false }),
+    admin.from('daily_reports').select('report_date, created_at, study_duration, plan_fit, mock_taken, day_outcome').eq('student_id', id).order('report_date', { ascending: false }),
     admin.from('notifications').select('type, title, pushed_at, clicked_at').eq('user_id', id).not('pushed_at', 'is', null).order('pushed_at', { ascending: false }).limit(200),
     admin.from('student_engagement').select('signed_up_at, buddy_cta_last_at, intent_door_at, sales_called_at, mock_opened').eq('student_id', id).maybeSingle(),
     admin.from('mentor_grants').select('door, created_at').eq('student_id', id),
@@ -134,7 +135,10 @@ export async function getStudent360(admin: any, id: string): Promise<Student360 
   const twentyAgo = new Date(now - 20 * DAY).toISOString().slice(0, 10);
   let recentActive10 = 0, priorActive10 = 0;
   for (const r of winReports) {
-    if ((Number(r.study_duration) || 0) <= 0) continue;
+    // A3 — the student's declared outcome counts as an active day even when
+    // the hours column is 0 (a check-in never asks for hours). `hrs` above is
+    // left alone deliberately: it feeds computeCapacity, a deferred consumer.
+    if (!dayWasStudied(r)) continue;
     if (r.report_date > tenAgo) recentActive10++;
     else if (r.report_date > twentyAgo) priorActive10++;
   }

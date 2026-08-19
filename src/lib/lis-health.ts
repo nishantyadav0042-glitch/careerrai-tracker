@@ -8,6 +8,7 @@ import { daysSinceLastLog } from '@/lib/streak-utils';
 import type { DecisionType } from '@/lib/coach-decision';
 import type { ConstraintKey } from '@/lib/constraint-engine';
 import type { Blocker } from '@/lib/mission-engine';
+import { dayWasStudied } from '@/lib/check-in';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -78,7 +79,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
     admin.from('profiles')
       .select('id, full_name, study_target_hours, hours_available, baseline_varc, baseline_dilr, baseline_qa, target_percentile, biggest_blocker, attempt_year, current_stage, is_repeater, is_working_professional')
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
-    admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken').gte('report_date', windowStart),
+    admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken, day_outcome').gte('report_date', windowStart),
     admin.from('daily_routines').select('student_id, routine_date, tasks').gte('routine_date', windowStart),
     admin.from('routine_task_completions').select('student_id, routine_date, task_id').gte('routine_date', windowStart),
     admin.from('topic_coverage').select('student_id, status'),
@@ -155,7 +156,9 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
     // Direction windows + coverage + mock signals.
     let recentActive10 = 0, priorActive10 = 0;
     for (const r of rep) {
-      if ((Number(r.study_duration) || 0) <= 0) continue;
+      // A3 — see student-360: a declared study day with 0 hours is still
+      // active. `hrs` above feeds computeCapacity and is deferred, untouched.
+      if (!dayWasStudied(r)) continue;
       if (r.report_date > tenAgo) recentActive10++;
       else if (r.report_date > twentyAgo) priorActive10++;
     }

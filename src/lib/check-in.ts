@@ -90,3 +90,48 @@ export function isBlockerReason(v: unknown): boolean {
 export function outcomeAsksWhy(o: DayOutcome): boolean {
   return OUTCOME_OPTIONS.find((x) => x.id === o)?.asksWhy === true;
 }
+
+/**
+ * The two outcomes that mean the student sat down and did work.
+ *
+ * Named for what it carries rather than for one consumer: when Q5 re-cuts,
+ * `outcomeNeedsDuration` shares this exact set — a day with work in it is
+ * exactly the day that has a length worth telling us — and two arrays with
+ * identical contents is how a fifth value gets added to one and missed in
+ * the other.
+ */
+const WORK_HAPPENED: readonly DayOutcome[] = ['studied', 'partial'];
+
+/**
+ * A3 — was this a study day?
+ *
+ * ONE authority, because four consumers were answering this from
+ * `study_duration > 0` and all four were wrong about the same 62 rows.
+ *
+ * `study_duration` CANNOT answer this question. It is NOT NULL DEFAULT 0, so
+ * it has no way to say "never asked" — and the check-in gate deliberately
+ * writes 0 into it ("a check-in is not a study claim"). The student,
+ * meanwhile, has answered directly in `day_outcome`. Asking the hours column
+ * and ignoring the answer the student actually gave is how 38 students got
+ * told they had 0 study days in a week they checked in for.
+ *
+ * The rule is a UNION and is therefore monotone: it can only ever add a study
+ * day, never remove one. Production carries zero rows where a student declared
+ * not_studied/skipped while hours were positive, but the union protects that
+ * case anyway — a day that already counted must not stop counting because a
+ * second signal disagrees. Which of the two signals is *right* is a J6-A
+ * provenance question, deliberately not decided here.
+ *
+ * Scope (J6-A): this reads existing columns. It changes nothing about what
+ * `study_duration` stores or means, and rewrites no historical value. It also
+ * deliberately does NOT read study_duration_source — how to interpret the 342
+ * historical NULL-provenance rows is an open founder ruling (G14 item F), and
+ * this predicate must not quietly answer it.
+ */
+export function dayWasStudied(row: {
+  day_outcome?: string | null;
+  study_duration?: number | string | null;
+}): boolean {
+  if (isDayOutcome(row.day_outcome) && WORK_HAPPENED.includes(row.day_outcome)) return true;
+  return (Number(row.study_duration) || 0) > 0;
+}
