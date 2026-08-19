@@ -1,0 +1,32 @@
+-- One half-tick authority, not two
+--
+-- routine_task_completions.portion was constrained to ('full','half') -- the
+-- half-tick concept -- and sat alongside `confidence`, which is where the
+-- half-tick actually lives ('blue' = half, per src/lib/completion-portion.ts).
+--
+-- MEASURED BEFORE DROPPING, not assumed: 0 of 289 rows populated, no writer
+-- anywhere in src/, no reader, no index, no view depending on it. The only
+-- dependency was its own CHECK constraint, which goes with it.
+--
+-- An empty column with the right name and the right constraint is not harmless
+-- clutter. It is a second authority waiting to be adopted, and "a second
+-- definition added quietly" is this codebase's documented recurring failure --
+-- the one covered-authority.guard and the canonical boundary guard both exist
+-- to prevent. The next person to implement half-ticks would have found
+-- `portion`, used it, and then the two would have disagreed. Removing the
+-- hazard beats documenting it.
+--
+-- NO DATA IS LOST because there is none: zero populated rows, verified
+-- immediately before this ran.
+--
+-- THE CLIENT CONTRACT IS UNCHANGED. complete-task still accepts `portion` in
+-- the REQUEST BODY and maps it to a confidence signal; the column was never
+-- its storage. Dropping it changes no API behaviour and no student-visible
+-- behaviour.
+--
+-- ROLLBACK, should the concept ever need its own column again:
+--   alter table public.routine_task_completions add column portion text
+--     check (portion is null or portion in ('full','half'));
+-- There is no data to restore.
+
+alter table public.routine_task_completions drop column if exists portion;
