@@ -558,6 +558,13 @@ export default async function DailyTrackerPage() {
             anchors (was ImportantDates) now live in a single block. The finish
             date used to be printed three times across those cards; it appears
             once. Reschedule is unchanged. */}
+        {/* 0 · WHAT RAI NOTICED — above the plan, deliberately.
+            It used to render near the bottom as a 7-second floating cloud on a
+            white background, which is why the founder only ever caught it by
+            accident. It is the one place the app speaks about the student
+            rather than instructing them, so it opens the screen. */}
+        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
+
         {pace && targetIso && (
           <PaceCard
             pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels}
@@ -596,7 +603,6 @@ export default async function DailyTrackerPage() {
         <HomeTimetableCard />
 
         {/* The daily insight, as a passing 7-second cloud. */}
-        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
 
         {/* ImportantDates was a third dark card repeating the syllabus date a
             third time — its three anchors now sit in the position card above. */}
