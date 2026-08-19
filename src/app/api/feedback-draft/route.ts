@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const { data: logs } = await admin
       .from('daily_reports')
-      .select('report_date, study_duration, topics_covered, confidence, stress, mock_score, mock_taken')
+      .select('report_date, study_duration, topics_covered, mock_score, mock_taken')
       .eq('student_id', studentId)
       .gte('report_date', sevenDaysAgo.toISOString().split('T')[0])
       .order('report_date', { ascending: false });
@@ -56,13 +56,10 @@ export async function POST(request: NextRequest) {
     const avgHours = daysLogged > 0
       ? ((logs ?? []).reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
       : '0';
-    const avgStress = daysLogged > 0
-      ? ((logs ?? []).reduce((s, r) => s + (r.stress ?? 3), 0) / daysLogged).toFixed(1)
-      : '3';
 
     const factsContext = [
       `Current streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
-      `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day, avg stress ${avgStress}/5`,
+      `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
       latestDebrief
         ? `Latest mock (${latestDebrief.taken_on}): ${latestDebrief.overall_percentile ?? '?'}%ile`
         : 'No mock debriefs yet',

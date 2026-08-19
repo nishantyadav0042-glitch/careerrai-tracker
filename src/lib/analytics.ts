@@ -88,13 +88,35 @@ export function computeSummary(reports: DailyReport[], period: number): Analytic
   else if (overallScore >= 50) band = 'Needs nudging';
   else band = 'Needs intervention';
 
+  // J2 — burnout and sleep red flags RETIRED, not re-thresholded.
+  //
+  // RE-CUT against current main. The J2 commit (e176981, 18 Aug) was written,
+  // reviewed and never merged: it lives only on the parked branch, so BOTH
+  // flags stayed live in production for another day. The ruling below is J2's,
+  // verified still true against today's data before re-applying.
+  //
+  // Both depended on evidence CareerRai does not collect: upsert_log_and_streak
+  // hard-codes stress=2 and sleep_quality=3 on every write, so neither rule
+  // could fire from a real measurement. avgStress >= 4 never fired at all --
+  // mathematically impossible while stress is pinned at 2.
+  //
+  // avgSleep < 3 DID fire -- 26 times in production -- but not from a real
+  // signal. `avg([])` returns 0 for a student with zero reports in the window,
+  // and 0 < 3. Every one of those firings coincided exactly with "Fewer than 4
+  // reports this week": a student who logged NOTHING was told their SLEEP was
+  // the problem. Retiring loses no real signal, because the going-quiet flag
+  // already covers every one of those weeks, and it removes a second
+  // independent defect -- absence of evidence read as a specific, alarming
+  // number -- alongside the fabricated-input one.
+  //
+  // A retirement, not a repair: CareerRai has no trustworthy burnout or
+  // sleep-quality detection, because neither is meaningfully collected. When
+  // one is collected, the flag returns in the same commit as the input.
+  //
+  // These flags feed check-red-flags, which reaches the STUDENT as an
+  // intervention -- which is why a fabricated average became a real message.
   const redFlags: string[] = [];
-  if (avgStress >= 4) redFlags.push(`Avg stress ${avgStress.toFixed(1)}/5 — burnout risk`);
-  // Never flag a number we do not have. The J2 lesson, fourth appearance: this
-  // flag feeds check-red-flags, which reaches the student as an intervention,
-  // so a fabricated average becomes a real message.
   if (avgStudy !== null && avgStudy < 3) redFlags.push('Avg study below 3 hrs/day — momentum dropping');
-  if (avgSleep < 3) redFlags.push('Sleep quality below 3/5 — affects retention');
   if (reports.length < 4 && period === 7) redFlags.push('Fewer than 4 reports this week — going quiet');
   if (mockScores.length >= 2 && mockScores[mockScores.length - 1] < mockScores[0]) {
     redFlags.push('Mock accuracy declining');

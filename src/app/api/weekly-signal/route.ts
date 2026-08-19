@@ -7,14 +7,13 @@ import { callGemini, GOVERNING_RULE } from '@/lib/gemini';
 // unavailable for any reason, the card still shows a REAL observation
 // computed from the same weekly summary — never an error, never blank.
 function ruleBasedInsight(s: {
-  days_logged: number; avg_hours_per_day: string; avg_stress: string;
-  mock_taken: number; latest_mock_score: number | null; stress_trend: string;
+  days_logged: number; avg_hours_per_day: string;
+  mock_taken: number; latest_mock_score: number | null;
 }, first: string): string {
   if (s.days_logged === 0) return `${first} logged 0 of the last 7 days — the week is invisible.`;
-  if (s.stress_trend === 'rising') return `Stress trending up over the week (avg ${s.avg_stress}/5) — worth exploring why.`;
   if (s.mock_taken > 0 && s.latest_mock_score != null) return `${s.mock_taken} mock${s.mock_taken > 1 ? 's' : ''} this week, latest score ${s.latest_mock_score} — review it together.`;
   if (s.days_logged <= 3) return `Logged ${s.days_logged} of the last 7 days at ${s.avg_hours_per_day} hrs/day — consistency is the gap.`;
-  return `${s.days_logged}/7 days logged, ${s.avg_hours_per_day} hrs/day, stress steady at ${s.avg_stress}/5.`;
+  return `${s.days_logged}/7 days logged, ${s.avg_hours_per_day} hrs/day.`;
 }
 
 export async function POST(request: NextRequest) {
@@ -64,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     const { data: logs } = await admin
       .from('daily_reports')
-      .select('report_date, study_duration, topics_covered, confidence, stress, mock_score, mock_taken')
+      .select('report_date, study_duration, topics_covered, mock_score, mock_taken')
       .eq('student_id', studentId)
       .gte('report_date', sevenDaysAgo.toISOString().split('T')[0])
       .order('report_date', { ascending: true });
@@ -73,27 +72,19 @@ export async function POST(request: NextRequest) {
     const avgHours = daysLogged > 0
       ? ((logs ?? []).reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
       : '0';
-    const avgStress = daysLogged > 0
-      ? ((logs ?? []).reduce((s, r) => s + (r.stress ?? 3), 0) / daysLogged).toFixed(1)
-      : '3';
     const mockLogs = (logs ?? []).filter(r => r.mock_taken);
     const latestMock = mockLogs.length > 0 ? mockLogs[mockLogs.length - 1] : null;
 
     const summaryJson = {
       days_logged: daysLogged,
       avg_hours_per_day: avgHours,
-      avg_stress: avgStress,
       mock_taken: mockLogs.length,
       latest_mock_score: latestMock?.mock_score ?? null,
-      stress_trend: logs && logs.length >= 3
-        ? (logs[logs.length - 1].stress ?? 3) > (logs[0].stress ?? 3) ? 'rising' : 'falling'
-        : 'stable',
     };
 
     const stats = {
       daysLogged,
       avgHours,
-      avgStress,
       mockTaken: mockLogs.length,
       latestMockScore: latestMock?.mock_score ?? null,
     };

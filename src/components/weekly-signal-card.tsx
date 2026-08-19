@@ -3,13 +3,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
-import { Send, Check, Sparkles, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { Send, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface WeeklyStats {
   daysLogged: number;
   avgHours: string;
-  avgStress: string;
   mockTaken: number;
   latestMockScore: number | null;
 }
@@ -108,10 +107,12 @@ export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklyS
     );
   }
 
-  const stressNum = stats ? parseFloat(stats.avgStress) : 3;
-  const StressTrendIcon = stressNum > 3.5 ? TrendingUp : stressNum < 2.5 ? TrendingDown : Minus;
-  const stressColor = stressNum > 3.5 ? 'text-red-600' : stressNum < 2.5 ? 'text-emerald-600' : 'text-stone-500';
-
+  // The "Stress trend" tile is gone (J3, re-cut). It rendered a mean over a
+  // column the write path hard-codes to 2, with a trend arrow that could only
+  // ever point sideways and a colour that told every mentor their student was
+  // calm. Nothing replaces it: there is no truthful wellbeing figure to show,
+  // and a placeholder would imply we merely lack data THIS WEEK rather than
+  // that we have never collected it.
   return (
     <Card className="p-5 border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-white">
       <div className="flex items-center gap-2 mb-4">
@@ -132,13 +133,6 @@ export function WeeklySignalCard({ studentId, studentName, onFeedback }: WeeklyS
           <div className="bg-white rounded-xl p-3 border border-stone-100">
             <div className="text-xs text-stone-500 mb-1">Avg hours/day</div>
             <div className="text-2xl font-bold text-stone-900">{stats.avgHours}<span className="text-sm font-normal text-stone-400"> hrs</span></div>
-          </div>
-          <div className="bg-white rounded-xl p-3 border border-stone-100">
-            <div className="text-xs text-stone-500 mb-1">Stress trend</div>
-            <div className={cn('flex items-center gap-1 text-lg font-bold', stressColor)}>
-              <StressTrendIcon className="w-4 h-4" />
-              {stats.avgStress}<span className="text-xs font-normal text-stone-400">/5</span>
-            </div>
           </div>
           <div className="bg-white rounded-xl p-3 border border-stone-100">
             <div className="text-xs text-stone-500 mb-1">Mock performance</div>
