@@ -43,6 +43,18 @@ export interface DailyReport {
   notes: string | null;
   mood_emoji: string | null;
   emotional_chips: string[];
+  // The student's own answer to "how did today go?" — the authority A3 uses to
+  // decide whether a day was studied, and half of the pair Q3 uses to decide
+  // whether its duration was ever measured. Nullable: 142 of 342 production
+  // rows carry no answer, which means the question was not asked (G14-4A),
+  // never that a write failed.
+  day_outcome: string | null;
+  plan_fit: string | null;
+  blocker_reason: string | null;
+  // Where the stored study_duration came from (G13-A). NULL means provenance
+  // is UNKNOWN -- never 'not_collected'. All 342 historical rows are NULL and
+  // are not to be reinterpreted (J6-A).
+  study_duration_source: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,7 +91,8 @@ export interface Notification {
 }
 
 export interface AnalyticsSummary {
-  avgStudy: number;
+  /** null when nothing in the window could be measured — never 0 (Q3). */
+  avgStudy: number | null;
   totalStudy: number;
   totalMocks: number;
   avgMockScore: number;

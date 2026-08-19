@@ -22,7 +22,7 @@ export type BuddyInfo = Profile & {
 
 interface StudentStat {
   student: Profile & StudentDossierData & { onboarding_completed?: boolean | null; phone?: string | null; created_at?: string };
-  summary: { band: string; overallScore: number; daysSubmitted: number; avgStudy: number };
+  summary: { band: string; overallScore: number; daysSubmitted: number; avgStudy: number | null };
   buddy?: Profile;
   submittedToday: boolean;
   hasRedFlags: boolean;

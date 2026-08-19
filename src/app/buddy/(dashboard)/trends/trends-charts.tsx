@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 interface StudentSummary {
   id: string;
   name: string;
-  avgStudy: number;
+  avgStudy: number | null;
   avgConfidence: number;
   daysSubmitted: number;
 }
@@ -71,7 +71,7 @@ export default function BuddyTrendsCharts({
               <div className="flex gap-4 text-right">
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Study</div>
-                  <div className="font-mono font-bold text-stone-900 text-sm">{s.avgStudy.toFixed(1)}h</div>
+                  <div className="font-mono font-bold text-stone-900 text-sm">{s.avgStudy == null ? <span className="text-stone-400">—</span> : `${s.avgStudy.toFixed(1)}h`}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Conf</div>

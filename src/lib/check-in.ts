@@ -135,3 +135,49 @@ export function dayWasStudied(row: {
   if (isDayOutcome(row.day_outcome) && WORK_HAPPENED.includes(row.day_outcome)) return true;
   return (Number(row.study_duration) || 0) > 0;
 }
+
+/**
+ * Q3 — is this row's duration a number we actually measured?
+ *
+ * A UNION across the two eras this column has lived through, because the
+ * product must be truthful about both at once:
+ *
+ *   · PROVENANCE ERA (G13-A onward). The writer said outright that no duration
+ *     was collected. Authoritative, and the only signal that will exist for
+ *     rows where the student declared nothing.
+ *
+ *   · LEGACY ERA (all 342 rows in production today). No provenance was ever
+ *     stamped, but the student's own answer still carries the evidence: they
+ *     said work happened AND the stored duration is zero. Nobody studies for
+ *     exactly no time; that pair is a question the surface never finished
+ *     asking.
+ *
+ * WHY THE UNION AND NOT THE STAMP ALONE. Detecting this from
+ * `study_duration_source === 'not_collected'` by itself is correct in a world
+ * where provenance is populated and VACUOUS in ours: that column is NULL in
+ * 342 of 342 production rows, so a stamp-only rule excludes exactly zero of
+ * them. Measured: stamp-only 0 rows, this rule 65 rows across 40 students,
+ * moving the measured average from 2.13 to 2.84 h/day. A fix that ships and
+ * changes nothing is the failure mode this workstream exists to catch.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT DECIDE. A bare NULL provenance still means
+ * "we don't know where this number came from" and does NOT on its own make a
+ * duration unknown — otherwise one deploy would silently reclassify every
+ * historical row, which J6-A forbids. Unknown-ness here always rests on
+ * POSITIVE evidence: an explicit stamp, or a declared-work-with-zero-hours
+ * pair. The held ruling on bare NULL semantics is untouched.
+ *
+ * A DECLARED ZERO IS A MEASUREMENT. 'not_studied' and 'skipped' at zero hours
+ * stay in the average deliberately — excluding them would let a student dodge
+ * every flag by honestly reporting their bad days, which inverts the incentive
+ * the whole check-in depends on.
+ */
+export function durationIsUnknown(row: {
+  day_outcome?: string | null;
+  study_duration?: number | string | null;
+  study_duration_source?: string | null;
+}): boolean {
+  if (row.study_duration_source === 'not_collected') return true;
+  if ((Number(row.study_duration) || 0) > 0) return false;
+  return isDayOutcome(row.day_outcome) && WORK_HAPPENED.includes(row.day_outcome);
+}
