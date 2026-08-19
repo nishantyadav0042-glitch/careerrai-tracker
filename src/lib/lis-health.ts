@@ -1,6 +1,7 @@
 import { computeCapacity } from '@/lib/capacity-engine';
 import { dailyHours } from '@/lib/daily-hours';
 import { computeAdaptation } from '@/lib/adaptation-engine';
+import { weightedCompletedForDay } from '@/lib/completion-portion';
 import { assembleIntelligence, momentumProxy } from '@/lib/intelligence';
 import { getPhase } from '@/lib/routine-engine';
 import { weeksToExam } from '@/lib/study-plan';
@@ -81,7 +82,7 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
       .eq('role', 'student').not('is_test_account', 'is', true).not('is_demo', 'is', true),
     admin.from('daily_reports').select('student_id, report_date, study_duration, plan_fit, mock_taken, day_outcome, study_duration_source').gte('report_date', windowStart),
     admin.from('daily_routines').select('student_id, routine_date, tasks').gte('routine_date', windowStart),
-    admin.from('routine_task_completions').select('student_id, routine_date, task_id').gte('routine_date', windowStart),
+    admin.from('routine_task_completions').select('student_id, routine_date, task_id, confidence').gte('routine_date', windowStart),
     admin.from('topic_coverage').select('student_id, status'),
     admin.from('mock_debriefs').select('student_id, taken_on'),
     admin.from('streak_data').select('student_id, last_log_date'),
@@ -135,7 +136,10 @@ export async function getLisHealth(admin: any): Promise<LisHealth> {
       const done = doneSet(r.routine_date);
       if (r.routine_date < todayStr && tasks.length > 0) {
         planDays++; plannedTasks += tasks.length;
-        completedTasks += Math.min(tasks.length, done.size);
+        // A half-tick is half a finished task (completion-portion). `done`
+        // above stays a plain id set: recency only asks whether a task was
+        // touched, and the 0.5 weighting belongs to the ratio and only there.
+        completedTasks += weightedCompletedForDay(completedByDate.get(r.routine_date) ?? [], tasks.length);
       }
       const ago = Math.round((Date.parse(todayStr) - Date.parse(r.routine_date)) / DAY);
       for (const t of tasks) {
