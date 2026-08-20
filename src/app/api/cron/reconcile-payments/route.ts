@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   const now = Date.now();
   const { data: stuck } = await admin
     .from('student_payments')
-    .select('id, student_id, plan, coupon_code, amount, razorpay_order_id, created_at')
+    .select('id, student_id, plan, coupon_code, amount, session_credit_id, razorpay_order_id, created_at')
     .eq('status', 'created')
     .not('razorpay_order_id', 'is', null)
     .lt('created_at', new Date(now - MIN_AGE_MINUTES * 60_000).toISOString())

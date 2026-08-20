@@ -21,6 +21,8 @@ export interface PayableRow {
    *  carried onto the credit so the mentor opens knowing the problem. */
   finding_kind?: string | null;
   finding_evidence?: string | null;
+  /** Plan purchases only: the ₹299 session credit applied at order creation. */
+  session_credit_id?: string | null;
 }
 
 export type ActivationSource = 'webhook' | 'reconcile';
@@ -124,6 +126,16 @@ export async function activatePaidOrder(
   if (activateErr) {
     console.error(`[activate:${source}] activate_payment failed:`, activateErr.message);
     return false;
+  }
+
+  // The ₹299 entry ladder: the payment is real, so the credit that
+  // discounted it is now spent. IS NULL guard — one credit can never
+  // discount two payments, even under webhook retries.
+  if (row.session_credit_id) {
+    await admin.from('session_credits')
+      .update({ credited_to_payment_id: row.id })
+      .eq('id', row.session_credit_id)
+      .is('credited_to_payment_id', null);
   }
 
   // Freemium upgrade: flip is_premium, queue a buddy, confirm in-app.

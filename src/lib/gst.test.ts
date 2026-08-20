@@ -108,6 +108,8 @@ describe('the money path charges the gross and stores the split', () => {
   it('the pending-order reuse lookup compares the CHARGED amount', () => {
     // Comparing against the pre-tax figure would never match an exclusive
     // plan's row, so every session checkout would mint a fresh Razorpay order.
-    expect(src()).toContain("eq('amount', taxForPlan(plan, price.finalPaise).grossPaise)");
+    // effectivePaise = price after the ₹299 session credit (20 Aug ladder) —
+    // the reuse check must compare what we would CHARGE now, credit included.
+    expect(src()).toContain("eq('amount', taxForPlan(plan, effectivePaise).grossPaise)");
   });
 });

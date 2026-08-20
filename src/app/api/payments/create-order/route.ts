@@ -6,6 +6,7 @@ import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { createRazorpayOrder } from '@/lib/razorpay';
 import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
+import { pickUpgradeCredit } from '@/lib/session-credit';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { taxForPlan } from '@/lib/gst';
@@ -27,20 +28,39 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // Free path: a grant brought the price below Razorpay's floor — activate directly.
-    if (price.finalPaise < MIN_CHARGE_PAISE) {
+    // ── The ₹299 entry ladder (founder, 20 Aug 2026) ──────────────────────
+    // A session bought in the last CREDIT_WINDOW_DAYS credits against ANY
+    // plan. Applied AFTER scholarship/coupon, capped at the price itself.
+    // The credit row is marked spent only when this payment activates
+    // (lib/activate-payment), never here — an abandoned checkout must not
+    // burn the student's credit.
+    const { data: creditRows } = await admin
+      .from('session_credits')
+      .select('id, created_at, status, amount_paise, credited_to_payment_id')
+      .eq('student_id', user.id);
+    const credit = pickUpgradeCredit((creditRows ?? []) as never[]);
+    const creditPaise = credit ? Math.min(credit.paise, price.finalPaise) : 0;
+    const effectivePaise = price.finalPaise - creditPaise;
+    const discountLabel = creditPaise > 0
+      ? [price.label, `₹${creditPaise / 100} session credit applied`].filter(Boolean).join(' · ')
+      : price.label;
+
+    // Free path: grant/credit brought the price below Razorpay's floor — activate directly.
+    if (effectivePaise < MIN_CHARGE_PAISE) {
       const renews = addMonthsClamped(new Date(), p.months);
 
       // Tax is stored, never recomputed later: the rate can change and an
       // August payment must keep the split it was actually charged under.
-      const freeTax = taxForPlan(plan, price.finalPaise);
+      const freeTax = taxForPlan(plan, effectivePaise);
       const { data: payRow } = await admin.from('student_payments').insert({
         student_id: user.id,
-        amount: price.finalPaise,
+        amount: effectivePaise,
         original_amount: price.basePaise,
         plan,
         discount_source: price.discountSource,
         coupon_code: price.couponCode,
+        session_credit_id: credit?.id ?? null,
+        session_credit_paise: creditPaise || null,
         base_paise: freeTax.basePaise,
         gst_paise: freeTax.gstPaise,
         gst_rate: freeTax.rate,
@@ -57,6 +77,15 @@ export async function POST(request: NextRequest) {
 
       // Freemium: a free (scholarship/coupon) activation still unlocks the buddy.
       await grantPremiumAndQueueBuddy(admin, user.id);
+
+      // The credit is spent the moment the free activation lands. IS NULL
+      // guard: one credit, one discount, ever.
+      if (credit && creditPaise > 0) {
+        await admin.from('session_credits')
+          .update({ credited_to_payment_id: payRow?.id ?? null })
+          .eq('id', credit.id)
+          .is('credited_to_payment_id', null);
+      }
 
       // Burn the coupon (per-student + global) when one made it free. Upsert so a
       // repeat free-activation for the same (coupon, student) is a no-op under the
@@ -132,7 +161,7 @@ export async function POST(request: NextRequest) {
       .eq('student_id', user.id)
       .eq('plan', plan)
       .eq('status', 'created')
-      .eq('amount', taxForPlan(plan, price.finalPaise).grossPaise)
+      .eq('amount', taxForPlan(plan, effectivePaise).grossPaise)
       .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
@@ -145,7 +174,7 @@ export async function POST(request: NextRequest) {
         currency:      'INR',
         keyId:         process.env.RAZORPAY_KEY_ID,
         plan,
-        discountLabel: price.label,
+        discountLabel,
         prefill,
       });
     }
@@ -157,7 +186,7 @@ export async function POST(request: NextRequest) {
     // inclusive, so gross === finalPaise and nothing about them changes. The
     // ₹299 session is quoted exclusive — the mentor must receive the full
     // ₹299 — so the student is charged ₹352.82.
-    const tax = taxForPlan(plan, price.finalPaise);
+    const tax = taxForPlan(plan, effectivePaise);
     const order = await createRazorpayOrder(
       tax.grossPaise,
       `careerrai_${user.id.slice(0, 8)}_${Date.now()}`,
@@ -181,6 +210,8 @@ export async function POST(request: NextRequest) {
       gst_paise: tax.gstPaise,
       gst_rate: tax.rate,
       tax_mode: tax.mode,
+      session_credit_id: credit?.id ?? null,
+      session_credit_paise: creditPaise || null,
       razorpay_order_id: order.id,
       status: 'created',
     });
@@ -191,7 +222,7 @@ export async function POST(request: NextRequest) {
       currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID, // public key id — safe on the client
       plan,
-      discountLabel: price.label,
+      discountLabel,
       prefill,
     });
   } catch (e) {

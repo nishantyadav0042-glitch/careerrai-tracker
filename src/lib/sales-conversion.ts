@@ -142,7 +142,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   const buddyLine = recommendedBuddy
     ? ` For you I'd pair ${recommendedBuddy.name}${recommendedBuddy.college ? ` (${recommendedBuddy.college})` : ''}${recommendedBuddy.reason ? ` — ${recommendedBuddy.reason.toLowerCase()}` : ''}.`
     : '';
-  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. Book one ${SESSION_MINUTES}-minute session with an IIM buddy — they review your actual preparation, find the one thing holding your score back, and you leave with a written next step.${buddyLine} It's Rs ${SESSION_RS}, one time. Book here: ${SITE_URL}/student/buddy`;
+  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. Book one ${SESSION_MINUTES}-minute session with an IIM buddy — they review your actual preparation, find the one thing holding your score back, and you leave with a written next step.${buddyLine} It's Rs ${SESSION_RS} + GST, one time. Book here: ${SITE_URL}/student/buddy`;
 
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),

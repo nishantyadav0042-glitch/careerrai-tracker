@@ -195,23 +195,34 @@ export const SPECIALITY_LABEL: Record<Speciality, string> = {
 // ── The upgrade credit ──────────────────────────────────────────────────────
 
 /**
- * How much of a past session payment counts against a subscription now.
+ * The one eligible upgrade credit, or null.
  *
- * Only unspent-on-upgrade, non-refunded credits inside the window, and only
- * ONE — crediting three sessions against a ₹2,999 plan is a discount we never
- * agreed to. This is what turns the ₹299 from a cheaper substitute into a
- * risk-free way to find out.
+ * Founder ruling (20 Aug 2026): the session is the ENTRY POINT and its price
+ * credits against ANY plan checkout sells — monthly, quarterly, Till-CAT,
+ * half-year — bought inside the window. Only unspent-on-upgrade,
+ * non-refunded credits count, and only ONE — crediting three sessions
+ * against one plan is a discount we never agreed to. This is what turns the
+ * ₹299 from a cheaper substitute into a low-risk way to find out.
  */
-export function upgradeCreditPaise(
-  credits: readonly { created_at: string; status: CreditStatus; amount_paise: number; credited_to_payment_id: string | null }[],
+export function pickUpgradeCredit(
+  credits: readonly { id: string; created_at: string; status: CreditStatus; amount_paise: number; credited_to_payment_id: string | null }[],
   now: Date = new Date(),
-): number {
+): { id: string; paise: number } | null {
   const cutoff = now.getTime() - CREDIT_WINDOW_DAYS * 86_400_000;
   const eligible = credits.filter((c) =>
     c.status !== 'refunded' &&
     c.credited_to_payment_id == null &&
     Date.parse(c.created_at) >= cutoff,
   );
-  if (eligible.length === 0) return 0;
-  return Math.max(...eligible.map((c) => c.amount_paise));
+  if (eligible.length === 0) return null;
+  const best = eligible.reduce((a, b) => (b.amount_paise > a.amount_paise ? b : a));
+  return { id: best.id, paise: best.amount_paise };
+}
+
+/** How much of a past session payment counts against a plan now. */
+export function upgradeCreditPaise(
+  credits: readonly { id: string; created_at: string; status: CreditStatus; amount_paise: number; credited_to_payment_id: string | null }[],
+  now: Date = new Date(),
+): number {
+  return pickUpgradeCredit(credits, now)?.paise ?? 0;
 }

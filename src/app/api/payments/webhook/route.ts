@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         const admin = createAdminClient();
         const { data: row } = await admin
           .from('student_payments')
-          .select('id, student_id, plan, status, coupon_code, amount')
+          .select('id, student_id, plan, status, coupon_code, amount, session_credit_id')
           .eq('razorpay_order_id', orderId)
           .maybeSingle();
 
