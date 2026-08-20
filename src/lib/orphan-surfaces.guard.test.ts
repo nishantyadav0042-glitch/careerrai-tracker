@@ -52,6 +52,13 @@ const KNOWN_ORPHANS: Record<string, string> = {
   'src/components/testimonials.tsx':
     'From the same freemium plan, never wired. Reads lib/testimonials.ts, ' +
     'which holds real quotes and IS the no-invented-testimonials authority.',
+  'src/components/sales-deck.tsx':
+    'Unmounted by SA-1B (20 Aug): /admin/sales now renders the canonical ' +
+    'CallDeck queue. NOT parked for later — scheduled for deletion in the ' +
+    'SA-1B retire commit together with the ranking it displayed ' +
+    '(lib/sales-queue) and the legacy body alias in /api/admin/outreach, ' +
+    'after a caller re-proof at delete time (founder rule: swap and delete ' +
+    'are separate commits). If you are reading this after SA-1F, it was missed.',
 };
 
 // Its own dedicated /api/student/peer-pulse route has no client caller either,

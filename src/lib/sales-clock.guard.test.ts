@@ -57,3 +57,16 @@ describe('one authoritative next-action field', () => {
     expect(readFileSync('src/lib/sales-queue.ts', 'utf8')).toContain('next_action_at');
   });
 });
+
+// ── SA-1B: the admin's queue IS the rep's queue ────────────────────────────
+// /admin/sales renders buildCallQueue — the canonical authority — never a
+// parallel ranking. buildSalesQueue still exists (retired in a separate
+// commit after caller re-proof); this guard stops the admin page from
+// quietly drifting back to it.
+describe('one queue authority on the admin surface', () => {
+  it('/admin/sales consumes buildCallQueue, not buildSalesQueue', () => {
+    const s = readFileSync('src/app/admin/sales/page.tsx', 'utf8');
+    expect(s).toContain("from '@/lib/call-queue'");
+    expect(s).not.toContain('buildSalesQueue');
+  });
+});
