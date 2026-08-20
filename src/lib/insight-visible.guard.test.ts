@@ -37,8 +37,18 @@ describe('the daily insight is visible', () => {
   it('marks itself seen only on a deliberate dismiss, never on mount', () => {
     const s = code(CARD);
     expect(s, 'the seen key must be written exactly once, in the dismiss path').toMatch(/setItem/);
-    // setItem must not sit inside a useEffect — that was the on-mount bug.
-    expect(s).not.toMatch(/useEffect[\s\S]{0,400}setItem/);
+    // The first version of this assertion was a 400-character proximity check
+    // ("no setItem near a useEffect"), which tripped the moment an unrelated
+    // effect was added ABOVE the dismiss handler -- flagging code where the
+    // invariant still held. Test the invariant itself instead: every setItem
+    // in the file must be inside the dismiss function, and the effect bodies
+    // must contain none.
+    const effects = [...s.matchAll(/useEffect\(\(\) => \{([\s\S]*?)\}, \[/g)];
+    for (const m of effects) {
+      expect(m[1], 'no effect body may mark the insight as seen').not.toMatch(/setItem/);
+    }
+    const dismissBody = s.slice(s.indexOf('function dismiss'), s.indexOf('return ('));
+    expect(dismissBody, 'the dismiss handler is the only writer').toMatch(/setItem/);
   });
 
   it('sits in the page flow, not pinned to the bottom of the viewport', () => {
