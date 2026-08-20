@@ -49,7 +49,7 @@ function ActivityRow({ title, s }: { title: string; s: Tally }) {
           { l: 'Connected', v: s.connected, sub: `${s.connectRate}%`, good: false },
           { l: 'Interested', v: s.interested, sub: undefined, good: false },
           { l: 'Callbacks', v: s.callback, sub: undefined, good: false },
-          { l: 'Converted', v: s.converted, sub: `${s.convRate}%`, good: s.converted > 0 },
+          { l: 'Marked converted', v: s.converted, sub: `${s.convRate}%`, good: s.converted > 0 },
         ].map((x) => (
           <div key={x.l} className="rounded-xl bg-stone-50 border border-stone-100 p-2.5">
             <div className={cn('text-xl font-extrabold tabular-nums', x.good ? 'text-emerald-600' : 'text-stone-900')}>{x.v}</div>
@@ -86,6 +86,15 @@ export default async function SalesPerformancePage() {
   const actList = (acts ?? []) as any[];
   const port = (portfolio ?? []) as any[];
 
+  // SA-1E: WON is the payment ledger, never the typed disposition.
+  const portIds = port.map((p) => p.student_id);
+  const { data: paidRows } = portIds.length
+    ? await admin.from('student_payments').select('student_id, amount').eq('status', 'paid').in('student_id', portIds)
+    : { data: [] as any[] };
+  const paidSet = new Set((paidRows ?? []).map((r: any) => r.student_id as string));
+  const won = port.filter((p) => paidSet.has(p.student_id)).length;
+  const bookedRs = Math.round(((paidRows ?? []) as any[]).reduce((a, r) => a + ((r.amount as number | null) ?? 0), 0) / 100);
+
   const ids = [...new Set([...actList.map((a) => a.student_id), ...port.map((p) => p.student_id)])];
   const { data: profs } = ids.length ? await admin.from('profiles').select('id, full_name').in('id', ids) : { data: [] as any[] };
   const nameById = new Map((profs ?? []).map((p: any) => [p.id, p.full_name ?? 'Student']));
@@ -97,9 +106,8 @@ export default async function SalesPerformancePage() {
   const pc = (s: string) => port.filter((p) => p.status === s).length;
   const interested = pc('interested');
   const callbacks = pc('follow_up');
-  const converted = pc('converted');
   const notInterested = pc('not_interested');
-  const working = port.length - converted - notInterested;
+  const working = port.length - won - notInterested;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -120,7 +128,7 @@ export default async function SalesPerformancePage() {
               { l: 'Working', v: working },
               { l: 'Interested', v: interested, note: `Rs ${(interested * PRICE).toLocaleString('en-IN')}` },
               { l: 'Callbacks', v: callbacks },
-              { l: 'Converted', v: converted, note: `Rs ${(converted * PRICE).toLocaleString('en-IN')}` },
+              { l: 'Won (paid)', v: won, note: `Rs ${bookedRs.toLocaleString('en-IN')}` },
               { l: 'Lost', v: notInterested },
             ].map((x) => (
               <div key={x.l} className="rounded-xl bg-white/10 p-2.5">

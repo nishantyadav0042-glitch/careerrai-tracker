@@ -8,12 +8,14 @@ import { getRepPortfolio } from '@/lib/sales-portfolio';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My leads · CareerRai' };
 
-const FILTERS: { key: string; label: string; match: (s: string) => boolean }[] = [
-  { key: 'active', label: 'Active', match: (s) => ['interested', 'follow_up', 'no_answer', 'called'].includes(s) },
-  { key: 'interested', label: 'Interested', match: (s) => s === 'interested' },
-  { key: 'follow_up', label: 'Callbacks', match: (s) => s === 'follow_up' },
-  { key: 'converted', label: 'Won', match: (s) => s === 'converted' },
-  { key: 'not_interested', label: 'Lost', match: (s) => s === 'not_interested' },
+// SA-1E: 'Won' is the paid ledger, never the typed 'converted' disposition —
+// and a paid student is out of 'Active' work whatever their typed status says.
+const FILTERS: { key: string; label: string; match: (l: { status: string; paid: boolean }) => boolean }[] = [
+  { key: 'active', label: 'Active', match: (l) => !l.paid && ['interested', 'follow_up', 'no_answer', 'called', 'converted'].includes(l.status) },
+  { key: 'interested', label: 'Interested', match: (l) => !l.paid && l.status === 'interested' },
+  { key: 'follow_up', label: 'Callbacks', match: (l) => !l.paid && l.status === 'follow_up' },
+  { key: 'converted', label: 'Won', match: (l) => l.paid },
+  { key: 'not_interested', label: 'Lost', match: (l) => l.status === 'not_interested' },
 ];
 const STATUS_LABEL: Record<string, string> = {
   interested: 'Interested', follow_up: 'Callback', no_answer: 'No answer', called: 'Called', converted: 'Won', not_interested: 'Lost',
@@ -33,7 +35,7 @@ export default async function MyLeadsPage({ searchParams }: { searchParams: Prom
   const { leads } = await getRepPortfolio(admin, (me?.email as string) ?? '__none__');
   const filter = f && FILTERS.some((x) => x.key === f) ? f : 'active';
   const flt = FILTERS.find((x) => x.key === filter)!;
-  const list = leads.filter((l) => flt.match(l.status));
+  const list = leads.filter((l) => flt.match(l));
 
   return (
     <div>

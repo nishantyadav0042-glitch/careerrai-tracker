@@ -13,10 +13,42 @@ const PRICE = 999;
 export interface PortfolioLead {
   studentId: string; name: string; phone: string | null; waNumber: string | null;
   status: string; callbackAt: string | null; note: string | null; updatedAt: string | null;
+  /** SA-1E: financial truth — a 'paid' row exists in student_payments. */
+  paid: boolean;
 }
 export interface PortfolioSummary {
-  total: number; working: number; interested: number; callbacks: number; converted: number; lost: number;
-  pipeline: number; booked: number;
+  total: number; working: number; interested: number; callbacks: number;
+  /** WON = a paid ledger row (student_payments.status='paid') — NEVER the
+   *  typed 'converted' disposition. SA-1E: one financial truth. */
+  converted: number;
+  lost: number;
+  /** Speculative: interested × price. */
+  pipeline: number;
+  /** Real rupees from the paid ledger rows of this book — not count × price. */
+  booked: number;
+}
+
+/** SA-1E: summary derivation as a pure function, so the WON rule is testable:
+ *  typed-converted-but-unpaid is NOT won; paid is won regardless of typing. */
+export function summarizePortfolio(
+  leads: { status: string; paid: boolean }[],
+  paidPaiseByStudent: number[],
+): PortfolioSummary {
+  const cnt = (s: string) => leads.filter((r) => r.status === s).length;
+  const won = leads.filter((r) => r.paid).length;
+  const lost = cnt('not_interested');
+  const interested = cnt('interested');
+  const bookedPaise = paidPaiseByStudent.reduce((a, b) => a + b, 0);
+  return {
+    total: leads.length,
+    working: leads.length - won - lost,
+    interested,
+    callbacks: cnt('follow_up'),
+    converted: won,
+    lost,
+    pipeline: interested * PRICE,
+    booked: Math.round(bookedPaise / 100),
+  };
 }
 export interface CallStats { attempts: number; connected: number; converted: number; connectRate: number; convRate: number; }
 
@@ -38,29 +70,28 @@ export async function getRepPortfolio(admin: any, repEmail: string): Promise<{ l
     .eq('owner', repEmail);
   const list = (rows ?? []) as any[];
   if (list.length === 0) {
-    return { leads: [], summary: { total: 0, working: 0, interested: 0, callbacks: 0, converted: 0, lost: 0, pipeline: 0, booked: 0 } };
+    return { leads: [], summary: summarizePortfolio([], []) };
   }
   const ids = list.map((r) => r.student_id);
-  const { data: profs } = await db.from('profiles').select('id, full_name, phone').in('id', ids);
+  const [{ data: profs }, { data: paidRows }] = await Promise.all([
+    db.from('profiles').select('id, full_name, phone').in('id', ids),
+    // The financial ledger is the ONE source of WON (SA-1E). client events
+    // and typed dispositions are signals, never money truth.
+    db.from('student_payments').select('student_id, amount').eq('status', 'paid').in('student_id', ids),
+  ]);
   const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
+  const paidSet = new Set((paidRows ?? []).map((r: any) => r.student_id as string));
 
   const leads: PortfolioLead[] = list.map((r) => {
     const p = byId.get(r.student_id) as any;
     return {
       studentId: r.student_id, name: p?.full_name ?? 'Student', phone: p?.phone ?? null, waNumber: waNumber(p?.phone ?? null),
       status: r.status ?? 'working', callbackAt: r.callback_at ?? null, note: r.notes ?? null, updatedAt: r.updated_at ?? null,
+      paid: paidSet.has(r.student_id),
     };
   }).sort((a, b) => (RANK[a.status] ?? 5) - (RANK[b.status] ?? 5) || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
 
-  const cnt = (s: string) => list.filter((r) => r.status === s).length;
-  const interested = cnt('interested');
-  const converted = cnt('converted');
-  const lost = cnt('not_interested');
-  const callbacks = cnt('follow_up');
-  const summary: PortfolioSummary = {
-    total: list.length, working: list.length - converted - lost, interested, callbacks, converted, lost,
-    pipeline: interested * PRICE, booked: converted * PRICE,
-  };
+  const summary = summarizePortfolio(leads, (paidRows ?? []).map((r: any) => (r.amount as number | null) ?? 0));
   return { leads, summary };
 }
 
