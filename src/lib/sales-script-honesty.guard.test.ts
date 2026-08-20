@@ -50,6 +50,21 @@ describe('one offer, one price, imported from checkout', () => {
   });
 });
 
+describe('the quoted price is the charged price', () => {
+  it('while GST is off, the script quotes the flat session price a student actually pays', async () => {
+    // GST_ENABLED=false → checkout charges exactly Rs 299 (verified in
+    // production: every session row has gst_paise=0). The day GST_ENABLED
+    // flips true the student pays Rs 353, and this test fails on purpose:
+    // update the script copy to say "+ GST" in the same commit as the flag.
+    const { GST_ENABLED } = await import('./gst');
+    if (!GST_ENABLED) {
+      for (const file of SCRIPT_FILES) expect(copyOf(file)).not.toMatch(/\+\s*GST/i);
+    } else {
+      expect(copyOf('src/lib/sales-conversion.ts')).toMatch(/\+\s*GST/i);
+    }
+  });
+});
+
 describe('no undeliverable promises', () => {
   it.each(SCRIPT_FILES)('%s makes no refund / money-back claim', (file) => {
     expect(copyOf(file)).not.toMatch(/refund|money.?back|paise wapas/i);
