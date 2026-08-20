@@ -50,6 +50,18 @@ describe('the buddy showcase offers five and recommends one', () => {
     expect(s).toMatch(/b\.reason \?\?/);
   });
 
+  it('claims personalisation only when a real match reason exists', () => {
+    // Measured 19 Aug: 1 student of 554 has a baseline, so weakestSection --
+    // the largest personalisation weight in rankBuddies -- fires for one
+    // person. For 431 (78%) no student-specific term fires and the ranking is
+    // pure profile completeness, identical for everyone. matchReason returns
+    // null in exactly those cases, so it is the honest switch.
+    const s = code(CARD);
+    expect(s, 'the personalised label must be conditional').toMatch(/personalised\s*\?/);
+    expect(s).toMatch(/const personalised = b\.reason != null/);
+    expect(s, 'and there must be a non-personalised alternative').toMatch(/Our pick/);
+  });
+
   it('never claims a credential has been verified', () => {
     const s = code(CARD);
     expect(s).not.toMatch(/verified[^.<>{}]{0,40}(iim|alumni|mentor)/i);

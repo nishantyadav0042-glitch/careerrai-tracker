@@ -45,8 +45,14 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
   return (
     <div>
       <div className="text-xs uppercase tracking-widest text-stone-500 font-semibold">Our recommendation</div>
+      {/* The subtitle used to promise "matched to your profile from your own
+          preparation". True for a student with baselines; there is currently
+          one. It now says what is true for everyone, and the per-card reason
+          carries the personalisation when there is any. */}
       <p className="text-xs text-stone-400 mt-1 mb-4">
-        Matched to your profile from your own preparation. Browse free — start 1:1 mentorship to connect.
+        {buddies[0]?.reason
+          ? 'Matched to your profile from your own preparation. Browse free — start 1:1 mentorship to connect.'
+          : 'Every buddy here cleared CAT. Browse free — start 1:1 mentorship to connect.'}
       </p>
 
       <div className="space-y-3">
@@ -54,7 +60,22 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
           // When the list is open, the recommendation must stay identifiable —
           // otherwise five equal cards make CareerRai's match invisible and the
           // student is back to picking a stranger from a directory.
+          //
+          // BUT THE LABEL HAS TO EARN THE WORD "you". Measured 19 Aug: exactly
+          // ONE student of 554 has any baseline, so weakestSection() — the +40
+          // term and by far the largest personalisation weight in rankBuddies —
+          // fires for one person. For 431 students (78%) no student-specific
+          // term fires at all, and the ranking collapses to profile
+          // completeness: avatar, LinkedIn, percentile. Identical for all of
+          // them.
+          //
+          // So "Recommended for you" would be a personalisation claim over a
+          // global sort for most students — the same shape as every other
+          // defect this week. b.reason is null in exactly those cases (
+          // matchReason returns null when it has no basis), so it is the
+          // honest switch: personalised wording only when a real reason exists.
           const isPick = i === 0;
+          const personalised = b.reason != null;
           const initials = (b.full_name || 'B').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
           const journey = journeyLabel(b);
           const firstName = b.full_name.split(' ')[0];
@@ -95,7 +116,7 @@ export function RecommendedBuddies({ buddies, studentName }: { buddies: Recommen
                   <h3 className="text-lg font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>{b.full_name}</h3>
                   {isPick && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-orange-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-400">
-                      <Sparkles className="w-3 h-3" />Recommended for you
+                      <Sparkles className="w-3 h-3" />{personalised ? 'Recommended for you' : 'Our pick'}
                     </span>
                   )}
                 </div>
