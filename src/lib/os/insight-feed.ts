@@ -136,68 +136,10 @@ export function orderFeedTop(rows: InsightRow[]): InsightRow[] {
 /** How many cards before "See more". Bounded — this is not a feed to fall into. */
 export const FEED_PAGE_SIZE = 8;
 
-// ── The monthly contributor reward ──────────────────────────────────────────
-//
-// Founder: the ten students whose contributions the batch finds most helpful
-// each month get a month of Buddy free.
-//
-// Phrased as "most helpful", never "most upvoted", for a reason that is not
-// cosmetic: "most upvoted" is an instruction to go and collect votes from forty
-// friends, and the moment that starts the ranking stops measuring quality and
-// the reward stops being credible. The public wording describes the OUTCOME we
-// want; the private ranking below decides it.
-
-export const MONTHLY_WINNERS = 10;
-
-/** A contribution must clear this before it can win anything, so a single vote
- *  from a single friend can never take a Buddy month. */
-export const MIN_VOTES_FOR_ELIGIBILITY = 5;
-
-export interface ContributorScore {
-  studentId: string;
-  helpful: number;
-  total: number;
-  contributions: number;
-}
-
-/**
- * Rank contributors for the month.
- *
- * Ranked on NET helpful (helpful minus not-useful), not on raw helpful, so a
- * contribution that the batch actively found unhelpful cannot climb simply by
- * being seen a lot. Ties break on fewer total contributions first — one
- * genuinely useful post beats five mediocre ones, which is the behaviour we
- * want to reward and the opposite of what a volume-based ranking teaches.
- */
-export function rankContributors(scores: ContributorScore[], take = MONTHLY_WINNERS): ContributorScore[] {
-  return rankAll(scores).slice(0, take);
-}
-
-/** The full ordered board. Separate from rankContributors so a student's own
- *  position can be found without also deciding who wins. */
-export function rankAll(scores: ContributorScore[]): ContributorScore[] {
-  return [...scores]
-    .filter((s) => s.total >= MIN_VOTES_FOR_ELIGIBILITY)
-    .sort((a, b) => {
-      const netA = a.helpful - (a.total - a.helpful);
-      const netB = b.helpful - (b.total - b.helpful);
-      if (netA !== netB) return netB - netA;
-      if (a.contributions !== b.contributions) return a.contributions - b.contributions;
-      return a.studentId.localeCompare(b.studentId);
-    });
-}
-
-/**
- * This student's position this month, or null if they have not qualified.
- *
- * Founder, 12 Aug: the votes are the MECHANISM, the rank is the REWARD. So the
- * student sees "#6 this month" and never "14 votes" — rank is a status that
- * reads the same at 300 students and at 300,000, while a raw count at our size
- * tells them precisely how small the room is.
- *
- * 1-indexed, because "#0 this month" is not a thing anybody wants to be.
- */
-export function myRank(scores: ContributorScore[], studentId: string): number | null {
-  const idx = rankAll(scores).findIndex((s) => s.studentId === studentId);
-  return idx === -1 ? null : idx + 1;
-}
+// The monthly contributor reward (top 10 by net-helpful → a free Buddy month,
+// with rankContributors / rankAll / myRank / MONTHLY_WINNERS /
+// MIN_VOTES_FOR_ELIGIBILITY) was DELETED on 20 Aug, not merely unmounted.
+// Founder ruling: no superstars — no names, no profiles, no rank, no reward
+// for posting, because a board changes WHY a student shares. Leaving the
+// ranking machinery exported would have left it one import from returning,
+// which is exactly how retired mechanisms come back in this codebase.

@@ -2,20 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Swords, Check, X as XIcon } from 'lucide-react';
+import { ArrowLeft, Swords } from 'lucide-react';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 
-// The verification desk. Two jobs:
-//  1. Review student submissions — approve puts a question in the bank with
-//     the student's credit, or publishes a tip. Reject is silent.
-//  2. Feed and schedule the bank — founder-created questions plus approved
-//     student ones, scheduled one per section per day (live 8am IST).
-
-interface Pending {
-  id: string; kind: string; topic: string | null; created_at: string;
-  payload: { text?: string; question?: string; options?: string[]; correct_index?: number; explanation?: string };
-  profiles?: { full_name?: string | null } | null;
-}
+// The challenge bank desk: feed and schedule daily challenges, one per
+// section per day (live 8am IST).
+//
+// It used to have a second job — reviewing student submissions into the bank
+// — removed 20 Aug. That path read payload.options, an MCQ shape the live
+// submission flow has never written, and after the live-pool migration it
+// would have claimed the safety-hold queue and offered an Approve button
+// that could only 500. Safety holds are reviewed on /admin/daily-pick.
 interface PipelineRow {
   id: string; kind: string; topic: string | null; text: string | null;
   hasImage: boolean; displayName: string | null; votingEndsAt: string | null;
@@ -31,7 +28,6 @@ const TOPICS_FOR = (sec: string) =>
   Object.entries(TOPIC_METADATA).filter(([, m]) => m.section === sec).map(([t]) => t);
 
 export default function AdminChallengesPage() {
-  const [pending, setPending] = useState<Pending[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [bank, setBank] = useState<BankRow[]>([]);
   const [activeDate, setActiveDate] = useState('');
@@ -52,7 +48,6 @@ export default function AdminChallengesPage() {
     const res = await fetch('/api/admin/challenges');
     if (!res.ok) return;
     const json = await res.json();
-    setPending(json.pending ?? []);
     setPipeline(json.pipeline ?? []);
     setBank(json.bank ?? []);
     setActiveDate(json.activeDate ?? '');
@@ -102,50 +97,10 @@ export default function AdminChallengesPage() {
         {msg && <p className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">{msg}</p>}
 
         {/* ── Review queue ── */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4">
-          <h2 className="text-sm font-bold text-stone-900">Student submissions · {pending.length} waiting</h2>
-          {pending.length === 0 && <p className="mt-2 text-xs text-stone-400">Queue is clear.</p>}
-          <div className="mt-2 space-y-3">
-            {pending.map((p) => (
-              <div key={p.id} className="rounded-xl border border-stone-200 p-3">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">
-                  {p.kind} · {p.topic ?? 'no topic'} · from {p.profiles?.full_name ?? 'unknown'}
-                </p>
-                {p.kind !== 'question' ? (
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-stone-800">{p.payload.text}</p>
-                ) : (
-                  <>
-                    <p className="mt-1.5 whitespace-pre-line text-[13px] leading-relaxed text-stone-800">{p.payload.question}</p>
-                    <ol className="mt-1.5 space-y-0.5 text-[12px] text-stone-600">
-                      {(p.payload.options ?? []).map((o, i) => (
-                        <li key={i} className={i === p.payload.correct_index ? 'font-bold text-emerald-700' : ''}>
-                          {String.fromCharCode(65 + i)}. {o}{i === p.payload.correct_index ? ' ✓' : ''}
-                        </li>
-                      ))}
-                    </ol>
-                    <p className="mt-1.5 text-[12px] italic text-stone-500">{p.payload.explanation}</p>
-                  </>
-                )}
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button" disabled={busy === p.id}
-                    onClick={() => void post({ action: 'review', submission_id: p.id, decision: 'approve' }, p.id)}
-                    className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
-                  >
-                    <Check className="h-3.5 w-3.5" /> Approve
-                  </button>
-                  <button
-                    type="button" disabled={busy === p.id}
-                    onClick={() => void post({ action: 'review', submission_id: p.id, decision: 'reject' }, p.id)}
-                    className="flex items-center gap-1 rounded-lg bg-stone-200 px-3 py-1.5 text-xs font-bold text-stone-700 disabled:opacity-50"
-                  >
-                    <XIcon className="h-3.5 w-3.5" /> Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* The student-submission review panel was removed 20 Aug: it belonged to
+          a moderation generation that never ran, and its Approve button could
+          only fail. Safety holds are reviewed on /admin/daily-pick. */}
+        
 
         {/* ── The voting pipeline (Curriculum Selection) ── */}
         <section className="rounded-2xl border border-stone-200 bg-white p-4">

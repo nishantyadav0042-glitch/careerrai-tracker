@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, HeartHandshake, Camera } from 'lucide-react';
 import { track } from '@/lib/journey';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
-import { MAX_IMAGE_BYTES, IMAGE_MIMES, MAX_TIP_CHARS, MAX_QUESTION_CHARS } from '@/lib/community-pipeline';
+import { MAX_IMAGE_BYTES, MAX_TIP_CHARS, MAX_QUESTION_CHARS } from '@/lib/community-pipeline';
 
 // "Help the next student" — exactly two things, minimum friction:
 //   💡 a Tip — one sharp idea in plain text (≤150 chars), section + topic
@@ -66,9 +66,12 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   // Topic is optional for BOTH kinds now — the student brings the idea, the
   // system files it. Section stays because it is one tap and it is what the
   // feed is organised by.
+  // NOTHING but the content is required now (founder, 20 Aug). Section and
+  // topic are both optional; the safety screen that already reads every
+  // submission returns the section, so the student never files anything.
   const ready = kind === 'tip'
-    ? Boolean(section && tip.trim().length >= 15)
-    : Boolean(section && (image != null || questionText.trim().length >= 10));
+    ? tip.trim().length >= 15
+    : image != null || questionText.trim().length >= 10;
 
   async function submit() {
     setBusy(true); setError(null);
@@ -153,7 +156,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                 value={section} onChange={(e) => { setSection(e.target.value); setTopic(''); }}
                 className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900"
               >
-                <option value="">Section…</option>
+                <option value="">Section (optional)…</option>
                 {SECTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
               <select

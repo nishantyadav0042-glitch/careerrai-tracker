@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  mayShowVoteCount, voteDisplay, orderFeed, orderFeedTop, netScore, rankContributors, myRank,
-  VOTE_COUNT_REVEAL_MIN, MIN_VOTES_FOR_ELIGIBILITY, MONTHLY_WINNERS,
+  mayShowVoteCount, voteDisplay, orderFeed, orderFeedTop, netScore,
+  VOTE_COUNT_REVEAL_MIN,
   type InsightRow,
 } from './insight-feed';
 
@@ -130,67 +130,7 @@ describe('feed order rewards contributing, not accumulating', () => {
   });
 });
 
-describe('the monthly Buddy reward cannot be farmed', () => {
-  const c = (id: string, helpful: number, total: number, contributions = 1) =>
-    ({ studentId: id, helpful, total, contributions });
-
-  it('ignores anyone below the eligibility floor — one friend is not a batch', () => {
-    const out = rankContributors([c('friend-voted', 1, 1), c('real', 8, 10)]);
-    expect(out.map((x) => x.studentId)).toEqual(['real']);
-    expect(MIN_VOTES_FOR_ELIGIBILITY).toBeGreaterThan(1);
-  });
-
-  it('ranks on NET helpful, so being widely disliked cannot win', () => {
-    // 30 helpful / 60 total = net 0. 12 helpful / 12 total = net 12.
-    const out = rankContributors([c('loud', 30, 60), c('good', 12, 12)]);
-    expect(out[0].studentId).toBe('good');
-  });
-
-  it('prefers one genuinely useful post over five mediocre ones on a tie', () => {
-    const out = rankContributors([c('spammer', 10, 10, 5), c('careful', 10, 10, 1)]);
-    expect(out[0].studentId).toBe('careful');
-  });
-
-  it('takes exactly ten, and is deterministic on a full tie', () => {
-    const many = Array.from({ length: 30 }, (_, i) => c(`s${String(i).padStart(2, '0')}`, 10, 10));
-    const out = rankContributors(many);
-    expect(out).toHaveLength(MONTHLY_WINNERS);
-    expect(rankContributors(many).map((x) => x.studentId)).toEqual(out.map((x) => x.studentId));
-  });
-
-  it('returns nobody rather than padding the list when few qualify', () => {
-    expect(rankContributors([c('a', 1, 2), c('b', 0, 1)])).toEqual([]);
-  });
-});
-
-describe('rank is the reward, the count is only the mechanism', () => {
-  const c = (id: string, helpful: number, total: number, contributions = 1) =>
-    ({ studentId: id, helpful, total, contributions });
-
-  it('gives a 1-indexed position — nobody is #0', () => {
-    const board = [c('a', 20, 20), c('b', 10, 10), c('c', 6, 6)];
-    expect(myRank(board, 'a')).toBe(1);
-    expect(myRank(board, 'c')).toBe(3);
-  });
-
-  it('returns null for a student who has not qualified yet', () => {
-    // An unearned rank is worse than no rank.
-    expect(myRank([c('a', 20, 20)], 'nobody')).toBeNull();
-    expect(myRank([c('new', 1, 1)], 'new')).toBeNull();
-  });
-
-  it('agrees with the winners list — one ordering, not two', () => {
-    const board = Array.from({ length: 15 }, (_, i) => c(`s${i}`, 30 - i, 30 - i));
-    const winners = rankContributors(board).map((x) => x.studentId);
-    for (let i = 0; i < winners.length; i++) {
-      expect(myRank(board, winners[i])).toBe(i + 1);
-    }
-  });
-
-  it('reveals no population size — rank alone cannot be reverse-engineered', () => {
-    // Two boards of very different sizes give the top student the same rank.
-    const small = [c('me', 20, 20), c('x', 5, 5)];
-    const large = Array.from({ length: 400 }, (_, i) => c(`p${i}`, 5, 5)).concat([c('me', 99, 99)]);
-    expect(myRank(small, 'me')).toBe(myRank(large, 'me'));
-  });
-});
+// The monthly contributor-reward tests (rankContributors / myRank /
+// MONTHLY_WINNERS / MIN_VOTES_FOR_ELIGIBILITY) were removed with the feature
+// on 20 Aug — founder ruling: no superstars. The guard that keeps it gone
+// lives in no-careerrai-byline.guard.test.ts.

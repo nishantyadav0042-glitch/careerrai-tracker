@@ -48,10 +48,25 @@ describe('every rejection carries a machine code — no more opaque 400s', () =>
     if (!r.ok) { expect(r.code).toBe('IMAGE_TYPE_UNSUPPORTED'); expect(r.error).toMatch(/JPG|PNG/); }
   });
 
-  it('missing section → SECTION_REQUIRED', () => {
+  // 20 Aug: section became optional too. NOTHING but the content is required
+  // now — the safety screen already reads every submission and returns the
+  // section, so a student never files anything into our taxonomy.
+  it('no section is fine — the content is the only requirement', () => {
     const r = validate({ kind: 'question', text: 'a perfectly reasonable question here' });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe('SECTION_REQUIRED');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.section).toBeNull();
+  });
+
+  it('a section the student DID pick is kept', () => {
+    const r = validate({ kind: 'question', section: 'QA', text: 'a perfectly reasonable question here' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.section).toBe('QA');
+  });
+
+  it('a nonsense section is dropped, not rejected', () => {
+    const r = validate({ kind: 'question', section: 'ASTROLOGY', text: 'a perfectly reasonable question here' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.section).toBeNull();
   });
 
   it('bad kind → KIND_INVALID', () => {
@@ -105,6 +120,34 @@ describe('tips keep their existing contract', () => {
     const r = validate({ kind: 'question', section: 'QA', topic: 'Not A Topic', text: 'What is the remainder when 7^100 is divided by 5?' });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.topic).toBeNull();
+  });
+});
+
+describe('classification never becomes student friction', () => {
+  it('the safety screen returns the section — no second classifier exists', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    const safety = readFileSync('src/lib/community-safety.ts', 'utf8');
+    // It rides the SAME Gemini call the screen already makes: no extra
+    // request, no extra latency, and nowhere else in the codebase decides
+    // what section a piece of student content belongs to.
+    expect(safety).toContain('InferredSection');
+    expect(safety).toContain('readSection');
+    const calls = (safety.match(/callGemini\(/g) ?? []).length;
+    expect(calls, 'a separate classification call would be a second engine').toBe(2);
+  });
+
+  it('the submit route prefers the student choice, then the inference', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    const route = readFileSync('src/app/api/community/submit/route.ts', 'utf8');
+    expect(route).toContain('sub.section ?? imageVerdict?.section ?? textVerdict?.section ?? null');
+  });
+
+  it('the client requires content and nothing else', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    const client = readFileSync('src/components/community-submit.tsx', 'utf8');
+    const ready = client.slice(client.indexOf('const ready ='), client.indexOf('async function submit'));
+    expect(ready, 'section must not gate the send button').not.toContain('section &&');
+    expect(ready, 'topic must not gate it either').not.toContain('topic &&');
   });
 });
 

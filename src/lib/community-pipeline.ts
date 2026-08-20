@@ -144,7 +144,8 @@ export interface SubmitInput {
 
 export interface ValidSubmission {
   kind: 'tip' | 'question';
-  section: string;
+  /** null when the student did not pick one — the safety screen infers it. */
+  section: string | null;
   topic: string | null;
   /** Tip text, or the typed question text (image-free path). */
   text: string | null;
@@ -168,10 +169,14 @@ export function validateSubmission(
   if (kind !== 'tip' && kind !== 'question') {
     return { ok: false, code: 'KIND_INVALID', error: 'Choose a tip or a question' };
   }
-  if (typeof section !== 'string' || !sections.includes(section)) {
-    return { ok: false, code: 'SECTION_REQUIRED', error: 'Pick a section' };
-  }
-  const topicOk = typeof topic === 'string' && topicSectionOf(topic) === section;
+  // Section is OPTIONAL (founder, 20 Aug): internal structure must not become
+  // student friction. A student with a tough question in front of them should
+  // not have to file it into our taxonomy first — the safety screen already
+  // reads the content and returns the section, so the classification happens
+  // where it costs nobody anything.
+  const sectionOk = typeof section === 'string' && sections.includes(section);
+  const chosenSection = sectionOk ? (section as string) : null;
+  const topicOk = typeof topic === 'string' && chosenSection != null && topicSectionOf(topic) === chosenSection;
 
   if (kind === 'tip') {
     // Topic is OPTIONAL for a tip (founder, 20 Aug). It used to be mandatory,
@@ -183,7 +188,7 @@ export function validateSubmission(
     if (text.length === 0) return { ok: false, code: 'CONTENT_REQUIRED', error: 'Write your tip first' };
     if (text.length < MIN_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_SHORT', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
     if (text.length > MAX_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_LONG', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
-    return { ok: true, value: { kind, section, topic: topicOk ? (topic as string) : null, text, image: null, imageMime: null } };
+    return { ok: true, value: { kind, section: chosenSection, topic: topicOk ? (topic as string) : null, text, image: null, imageMime: null } };
   }
 
   // question: text OR image, both welcome.
@@ -201,7 +206,7 @@ export function validateSubmission(
   return {
     ok: true,
     value: {
-      kind, section, topic: topicOk ? (topic as string) : null,
+      kind, section: chosenSection, topic: topicOk ? (topic as string) : null,
       text: text || null,
       image: hasImage ? (body.image as string) : null,
       imageMime: hasImage ? (body.image_mime as string) : null,

@@ -8,7 +8,7 @@ export const maxDuration = 30;
 
 // Admin: the verification desk for the Daily Challenge.
 //
-// GET  — pending student submissions + the challenge bank + today's status.
+// GET  — the challenge bank + today's status.
 // POST — { action: 'create' | 'schedule' | 'review' | 'retire', ... }
 //   create   — founder/admin adds a question straight to the bank
 //   review   — approve/reject a student submission; approving a question
@@ -26,10 +26,7 @@ export async function GET() {
   if ('error' in ctx) return ctx.error;
   const { admin } = ctx;
 
-  const [{ data: pending }, { data: bank }, { data: attemptsToday }, { data: votingRows }, { data: votes }] = await Promise.all([
-    admin.from('student_submissions')
-      .select('id, student_id, kind, topic, payload, created_at, profiles:student_id(full_name)')
-      .eq('status', 'pending').order('created_at'),
+  const [{ data: bank }, { data: attemptsToday }, { data: votingRows }, { data: votes }] = await Promise.all([
     admin.from('daily_challenges')
       .select('id, live_date, section, topic, question, difficulty, source, status')
       .neq('status', 'rejected').order('live_date', { ascending: false, nullsFirst: true }).limit(60),
@@ -37,7 +34,7 @@ export async function GET() {
       .gte('created_at', new Date(Date.now() - 2 * 86_400_000).toISOString()),
     admin.from('student_submissions')
       .select('id, kind, topic, payload, display_name, image_path, voting_ends_at')
-      .eq('status', 'voting').order('created_at'),
+      .eq('status', 'live').order('created_at'),
     admin.from('submission_votes').select('submission_id, helpful'),
   ]);
 
@@ -68,7 +65,6 @@ export async function GET() {
 
   return NextResponse.json({
     activeDate: activeChallengeDate(),
-    pending: pending ?? [],
     bank: bank ?? [],
     pipeline,
     recentAttempts: (attemptsToday ?? []).length,
@@ -101,45 +97,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, id: data.id });
   }
 
-  if (action === 'review') {
-    const { submission_id: sid, decision } = body as { submission_id?: string; decision?: string };
-    if (!sid || (decision !== 'approve' && decision !== 'reject')) {
-      return NextResponse.json({ error: 'submission_id and decision required' }, { status: 400 });
-    }
-    const { data: sub } = await admin.from('student_submissions')
-      .select('id, student_id, kind, topic, payload, status').eq('id', sid).maybeSingle();
-    if (!sub || sub.status !== 'pending') return NextResponse.json({ error: 'Not pending' }, { status: 400 });
-
-    const now = new Date().toISOString();
-    if (decision === 'reject') {
-      await admin.from('student_submissions')
-        .update({ status: 'rejected', reviewed_by: userId, reviewed_at: now }).eq('id', sid);
-      return NextResponse.json({ ok: true });
-    }
-
-    if (sub.kind === 'question') {
-      // Approved question graduates into the bank WITH the student's credit —
-      // the credit is the reward, and it survives into the daily drop.
-      const p = sub.payload as { question: string; options: string[]; correct_index: number; explanation: string };
-      const meta = TOPIC_METADATA[sub.topic as string];
-      if (!meta) return NextResponse.json({ error: 'Submission topic no longer canonical' }, { status: 400 });
-      const { error } = await admin.from('daily_challenges').insert({
-        section: meta.section, topic: sub.topic,
-        question: p.question, options: p.options, correct_index: p.correct_index,
-        explanation: p.explanation, difficulty: 'medium',
-        source: 'student', contributor_id: sub.student_id, status: 'approved',
-      });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    await admin.from('student_submissions').update({
-      status: 'approved', reviewed_by: userId, reviewed_at: now,
-      // Tips, mistakes and shortcuts publish the moment they're approved —
-      // straight into their topic's curriculum. Questions publish when their
-      // bank entry is scheduled live.
-      published_at: sub.kind !== 'question' ? now : null,
-    }).eq('id', sid);
-    return NextResponse.json({ ok: true });
-  }
+  // The Gen-1 submission review path was removed 20 Aug. It read
+  // student_submissions where status='pending' and promoted them into
+  // daily_challenges by reading payload.options — an MCQ shape the live
+  // submission path has never written. Zero rows ever went through it, and
+  // after the live-pool migration 'pending' means something else entirely
+  // (a safety hold), so this screen would have offered an Approve button
+  // that could only fail. Safety holds are reviewed on /admin/daily-pick.
 
   if (action === 'schedule') {
     const { challenge_id: cid, live_date: liveDate } = body as { challenge_id?: string; live_date?: string };

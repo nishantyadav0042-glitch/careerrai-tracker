@@ -18,6 +18,7 @@ interface Stats {
   funnel: { dau: number; opened: number; openRate: number | null; voted: number; voteRate: number | null; contributed: number; contributionRate: number | null; sharesBlocked: number };
   helpScore: number;
   items: Item[];
+  pending: { id: string; kind: string; topic: string | null; text: string | null; imageUrl: string | null; createdAt: string }[];
   topics: { topic: string; items: number; votes: number; helpfulPct: number | null }[];
   retention: { everVoters: number; votersActiveLast7d: number; note: string | null };
 }
@@ -27,8 +28,9 @@ interface Stats {
 // legacy permanent shelf stock. All three are equally Top Pick-eligible.
 const STATUS_TONE: Record<string, string> = {
   voting: 'bg-emerald-50 text-emerald-700',
-  featured: 'bg-amber-50 text-amber-700',
-  archived: 'bg-stone-100 text-stone-500',
+  live: 'bg-emerald-50 text-emerald-700',
+  pending: 'bg-amber-50 text-amber-700',
+  blocked: 'bg-rose-50 text-rose-600',
 };
 
 export default function DailyPickDashboard() {
@@ -41,6 +43,17 @@ export default function DailyPickDashboard() {
 
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch */
   useEffect(() => { void load(); }, [load]);
+
+  // Resolve a safety hold. The screen fails CLOSED, so any Gemini outage
+  // parks real student submissions in 'pending' — without this button they
+  // would sit there forever and the student would never learn why.
+  const resolve = async (id: string, decision: 'publish' | 'block') => {
+    const res = await fetch('/api/admin/daily-pick-stats', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, decision }),
+    });
+    if (res.ok) await load();
+  };
 
   if (!stats) return <div className="p-6 text-sm text-stone-400">Loading…</div>;
   const f = stats.funnel;
@@ -89,6 +102,36 @@ export default function DailyPickDashboard() {
             No bar, no minimum votes. Max votes tops the slot for exactly one day; zero-vote items rise by queue order. Nothing is ever judged or dropped.
           </p>
           <div className="mt-2 space-y-1">
+            {/* Safety holds — the only queue a human still works. */}
+            {stats.pending.length > 0 && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
+                  Held for review · {stats.pending.length}
+                </p>
+                <p className="mt-0.5 text-[11px] text-amber-700/80">
+                  The safety screen could not decide (usually an AI outage). Students cannot see these until you do.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {stats.pending.map((p) => (
+                    <div key={p.id} className="rounded-lg border border-amber-200 bg-white p-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">{p.kind}</p>
+                      {p.text && <p className="mt-0.5 text-[13px] text-stone-800">{p.text}</p>}
+                      {p.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imageUrl} alt="" className="mt-1.5 max-h-40 rounded border border-stone-200" />
+                      )}
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" onClick={() => void resolve(p.id, 'publish')}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white">Publish</button>
+                        <button type="button" onClick={() => void resolve(p.id, 'block')}
+                          className="rounded-lg bg-stone-200 px-3 py-1.5 text-[12px] font-bold text-stone-700">Block</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {stats.items.map((it) => (
               <div key={it.id} className="flex items-center gap-2 border-b border-stone-50 py-1.5 last:border-0">
                 <span className="shrink-0 text-[13px]">{it.kind === 'tip' ? '💡' : '📷'}</span>
@@ -100,7 +143,7 @@ export default function DailyPickDashboard() {
                   👍{it.yes} 👎{it.no}{it.helpfulPct != null ? ` · ${it.helpfulPct}%` : ''}
                 </span>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_TONE[it.status] ?? 'bg-stone-100 text-stone-500'}`}>
-                  {it.status === 'voting' ? 'on ballot' : it.status === 'archived' ? 'resting' : it.status}
+                  {it.status}
                 </span>
               </div>
             ))}

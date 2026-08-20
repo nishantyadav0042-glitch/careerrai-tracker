@@ -12,6 +12,12 @@
 // relevance (organizing/filtering), it never judges whether the maths is
 // good — students do that with votes.
 
+// SECTION INFERENCE (20 Aug) rides along on these SAME calls. The founder's
+// rule: internal structure must not become student friction — a student with
+// a tough question in front of them should not have to classify it into our
+// taxonomy first. The safety screen is already reading the content, so it
+// returns the section too: zero extra API calls, zero extra latency, and no
+// second classification engine anywhere in the codebase.
 import { callGemini, extractJson } from './gemini';
 
 export type SafetyVerdict = 'ok' | 'blocked' | 'manual';
@@ -39,18 +45,28 @@ const TEXT_SYSTEM = `You are a strict safety screen for a CAT-exam-prep study ap
 Judge ONLY safety and relevance, never educational quality.
 Return JSON: {"safe": boolean, "reason": string}.
 safe=false if the text contains ANY of: sexual content, nudity references, hate speech, harassment, threats, self-harm content, violence, drug promotion, spam, advertising, requests to contact outside the app, personal contact details, or content unrelated to CAT preparation (QA/VARC/DILR study).
-Otherwise safe=true. When in doubt, safe=false.`;
+Otherwise safe=true. When in doubt, safe=false.
+Also return "section": one of "QA", "VARC", "DILR", or null if you cannot tell confidently.`;
 
-export async function checkTipSafety(text: string): Promise<{ verdict: SafetyVerdict; reason?: string }> {
+/** The three CAT sections, or null when the screen could not tell. */
+export type InferredSection = 'QA' | 'VARC' | 'DILR' | null;
+
+function readSection(v: unknown): InferredSection {
+  return v === 'QA' || v === 'VARC' || v === 'DILR' ? v : null;
+}
+
+export async function checkTipSafety(text: string): Promise<{ verdict: SafetyVerdict; reason?: string; section?: InferredSection }> {
   if (localTextScreen(text) === 'blocked') return { verdict: 'blocked', reason: 'contact/promo pattern' };
 
   const raw = await callGemini({
     parts: [{ text: `Screen this study tip:\n\n${text}` }],
     system: TEXT_SYSTEM, json: true, maxTokens: 150, temperature: 0,
   });
-  const parsed = extractJson<{ safe?: boolean; reason?: string }>(raw);
+  const parsed = extractJson<{ safe?: boolean; reason?: string; section?: unknown }>(raw);
   if (parsed == null || typeof parsed.safe !== 'boolean') return { verdict: 'manual' };
-  return parsed.safe ? { verdict: 'ok' } : { verdict: 'blocked', reason: parsed.reason };
+  return parsed.safe
+    ? { verdict: 'ok', section: readSection(parsed.section) }
+    : { verdict: 'blocked', reason: parsed.reason };
 }
 
 const IMAGE_SYSTEM = `You are a strict safety screen for images uploaded to a CAT-exam-prep study app.
@@ -58,9 +74,10 @@ An acceptable image is a photo or screenshot of an academic practice question (m
 Return JSON: {"safe": boolean, "isQuestion": boolean, "reason": string}.
 safe=false for ANY of: sexual/explicit content, nudity, violence or gore, hate symbols, harassment, drug content, memes, selfies or photos of people, advertisements, QR codes, phone numbers or handles or links visible, coaching-institute promotion.
 isQuestion=false if the image is not an academic question at all.
-When in doubt, safe=false.`;
+When in doubt, safe=false.
+Also return "section": one of "QA", "VARC", "DILR", or null if you cannot tell confidently.`;
 
-export async function checkImageSafety(base64: string, mimeType: string): Promise<{ verdict: SafetyVerdict; reason?: string }> {
+export async function checkImageSafety(base64: string, mimeType: string): Promise<{ verdict: SafetyVerdict; reason?: string; section?: InferredSection }> {
   const raw = await callGemini({
     parts: [
       { text: 'Screen this uploaded image:' },
@@ -68,10 +85,10 @@ export async function checkImageSafety(base64: string, mimeType: string): Promis
     ],
     system: IMAGE_SYSTEM, json: true, maxTokens: 150, temperature: 0,
   });
-  const parsed = extractJson<{ safe?: boolean; isQuestion?: boolean; reason?: string }>(raw);
+  const parsed = extractJson<{ safe?: boolean; isQuestion?: boolean; reason?: string; section?: unknown }>(raw);
   // Fail closed: no AI available → a human looks before anyone else does.
   if (parsed == null || typeof parsed.safe !== 'boolean') return { verdict: 'manual' };
   if (!parsed.safe) return { verdict: 'blocked', reason: parsed.reason };
   if (parsed.isQuestion !== true) return { verdict: 'blocked', reason: 'not an academic question image' };
-  return { verdict: 'ok' };
+  return { verdict: 'ok', section: readSection(parsed.section) };
 }

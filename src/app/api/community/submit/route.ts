@@ -101,14 +101,18 @@ export async function POST(request: NextRequest) {
 
   // Any 'manual' verdict on any part → pending (human review before students see it).
   const anyManual = textVerdict?.verdict === 'manual' || imageVerdict?.verdict === 'manual';
+  const resolvedSection = sub.section ?? imageVerdict?.section ?? textVerdict?.section ?? null;
 
   const { error } = await admin.from('student_submissions').insert({
     student_id: user.id,
     kind: sub.kind,
     topic: sub.topic,
+    // Section: what the student picked, else what the safety screen inferred,
+    // else null — a card without a section chip is fine, an extra dropdown in
+    // front of a contribution is not.
     payload: sub.kind === 'tip'
-      ? { text: sub.text, section: sub.section }
-      : { section: sub.section, ...(sub.text ? { text: sub.text } : {}) },
+      ? { text: sub.text, section: resolvedSection }
+      : { section: resolvedSection, ...(sub.text ? { text: sub.text } : {}) },
     ...(imagePath ? { image_path: imagePath } : {}),
     display_name: displayName,
     // 'live' is permanent and votable (20 Aug: the 72h ballot retired — it

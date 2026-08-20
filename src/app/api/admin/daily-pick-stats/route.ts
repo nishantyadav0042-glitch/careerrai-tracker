@@ -21,7 +21,7 @@ export async function GET() {
   const since24 = dayStart.toISOString();
   const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  const [{ data: events24 }, { data: votes }, { data: subs }, { data: submitters24 }] = await Promise.all([
+  const [{ data: events24 }, { data: votes }, { data: subs }, { data: submitters24 }, { data: pendingRows }] = await Promise.all([
     // One pass over the last 24h of events; funnel derived in memory.
     admin.from('student_events').select('user_id, event').gte('created_at', since24)
       .in('event', ['app_open', 'daily_pick_open', 'community_voted', 'community_submitted', 'community_share_blocked']),
@@ -30,6 +30,14 @@ export async function GET() {
       .select('id, kind, topic, payload, display_name, status, created_at, voting_ends_at')
       .eq('status', 'live'),
     admin.from('student_submissions').select('student_id').gte('created_at', since24),
+    // Safety holds. The screen fails CLOSED — any Gemini outage parks real
+    // student submissions here, so they need a human with a publish button
+    // or the content silently disappears (found 20 Aug: there was no such
+    // button anywhere, and the one that looked like it belonged to a retired
+    // moderation generation and could only 500).
+    admin.from('student_submissions')
+      .select('id, kind, topic, payload, image_path, created_at')
+      .eq('status', 'pending').order('created_at'),
   ]);
 
   // ── Funnel (last 24h) ──
@@ -104,10 +112,51 @@ export async function GET() {
     helpScore,
     items,
     topics,
+    pending: (pendingRows ?? []).map((r) => ({
+      id: r.id as string,
+      kind: r.kind as string,
+      topic: (r.topic as string | null) ?? null,
+      text: ((r.payload ?? {}) as { text?: string }).text ?? null,
+      imageUrl: r.image_path
+        ? admin.storage.from('community-questions').getPublicUrl(r.image_path as string).data.publicUrl
+        : null,
+      createdAt: r.created_at as string,
+    })),
     retention: {
       everVoters: everVoters.size,
       votersActiveLast7d: votersActive,
       note: everVoters.size < 20 ? 'Voters-vs-non-voters retention needs ~a week of votes to mean anything.' : null,
     },
   });
+}
+
+/**
+ * POST — resolve a safety hold. The only two outcomes a held submission can
+ * have: it goes live, or it is blocked. Deliberately NOT an "approve into the
+ * challenge bank" flow — that was the retired generation, and it read an MCQ
+ * payload this path never writes.
+ */
+export async function POST(request: Request) {
+  const ctx = await requireAdmin();
+  if ('error' in ctx) return ctx.error;
+  const { admin, userId } = ctx;
+
+  const body = (await request.json().catch(() => ({}))) as { id?: unknown; decision?: unknown };
+  const { id, decision } = body;
+  if (typeof id !== 'string' || (decision !== 'publish' && decision !== 'block')) {
+    return NextResponse.json({ error: 'id and decision (publish|block) required' }, { status: 400 });
+  }
+
+  const { error } = await admin.from('student_submissions')
+    .update({
+      status: decision === 'publish' ? 'live' : 'blocked',
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+      ...(decision === 'publish' ? { published_at: new Date().toISOString() } : {}),
+    })
+    .eq('id', id)
+    .eq('status', 'pending');   // only a held item may be resolved
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
