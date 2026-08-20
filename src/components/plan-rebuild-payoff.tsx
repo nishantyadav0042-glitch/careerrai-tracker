@@ -118,6 +118,11 @@ export function PlanRebuildPayoff({ onDone, streak, source, forLabel, noticed }:
         setPlan(p);
         track('checkin_payoff_shown', {
           source, taskCount: p.tasks.length, hasBecause: p.because != null,
+          // Whether a post-log "noticed" line rode this payoff. The line the
+          // server sends is either a post-log insight or a prescriptive nudge;
+          // hasNoticed=false is the silence Batch 7 set out to end, so this
+          // flag IS the measurement of that fix.
+          hasNoticed: noticed != null,
         });
       } else {
         onDone();

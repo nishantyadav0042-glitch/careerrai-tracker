@@ -563,7 +563,7 @@ export default async function DailyTrackerPage() {
             white background, which is why the founder only ever caught it by
             accident. It is the one place the app speaks about the student
             rather than instructing them, so it opens the screen. */}
-        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} />}
+        {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
 
         {pace && targetIso && (
           <PaceCard

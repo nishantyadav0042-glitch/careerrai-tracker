@@ -205,6 +205,12 @@ export type EventName =
   // student the failure. Observability only; nothing retries or reorders.
   | 'completion_write'
   | 'first_log_prompt'
+  // The daily "Rai noticed" card on Home (19 Aug). shown fires once per
+  // render-day, dismissed on the deliberate close -- the pair that lets the
+  // funnel distinguish "delivered" from "read", which the old 7-second toast
+  // could not (it marked itself seen on mount, so delivery and reading were
+  // indistinguishable and both unmeasurable).
+  | 'insight_shown' | 'insight_dismissed'
   // Onboarding's closing log-practice screen (13 Aug): props carry how many of
   // the 3 practice tasks were marked and whether it was skipped — the cohort
   // key for "does practising the log move onboarded → first real log".

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { studyDayString } from '@/lib/study-day';
+import { track } from '@/lib/journey';
 import { Eye, X } from 'lucide-react';
 
 // ── The daily insight, made possible to actually see ────────────────────────
@@ -44,10 +45,19 @@ function alreadySeen(): boolean {
   try { return localStorage.getItem(seenKey()) === '1'; } catch { return false; }
 }
 
-export function InsightBubble({ title, text }: { title: string; text: string }) {
+export function InsightBubble({ title, text, kind }: { title: string; text: string; kind?: string }) {
   // Read once, on first render, so the card does not flash in and out when the
   // component re-renders for unrelated reasons.
   const [dismissed, setDismissed] = useState<boolean>(alreadySeen);
+
+  // Observability only (Batch 8, Task 4): shown/dismissed is the pair that
+  // separates "delivered" from "read". The old toast could not record either.
+  // NOTE: no localStorage write happens here -- marking-as-seen stays in the
+  // dismiss handler and nowhere else; that separation is the whole fix.
+  useEffect(() => {
+    if (!dismissed) track('insight_shown', { kind: kind ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (dismissed) return null;
 
@@ -55,6 +65,7 @@ export function InsightBubble({ title, text }: { title: string; text: string }) 
     // The seen key is written HERE -- on a deliberate dismiss -- and nowhere
     // else. Marking it read on mount was the defect above.
     try { localStorage.setItem(seenKey(), '1'); } catch { /* storage blocked */ }
+    track('insight_dismissed', { kind: kind ?? null });
     setDismissed(true);
   }
 
