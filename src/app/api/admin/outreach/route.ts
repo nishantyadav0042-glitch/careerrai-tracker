@@ -13,7 +13,7 @@ const VALID_STATUS: readonly string[] = LEAD_STATUSES;
 //
 // ONE CLOCK (SA-1A, 20 Aug 2026): the admin's follow-up date is written to
 // next_action_at — the SAME column the rep's disposition engine writes and
-// the call queue reads — never to the deprecated `next_follow_up`. The date
+// the call queue reads. The date
 // maps to 11:00 IST via the one cadence model in lib/sales-disposition.
 export async function PATCH(request: NextRequest) {
   const supabase = createServerClient(
@@ -29,11 +29,8 @@ export async function PATCH(request: NextRequest) {
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json();
-  // `next_follow_up` is accepted as a legacy body alias for nextActionDate
-  // (sales-deck.tsx still sends it until it retires in SA-1B) — but the only
-  // column it ever reaches is next_action_at.
-  const { student_id, owner, status, nextActionDate, next_follow_up: legacyNextFollowUp, notes } = body ?? {};
-  const followDate = nextActionDate ?? legacyNextFollowUp;
+  const { student_id, owner, status, nextActionDate, notes } = body ?? {};
+  const followDate = nextActionDate;
   if (typeof student_id !== 'string' || !student_id) {
     return NextResponse.json({ error: 'student_id required' }, { status: 400 });
   }

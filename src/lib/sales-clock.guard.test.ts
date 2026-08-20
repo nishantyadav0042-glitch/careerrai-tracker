@@ -22,18 +22,17 @@ describe('nextActionAtFromDate — the one cadence model', () => {
   });
 });
 
-// Files that must speak ONLY the canonical clock. sales-deck.tsx is
-// deliberately absent: it still posts the legacy `next_follow_up` BODY ALIAS
-// (mapped server-side to next_action_at) and retires wholesale in SA-1B —
-// adding it here would just move when we delete it, not what production does.
+// Files that must speak ONLY the canonical clock.
 const CLOCK_CLEAN_FILES = [
-  'src/lib/sales-queue.ts',
   'src/lib/call-queue.ts',
   'src/lib/sales-portfolio.ts',
   'src/lib/sales-conversion.ts',
   'src/app/admin/leads/[id]/page.tsx',
   'src/app/admin/leads/[id]/outreach-panel.tsx',
   'src/app/api/sales/log/route.ts',
+  // SA-1B commit 2: the legacy body alias died with sales-deck.tsx, so the
+  // admin outreach route is now fully clock-clean too.
+  'src/app/api/admin/outreach/route.ts',
 ];
 
 describe('one authoritative next-action field', () => {
@@ -41,28 +40,15 @@ describe('one authoritative next-action field', () => {
     expect(readFileSync(file, 'utf8')).not.toContain('next_follow_up');
   });
 
-  it('the admin outreach route writes ONLY next_action_at (legacy body key is an alias, not a column write)', () => {
-    const s = readFileSync('src/app/api/admin/outreach/route.ts', 'utf8');
-    expect(s).toContain('next_action_at: followDate ? nextActionAtFromDate(followDate) : null');
-    // The literal next_follow_up may appear only as the renamed legacy body
-    // alias — never as a payload key reaching the database.
-    const uses = [...s.matchAll(/next_follow_up/g)].length;
-    expect(s).toContain('next_follow_up: legacyNextFollowUp');
-    const aliasAndCommentUses = [...s.matchAll(/next_follow_up: legacyNextFollowUp|`next_follow_up`/g)].length;
-    expect(uses).toBe(aliasAndCommentUses);
-  });
-
-  it('both queue authorities read the same clock column', () => {
+  it('the canonical queue reads the canonical clock', () => {
     expect(readFileSync('src/lib/call-queue.ts', 'utf8')).toContain('next_action_at');
-    expect(readFileSync('src/lib/sales-queue.ts', 'utf8')).toContain('next_action_at');
   });
 });
 
 // ── SA-1B: the admin's queue IS the rep's queue ────────────────────────────
 // /admin/sales renders buildCallQueue — the canonical authority — never a
-// parallel ranking. buildSalesQueue still exists (retired in a separate
-// commit after caller re-proof); this guard stops the admin page from
-// quietly drifting back to it.
+// parallel ranking. The old authority (lib/sales-queue) was deleted in the
+// SA-1B retire commit; this guard stops one from quietly growing back.
 describe('one queue authority on the admin surface', () => {
   it('/admin/sales consumes buildCallQueue, not buildSalesQueue', () => {
     const s = readFileSync('src/app/admin/sales/page.tsx', 'utf8');

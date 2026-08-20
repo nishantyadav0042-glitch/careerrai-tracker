@@ -26,7 +26,9 @@ import { readFileSync } from 'node:fs';
 // Add any new outbound-copy module to FILES the day it is created.
 
 const FILES = [
-  'src/lib/sales-queue.ts', // the queue's ready-to-send script
+  // sales-queue.ts (the old queue's ready-to-send script) was retired in
+  // SA-1B — the personalized pitch in sales-conversion is now the one
+  // generated outbound script.
   'src/lib/sales-conversion.ts', // the objection playbook read DURING a call
   'src/lib/mission-queue.ts', // Tonight's Mission founder WhatsApp drafts
   'src/lib/wa-messages.ts', // the WhatsApp copy library
