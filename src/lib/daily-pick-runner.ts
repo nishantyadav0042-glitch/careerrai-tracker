@@ -11,10 +11,11 @@ import { pickForToday, runwayFor, type PickCandidate } from './daily-pick';
 // for a kind, it does nothing. Two runs in a minute cannot produce two winners,
 // and a missed cron is repaired by the next visit rather than skipping a day.
 //
-// Eligible = 'voting' | 'featured' | 'archived'. Those three are the whole
-// surviving pool under the no-bar model; 'pending' has not cleared the safety
-// gate and 'blocked' failed it, and neither may ever reach a student.
-const ELIGIBLE_STATUSES = ['voting', 'featured', 'archived'] as const;
+// Eligible = every LIVE item (20 Aug: the three-status ballot pool collapsed
+// into one — 'voting'/'archived' were the same thing wearing two names, and
+// the split was refusing votes on most of the feed). 'pending' has not
+// cleared the safety gate and 'blocked' failed it; neither reaches a student.
+const ELIGIBLE_STATUSES = ['live'] as const;
 
 export interface PromoteResult {
   date: string;

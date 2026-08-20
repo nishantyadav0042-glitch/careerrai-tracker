@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowBigUp, ArrowBigDown, Sparkles, Trophy } from 'lucide-react';
+import { ArrowBigUp, ArrowBigDown, Sparkles } from 'lucide-react';
 import { track } from '@/lib/journey';
 
 // ── Student Insights — the community loop ───────────────────────────────────
@@ -45,8 +45,6 @@ interface Payload {
   /** ONE earned item, selected from the same contribution pool as the feed. */
   topPick: Item | null;
   feed: Item[];
-  /** This student's position this month. Null until they qualify. */
-  myRank: number | null;
 }
 
 export function StudentInsights() {
@@ -113,7 +111,7 @@ export function StudentInsights() {
 
   if (!data) return null;
 
-  const { topPick, feed, myRank } = data;
+  const { topPick, feed } = data;
   if (!topPick && feed.length === 0) return <EmptyState />;
 
   const liveScore = (i: Item) => i.score + (scoreDelta[i.id] ?? 0);
@@ -126,37 +124,13 @@ export function StudentInsights() {
 
   return (
     <div className="space-y-5">
-      {/* ── Student Contributors, first and loud (founder, 13 Aug) ─────────
-          This sat at the bottom in grey — "you have kept it hidden, such a
-          boring thing". It is the whole reason a student writes anything
-          here, so it opens the screen instead of closing it.
-          Still no leaderboard, no countdown, no participant count: all three
-          would report how small the room is. Rank without a vote count is the
-          one honest way to show standing at any size. */}
-      <div className="rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-[1.5px]">
-        <div className="rounded-[14.5px] bg-white px-4 py-3.5">
-          <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500">
-              <Trophy className="h-4 w-4 text-white" />
-            </span>
-            <p className="text-[14px] font-extrabold text-stone-900">Student Contributors</p>
-          </div>
-          {myRank != null && (
-            <p className="mt-2 inline-block rounded-lg bg-orange-50 px-2.5 py-1 text-[12.5px] font-bold text-orange-700">
-              {myRank === 1 ? "You're #1 this month" : `You're #${myRank} this month`}
-            </p>
-          )}
-          {/* Founder, 13 Aug: "too long, no one will read this — simply write
-              10", then the criterion made explicit: "top 10 students maximum
-              shared questions — Free Buddy Access for a month." So the line
-              names the ACTION (share questions), not a vague "helpful" — a
-              student reading it must know exactly what to do to win. */}
-          <p className="mt-2 text-[13px] font-bold text-stone-900">
-            Share questions. Top 10 each month → <span className="text-orange-600">Buddy free for a month</span>
-          </p>
-        </div>
-      </div>
-
+      {/* The contributor leaderboard stood here until 20 Aug. Founder ruling:
+          no superstars — no names, no profiles, no rank, no reward for
+          posting. A student who shares a tough question should be
+          doing it because the next student gets un-stuck, not to climb a
+          board. What replaces it is nothing at all: the content is the
+          surface, and the vote count on their own card is the only signal
+          a contributor needs. */}
       {topPick && (
         <section>
           <SectionLabel>Today&apos;s Pick</SectionLabel>

@@ -56,30 +56,32 @@ describe('a real student still gets their name', () => {
   });
 });
 
-describe('Student Contributors leads the screen', () => {
-  // It sat at the bottom in grey — "you have kept it hidden, such a boring
-  // thing". It is the reason a student writes anything here, so it opens the
-  // screen. Still no leaderboard or participant count: rank without a vote
-  // count is the only honest way to show standing at our size.
+describe('no student is turned into a superstar', () => {
+  // The contributor leaderboard ("Student Contributors", "You're #6 this
+  // month", top-10 → a free Buddy month) led this screen until 20 Aug.
+  // Founder ruling: no names, no profiles, no rank, no reward for posting.
+  // The reason is not cosmetic — a board changes WHY a student shares. We
+  // want "the next student gets un-stuck", not "I am climbing something".
   const src = () => readFileSync('src/components/student-insights.tsx', 'utf8');
 
-  it('appears before both the Today\'s Pick and Student Insights sections', () => {
-    // Match the JSX, not the prose — the file's header comment mentions both
-    // section names and would make any position check meaningless.
+  it('shows no rank, no board, no contributor standing', () => {
     const s = src();
-    const contributors = s.indexOf('>Student Contributors<');
-    const todaysPick = s.indexOf('<SectionLabel>Today&apos;s Pick</SectionLabel>');
-    const insights = s.indexOf('<SectionLabel>Student Insights</SectionLabel>');
-    expect(contributors, 'contributors block not found in JSX').toBeGreaterThan(-1);
-    expect(todaysPick).toBeGreaterThan(-1);
-    expect(insights).toBeGreaterThan(-1);
-    expect(contributors).toBeLessThan(todaysPick);
-    expect(contributors).toBeLessThan(insights);
+    for (const banned of ['myRank', 'Student Contributors', 'this month', 'Trophy']) {
+      expect(s, `"${banned}" is a status mechanic and must not return`).not.toContain(banned);
+    }
   });
 
-  it('still shows rank without ever showing a vote count', () => {
+  it('the API does not compute or serve a rank either', () => {
+    // Removing it from the component alone would leave the machinery one
+    // import away from coming back.
+    const route = readFileSync('src/app/api/community/insights/route.ts', 'utf8');
+    expect(route).not.toContain('myRank');
+    expect(route).not.toContain('rankContributors');
+  });
+
+  it('the content still leads the screen', () => {
     const s = src();
-    expect(s).toContain('myRank');
-    expect(s).not.toMatch(/\d+\s*votes/);
+    expect(s).toContain("<SectionLabel>Today&apos;s Pick</SectionLabel>");
+    expect(s).toContain('<SectionLabel>Student Insights</SectionLabel>');
   });
 });

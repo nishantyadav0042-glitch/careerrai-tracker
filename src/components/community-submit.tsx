@@ -63,8 +63,11 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Topic is optional for BOTH kinds now — the student brings the idea, the
+  // system files it. Section stays because it is one tap and it is what the
+  // feed is organised by.
   const ready = kind === 'tip'
-    ? section && topic && tip.trim().length >= 15
+    ? Boolean(section && tip.trim().length >= 15)
     : Boolean(section && (image != null || questionText.trim().length >= 10));
 
   async function submit() {
@@ -157,7 +160,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                 value={topic} onChange={(e) => setTopic(e.target.value)} disabled={!section}
                 className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900 disabled:opacity-50"
               >
-                <option value="">{kind === 'tip' ? 'Topic…' : 'Topic (optional)…'}</option>
+                <option value="">Topic (optional)…</option>
                 {section && TOPICS_FOR(section).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>

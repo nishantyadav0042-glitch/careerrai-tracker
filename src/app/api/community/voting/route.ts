@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { dailyPickIndex, VOTE_PROMPT } from '@/lib/community-pipeline';
-import { recycleCommunityPool } from '@/lib/community-recycle';
 import { promoteDailyPick } from '@/lib/daily-pick-runner';
 import { getLogDateString } from '@/lib/streak-utils';
 
@@ -22,41 +21,26 @@ export async function GET() {
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();
 
-  // The shelf = items still in their voting window PLUS everything that has
-  // earned a permanent place ('featured', no expiry). Featured items keep
+  // One live pool: every item is on the shelf and votable, permanently.
   // collecting votes, so a genuinely good question is asked again instead of
   // vanishing when its first window closes.
   // Deliberately a plain .in() plus a JS expiry filter rather than a nested
-  // PostgREST or(and(...)) expression: this is the query that renders Daily
-  // Pick, and a filter that cannot be exercised in CI is not something to
-  // gamble the launch surface on. 'featured' items have no expiry at all.
+  // ONE live pool (20 Aug). This used to be a ballot: only items inside a 72h
+  // window were on the shelf, everything else 'archived' and un-votable — and
+  // the feed showed the archived ones anyway, so most vote taps returned 400.
+  // A live item is on the shelf and votable, permanently.
   const shelf = async () => {
     const { data } = await admin.from('student_submissions')
-      .select('id, kind, topic, payload, image_path, display_name, curated, student_id, status, voting_ends_at')
-      .in('status', ['voting', 'featured'])
+      .select('id, kind, topic, payload, image_path, display_name, curated, student_id, status')
+      .eq('status', 'live')
       .order('id');
-    return (data ?? []).filter((r: { status: string; voting_ends_at: string | null }) =>
-      r.status === 'featured' || (r.voting_ends_at != null && r.voting_ends_at > nowIso));
+    return data ?? [];
   };
 
-  const [initialPool, { data: myVotes }] = await Promise.all([
+  const [pool, { data: myVotes }] = await Promise.all([
     shelf(),
     admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
   ]);
-  let pool = initialPool;
-
-  // Lazy safety net: if the shelf is empty the daily recycle cron has stalled
-  // (or has never run on a fresh environment). Recycle inline and re-read
-  // rather than showing a student a blank Daily Pick — an empty community
-  // surface reads as "nobody uses this app", which is unrecoverable.
-  if (!pool || pool.length === 0) {
-    try {
-      await recycleCommunityPool(admin);
-      pool = await shelf();
-    } catch (e) {
-      console.error('[community/voting] inline recycle failed', e);
-    }
-  }
 
   const day = getLogDateString();
 
@@ -72,7 +56,7 @@ export async function GET() {
     .from('student_submissions')
     .select('id, kind, topic, payload, image_path, display_name, curated')
     .eq('featured_on', day)
-    .in('status', ['voting', 'featured', 'archived']);
+    .eq('status', 'live');
   const topIds = new Set((topRows ?? []).map((r) => r.id as string));
 
   const voted = new Set((myVotes ?? []).map((v) => v.submission_id as string));

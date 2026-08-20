@@ -28,7 +28,7 @@ export async function GET() {
     admin.from('submission_votes').select('submission_id, student_id, helpful, created_at'),
     admin.from('student_submissions')
       .select('id, kind, topic, payload, display_name, status, created_at, voting_ends_at')
-      .in('status', ['voting', 'featured', 'archived']),
+      .eq('status', 'live'),
     admin.from('student_submissions').select('student_id').gte('created_at', since24),
   ]);
 

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
-import { orderFeed, voteDisplay, myRank, FEED_PAGE_SIZE, type InsightRow, type ContributorScore } from '@/lib/os/insight-feed';
+import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow } from '@/lib/os/insight-feed';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 20;
@@ -38,7 +38,7 @@ export async function GET() {
   const [{ data: subs }, { data: votes }, { data: myVotes }] = await Promise.all([
     admin.from('student_submissions')
       .select('id, kind, payload, image_path, display_name, student_id, created_at, featured_on, status')
-      .in('status', ['voting', 'featured', 'archived'])
+      .eq('status', 'live')
       .order('created_at', { ascending: false })
       .limit(60),
     admin.from('submission_votes').select('submission_id, helpful'),
@@ -117,26 +117,7 @@ export async function GET() {
     .slice(0, FEED_PAGE_SIZE)
     .map(shape);
 
-  // ── Contributor rank for the month ────────────────────────────────────────
-  // Votes are the mechanism; RANK is what the student sees. Computed over this
-  // calendar month's contributions only, so the board resets and a student who
-  // starts today is not permanently behind someone from June.
-  const monthStart = day.slice(0, 8) + '01';
-  const scores = new Map<string, ContributorScore>();
-  for (const s of (subs ?? []) as SubmissionRow[]) {
-    if (!s.student_id || s.created_at.slice(0, 10) < monthStart) continue;
-    const t = tally.get(s.id) ?? { helpful: 0, total: 0 };
-    const cur = scores.get(s.student_id) ?? { studentId: s.student_id, helpful: 0, total: 0, contributions: 0 };
-    cur.helpful += t.helpful;
-    cur.total += t.total;
-    cur.contributions += 1;
-    scores.set(s.student_id, cur);
-  }
+  // Contributor rank retired 20 Aug (founder: no superstars, no board).
 
-  return NextResponse.json({
-    topPick: shape(pick),
-    feed,
-    // null until they qualify — an unearned rank is worse than none.
-    myRank: myRank([...scores.values()], user.id),
-  });
+  return NextResponse.json({ topPick: shape(pick), feed });
 }

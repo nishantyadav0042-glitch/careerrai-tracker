@@ -37,16 +37,14 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
   const { data: sub } = await admin.from('student_submissions')
-    .select('id, status, voting_ends_at, student_id').eq('id', sid).maybeSingle();
-  // 'featured' items are permanent shelf stock with no expiry — they keep
-  // collecting votes, which is how a good item stays good (and how one that
-  // stops helping eventually drops back out).
-  const open = sub && (
-    sub.status === 'featured' ||
-    (sub.status === 'voting' && (!sub.voting_ends_at || sub.voting_ends_at >= new Date().toISOString()))
-  );
-  if (!open) {
-    return NextResponse.json({ error: 'Voting is closed for this one' }, { status: 400 });
+    .select('id, status, student_id').eq('id', sid).maybeSingle();
+  // A live item is votable FOREVER (20 Aug). The old rule also accepted
+  // 'featured' and a 72h 'voting' window — and refused 'archived', which was
+  // 77% of what the feed displayed: 5 of the first 8 cards answered a vote
+  // with 400 and the vote vanished. Content is permanent; only the top
+  // placement is one day.
+  if (!sub || sub.status !== 'live') {
+    return NextResponse.json({ error: 'This one is no longer available' }, { status: 400 });
   }
   // No self-votes — the one gaming vector this simple design has.
   if (sub.student_id === user.id) {

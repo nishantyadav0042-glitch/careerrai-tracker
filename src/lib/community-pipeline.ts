@@ -9,7 +9,19 @@
 // random first name is attached at submission, because the goal is helping
 // students, not making one student a star.
 
-export const VOTING_WINDOW_HOURS = 72;
+/**
+ * Every value student_submissions.status may hold. Mirrors the DB CHECK in
+ * 20260820e_community_one_live_pool.sql — guard-pinned.
+ *
+ * The 72h ballot (voting → archived) retired 20 Aug: it was refusing votes on
+ * 77% of the items the feed displayed. Content is permanent and votable;
+ * only the TOP PLACEMENT is one day, and that lives in featured_on.
+ */
+export const SUBMISSION_STATUSES = ['live', 'pending', 'blocked', 'rejected'] as const;
+export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
+
+/** Everything a student may see and vote on. */
+export const VISIBLE_STATUSES = ['live'] as const;
 
 // There is NO vote bar and NO minimum-votes floor — anywhere. Founder, 29 Jul
 // ("don't set a bar; maximum votes gets the top position") and again 7 Aug,
@@ -162,12 +174,16 @@ export function validateSubmission(
   const topicOk = typeof topic === 'string' && topicSectionOf(topic) === section;
 
   if (kind === 'tip') {
-    if (!topicOk) return { ok: false, code: 'TOPIC_REQUIRED', error: 'Pick the topic your tip is about' };
+    // Topic is OPTIONAL for a tip (founder, 20 Aug). It used to be mandatory,
+    // which made the product's cheapest contribution carry its heaviest form:
+    // a question needed only a section, a one-line tip needed section AND the
+    // right topic hunted out of a dropdown. Friction was inverted. The system
+    // knows the curriculum; the student's job is the idea.
     const text = typeof body.tip === 'string' ? body.tip.trim() : '';
     if (text.length === 0) return { ok: false, code: 'CONTENT_REQUIRED', error: 'Write your tip first' };
     if (text.length < MIN_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_SHORT', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
     if (text.length > MAX_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_LONG', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
-    return { ok: true, value: { kind, section, topic: topic as string, text, image: null, imageMime: null } };
+    return { ok: true, value: { kind, section, topic: topicOk ? (topic as string) : null, text, image: null, imageMime: null } };
   }
 
   // question: text OR image, both welcome.

@@ -73,16 +73,26 @@ describe('tips keep their existing contract', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('tip without topic → TOPIC_REQUIRED', () => {
+  // 20 Aug: topic became OPTIONAL for tips. It used to be mandatory, which
+  // put the heaviest form on the lightest contribution — a photo question
+  // needed only a section, a one-line tip needed the exact topic hunted out
+  // of a dropdown. The student brings the idea; the system files it.
+  it('a tip without a topic is accepted', () => {
     const r = validate({ kind: 'tip', section: 'QA', tip: 'Always factor before you reach for the formula.' });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe('TOPIC_REQUIRED');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.topic).toBeNull();
   });
 
-  it('topic from the WRONG section → TOPIC_REQUIRED (no cross-filing)', () => {
+  it('a topic from the WRONG section is dropped, not rejected — no cross-filing, no dead end', () => {
     const r = validate({ kind: 'tip', section: 'QA', topic: 'Reading Comprehension', tip: 'Skim the passage twice before the questions.' });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe('TOPIC_REQUIRED');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.topic).toBeNull();
+  });
+
+  it('a correct topic still files the tip under it', () => {
+    const r = validate({ kind: 'tip', section: 'QA', topic: 'Quadratic Equations', tip: 'Always factor before you reach for the formula.' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.topic).toBe('Quadratic Equations');
   });
 
   it('short tip → TEXT_TOO_SHORT below the declared floor', () => {

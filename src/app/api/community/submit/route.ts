@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
 import { checkTipSafety, checkImageSafety } from '@/lib/community-safety';
 import {
-  MAX_IMAGE_BYTES, MAX_SUBMISSIONS_PER_DAY, VOTING_WINDOW_HOURS,
+  MAX_IMAGE_BYTES, MAX_SUBMISSIONS_PER_DAY,
   randomDisplayName, validateSubmission, type SubmitInput,
 } from '@/lib/community-pipeline';
 
@@ -18,11 +18,11 @@ export const maxDuration = 60;
 //              mandatory image was an implementation shortcut, not the
 //              product), section mandatory, topic optional
 //
-// Flow: automated SAFETY gate (the only pre-publication check) → the voting
-// pool for 72h, under a random display name → ranked by student votes → the
-// best become featured curriculum. Educational quality is never moderated;
-// the community decides it. One submission per student per day — the limit
-// creates the quality.
+// Flow: automated SAFETY gate (the only pre-publication check) → live in the
+// pool permanently, under a throwaway display name → ranked by student votes
+// → the most useful takes the top slot for exactly one day. Educational
+// quality is never moderated; the community decides it. One submission per
+// student per day — the limit creates the quality.
 
 const SECTIONS: string[] = KNOWLEDGE_GRAPH.map((s) => s.id);
 
@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'One share a day — make it your best one.', code: 'RATE_LIMITED' }, { status: 429 });
   }
 
-  const votingEnds = new Date(Date.now() + VOTING_WINDOW_HOURS * 3600_000).toISOString();
   const displayName = randomDisplayName();
 
   // ── Text safety — tips AND typed questions run the same gate ──
@@ -112,8 +111,10 @@ export async function POST(request: NextRequest) {
       : { section: sub.section, ...(sub.text ? { text: sub.text } : {}) },
     ...(imagePath ? { image_path: imagePath } : {}),
     display_name: displayName,
-    status: anyManual ? 'pending' : 'voting',
-    voting_ends_at: votingEnds,
+    // 'live' is permanent and votable (20 Aug: the 72h ballot retired — it
+    // was closing votes on most of the visible feed). A 'manual' safety
+    // verdict holds it at 'pending', which no student-facing query reads.
+    status: anyManual ? 'pending' : 'live',
   });
   if (error) {
     console.error('[community] submission insert failed', error.message);
