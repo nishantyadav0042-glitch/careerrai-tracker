@@ -4,6 +4,15 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { bandMeta } from '@/lib/momentum';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { SITE_URL } from '@/lib/site';
+import { SESSION_PRICE_PAISE, SESSION_MINUTES, CREDIT_WINDOW_DAYS } from '@/lib/session-credit';
+
+// FOUNDER RULING (20 Aug 2026): the 10-call experiment sells ONE offer — the
+// Rs 299 single session. The price is imported from the checkout's own
+// constant so script and checkout cannot quote different numbers. Sessions
+// carry NO money-back promise (the credit toward Till-CAT within
+// CREDIT_WINDOW_DAYS is a discount, not money back) — so this script makes
+// no such claims, and the honesty guard fails the build if one creeps in.
+const SESSION_RS = SESSION_PRICE_PAISE / 100;
 import { isCovered } from './coverage-status';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -110,16 +119,15 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   // ── Objection playbook (tailored) ──
   // HONESTY RULE (20 Aug, Sales Phase 1 — same audit standard as the queue
   // script, 13 Aug): this playbook is read DURING a live call, so it may only
-  // claim what the product delivers today. The dormant free-messages mechanic
   // (26 grants, 0 activated) and the unconditional risk-free framing were
-  // removed; the refund is always stated WITH its logged-days condition.
+  // Rs 299 session objections — every claim below is deliverable today.
   const objections: Objection[] = [
-    { objection: '"Rs 999 is too much"', response: 'It\'s less than a single coaching class — and if it hasn\'t helped in your first month you get a full refund. The one condition is 20 logged study days, so we know you gave it a real go.' },
-    { objection: '"I\'m not sure it\'ll help me"', response: 'Fair — that\'s exactly what the refund is for. Try it for a month; if it hasn\'t helped, you get the full amount back. The one condition is 20 logged study days, so you only pay for something you actually used.' },
+    { objection: `"Rs ${SESSION_RS} for one call?"`, response: `It's ${SESSION_MINUTES} minutes one-on-one with an IIM student who has read your actual prep before the call — less than one mock test costs. And if you upgrade to the full buddy within ${CREDIT_WINDOW_DAYS} days, the Rs ${SESSION_RS} counts toward it.` },
+    { objection: '"I\'m not sure it\'ll help me"', response: `That's exactly what the session answers. You're not committing to anything — ${SESSION_MINUTES} minutes, your real numbers on the table, and you leave with a written next step. One sitting and you know.` },
   ];
   if (weakSection) objections.push({ objection: '"I can manage on my own"', response: `You're strong in ${strongSection ?? 'some areas'}, but ${weakSection} is where marks are leaking. A buddy builds a focused ${weakSection} plan — that's the fastest score jump.` });
   if (momentum.band === 'champion' || momentum.band === 'on_track') objections.push({ objection: '"I already study daily"', response: 'Exactly — you\'re putting in the hours. A buddy makes sure those hours go to the right topics instead of guesswork. Same effort, more score.' });
-  if (buddyTaps >= 1) objections.push({ objection: '"Let me think about it"', response: 'You already looked at the buddy, so you know you want the guidance. The only real question is risk — and the full refund removes it: 20 logged study days in your first month and you can claim every rupee back if it hasn\'t helped.' });
+  if (buddyTaps >= 1) objections.push({ objection: '"Let me think about it"', response: `You already looked at the buddy option, so part of you wants this. Don't decide the big plan today — do one session and decide with evidence. It credits toward the full plan if you upgrade within ${CREDIT_WINDOW_DAYS} days.` });
 
   // Recommended buddy — a specific, relevant mentor beats "a buddy". Reuses the
   // same matching engine the student-facing showcase uses (section fit first).
@@ -134,7 +142,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   const buddyLine = recommendedBuddy
     ? ` For you I'd pair ${recommendedBuddy.name}${recommendedBuddy.college ? ` (${recommendedBuddy.college})` : ''}${recommendedBuddy.reason ? ` — ${recommendedBuddy.reason.toLowerCase()}` : ''}.`
     : '';
-  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you.${buddyLine} It's Rs 999, and if it hasn't helped in your first month you get a full refund — the one condition is 20 logged study days, so we know you gave it a real go. Shall I set it up? App: ${SITE_URL}`;
+  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. Book one ${SESSION_MINUTES}-minute session with an IIM buddy — they review your actual preparation, find the one thing holding your score back, and you leave with a written next step.${buddyLine} It's Rs ${SESSION_RS}, one time. Book here: ${SITE_URL}/student/buddy`;
 
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),

@@ -1,68 +1,75 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { SESSION_PRICE_PAISE } from './session-credit';
 
-// ── Outbound sales copy may only promise what a student can receive ──
+// ── The outbound sales script may only promise what a student can receive ──
 //
-// Found 13 Aug 2026 while building the Pooja training manual — the generated
-// queue script carried two claims that did not survive a check against the
-// live system. Re-found 20 Aug by the Sales Phase-1 forensic: the SAME claims
-// were alive in two files this guard did not cover, because it was pinned to
-// one filename. Four real students had already received the free-messages
-// promise via Tonight's Mission (26 grants recorded, 0 ever activated).
+// First written 13 Aug 2026, when the queue script promised free mentor
+// messages nobody could collect and a "no risk" refund without its condition.
+// Rewritten 20 Aug (founder ruling): the 10-call experiment sells exactly ONE
+// offer — the Rs 299 single session — and the script, the landing surface
+// (/student/buddy) and the checkout (/api/sessions/book) must quote the same
+// number. The price here is IMPORTED from the checkout's own constant, so the
+// script literally cannot drift from what Razorpay charges.
 //
-// The guard now encodes the IDEA across every file that generates outbound
-// sales copy, not a character sequence in one file:
-//
-//   1. No free-message/free-question offer — the mechanic is dormant by
-//      design (env flag + per-grant admin activation, mentor-doors.ts).
-//      mentor-doors.ts itself is deliberately NOT in this list: its copy is
-//      generated only AFTER a grant is activated, when the messages are real.
-//   2. No unconditional "no risk" framing.
-//   3. The refund is never stated without its logged-study-days condition
-//      (the public /refunds page requires it).
-//   4. One file quotes at most one price — a lead hearing two numbers from
-//      the same script is the claim-vs-delivery gap in a different costume.
-//
-// Add any new outbound-copy module to FILES the day it is created.
+// Sessions carry NO money-back promise (founder ruling: the 7-day credit
+// toward Till-CAT is a discount, not money back). So unlike the old guard,
+// which required the refund's condition to travel with it, the script files
+// now must not make refund claims AT ALL.
 
-const FILES = [
-  // sales-queue.ts (the old queue's ready-to-send script) was retired in
-  // SA-1B — the personalized pitch in sales-conversion is now the one
-  // generated outbound script.
-  'src/lib/sales-conversion.ts', // the objection playbook read DURING a call
-  'src/lib/mission-queue.ts', // Tonight's Mission founder WhatsApp drafts
-  'src/lib/wa-messages.ts', // the WhatsApp copy library
+// Claims are what students RECEIVE — strip // comment lines before matching,
+// so the guard reads the copy, not the engineering notes about the copy.
+function copyOf(file: string): string {
+  return readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+}
+
+const SCRIPT_FILES = [
+  'src/lib/sales-conversion.ts', // the pitch + objection playbook read on a call
+  'src/lib/mission-queue.ts',    // the founder's daily-45 WhatsApp drafts
 ];
-const src = (f: string) => readFileSync(f, 'utf8');
 
-describe.each(FILES)('outbound sales copy honesty: %s', (file) => {
-  it('never offers the dormant free-message mechanic', () => {
-    // Lookbehind excludes hyphenated words like "state-free message"
-    // (a code comment, not copy) while catching every real phrasing.
-    expect(src(file)).not.toMatch(/(?<!-)free\s+(message|msg|question)/i);
+describe('one offer, one price, imported from checkout', () => {
+  const want = `Rs ${SESSION_PRICE_PAISE / 100}`;
+
+  it.each(SCRIPT_FILES)('%s quotes only the session price the checkout charges', (file) => {
+    const src = copyOf(file);
+    const quoted = [...new Set(src.match(/Rs \d{1,3}(?:,\d{3})*/g) ?? [])];
+    // Every literal price in the file must be the session price. Prices built
+    // from ${SESSION_RS} interpolation are tied to the constant by construction.
+    for (const q of quoted) expect(q, `${file} quotes ${q}`).toBe(want);
   });
 
-  it('does not pull the free-message count constant into the sales path', () => {
-    expect(src(file)).not.toContain('MENTOR_FREE_MESSAGES');
+  it('the conversion script computes its price from SESSION_PRICE_PAISE', () => {
+    const src = readFileSync('src/lib/sales-conversion.ts', 'utf8');
+    expect(src).toContain('SESSION_PRICE_PAISE / 100');
   });
 
-  it('drops the unconditional "no risk" framing', () => {
-    expect(src(file)).not.toMatch(/no risk/i);
+  it('the script sends students to the surface that sells the session', () => {
+    const src = readFileSync('src/lib/sales-conversion.ts', 'utf8');
+    expect(src).toContain('/student/buddy');
+  });
+});
+
+describe('no undeliverable promises', () => {
+  it.each(SCRIPT_FILES)('%s makes no refund / money-back claim', (file) => {
+    expect(copyOf(file)).not.toMatch(/refund|money.?back|paise wapas/i);
   });
 
-  it('states the logged-days condition wherever the refund is mentioned', () => {
-    const s = src(file);
-    if (/full refund/i.test(s)) {
-      expect(s).toMatch(/20 logged study days/);
-    }
+  it.each(SCRIPT_FILES)('%s does not offer the dormant free-message mechanic', (file) => {
+    const src = copyOf(file);
+    expect(src).not.toMatch(/(?<!-)free\s+(message|question)/i);
+    expect(src).not.toContain('MENTOR_FREE_MESSAGES');
   });
 
-  it('quotes a single price, not two competing ones', () => {
-    // Conflict 1 in docs/POOJA-TRAINING-MANUAL.md (which plan leads) is an
-    // open founder decision — until it is ruled, no file may quietly acquire
-    // BOTH numbers.
-    // Trailing punctuation is not part of the price ("Rs 999," ≡ "Rs 999").
-    const quoted = (src(file).match(/Rs [\d,]+/g) ?? []).map((p) => p.replace(/,+$/, ''));
-    expect(new Set(quoted).size).toBeLessThanOrEqual(1);
+  it.each(SCRIPT_FILES)('%s never claims zero risk', (file) => {
+    expect(copyOf(file)).not.toMatch(/no risk|risk[- ]free/i);
+  });
+
+  // wa-messages is a separate campaign surface (not the call script); it keeps
+  // the original rules: no free-message offers, no unconditioned claims.
+  it('wa-messages stays free of the dormant free-message offer', () => {
+    const src = readFileSync('src/lib/wa-messages.ts', 'utf8');
+    expect(src).not.toMatch(/(?<!-)free\s+(message|question)/i);
+    expect(src).not.toContain('MENTOR_FREE_MESSAGES');
   });
 });

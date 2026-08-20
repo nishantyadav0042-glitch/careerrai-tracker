@@ -39,7 +39,7 @@ describe('every inline outreach builder interpolates SITE_URL', () => {
   // in your message.
   const BUILDERS: Array<{ file: string; marker: string }> = [
     { file: 'src/lib/mission-queue.ts',               marker: 'Nishant' }, // the daily-45 queue
-    { file: 'src/lib/sales-conversion.ts',            marker: 'Exam Buddy' },
+    { file: 'src/lib/sales-conversion.ts',            marker: 'Book here' }, // the Rs 299 session pitch (objection RESPONSES are spoken, not sent — the marker must hit only the sendable pitch)
     { file: 'src/app/admin/reminders/page.tsx',       marker: 'Nishant' },
     // wants-buddy and going-cold pages retired 10 Aug (duplicates of People
     // filters); their inline outreach builders went with them.
