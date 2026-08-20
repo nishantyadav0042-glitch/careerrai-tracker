@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
-import { computeDailyInsight } from '@/lib/daily-insight';
+import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } from '@/lib/daily-insight';
 import { dispatch } from '@/lib/notification-os';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
@@ -50,10 +50,13 @@ async function dailyInsightRun(): Promise<NextResponse> {
     if (alreadySent.has(s.id)) { skipped++; continue; }
     if ((daysByStudent.get(s.id)?.size ?? 0) < 2) { skipped++; continue; }
 
+    // Same 7-day memory the home card uses — one shared authority, so the
+    // push and the screen can never disagree about what is "today's" insight.
+    const suppressedKeys = await loadSuppressedInsightKeys(admin, s.id).catch(() => new Set<string>());
     const insight = await computeDailyInsight(admin, s.id, {
       isRepeater: s.is_repeater === true,
       isWorkingProfessional: s.is_working_professional === true,
-    }).catch(() => null);
+    }, undefined, { suppressedKeys }).catch(() => null);
     if (!insight) { skipped++; continue; }
 
     const outcome = await dispatch({
@@ -66,8 +69,12 @@ async function dailyInsightRun(): Promise<NextResponse> {
       expectedAction: 'open_plan',
       prefs: (s.notif_prefs ?? {}) as Record<string, unknown>,
     });
-    if (outcome === 'sent') sent++;
-    else skipped++;
+    if (outcome === 'sent') {
+      sent++;
+      // Only a delivered push counts as "shown" — a budget-skipped one must
+      // not silence tomorrow's card.
+      await recordInsightShown(admin, s.id, insight).catch(() => {});
+    } else skipped++;
   }
 
   return NextResponse.json({ ok: true, sent, skipped });

@@ -11,7 +11,7 @@ import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
 import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 import { CampaignOfferCard } from '@/components/campaign/offer-card';
-import { computeDailyInsight } from '@/lib/daily-insight';
+import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } from '@/lib/daily-insight';
 import { CheckInGate } from '@/components/check-in-gate';
 import { TodaysRoutineCard } from '@/components/DailyTracker/TodaysRoutineCard';
 import { ValueProofCard } from '@/components/value-proof-card';
@@ -440,9 +440,17 @@ export default async function DailyTrackerPage() {
   // Today's insight ON the home screen (founder: in-app, not just push) —
   // same rule engine as the 5 PM notification, topicMemory reused from this
   // page's own computation. Null (fewer than 2 logged days) renders nothing.
+  // Repeat suppression (founder, 20 Aug): an insight the student saw in the
+  // last 7 days steps aside for the next candidate, so the card is a fresh
+  // noticing rather than the same sentence every morning. Recording the show
+  // is fire-and-forget — a failed write must never blank the home screen.
   const dailyInsight = (logs ?? []).length >= 2
-    ? await computeDailyInsight(admin, user.id, archetype, { topicMemory }).catch(() => null)
+    ? await (async () => {
+        const suppressedKeys = await loadSuppressedInsightKeys(admin, user.id).catch(() => new Set<string>());
+        return computeDailyInsight(admin, user.id, archetype, { topicMemory }, { suppressedKeys });
+      })().catch(() => null)
     : null;
+  if (dailyInsight) void recordInsightShown(admin, user.id, dailyInsight).catch(() => {});
 
   // The daily check-in. YESTERDAY ONLY, never older — a student returning
   // after two weeks answers one question, not fourteen. Skipped entirely for

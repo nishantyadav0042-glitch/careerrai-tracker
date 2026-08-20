@@ -1,4 +1,4 @@
-import { TOPIC_METADATA } from '@/lib/topics-constants';
+import { TOPIC_METADATA, QA_GROUPS } from '@/lib/topics-constants';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { isCovered } from './coverage-status';
 
@@ -17,6 +17,22 @@ import { isCovered } from './coverage-status';
 //   6. Progress fallback — coverage moving, keep feeding the plan.
 // Every number in every sentence comes from the student's own rows. Rules
 // detect; no model in the loop.
+//
+// LANGUAGE CONTRACT (founder, 20 Aug — the "top marks" incident): an insight
+// may claim no more than its evidence. Student facts (their own rows) may be
+// stated plainly. Exam context may be QUALITATIVE only — "shows up every
+// year", "a core part of QA" — never a marks claim, never a percentage,
+// never a predicted question count. TOPIC_METADATA.weightage is an internal
+// 1–5 emphasis rating for RANKING candidates; it must never be rendered as
+// an exam-marks claim ("top marks" died here). Numbers about the exam itself
+// belong to a governed historical-fact registry (not yet built) and to the
+// drill-down, never to this card. daily-insight-honesty.guard.test.ts pins
+// all of this.
+//
+// REPEAT SUPPRESSION (founder, 20 Aug, Q3=A): a shown insight (same kind +
+// subject) stays quiet for 7 days — daily_insight_shown remembers, both the
+// tracker card and the 5 PM push consult it, and 'progress' is the exempt
+// fallback so a quiet week still gets a gentle line.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -24,6 +40,46 @@ export interface DailyInsight {
   kind: 'recovery' | 'avoidance' | 'high_weightage' | 'revision' | 'consistency' | 'progress';
   title: string;
   text: string;
+  /** What the insight is about (topic or section) — the suppression key's
+   *  second half. Empty for student-wide kinds (consistency, progress). */
+  subject?: string;
+}
+
+/** The suppression identity: same kind + same subject = the same insight. */
+export function insightKey(i: Pick<DailyInsight, 'kind' | 'subject'>): string {
+  return `${i.kind}:${i.subject ?? ''}`;
+}
+
+export const INSIGHT_SUPPRESS_DAYS = 7;
+
+/** Keys shown within the last 7 days — candidates carrying one stay quiet. */
+export async function loadSuppressedInsightKeys(admin: any, studentId: string): Promise<Set<string>> {
+  const cutoff = new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000)
+    .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const { data } = await admin
+    .from('daily_insight_shown')
+    .select('insight_key, last_shown_on')
+    .eq('student_id', studentId)
+    .gt('last_shown_on', cutoff);
+  return new Set((data ?? []).map((r: any) => r.insight_key as string));
+}
+
+/** Record a show (card rendered or push sent). Idempotent per day. */
+export async function recordInsightShown(admin: any, studentId: string, insight: DailyInsight): Promise<void> {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  await admin.from('daily_insight_shown').upsert({
+    student_id: studentId,
+    insight_key: insightKey(insight),
+    last_shown_on: today,
+  });
+}
+
+/** QA topics roll up to a family (Algebra, Arithmetic, …) whose yearly
+ *  PRESENCE in the exam is a defensible qualitative claim. Other sections
+ *  fall back to naming the section itself. */
+function examContextLine(topic: string, section: string): string {
+  const family = QA_GROUPS.find((g) => g.units.includes(topic))?.label;
+  return family ? `${family} shows up in ${section} every year` : `a core part of ${section}`;
 }
 
 // ONE LINE MEANS ONE LINE (founder, 25 July: the card was eating half the home
@@ -48,8 +104,14 @@ export async function computeDailyInsight(
   archetype: { isRepeater: boolean; isWorkingProfessional: boolean },
   // Callers that already computed topic memory this request (the Home page)
   // pass it in — one expensive scan, two consumers.
-  prefetched?: { topicMemory?: Awaited<ReturnType<typeof computeTopicMemory>> }
+  prefetched?: { topicMemory?: Awaited<ReturnType<typeof computeTopicMemory>> },
+  opts?: { suppressedKeys?: Set<string> }
 ): Promise<DailyInsight | null> {
+  // A candidate the student saw in the last 7 days steps aside for the next
+  // rule. 'progress' is exempt: it is the fallback, not an observation.
+  const suppressed = opts?.suppressedKeys ?? new Set<string>();
+  const unlessSuppressed = (i: DailyInsight): DailyInsight | null =>
+    i.kind !== 'progress' && suppressed.has(insightKey(i)) ? null : i;
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
   const [{ data: reports }, { data: routines }, { data: completions }, topicMemory] = await Promise.all([
     admin.from('daily_reports').select('report_date').eq('student_id', studentId).gte('report_date', fourteenDaysAgo),
@@ -93,11 +155,13 @@ export async function computeDailyInsight(
     const green = sorted.slice(redIdx + 1).find((m) => m.confidence === 'green');
     if (green && green.date >= threeDaysAgo) {
       const stillRed = [...byTopic.entries()].find(([t, ms]) => t !== topic && ms[ms.length - 1]?.confidence === 'red')?.[0];
-      return {
+      const r = unlessSuppressed({
         kind: 'recovery',
         title: '🔥 You beat a hard topic',
         text: oneLine(`${topic}: struggled → solid.${stillRed ? ` ${stillRed} next.` : ''}`),
-      };
+        subject: topic,
+      });
+      if (r) return r;
     }
   }
 
@@ -109,25 +173,33 @@ export async function computeDailyInsight(
     // The old copy also named the section they favoured instead. Naming the
     // avoided one and the next step is the whole message; the comparison was
     // just words.
-    return {
+    const r = unlessSuppressed({
       kind: 'avoidance',
       title: `📊 A pattern in your week`,
       text: oneLine(`Only ${doneBySec[avoided] ?? 0} of ${served[avoided]} ${avoided} tasks done. Give ${avoided} 20 minutes first tomorrow.`),
-    };
+      subject: avoided,
+    });
+    if (r) return r;
   }
 
-  // 3 — HIGH-WEIGHTAGE untouched: name the marks at risk.
+  // 3 — CORE topic untouched. weightage ranks the CANDIDATES only — the
+  // sentence itself makes no marks claim ("top marks" died 20 Aug: it
+  // rendered our internal 1–5 emphasis rating as an exam-marks fact). The
+  // exam context is qualitative and family-level — the strongest claim the
+  // evidence supports. One topic per day, not two: sharper, and honest about
+  // being one observation. Suppressed topics rotate to the next candidate.
   const heavyUntouched = topicMemory
     .filter((t) => t.status === 'not_started' && (TOPIC_METADATA[t.topic]?.weightage ?? 0) >= 4)
     .sort((a, b) => (TOPIC_METADATA[b.topic]?.weightage ?? 0) - (TOPIC_METADATA[a.topic]?.weightage ?? 0));
-  if (heavyUntouched.length > 0) {
-    const names = heavyUntouched.slice(0, 2).map((t) => t.topic);
-    const sec = TOPIC_METADATA[names[0]]?.section ?? '';
-    return {
+  for (const cand of heavyUntouched) {
+    const sec = TOPIC_METADATA[cand.topic]?.section ?? '';
+    const r = unlessSuppressed({
       kind: 'high_weightage',
-      title: '🎯 Where the marks are',
-      text: oneLine(`${names.join(' and ')} — top marks in ${sec}, still untouched. Start there.`),
-    };
+      title: '🎯 RAI noticed a gap',
+      text: oneLine(`${cand.topic} — still untouched, and ${examContextLine(cand.topic, sec)}.`),
+      subject: cand.topic,
+    });
+    if (r) return r;
   }
 
   // 4 — REVISION overdue on a finished topic.
@@ -135,11 +207,13 @@ export async function computeDailyInsight(
     .filter((t) => t.revisionOverdue && isCovered(t.status))
     .sort((a, b) => (b.lastTouchedDaysAgo ?? 0) - (a.lastTouchedDaysAgo ?? 0))[0];
   if (fading) {
-    return {
+    const r = unlessSuppressed({
       kind: 'revision',
       title: '🔁 One topic is fading',
       text: oneLine(`${fading.topic} untouched for ${fading.lastTouchedDaysAgo ?? 'several'} days. 20 minutes today locks it in.`),
-    };
+      subject: fading.topic,
+    });
+    if (r) return r;
   }
 
   // 5 — CONSISTENCY worth naming.
@@ -149,11 +223,12 @@ export async function computeDailyInsight(
       .filter((d: string) => d >= new Date(Date.now() - 5 * 86_400_000).toISOString().split('T')[0])
   ).size;
   if (last5 >= 4) {
-    return {
+    const r = unlessSuppressed({
       kind: 'consistency',
       title: '🔥 Your consistency is showing',
       text: oneLine(`${last5} of the last 5 days studied. Tomorrow just needs to match today.`),
-    };
+    });
+    if (r) return r;
   }
 
   // 6 — Progress fallback: coverage moving.
