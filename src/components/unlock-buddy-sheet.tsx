@@ -390,26 +390,28 @@ export function UnlockBuddyButton({
             </p>
 
             <div className="mt-5 space-y-2.5">
-              <PlanCta
-                iosUrl={iosUrl}
-                onClick={() => tap('tillcat')}
-                disabled={busy !== null}
-                className="block w-full rounded-2xl border-2 border-stone-900 bg-stone-900 px-4 py-3.5 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50"
+              {/* The ladder, founder order (20 Aug): the ₹299 session is the
+                  ENTRY POINT and the primary CTA; the subscriptions stay
+                  clearly available as the core upsell. The rung LINKS rather
+                  than charging here: BookSessionCard fetches mentor
+                  availability before rendering a button, and capacity is 21
+                  sessions a week — selling inline would take money for time
+                  the mentors cannot give, which that card exists to prevent. */}
+              <a
+                href="/student/buddy"
+                onClick={() => setOpen(false)}
+                className="block w-full rounded-2xl border-2 border-stone-900 bg-stone-900 px-4 py-3.5 text-left text-white transition-transform active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold">Till CAT</span>
-                  <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Best value</span>
+                  <span className="text-sm font-bold">Just one session first</span>
+                  <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Start here</span>
                 </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold">₹2,999</span>
-                  <span className="text-xs text-stone-500 line-through">₹3,996</span>
-                  <span className="text-[11px] font-semibold text-emerald-400">save ₹997</span>
+                  <span className="text-2xl font-extrabold">₹299</span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-stone-300">Your buddy all the way to exam day · about ₹25/day</p>
-                <span className="mt-2 inline-block text-sm font-bold text-orange-300">
-                  {busy === 'tillcat' ? 'Starting…' : 'Get my buddy till CAT →'}
-                </span>
-              </PlanCta>
+                <p className="mt-0.5 text-[11px] text-stone-300">One 1-on-1 with an IIM senior · no subscription</p>
+                <span className="mt-2 inline-block text-sm font-bold text-orange-300">See if a mentor has room →</span>
+              </a>
 
               <PlanCta
                 iosUrl={iosUrl}
@@ -418,31 +420,29 @@ export function UnlockBuddyButton({
                 className="block w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-stone-900">Just this month</span>
+                  <span className="text-sm font-semibold text-stone-900">Go deeper — monthly</span>
                   <span className="text-sm font-bold text-stone-900">{busy === 'monthly' ? 'Starting…' : '₹999'}</span>
                 </div>
                 <p className="mt-0.5 text-[11px] text-stone-500">Month to month · you&apos;ll decide again in 30 days</p>
               </PlanCta>
 
-              {/* The entry rung (19 Aug). Both upsell screens used to jump from
-                  free to ₹999 with nothing in between, while a ₹299 single
-                  session already existed — payments, booking route and a
-                  capacity-gated card — but appeared on neither screen.
-                  It LINKS rather than charging here: BookSessionCard fetches
-                  mentor availability before rendering a button, and capacity is
-                  21 sessions a week. Selling inline would take money for time
-                  the mentors cannot give, which that card exists to prevent. */}
-              <a
-                href="/student/buddy"
-                onClick={() => setOpen(false)}
-                className="block w-full rounded-2xl border border-dashed border-stone-300 px-4 py-3 text-left transition-colors hover:border-stone-400"
+              <PlanCta
+                iosUrl={iosUrl}
+                onClick={() => tap('tillcat')}
+                disabled={busy !== null}
+                className="block w-full rounded-2xl border border-stone-300 px-4 py-3 text-left transition-colors hover:border-stone-500 disabled:opacity-50"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-stone-900">Just one session first</span>
-                  <span className="text-sm font-bold text-stone-900">₹299</span>
+                  <span className="text-sm font-semibold text-stone-900">Till CAT — full support</span>
+                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Best value</span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-stone-500">One 1-on-1 with an IIM senior · no subscription</p>
-              </a>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl font-extrabold text-stone-900">₹2,999</span>
+                  <span className="text-xs text-stone-400 line-through">₹3,996</span>
+                  <span className="text-[11px] font-semibold text-emerald-600">save ₹997</span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-stone-500">Your buddy all the way to exam day · about ₹25/day{busy === 'tillcat' ? ' · Starting…' : ''}</p>
+              </PlanCta>
             </div>
 
             <p className="mt-3 text-center text-[11px] text-stone-400">
