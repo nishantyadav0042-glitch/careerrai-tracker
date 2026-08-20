@@ -163,7 +163,7 @@ const SLIDES: Slide[] = [
   {
     badge: 'Your role',
     title: 'One student. One mentor. You.',
-    body: 'Students pay ₹999/month for a real IIM senior in their corner — not videos, not a batch. Your name, your mock advice, your nudges. That personal attention IS the product.',
+    body: 'Students pay for a real IIM senior in their corner — not videos, not a batch. Some start with one ₹299 session; others keep you with them at ₹999/month. Your name, your mock advice, your nudges. That personal attention IS the product.',
     visual: <PairVisual />,
   },
   {

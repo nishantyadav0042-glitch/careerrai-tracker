@@ -4,7 +4,12 @@
 // commitment screen (finish-date + hours) and before the general Meet-Buddy
 // screen — ONLY to students who marked themselves a repeater. Uses what they
 // just told us (last year's percentile, whether they had real support) to
-// make the ₹999 IIM buddy offer land as relief, not a sales pitch.
+// make the IIM buddy land as relief, not a sales pitch.
+//
+// Ladder framing (founder, 20 Aug): the ₹299 single session is the entry
+// point, ₹999/month the ongoing option. This screen sells NOTHING — it has
+// no checkout — so it names both and lets the buddy surfaces take the money
+// where mentor availability is actually checked.
 interface Props {
   onNext: (data?: Record<string, unknown>) => void;
   onBack: () => void;
@@ -31,8 +36,9 @@ export default function ScreenRepeaterBuddyPitch({ onNext, onBack, canGoBack, is
 
       <div className="rounded-2xl border border-orange-200 bg-orange-50/60 p-4">
         <p className="text-sm leading-relaxed text-stone-700">
-          Don&apos;t worry — at <span className="font-semibold text-stone-900">CareerRai</span> you get a real{' '}
-          <span className="font-semibold text-stone-900">IIM buddy</span> for just{' '}
+          Don&apos;t worry — at <span className="font-semibold text-stone-900">CareerRai</span> you can sit with a real{' '}
+          <span className="font-semibold text-stone-900">IIM buddy</span>. Start with one session at{' '}
+          <span className="font-bold text-orange-700">₹299</span>, or keep one with you every month at{' '}
           <span className="font-bold text-orange-700">₹999</span> — they review your prep and every mock.
         </p>
       </div>
