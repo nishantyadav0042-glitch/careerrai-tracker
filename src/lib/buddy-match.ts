@@ -1,3 +1,7 @@
+import { resolveFocusSections } from './focus-sections';
+import { type DebriefRow } from './mock-informed-focus';
+import { studyDayString } from './study-day';
+
 // Ranks buddies for a specific free student — powers the "Top buddies for you"
 // showcase. Deliberately simple and explainable: a buddy scores higher when
 // their strongest section is the student's weakest, and when the student's
@@ -11,6 +15,21 @@ export interface MatchStudent {
   baseline_qa: number | null;
   is_working_professional: boolean | null;
   is_repeater: boolean | null;
+  /**
+   * The plan engine's answer to "what is this student struggling with?",
+   * resolved by resolveFocusSections -- the SAME authority that decides which
+   * section today's plan attacks. Founder ruling (Batch 8): matching must
+   * never hold its own opinion about a student's weakness. focus_source says
+   * which evidence rung produced it; the hard 'DILR' default at the bottom of
+   * the chain arrives as source 'default' and is treated as no evidence.
+   *
+   * Optional so callers that predate this (cron/buddy-evening) keep their
+   * exact old behaviour: absent focus = the legacy baseline-only path.
+   */
+  focus_weakest?: string | null;
+  focus_source?: 'mock' | 'self_report' | 'baseline' | 'coverage' | 'default' | null;
+  /** A genuine plateau (see findPlateau) -- never mere repetition. */
+  plateau?: { topic: string; section: string } | null;
 }
 
 export interface MatchBuddy {
@@ -38,6 +57,50 @@ export function weakestSection(s: MatchStudent): string | null {
   return sections.reduce((a, b) => (b.val < a.val ? b : a)).name;
 }
 
+/** Distinct days required before repetition is even a candidate for plateau. */
+export const PLATEAU_MIN_DAYS = 3;
+
+/**
+ * A genuine plateau, or null.
+ *
+ * Founder ruling (Batch 8): "Never classify repetition alone as stuckness."
+ * A student touching Arithmetic three days running might be drilling it by
+ * choice. So this requires BOTH:
+ *
+ *   1. the same topic completed on >= PLATEAU_MIN_DAYS distinct days, AND
+ *   2. the student's own MOST RECENT confidence mark on it is a struggle
+ *      signal ('red' or 'yellow') -- their tap, not our inference. This is the
+ *      same evidence daily-insight's recovery rule reads from the other side,
+ *      and it is corroborated by the coverage ladder by construction: only
+ *      green/blue advance a topic, so a latest-red topic is also one whose
+ *      repeated work is not converting into rung movement.
+ *
+ * Repetition with green marks falls through -- that is practice, not a wall.
+ * If several topics qualify, the most-repeated wins; ties break to the topic
+ * with the most recent struggle mark, so the answer is deterministic.
+ */
+export function findPlateau(
+  completions: { topic: string; section: string; date: string; confidence: string | null }[],
+): { topic: string; section: string } | null {
+  const byTopic = new Map<string, { section: string; dates: Set<string>; marks: { date: string; confidence: string | null }[] }>();
+  for (const c of completions) {
+    if (!byTopic.has(c.topic)) byTopic.set(c.topic, { section: c.section, dates: new Set(), marks: [] });
+    const t = byTopic.get(c.topic)!;
+    t.dates.add(c.date);
+    t.marks.push({ date: c.date, confidence: c.confidence });
+  }
+  const candidates: { topic: string; section: string; days: number; lastStruggle: string }[] = [];
+  for (const [topic, t] of byTopic) {
+    if (t.dates.size < PLATEAU_MIN_DAYS) continue;
+    const latest = [...t.marks].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (latest.confidence !== 'red' && latest.confidence !== 'yellow') continue;
+    candidates.push({ topic, section: t.section, days: t.dates.size, lastStruggle: latest.date });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.days - a.days || b.lastStruggle.localeCompare(a.lastStruggle) || a.topic.localeCompare(b.topic));
+  return { topic: candidates[0].topic, section: candidates[0].section };
+}
+
 // A buddy's own percentile jump between attempts, if she is a repeater
 // herself (first_attempt_percentile set). This is real journey data, not a
 // self-checked box, so it's the most truthful signal available and should
@@ -48,6 +111,31 @@ function buddyImprovement(buddy: MatchBuddy): number | null {
 }
 
 export function matchReason(student: MatchStudent, buddy: MatchBuddy): string | null {
+  // Evidence ladder, most specific first (founder ruling, Batch 8). Every line
+  // is traceable to a stored or derived signal, and the SOURCE decides the
+  // wording -- a mock finding, a plateau the student marked themselves, a
+  // self-report and a coverage-grid reading are four different claims and must
+  // not share one sentence. The 'default' source produces NO reason: the
+  // bottom of the focus chain is a hard 'DILR' fallback, and a default is not
+  // a fact about the student.
+  if (student.plateau && buddy.strongest_section === student.plateau.section) {
+    return `Strong in ${student.plateau.section} — best fit for breaking your repeated ${student.plateau.topic} plateau`;
+  }
+  const focusWeak = student.focus_source && student.focus_source !== 'default' ? student.focus_weakest : null;
+  if (focusWeak && buddy.strongest_section === focusWeak) {
+    switch (student.focus_source) {
+      case 'mock':
+        return `Strong in ${focusWeak} — the section your last mock exposed`;
+      case 'self_report':
+        return `Strong in ${focusWeak} — the section you said you struggle with`;
+      case 'baseline':
+        return `Strong in ${focusWeak} — your weakest section`;
+      case 'coverage':
+        return `Strong in ${focusWeak} — where your syllabus map is thinnest`;
+    }
+  }
+  // Legacy path for callers that don't resolve focus (cron/buddy-evening):
+  // baseline-only, exactly as before.
   const weak = weakestSection(student);
   if (weak && buddy.strongest_section === weak) return `Strong in ${weak} — your weakest section`;
 
@@ -89,10 +177,18 @@ export function matchReason(student: MatchStudent, buddy: MatchBuddy): string | 
 }
 
 export function rankBuddies(student: MatchStudent, buddies: MatchBuddy[]): MatchBuddy[] {
+  // Weights follow the evidence ladder: measured beats marked-by-student beats
+  // typed-at-signup beats grid-derived, and profile completeness is only ever
+  // a tie-break (its terms sum to 25, below every evidence weight). The
+  // 'default' focus source scores nothing -- see matchReason.
+  const focusWeak = student.focus_source && student.focus_source !== 'default' ? student.focus_weakest : null;
+  const FOCUS_WEIGHT: Record<string, number> = { mock: 60, self_report: 40, baseline: 35, coverage: 30 };
   const weak = weakestSection(student);
   const score = (b: MatchBuddy): number => {
     let s = 0;
-    if (weak && b.strongest_section === weak) s += 40;
+    if (student.plateau && b.strongest_section === student.plateau.section) s += 50;
+    if (focusWeak && b.strongest_section === focusWeak) s += FOCUS_WEIGHT[student.focus_source as string] ?? 0;
+    else if (!focusWeak && weak && b.strongest_section === weak) s += 40;
     const isRepeaterBuddy = b.first_attempt_percentile != null;
     const improvement = buddyImprovement(b);
     const types = b.student_types_helped ?? [];
@@ -131,19 +227,56 @@ export async function getRecommendedBuddiesForStudent(
   admin: any,
   studentId: string
 ): Promise<RecommendedBuddyResult[]> {
-  const [{ data: student }, { data: buddies }] = await Promise.all([
+  const fourteenAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
+  const [{ data: student }, { data: buddies }, { data: coverage }, { data: debriefs }, { data: routines }, { data: completions }] = await Promise.all([
     admin.from('profiles')
-      .select('baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater')
+      .select('baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater, self_reported_weakest_section, self_reported_strongest_section')
       .eq('id', studentId).single(),
     admin.from('profiles')
       .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
       .eq('role', 'buddy').eq('buddy_onboarding_completed', true)
       .not('cat_percentile', 'is', null)
       .not('is_test_account', 'is', true), // never recommend test/demo buddies to real students
+    admin.from('topic_coverage').select('section, status').eq('student_id', studentId),
+    admin.from('mock_debriefs').select('taken_on, varc, dilr, qa')
+      .eq('student_id', studentId).order('taken_on', { ascending: false }).limit(5),
+    admin.from('daily_routines').select('routine_date, tasks')
+      .eq('student_id', studentId).gte('routine_date', fourteenAgo),
+    admin.from('routine_task_completions').select('routine_date, task_id, confidence')
+      .eq('student_id', studentId).gte('routine_date', fourteenAgo),
   ]);
   if (!student || !buddies?.length) return [];
 
-  const matchStudent = student as MatchStudent;
+  // THE SAME AUTHORITY THE PLAN USES (founder ruling, Batch 8). Matching held
+  // its own definition of weakest section -- the baseline columns, populated
+  // for 1 of 553 students -- while the plan resolved it from mock ->
+  // self-report -> baseline -> coverage. One student, one answer.
+  const focus = resolveFocusSections(
+    student, (coverage ?? []) as { section: string; status: string }[],
+    (debriefs ?? []) as DebriefRow[], studyDayString(),
+  );
+
+  // Plateau evidence: topic/section come from the routine's own task list,
+  // the confidence marks are the student's taps.
+  const taskMeta = new Map<string, { topic: string; section: string }>();
+  for (const r of routines ?? []) {
+    for (const t of (Array.isArray(r.tasks) ? r.tasks : []) as { id?: string; topic?: string; section?: string }[]) {
+      if (t.id && t.topic && t.section) taskMeta.set(String(t.id), { topic: t.topic, section: t.section });
+    }
+  }
+  const plateau = findPlateau(
+    (completions ?? []).flatMap((c: { routine_date: string; task_id: string; confidence: string | null }) => {
+      const meta = taskMeta.get(String(c.task_id));
+      return meta ? [{ topic: meta.topic, section: meta.section, date: c.routine_date, confidence: c.confidence }] : [];
+    }),
+  );
+
+  const matchStudent: MatchStudent = {
+    ...(student as MatchStudent),
+    focus_weakest: focus.weakest,
+    focus_source: focus.weakestSource,
+    plateau,
+  };
   return rankBuddies(matchStudent, buddies as MatchBuddy[])
     .slice(0, 5)
     .map((b) => ({ ...b, reason: matchReason(matchStudent, b) }));

@@ -152,7 +152,7 @@ describe('the profile mapping happens once, and reads the student\'s own hours',
   it('takes hours through lib/daily-hours, never from the finish date', () => {
     const p = toRoutineProfile(
       { study_target_hours: '7', weekend_hours_available: 9, is_repeater: true, attempt_year: 2026 },
-      { weakest: 'QA', strongest: 'VARC', mockBasis: null, mockTakenOn: null },
+      { weakest: 'QA', weakestSource: 'self_report', strongest: 'VARC', mockBasis: null, mockTakenOn: null },
     );
     expect(p.weekdayHours).toBe(7);
     expect(p.weekendHours).toBe(9);
