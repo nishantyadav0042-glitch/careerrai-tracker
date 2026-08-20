@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, HeartHandshake, Camera } from 'lucide-react';
 import { track } from '@/lib/journey';
-import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
-import { MAX_IMAGE_BYTES, MAX_TIP_CHARS, MAX_QUESTION_CHARS } from '@/lib/community-pipeline';
+import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS } from '@/lib/community-pipeline';
 
 // "Help the next student" — exactly two things, minimum friction:
 //   💡 a Tip — one sharp idea in plain text (≤150 chars), section + topic
@@ -15,19 +14,11 @@ import { MAX_IMAGE_BYTES, MAX_TIP_CHARS, MAX_QUESTION_CHARS } from '@/lib/commun
 // students, not making anyone a star. Students collectively decide what
 // becomes featured curriculum.
 
-const SECTIONS = KNOWLEDGE_GRAPH.map((s) => s.id);
-const TOPICS_FOR = (sec: string) =>
-  Object.entries(TOPIC_METADATA).filter(([, m]) => m.section === sec).map(([t]) => t).sort();
-
 export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   const fileInput = useRef<HTMLInputElement>(null);
   // The funnel's missing rung (20 Aug forensic): we could not tell how many
   // students ever OPENED this sheet. Now we can.
   useEffect(() => { track('community_share_opened', {}); }, []);
-  const [kind, setKind] = useState<'tip' | 'question'>('tip');
-  const [section, setSection] = useState('');
-  const [topic, setTopic] = useState('');
-  const [tip, setTip] = useState('');
   const [questionText, setQuestionText] = useState('');
   const [image, setImage] = useState<{ data: string; mime: string; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,26 +54,18 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
     }
   }
 
-  // Topic is optional for BOTH kinds now — the student brings the idea, the
-  // system files it. Section stays because it is one tap and it is what the
-  // feed is organised by.
-  // NOTHING but the content is required now (founder, 20 Aug). Section and
-  // topic are both optional; the safety screen that already reads every
-  // submission returns the section, so the student never files anything.
-  const ready = kind === 'tip'
-    ? tip.trim().length >= 15
-    : image != null || questionText.trim().length >= 10;
+  // The only requirement is that they said something. Everything else —
+  // question or tip, which section, which topic — is worked out behind the
+  // screen from the content itself.
+  const ready = image != null || questionText.trim().length >= 10;
 
   async function submit() {
     setBusy(true); setError(null);
     try {
-      const body = kind === 'tip'
-        ? { kind, section, topic, tip: tip.trim() }
-        : {
-            kind, section, topic: topic || undefined,
-            ...(questionText.trim() ? { text: questionText.trim() } : {}),
-            ...(image ? { image: image.data, image_mime: image.mime } : {}),
-          };
+      const body = {
+        text: questionText.trim() || undefined,
+        ...(image ? { image: image.data, image_mime: image.mime } : {}),
+      };
       const res = await fetch('/api/community/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -91,12 +74,13 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
       if (!res.ok) {
         // The CODE is the point (19 Aug: a bare status:400 left us unable to
         // say why a real student's attempt died).
-        track('community_share_blocked', { kind, section, status: res.status, code: json.code ?? 'UNKNOWN' });
+        track('community_share_blocked', { status: res.status, code: json.code ?? 'UNKNOWN' });
         setError(json.error ?? 'Could not send.'); setBusy(false); return;
       }
+      // The server decides kind/section now, so the client reports only what
+      // it actually knows: how the student chose to say it.
       track('community_submitted', {
-        kind, section,
-        mode: kind === 'tip' ? 'text' : image && questionText.trim() ? 'both' : image ? 'image' : 'text',
+        mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text',
       });
       setSent(json.message as string);
     } catch { setError('Could not send. Please try again.'); }
@@ -129,90 +113,52 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            <p className="mt-3 text-[16px] font-bold text-stone-900">Help the next student</p>
+            {/* ONE screen, no form (founder, 20 Aug). What used to stand here:
+                a tip/question toggle, a Section dropdown and a Topic dropdown
+                — three classification decisions asked BEFORE the student
+                could say the thing they came to say. A student with a hard
+                question in front of them should not have to file it first.
+                All three now happen behind the screen: a photo is a question,
+                and for text the safety screen that already reads every
+                submission returns both the kind and the section. */}
+            <p className="mt-3 text-[16px] font-bold text-stone-900">Stuck on something? Share it.</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-              Solved a tough question today? Share it. A tip that worked? Share that too.
-              Be part of the <span className="font-semibold text-stone-800">by-the-students,
-              for-the-students</span> community — anonymous, and students vote on what gets featured.
+              Send it to other students — photo or text, whatever is easier. Nobody sees your name.
             </p>
 
-            <div className="mt-3 flex gap-1.5">
-              <button
-                type="button" onClick={() => setKind('tip')}
-                className={`flex-1 rounded-xl py-2.5 text-[13px] font-bold ${kind === 'tip' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}
-              >
-                💡 A tip
-              </button>
-              <button
-                type="button" onClick={() => setKind('question')}
-                className={`flex-1 rounded-xl py-2.5 text-[13px] font-bold ${kind === 'question' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}
-              >
-                📷 A question
-              </button>
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <select
-                value={section} onChange={(e) => { setSection(e.target.value); setTopic(''); }}
-                className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900"
-              >
-                <option value="">Section (optional)…</option>
-                {SECTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select
-                value={topic} onChange={(e) => setTopic(e.target.value)} disabled={!section}
-                className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-900 disabled:opacity-50"
-              >
-                <option value="">Topic (optional)…</option>
-                {section && TOPICS_FOR(section).map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            {kind === 'tip' ? (
-              <label className="mt-3 block">
-                <textarea
-                  value={tip} onChange={(e) => setTip(e.target.value.slice(0, MAX_TIP_CHARS))} rows={3}
-                  placeholder="One idea, simple words. e.g. Always mark the fixed positions first."
-                  className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
-                />
-                <span className="mt-0.5 block text-right text-[10px] text-stone-400">{tip.length}/{MAX_TIP_CHARS}</span>
-              </label>
-            ) : (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={questionText}
-                  onChange={(e) => setQuestionText(e.target.value.slice(0, MAX_QUESTION_CHARS))}
-                  rows={3}
-                  placeholder="Type the question… or just attach a photo below — either works"
-                  className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
-                />
-                <input
-                  ref={fileInput}
-                  type="file" accept="image/*" capture="environment"
-                  className="hidden" onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ''; }}
-                />
-                {image ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */}
-                    <img src={image.preview} alt="Your question" className="max-h-56 w-full rounded-xl border border-stone-200 object-contain" />
-                    <button
-                      type="button" onClick={() => fileInput.current?.click()}
-                      className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-700 active:scale-[0.98]"
-                    >
-                      <Camera className="h-3.5 w-3.5" /> Retake photo
-                    </button>
-                  </>
-                ) : (
+            <div className="mt-3 space-y-2">
+              <textarea
+                value={questionText}
+                onChange={(e) => setQuestionText(e.target.value.slice(0, MAX_QUESTION_CHARS))}
+                rows={3}
+                placeholder="Type it… a tough question, or a trick that worked. Or just add a photo."
+                className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
+              />
+              <input
+                ref={fileInput}
+                type="file" accept="image/*" capture="environment"
+                className="hidden" onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ''; }}
+              />
+              {image ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */}
+                  <img src={image.preview} alt="What you are sharing" className="max-h-56 w-full rounded-xl border border-stone-200 object-contain" />
                   <button
                     type="button" onClick={() => fileInput.current?.click()}
-                    className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-stone-300 text-stone-500"
+                    className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-700 active:scale-[0.98]"
                   >
-                    <Camera className="h-5 w-5" />
-                    <span className="text-[12.5px] font-semibold">Or take / upload a photo (optional)</span>
+                    <Camera className="h-3.5 w-3.5" /> Retake photo
                   </button>
-                )}
-              </div>
-            )}
+                </>
+              ) : (
+                <button
+                  type="button" onClick={() => fileInput.current?.click()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 py-3 text-[13px] font-semibold text-stone-600 active:scale-[0.99]"
+                >
+                  <Camera className="h-4 w-4" /> Add a photo
+                </button>
+              )}
+            </div>
 
           </>
         )}

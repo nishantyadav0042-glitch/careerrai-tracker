@@ -165,10 +165,19 @@ export function validateSubmission(
   sections: readonly string[],
   topicSectionOf: (topic: string) => string | undefined,
 ): { ok: true; value: ValidSubmission } | { ok: false; code: SubmitFailCode; error: string } {
-  const { kind, section, topic } = body;
-  if (kind !== 'tip' && kind !== 'question') {
-    return { ok: false, code: 'KIND_INVALID', error: 'Choose a tip or a question' };
-  }
+  // KIND IS NOT THE STUDENT'S JOB EITHER (founder, 20 Aug). The modal used to
+  // open with "A tip / A question" before it would take anything at all —
+  // asking someone to classify their own thought before they can share it.
+  // A photo is a question, near enough always; text is read by the safety
+  // screen, which already returns what it is. What arrives here is only a
+  // hint, and the shape of the content settles it.
+  const { section, topic } = body;
+  const hasImageEarly = typeof body.image === 'string' && body.image.length > 0;
+  const hinted = body.kind === 'tip' || body.kind === 'question' ? body.kind : null;
+  // A photo OUTRANKS the hint. A stale client that still says 'tip' while
+  // attaching a picture must not fall into the tip branch and be rejected for
+  // having no text — the picture IS the content.
+  const kind: 'tip' | 'question' = hasImageEarly ? 'question' : (hinted ?? 'tip');
   // Section is OPTIONAL (founder, 20 Aug): internal structure must not become
   // student friction. A student with a tough question in front of them should
   // not have to file it into our taxonomy first — the safety screen already
@@ -184,7 +193,10 @@ export function validateSubmission(
     // a question needed only a section, a one-line tip needed section AND the
     // right topic hunted out of a dropdown. Friction was inverted. The system
     // knows the curriculum; the student's job is the idea.
-    const text = typeof body.tip === 'string' ? body.tip.trim() : '';
+    // Either field carries the words — the client no longer decides which.
+    const text = typeof body.tip === 'string' && body.tip.trim()
+      ? body.tip.trim()
+      : typeof body.text === 'string' ? body.text.trim() : '';
     if (text.length === 0) return { ok: false, code: 'CONTENT_REQUIRED', error: 'Write your tip first' };
     if (text.length < MIN_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_SHORT', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
     if (text.length > MAX_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_LONG', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };

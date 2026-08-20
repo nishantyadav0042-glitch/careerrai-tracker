@@ -55,17 +55,24 @@ function readSection(v: unknown): InferredSection {
   return v === 'QA' || v === 'VARC' || v === 'DILR' ? v : null;
 }
 
-export async function checkTipSafety(text: string): Promise<{ verdict: SafetyVerdict; reason?: string; section?: InferredSection }> {
+/** Is this a problem to solve, or advice? Null when the screen cannot tell. */
+export type InferredKind = 'question' | 'tip' | null;
+
+function readKind(v: unknown): InferredKind {
+  return v === 'question' || v === 'tip' ? v : null;
+}
+
+export async function checkTipSafety(text: string): Promise<{ verdict: SafetyVerdict; reason?: string; section?: InferredSection; kind?: InferredKind }> {
   if (localTextScreen(text) === 'blocked') return { verdict: 'blocked', reason: 'contact/promo pattern' };
 
   const raw = await callGemini({
     parts: [{ text: `Screen this study tip:\n\n${text}` }],
     system: TEXT_SYSTEM, json: true, maxTokens: 150, temperature: 0,
   });
-  const parsed = extractJson<{ safe?: boolean; reason?: string; section?: unknown }>(raw);
+  const parsed = extractJson<{ safe?: boolean; reason?: string; section?: unknown; kind?: unknown }>(raw);
   if (parsed == null || typeof parsed.safe !== 'boolean') return { verdict: 'manual' };
   return parsed.safe
-    ? { verdict: 'ok', section: readSection(parsed.section) }
+    ? { verdict: 'ok', section: readSection(parsed.section), kind: readKind(parsed.kind) }
     : { verdict: 'blocked', reason: parsed.reason };
 }
 

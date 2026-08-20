@@ -102,10 +102,13 @@ export async function POST(request: NextRequest) {
   // Any 'manual' verdict on any part → pending (human review before students see it).
   const anyManual = textVerdict?.verdict === 'manual' || imageVerdict?.verdict === 'manual';
   const resolvedSection = sub.section ?? imageVerdict?.section ?? textVerdict?.section ?? null;
+  // A photo is a question. For text-only, the safety screen already read the
+  // words and said which it is — so the student never had to.
+  const resolvedKind = sub.image ? 'question' : (textVerdict?.kind ?? sub.kind);
 
   const { error } = await admin.from('student_submissions').insert({
     student_id: user.id,
-    kind: sub.kind,
+    kind: resolvedKind,
     topic: sub.topic,
     // Section: what the student picked, else what the safety screen inferred,
     // else null — a card without a section chip is fine, an extra dropdown in

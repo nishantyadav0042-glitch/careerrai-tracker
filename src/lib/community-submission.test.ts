@@ -69,10 +69,12 @@ describe('every rejection carries a machine code — no more opaque 400s', () =>
     if (r.ok) expect(r.value.section).toBeNull();
   });
 
-  it('bad kind → KIND_INVALID', () => {
+  it('nothing said at all → CONTENT_REQUIRED', () => {
+    // Nothing was said, so the failure is about the CONTENT — the kind hint
+    // is no longer a thing a student can get wrong.
     const r = validate({ kind: 'rant', section: 'QA' });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe('KIND_INVALID');
+    if (!r.ok) expect(r.code).toBe('CONTENT_REQUIRED');
   });
 
   it('over-long typed question → TEXT_TOO_LONG at the declared cap', () => {
