@@ -42,7 +42,7 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(60),
     admin.from('submission_votes').select('submission_id, helpful'),
-    admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
+    admin.from('submission_votes').select('submission_id, helpful').eq('student_id', user.id),
   ]);
 
   const tally = new Map<string, { helpful: number; total: number }>();
@@ -53,6 +53,10 @@ export async function GET() {
     tally.set(v.submission_id, t);
   }
   const mine = new Set((myVotes ?? []).map((v: { submission_id: string }) => v.submission_id));
+  const myVoteById = new Map(
+    ((myVotes ?? []) as { submission_id: string; helpful: boolean }[])
+      .map((v) => [v.submission_id, v.helpful ? ('up' as const) : ('down' as const)]),
+  );
 
   // Names we publish under ourselves — never shown as a byline.
   const isCuratedName = (n: string | null | undefined) =>
@@ -97,7 +101,8 @@ export async function GET() {
     return {
       id: r.id, kind: r.kind, text: r.text, section: r.section,
       displayName: r.displayName, imageUrl: r.imageUrl,
-      helpfulCount: d.count, canVote: d.canVote, isMine: r.isMine, votedByMe: r.votedByMe,
+      score: d.score, canVote: d.canVote, isMine: r.isMine,
+      myVote: myVoteById.get(r.id) ?? null,
     };
   };
 

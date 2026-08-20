@@ -32,11 +32,13 @@ interface Item {
   section: string | null;
   displayName: string | null;
   imageUrl: string | null;
-  /** Already decided server-side: null means it must not be shown. */
-  helpfulCount: number | null;
+  /** Net score (helpful − not-helpful), decided server-side. Always shown —
+   *  founder ruling 20 Aug: a vote must have a visible consequence. */
+  score: number;
   canVote: boolean;
   isMine: boolean;
-  votedByMe: boolean;
+  /** My CURRENT vote — changeable and removable, not a one-shot. */
+  myVote: 'up' | 'down' | null;
 }
 
 interface Payload {
@@ -49,7 +51,13 @@ interface Payload {
 
 export function StudentInsights() {
   const [data, setData] = useState<Payload | null>(null);
-  const [voted, setVoted] = useState<Record<string, 'up' | 'down'>>({});
+  // Tab (founder, 20 Aug): Top = best rises by net score; New = newest first
+  // so fresh contributions stay discoverable. Two orderings, not one clever
+  // one — the server sends both, the tab just picks.
+  const [tab, setTab] = useState<'top' | 'new'>('top');
+  // My current vote per item + optimistic score deltas, reconciled on load().
+  const [myVotes, setMyVotes] = useState<Record<string, 'up' | 'down' | null>>({});
+  const [scoreDelta, setScoreDelta] = useState<Record<string, number>>({});
   // A SET, not a single id. This used to be one nullable id used as a global
   // lock, with a guard at the top of vote() that returned whenever ANY vote
   // was in flight — so every other tap was silently dropped. On a phone that is a
@@ -70,22 +78,34 @@ export function StudentInsights() {
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch, same pattern as the challenge card */
   useEffect(() => { void load(); }, [load]);
 
-  async function vote(item: Item, helpful: boolean) {
-    if (busy.has(item.id) || voted[item.id]) return;
+  /** score contribution of a vote state: up=+1, down=−1, none=0. */
+  const weight = (v: 'up' | 'down' | null | undefined) => (v === 'up' ? 1 : v === 'down' ? -1 : 0);
+
+  async function vote(item: Item, dir: 'up' | 'down') {
+    if (busy.has(item.id)) return;
+    const prev = myVotes[item.id] !== undefined ? myVotes[item.id] : item.myVote;
+    // Tapping my current vote removes it; tapping the other switches it.
+    const next: 'up' | 'down' | null = prev === dir ? null : dir;
     setBusy((b) => new Set(b).add(item.id));
-    // Optimistic: the student's own action is the reward here, so it must land
-    // instantly. There is no count to be wrong about.
-    setVoted((v) => ({ ...v, [item.id]: helpful ? 'up' : 'down' }));
+    // Optimistic — and REVERTED if the server says no. The UI never keeps a
+    // vote the database rejected.
+    setMyVotes((v) => ({ ...v, [item.id]: next }));
+    setScoreDelta((d) => ({ ...d, [item.id]: (d[item.id] ?? 0) + weight(next) - weight(prev) }));
     try {
       const res = await fetch('/api/community/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submission_id: item.id, helpful }),
+        body: JSON.stringify({ submission_id: item.id, dir: next }),
       });
-      if (res.ok || res.status === 409) track('community_voted', { helpful });
-      else setVoted((v) => { const n = { ...v }; delete n[item.id]; return n; });
+      if (res.ok) {
+        track('community_voted', { dir: next ?? 'removed', from: prev ?? 'none' });
+      } else {
+        setMyVotes((v) => ({ ...v, [item.id]: prev ?? null }));
+        setScoreDelta((d) => ({ ...d, [item.id]: (d[item.id] ?? 0) - (weight(next) - weight(prev)) }));
+      }
     } catch {
-      setVoted((v) => { const n = { ...v }; delete n[item.id]; return n; });
+      setMyVotes((v) => ({ ...v, [item.id]: prev ?? null }));
+      setScoreDelta((d) => ({ ...d, [item.id]: (d[item.id] ?? 0) - (weight(next) - weight(prev)) }));
     } finally {
       setBusy((b) => { const n = new Set(b); n.delete(item.id); return n; });
     }
@@ -95,6 +115,14 @@ export function StudentInsights() {
 
   const { topPick, feed, myRank } = data;
   if (!topPick && feed.length === 0) return <EmptyState />;
+
+  const liveScore = (i: Item) => i.score + (scoreDelta[i.id] ?? 0);
+  const liveVote = (i: Item) => (myVotes[i.id] !== undefined ? myVotes[i.id] : i.myVote);
+  // Top: net score desc, newer on ties — same rule as lib/os/insight-feed
+  // orderFeedTop. New: server order (newest-first with voted-sink) untouched.
+  const ordered = tab === 'top'
+    ? [...feed].sort((a, b) => liveScore(b) - liveScore(a))
+    : feed;
 
   return (
     <div className="space-y-5">
@@ -133,20 +161,34 @@ export function StudentInsights() {
         <section>
           <SectionLabel>Today&apos;s Pick</SectionLabel>
           <div className="mt-2">
-            <Card item={topPick} featured voted={voted} onVote={vote} busy={busy} />
+            <Card item={topPick} featured myVote={liveVote(topPick)} score={liveScore(topPick)} onVote={vote} busy={busy} />
           </div>
         </section>
       )}
 
       {feed.length > 0 && (
         <section>
-          <SectionLabel>Student Insights</SectionLabel>
-          <p className="mt-0.5 text-[11.5px] text-stone-400">
-            Questions, shortcuts and lessons from students preparing alongside you.
-          </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <SectionLabel>Student Insights</SectionLabel>
+              <p className="mt-0.5 text-[11.5px] text-stone-400">
+                Questions, shortcuts and lessons from students preparing alongside you.
+              </p>
+            </div>
+            <div className="flex gap-1">
+              {(['top', 'new'] as const).map((t) => (
+                <button
+                  key={t} type="button" onClick={() => setTab(t)}
+                  className={`rounded-full px-3 py-1 text-[11px] font-bold ${tab === t ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-500'}`}
+                >
+                  {t === 'top' ? 'Top' : 'New'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-2.5 space-y-2">
-            {feed.map((item) => (
-              <Card key={item.id} item={item} voted={voted} onVote={vote} busy={busy} />
+            {ordered.map((item) => (
+              <Card key={item.id} item={item} myVote={liveVote(item)} score={liveScore(item)} onVote={vote} busy={busy} />
             ))}
           </div>
         </section>
@@ -163,17 +205,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Card({
-  item, featured, voted, onVote, busy,
+  item, featured, myVote, score, onVote, busy,
 }: {
   item: Item;
   featured?: boolean;
-  voted: Record<string, 'up' | 'down'>;
-  onVote: (item: Item, helpful: boolean) => void;
+  myVote: 'up' | 'down' | null;
+  score: number;
+  onVote: (item: Item, dir: 'up' | 'down') => void;
   busy: Set<string>;
 }) {
-  const myVote = voted[item.id];
-  const done = !!myVote || item.votedByMe;
-
   return (
     <article
       className={
@@ -208,42 +248,38 @@ function Card({
           {item.section && <span className={item.isMine || item.displayName ? 'ml-1.5' : ''}>{item.section}</span>}
         </p>
 
-        {/* Votes, IN WORDS. Founder, 13 Aug: bare arrows say nothing — a
-            student must know why the buttons exist before they will ever tap
-            one. "Helps for CAT" also states the judging standard: not "do I
-            like this" but "would this move my score" — which is exactly the
-            signal the Wilson ranking needs to be worth anything. No number
-            unless the server sent one, which it only does once the number is
-            worth seeing. */}
-        {item.isMine ? null : done ? (
-          <span className="text-[11.5px] font-semibold text-teal-700">
-            {myVote === 'down' ? 'Noted' : 'Marked: helps for CAT ✓'}
+        {/* The vote, with its consequence visible (founder ruling, 20 Aug):
+            ▲ score ▼. Your current vote stays highlighted; tap it again to
+            take it back, tap the other to switch. "Helps for CAT" survives
+            as the up-arrow label — it states the judging standard. */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={busy.has(item.id) || !item.canVote}
+            onClick={() => onVote(item, 'up')}
+            aria-label="Helps for CAT"
+            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11.5px] font-bold transition-transform active:scale-95 disabled:opacity-40 ${
+              myVote === 'up' ? 'border border-teal-300 bg-teal-100 text-teal-800' : 'border border-teal-200 bg-teal-50 text-teal-700'
+            }`}
+          >
+            <ArrowBigUp className={`h-4 w-4 ${myVote === 'up' ? 'fill-teal-600' : ''}`} />
+            Helps for CAT
+          </button>
+          <span className={`min-w-[1.75rem] text-center text-[13px] font-extrabold tabular-nums ${score > 0 ? 'text-teal-700' : score < 0 ? 'text-rose-500' : 'text-stone-400'}`}>
+            {score}
           </span>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={busy.has(item.id)}
-              onClick={() => onVote(item, true)}
-              className="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[11.5px] font-bold text-teal-700 transition-transform active:scale-95 disabled:opacity-50"
-            >
-              <ArrowBigUp className="h-4 w-4" />
-              Helps for CAT
-              {item.helpfulCount != null && (
-                <span className="text-[11px] font-bold">· {item.helpfulCount}</span>
-              )}
-            </button>
-            <button
-              type="button"
-              disabled={busy.has(item.id)}
-              onClick={() => onVote(item, false)}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11.5px] font-semibold text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 active:scale-95 disabled:opacity-50"
-            >
-              <ArrowBigDown className="h-4 w-4" />
-              Not helpful
-            </button>
-          </div>
-        )}
+          <button
+            type="button"
+            disabled={busy.has(item.id) || !item.canVote}
+            onClick={() => onVote(item, 'down')}
+            aria-label="Not helpful"
+            className={`inline-flex items-center rounded-lg px-2 py-1.5 transition-colors active:scale-95 disabled:opacity-40 ${
+              myVote === 'down' ? 'bg-stone-200 text-stone-700' : 'text-stone-400 hover:bg-stone-100 hover:text-stone-600'
+            }`}
+          >
+            <ArrowBigDown className={`h-4 w-4 ${myVote === 'down' ? 'fill-stone-500' : ''}`} />
+          </button>
+        </div>
       </div>
     </article>
   );

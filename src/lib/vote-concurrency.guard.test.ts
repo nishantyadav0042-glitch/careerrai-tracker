@@ -44,7 +44,9 @@ describe('votes on different items never block each other', () => {
 
     it(`${name} disables only the button actually in flight`, () => {
       const src = readFileSync(file, 'utf8');
-      expect(src).toContain('disabled={busy.has(item.id)}');
+      // 20 Aug: canVote joined the disabled condition (self-votes), but the
+      // busy lock must stay PER-ITEM — the original bug was one global lock.
+      expect(src).toMatch(/disabled=\{busy\.has\(item\.id\)/);
       expect(src).not.toContain('disabled={busy === item.id}');
     });
 
@@ -62,7 +64,10 @@ describe('the server never capped votes either', () => {
     // The limit was purely a client bug; confirming the API stays open so a
     // future "fix" is not attempted in the wrong layer.
     const src = readFileSync('src/app/api/community/vote/route.ts', 'utf8');
-    expect(src).toContain("from('submission_votes').insert");
+    // 20 Aug: insert became upsert-on-uniqueness (a vote is changeable now);
+    // still one row per (student, submission), still no volume cap.
+    expect(src).toMatch(/from\('submission_votes'\)\.upsert/);
+    expect(src).toContain("onConflict: 'student_id,submission_id'");
     // A daily/total cap would look like a count() against submission_votes.
     expect(src).not.toMatch(/count\([\s\S]{0,80}submission_votes/);
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  mayShowVoteCount, voteDisplay, orderFeed, rankContributors, myRank,
+  mayShowVoteCount, voteDisplay, orderFeed, orderFeedTop, netScore, rankContributors, myRank,
   VOTE_COUNT_REVEAL_MIN, MIN_VOTES_FOR_ELIGIBILITY, MONTHLY_WINNERS,
   type InsightRow,
 } from './insight-feed';
@@ -30,16 +30,19 @@ describe('no small numbers, ever', () => {
     expect(VOTE_COUNT_REVEAL_MIN).toBeGreaterThanOrEqual(20);
   });
 
-  it('returns count: null — the UI is never handed a number it must hide', () => {
-    // Defence in depth: the small number does not reach the component at all,
-    // so it cannot leak through a future redesign or a network tab.
-    const d = voteDisplay(row({ helpfulVotes: 3, totalVotes: 4 }));
-    expect(d.count).toBeNull();
+  // RULING CHANGE (founder, 20 Aug): per-item net score is ALWAYS visible —
+  // a vote with no visible consequence reads as a broken product. What the
+  // 12 Aug rule still protects is aggregate smallness (member counts,
+  // participant counts), not an item's score.
+  it('the score is the net, and it is always handed to the UI', () => {
+    expect(voteDisplay(row({ helpfulVotes: 3, totalVotes: 4 })).score).toBe(2);
+    expect(voteDisplay(row({ helpfulVotes: 40, totalVotes: 44 })).score).toBe(36);
+    expect(voteDisplay(row({ helpfulVotes: 0, totalVotes: 0 })).score).toBe(0);
   });
 
-  it('passes the count through once it has earned the right to be seen', () => {
-    const d = voteDisplay(row({ helpfulVotes: 40, totalVotes: 44 }));
-    expect(d.count).toBe(40);
+  it('netScore has exactly one definition: helpful minus not-helpful', () => {
+    expect(netScore({ helpfulVotes: 5, totalVotes: 8 })).toBe(2);
+    expect(netScore({ helpfulVotes: 0, totalVotes: 3 })).toBe(-3);
   });
 });
 
@@ -48,12 +51,55 @@ describe('who may vote', () => {
     expect(voteDisplay(row({ isMine: true })).canVote).toBe(false);
   });
 
-  it('never asks twice', () => {
-    expect(voteDisplay(row({ votedByMe: true })).canVote).toBe(false);
+  it('still offers the buttons after a vote — a vote can now be changed or removed', () => {
+    expect(voteDisplay(row({ votedByMe: true })).canVote).toBe(true);
   });
 
   it('offers the vote to everyone else', () => {
     expect(voteDisplay(row()).canVote).toBe(true);
+  });
+});
+
+describe('Top — the best content rises, deterministically', () => {
+  it('orders by net score, so downvotes actually push things down', () => {
+    const out = orderFeedTop([
+      row({ id: 'loved', helpfulVotes: 4, totalVotes: 5, createdAt: '2026-08-01T00:00:00Z' }),   // +3
+      row({ id: 'contested', helpfulVotes: 5, totalVotes: 9, createdAt: '2026-08-10T00:00:00Z' }), // +1
+      row({ id: 'disliked', helpfulVotes: 1, totalVotes: 4, createdAt: '2026-08-12T00:00:00Z' }),  // -2
+    ]);
+    expect(out.map((r) => r.id)).toEqual(['loved', 'contested', 'disliked']);
+  });
+
+  it('breaks ties newer-first, so fresh good content is not buried by age', () => {
+    const out = orderFeedTop([
+      row({ id: 'old', helpfulVotes: 2, totalVotes: 2, createdAt: '2026-08-01T00:00:00Z' }),
+      row({ id: 'new', helpfulVotes: 2, totalVotes: 2, createdAt: '2026-08-12T00:00:00Z' }),
+    ]);
+    expect(out.map((r) => r.id)).toEqual(['new', 'old']);
+  });
+
+  it('zero-vote items stay visible and deterministic — never filtered out', () => {
+    const out = orderFeedTop([
+      row({ id: 'scored', helpfulVotes: 1, totalVotes: 1, createdAt: '2026-08-01T00:00:00Z' }),
+      row({ id: 'fresh-zero', createdAt: '2026-08-12T00:00:00Z' }),
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[1].id).toBe('fresh-zero');
+  });
+
+  it('voting on something does NOT hide it from Top — Top is about the content', () => {
+    const out = orderFeedTop([
+      row({ id: 'voted-best', votedByMe: true, helpfulVotes: 3, totalVotes: 3 }),
+      row({ id: 'unvoted', helpfulVotes: 1, totalVotes: 1 }),
+    ]);
+    expect(out[0].id).toBe('voted-best');
+  });
+
+  it('does not mutate the input', () => {
+    const input = [row({ id: 'a', helpfulVotes: 1, totalVotes: 1 }), row({ id: 'b' })];
+    const before = input.map((r) => r.id);
+    orderFeedTop(input);
+    expect(input.map((r) => r.id)).toEqual(before);
   });
 });
 

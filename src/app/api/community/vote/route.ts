@@ -4,10 +4,19 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export const maxDuration = 30;
 
-// POST /api/community/vote — one curriculum judgement: should future students
-// see this? One vote per student per item, first vote stands, and the
-// response deliberately returns NO tallies — a voter who sees the score
-// stops judging the content and starts joining the crowd.
+// POST /api/community/vote — one student × one contribution = one CURRENT
+// vote (founder ruling, 20 Aug). States: none / up / down. Every transition
+// is legal and server-authoritative:
+//   none→up, none→down, up→down, down→up  → upsert on the DB uniqueness
+//   up→none, down→none                    → delete
+// The DB constraint (submission_votes_once UNIQUE(student_id,submission_id))
+// is the invariant; the upsert rides it, so two tabs / rapid taps / retries
+// converge on one row. The response returns ok only after the DB write —
+// the UI must never claim a vote the database rejected.
+//
+// Body: { submission_id, dir: 'up' | 'down' | null }. The legacy
+// { helpful: boolean } body is still accepted (older clients in the deploy
+// window) and maps to up/down.
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -15,9 +24,15 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const { submission_id: sid, helpful } = body as { submission_id?: unknown; helpful?: unknown };
-  if (typeof sid !== 'string' || typeof helpful !== 'boolean') {
-    return NextResponse.json({ error: 'submission_id and helpful required' }, { status: 400 });
+  const { submission_id: sid, dir: rawDir, helpful } = body as {
+    submission_id?: unknown; dir?: unknown; helpful?: unknown;
+  };
+  const dir: 'up' | 'down' | null | undefined =
+    rawDir === 'up' || rawDir === 'down' || rawDir === null ? rawDir
+    : typeof helpful === 'boolean' ? (helpful ? 'up' : 'down')
+    : undefined;
+  if (typeof sid !== 'string' || dir === undefined) {
+    return NextResponse.json({ error: 'submission_id and dir (up/down/null) required' }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -38,13 +53,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You can’t vote on your own share' }, { status: 400 });
   }
 
-  const { error } = await admin.from('submission_votes').insert({
-    student_id: user.id, submission_id: sid, helpful,
-  });
-  if (error) {
-    const already = error.code === '23505';
-    return NextResponse.json({ error: already ? 'Already voted' : 'Could not save' }, { status: already ? 409 : 500 });
+  if (dir === null) {
+    // Remove my vote. Deleting a row that isn't there is a no-op — idempotent.
+    const { error } = await admin.from('submission_votes')
+      .delete().eq('student_id', user.id).eq('submission_id', sid);
+    if (error) return NextResponse.json({ error: 'Could not save' }, { status: 500 });
+    return NextResponse.json({ ok: true, myVote: null });
   }
 
-  return NextResponse.json({ ok: true });
+  // Set or switch. One statement on the uniqueness constraint — no
+  // read-then-write, so concurrent taps serialize on the row.
+  const { error } = await admin.from('submission_votes').upsert(
+    { student_id: user.id, submission_id: sid, helpful: dir === 'up' },
+    { onConflict: 'student_id,submission_id' },
+  );
+  if (error) return NextResponse.json({ error: 'Could not save' }, { status: 500 });
+
+  return NextResponse.json({ ok: true, myVote: dir });
 }

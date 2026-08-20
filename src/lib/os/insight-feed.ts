@@ -1,7 +1,17 @@
-// ── Student Insights: the community loop, with the numbers kept out of sight ─
+// ── Student Insights: the community loop ────────────────────────────────────
 //
-// Founder, 12 Aug 2026: build the community loop again, and no small numbers
-// should be visible.
+// RULING CHANGE (founder, 20 Aug 2026): votes become a VISIBLE, real ranking
+// system — every card shows its net score (▲ n), a student can change or
+// remove their vote, and a Top ordering exists where the best content rises.
+// This deliberately overrides the 12 Aug "no small numbers" ruling for
+// PER-ITEM scores: the founder's own forensic showed students voting into a
+// void ("their votes are not being counted") — a vote with no visible
+// consequence reads as a broken product, which is worse than a small number.
+//
+// What SURVIVES from 12 Aug, unchanged: no member counts, no participant
+// counts, no leaderboard totals — a per-item score says "this item helped
+// people" without announcing the size of the room. Contributor REWARD is
+// still rank, never count (myRank below).
 //
 // That constraint is the entire design problem, and it has a clean answer:
 //
@@ -62,18 +72,25 @@ export interface InsightRow {
   votedByMe: boolean;
 }
 
+/** Net score — THE one definition, used by display and every ranking.
+ *  score = helpful − not-helpful. Nothing else may re-derive it. */
+export function netScore(row: Pick<InsightRow, 'helpfulVotes' | 'totalVotes'>): number {
+  return row.helpfulVotes - (row.totalVotes - row.helpfulVotes);
+}
+
 /** What the UI is allowed to render for an item's votes. */
 export interface VoteDisplay {
-  /** The number, or null when it must stay hidden. */
-  count: number | null;
-  /** Whether to offer the vote buttons at all. */
+  /** Net score, always shown (founder ruling, 20 Aug). */
+  score: number;
+  /** Vote buttons always render for others' content — a vote can now be
+   *  changed or removed, so having voted no longer disables them. */
   canVote: boolean;
 }
 
 export function voteDisplay(row: InsightRow): VoteDisplay {
   return {
-    count: mayShowVoteCount(row.totalVotes) ? row.helpfulVotes : null,
-    canVote: !row.isMine && !row.votedByMe,
+    score: netScore(row),
+    canVote: !row.isMine,
   };
 }
 
@@ -94,6 +111,24 @@ export function voteDisplay(row: InsightRow): VoteDisplay {
 export function orderFeed(rows: InsightRow[]): InsightRow[] {
   return [...rows].sort((a, b) => {
     if (a.votedByMe !== b.votedByMe) return a.votedByMe ? 1 : -1;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+}
+
+/**
+ * TOP — the founder's "best rises" ordering (20 Aug).
+ *
+ * Net score first, newer first on ties. Deliberately deterministic and
+ * deliberately NOT an engagement algorithm: at this community's size a decay
+ * formula would be noise wearing a suit. The New tab (orderFeed above) is
+ * what protects fresh content from an old high scorer sitting on top —
+ * two orderings, not one clever one. votedByMe does NOT sink here: Top is a
+ * statement about the content, and hiding what you voted for would bend it.
+ */
+export function orderFeedTop(rows: InsightRow[]): InsightRow[] {
+  return [...rows].sort((a, b) => {
+    const d = netScore(b) - netScore(a);
+    if (d !== 0) return d;
     return b.createdAt.localeCompare(a.createdAt);
   });
 }
