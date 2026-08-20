@@ -1,5 +1,6 @@
 import { getLogDateString, liveStreak, momentumStreak, daysSinceLastLog, MS_PER_DAY } from '@/lib/streak-utils';
 import { GOING_COLD_DAYS } from '@/lib/os/people-filter';
+import { CALL_OUTCOMES } from '@/lib/sales-disposition';
 
 // ── The dashboard's single source of truth ───────────────────────────────────
 //
@@ -20,7 +21,8 @@ import { GOING_COLD_DAYS } from '@/lib/os/people-filter';
 //   Remind to log      → onboarded, has NOT logged today.
 //   Streak breakers    → lib/streak-breakers.ts (logged day-before-yesterday,
 //                        skipped yesterday, silent today) — already shared.
-//   Sales-ready        → engagement.sales_ready, never called, still free.
+//   Sales-ready        → engagement.sales_ready, no call disposition in
+//                        sales_activity yet (SA-1C drain), still free.
 //   Going cold         → last log 4+ days ago.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -151,6 +153,18 @@ export interface SalesReadyRow extends RealStudent {
   mentorDoor: 'history' | 'intent' | null; // crossed a free-mentor door (dormant until enabled)
 }
 
+// SA-1C (20 Aug 2026): the drain. This list used to filter on
+// sales_called_at IS NULL — a column NOTHING ever wrote, so the list could
+// only grow (363 flagged, 0 ever cleared; forensic finding P1-D). The drain
+// is now the call HISTORY: a student leaves this list once a sales_activity
+// row exists whose status is one of the five call dispositions
+// (CALL_OUTCOMES in lib/sales-disposition). That definition is deliberate:
+// a no-answer attempt ALSO drains, because that student is now inside the
+// cadence loop (lead_outreach.next_action_at) and surfaces in the calling
+// queue — showing them here too would be the same student on two lists.
+// Future non-call activity (a reassignment, a note) uses other status
+// values and must NOT drain; importing the vocabulary keeps that boundary
+// in one place.
 export async function getSalesReadyToCall(admin: any, students?: RealStudent[]): Promise<SalesReadyRow[]> {
   const base = students ?? (await getRealStudents(admin));
   const byId = new Map(base.map((s) => [s.id, s]));
@@ -158,9 +172,16 @@ export async function getSalesReadyToCall(admin: any, students?: RealStudent[]):
     .from('student_engagement')
     .select('student_id, buddy_cta_clicks, mock_opened, signed_up_at')
     .eq('sales_ready', true)
-    .is('sales_called_at', null)
     .limit(1000);
-  const ids = (rows ?? []).map((r: any) => r.student_id as string).filter((id: string) => byId.has(id));
+  const flagged = (rows ?? []).map((r: any) => r.student_id as string).filter((id: string) => byId.has(id));
+  if (flagged.length === 0) return [];
+  const { data: worked } = await admin
+    .from('sales_activity')
+    .select('student_id')
+    .in('student_id', flagged)
+    .in('status', CALL_OUTCOMES as unknown as string[]);
+  const workedIds = new Set((worked ?? []).map((w: any) => w.student_id as string));
+  const ids = flagged.filter((id: string) => !workedIds.has(id));
   if (ids.length === 0) return [];
   const [{ data: profs }, { data: streaks }, { data: doors }] = await Promise.all([
     admin.from('profiles').select('id, is_premium').in('id', ids),
