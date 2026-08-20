@@ -32,9 +32,9 @@ interface Item {
   section: string | null;
   displayName: string | null;
   imageUrl: string | null;
-  /** Net score (helpful − not-helpful), decided server-side. Always shown —
-   *  founder ruling 20 Aug: a vote must have a visible consequence. */
-  score: number;
+  /** "% found this useful", or null below the sample floor. NEVER a raw
+   *  count — founder, 20 Aug: the count is what makes the room look small. */
+  helpfulPct: number | null;
   canVote: boolean;
   isMine: boolean;
   /** My CURRENT vote — changeable and removable, not a one-shot. */
@@ -114,12 +114,12 @@ export function StudentInsights() {
   const { topPick, feed } = data;
   if (!topPick && feed.length === 0) return <EmptyState />;
 
-  const liveScore = (i: Item) => i.score + (scoreDelta[i.id] ?? 0);
   const liveVote = (i: Item) => (myVotes[i.id] !== undefined ? myVotes[i.id] : i.myVote);
-  // Top: net score desc, newer on ties — same rule as lib/os/insight-feed
-  // orderFeedTop. New: server order (newest-first with voted-sink) untouched.
+  // Ranking still runs on the real score — it is just never printed. The
+  // server sends the feed already ordered; scoreDelta only nudges the local
+  // ordering so a fresh vote moves the card the student just voted on.
   const ordered = tab === 'top'
-    ? [...feed].sort((a, b) => liveScore(b) - liveScore(a))
+    ? [...feed].sort((a, b) => (scoreDelta[b.id] ?? 0) - (scoreDelta[a.id] ?? 0))
     : feed;
 
   return (
@@ -135,7 +135,7 @@ export function StudentInsights() {
         <section>
           <SectionLabel>Today&apos;s Pick</SectionLabel>
           <div className="mt-2">
-            <Card item={topPick} featured myVote={liveVote(topPick)} score={liveScore(topPick)} onVote={vote} busy={busy} />
+            <Card item={topPick} featured myVote={liveVote(topPick)} onVote={vote} busy={busy} />
           </div>
         </section>
       )}
@@ -162,7 +162,7 @@ export function StudentInsights() {
           </div>
           <div className="mt-2.5 space-y-2">
             {ordered.map((item) => (
-              <Card key={item.id} item={item} myVote={liveVote(item)} score={liveScore(item)} onVote={vote} busy={busy} />
+              <Card key={item.id} item={item} myVote={liveVote(item)} onVote={vote} busy={busy} />
             ))}
           </div>
         </section>
@@ -179,12 +179,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Card({
-  item, featured, myVote, score, onVote, busy,
+  item, featured, myVote, onVote, busy,
 }: {
   item: Item;
   featured?: boolean;
   myVote: 'up' | 'down' | null;
-  score: number;
   onVote: (item: Item, dir: 'up' | 'down') => void;
   busy: Set<string>;
 }) {
@@ -222,10 +221,14 @@ function Card({
           {item.section && <span className={item.isMine || item.displayName ? 'ml-1.5' : ''}>{item.section}</span>}
         </p>
 
-        {/* The vote, with its consequence visible (founder ruling, 20 Aug):
-            ▲ score ▼. Your current vote stays highlighted; tap it again to
-            take it back, tap the other to switch. "Helps for CAT" survives
-            as the up-arrow label — it states the judging standard. */}
+        {/* No counts, ever (founder, 20 Aug: they are small, and a small
+            number announces the size of the room). What a vote visibly does
+            instead: your button lights up and stays lit — tap it again to
+            take the vote back, tap the other to switch — and the item moves
+            in the ranking. A "% found this useful" joins in once enough
+            students have voted for a ratio to mean anything; below that
+            floor there is no number at all, because a percentage from two
+            votes is a worse lie than the two votes were. */}
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -239,9 +242,11 @@ function Card({
             <ArrowBigUp className={`h-4 w-4 ${myVote === 'up' ? 'fill-teal-600' : ''}`} />
             Helps for CAT
           </button>
-          <span className={`min-w-[1.75rem] text-center text-[13px] font-extrabold tabular-nums ${score > 0 ? 'text-teal-700' : score < 0 ? 'text-rose-500' : 'text-stone-400'}`}>
-            {score}
-          </span>
+          {item.helpfulPct != null && (
+            <span className="text-[11.5px] font-bold text-teal-700">
+              {item.helpfulPct}% found this useful
+            </span>
+          )}
           <button
             type="button"
             disabled={busy.has(item.id) || !item.canVote}

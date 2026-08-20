@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   mayShowVoteCount, voteDisplay, orderFeed, orderFeedTop, netScore,
-  VOTE_COUNT_REVEAL_MIN,
+  helpfulPct, HELPFUL_PCT_MIN_VOTES, VOTE_COUNT_REVEAL_MIN,
   type InsightRow,
 } from './insight-feed';
 
@@ -30,14 +30,29 @@ describe('no small numbers, ever', () => {
     expect(VOTE_COUNT_REVEAL_MIN).toBeGreaterThanOrEqual(20);
   });
 
-  // RULING CHANGE (founder, 20 Aug): per-item net score is ALWAYS visible —
-  // a vote with no visible consequence reads as a broken product. What the
-  // 12 Aug rule still protects is aggregate smallness (member counts,
-  // participant counts), not an item's score.
-  it('the score is the net, and it is always handed to the UI', () => {
-    expect(voteDisplay(row({ helpfulVotes: 3, totalVotes: 4 })).score).toBe(2);
-    expect(voteDisplay(row({ helpfulVotes: 40, totalVotes: 44 })).score).toBe(36);
-    expect(voteDisplay(row({ helpfulVotes: 0, totalVotes: 0 })).score).toBe(0);
+  // Founder, 20 Aug: no raw counts on a card — they are small, and a small
+  // number announces the size of the room. A ratio does not.
+  it('hands the UI a percentage, never a count', () => {
+    const d = voteDisplay(row({ helpfulVotes: 9, totalVotes: 11 }));
+    expect(d.helpfulPct).toBe(82);
+    expect(d).not.toHaveProperty('score');
+    expect(d).not.toHaveProperty('count');
+  });
+
+  it('shows NO percentage below the sample floor — two votes cannot say 100%', () => {
+    expect(helpfulPct({ helpfulVotes: 2, totalVotes: 2 })).toBeNull();
+    expect(helpfulPct({ helpfulVotes: 3, totalVotes: 3 })).toBeNull();
+    expect(voteDisplay(row({ helpfulVotes: 5, totalVotes: 5 })).helpfulPct).toBeNull();
+  });
+
+  it('the floor is a real sample, and it is documented as a constant', () => {
+    expect(HELPFUL_PCT_MIN_VOTES).toBeGreaterThanOrEqual(10);
+    expect(helpfulPct({ helpfulVotes: 8, totalVotes: HELPFUL_PCT_MIN_VOTES })).toBe(80);
+    expect(helpfulPct({ helpfulVotes: 8, totalVotes: HELPFUL_PCT_MIN_VOTES - 1 })).toBeNull();
+  });
+
+  it('the score still exists for RANKING — it is computed, just never printed', () => {
+    expect(netScore({ helpfulVotes: 3, totalVotes: 4 })).toBe(2);
   });
 
   it('netScore has exactly one definition: helpful minus not-helpful', () => {

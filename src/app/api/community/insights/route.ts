@@ -101,7 +101,7 @@ export async function GET() {
     return {
       id: r.id, kind: r.kind, text: r.text, section: r.section,
       displayName: r.displayName, imageUrl: r.imageUrl,
-      score: d.score, canVote: d.canVote, isMine: r.isMine,
+      helpfulPct: d.helpfulPct, canVote: d.canVote, isMine: r.isMine,
       myVote: myVoteById.get(r.id) ?? null,
     };
   };

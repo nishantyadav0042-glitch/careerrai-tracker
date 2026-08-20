@@ -130,16 +130,25 @@ export default async function StudentPipelinePage({ searchParams }: { searchPara
           {rows.map((r) => {
             const m = priorityMeta(r.priority);
             return (
-              <Link key={r.id} href={`/admin/student/${r.id}`} className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3 transition-colors hover:border-stone-400">
-                <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${BADGE[m.tone]}`}>{r.priority}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-bold text-stone-900">{r.name}</p>
-                  <p className="truncate text-[11.5px] text-stone-500">{r.reason}</p>
-                </div>
+              // The WA link is a SIBLING of the row link, not a child of it.
+              // It used to be nested inside <Link> with an onClick that called
+              // stopPropagation — two bugs in one line: an <a> inside an <a> is
+              // invalid HTML, and an event handler cannot cross into a server
+              // component. React refused to render the page at all (512 crashes
+              // between 9 and 15 Aug; this workspace has been dead since).
+              // Siblings need no handler: the tap targets simply do not overlap.
+              <div key={r.id} className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3 transition-colors hover:border-stone-400">
+                <Link href={`/admin/student/${r.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${BADGE[m.tone]}`}>{r.priority}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-bold text-stone-900">{r.name}</p>
+                    <p className="truncate text-[11.5px] text-stone-500">{r.reason}</p>
+                  </div>
+                </Link>
                 {r.phone && (
-                  <a href={`https://wa.me/${r.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-[11px] font-semibold text-teal-700">WA</a>
+                  <a href={`https://wa.me/${r.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-50">WA</a>
                 )}
-              </Link>
+              </div>
             );
           })}
         </div>

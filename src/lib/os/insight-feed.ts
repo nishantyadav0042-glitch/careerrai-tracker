@@ -1,17 +1,25 @@
 // ── Student Insights: the community loop ────────────────────────────────────
 //
-// RULING CHANGE (founder, 20 Aug 2026): votes become a VISIBLE, real ranking
-// system — every card shows its net score (▲ n), a student can change or
-// remove their vote, and a Top ordering exists where the best content rises.
-// This deliberately overrides the 12 Aug "no small numbers" ruling for
-// PER-ITEM scores: the founder's own forensic showed students voting into a
-// void ("their votes are not being counted") — a vote with no visible
-// consequence reads as a broken product, which is worse than a small number.
+// HOW A VOTE SHOWS ITS CONSEQUENCE (founder, 20 Aug — two rulings, in order).
 //
-// What SURVIVES from 12 Aug, unchanged: no member counts, no participant
-// counts, no leaderboard totals — a per-item score says "this item helped
-// people" without announcing the size of the room. Contributor REWARD is
-// still rank, never count (myRank below).
+// First: a vote must visibly do something. Students were voting into a void,
+// which reads as a broken product.
+//
+// Then: do not show raw counts — they are small, and "▲ 2" announces the size
+// of the room more loudly than it praises the content.
+//
+// Both are satisfied without lying, because a vote has THREE consequences and
+// only one of them is a number:
+//   1. the button state flips instantly — my vote is mine and I can see it
+//   2. the item MOVES — ranking is the real consequence of voting
+//   3. a percentage appears once the sample can carry one
+//
+// The percentage obeys the same discipline as challenge.ts SPLIT_MIN_ATTEMPTS
+// ("a percentage is noise wearing a suit"): below the floor there is no
+// number at all, because "100% found this useful" from two votes is a worse
+// lie than the two votes were. Above it, "82% found this useful" is real
+// evidence and says nothing about how many of us there are — it reads the
+// same at 300 students and at 300,000.
 //
 // That constraint is the entire design problem, and it has a clean answer:
 //
@@ -54,6 +62,23 @@ export function mayShowVoteCount(total: number): boolean {
   return total >= VOTE_COUNT_REVEAL_MIN;
 }
 
+/**
+ * Votes needed before a "% found this useful" may be shown.
+ *
+ * Lower than VOTE_COUNT_REVEAL_MIN because a ratio survives a smaller sample
+ * than a headline count does — but not by much, and deliberately not 1 or 2.
+ * At n=3 a single downvote swings the figure by 33 points; at n=10 it moves
+ * it by 10, which a student can read as a real opinion rather than an
+ * accident. Same reasoning, same shape, as SPLIT_MIN_ATTEMPTS in challenge.ts.
+ */
+export const HELPFUL_PCT_MIN_VOTES = 10;
+
+/** "% found this useful", or null when the sample cannot carry one. */
+export function helpfulPct(row: Pick<InsightRow, 'helpfulVotes' | 'totalVotes'>): number | null {
+  if (row.totalVotes < HELPFUL_PCT_MIN_VOTES) return null;
+  return Math.round((row.helpfulVotes / row.totalVotes) * 100);
+}
+
 export interface InsightRow {
   id: string;
   kind: InsightKind;
@@ -80,16 +105,17 @@ export function netScore(row: Pick<InsightRow, 'helpfulVotes' | 'totalVotes'>): 
 
 /** What the UI is allowed to render for an item's votes. */
 export interface VoteDisplay {
-  /** Net score, always shown (founder ruling, 20 Aug). */
-  score: number;
-  /** Vote buttons always render for others' content — a vote can now be
-   *  changed or removed, so having voted no longer disables them. */
+  /** "% found this useful", or null below the floor. NEVER a raw count —
+   *  the count is what makes the room look empty. */
+  helpfulPct: number | null;
+  /** Vote buttons always render for others' content — a vote can be
+   *  changed or removed, so having voted does not disable them. */
   canVote: boolean;
 }
 
 export function voteDisplay(row: InsightRow): VoteDisplay {
   return {
-    score: netScore(row),
+    helpfulPct: helpfulPct(row),
     canVote: !row.isMine,
   };
 }
