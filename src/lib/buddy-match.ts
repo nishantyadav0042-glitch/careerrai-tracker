@@ -222,62 +222,153 @@ export interface RecommendedBuddyResult extends MatchBuddy {
 // that it does not become a mentor marketplace to shop in -- which is exactly
 // the category the founder does not want to be in. Shared by every screen that shows the buddy showcase to a free
 // student — profile page, and the paywall screens (buddy tab, chat tab).
-export async function getRecommendedBuddiesForStudent(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
-  studentId: string
-): Promise<RecommendedBuddyResult[]> {
-  const fourteenAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
-  const [{ data: student }, { data: buddies }, { data: coverage }, { data: debriefs }, { data: routines }, { data: completions }] = await Promise.all([
-    admin.from('profiles')
-      .select('baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater, self_reported_weakest_section, self_reported_strongest_section')
-      .eq('id', studentId).single(),
-    admin.from('profiles')
-      .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
-      .eq('role', 'buddy').eq('buddy_onboarding_completed', true)
-      .not('cat_percentile', 'is', null)
-      .not('is_test_account', 'is', true), // never recommend test/demo buddies to real students
-    admin.from('topic_coverage').select('section, status').eq('student_id', studentId),
-    admin.from('mock_debriefs').select('taken_on, varc, dilr, qa')
-      .eq('student_id', studentId).order('taken_on', { ascending: false }).limit(5),
-    admin.from('daily_routines').select('routine_date, tasks')
-      .eq('student_id', studentId).gte('routine_date', fourteenAgo),
-    admin.from('routine_task_completions').select('routine_date, task_id, confidence')
-      .eq('student_id', studentId).gte('routine_date', fourteenAgo),
-  ]);
-  if (!student || !buddies?.length) return [];
+/** The raw rows one student's focus resolution needs. Shape-identical whether
+ *  they arrived from a single-student fetch or a bulk one. */
+export interface FocusInputs {
+  profile: Record<string, unknown>;
+  coverage: { section: string; status: string }[];
+  debriefs: DebriefRow[];
+  routines: { tasks: unknown }[];
+  completions: { routine_date: string; task_id: string; confidence: string | null }[];
+}
 
-  // THE SAME AUTHORITY THE PLAN USES (founder ruling, Batch 8). Matching held
-  // its own definition of weakest section -- the baseline columns, populated
-  // for 1 of 553 students -- while the plan resolved it from mock ->
-  // self-report -> baseline -> coverage. One student, one answer.
-  const focus = resolveFocusSections(
-    student, (coverage ?? []) as { section: string; status: string }[],
-    (debriefs ?? []) as DebriefRow[], studyDayString(),
-  );
+/**
+ * THE single place a student becomes a MatchStudent.
+ *
+ * P1, 20 Aug: the page resolved focus through resolveFocusSections while
+ * cron/buddy-evening called rankBuddies directly with only the baseline
+ * columns -- populated for 1 of 553 students -- so the cron ranked on profile
+ * completeness alone. Proven consequence: the push named Soumitra while the
+ * page it opened recommended Spandana, for 80 of 123 push-eligible students.
+ *
+ * The bug was not the cron's query list. It was that TWO code paths could each
+ * decide what a student's problem is. This function is the fix: it is pure, it
+ * takes rows, and every surface must go through it. Fetching differs (one
+ * student or many); deciding cannot.
+ */
+export function buildMatchStudent(inputs: FocusInputs, todayIso: string): MatchStudent {
+  const focus = resolveFocusSections(inputs.profile, inputs.coverage, inputs.debriefs, todayIso);
 
-  // Plateau evidence: topic/section come from the routine's own task list,
-  // the confidence marks are the student's taps.
+  // Plateau evidence: topic/section come from the routine's own task list, the
+  // confidence marks are the student's own taps.
   const taskMeta = new Map<string, { topic: string; section: string }>();
-  for (const r of routines ?? []) {
+  for (const r of inputs.routines) {
     for (const t of (Array.isArray(r.tasks) ? r.tasks : []) as { id?: string; topic?: string; section?: string }[]) {
       if (t.id && t.topic && t.section) taskMeta.set(String(t.id), { topic: t.topic, section: t.section });
     }
   }
   const plateau = findPlateau(
-    (completions ?? []).flatMap((c: { routine_date: string; task_id: string; confidence: string | null }) => {
+    inputs.completions.flatMap((c) => {
       const meta = taskMeta.get(String(c.task_id));
       return meta ? [{ topic: meta.topic, section: meta.section, date: c.routine_date, confidence: c.confidence }] : [];
     }),
   );
 
-  const matchStudent: MatchStudent = {
-    ...(student as MatchStudent),
+  return {
+    ...(inputs.profile as unknown as MatchStudent),
     focus_weakest: focus.weakest,
     focus_source: focus.weakestSource,
     plateau,
   };
-  return rankBuddies(matchStudent, buddies as MatchBuddy[])
+}
+
+/** Columns every focus resolution needs from the student's profile row. */
+export const FOCUS_PROFILE_COLUMNS =
+  'id, baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater, self_reported_weakest_section, self_reported_strongest_section';
+
+/** Showcase-eligible mentors. One definition, used by page and cron alike. */
+export const MATCH_BUDDY_COLUMNS =
+  'id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchEligibleBuddies(admin: any): Promise<MatchBuddy[]> {
+  const { data } = await admin.from('profiles').select(MATCH_BUDDY_COLUMNS)
+    .eq('role', 'buddy').eq('buddy_onboarding_completed', true)
+    .not('cat_percentile', 'is', null)
+    .not('is_test_account', 'is', true); // never recommend test/demo buddies
+  return (data ?? []) as MatchBuddy[];
+}
+
+/**
+ * Focus inputs for MANY students, in a bounded number of queries.
+ *
+ * Four queries per CHUNK, not per student. The cron previously did zero of
+ * these; doing them per-student would have been 6 x N, which the audit costed
+ * at ~60k queries per run at 10k students and called unacceptable at 100k.
+ * Chunking keeps both the query count and each result set bounded, so the run
+ * grows linearly in chunks rather than quadratically in round-trips.
+ */
+export const FOCUS_BULK_CHUNK = 250;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchFocusInputsBulk(admin: any, studentIds: string[]): Promise<Map<string, FocusInputs>> {
+  const out = new Map<string, FocusInputs>();
+  const fourteenAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
+
+  for (let i = 0; i < studentIds.length; i += FOCUS_BULK_CHUNK) {
+    const ids = studentIds.slice(i, i + FOCUS_BULK_CHUNK);
+    const [{ data: profiles }, { data: coverage }, { data: debriefs }, { data: routines }, { data: completions }] =
+      await Promise.all([
+        admin.from('profiles').select(FOCUS_PROFILE_COLUMNS).in('id', ids),
+        admin.from('topic_coverage').select('student_id, section, status').in('student_id', ids),
+        admin.from('mock_debriefs').select('student_id, taken_on, varc, dilr, qa').in('student_id', ids),
+        admin.from('daily_routines').select('student_id, tasks').in('student_id', ids).gte('routine_date', fourteenAgo),
+        admin.from('routine_task_completions').select('student_id, routine_date, task_id, confidence')
+          .in('student_id', ids).gte('routine_date', fourteenAgo),
+      ]);
+
+    const group = <T extends { student_id: string }>(rows: T[] | null) => {
+      const m = new Map<string, T[]>();
+      for (const r of rows ?? []) {
+        if (!m.has(r.student_id)) m.set(r.student_id, []);
+        m.get(r.student_id)!.push(r);
+      }
+      return m;
+    };
+    const cov = group(coverage), deb = group(debriefs), rou = group(routines), com = group(completions);
+
+    for (const p of (profiles ?? []) as { id: string }[]) {
+      out.set(p.id, {
+        profile: p as Record<string, unknown>,
+        coverage: (cov.get(p.id) ?? []) as unknown as { section: string; status: string }[],
+        debriefs: (deb.get(p.id) ?? []) as unknown as DebriefRow[],
+        routines: (rou.get(p.id) ?? []) as unknown as { tasks: unknown }[],
+        completions: (com.get(p.id) ?? []) as unknown as { routine_date: string; task_id: string; confidence: string | null }[],
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The recommendation, for one student. Page-side entry point.
+ *
+ * Fetches this student's inputs and hands them to buildMatchStudent -- the same
+ * function the cron uses -- so the two cannot disagree about who is
+ * recommended or why.
+ */
+export async function getRecommendedBuddiesForStudent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  studentId: string
+): Promise<RecommendedBuddyResult[]> {
+  const [inputsById, buddies] = await Promise.all([
+    fetchFocusInputsBulk(admin, [studentId]),
+    fetchEligibleBuddies(admin),
+  ]);
+  const inputs = inputsById.get(studentId);
+  if (!inputs || !buddies.length) return [];
+  return recommendFor(inputs, buddies);
+}
+
+/**
+ * Ranking + reasons from already-fetched inputs. The ONLY producer of a Buddy
+ * recommendation. Page and cron both end here, which is what makes the push
+ * and the page it opens structurally incapable of naming different mentors.
+ */
+export function recommendFor(inputs: FocusInputs, buddies: MatchBuddy[], todayIso = studyDayString()): RecommendedBuddyResult[] {
+  const matchStudent = buildMatchStudent(inputs, todayIso);
+  return rankBuddies(matchStudent, buddies)
     .slice(0, 5)
     .map((b) => ({ ...b, reason: matchReason(matchStudent, b) }));
 }
