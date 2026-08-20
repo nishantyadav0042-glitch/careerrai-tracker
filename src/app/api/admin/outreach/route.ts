@@ -1,8 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { LEAD_STATUSES } from '@/lib/sales-disposition';
 
-const VALID_STATUS = ['not_contacted', 'called', 'interested', 'follow_up', 'converted', 'not_interested'];
+// One vocabulary, one authority: the same list the DB CHECK enforces.
+const VALID_STATUS: readonly string[] = LEAD_STATUSES;
 
 // Upsert a lead's outreach state (owner / status / follow-up / notes).
 // Admin-only: lead_outreach has RLS with no policies, so only this

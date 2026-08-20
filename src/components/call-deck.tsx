@@ -25,17 +25,31 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
   const [list, setList] = useState(queue);
   const [done, setDone] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [errorById, setErrorById] = useState<Record<string, string>>({});
 
-  const dispose = async (lead: CallLead, outcome: string, note: string, callbackAt?: string) => {
+  // NOT optimistic (20 Aug, Sales Phase 1): the lead leaves the deck only
+  // after the server confirms the write. The old version removed the card
+  // regardless — a rejected disposition looked identical to a saved one, and
+  // the lead was gone from the rep's day with nothing recorded.
+  const dispose = async (lead: CallLead, outcome: string, note: string, callbackAt?: string): Promise<boolean> => {
+    setErrorById((e) => ({ ...e, [lead.studentId]: '' }));
+    let failure = 'Could not save the call — check your connection and try again.';
     try {
-      await fetch('/api/sales/log', {
+      const res = await fetch('/api/sales/log', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: lead.studentId, outcome, note, callbackAt, hot: lead.hot }),
       });
-    } catch { /* best-effort */ }
-    setDone((d) => d + 1);
-    setList((l) => l.filter((x) => x.studentId !== lead.studentId));
-    setOpenId(null);
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.ok === true) {
+        setDone((d) => d + 1);
+        setList((l) => l.filter((x) => x.studentId !== lead.studentId));
+        setOpenId(null);
+        return true;
+      }
+      if (json?.error) failure = json.error;
+    } catch { /* network failure — fall through to the shared message */ }
+    setErrorById((e) => ({ ...e, [lead.studentId]: failure }));
+    return false;
   };
 
   if (list.length === 0) {
@@ -81,13 +95,16 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
                 <MessageCircle className="h-4 w-4" /> WA
               </a>
             )}
-            <button onClick={() => dispose(lead, 'no_answer', '')} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50" title="Didn't pick up">
+            <button onClick={() => void dispose(lead, 'no_answer', '')} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-semibold text-orange-600 active:bg-orange-50" title="Didn't pick up">
               <PhoneOff className="h-4 w-4" /> No answer
             </button>
             <button onClick={() => setOpenId(openId === lead.studentId ? null : lead.studentId)} className="flex items-center justify-center gap-1 bg-white px-3 py-3 text-[12px] font-bold text-teal-700 active:bg-teal-50">
               Log <ChevronDown className={`h-4 w-4 transition-transform ${openId === lead.studentId ? 'rotate-180' : ''}`} />
             </button>
           </div>
+          {errorById[lead.studentId] ? (
+            <p className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700">{errorById[lead.studentId]}</p>
+          ) : null}
           {openId === lead.studentId && <Disposition lead={lead} onDispose={dispose} />}
         </div>
       ))}
@@ -95,7 +112,7 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
   );
 }
 
-function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallLead, o: string, n: string, cb?: string) => void }) {
+function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallLead, o: string, n: string, cb?: string) => Promise<boolean> }) {
   const [outcome, setOutcome] = useState('interested');
   const [note, setNote] = useState('');
   const [callbackAt, setCallbackAt] = useState('');
@@ -124,7 +141,11 @@ function Disposition({ lead, onDispose }: { lead: CallLead; onDispose: (l: CallL
         className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
       <button
         disabled={!canSave || saving}
-        onClick={() => { setSaving(true); onDispose(lead, outcome, note.trim(), needsCallback ? (callbackAt || defaultCallback()) : undefined); }}
+        onClick={async () => {
+          setSaving(true);
+          const ok = await onDispose(lead, outcome, note.trim(), needsCallback ? (callbackAt || defaultCallback()) : undefined);
+          if (!ok) setSaving(false); // failed — keep the form so she can retry
+        }}
         className="w-full rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40">
         {saving ? 'Saving…' : canSave ? 'Save & next' : 'Write feedback to save'}
       </button>

@@ -108,13 +108,18 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   const tier: ConversionView['tier'] = (buddyTaps >= 1 && active) ? 'hot' : (buddyTaps >= 1 || mock || momentum.score >= 50) ? 'warm' : 'cool';
 
   // ── Objection playbook (tailored) ──
+  // HONESTY RULE (20 Aug, Sales Phase 1 — same audit standard as the queue
+  // script, 13 Aug): this playbook is read DURING a live call, so it may only
+  // claim what the product delivers today. The dormant free-messages mechanic
+  // (26 grants, 0 activated) and the unconditional risk-free framing were
+  // removed; the refund is always stated WITH its logged-days condition.
   const objections: Objection[] = [
-    { objection: '"Rs 999 is too much"', response: 'It\'s less than a single coaching class — and there\'s a full refund if you don\'t find value. There is literally no risk.' },
-    { objection: '"I\'m not sure it\'ll help me"', response: 'That\'s exactly why you get 3 free messages first — try the buddy, feel the value, then decide.' },
+    { objection: '"Rs 999 is too much"', response: 'It\'s less than a single coaching class — and if it hasn\'t helped in your first month you get a full refund. The one condition is 20 logged study days, so we know you gave it a real go.' },
+    { objection: '"I\'m not sure it\'ll help me"', response: 'Fair — that\'s exactly what the refund is for. Try it for a month; if it hasn\'t helped, you get the full amount back. The one condition is 20 logged study days, so you only pay for something you actually used.' },
   ];
   if (weakSection) objections.push({ objection: '"I can manage on my own"', response: `You're strong in ${strongSection ?? 'some areas'}, but ${weakSection} is where marks are leaking. A buddy builds a focused ${weakSection} plan — that's the fastest score jump.` });
   if (momentum.band === 'champion' || momentum.band === 'on_track') objections.push({ objection: '"I already study daily"', response: 'Exactly — you\'re putting in the hours. A buddy makes sure those hours go to the right topics instead of guesswork. Same effort, more score.' });
-  if (buddyTaps >= 1) objections.push({ objection: '"Let me think about it"', response: 'You already looked at the buddy, so you know you want the guidance. The only real question is risk — and the full refund removes it. Try the 3 free messages tonight.' });
+  if (buddyTaps >= 1) objections.push({ objection: '"Let me think about it"', response: 'You already looked at the buddy, so you know you want the guidance. The only real question is risk — and the full refund removes it: 20 logged study days in your first month and you can claim every rupee back if it hasn\'t helped.' });
 
   // Recommended buddy — a specific, relevant mentor beats "a buddy". Reuses the
   // same matching engine the student-facing showcase uses (section fit first).
@@ -129,7 +134,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   const buddyLine = recommendedBuddy
     ? ` For you I'd pair ${recommendedBuddy.name}${recommendedBuddy.college ? ` (${recommendedBuddy.college})` : ''}${recommendedBuddy.reason ? ` — ${recommendedBuddy.reason.toLowerCase()}` : ''}.`
     : '';
-  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you.${buddyLine} It's Rs 999, full refund if you don't find value, and 3 free messages to start. Shall I set it up? App: ${SITE_URL}`;
+  const pitch = `${first}, you've been preparing seriously${weakSection ? ` and ${weakSection} is the area holding your score back` : ''}. An Exam Buddy is a personal mentor who builds your plan around your weak areas and tracks your mocks with you.${buddyLine} It's Rs 999, and if it hasn't helped in your first month you get a full refund — the one condition is 20 logged study days, so we know you gave it a real go. Shall I set it up? App: ${SITE_URL}`;
 
   return {
     studentId: id, name: p.full_name ?? 'Student', firstName: first, phone: p.phone ?? null, waNumber: waNumber(p.phone ?? null),

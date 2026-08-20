@@ -1,26 +1,18 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isCallOutcome, isConnectedOutcome, planDisposition } from '@/lib/sales-disposition';
 
-// Disposition engine — the heart of the dialer CRM. Every call MUST end in a
-// disposition; this computes when (if ever) the lead comes back:
-//   interested      → follow up in 2 days
-//   callback        → at the exact time the student asked for
-//   converted       → gone (won)
-//   not_interested  → gone forever (never resurface)
-//   no_answer       → retry this evening, or next day; hot leads always roll to
-//                     tomorrow; after repeated misses it goes cold (+3 days)
-// Feedback is mandatory on every CONNECTED call (not on a no-answer).
-
-// Build a UTC ISO for an IST wall-clock time `dayOffset` days from today.
-function istFutureIso(dayOffset: number, hour: number, minute = 0): string {
-  const istNow = new Date(Date.now() + 5.5 * 3600_000);
-  const target = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() + dayOffset, hour, minute);
-  return new Date(target - 5.5 * 3600_000).toISOString();
-}
-function istHour(): number {
-  return new Date(Date.now() + 5.5 * 3600_000).getUTCHours();
-}
+// Disposition endpoint — the heart of the dialer CRM. Every call MUST end in a
+// disposition. The vocabulary and the disposition → state mapping live in ONE
+// place (lib/sales-disposition) shared with the DB CHECK; this route only
+// authenticates, validates, and persists.
+//
+// TRUTH RULE (20 Aug, Sales Phase 1): a failed DB write returns non-2xx. The
+// original version ignored both write errors and returned {ok:true} while the
+// production CHECK rejected status='no_answer' — the lead silently left the
+// queue forever and history said the call happened. Never again: the client
+// only advances on a confirmed write.
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -37,14 +29,12 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const { studentId, outcome, note, callbackAt, hot } = body ?? {};
-  const CONNECTED = ['interested', 'callback', 'converted', 'not_interested'];
-  const VALID = [...CONNECTED, 'no_answer'];
-  if (typeof studentId !== 'string' || !VALID.includes(outcome)) {
+  if (typeof studentId !== 'string' || !isCallOutcome(outcome)) {
     return NextResponse.json({ error: 'Invalid disposition' }, { status: 400 });
   }
   const noteText = typeof note === 'string' ? note.trim() : '';
-  // Feedback is mandatory on a connected call.
-  if (CONNECTED.includes(outcome) && noteText.length === 0) {
+  // Feedback is mandatory on a connected call (not on a no-answer).
+  if (isConnectedOutcome(outcome) && noteText.length === 0) {
     return NextResponse.json({ error: 'Feedback is required for a connected call.' }, { status: 400 });
   }
   // A callback needs a time.
@@ -52,55 +42,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
   }
 
-  // Map the disposition to a stored status + a next_action_at (the re-queue clock).
   const { data: cur } = await admin.from('lead_outreach').select('no_answer_count').eq('student_id', studentId).maybeSingle();
   const prevMisses = (cur?.no_answer_count as number | null) ?? 0;
 
-  let status = outcome;
-  let nextActionAt: string | null = null;
-  let noAnswerCount = prevMisses;
-  let cbAt: string | null = null;
-
-  if (outcome === 'callback') {
-    status = 'follow_up';
-    cbAt = new Date((callbackAt as string).slice(0, 16) + ':00+05:30').toISOString();
-    nextActionAt = cbAt;
-    noAnswerCount = 0;
-  } else if (outcome === 'interested') {
-    nextActionAt = istFutureIso(2, 11, 0); // gentle follow-up in 2 days, late morning
-    noAnswerCount = 0;
-  } else if (outcome === 'no_answer') {
-    noAnswerCount = prevMisses + 1;
-    if (hot === true) {
-      nextActionAt = istFutureIso(1, 10, 0);            // never lose a hot lead — tomorrow morning
-    } else if (noAnswerCount < 2 && istHour() < 17) {
-      nextActionAt = istFutureIso(0, 18, 30);           // evening retry today
-    } else if (noAnswerCount < 4) {
-      nextActionAt = istFutureIso(1, 18, 0);            // tomorrow evening
-    } else {
-      nextActionAt = istFutureIso(3, 18, 0);            // going cold — space it out
-    }
-  }
-  // converted / not_interested → nextActionAt stays null (closed forever).
+  const plan = planDisposition(outcome, {
+    prevMisses,
+    hot: hot === true,
+    callbackAtLocal: typeof callbackAt === 'string' ? callbackAt : null,
+    nowMs: Date.now(),
+  });
 
   const actor = (me?.email as string | null) ?? (me?.full_name as string | null) ?? 'sales';
   const now = new Date().toISOString();
 
-  await admin.from('lead_outreach').upsert({
+  // State first, then history — and BOTH checked. If state fails we stop
+  // before writing history, so the two can never contradict each other.
+  const { error: stateError } = await admin.from('lead_outreach').upsert({
     student_id: studentId,
-    status,
-    callback_at: cbAt,
-    next_action_at: nextActionAt,
+    status: plan.status,
+    callback_at: plan.callbackAt,
+    next_action_at: plan.nextActionAt,
     last_attempt_at: now,
-    no_answer_count: noAnswerCount,
+    no_answer_count: plan.noAnswerCount,
     notes: noteText || null,
     owner: actor,
     updated_at: now,
   });
+  if (stateError) {
+    console.error('[sales/log] lead_outreach upsert failed:', stateError.message);
+    return NextResponse.json({ error: 'Could not save the call — try again.' }, { status: 500 });
+  }
 
-  await admin.from('sales_activity').insert({
-    student_id: studentId, actor, status: outcome, note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : null), callback_at: cbAt,
+  const { error: historyError } = await admin.from('sales_activity').insert({
+    student_id: studentId,
+    actor,
+    status: outcome,
+    note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : null),
+    callback_at: plan.callbackAt,
   });
+  if (historyError) {
+    console.error('[sales/log] sales_activity insert failed:', historyError.message);
+    return NextResponse.json({ error: 'Call state saved but history write failed — retry to record it.' }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

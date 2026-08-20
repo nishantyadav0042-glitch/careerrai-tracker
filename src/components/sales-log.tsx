@@ -2,9 +2,14 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
 
+// Keys are the API's disposition vocabulary (lib/sales-disposition
+// CALL_OUTCOMES) — 'callback', not the stored 'follow_up'. The original
+// component sent the stored-status vocabulary under the wrong body key
+// ('status' instead of 'outcome'), so every save was silently rejected with
+// a 400 while the UI showed "Call logged ✓".
 const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'interested', label: 'Interested', cls: 'bg-amber-500 text-white' },
-  { key: 'follow_up', label: 'Callback', cls: 'bg-sky-600 text-white' },
+  { key: 'callback', label: 'Callback', cls: 'bg-sky-600 text-white' },
   { key: 'converted', label: 'Converted', cls: 'bg-emerald-600 text-white' },
   { key: 'no_answer', label: 'No answer', cls: 'bg-stone-200 text-stone-700' },
   { key: 'not_interested', label: 'Not interested', cls: 'bg-stone-200 text-stone-700' },
@@ -25,16 +30,24 @@ export function QuickLog({ studentId }: { studentId: string }) {
   const [callbackAt, setCallbackAt] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const needsCallback = status === 'follow_up';
+  const [error, setError] = useState<string | null>(null);
+  const needsCallback = status === 'callback';
 
+  // "Call logged ✓" is shown only after the server confirms the write —
+  // never optimistically (20 Aug, Sales Phase 1).
   async function save() {
     setSaving(true);
+    setError(null);
     try {
-      await fetch('/api/sales/log', {
+      const res = await fetch('/api/sales/log', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, status, note, callbackAt: needsCallback ? (callbackAt || defaultCallback()) : null }),
+        body: JSON.stringify({ studentId, outcome: status, note, callbackAt: needsCallback ? (callbackAt || defaultCallback()) : null }),
       });
-      setSaved(true);
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.ok === true) setSaved(true);
+      else setError(json?.error ?? 'Could not save the call — try again.');
+    } catch {
+      setError('Connection issue — try again.');
     } finally { setSaving(false); }
   }
 
@@ -62,6 +75,7 @@ export function QuickLog({ studentId }: { studentId: string }) {
       )}
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What did they say? Objections, next step…"
         className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+      {error && <p className="text-[12px] font-semibold text-rose-600">{error}</p>}
       <button onClick={save} disabled={saving}
         className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-60">
         {saving ? 'Saving…' : <><Check className="h-4 w-4" /> Save this call</>}
