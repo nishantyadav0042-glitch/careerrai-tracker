@@ -3,14 +3,20 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { TOPIC_METADATA, KNOWLEDGE_GRAPH } from '@/lib/topics-constants';
 import { checkTipSafety, checkImageSafety } from '@/lib/community-safety';
-import { randomDisplayName, VOTING_WINDOW_HOURS, MAX_SUBMISSIONS_PER_DAY, MAX_IMAGE_BYTES, IMAGE_MIMES, MIN_TIP_CHARS, MAX_TIP_CHARS } from '@/lib/community-pipeline';
+import {
+  MAX_IMAGE_BYTES, MAX_SUBMISSIONS_PER_DAY, VOTING_WINDOW_HOURS,
+  randomDisplayName, validateSubmission, type SubmitInput,
+} from '@/lib/community-pipeline';
 
 export const maxDuration = 60;
 
-// POST /api/community/submit — exactly two contribution types (founder, 25 Jul):
+// POST /api/community/submit — exactly two contribution types:
 //
 //   tip      — plain text ≤150 chars, section + topic mandatory
-//   question — a PHOTO, section mandatory, topic optional
+//   question — typed text OR a photo OR both (founder, 20 Aug: the purpose
+//              is sharing a tough question as easily as possible — the
+//              mandatory image was an implementation shortcut, not the
+//              product), section mandatory, topic optional
 //
 // Flow: automated SAFETY gate (the only pre-publication check) → the voting
 // pool for 72h, under a random display name → ranked by student votes → the
@@ -23,26 +29,14 @@ const SECTIONS: string[] = KNOWLEDGE_GRAPH.map((s) => s.id);
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthenticated', code: 'AUTH_REQUIRED' }, { status: 401 });
 
-  const body = await request.json().catch(() => ({}));
-  const { kind, section, topic, tip, image, image_mime: imageMime } = body as {
-    kind?: unknown; section?: unknown; topic?: unknown; tip?: unknown;
-    image?: unknown; image_mime?: unknown;
-  };
+  const body = (await request.json().catch(() => ({}))) as SubmitInput;
 
-  if (kind !== 'tip' && kind !== 'question') {
-    return NextResponse.json({ error: 'kind must be tip or question' }, { status: 400 });
-  }
-  if (typeof section !== 'string' || !SECTIONS.includes(section)) {
-    return NextResponse.json({ error: 'Pick a section' }, { status: 400 });
-  }
-  // Topic: mandatory for tips (a tip must land somewhere in the curriculum),
-  // optional for questions (the photo speaks for itself; friction stays low).
-  const topicOk = typeof topic === 'string' && !!TOPIC_METADATA[topic] && TOPIC_METADATA[topic].section === section;
-  if (kind === 'tip' && !topicOk) {
-    return NextResponse.json({ error: 'Pick the topic your tip is about' }, { status: 400 });
-  }
+  // ONE contract, shared shape with the client hint (lib/community-pipeline).
+  const v = validateSubmission(body, SECTIONS, (t) => TOPIC_METADATA[t]?.section);
+  if (!v.ok) return NextResponse.json({ error: v.error, code: v.code }, { status: 400 });
+  const sub = v.value;
 
   const admin = createAdminClient();
 
@@ -52,69 +46,78 @@ export async function POST(request: NextRequest) {
     .from('student_submissions').select('id', { count: 'exact', head: true })
     .eq('student_id', user.id).gte('created_at', dayAgo);
   if ((count ?? 0) >= MAX_SUBMISSIONS_PER_DAY) {
-    return NextResponse.json({ error: 'One share a day — make it your best one.' }, { status: 429 });
+    return NextResponse.json({ error: 'One share a day — make it your best one.', code: 'RATE_LIMITED' }, { status: 429 });
   }
 
   const votingEnds = new Date(Date.now() + VOTING_WINDOW_HOURS * 3600_000).toISOString();
   const displayName = randomDisplayName();
 
-  if (kind === 'tip') {
-    const text = typeof tip === 'string' ? tip.trim() : '';
-    if (text.length < MIN_TIP_CHARS || text.length > MAX_TIP_CHARS) {
-      return NextResponse.json({ error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` }, { status: 400 });
-    }
-
-    const safety = await checkTipSafety(text);
-    if (safety.verdict === 'blocked') {
+  // ── Text safety — tips AND typed questions run the same gate ──
+  let textVerdict: Awaited<ReturnType<typeof checkTipSafety>> | null = null;
+  if (sub.text) {
+    textVerdict = await checkTipSafety(sub.text);
+    if (textVerdict.verdict === 'blocked') {
       // Generic message on purpose — echoing what tripped the filter teaches
       // how to evade it.
-      return NextResponse.json({ error: 'This can’t be shared. Keep it about CAT prep, with no links or contact details.' }, { status: 400 });
+      return NextResponse.json({
+        error: 'This can’t be shared. Keep it about CAT prep, with no links or contact details.',
+        code: 'MODERATION_BLOCKED',
+      }, { status: 400 });
+    }
+  }
+
+  // ── Image path (optional now) ──
+  let imagePath: string | null = null;
+  let imageVerdict: Awaited<ReturnType<typeof checkImageSafety>> | null = null;
+  if (sub.image && sub.imageMime) {
+    const bytes = Buffer.from(sub.image, 'base64');
+    if (bytes.length < 1024) {
+      return NextResponse.json({ error: 'That photo looks empty — try again', code: 'IMAGE_TOO_SMALL' }, { status: 400 });
+    }
+    if (bytes.length > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: 'Photo must be under 4 MB', code: 'IMAGE_TOO_LARGE' }, { status: 400 });
     }
 
-    const { error } = await admin.from('student_submissions').insert({
-      student_id: user.id, kind: 'tip', topic: topic as string,
-      payload: { text, section },
-      display_name: displayName,
-      status: safety.verdict === 'ok' ? 'voting' : 'pending',
-      voting_ends_at: votingEnds,
-    });
-    if (error) return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 });
-  } else {
-    if (typeof image !== 'string' || typeof imageMime !== 'string' || !IMAGE_MIMES.includes(imageMime)) {
-      return NextResponse.json({ error: 'Attach a photo of the question (JPG/PNG)' }, { status: 400 });
-    }
-    const bytes = Buffer.from(image, 'base64');
-    if (bytes.length < 1024 || bytes.length > MAX_IMAGE_BYTES) {
-      return NextResponse.json({ error: 'Photo must be under 4 MB' }, { status: 400 });
-    }
-
-    const safety = await checkImageSafety(image, imageMime);
-    if (safety.verdict === 'blocked') {
-      return NextResponse.json({ error: 'This image can’t be shared. Upload a clear photo of a CAT practice question.' }, { status: 400 });
+    imageVerdict = await checkImageSafety(sub.image, sub.imageMime);
+    if (imageVerdict.verdict === 'blocked') {
+      return NextResponse.json({
+        error: 'This image can’t be shared. Upload a clear photo of a CAT practice question.',
+        code: 'MODERATION_BLOCKED',
+      }, { status: 400 });
     }
 
     // The image touches storage ONLY after the gate. A 'manual' verdict still
     // uploads (a human must be able to see it to review it) but the row stays
     // 'pending', which no student-facing query reads.
-    const ext = imageMime === 'image/png' ? 'png' : imageMime === 'image/webp' ? 'webp' : 'jpg';
-    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const ext = sub.imageMime === 'image/png' ? 'png' : sub.imageMime === 'image/webp' ? 'webp' : 'jpg';
+    imagePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await admin.storage
       .from('community-questions')
-      .upload(path, bytes, { contentType: imageMime, cacheControl: '86400' });
+      .upload(imagePath, bytes, { contentType: sub.imageMime, cacheControl: '86400' });
     if (upErr) {
       console.error('[community] image upload failed', upErr.message);
-      return NextResponse.json({ error: 'Could not save the photo. Please try again.' }, { status: 500 });
+      return NextResponse.json({ error: 'Could not save the photo. Please try again.', code: 'IMAGE_UPLOAD_FAILED' }, { status: 500 });
     }
+  }
 
-    const { error } = await admin.from('student_submissions').insert({
-      student_id: user.id, kind: 'question', topic: topicOk ? (topic as string) : null,
-      payload: { section },
-      image_path: path,
-      display_name: displayName,
-      status: safety.verdict === 'ok' ? 'voting' : 'pending',
-      voting_ends_at: votingEnds,
-    });
-    if (error) return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 });
+  // Any 'manual' verdict on any part → pending (human review before students see it).
+  const anyManual = textVerdict?.verdict === 'manual' || imageVerdict?.verdict === 'manual';
+
+  const { error } = await admin.from('student_submissions').insert({
+    student_id: user.id,
+    kind: sub.kind,
+    topic: sub.topic,
+    payload: sub.kind === 'tip'
+      ? { text: sub.text, section: sub.section }
+      : { section: sub.section, ...(sub.text ? { text: sub.text } : {}) },
+    ...(imagePath ? { image_path: imagePath } : {}),
+    display_name: displayName,
+    status: anyManual ? 'pending' : 'voting',
+    voting_ends_at: votingEnds,
+  });
+  if (error) {
+    console.error('[community] submission insert failed', error.message);
+    return NextResponse.json({ error: 'Could not save. Please try again.', code: 'SERVER_ERROR' }, { status: 500 });
   }
 
   return NextResponse.json({

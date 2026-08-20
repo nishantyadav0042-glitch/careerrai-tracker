@@ -101,3 +101,97 @@ export function dailyPickIndex(studentId: string, dateIso: string, poolSize: num
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h % poolSize;
 }
+
+
+// ── Structured submission failure codes (founder mandate, 20 Aug) ──────────
+//
+// The 19 Aug incident: a real student's submission died as an opaque
+// status:400 and we could not tell WHICH of three branches rejected her.
+// Every rejection now carries a machine code — tracked in telemetry, mapped
+// to a helpful human sentence client-side. Internal moderation detail stays
+// vague on purpose (echoing what tripped the filter teaches evasion).
+export type SubmitFailCode =
+  | 'KIND_INVALID'
+  | 'SECTION_REQUIRED'
+  | 'TOPIC_REQUIRED'
+  | 'CONTENT_REQUIRED'
+  | 'TEXT_TOO_SHORT'
+  | 'TEXT_TOO_LONG'
+  | 'IMAGE_TYPE_UNSUPPORTED'
+  | 'IMAGE_TOO_SMALL'
+  | 'IMAGE_TOO_LARGE'
+  | 'IMAGE_UPLOAD_FAILED'
+  | 'MODERATION_BLOCKED'
+  | 'RATE_LIMITED'
+  | 'SERVER_ERROR';
+
+export interface SubmitInput {
+  kind?: unknown; section?: unknown; topic?: unknown;
+  tip?: unknown; text?: unknown; image?: unknown; image_mime?: unknown;
+}
+
+export interface ValidSubmission {
+  kind: 'tip' | 'question';
+  section: string;
+  topic: string | null;
+  /** Tip text, or the typed question text (image-free path). */
+  text: string | null;
+  image: string | null;
+  imageMime: string | null;
+}
+
+/**
+ * Pure validation — the one place the submission contract lives, so the
+ * client hint and the server authority cannot drift. A QUESTION needs text
+ * OR an image (founder, 20 Aug: the purpose is sharing a tough question as
+ * easily as possible — typed, photographed, or both — never a mandatory
+ * image because the first implementation happened to want one).
+ */
+export function validateSubmission(
+  body: SubmitInput,
+  sections: readonly string[],
+  topicSectionOf: (topic: string) => string | undefined,
+): { ok: true; value: ValidSubmission } | { ok: false; code: SubmitFailCode; error: string } {
+  const { kind, section, topic } = body;
+  if (kind !== 'tip' && kind !== 'question') {
+    return { ok: false, code: 'KIND_INVALID', error: 'Choose a tip or a question' };
+  }
+  if (typeof section !== 'string' || !sections.includes(section)) {
+    return { ok: false, code: 'SECTION_REQUIRED', error: 'Pick a section' };
+  }
+  const topicOk = typeof topic === 'string' && topicSectionOf(topic) === section;
+
+  if (kind === 'tip') {
+    if (!topicOk) return { ok: false, code: 'TOPIC_REQUIRED', error: 'Pick the topic your tip is about' };
+    const text = typeof body.tip === 'string' ? body.tip.trim() : '';
+    if (text.length === 0) return { ok: false, code: 'CONTENT_REQUIRED', error: 'Write your tip first' };
+    if (text.length < MIN_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_SHORT', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
+    if (text.length > MAX_TIP_CHARS) return { ok: false, code: 'TEXT_TOO_LONG', error: `Tips are ${MIN_TIP_CHARS}–${MAX_TIP_CHARS} characters — one sharp idea` };
+    return { ok: true, value: { kind, section, topic: topic as string, text, image: null, imageMime: null } };
+  }
+
+  // question: text OR image, both welcome.
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  const hasImage = typeof body.image === 'string' && body.image.length > 0;
+  if (!hasImage && text.length === 0) {
+    return { ok: false, code: 'CONTENT_REQUIRED', error: 'Type the question or attach a photo of it' };
+  }
+  if (text.length > MAX_QUESTION_CHARS) {
+    return { ok: false, code: 'TEXT_TOO_LONG', error: `Keep the question under ${MAX_QUESTION_CHARS} characters` };
+  }
+  if (hasImage && (typeof body.image_mime !== 'string' || !IMAGE_MIMES.includes(body.image_mime))) {
+    return { ok: false, code: 'IMAGE_TYPE_UNSUPPORTED', error: 'That photo format isn’t supported — use JPG or PNG, or type the question instead' };
+  }
+  return {
+    ok: true,
+    value: {
+      kind, section, topic: topicOk ? (topic as string) : null,
+      text: text || null,
+      image: hasImage ? (body.image as string) : null,
+      imageMime: hasImage ? (body.image_mime as string) : null,
+    },
+  };
+}
+
+/** Typed questions get room to breathe; still one question, not an essay. */
+export const MAX_QUESTION_CHARS = 600;
