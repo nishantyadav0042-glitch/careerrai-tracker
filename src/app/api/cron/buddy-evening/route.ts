@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
-import { rankBuddies, type MatchBuddy, type MatchStudent } from '@/lib/buddy-match';
+import { fetchEligibleBuddies, fetchFocusInputsBulk, recommendFor } from '@/lib/buddy-match';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Every invocation of this route walks the whole student roster. Vercel's
@@ -28,25 +28,21 @@ async function buddyEveningRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const todayStart = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30';
 
-  // Buddy pool — fetched once, ranked per student.
-  const { data: buddies } = await admin
-    .from('profiles')
-    .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
-    .eq('role', 'buddy')
-    .eq('buddy_onboarding_completed', true)
-    .not('cat_percentile', 'is', null)
-    .not('is_test_account', 'is', true);
-  if (!buddies?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no_buddies' });
+  // Buddy pool — the SAME eligibility definition the page uses, not a second
+  // copy of the column list that can drift from it.
+  const buddies = await fetchEligibleBuddies(admin);
+  if (!buddies.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no_buddies' });
 
   // Free students with a live push subscription. Premium/assigned students are
   // filtered out (buddy_id null + is_premium not true).
   const { data: students } = await admin
     .from('profiles')
-    .select('id, is_premium, notif_prefs, baseline_varc, baseline_dilr, baseline_qa, is_working_professional, is_repeater')
+    .select('id, is_premium, notif_prefs')
     .eq('role', 'student')
     .is('buddy_id', null)
     .not('push_subscription', 'is', null);
   if (!students?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no_students' });
+
 
   // Idempotency: who already got today's buddy nudge.
   const { data: already } = await admin
@@ -56,6 +52,22 @@ async function buddyEveningRun(): Promise<NextResponse> {
     .gte('created_at', todayStart);
   const sentToday = new Set((already ?? []).map((r) => r.user_id));
 
+  // P1 FIX (20 Aug). This cron used to call rankBuddies directly with only the
+  // baseline columns, which are populated for 1 of 553 students -- so it ranked
+  // on profile completeness while the page ranked on resolved focus. The push
+  // named Soumitra; the page it opened recommended Spandana; 80 of 123
+  // push-eligible students would have seen that contradiction.
+  //
+  // Now both sides end at recommendFor(). Fetched in BULK -- four queries per
+  // chunk of 250 students, not six per student -- so the run stays linear in
+  // chunks instead of exploding in round-trips at 10k/100k.
+  const eligibleIds = (students as { id: string; is_premium: boolean | null; notif_prefs: unknown }[])
+    .filter((s) => s.is_premium !== true)
+    .filter((s) => ((s.notif_prefs ?? {}) as { push?: boolean }).push !== false)
+    .filter((s) => !sentToday.has(s.id))
+    .map((s) => s.id);
+  const focusInputs = await fetchFocusInputsBulk(admin, eligibleIds);
+
   let sent = 0;
   for (const s of students) {
     if (s.is_premium === true) continue;               // free only
@@ -63,8 +75,11 @@ async function buddyEveningRun(): Promise<NextResponse> {
     const prefs = (s.notif_prefs ?? {}) as { push?: boolean };
     if (prefs.push === false) continue;                // respect an explicit opt-out
 
-    const ranked = rankBuddies(s as MatchStudent, buddies as MatchBuddy[]);
-    const top = ranked[0];
+    // Identical call to the page's. If this ever diverges again, the guard in
+    // cron-page-agreement.test.ts fails before it reaches a student.
+    const inputs = focusInputs.get(s.id);
+    if (!inputs) continue;
+    const top = recommendFor(inputs, buddies)[0];
     if (!top) continue;
 
     const firstName = (top.full_name || 'Your buddy').split(' ')[0];
