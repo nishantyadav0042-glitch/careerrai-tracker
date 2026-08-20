@@ -64,8 +64,19 @@ export function strongestFromBaseline(p: BaselineProfile): Section | null {
   return scores.reduce((a, b) => (b.v > a.v ? b : a)).s;
 }
 
+export type WeakestSource = 'mock' | 'self_report' | 'baseline' | 'coverage' | 'default';
+
 export interface FocusSections {
   weakest: Section;
+  /**
+   * WHICH rung of the evidence ladder produced `weakest`. Added for Buddy
+   * matching (Batch 8): a consumer that presents the weakest section back to
+   * the student as personalisation must know whether it came from evidence or
+   * from the hard 'DILR' default at the bottom of the chain -- a default is
+   * not a fact about the student, and claiming it as one is the defect class
+   * this codebase keeps paying for. The plan engine itself ignores this field.
+   */
+  weakestSource: WeakestSource;
   strongest: Section | null;
   /** Set when a mock decided it — the plan may only claim this when true. */
   mockBasis: string | null;
@@ -92,12 +103,23 @@ export function resolveFocusSections(
   todayIso: string,
 ): FocusSections {
   const mock = mockInformedFocus(debriefRows, todayIso);
+  // The chain, written once and read twice: the value falls through it, and
+  // the source names the rung that answered. Keeping the literal chain intact
+  // matters -- two guard tests pin mock above self-report by reading this body.
+  const weakest = mock?.weakest
+    ?? (profile.self_reported_weakest_section as Section | null)
+    ?? weakestFromBaseline(profile)
+    ?? weakestFromCoverage(coverageRows)
+    ?? 'DILR';
+  const weakestSource: WeakestSource =
+    mock ? 'mock'
+    : profile.self_reported_weakest_section ? 'self_report'
+    : weakestFromBaseline(profile) ? 'baseline'
+    : weakestFromCoverage(coverageRows) ? 'coverage'
+    : 'default';
   return {
-    weakest: mock?.weakest
-      ?? (profile.self_reported_weakest_section as Section | null)
-      ?? weakestFromBaseline(profile)
-      ?? weakestFromCoverage(coverageRows)
-      ?? 'DILR',
+    weakest,
+    weakestSource,
     strongest: mock?.strongest
       ?? (profile.self_reported_strongest_section as Section | null)
       ?? strongestFromBaseline(profile),
