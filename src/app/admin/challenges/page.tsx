@@ -15,7 +15,7 @@ import { TOPIC_METADATA } from '@/lib/topics-constants';
 // that could only 500. Safety holds are reviewed on /admin/daily-pick.
 interface PipelineRow {
   id: string; kind: string; topic: string | null; text: string | null;
-  hasImage: boolean; displayName: string | null; votingEndsAt: string | null;
+  hasImage: boolean; displayName: string | null;
   yes: number; no: number;
 }
 interface BankRow {

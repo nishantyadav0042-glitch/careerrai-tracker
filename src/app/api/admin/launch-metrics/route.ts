@@ -16,7 +16,6 @@ export async function GET() {
 
   const since24 = new Date(Date.now() - 86_400_000).toISOString();
   const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const nowIso = new Date().toISOString();
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null);
 
   const [
@@ -50,14 +49,14 @@ export async function GET() {
     admin.from('profiles').select('install_source, created_at, is_test_account'),
     admin.from('daily_reports').select('student_id, report_date').gte('created_at', since24),
     admin.from('submission_votes').select('student_id').gte('created_at', since24),
-    admin.from('student_submissions').select('kind, status, voting_ends_at, created_at'),
+    admin.from('student_submissions').select('kind, status, created_at'),
     // Push funnel, three real stages. NOT read_at — nothing in the codebase
     // has ever written that column (the only read_at writers are chat and
     // voice notes), so this tile showed 0 opens forever no matter what
     // students did. The service worker beacons the truth: received_at when
     // the push lands on the device, clicked_at when it is tapped.
     admin.from('notifications').select('id, pushed_at, received_at, clicked_at, created_at').gte('created_at', since24),
-    admin.from('student_submissions').select('kind, status, voting_ends_at'),
+    admin.from('student_submissions').select('kind, status'),
   ]);
 
   // ── Reach ──
@@ -115,8 +114,7 @@ export async function GET() {
   const sharedQs24 = (subs24 ?? []).filter((s) => s.kind === 'question' && (s.created_at as string) >= since24).length;
 
   const activeOf = (kind: string) => (shelf ?? []).filter((s) =>
-    s.kind === kind && (s.status === 'featured' ||
-      (s.status === 'voting' && (s.voting_ends_at as string | null) !== null && (s.voting_ends_at as string) > nowIso))).length;
+    s.kind === kind && s.status === 'live').length;
 
   // ── Push: three stages, because two of them fail independently ──
   // Sent ≠ delivered. Roughly a third of pushes handed to Google's service

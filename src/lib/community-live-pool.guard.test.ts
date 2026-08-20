@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { SUBMISSION_STATUSES, VISIBLE_STATUSES } from './community-pipeline';
 
 // ── Everything a student can see, a student can vote on ────────────────────
@@ -81,6 +82,39 @@ describe('what the student sees, the student can vote on', () => {
   it('the ballot module is gone, not merely unused', () => {
     expect(existsSync('src/lib/community-recycle.ts'),
       'community-recycle.ts revived the archived pool — it has no job now').toBe(false);
+  });
+});
+
+// The guard that would have caught the three regressions below. The first
+// version of this file hand-listed two routes and pinned those; three OTHER
+// files kept reading the retired statuses and each broke something real:
+//   /api/community/report      — the Play-required "this shouldn't be here"
+//                                button returned 400 on EVERY card
+//   /api/community/daily-slot  — the community slot could never be offered
+//   /api/admin/launch-metrics  — the active-pool count was always zero
+// A guard that names files only protects the files it names. This one sweeps
+// the whole tree, so the NEXT vocabulary change cannot leave a reader behind.
+describe('no reader anywhere still speaks the retired vocabulary', () => {
+  const RETIRED = ["'voting'", "'archived'", "'featured'", "voting_ends_at"];
+
+  function walk(dir: string): string[] {
+    return readdirSync(dir).flatMap((e) => {
+      const p = join(dir, e);
+      if (statSync(p).isDirectory()) return walk(p);
+      return /\.tsx?$/.test(p) && !/\.test\.tsx?$/.test(p) ? [p] : [];
+    });
+  }
+
+  it('sweeps every source file, not a hand-picked list', () => {
+    const offenders: string[] = [];
+    for (const file of walk('src')) {
+      const src = code(file);
+      // featured_on is a DIFFERENT column (the one-day top slot) and stays.
+      const stripped = src.replace(/featured_on/g, '');
+      const hits = RETIRED.filter((w) => stripped.includes(w));
+      if (hits.length) offenders.push(`${file} ${hits.join(',')}`);
+    }
+    expect(offenders, 'these still read a status the DB CHECK rejects').toEqual([]);
   });
 });
 

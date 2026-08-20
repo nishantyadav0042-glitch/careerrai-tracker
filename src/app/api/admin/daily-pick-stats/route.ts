@@ -27,7 +27,7 @@ export async function GET() {
       .in('event', ['app_open', 'daily_pick_open', 'community_voted', 'community_submitted', 'community_share_blocked']),
     admin.from('submission_votes').select('submission_id, student_id, helpful, created_at'),
     admin.from('student_submissions')
-      .select('id, kind, topic, payload, display_name, status, created_at, voting_ends_at')
+      .select('id, kind, topic, payload, display_name, status, created_at')
       .eq('status', 'live'),
     admin.from('student_submissions').select('student_id').gte('created_at', since24),
     // Safety holds. The screen fails CLOSED — any Gemini outage parks real

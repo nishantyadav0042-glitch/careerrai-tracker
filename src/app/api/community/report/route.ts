@@ -28,7 +28,11 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: sub } = await admin.from('student_submissions')
     .select('id, status').eq('id', sid).maybeSingle();
-  if (!sub || !['voting', 'featured'].includes(sub.status as string)) {
+  // Live items are the reportable ones. This read 'voting'/'featured' until
+  // 20 Aug — statuses the live-pool migration retired — so EVERY report
+  // returned 400 and the Play-required "this shouldn't be here" button was
+  // dead on every card in the feed.
+  if (!sub || sub.status !== 'live') {
     return NextResponse.json({ error: 'Nothing to report here' }, { status: 400 });
   }
 
@@ -44,7 +48,7 @@ export async function POST(request: NextRequest) {
 
   const { count } = await admin.from('community_reports')
     .select('id', { count: 'exact', head: true }).eq('submission_id', sid);
-  if ((count ?? 0) >= AUTO_PULL_AT && sub.status !== 'pending') {
+  if ((count ?? 0) >= AUTO_PULL_AT && sub.status === 'live') {
     await admin.from('student_submissions').update({ status: 'pending' }).eq('id', sid);
   }
 

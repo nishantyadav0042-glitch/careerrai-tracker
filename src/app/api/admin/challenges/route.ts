@@ -33,7 +33,7 @@ export async function GET() {
     admin.from('challenge_attempts').select('challenge_id, is_correct, daily_challenges:challenge_id(live_date)')
       .gte('created_at', new Date(Date.now() - 2 * 86_400_000).toISOString()),
     admin.from('student_submissions')
-      .select('id, kind, topic, payload, display_name, image_path, voting_ends_at')
+      .select('id, kind, topic, payload, display_name, image_path')
       .eq('status', 'live').order('created_at'),
     admin.from('submission_votes').select('submission_id, helpful'),
   ]);
@@ -58,7 +58,6 @@ export async function GET() {
       text: (r.payload as { text?: string } | null)?.text ?? null,
       hasImage: !!r.image_path,
       displayName: r.display_name,
-      votingEndsAt: r.voting_ends_at,
       yes: t.yes, no: t.no, totalVotes: g.total, helpfulPct: g.helpfulPct,
     };
   }).sort((a, b) => b.totalVotes - a.totalVotes);

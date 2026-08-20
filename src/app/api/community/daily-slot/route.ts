@@ -64,16 +64,17 @@ export async function GET() {
   try {
     const [{ data: open }, { data: mine }] = await Promise.all([
       admin.from('student_submissions')
-        .select('id, student_id, status, voting_ends_at')
-        .in('status', ['voting', 'featured']),
+        .select('id, student_id')
+        .eq('status', 'live'),
       admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
     ]);
     const voted = new Set((mine ?? []).map((v: { submission_id: string }) => v.submission_id));
-    const nowIso = now.toISOString();
-    communityOpen = (open ?? []).some((s: { id: string; student_id: string | null; status: string; voting_ends_at: string | null }) =>
-      s.student_id !== user.id &&
-      !voted.has(s.id) &&
-      (s.status === 'featured' || (s.voting_ends_at != null && s.voting_ends_at > nowIso))
+    // A live item that is not mine and that I have not judged yet. The old
+    // rule also demanded an unexpired 72h ballot window; after that ballot
+    // retired on 20 Aug the clause could never be true, so the community slot
+    // silently stopped being offered by the rotation at all.
+    communityOpen = (open ?? []).some((s: { id: string; student_id: string | null }) =>
+      s.student_id !== user.id && !voted.has(s.id)
     );
   } catch (e) {
     console.error('[daily-slot] community availability failed', e);
