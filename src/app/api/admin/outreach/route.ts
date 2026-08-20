@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { LEAD_STATUSES } from '@/lib/sales-disposition';
+import { LEAD_STATUSES, nextActionAtFromDate } from '@/lib/sales-disposition';
 
 // One vocabulary, one authority: the same list the DB CHECK enforces.
 const VALID_STATUS: readonly string[] = LEAD_STATUSES;
@@ -10,6 +10,11 @@ const VALID_STATUS: readonly string[] = LEAD_STATUSES;
 // Admin-only: lead_outreach has RLS with no policies, so only this
 // service-role path can touch it — students can never read the sales
 // team's notes about them.
+//
+// ONE CLOCK (SA-1A, 20 Aug 2026): the admin's follow-up date is written to
+// next_action_at — the SAME column the rep's disposition engine writes and
+// the call queue reads — never to the deprecated `next_follow_up`. The date
+// maps to 11:00 IST via the one cadence model in lib/sales-disposition.
 export async function PATCH(request: NextRequest) {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,14 +29,18 @@ export async function PATCH(request: NextRequest) {
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json();
-  const { student_id, owner, status, next_follow_up, notes } = body ?? {};
+  // `next_follow_up` is accepted as a legacy body alias for nextActionDate
+  // (sales-deck.tsx still sends it until it retires in SA-1B) — but the only
+  // column it ever reaches is next_action_at.
+  const { student_id, owner, status, nextActionDate, next_follow_up: legacyNextFollowUp, notes } = body ?? {};
+  const followDate = nextActionDate ?? legacyNextFollowUp;
   if (typeof student_id !== 'string' || !student_id) {
     return NextResponse.json({ error: 'student_id required' }, { status: 400 });
   }
   if (status != null && !VALID_STATUS.includes(status)) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
   }
-  if (next_follow_up != null && !/^\d{4}-\d{2}-\d{2}$/.test(next_follow_up)) {
+  if (followDate != null && !/^\d{4}-\d{2}-\d{2}$/.test(followDate)) {
     return NextResponse.json({ error: 'Invalid follow-up date' }, { status: 400 });
   }
 
@@ -39,7 +48,7 @@ export async function PATCH(request: NextRequest) {
     student_id,
     owner: typeof owner === 'string' && owner.trim() ? owner.trim().slice(0, 100) : null,
     status: status ?? 'not_contacted',
-    next_follow_up: next_follow_up ?? null,
+    next_action_at: followDate ? nextActionAtFromDate(followDate) : null,
     notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 2000) : null,
     updated_at: new Date().toISOString(),
   });

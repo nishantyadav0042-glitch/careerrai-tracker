@@ -54,6 +54,17 @@ export function istHourOf(nowMs: number): number {
   return new Date(nowMs + 5.5 * 3600_000).getUTCHours();
 }
 
+/**
+ * Admin follow-up date → the one clock (SA-1A). The admin panel picks a DATE;
+ * the canonical clock is a timestamptz. The date maps to 11:00 IST that day —
+ * the same "late morning" slot the cadence engine already uses for an
+ * interested-lead follow-up — so there is exactly one cadence model, not two.
+ */
+export function nextActionAtFromDate(date: string): string {
+  // 11:00 IST = 05:30 UTC on the same calendar date.
+  return `${date}T05:30:00.000Z`;
+}
+
 export interface DispositionPlan {
   /** Stored lead_outreach.status — always a legal LEAD_STATUSES value. */
   status: LeadStatus;

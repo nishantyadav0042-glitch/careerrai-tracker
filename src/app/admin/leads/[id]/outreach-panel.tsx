@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 interface OutreachState {
   owner: string;
   status: string;
-  next_follow_up: string;
+  /** Follow-up DATE (YYYY-MM-DD). Stored as next_action_at, 11:00 IST — the one clock (SA-1A). */
+  next_action_date: string;
   notes: string;
 }
 
@@ -39,7 +40,7 @@ export function OutreachPanel({ studentId, initial }: { studentId: string; initi
           student_id: studentId,
           owner: state.owner.trim() || null,
           status: state.status,
-          next_follow_up: state.next_follow_up || null,
+          nextActionDate: state.next_action_date || null,
           notes: state.notes.trim() || null,
         }),
       });
@@ -99,8 +100,8 @@ export function OutreachPanel({ studentId, initial }: { studentId: string; initi
             <label className="mb-1.5 block text-xs font-semibold text-stone-500">Next follow-up</label>
             <input
               type="date"
-              value={state.next_follow_up}
-              onChange={(e) => setState((s) => ({ ...s, next_follow_up: e.target.value }))}
+              value={state.next_action_date}
+              onChange={(e) => setState((s) => ({ ...s, next_action_date: e.target.value }))}
               className={inputClass}
             />
           </div>

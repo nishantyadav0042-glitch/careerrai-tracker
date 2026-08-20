@@ -150,7 +150,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     computeTopicMemory(admin, id, archetype),
     admin.from('streak_data').select('current_streak, last_log_date, shields').eq('student_id', id).maybeSingle(),
     admin.from('student_engagement').select('buddy_cta_clicks').eq('student_id', id).maybeSingle(),
-    admin.from('lead_outreach').select('owner, status, next_follow_up, notes').eq('student_id', id).maybeSingle(),
+    admin.from('lead_outreach').select('owner, status, next_action_at, notes').eq('student_id', id).maybeSingle(),
     admin.from('daily_reports').select('report_date, study_duration, mock_taken').eq('student_id', id).order('report_date', { ascending: false }).limit(10),
     admin.from('mock_debriefs').select('taken_on, overall_percentile').eq('student_id', id).order('taken_on', { ascending: false }),
     // Does a plan REALLY exist? The WhatsApp composer gates every
@@ -393,7 +393,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           initial={{
             owner: (outreach?.owner as string | null) ?? '',
             status: (outreach?.status as string | null) ?? 'not_contacted',
-            next_follow_up: (outreach?.next_follow_up as string | null) ?? '',
+            // The one clock, shown to the admin as its IST calendar date.
+            next_action_date: (outreach?.next_action_at as string | null)?.length
+              ? new Date(outreach!.next_action_at as string).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+              : '',
             notes: (outreach?.notes as string | null) ?? '',
           }}
         />

@@ -73,7 +73,7 @@ export async function buildSalesQueue(admin?: any): Promise<SalesQueue> {
   const [{ data: eng }, { data: doors }, { data: outreach }] = await Promise.all([
     db.from('student_engagement').select('student_id, mock_opened').in('student_id', ids),
     db.from('mentor_grants').select('student_id, door').in('student_id', ids),
-    db.from('lead_outreach').select('student_id, status, next_follow_up, updated_at').in('student_id', ids),
+    db.from('lead_outreach').select('student_id, status, next_action_at, updated_at').in('student_id', ids),
   ]);
   const mockById = new Map((eng ?? []).map((e: any) => [e.student_id, e.mock_opened === true]));
   const doorById = new Map((doors ?? []).map((d: any) => [d.student_id, d.door]));
@@ -91,8 +91,9 @@ export async function buildSalesQueue(admin?: any): Promise<SalesQueue> {
     const status = (out?.status as string | null) ?? null;
     // Closed either way — off the queue.
     if (status === 'converted' || status === 'not_interested') continue;
-    // A scheduled follow-up not yet due — hide until its date.
-    if (status === 'follow_up' && out?.next_follow_up && out.next_follow_up > today) continue;
+    // A scheduled follow-up not yet due — hide until the ONE clock (SA-1A)
+    // says it is. Same column the rep's disposition engine writes.
+    if (status === 'follow_up' && out?.next_action_at && new Date(out.next_action_at).getTime() > Date.now()) continue;
 
     const tappedBuddy = r.buddyCtaClicks >= 1;
     const mock = mockById.get(r.id) === true;
