@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
+import { escapeToBrowserForPayment, readPaymentSurfaceSignals } from '@/lib/store-build';
+import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
+import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
 
 // ── The ₹299 door, in the Buddy section ─────────────────────────────────────
 //
@@ -41,6 +44,11 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   const [state, setState] = useState<Availability | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the store-build escape couldn't open a tab. A plain "go to
+  // careerrai.in yourself" sentence is a dead end on a phone — always leave a
+  // tappable link behind.
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
+  const iosUrl = useIosPayUrl('/student/buddy');
 
   useEffect(() => {
     let alive = true;
@@ -55,9 +63,38 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
 
   async function book() {
     if (busy) return;
+    track('session_book_click', { finding: findingKind ?? null });
+
+    // Where checkout is allowed to open — see lib/payment-surface. iOS (store
+    // wrapper or installed PWA) cannot complete a payment inline; it must
+    // finish in the real browser. This used to skip that check entirely and
+    // always open Razorpay in-page, which is why this surface has 0
+    // successful payments in its history regardless of platform.
+    const surface = paymentSurface(readPaymentSurfaceSignals());
+    if (surface !== 'inline') {
+      setBusy(true); setError(null);
+      try {
+        if (surface === 'ios_link_handoff') {
+          // The anchor itself is the navigation (see render below); this only
+          // records the tap so the funnel shows intent even though iosUrl was
+          // already minted on mount.
+          track('pay_escape_browser', { plan: 'session', opened: true, ios: true, mode: 'ios_link', linkReady: iosUrl != null });
+          return;
+        }
+        const opened = await escapeToBrowserForPayment('/student/buddy');
+        track('pay_escape_browser', { plan: 'session', opened, mode: 'popup' });
+        if (!opened) {
+          setError(HANDOFF_COPY.noLink);
+          setManualUrl('https://careerrai.in/student/buddy');
+        }
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     setBusy(true); setError(null);
     try {
-      track('session_book_click', { finding: findingKind ?? null });
       const res = await fetch('/api/sessions/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,6 +113,7 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
         currency: json.currency,
         name: 'CareerRai',
         description: `${json.minutes}-min 1:1 session with an IIM Buddy`,
+        prefill: json.prefill,
         theme: { color: '#E8652D' },
         modal: {
           ondismiss: () => {
@@ -126,13 +164,30 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
       <div className="p-4">
         {state.available ? (
           <>
-            <button
-              type="button" onClick={() => void book()} disabled={busy}
-              className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-extrabold text-white transition-transform active:scale-[0.99] disabled:opacity-60"
-            >
-              {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
-            </button>
+            {iosUrl ? (
+              <a
+                href={iosUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => void book()}
+                className="block w-full rounded-xl bg-orange-500 py-3 text-center text-[14px] font-extrabold text-white transition-transform active:scale-[0.99]"
+              >
+                {`Book my session — ${state.priceLabel}`}
+              </a>
+            ) : (
+              <button
+                type="button" onClick={() => void book()} disabled={busy}
+                className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-extrabold text-white transition-transform active:scale-[0.99] disabled:opacity-60"
+              >
+                {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
+              </button>
+            )}
             <p className="mt-2 text-center text-[10.5px] text-stone-400">One-time. Nothing renews.</p>
+            {manualUrl && (
+              <a href={manualUrl} className="mt-2 block text-center text-[12px] font-semibold text-orange-600 underline">
+                Continue to secure payment →
+              </a>
+            )}
           </>
         ) : (
           // Sold out is an honest, GOOD answer: it says we protect the sessions

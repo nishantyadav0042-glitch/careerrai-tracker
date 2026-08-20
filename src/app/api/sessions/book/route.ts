@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createRazorpayOrder } from '@/lib/razorpay';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { taxForPlan } from '@/lib/gst';
+import { normalizeIndianPhone } from '@/lib/phone';
 import {
   SESSION_PLAN_ID, SESSION_PRICE_PAISE, SESSION_MINUTES,
   rosterCapacity, matchMentor, type MentorProfile, type Speciality,
@@ -105,6 +106,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No Buddy is free this week. Please check back shortly.', soldOut: true }, { status: 409 });
   }
 
+  // Contact details for Razorpay's prefill — same source and shape as
+  // create-order's. Without these, Razorpay's first screen asks a signed-in
+  // student for their phone number and email again, on the one screen where
+  // that friction costs the sale.
+  const { data: payer } = await admin
+    .from('profiles')
+    .select('full_name, phone, email')
+    .eq('id', user.id)
+    .maybeSingle();
+  const prefill = {
+    name: payer?.full_name || undefined,
+    contact: normalizeIndianPhone(payer?.phone) ?? undefined,
+    email: payer?.email || undefined,
+  };
+
   // 4. Only now, money. GST is currently off, so gross === ₹299.
   const tax = taxForPlan(SESSION_PLAN_ID, SESSION_PRICE_PAISE);
   const order = await createRazorpayOrder(
@@ -144,6 +160,7 @@ export async function POST(request: NextRequest) {
     keyId: process.env.RAZORPAY_KEY_ID,
     matchReason: match.reason,
     minutes: SESSION_MINUTES,
+    prefill,
   });
 }
 
