@@ -1,3 +1,4 @@
+import { leadVisibleTo } from '@/lib/sales-disposition';
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -50,7 +51,10 @@ function istTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
-export async function buildCallQueue(admin?: any): Promise<CallQueue> {
+// `repEmail` scopes the queue to one rep's actionable work (SA-1D): unclaimed
+// leads plus the leads they own. Omit it (the admin oversight frame) to see
+// everything, claimed or not.
+export async function buildCallQueue(admin?: any, repEmail?: string | null): Promise<CallQueue> {
   const db = admin ?? createAdminClient();
   const now = Date.now();
   const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -65,7 +69,7 @@ export async function buildCallQueue(admin?: any): Promise<CallQueue> {
     db.from('profiles').select('id, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
     db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
-    db.from('lead_outreach').select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count').in('student_id', ids),
+    db.from('lead_outreach').select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner').in('student_id', ids),
   ]);
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
@@ -86,6 +90,8 @@ export async function buildCallQueue(admin?: any): Promise<CallQueue> {
     const o = outById.get(r.id) as any;
     const status = (o?.status as string | null) ?? null;
     if (status && CLOSED.has(status)) continue; // gone forever
+    // Another rep's claimed lead is not this rep's work (SA-1D).
+    if (!leadVisibleTo((o?.owner as string | null) ?? null, repEmail)) continue;
     totalOpen++;
 
     const nextAction = o?.next_action_at ? new Date(o.next_action_at).getTime() : null;

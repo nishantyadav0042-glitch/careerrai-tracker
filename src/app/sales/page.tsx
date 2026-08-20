@@ -16,10 +16,13 @@ export default async function SalesCallsPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
   const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
   if (me?.role !== 'sales' && me?.role !== 'admin') redirect('/login');
 
-  const { queue, connectedToday, dueNow } = await buildCallQueue(admin);
+  // A rep sees unclaimed leads + her own book; an admin visiting the rep
+  // workspace sees everything (oversight, same as /admin/sales).
+  const repEmail = me?.role === 'sales' ? ((me?.email as string | null) ?? null) : undefined;
+  const { queue, connectedToday, dueNow } = await buildCallQueue(admin, repEmail);
   const primeTime = istHour() >= 18 && istHour() < 21;
 
   return (

@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface OutreachState {
-  owner: string;
   status: string;
   /** Follow-up DATE (YYYY-MM-DD). Stored as next_action_at, 11:00 IST — the one clock (SA-1A). */
   next_action_date: string;
@@ -22,7 +21,10 @@ const STATUS_OPTIONS = [
 ];
 
 // The team's working state per lead — exactly five fields, nothing more.
-export function OutreachPanel({ studentId, initial }: { studentId: string; initial: OutreachState }) {
+// `owner` is display-only (SA-1D): ownership is set by the atomic claim when
+// a call is logged, and moved only by the admin reassign action — never by
+// typing a name into a form.
+export function OutreachPanel({ studentId, owner, initial }: { studentId: string; owner: string | null; initial: OutreachState }) {
   const [state, setState] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -38,7 +40,6 @@ export function OutreachPanel({ studentId, initial }: { studentId: string; initi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           student_id: studentId,
-          owner: state.owner.trim() || null,
           status: state.status,
           nextActionDate: state.next_action_date || null,
           notes: state.notes.trim() || null,
@@ -88,13 +89,10 @@ export function OutreachPanel({ studentId, initial }: { studentId: string; initi
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-stone-500">Owner</label>
-            <input
-              type="text"
-              value={state.owner}
-              onChange={(e) => setState((s) => ({ ...s, owner: e.target.value }))}
-              placeholder="Who's on this lead?"
-              className={inputClass}
-            />
+            <p className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2 text-sm text-stone-700">
+              {owner ?? 'Unclaimed'}
+            </p>
+            <p className="mt-1 text-[10px] text-stone-400">Set by logging a call; moved only by admin reassign.</p>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-stone-500">Next follow-up</label>

@@ -42,6 +42,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
   }
 
+  const actor = (me?.email as string | null) ?? (me?.full_name as string | null) ?? 'sales';
+
+  // SA-1D: claim before write. One shared book — logging a call claims the
+  // lead atomically (single conditional statement in the claim_lead RPC).
+  // If another rep already owns it, NOTHING is written and the client keeps
+  // the card: a failed claim must never look like a logged call.
+  const { data: claimRows, error: claimError } = await admin.rpc('claim_lead', {
+    p_student_id: studentId,
+    p_owner: actor,
+  });
+  if (claimError) {
+    console.error('[sales/log] claim_lead failed:', claimError.message);
+    return NextResponse.json({ error: 'Could not claim the lead — try again.' }, { status: 500 });
+  }
+  const claim = Array.isArray(claimRows) ? claimRows[0] : claimRows;
+  if (!claim?.claimed) {
+    return NextResponse.json(
+      { error: `This lead is owned by ${claim?.current_owner ?? 'another rep'} — ask an admin to reassign it.` },
+      { status: 409 },
+    );
+  }
+
   const { data: cur } = await admin.from('lead_outreach').select('no_answer_count').eq('student_id', studentId).maybeSingle();
   const prevMisses = (cur?.no_answer_count as number | null) ?? 0;
 
@@ -52,7 +74,6 @@ export async function POST(request: NextRequest) {
     nowMs: Date.now(),
   });
 
-  const actor = (me?.email as string | null) ?? (me?.full_name as string | null) ?? 'sales';
   const now = new Date().toISOString();
 
   // State first, then history — and BOTH checked. If state fails we stop
@@ -65,7 +86,8 @@ export async function POST(request: NextRequest) {
     last_attempt_at: now,
     no_answer_count: plan.noAnswerCount,
     notes: noteText || null,
-    owner: actor,
+    // owner is deliberately absent: ownership is written ONLY by the atomic
+    // claim above and by the admin reassign route — never by a plain upsert.
     updated_at: now,
   });
   if (stateError) {

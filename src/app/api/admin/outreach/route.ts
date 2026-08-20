@@ -29,7 +29,10 @@ export async function PATCH(request: NextRequest) {
   if (me?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json();
-  const { student_id, owner, status, nextActionDate, notes } = body ?? {};
+  // SA-1D: `owner` is no longer accepted here. Ownership is written only by
+  // the atomic claim (claim_lead RPC, via /api/sales/log) and the admin
+  // reassign route — free-text ownership was the race we removed.
+  const { student_id, status, nextActionDate, notes } = body ?? {};
   const followDate = nextActionDate;
   if (typeof student_id !== 'string' || !student_id) {
     return NextResponse.json({ error: 'student_id required' }, { status: 400 });
@@ -43,7 +46,6 @@ export async function PATCH(request: NextRequest) {
 
   const { error } = await admin.from('lead_outreach').upsert({
     student_id,
-    owner: typeof owner === 'string' && owner.trim() ? owner.trim().slice(0, 100) : null,
     status: status ?? 'not_contacted',
     next_action_at: followDate ? nextActionAtFromDate(followDate) : null,
     notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 2000) : null,

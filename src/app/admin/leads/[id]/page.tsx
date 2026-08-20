@@ -390,8 +390,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         {/* Outreach — the team's working state. */}
         <OutreachPanel
           studentId={id}
+          owner={(outreach?.owner as string | null) ?? null}
           initial={{
-            owner: (outreach?.owner as string | null) ?? '',
             status: (outreach?.status as string | null) ?? 'not_contacted',
             // The one clock, shown to the admin as its IST calendar date.
             next_action_date: (outreach?.next_action_at as string | null)?.length

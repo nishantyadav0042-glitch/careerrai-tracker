@@ -37,6 +37,22 @@ export const LEAD_STATUSES = [
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
+/** Every value sales_activity.status may hold: the five call dispositions
+ *  plus 'reassigned' (an admin's intentional ownership transfer, appended as
+ *  history — it is NOT a call and must never drain the sales-ready signal).
+ *  Mirrors the DB CHECK in 20260820c_sales_claim.sql — guard-pinned. */
+export const ACTIVITY_STATUSES = [...CALL_OUTCOMES, 'reassigned'] as const;
+
+/**
+ * SA-1D visibility rule (one shared book): an unclaimed lead is available to
+ * every rep; a claimed lead is actionable ONLY for its owner. No rep context
+ * (repEmail undefined — the admin oversight frame) sees everything.
+ */
+export function leadVisibleTo(owner: string | null | undefined, repEmail?: string | null): boolean {
+  if (!owner || !repEmail) return true;
+  return owner === repEmail;
+}
+
 export function isCallOutcome(v: unknown): v is CallOutcome {
   return typeof v === 'string' && (CALL_OUTCOMES as readonly string[]).includes(v);
 }
