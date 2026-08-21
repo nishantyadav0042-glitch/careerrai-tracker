@@ -29,10 +29,20 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data: challenge } = await admin
+  const { data: challenge, error: chalErr } = await admin
     .from('daily_challenges')
     .select('id, live_date, status, section, topic, options, correct_index, difficulty, explanation, target_seconds')
     .eq('id', challengeId).maybeSingle();
+  // Last instance of the sprint's central bug (21 Aug): unchecked, a blip made
+  // `challenge` null and the student was told "this challenge is not open" —
+  // their answer, and the beat-the-clock run behind it, discarded. UNKNOWN is
+  // retryable; a genuinely closed challenge is still the 400 below.
+  if (chalErr) {
+    return NextResponse.json(
+      { error: 'Could not submit your answer — try again.', code: 'ATTEMPT_UNAVAILABLE', retryable: true },
+      { status: 503 },
+    );
+  }
 
   // Only the active day's live challenge is answerable — yesterday's stays
   // readable but closed, so the community split stops moving once a day ends.
