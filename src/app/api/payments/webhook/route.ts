@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyRazorpayWebhook } from '@/lib/razorpay';
 import { revokePremium } from '@/lib/premium';
 import { logSecurityEvent } from '@/lib/security-log';
-import { activatePaidOrder } from '@/lib/activate-payment';
+import { activatePaidOrder, readWebhookPaymentRow, readRefundTargetStudent } from '@/lib/activate-payment';
 import { emitTimeline } from '@/lib/os/timeline';
 
 // Subscription state changes ONLY here, and only after the signature verifies.
@@ -36,11 +36,13 @@ export async function POST(request: NextRequest) {
 
       if (orderId) {
         const admin = createAdminClient();
-        const { data: row } = await admin
-          .from('student_payments')
-          .select('id, student_id, plan, status, coupon_code, amount, session_credit_id')
-          .eq('razorpay_order_id', orderId)
-          .maybeSingle();
+        // BOUNDARY 2, change 4: a failed read THROWS here, lands in the catch
+        // below, and answers 500 — Razorpay redelivers. It must never fall
+        // through to the { ok: true } at the bottom: acknowledging an event we
+        // could not establish is how a real payment silently never activates.
+        // null = the order genuinely is not ours; 'paid' = duplicate delivery.
+        // Both of those remain legitimate 200s.
+        const row = await readWebhookPaymentRow(admin, orderId);
 
         if (row && row.status !== 'paid') {
           // Marks paid, activates the subscription, burns the coupon, grants
@@ -59,20 +61,19 @@ export async function POST(request: NextRequest) {
       const refundedPaymentId = refundEntity?.payment_id;
       if (refundedPaymentId) {
         const admin = createAdminClient();
-        const { data: row } = await admin
-          .from('student_payments')
-          .select('student_id')
-          .eq('razorpay_payment_id', refundedPaymentId)
-          .maybeSingle();
-        if (row?.student_id) {
-          await revokePremium(admin, row.student_id);
+        // BOUNDARY 2, change 4: same rule as the capture path — a failed read
+        // throws → 500 → Razorpay redelivers. An ACKed refund we never
+        // processed would leave a refunded student premium forever.
+        const refundStudentId = await readRefundTargetStudent(admin, refundedPaymentId);
+        if (refundStudentId) {
+          await revokePremium(admin, refundStudentId);
           await emitTimeline(admin, {
-            entity: 'student', entityId: row.student_id, kind: 'refunded',
+            entity: 'student', entityId: refundStudentId, kind: 'refunded',
             summary: 'Refunded — premium revoked', actor: 'system',
             metadata: { paymentId: refundedPaymentId },
           });
           await logSecurityEvent(admin, {
-            type: 'payment_refunded', severity: 'warning', userId: row.student_id,
+            type: 'payment_refunded', severity: 'warning', userId: refundStudentId,
             metadata: { paymentId: refundedPaymentId },
           });
         }

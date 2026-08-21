@@ -15,12 +15,22 @@ export async function grantPremiumAndQueueBuddy(
 ): Promise<void> {
   // Atomic gate: flip to premium ONLY if not already premium, and report whether
   // this call is the one that did it. A concurrent second delivery sees 0 rows.
-  const { data: flipped } = await admin
+  const { data: flipped, error: flipErr } = await admin
     .from('profiles')
     .update({ is_premium: true, premium_since: new Date().toISOString() })
     .eq('id', studentId)
     .eq('is_premium', false)
     .select('id');
+
+  // BOUNDARY 2, change 4 (founder GO, 21 Aug): a FAILED flip used to be
+  // indistinguishable from "already premium" — `flipped` was null on error
+  // too, so an infrastructure failure silently skipped the grant while the
+  // webhook went on to ACK success. ERROR is UNKNOWN, not "already granted":
+  // throw, so the webhook answers 500 (Razorpay redelivers), reconcile logs
+  // the row as an error, and retry-unlock reports the failure to the admin.
+  if (flipErr) {
+    throw new Error(`Could not flip premium for student: ${flipErr.message}`);
+  }
 
   // Already premium (another delivery won the race) → nothing more to do.
   if (!flipped || flipped.length === 0) return;
@@ -45,14 +55,28 @@ export async function grantPremiumAndQueueBuddy(
   });
 }
 
-/** Downgrade to free on refund — keep the account + all logs. Cancels a pending buddy request. */
+/** Downgrade to free on refund — keep the account + all logs. Cancels a pending buddy request.
+ *
+ *  BOUNDARY 2, change 4: both writes used to be fire-and-forget — a failed
+ *  revoke was silently swallowed and the refund webhook ACKed 200, so a
+ *  refunded student kept premium forever (Razorpay never redelivers an
+ *  acknowledged event). A failed write now throws; the webhook answers 500
+ *  and the redelivery retries the revoke, which is idempotent. */
 export async function revokePremium(admin: SupabaseClient, studentId: string): Promise<void> {
-  await admin.from('profiles').update({ is_premium: false }).eq('id', studentId);
-  await admin
+  const { error: revokeErr } = await admin.from('profiles').update({ is_premium: false }).eq('id', studentId);
+  if (revokeErr) {
+    throw new Error(`Could not revoke premium for student: ${revokeErr.message}`);
+  }
+  const { error: cancelErr } = await admin
     .from('buddy_assignment_queue')
     .update({ status: 'cancelled' })
     .eq('student_id', studentId)
     .eq('status', 'pending');
+  if (cancelErr) {
+    // The entitlement is already gone; the pending buddy request is not — a
+    // refunded student must not be handed a mentor. Same rule: never swallow.
+    throw new Error(`Could not cancel the pending buddy request: ${cancelErr.message}`);
+  }
 }
 
 /**

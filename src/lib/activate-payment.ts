@@ -27,6 +27,77 @@ export interface PayableRow {
 
 export type ActivationSource = 'webhook' | 'reconcile';
 
+/** The ledger row as the webhook needs it: the payable fields plus the status
+ *  that decides idempotency (already 'paid' → the duplicate-delivery ACK). */
+export interface WebhookPaymentRow extends PayableRow {
+  status: string;
+}
+
+/**
+ * Read the ledger row for a captured order — null ONLY when the query
+ * succeeded and no row exists — or THROW.
+ *
+ * BOUNDARY 2, change 4 (founder GO, 21 Aug). The webhook used to destructure
+ * this read with the error never inspected: one failed read and `row` was
+ * null, the activation block was skipped, and the handler fell through to
+ * `{ ok: true }`. Razorpay was told the event was processed, stopped
+ * retrying, and a real capture was never activated — ERROR flattened into
+ * "nothing to do" at the exact moment money arrived. A read failure must
+ * surface as a thrown error the webhook answers with 500, so Razorpay
+ * redelivers. Genuine absence (an order not in our ledger) stays null — that
+ * is a legitimate answer, not a failure.
+ *
+ * Same contract as readUpgradeCredits and readMentorRoster: retry once so a
+ * blip stays invisible, then throw. Deliberately NOT a generic ledger
+ * abstraction — the webhook's order lookup and the refund lookup share the
+ * error semantic, not a business primitive.
+ */
+export async function readWebhookPaymentRow(
+  // Same loose client type the rest of the payment libs use.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  orderId: string,
+): Promise<WebhookPaymentRow | null> {
+  let lastMessage = 'unknown';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from('student_payments')
+      .select('id, student_id, plan, status, coupon_code, amount, session_credit_id')
+      .eq('razorpay_order_id', orderId)
+      .maybeSingle();
+    if (!error) return (data as WebhookPaymentRow | null) ?? null;
+    lastMessage = error.message;
+  }
+  throw new Error(`Could not read payment for webhook order: ${lastMessage}`);
+}
+
+/**
+ * Read which student a refunded Razorpay payment belongs to — null ONLY when
+ * the query succeeded and the payment is not in our ledger — or THROW.
+ *
+ * BOUNDARY 2, change 4: same disease on the refund path. A failed read made
+ * the refund look like it belonged to nobody, the revoke was skipped, and the
+ * webhook ACKed — so a refunded student kept premium forever, because
+ * Razorpay never redelivers an acknowledged event. Retry once, then throw.
+ */
+export async function readRefundTargetStudent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  razorpayPaymentId: string,
+): Promise<string | null> {
+  let lastMessage = 'unknown';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from('student_payments')
+      .select('student_id')
+      .eq('razorpay_payment_id', razorpayPaymentId)
+      .maybeSingle();
+    if (!error) return (data?.student_id as string | undefined) ?? null;
+    lastMessage = error.message;
+  }
+  throw new Error(`Could not read payment for refund: ${lastMessage}`);
+}
+
 /**
  * Idempotent: callers must only pass a row whose status is not already 'paid',
  * and `activate_payment` itself is safe to retry. Returns false if the DB

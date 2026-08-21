@@ -63,7 +63,12 @@ describe('the wiring — checkout applies it, activation spends it', () => {
   });
 
   it('the webhook and the reconcile cron both carry the credit id to activation', () => {
-    expect(readFileSync('src/app/api/payments/webhook/route.ts', 'utf8')).toContain('session_credit_id');
+    // Boundary 2 change 4 moved the webhook's ledger read into
+    // readWebhookPaymentRow — the credit id now rides in the primitive's
+    // select, and the route must consume that primitive. The idea being
+    // pinned is unchanged: the row handed to activation carries the credit.
+    expect(readFileSync('src/lib/activate-payment.ts', 'utf8')).toMatch(/select\('[^']*session_credit_id[^']*'\)/);
+    expect(readFileSync('src/app/api/payments/webhook/route.ts', 'utf8')).toContain('readWebhookPaymentRow(admin');
     expect(readFileSync('src/app/api/cron/reconcile-payments/route.ts', 'utf8')).toContain('session_credit_id');
   });
 });
