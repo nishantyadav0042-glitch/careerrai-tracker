@@ -52,8 +52,10 @@ export async function requireAdmin() {
 
   const admin = createAdminClient();
   const role = await readRole(admin, user.id);
-  // A role we DID read, that is not admin — a real authorization answer.
-  if (role !== 'admin') redirect('/login');
+  // A role we DID read, that is not admin — a real authorization answer, so
+  // send them where they actually belong. /login is reserved for someone we
+  // genuinely cannot identify; a signed-in student does not belong there.
+  if (role !== 'admin') redirect(homeForRole(role));
 
   return { user, admin };
 }

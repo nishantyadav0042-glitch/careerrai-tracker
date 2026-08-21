@@ -44,9 +44,12 @@ describe('the page gate never turns an outage into a logout', () => {
 
   it('redirects only on a role it actually received', () => {
     const s = src();
-    // The redirect must be guarded by the resolved role, not by raw data that
-    // could be null because the query failed.
-    expect(s).toMatch(/role !== 'admin'\) redirect\('\/login'\)/);
+    // The decision must read the RESOLVED role, never raw data that could be
+    // null because the query failed. The destination is deliberately not
+    // pinned here — this guard once demanded the literal redirect('/login')
+    // and failed the day that became homeForRole(role), which is a better
+    // answer. Pin the idea (decide from `role`), not the characters.
+    expect(s).toMatch(/if \(role !== 'admin'\) redirect\(/);
     expect(s).not.toMatch(/me\?\.role !== 'admin'/);
   });
 });
