@@ -19,9 +19,13 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   // The funnel's missing rung (20 Aug forensic): we could not tell how many
   // students ever OPENED this sheet. Now we can.
   useEffect(() => { track('community_share_opened', {}); }, []);
+  // ONE id per share intent, reused by every retry (21 Aug). The server keys
+  // idempotency off it, so pressing Send twice can never create two shares.
+  const requestId = useRef<string>(crypto.randomUUID());
   const [questionText, setQuestionText] = useState('');
   const [image, setImage] = useState<{ data: string; mime: string; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
 
@@ -59,6 +63,16 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   // screen from the content itself.
   const ready = image != null || questionText.trim().length >= 10;
 
+  /** Did this share actually land? null = we could not find out. */
+  async function reconcile(): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/community/submit?requestId=${encodeURIComponent(requestId.current)}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.found ? (json.message as string) : null;
+    } catch { return null; }
+  }
+
   async function submit() {
     setBusy(true); setError(null);
     // The student pressed Send. Everything after this is OUR problem, and any
@@ -66,6 +80,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
     track('community_share_attempted', { mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text' });
     try {
       const body = {
+        requestId: requestId.current,
         text: questionText.trim() || undefined,
         ...(image ? { image: image.data, image_mime: image.mime } : {}),
       };
@@ -87,11 +102,22 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
       });
       setSent(json.message as string);
     } catch (e) {
-      // Previously silent: a network drop or a runtime throw set an error on
-      // screen and left no trace, so an attempt that died here was
-      // indistinguishable from a student who never pressed Send.
+      // The request died before it produced an answer — which does NOT mean
+      // the share failed. On 21 Aug the server finished successfully FIFTEEN
+      // SECONDS after the phone gave up, and the student was told it failed.
+      // We do not know, so we do not claim: ask the server what actually
+      // happened, keyed by this intent's id.
       track('community_share_failed', { reason: e instanceof Error ? e.name : 'unknown' });
-      setError('Could not send. Please try again.');
+      setChecking(true);
+      const landed = await reconcile();
+      setChecking(false);
+      if (landed) {
+        track('community_submitted', { mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text', via: 'reconcile' });
+        setSent(landed);
+      } else {
+        // Still unknown, or genuinely absent. Retrying is safe — same id.
+        setError('We couldn’t confirm it yet. Tap Send again — it won’t post twice.');
+      }
     }
     setBusy(false);
   }
@@ -181,7 +207,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
               type="button" disabled={busy || !ready} onClick={() => void submit()}
               className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-bold text-white disabled:opacity-50"
             >
-              {busy ? 'Checking & sending…' : 'Send to the community'}
+              {checking ? 'Checking your submission…' : busy ? 'Checking & sending…' : 'Send to the community'}
             </button>
             <p className="mt-1.5 text-center text-[10px] text-stone-400">
               One share a day · checked automatically before anyone sees it
