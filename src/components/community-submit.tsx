@@ -58,6 +58,14 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   const [image, setImage] = useState<Img | null>(null);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  // A frozen button for 20-40 seconds is what caused the 21 Aug incident: the
+  // student assumed it was broken, pressed again, and got a rate limit for a
+  // share that had actually succeeded. We cannot show true progress (one POST,
+  // and fetch cannot report upload progress) — so we do not invent a
+  // percentage. We say what is actually happening and, past a few seconds,
+  // that it is still working. Honest waiting beats a fake bar.
+  const [stage, setStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   // Crop mode — entered by the student's choice, or suggested by the server.
@@ -69,13 +77,17 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
     setError(null);
     setCropping(false);
     setCrop(undefined);
+    setPreparing(true);
     try {
       const out = await prepareImage(file, { maxDim: PHOTO_MAX_DIM, quality: PHOTO_QUALITY, maxBytes: MAX_IMAGE_BYTES });
       if ('tooLarge' in out) { setError('That photo is too large even after compressing — try a closer crop'); return; }
       originalFile.current = file;
       setImage({ data: out.data, mime: out.mime, preview: out.preview });
+      track('community_photo_prepared', { kb: Math.round(out.data.length * 0.75 / 1024) });
     } catch {
       setError('Couldn’t read that photo — use a JPG/PNG, or just type the question below');
+    } finally {
+      setPreparing(false);
     }
   }
 
@@ -117,10 +129,18 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
   }
 
   async function submit() {
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setStage(0);
     // The student pressed Send. Everything after this is OUR problem, and any
     // outcome other than a submission is a defect until proven otherwise.
+    const startedAt = Date.now();
     track('community_share_attempted', { mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text' });
+    // Advance the wording as the wait grows. Cleared in every exit path below.
+    const ticks = [
+      setTimeout(() => setStage(1), 3000),
+      setTimeout(() => setStage(2), 9000),
+      setTimeout(() => setStage(3), 18000),
+    ];
+    const stopTicking = () => ticks.forEach(clearTimeout);
     try {
       const body = {
         requestId: requestId.current,
@@ -135,7 +155,8 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
       if (!res.ok) {
         // The CODE is the point (19 Aug: a bare status:400 left us unable to
         // say why a real student's attempt died).
-        track('community_share_blocked', { status: res.status, code: json.code ?? 'UNKNOWN' });
+        stopTicking();
+        track('community_share_blocked', { status: res.status, code: json.code ?? 'UNKNOWN', ms: Date.now() - startedAt });
         setError(json.error ?? 'Could not send.');
         // Progressive friction: the server names the help this photo needs.
         // Several unrelated questions → open the crop so one tap of guidance
@@ -149,9 +170,13 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
       }
       // The server decides kind/section AND the honest sentence: a published
       // share and one held for checking are different truths, told apart.
+      stopTicking();
+      // The REAL end-to-end duration a student experienced — the number the
+      // server-side timing log cannot see, because it excludes the upload.
       track('community_submitted', {
         mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text',
         published: json.published === true,
+        ms: Date.now() - startedAt,
       });
       setSent(json.message as string);
     } catch (e) {
@@ -160,7 +185,8 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
       // SECONDS after the phone gave up, and the student was told it failed.
       // We do not know, so we do not claim: ask the server what actually
       // happened, keyed by this intent's id.
-      track('community_share_failed', { reason: e instanceof Error ? e.name : 'unknown' });
+      stopTicking();
+      track('community_share_failed', { reason: e instanceof Error ? e.name : 'unknown', ms: Date.now() - startedAt });
       setChecking(true);
       const landed = await reconcile();
       setChecking(false);
@@ -172,6 +198,8 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
         setError('We couldn’t confirm it yet. Tap Send again — it won’t post twice.');
       }
     }
+    stopTicking();
+    setStage(0);
     setBusy(false);
   }
 
@@ -268,10 +296,10 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                 </>
               ) : (
                 <button
-                  type="button" onClick={() => fileInput.current?.click()}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 py-3 text-[13px] font-semibold text-stone-600 active:scale-[0.99]"
+                  type="button" onClick={() => fileInput.current?.click()} disabled={preparing}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 py-3 text-[13px] font-semibold text-stone-600 active:scale-[0.99] disabled:opacity-60"
                 >
-                  <Camera className="h-4 w-4" /> Add a photo
+                  <Camera className="h-4 w-4" /> {preparing ? 'Preparing photo…' : 'Add a photo'}
                 </button>
               )}
             </div>
@@ -288,7 +316,11 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
               type="button" disabled={busy || !ready || cropping} onClick={() => void submit()}
               className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-bold text-white disabled:opacity-50"
             >
-              {checking ? 'Checking your submission…' : busy ? 'Checking & sending…' : 'Send to the community'}
+              {checking
+                ? 'Checking your submission…'
+                : busy
+                  ? ['Sending…', 'Uploading your photo…', 'Checking it…', 'Almost there — still working'][stage]
+                  : 'Send to the community'}
             </button>
             <p className="mt-1.5 text-center text-[10px] text-stone-400">
               One share a day · checked automatically before anyone sees it

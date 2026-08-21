@@ -273,6 +273,10 @@ export type EventName =
   // tells capture friction apart from motivation — a student who opens the
   // crop and cancels is a different problem from one who never opens it.
   | 'community_crop_opened' | 'community_crop_confirmed' | 'community_crop_cancelled'
+  // Client-side photo prep, and the REAL end-to-end duration the student
+  // experienced. The server's timing log starts after Vercel has buffered the
+  // request body, so it cannot see the upload leg at all — this can.
+  | 'community_photo_prepared'
   | 'content_reported'
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
   | 'channel_referred'

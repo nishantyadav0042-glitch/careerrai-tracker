@@ -70,3 +70,48 @@ describe('telemetry never becomes part of the product', () => {
     expect(src).toMatch(/image != null \|\| questionText\.trim\(\)\.length >= 10/);
   });
 });
+
+// ── The Send button must never look frozen (21 Aug incident) ────────────────
+//
+// The original failure was not only slow: it was SILENT. One opaque
+// "Checking & sending…" for 20-40 seconds, so the student concluded it was
+// broken, pressed again, and was told they had already shared today - for a
+// share they believed had failed.
+
+describe('a long wait is narrated, never frozen', () => {
+  it('the wait has stages, and they advance on a clock', () => {
+    expect(src).toMatch(/setTimeout\(\(\) => setStage\(1\)/);
+    expect(src).toMatch(/setTimeout\(\(\) => setStage\(2\)/);
+    expect(src).toMatch(/setTimeout\(\(\) => setStage\(3\)/);
+    // Four distinct sentences, so 30 seconds never reads as one dead moment.
+    expect(src).toMatch(/'Sending…'[\s\S]{0,120}'Almost there/);
+  });
+
+  it('every exit path stops the clock — no stage text outlives the request', () => {
+    // A stale timer would relabel a finished request, which is its own lie.
+    const submitBody = src.slice(src.indexOf('async function submit()'), src.indexOf('return ('));
+    const exits = submitBody.match(/stopTicking\(\)/g) ?? [];
+    expect(exits.length, 'blocked, submitted, failed and the final exit').toBeGreaterThanOrEqual(4);
+  });
+
+  it('no fake progress percentage is invented', () => {
+    // fetch cannot report upload progress; a percentage here would be fiction.
+    expect(src).not.toMatch(/progress\s*[:=]\s*\d/);
+    expect(src).not.toContain('%"');
+  });
+
+  it('preparing a photo is visible too, so a big image never looks frozen', () => {
+    expect(src).toContain("'Preparing photo…'");
+    expect(src).toMatch(/disabled=\{preparing\}/);
+  });
+
+  it('the REAL end-to-end duration is recorded on every outcome', () => {
+    // The server timing log starts after Vercel buffers the body, so it cannot
+    // see the upload leg. Only the client can measure what the student felt.
+    for (const evt of ['community_submitted', 'community_share_blocked', 'community_share_failed']) {
+      const at = src.indexOf(`track('${evt}'`);
+      expect(at, `${evt} missing`).toBeGreaterThan(-1);
+      expect(src.slice(at, at + 260)).toContain('ms:');
+    }
+  });
+});
