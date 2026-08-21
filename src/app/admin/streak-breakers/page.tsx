@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { getStreakBreakers } from '@/lib/streak-breakers';
 import { ArrowLeft } from 'lucide-react';
 import { SITE_URL } from '@/lib/site';
@@ -26,11 +24,7 @@ function message(first: string): string {
 }
 
 export default async function StreakBreakersPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const cohort = await getStreakBreakers(admin);
   const withPhone = cohort.map((s) => ({ ...s, wa: waNumber(s.phone) })).filter((s) => s.wa);

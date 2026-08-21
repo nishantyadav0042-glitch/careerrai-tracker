@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -63,11 +61,7 @@ function ActivityRow({ title, s }: { title: string; s: Tally }) {
 }
 
 export default async function SalesPerformancePage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // The rep whose portfolio this is (single sales user today = Priya).
   const { data: reps } = await admin.from('profiles').select('id, email, full_name').eq('role', 'sales').order('created_at', { ascending: true });

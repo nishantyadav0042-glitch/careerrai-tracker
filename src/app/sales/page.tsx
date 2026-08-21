@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireSales } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { buildCallQueue } from '@/lib/call-queue';
 import { CallDeck } from '@/components/call-deck';
@@ -13,11 +11,8 @@ function istHour(): number {
 }
 
 export default async function SalesCallsPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
+  const { user, admin } = await requireSales();
   const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
-  if (me?.role !== 'sales' && me?.role !== 'admin') redirect('/login');
 
   // A rep sees unclaimed leads + her own book; an admin visiting the rep
   // workspace sees everything (oversight, same as /admin/sales).

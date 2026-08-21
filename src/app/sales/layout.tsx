@@ -1,21 +1,13 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireSales } from '@/lib/admin-auth';
 import { Logo } from '@/components/logo';
 
 // Sales workspace — for the sales role (and admins, who can see everything).
 // Priya logs in and lands here; a student/buddy is bounced to their own home.
 export default async function SalesLayout({ children }: { children: React.ReactNode }) {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role, full_name').eq('id', user.id).single();
-  if (profile?.role !== 'sales' && profile?.role !== 'admin') {
-    if (profile?.role === 'student') redirect('/student/tracker');
-    if (profile?.role === 'buddy') redirect('/buddy/home');
-    redirect('/login');
-  }
+  // Canonical gate (21 Aug): a role we could not READ now throws instead of
+  // bouncing a signed-in rep to the login screen.
+  await requireSales();
 
   return (
     <div className="min-h-screen bg-stone-50">

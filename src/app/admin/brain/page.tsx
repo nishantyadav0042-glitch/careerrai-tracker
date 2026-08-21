@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { BrainApprovalList, type PendingDecision } from './brain-approval-list';
 
 // Manual-approval gate for the Product Brain (founder, 24 Jul): "recommend
@@ -8,11 +6,7 @@ import { BrainApprovalList, type PendingDecision } from './brain-approval-list';
 // reaches a student from here until it's tapped Approve — Reject just closes
 // it out. Ranked by impact so the highest-value calls are on top.
 export default async function AdminBrainPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const { data: rows } = await admin
     .from('decision_log')

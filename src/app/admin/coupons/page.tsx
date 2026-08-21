@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { AdminCouponsClient, type CouponRow } from './admin-coupons-client';
 
 interface CouponRecord {
@@ -23,12 +21,7 @@ function discountLabel(type: 'percent' | 'flat', value: number): string {
 
 export default async function AdminCouponsPage() {
   // Local JWT verification — middleware already paid the network auth hop.
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const { data: coupons } = await admin
     .from('coupons')

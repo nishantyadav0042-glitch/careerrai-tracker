@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireSales } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { getRepPortfolio, getRepCallStats } from '@/lib/sales-portfolio';
 
@@ -9,11 +7,8 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My summary · CareerRai' };
 
 export default async function SalesSummaryPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
+  const { user, admin } = await requireSales();
   const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
-  if (me?.role !== 'sales' && me?.role !== 'admin') redirect('/login');
   const email = (me?.email as string) ?? '__none__';
 
   const [{ summary: s, leads }, calls] = await Promise.all([

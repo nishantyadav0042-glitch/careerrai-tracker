@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { stepLabel } from '@/lib/lead-intel';
 import { waMessages, waNumber, leadState } from '@/lib/wa-messages';
 import { dreamCollegeLabel } from '@/lib/notification-os';
@@ -57,12 +55,7 @@ function StatusChip({ on, yes, no }: { on: boolean; yes: string; no: string }) {
 
 export default async function LeadsPage() {
   // Local JWT verification — middleware already paid the network auth hop.
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // Test/friend accounts (is_test_account) are hidden from the leads list so
   // founder testing never pollutes the real pipeline. Toggle it per-lead on

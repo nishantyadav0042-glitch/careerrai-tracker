@@ -17,12 +17,9 @@ export default async function BuddySchedulePage({
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (profile?.role !== 'buddy') redirect('/');
+  // The role gate lives in /buddy/layout.tsx (requireBuddy). Deciding again
+  // here from a read that may have failed can only misfire — a flaky profiles
+  // read would bounce a real buddy, which is exactly the 21 Aug defect.
 
   const [{ data: students }, readiness] = await Promise.all([
     admin.from('profiles').select('id, full_name').eq('buddy_id', user.id).order('full_name'),

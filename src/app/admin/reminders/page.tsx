@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { getRemindToLog } from '@/lib/admin-filters';
 import { ArrowLeft } from 'lucide-react';
 import { SITE_URL } from '@/lib/site';
@@ -30,11 +28,7 @@ function reminderText(firstName: string): string {
 }
 
 export default async function AdminRemindersPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // Membership comes from the SAME shared filter as the dashboard card
   // (lib/admin-filters.ts) — the card's number is this list's length. This page

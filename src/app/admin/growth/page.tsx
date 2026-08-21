@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { AD_CHANNELS, CHANNEL_LABEL, type AdChannel } from '@/lib/attribution';
 import { TrendingUp } from 'lucide-react';
 
@@ -16,11 +14,7 @@ function istDay(d: Date) {
 }
 
 export default async function AdminGrowthPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const [{ data: profiles }, { data: streaks }, { data: engagement }, { data: funnel }] = await Promise.all([
     admin.from('profiles').select('id, role, created_at, onboarding_completed, subscription_status, signup_source, is_test_account, attr_channel, attr_source, attr_campaign, attr_stamped_at'),

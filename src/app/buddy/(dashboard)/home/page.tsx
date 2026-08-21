@@ -61,7 +61,11 @@ export default async function BuddyHomePage({
     buddyBookingReadiness(user.id),
   ]);
 
-  if (profile?.role !== 'buddy') redirect('/');
+  // The role gate lives in /buddy/layout.tsx (requireBuddy). What is left
+  // here is a DATA requirement, not an access decision: this page renders the
+  // mentor's own profile and cannot draw it from nothing. A missing row is an
+  // error to surface, never a quiet redirect that reads as a logout.
+  if (!profile) throw new Error('Could not load your mentor profile — please retry.');
 
   // Students now browse buddy profiles before subscribing — an incomplete
   // profile is money left on the table. Nudge until every field is filled.

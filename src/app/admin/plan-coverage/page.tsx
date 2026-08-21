@@ -1,12 +1,6 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  assessPlanCoverage, planCoverageExceptions,
-  CONCENTRATION_LIMIT, MIN_DAYS_TO_JUDGE,
-  type PlannedSlot, type PlanCoverageRow,
-} from '@/lib/os/plan-coverage';
+import { requireAdmin } from '@/lib/admin-auth';
+import { assessPlanCoverage, planCoverageExceptions, CONCENTRATION_LIMIT, MIN_DAYS_TO_JUDGE, type PlannedSlot, type PlanCoverageRow } from '@/lib/os/plan-coverage';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,11 +25,7 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
 }
 
 export default async function PlanCoveragePage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const [{ data: profiles }, { data: routines }, { data: coverage }] = await Promise.all([
     admin.from('profiles')

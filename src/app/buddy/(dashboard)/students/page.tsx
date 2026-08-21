@@ -8,13 +8,10 @@ export default async function BuddyStudentsPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
 
-  if (profile?.role !== 'buddy') redirect('/');
+  // The role gate lives in /buddy/layout.tsx (requireBuddy). Deciding again
+  // here from a read that may have failed can only misfire — a flaky profiles
+  // read would bounce a real buddy, which is exactly the 21 Aug defect.
 
   const { data: students } = await admin
     .from('profiles')

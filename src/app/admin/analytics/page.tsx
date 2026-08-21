@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { Activity } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -29,11 +27,7 @@ function lastNDays(n: number): string[] {
 type Row = { user_id: string | null; event: string; path: string | null; created_at: string };
 
 export default async function AdminAnalyticsPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const sinceIso = new Date(Date.now() - DAYS * 86_400_000).toISOString();

@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, PhoneCall, Flame, MousePointerClick } from 'lucide-react';
@@ -16,12 +14,7 @@ export const metadata = { title: 'Sales queue · CareerRai' };
 // count uses (lib/admin-filters.ts) — the card's number is this list's length.
 export default async function SalesQueuePage() {
   // Local JWT verification — middleware already paid the network auth hop.
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const queue = await getSalesReadyToCall(admin);
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here

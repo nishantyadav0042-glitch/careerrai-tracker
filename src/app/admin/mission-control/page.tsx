@@ -1,13 +1,8 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  computeHealthScalars, computeAgeCohorts, evaluateAlerts, confidenceFor,
-  METRIC_OWNER, type HealthScalars, type Confidence,
-} from '@/lib/mission-control';
+import { computeHealthScalars, computeAgeCohorts, evaluateAlerts, confidenceFor, METRIC_OWNER, type HealthScalars, type Confidence } from '@/lib/mission-control';
 import { getRosterMomentum, momentumDistribution, bandMeta } from '@/lib/momentum';
 import { AutoRefresh } from '@/components/auto-refresh';
 
@@ -38,11 +33,7 @@ function Delta({ now, prev, goodIsUp = true }: { now: number; prev: number | nul
 }
 
 export default async function MissionControlPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const yesterdayIso = new Date(Date.now() - 20 * 3600_000).toISOString();

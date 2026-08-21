@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { redirect, notFound } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { notFound } from 'next/navigation';
+import { requireAdmin } from '@/lib/admin-auth';
 import { AD_CHANNELS, CHANNEL_LABEL, type AdChannel } from '@/lib/attribution';
 import { ArrowLeft } from 'lucide-react';
 
@@ -22,11 +21,7 @@ export default async function ChannelDrilldownPage({
   if (!(AD_CHANNELS as readonly string[]).includes(channel)) notFound();
   const ch = channel as AdChannel;
 
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const { data: rows } = await admin
     .from('profiles')

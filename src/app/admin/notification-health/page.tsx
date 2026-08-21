@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { STUDENT_BUDGET_TYPES } from '@/lib/notification-os';
 import { cn } from '@/lib/utils';
 import { pushRecoveryMessage, waNumber } from '@/lib/wa-messages';
@@ -66,12 +64,7 @@ function addDays(dateStr: string, days: number): string {
 
 export default async function NotificationHealthPage() {
   // Local JWT verification — middleware already paid the network auth hop.
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const nowMs = Date.now();

@@ -1,11 +1,6 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  BUDDY_FUNNEL_STEPS, MIN_FOR_RATE, ratesAreMeaningful, rateOrNull,
-  type FunnelStepCount,
-} from '@/lib/os/buddy-funnel';
+import { requireAdmin } from '@/lib/admin-auth';
+import { BUDDY_FUNNEL_STEPS, MIN_FOR_RATE, ratesAreMeaningful, rateOrNull, type FunnelStepCount } from '@/lib/os/buddy-funnel';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +14,7 @@ export const dynamic = 'force-dynamic';
 // sentence when it is too early.
 
 export default async function BuddyFunnelPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const keys = BUDDY_FUNNEL_STEPS.map((s) => s.key);
 

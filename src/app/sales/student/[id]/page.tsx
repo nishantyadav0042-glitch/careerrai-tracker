@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireSales } from '@/lib/admin-auth';
 import { ArrowLeft, Phone, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSalesConversionView } from '@/lib/sales-conversion';
@@ -16,11 +14,8 @@ const TIER: Record<string, string> = {
 
 export default async function ConvertPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'sales' && me?.role !== 'admin') redirect('/login');
+  const { user, admin } = await requireSales();
+  const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
 
   const v = await getSalesConversionView(admin, id);
   if (!v) return <div className="p-8 text-center text-sm text-stone-500">Student not found. <Link href="/sales" className="underline">Back</Link></div>;

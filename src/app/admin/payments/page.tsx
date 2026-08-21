@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { PLANS, isPlanId } from '@/lib/plans';
 import { AdminPaymentsClient, type IncomingRow, type OutgoingRow, type RefundRow } from './admin-payments-client';
 
@@ -12,12 +10,7 @@ function currentPeriod() {
 
 export default async function AdminPaymentsPage() {
   // Local JWT verification — middleware already paid the network auth hop.
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const { data: profiles } = await admin
     .from('profiles')

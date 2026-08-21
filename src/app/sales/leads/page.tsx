@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireSales } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { getRepPortfolio } from '@/lib/sales-portfolio';
 
@@ -26,11 +24,8 @@ function istWhen(iso: string | null): string {
 
 export default async function MyLeadsPage({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
   const { f } = await searchParams;
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
+  const { user, admin } = await requireSales();
   const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
-  if (me?.role !== 'sales' && me?.role !== 'admin') redirect('/login');
 
   const { leads } = await getRepPortfolio(admin, (me?.email as string) ?? '__none__');
   const filter = f && FILTERS.some((x) => x.key === f) ? f : 'active';

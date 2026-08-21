@@ -1,8 +1,7 @@
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthUser } from '@/lib/auth';
 import { expedifyStatusBadge, readCallFeedback } from '@/lib/call-feedback';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { momentumStreak } from '@/lib/streak-utils';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
@@ -34,12 +33,7 @@ const TIER_STYLE: Record<string, string> = {
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   // Local JWT verification — middleware already paid the network auth hop.
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const { data: profile } = await admin.from('profiles')
     .select('id, role, full_name, phone, email, college, category, course_year, work_ex_months, is_repeater, is_working_professional, coaching_enrolled, target_percentile, attempt_year, exam_target, dream_colleges, onboarding_completed, onboarding_step_reached, created_at, is_premium, buddy_id, app_installed, notif_prefs, post_signup_done, syllabus_target_date, pain_points, wants_mentor, cat_percentile, cat_year, current_company, linkedin_url, iim_converted, first_attempt_percentile, student_types_helped, strongest_section, buddy_onboarding_completed, is_test_account, expedify_status, expedify_synced_at, call_feedback, signup_device, signup_browser')

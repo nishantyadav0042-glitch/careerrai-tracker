@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { computeSummary } from '@/lib/analytics';
 import { AdminMatchPanel } from '../admin-match-panel';
 import { AdminStudentsList } from '../admin-students-list';
@@ -20,12 +18,7 @@ import { getLogDateString } from '@/lib/streak-utils';
 // "all the buddies" and could not find them inside a students page. One
 // responsibility, one home.
 export default async function AdminStudentsPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  const admin = createAdminClient();
-  const { data: adminProfile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (adminProfile?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   // Full onboarding columns — the students list renders complete dossiers.
   const { data: allProfiles } = await admin.from('profiles').select('id, role, full_name, email, phone, exam_target, buddy_id, cat_percentile, starting_percentile, onboarding_completed, college, category, is_repeater, is_working_professional, work_ex_months, coaching_enrolled, created_at, course_year, attempt_year, target_percentile, hours_available, study_target_hours, baseline_varc, baseline_dilr, baseline_qa, baseline_mocks_taken, dream_colleges, signup_source, strongest_section, student_types_helped, iim_converted, first_attempt_percentile, cat_year, current_company, biggest_mistake, younger_self_advice, how_i_work, linkedin_url, avatar_url, app_installed, notif_prefs, is_premium').order('created_at', { ascending: false });

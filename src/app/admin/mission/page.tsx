@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildMissionQueue } from '@/lib/mission-queue';
@@ -16,11 +14,7 @@ function istHour(): number {
 }
 
 export default async function MissionPage() {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const { cards, rootCause: rc, sentToday } = await buildMissionQueue(admin, 40);
   const mins = Math.round(cards.length * 1.5);

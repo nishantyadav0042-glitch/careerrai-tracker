@@ -1,7 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getAuthUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin-auth';
 import { ArrowLeft, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStudent360 } from '@/lib/student-360';
@@ -39,11 +37,7 @@ function waNumber(phone: string | null): string | null {
 
 export default async function Student360Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-  const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') redirect('/login');
+  const { admin } = await requireAdmin();
 
   const [s, entity, allAlerts, { data: mentorRows }, { data: assignmentRows }, { data: studentRow }] = await Promise.all([
     getStudent360(admin, id),

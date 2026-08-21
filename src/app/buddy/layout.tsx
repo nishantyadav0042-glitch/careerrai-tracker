@@ -1,39 +1,22 @@
-import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getAuthUser } from '@/lib/auth';
+import { requireBuddy } from '@/lib/admin-auth';
 
 // Outer buddy layout: role check only.
 // Shell (nav, badge) and onboarding gate live in (dashboard)/layout.tsx so that
 // /buddy/setup can render without the nav and without triggering a redirect loop.
 export default async function BuddyLayout({ children }: { children: React.ReactNode }) {
-  const user = await getAuthUser();
-  if (!user) redirect('/login');
-
-  // Fast path: role cookie set at login avoids a DB round-trip on every page.
-  const cookieStore = await cookies();
-  const roleCookie = cookieStore.get('user_role')?.value;
-  if (roleCookie === 'buddy') {
-    // Still verify from DB to catch stale cookies (role may have changed since last login).
-    const admin = createAdminClient();
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-    if (profile?.role === 'admin') redirect('/admin');
-    if (profile?.role === 'student') redirect('/student/tracker');
-    return <>{children}</>;
-  }
-
-  // Slow path (first load or cookie missing): verify role from DB.
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (profile?.role !== 'buddy') {
-    if (profile?.role === 'student') redirect('/student/tracker');
-    redirect('/login');
-  }
+  // Canonical gate (21 Aug). What stood here had the SAME root defect in two
+  // directions at once, which is what makes it worth recording:
+  //
+  //   slow path — `if (profile?.role !== 'buddy') redirect('/login')`. A
+  //   failed read meant profile was null, so a real buddy was thrown out.
+  //
+  //   cookie fast path — it checked only for admin and student. A failed read
+  //   matched NEITHER, fell through, and returned the children. The same
+  //   broken read that locked a buddy out over here let anyone in over there.
+  //
+  // The "fast path" also saved nothing: it still did the profiles read, to
+  // catch a stale cookie. One read either way, so one gate either way.
+  await requireBuddy();
 
   return <>{children}</>;
 }

@@ -19,7 +19,9 @@ export default async function BuddySetupPage() {
     .eq('id', user.id)
     .single();
 
-  if (profile?.role !== 'buddy') redirect('/login');
+  // The role gate lives in /buddy/layout.tsx (requireBuddy). Re-checking it
+  // here from a read that may have failed could only ever misfire — that is
+  // exactly how a flaky read became a logout.
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white">

@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/auth';
 import { BuddyBottomNav } from '@/components/bottom-nav';
@@ -15,8 +14,6 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
-  const cookieStore = await cookies();
-  const roleCookie = cookieStore.get('user_role')?.value;
 
   const admin = createAdminClient();
 
@@ -29,10 +26,8 @@ export default async function BuddyDashboardLayout({ children }: { children: Rea
   ]);
 
   // Validate role when cookie is absent (first load or expired).
-  if (!roleCookie && profile?.role !== 'buddy') {
-    if (profile?.role === 'student') redirect('/student/tracker');
-    redirect('/login');
-  }
+  // Role is settled by /buddy/layout.tsx (requireBuddy). This used to decide
+  // again from its own read, and a failed read landed a real buddy on /login.
 
   // Gate: buddy must complete storefront setup before accessing the dashboard.
   if (!profile?.buddy_onboarding_completed) {

@@ -34,7 +34,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // rather than redirect. An error boundary says "something broke"; a login
 // screen lies and says "you don't belong here".
 
-async function readRole(admin: ReturnType<typeof createAdminClient>, userId: string) {
+export async function readRole(admin: ReturnType<typeof createAdminClient>, userId: string) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await admin.from('profiles').select('role').eq('id', userId).single();
     if (!error) return data?.role ?? null;
@@ -56,4 +56,51 @@ export async function requireAdmin() {
   if (role !== 'admin') redirect('/login');
 
   return { user, admin };
+}
+
+/**
+ * Where a signed-in person belongs when they are not allowed here.
+ *
+ * Sending someone to /login when we KNOW their role is its own small lie —
+ * they are signed in, they just took a wrong door. Only an unknown or
+ * role-less account genuinely belongs at the login screen.
+ */
+export function homeForRole(role: string | null): string {
+  if (role === 'admin') return '/admin';
+  if (role === 'student') return '/student/tracker';
+  if (role === 'buddy') return '/buddy/home';
+  if (role === 'sales') return '/sales';
+  return '/login';
+}
+
+/**
+ * The buddy door. Same honesty contract as requireAdmin: a role we could not
+ * READ throws, a role we read and that is wrong redirects to where that
+ * person actually belongs.
+ */
+export async function requireBuddy() {
+  const user = await getAuthUser();
+  if (!user) redirect('/login');
+
+  const admin = createAdminClient();
+  const role = await readRole(admin, user.id);
+  if (role !== 'buddy') redirect(homeForRole(role));
+
+  return { user, admin };
+}
+
+/**
+ * The sales door. Admins pass too — they can see everything, and an admin
+ * bounced out of the sales workspace would be a worse bug than the one this
+ * file exists to fix.
+ */
+export async function requireSales() {
+  const user = await getAuthUser();
+  if (!user) redirect('/login');
+
+  const admin = createAdminClient();
+  const role = await readRole(admin, user.id);
+  if (role !== 'sales' && role !== 'admin') redirect(homeForRole(role));
+
+  return { user, admin, role };
 }
