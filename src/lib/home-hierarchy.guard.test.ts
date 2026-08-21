@@ -61,7 +61,7 @@ describe('the timetable stays on Home', () => {
 
 describe('exactly one commercial line on Home', () => {
   it('the ₹299 door names the offer and hands off — it does not sell here', () => {
-    expect(HOME).toContain('Audit your preparation with an IIM Buddy');
+    expect(HOME).toContain('Audit Your CAT Prep with IIM Alumni');
     expect(HOME).toMatch(/href="\/student\/buddy"/);
   });
 
@@ -72,7 +72,7 @@ describe('exactly one commercial line on Home', () => {
   });
 
   it('Home carries no second price and no ladder', () => {
-    const body = HOME.slice(HOME.indexOf('Audit your preparation'), HOME.indexOf('Audit your preparation') + 900);
+    const body = HOME.slice(HOME.indexOf('Audit Your CAT Prep'), HOME.indexOf('Audit Your CAT Prep') + 900);
     expect(body).not.toContain('₹999');
     expect(body).not.toContain('₹2,999');
   });

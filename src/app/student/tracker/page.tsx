@@ -588,7 +588,7 @@ export default async function DailyTrackerPage() {
             className="flex items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 shadow-sm active:scale-[0.99]"
           >
             <span className="text-[13.5px] font-extrabold leading-snug text-white">
-              Audit your preparation with an IIM Buddy — ₹299
+              Audit Your CAT Prep with IIM Alumni — ₹299
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-white/80" />
           </Link>
