@@ -91,6 +91,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
       });
       if ('tooLarge' in out) { setError('That crop is still too large — try a tighter one'); return; }
       setImage({ data: out.data, mime: out.mime, preview: out.preview });
+      track('community_crop_confirmed', { kb: Math.round(out.data.length * 0.75 / 1024) });
       setCropping(false);
       setCrop(undefined);
       setError(null);
@@ -139,7 +140,10 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
         // Progressive friction: the server names the help this photo needs.
         // Several unrelated questions → open the crop so one tap of guidance
         // becomes one drag of a box, not a typed "3rd Question."
-        if (json.code === 'IMAGE_MULTIPLE_OBJECTS' && image) setCropping(true);
+        if (json.code === 'IMAGE_MULTIPLE_OBJECTS' && image) {
+          setCropping(true);
+          track('community_crop_opened', { via: 'server' });
+        }
         setBusy(false);
         return;
       }
@@ -229,7 +233,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      type="button" onClick={() => { setCropping(false); setCrop(undefined); }}
+                      type="button" onClick={() => { setCropping(false); setCrop(undefined); track('community_crop_cancelled', {}); }}
                       className="flex-1 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-700"
                     >
                       Cancel
@@ -255,7 +259,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                       <Camera className="h-3.5 w-3.5" /> Retake
                     </button>
                     <button
-                      type="button" onClick={() => setCropping(true)}
+                      type="button" onClick={() => { setCropping(true); track('community_crop_opened', { via: 'student' }); }}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-stone-100 py-2 text-[12px] font-bold text-stone-700 active:scale-[0.98]"
                     >
                       <CropIcon className="h-3.5 w-3.5" /> Crop

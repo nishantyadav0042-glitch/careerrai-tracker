@@ -268,6 +268,11 @@ export type EventName =
   // server answer at all (network/runtime), which used to be silent.
   | 'community_share_opened' | 'community_share_attempted'
   | 'community_share_blocked' | 'community_share_failed'
+  // Crop is the progressive-friction step: opened by the student's choice or
+  // suggested by the server. Separating confirmed from cancelled is what
+  // tells capture friction apart from motivation — a student who opens the
+  // crop and cancels is a different problem from one who never opens it.
+  | 'community_crop_opened' | 'community_crop_confirmed' | 'community_crop_cancelled'
   | 'content_reported'
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
   | 'channel_referred'

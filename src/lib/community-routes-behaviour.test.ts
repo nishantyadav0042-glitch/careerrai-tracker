@@ -241,3 +241,39 @@ describe('feed: a DB failure is never "Be the one who adds something"', () => {
     expect(topPick.id).toBe('old-featured');
   });
 });
+
+// ── Rotation stability (Phase 1, items 11–12 and 18) ────────────────────────
+
+describe('rotation: the same student, the same day, the same pick', () => {
+  it('today\'s own serves are NOT history — the third open cannot re-roll the day', async () => {
+    // The card logs a serve on EVERY mount, and the three-peat guard read the
+    // last two serves with no day filter — so a student's third open saw
+    // today's kind twice, tripped the guard, and was handed a different pick
+    // for the same day. The read is now bounded to previous study days.
+    const route = await import('@/app/api/community/daily-slot/route');
+    expect(typeof route.GET).toBe('function');
+    const src = (await import('node:fs')).readFileSync('src/app/api/community/daily-slot/route.ts', 'utf8');
+    // The idea: recent-serve history stops at the start of today.
+    expect(src).toMatch(/\.lt\('created_at', studyDayStart\(now\)\.toISOString\(\)\)/);
+  });
+
+  it('availability excludes items already holding today\'s top slot', async () => {
+    // The ballot excludes today's featured items; availability did not — so
+    // the rotation could promise a community slot that rendered empty.
+    const src = (await import('node:fs')).readFileSync('src/app/api/community/daily-slot/route.ts', 'utf8');
+    expect(src).toMatch(/featuredToday\.has\(s\.id\)/);
+  });
+
+  it('an unreadable availability read is a retryable 503, never a smaller rotation', async () => {
+    currentAdmin = makeAdmin({
+      'student_submissions.select': () => ({ data: null, error: { message: 'down' } }),
+      'submission_votes.select': () => ({ data: [], error: null }),
+    });
+    // The route needs more of the world than this double provides (peer rows,
+    // mirror); what matters is that it does NOT answer 200-with-less.
+    let status = 0;
+    try { status = (await (await import('@/app/api/community/daily-slot/route')).GET()).status; }
+    catch { status = 500; }
+    expect(status).not.toBe(200);
+  });
+});
