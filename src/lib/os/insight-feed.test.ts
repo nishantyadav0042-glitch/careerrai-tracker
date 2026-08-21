@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   mayShowVoteCount, voteDisplay, orderFeed, orderFeedTop, netScore,
-  helpfulPct, HELPFUL_PCT_MIN_VOTES, VOTE_COUNT_REVEAL_MIN,
+  helpfulPct, VOTE_COUNT_REVEAL_MIN,
   type InsightRow,
 } from './insight-feed';
 
@@ -39,16 +39,17 @@ describe('no small numbers, ever', () => {
     expect(d).not.toHaveProperty('count');
   });
 
-  it('shows NO percentage below the sample floor — two votes cannot say 100%', () => {
-    expect(helpfulPct({ helpfulVotes: 2, totalVotes: 2 })).toBeNull();
-    expect(helpfulPct({ helpfulVotes: 3, totalVotes: 3 })).toBeNull();
-    expect(voteDisplay(row({ helpfulVotes: 5, totalVotes: 5 })).helpfulPct).toBeNull();
+  // Founder, 21 Aug: no minimum, anywhere. One vote is a real vote and 100%
+  // is what it actually was — nothing is being estimated about a population.
+  it('a single vote shows its true ratio', () => {
+    expect(helpfulPct({ helpfulVotes: 1, totalVotes: 1 })).toBe(100);
+    expect(helpfulPct({ helpfulVotes: 0, totalVotes: 1 })).toBe(0);
+    expect(helpfulPct({ helpfulVotes: 1, totalVotes: 2 })).toBe(50);
   });
 
-  it('the floor is a real sample, and it is documented as a constant', () => {
-    expect(HELPFUL_PCT_MIN_VOTES).toBeGreaterThanOrEqual(10);
-    expect(helpfulPct({ helpfulVotes: 8, totalVotes: HELPFUL_PCT_MIN_VOTES })).toBe(80);
-    expect(helpfulPct({ helpfulVotes: 8, totalVotes: HELPFUL_PCT_MIN_VOTES - 1 })).toBeNull();
+  it('only an item nobody has voted on shows nothing', () => {
+    expect(helpfulPct({ helpfulVotes: 0, totalVotes: 0 })).toBeNull();
+    expect(voteDisplay(row({ helpfulVotes: 0, totalVotes: 0 })).helpfulPct).toBeNull();
   });
 
   it('the score still exists for RANKING — it is computed, just never printed', () => {

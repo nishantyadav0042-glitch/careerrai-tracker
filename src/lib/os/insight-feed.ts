@@ -63,19 +63,24 @@ export function mayShowVoteCount(total: number): boolean {
 }
 
 /**
- * Votes needed before a "% found this useful" may be shown.
+ * "% found this useful" — the plain ratio of the votes cast, or null when
+ * nobody has voted yet.
  *
- * Lower than VOTE_COUNT_REVEAL_MIN because a ratio survives a smaller sample
- * than a headline count does — but not by much, and deliberately not 1 or 2.
- * At n=3 a single downvote swings the figure by 33 points; at n=10 it moves
- * it by 10, which a student can read as a real opinion rather than an
- * accident. Same reasoning, same shape, as SPLIT_MIN_ATTEMPTS in challenge.ts.
+ * NO MINIMUM (founder, 21 Aug, correcting me). I had put a 10-vote floor here
+ * by carrying the "a percentage is noise wearing a suit" rule across from
+ * challenge.ts. The founder's ruling is that it does not apply, and the
+ * reasoning is sound: that rule guards a claim ABOUT THE WORLD inferred from
+ * a sample — "63% of students find this hard" is a population estimate, and
+ * three attempts cannot support one. This is not an estimate. It is a direct
+ * readout of what the votes actually were: one student voted, one found it
+ * useful, 100%. Nothing is being extrapolated.
+ *
+ * Hiding it also reintroduced the failure we started from — a vote whose
+ * consequence you cannot see reads as a broken product — and it made a
+ * deliberately simple system carry a rule a student would never guess.
  */
-export const HELPFUL_PCT_MIN_VOTES = 10;
-
-/** "% found this useful", or null when the sample cannot carry one. */
 export function helpfulPct(row: Pick<InsightRow, 'helpfulVotes' | 'totalVotes'>): number | null {
-  if (row.totalVotes < HELPFUL_PCT_MIN_VOTES) return null;
+  if (row.totalVotes <= 0) return null;
   return Math.round((row.helpfulVotes / row.totalVotes) * 100);
 }
 

@@ -1,18 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { helpfulPct, netScore, HELPFUL_PCT_MIN_VOTES } from './os/insight-feed';
+import { helpfulPct, netScore } from './os/insight-feed';
 
 // ── A card shows a ratio or nothing — never a count ────────────────────────
 //
 // Founder, 20 Aug: the vote numbers are small, so do not print them; show a
 // percentage instead. Both halves matter.
 //
-// Not printing the count is the easy half. The hard half is refusing to print
-// a percentage that the sample cannot carry: "100% found this useful" from
-// two votes is a worse lie than the two votes were, and it is exactly the
-// failure this codebase has removed three times already (challenge.ts
-// SPLIT_MIN_ATTEMPTS, peer-cohort density gate, the insight engine's banned
-// exam statistics). So below the floor a card shows NO number at all.
+// There is NO minimum (founder, 21 Aug). I had added a 10-vote floor by
+// carrying across the "a percentage is noise wearing a suit" rule; the
+// founder overruled it and the distinction is real. That rule guards a claim
+// ABOUT THE WORLD inferred from a sample. This is not inferred — it is a
+// direct readout of the votes cast. One vote, one helpful, 100%: true as
+// written. A floor also brought back the original failure, a vote whose
+// consequence you cannot see, and made a deliberately simple system carry a
+// rule no student would ever guess.
 //
 // The vote still visibly does something: the button lights up and stays lit,
 // and the item moves in the ranking. The score is computed for that ordering
@@ -22,14 +24,18 @@ const read = (p: string) => readFileSync(p, 'utf8');
 const code = (p: string) =>
   read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-describe('the percentage is real or it is absent', () => {
-  it('says nothing at all below the floor', () => {
-    for (const n of [0, 1, 2, 3, 5, HELPFUL_PCT_MIN_VOTES - 1]) {
-      expect(helpfulPct({ helpfulVotes: n, totalVotes: n }), `${n} votes must not produce a %`).toBeNull();
-    }
+describe('every vote shows up, from the very first one', () => {
+  it('has no minimum — one vote already speaks', () => {
+    expect(helpfulPct({ helpfulVotes: 1, totalVotes: 1 })).toBe(100);
+    expect(helpfulPct({ helpfulVotes: 2, totalVotes: 2 })).toBe(100);
+    expect(helpfulPct({ helpfulVotes: 1, totalVotes: 3 })).toBe(33);
   });
 
-  it('speaks once the sample can carry it', () => {
+  it('is silent only when nobody has voted', () => {
+    expect(helpfulPct({ helpfulVotes: 0, totalVotes: 0 })).toBeNull();
+  });
+
+  it('reads the same at every scale', () => {
     expect(helpfulPct({ helpfulVotes: 9, totalVotes: 10 })).toBe(90);
     expect(helpfulPct({ helpfulVotes: 41, totalVotes: 50 })).toBe(82);
   });
