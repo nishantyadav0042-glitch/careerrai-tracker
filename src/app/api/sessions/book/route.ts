@@ -7,7 +7,7 @@ import { taxForPlan } from '@/lib/gst';
 import { normalizeIndianPhone } from '@/lib/phone';
 import {
   SESSION_PLAN_ID, SESSION_PRICE_PAISE, SESSION_MINUTES,
-  rosterCapacity, matchMentor, type MentorProfile, type Speciality,
+  rosterCapacity, matchMentor, readMentorRoster, hasOpenSessionCredit,
 } from '@/lib/session-credit';
 
 // POST /api/sessions/book — buy ONE 1:1 session.
@@ -25,41 +25,11 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-/** Sessions assigned but not yet completed still occupy a mentor's week. */
-function weekStartIso(): string {
-  const now = new Date();
-  const d = new Date(now.getTime() - ((now.getUTCDay() + 6) % 7) * 86_400_000);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
-}
-
-export async function loadRoster(admin: ReturnType<typeof createAdminClient>): Promise<MentorProfile[]> {
-  const [{ data: mentors }, { data: open }] = await Promise.all([
-    admin.from('profiles')
-      .select('id, full_name, specialities, strongest_section, own_weakest_section, attempt_number, weekly_session_cap')
-      .eq('role', 'buddy')
-      .not('weekly_session_cap', 'is', null),
-    admin.from('session_credits')
-      .select('buddy_id')
-      .in('status', ['assigned', 'scheduled'])
-      .gte('assigned_at', weekStartIso()),
-  ]);
-
-  const load = new Map<string, number>();
-  for (const c of open ?? []) {
-    if (c.buddy_id) load.set(c.buddy_id as string, (load.get(c.buddy_id as string) ?? 0) + 1);
-  }
-
-  return (mentors ?? []).map((m) => ({
-    buddyId: m.id as string,
-    fullName: ((m.full_name as string | null) ?? 'Your Buddy').split(' ')[0],
-    specialities: ((m.specialities as string[] | null) ?? []) as Speciality[],
-    strongestSection: (m.strongest_section as string | null) ?? null,
-    ownWeakestSection: (m.own_weakest_section as string | null) ?? null,
-    attemptNumber: (m.attempt_number as number | null) ?? null,
-    weeklyCap: (m.weekly_session_cap as number | null) ?? null,
-    openThisWeek: load.get(m.id as string) ?? 0,
-  }));
-}
+// loadRoster moved into lib/session-credit as readMentorRoster (Boundary 2,
+// change 3): its two reads ignored their errors and failed in OPPOSITE
+// directions — a mentors-read failure looked like "sold out" while a
+// load-read failure made every mentor look free. The primitive retries once
+// and THROWS, so a roster built from a failed read can no longer exist.
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -70,8 +40,23 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as { finding_kind?: string; finding_evidence?: string };
   const admin = createAdminClient();
 
-  // 1. CAPACITY, before anything else.
-  const roster = await loadRoster(admin);
+  // 1. CAPACITY, before anything else — through the throwing primitives.
+  // UNKNOWN answers 503 and stops here: it must never become "sold out"
+  // (false denial) and never become "everyone is free" (oversell), and it
+  // must sit BEFORE any Razorpay order exists.
+  let roster;
+  let alreadyBooked;
+  try {
+    [roster, alreadyBooked] = await Promise.all([
+      readMentorRoster(admin),
+      hasOpenSessionCredit(admin, user.id),
+    ]);
+  } catch {
+    return NextResponse.json(
+      { error: 'Could not check availability — please try again in a moment.', code: 'AVAILABILITY_READ_FAILED' },
+      { status: 503 },
+    );
+  }
   if (rosterCapacity(roster) <= 0) {
     return NextResponse.json({
       error: 'All our Buddies are fully booked this week. We will not take your money for a session we cannot hold — check back in a day or two.',
@@ -79,14 +64,11 @@ export async function POST(request: NextRequest) {
     }, { status: 409 });
   }
 
-  // 2. Don't sell a second session while one is still unfinished.
-  const { data: openCredit } = await admin
-    .from('session_credits')
-    .select('id, status')
-    .eq('student_id', user.id)
-    .in('status', ['paid', 'assigned', 'scheduled'])
-    .maybeSingle();
-  if (openCredit) {
+  // 2. Don't sell a second session while one is still unfinished. The old
+  // read used maybeSingle with its error ignored — a failed read (or a
+  // student who already had TWO open credits, which errors maybeSingle)
+  // waved the buyer straight through to a second charge.
+  if (alreadyBooked) {
     return NextResponse.json({
       error: 'You already have a session booked — let’s finish that one first.',
       alreadyBooked: true,
@@ -172,22 +154,29 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const roster = await loadRoster(admin);
-  const remaining = rosterCapacity(roster);
-
-  const { data: openCredit } = await admin
-    .from('session_credits')
-    .select('status')
-    .eq('student_id', user.id)
-    .in('status', ['paid', 'assigned', 'scheduled'])
-    .maybeSingle();
+  // UNKNOWN is 503 here too — answering available:false on a failed read
+  // would be the same ERROR→FALSE conversion in display clothing, and
+  // alreadyBooked:false would invite a purchase the POST would then refuse.
+  let roster;
+  let alreadyBooked;
+  try {
+    [roster, alreadyBooked] = await Promise.all([
+      readMentorRoster(admin),
+      hasOpenSessionCredit(admin, user.id),
+    ]);
+  } catch {
+    return NextResponse.json(
+      { error: 'Could not check availability — please try again.', code: 'AVAILABILITY_READ_FAILED' },
+      { status: 503 },
+    );
+  }
 
   return NextResponse.json({
-    available: remaining > 0,
+    available: rosterCapacity(roster) > 0,
     // A number this small is not published — "2 spots left" over four mentors
     // reports how small we are (the no-small-numbers rule). It only ever
     // gates the button.
-    alreadyBooked: !!openCredit,
+    alreadyBooked,
     priceLabel: '₹299',
     minutes: SESSION_MINUTES,
   });

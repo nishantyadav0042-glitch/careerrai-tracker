@@ -220,6 +220,104 @@ export const SPECIALITY_LABEL: Record<Speciality, string> = {
  * never an answer about the student's money. Founder ruling: an order may
  * not be created while the credit state is unknown.
  */
+/** Sessions assigned but not yet completed still occupy a mentor's week. */
+function weekStartIso(): string {
+  const now = new Date();
+  const d = new Date(now.getTime() - ((now.getUTCDay() + 6) % 7) * 86_400_000);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
+}
+
+/**
+ * Read the mentor roster WITH this week's load — or THROW.
+ *
+ * BOUNDARY 2, change 3. The old loadRoster ran two reads and inspected
+ * neither error, and the two failures pointed in OPPOSITE directions:
+ *
+ *   mentors read fails  -> roster []      -> "sold out"  (false DENIAL)
+ *   load read fails     -> load map empty -> every mentor appears free
+ *                                            (false PERMISSION - oversell)
+ *
+ * The second is the expensive one: an infrastructure blip minting
+ *  permission to consume a scarce human's week. Same contract as the other
+ * domain primitives: retry the pair once, then throw. A roster built from a
+ * failed load read must never exist.
+ */
+export async function readMentorRoster(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+): Promise<MentorProfile[]> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const [{ data: mentors, error: mErr }, { data: open, error: oErr }] = await Promise.all([
+      admin.from('profiles')
+        .select('id, full_name, specialities, strongest_section, own_weakest_section, attempt_number, weekly_session_cap')
+        .eq('role', 'buddy')
+        .not('weekly_session_cap', 'is', null),
+      admin.from('session_credits')
+        .select('buddy_id')
+        .in('status', ['assigned', 'scheduled'])
+        .gte('assigned_at', weekStartIso()),
+    ]);
+    if (!mErr && !oErr) {
+      const load = new Map<string, number>();
+      for (const c of (open ?? []) as { buddy_id: string | null }[]) {
+        if (c.buddy_id) load.set(c.buddy_id, (load.get(c.buddy_id) ?? 0) + 1);
+      }
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      return ((mentors ?? []) as any[]).map((m) => ({
+        buddyId: m.id as string,
+        fullName: ((m.full_name as string | null) ?? 'Your Buddy').split(' ')[0],
+        specialities: ((m.specialities as string[] | null) ?? []) as Speciality[],
+        strongestSection: (m.strongest_section as string | null) ?? null,
+        ownWeakestSection: (m.own_weakest_section as string | null) ?? null,
+        attemptNumber: (m.attempt_number as number | null) ?? null,
+        weeklyCap: (m.weekly_session_cap as number | null) ?? null,
+        openThisWeek: load.get(m.id as string) ?? 0,
+      }));
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    }
+    if (attempt === 1) {
+      console.error('[readMentorRoster] read failed twice:', mErr?.message ?? oErr?.message);
+      throw new Error('Could not read mentor availability');
+    }
+  }
+  throw new Error('unreachable');
+}
+
+/**
+ * Does this student already have an open (paid/assigned/scheduled) session?
+ * TRUE / FALSE from a successful read — or THROW.
+ *
+ * The old read used maybeSingle() with the error ignored, which failed OPEN
+ * in two ways: a read failure returned null ("no open session") and let a
+ * student buy a second session while one was in flight, and maybeSingle
+ * itself ERRORS when more than one open credit exists - the student with
+ * the most open sessions was exactly the one the check waved through.
+ *
+ * Deliberately not reusing readUpgradeCredits: that primitive answers "what
+ * discount applies to a plan", this one answers "is a session in flight" -
+ * same error semantic, different business question.
+ */
+export async function hasOpenSessionCredit(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  studentId: string,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from('session_credits')
+      .select('id')
+      .eq('student_id', studentId)
+      .in('status', ['paid', 'assigned', 'scheduled'])
+      .limit(1);
+    if (!error) return ((data ?? []) as unknown[]).length > 0;
+    if (attempt === 1) {
+      console.error('[hasOpenSessionCredit] read failed twice:', error.message);
+      throw new Error('Could not check your existing session');
+    }
+  }
+  throw new Error('unreachable');
+}
+
 export async function readUpgradeCredits(
   // Same loose client type the rest of the payment libs use — the callers
   // pass either the real service-role client or a test fake.

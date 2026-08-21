@@ -30,12 +30,19 @@ describe('capacity is checked BEFORE money, never after', () => {
 
   it('only mentors who DECLARED a capacity are ever considered', () => {
     // Undeclared means zero, not unlimited — seven of eight have not declared.
-    expect(readFileSync(ROUTE, 'utf8')).toContain("not('weekly_session_cap', 'is', null)");
+    // Boundary 2 Change 3 moved the roster query into the failure-aware
+    // primitive; the idea (filter on a declared cap) lives there now, and the
+    // route must actually consume that primitive rather than a local copy.
+    expect(readFileSync('src/lib/session-credit.ts', 'utf8')).toContain("not('weekly_session_cap', 'is', null)");
+    expect(readFileSync(ROUTE, 'utf8')).toContain('readMentorRoster(admin)');
   });
 
   it('a student cannot buy a second session while one is unfinished', () => {
+    // The open-credit query moved into hasOpenSessionCredit (Boundary 2,
+    // Change 3); the route keeps the decision, the primitive keeps the read.
+    expect(readFileSync('src/lib/session-credit.ts', 'utf8')).toContain("in('status', ['paid', 'assigned', 'scheduled'])");
     const s = readFileSync(ROUTE, 'utf8');
-    expect(s).toContain("in('status', ['paid', 'assigned', 'scheduled'])");
+    expect(s).toContain('hasOpenSessionCredit(admin, user.id)');
     expect(s).toContain('alreadyBooked: true');
   });
 });
