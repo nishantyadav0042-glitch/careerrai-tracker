@@ -6,6 +6,7 @@ import {
   storeCookieContradictsDevice,
 } from '@/lib/store-build';
 import { storeFunnelEnabled } from '@/lib/feature-flags';
+import { describeSbCookies, sbRemovalNames } from '@/lib/auth-observation';
 
 // Alternate hosts that must land on the canonical domain. The old
 // careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
@@ -117,6 +118,21 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // ── Track B instrumentation (founder GO, 21 Aug) — observation only ──────
+  // Correlates a forced login with the auth-cookie state that produced it.
+  // Names and byte-lengths ONLY — never cookie values, tokens, the Cookie
+  // header, or user identifiers (see lib/auth-observation). getUser() above
+  // is the only auth writer on this request, so checking the response here
+  // catches every sb-* deletion it may have emitted (_removeSession →
+  // maxAge=0), on whichever return path the request takes.
+  const obsId = crypto.randomUUID().slice(0, 8);
+  const sbRemovals = sbRemovalNames(
+    response.cookies.getAll().map((c) => ({ name: c.name, value: c.value, maxAge: c.maxAge })),
+  );
+  if (sbRemovals.length > 0) {
+    console.error('[auth-cookie-removal]', JSON.stringify({ obsId, path: pathname, removing: sbRemovals }));
+  }
+
   // Store-wrapper marker, set server-side so it CANNOT be lost.
   //
   // The Play/iOS wrappers launch on `?source=twa|ios`, but a fresh install is
@@ -198,6 +214,21 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/admin');
 
   if (isProtected && !user) {
+    // Track B: the moment the investigation exists for — a protected request
+    // with no user. Did it arrive carrying sb-* cookies (present-but-invalid)
+    // or none (evicted)? Empty sbNames IS the eviction finding. hasRoleCookie
+    // pins the selective-loss signature (user_role survived, auth cookies
+    // gone); ua (truncated) is the only environment hint — no identifiers.
+    const sb = describeSbCookies(request.cookies.getAll());
+    console.error('[auth-loss-observation]', JSON.stringify({
+      obsId,
+      path: pathname,
+      sbNames: sb.names,
+      sbBytes: sb.bytes,
+      hasRoleCookie: request.cookies.get('user_role') != null,
+      ua: (userAgent ?? '').slice(0, 80),
+    }));
+
     // A logged-out arrival splits two ways, and the split is the whole point.
     //
     // The store wrappers launch on `/student/tracker?source=twa|ios` — a
