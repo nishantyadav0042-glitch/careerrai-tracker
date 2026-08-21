@@ -167,9 +167,16 @@ describe('the route and the client both speak this contract', () => {
 
   it('the client re-encodes photos to JPEG — the HEIC wall is gone', () => {
     const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    // The canvas recipe moved into ONE canonical helper (21 Aug) — it was
+    // hand-copied into three components, the Incident #23 pattern. The idea
+    // pinned is unchanged: an iPhone HEIC decodes and leaves as JPEG.
+    const helper = readFileSync('src/lib/image-downscale.ts', 'utf8');
+    expect(helper).toContain('createImageBitmap');
+    expect(helper).toContain("toDataURL('image/jpeg'");
+    // ...and EXIF orientation is honoured, or a crop lands on the wrong region.
+    expect(helper).toContain("imageOrientation: 'from-image'");
     const client = readFileSync('src/components/community-submit.tsx', 'utf8');
-    expect(client).toContain('createImageBitmap');
-    expect(client).toContain("toDataURL('image/jpeg'");
+    expect(client).toContain('prepareImage(');
     expect(client).toContain("track('community_share_opened'");
   });
 });

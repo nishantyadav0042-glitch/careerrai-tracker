@@ -62,6 +62,10 @@ export function CommunityVoteCard() {
   // a single in-flight lock silently swallowed every other tap.
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
+  // A failed ballot load used to render null — outage and empty pool were the
+  // same blank page. Now it is a visible, retryable state.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [voteError, setVoteError] = useState<string | null>(null);
   const [sharedId, setSharedId] = useState<string | null>(null);
 
   async function share(item: VoteItem) {
@@ -73,9 +77,10 @@ export function CommunityVoteCard() {
   }
 
   const load = useCallback(async () => {
+    setLoadFailed(false);
     try {
       const res = await fetch('/api/community/voting');
-      if (!res.ok) return;
+      if (!res.ok) { setLoadFailed(true); setLoaded(true); return; }
       const json = await res.json();
       setTip(json.tip ?? null);
       setQuestions((json.questions as VoteItem[]) ?? []);
@@ -86,7 +91,7 @@ export function CommunityVoteCard() {
           tip: json.topPick?.tip?.id ?? null,
         });
       }
-    } catch { /* render nothing */ }
+    } catch { setLoadFailed(true); }
     setLoaded(true);
   }, []);
 
@@ -102,14 +107,29 @@ export function CommunityVoteCard() {
         body: JSON.stringify({ submission_id: item.id, helpful }),
       });
       if (res.ok || res.status === 409) {
+        setVoteError(null);
         track('community_voted', { kind: item.kind, helpful });
         setVotedIds((prev) => new Set(prev).add(item.id));
+      } else {
+        // A dropped tap must say so — silence here was indistinguishable from
+        // a button that simply did nothing.
+        setVoteError('That vote didn’t save — tap it again.');
       }
-    } catch { /* leave as-is */ }
+    } catch { setVoteError('That vote didn’t save — tap it again.'); }
     setBusy((b) => { const n = new Set(b); n.delete(item.id); return n; });
   }
 
   const hasTopPick = !!(topPick?.question || topPick?.tip);
+  if (loadFailed) {
+    return (
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
+        <p className="text-[13px] font-semibold text-stone-700">Couldn’t load today’s picks.</p>
+        <button type="button" onClick={() => void load()} className="mt-3 rounded-xl bg-stone-900 px-4 py-2 text-[12.5px] font-bold text-white">
+          Try again
+        </button>
+      </div>
+    );
+  }
   // The top pick must render even when this student has judged everything —
   // hiding the day's winner because YOUR ballot is empty would make the
   // surface look broken to exactly the most engaged voters.
@@ -149,7 +169,7 @@ export function CommunityVoteCard() {
         <div className="mt-1 flex items-center">
           {byline(item) && <p className="text-[10px] text-stone-400">{byline(item)}</p>}
           {/* Play UGC compliance: every shared item is reportable in-app. */}
-          <ReportItem submissionId={item.id} />
+          <ReportItem submissionId={item.id} onReported={() => setVotedIds((prev) => new Set(prev).add(item.id))} />
         </div>
 
         {voted ? (
@@ -228,7 +248,7 @@ export function CommunityVoteCard() {
           <p className="text-[10px] text-stone-400">
             {byline(item) ? `${byline(item)} · ` : ''}a new pick every day
           </p>
-          <ReportItem submissionId={item.id} />
+          <ReportItem submissionId={item.id} onReported={() => setVotedIds((prev) => new Set(prev).add(item.id))} />
         </div>
       </div>
     );
@@ -236,6 +256,7 @@ export function CommunityVoteCard() {
 
   return (
     <div className="space-y-2">
+      {voteError && <p className="text-[11.5px] font-semibold text-rose-600">{voteError}</p>}
       {topBlock(topPick?.question ?? null, '📷 Question of the day')}
       {topBlock(topPick?.tip ?? null, '💡 Tip of the day')}
       {/* Progress up top — four small decisions, and it shows you're moving. */}

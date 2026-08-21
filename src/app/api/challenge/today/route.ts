@@ -21,46 +21,37 @@ export async function GET() {
   const admin = createAdminClient();
   const date = activeChallengeDate();
 
-  const { data: challenges } = await admin
+  const { data: challenges, error: chalErr } = await admin
     .from('daily_challenges')
-    .select('id, section, topic, question, options, correct_index, difficulty, explanation, source, contributor_id, target_seconds')
+    .select('id, section, topic, question, options, correct_index, difficulty, explanation, source, target_seconds')
     .eq('status', 'live').eq('live_date', date)
     .order('section');
-
+  // Hardening sprint (21 Aug): a failed read used to render as "no question
+  // today" — the day's hero surface deleted by a blip, invisible to everyone.
+  if (chalErr) {
+    return NextResponse.json({ error: 'Could not load today’s question — try again.', code: 'CHALLENGE_UNAVAILABLE', retryable: true }, { status: 503 });
+  }
   if (!challenges || challenges.length === 0) {
     return NextResponse.json({ date, challenges: [] });
   }
 
   const ids = challenges.map((c) => c.id as string);
-  const contributorIds = [...new Set(challenges.map((c) => c.contributor_id as string | null).filter((v): v is string => !!v))];
-  const [{ data: myAttempts }, { data: allAttempts }, { data: coverage }, { data: contributors }] = await Promise.all([
+  const [{ data: myAttempts }, { data: allAttempts }, { data: coverage }] = await Promise.all([
     admin.from('challenge_attempts').select('challenge_id, choice, is_correct, seconds_taken')
       .eq('student_id', user.id).in('challenge_id', ids),
     admin.from('challenge_attempts').select('challenge_id, is_correct, seconds_taken').in('challenge_id', ids),
     admin.from('topic_coverage').select('topic, status').eq('student_id', user.id)
       .in('topic', challenges.map((c) => c.topic as string)),
-    contributorIds.length
-      ? admin.from('profiles').select('id, full_name').in('id', contributorIds)
-      : Promise.resolve({ data: [] as { id: string; full_name: string | null }[] }),
   ]);
 
-  // ── The byline is EARNED, never invented ──────────────────────────────────
+  // ── No real names, ever (hardening sprint, 21 Aug — supersedes 13 Aug) ────
   //
-  // This route used to hand back the literal string "a CareerRai student" for
-  // every contributed question. Founder, 13 Aug: "don't mention the name of
-  // CareerRai under questions — if a student submits then only their name
-  // should be there, otherwise just mention the topic and Section."
-  //
-  // Signing a student's work with our own name takes half the credit for
-  // something we did not write, and pads a thin feed with a byline nobody
-  // asked for. A real contributor gets their real name; everything else gets
-  // no byline at all and stands on its section and topic, which the card
-  // already shows.
-  const isCuratedName = (n: string | null | undefined) =>
-    !n || !n.trim() || n.trim().toLowerCase() === 'careerrai';
-  const nameById = new Map(
-    (contributors ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name])
-  );
+  // This route used to join profiles.full_name and render "Shared by {real
+  // name}". The path was dormant (nothing writes contributor_id), but it was
+  // one INSERT away from putting a student's actual identity on a shared
+  // surface. Founder's locked rule: contribution feedback is IMPACT, not
+  // identity — the community pipeline's anonymous display names are the only
+  // byline mechanism anywhere. Content here stands on its section and topic.
 
   const mine = new Map((myAttempts ?? []).map((a) => [a.challenge_id as string, a]));
   const coverageByTopic = new Map((coverage ?? []).map((c) => [c.topic as string, (c.status as string) ?? 'not_started']));
@@ -85,7 +76,6 @@ export async function GET() {
   const views: ChallengeView[] = challenges.map((c) => {
     const my = mine.get(c.id as string);
     const st = stats.get(c.id as string) ?? { total: 0, correct: 0, timed: 0, inTime: 0 };
-    const contributed = c.contributor_id ? nameById.get(c.contributor_id as string) : null;
     const yourSeconds = typeof my?.seconds_taken === 'number' ? (my.seconds_taken as number) : null;
     const target = targetFor(c);
     return {
@@ -96,7 +86,7 @@ export async function GET() {
       options: (c.options as string[]) ?? [],
       difficulty: c.difficulty as string,
       targetSeconds: target,
-      contributorName: isCuratedName(contributed) ? null : (contributed as string),
+      contributorName: null,
       attempt: my ? {
         choice: Number(my.choice),
         isCorrect: my.is_correct === true,

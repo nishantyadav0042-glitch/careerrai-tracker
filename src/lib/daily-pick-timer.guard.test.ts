@@ -190,10 +190,19 @@ describe('a question is never signed with our own name', () => {
   // The byline sweep on 13 Aug fixed three community surfaces and missed this
   // route, which was still returning the literal string for every contributed
   // question — under the questions, which is exactly what the founder named.
-  it('the challenge route resolves a real contributor name or none at all', () => {
+  it('the challenge route can never sign a question with a real name', () => {
+    // SUPERSEDED 21 Aug (hardening sprint, founder rule 1: no real names,
+    // anywhere). This route used to join profiles.full_name and render
+    // "Shared by {name}". The path was dormant — nothing writes
+    // contributor_id — but it was one INSERT away from putting a student's
+    // legal identity on a shared surface. Anonymity is now structural: the
+    // route cannot reach a name at all, and the only byline mechanism in the
+    // product is the community pipeline's generated display names.
     const src = readFileSync('src/app/api/challenge/today/route.ts', 'utf8');
     const code = src.replace(/^\s*\/\/.*$/gm, '');
     expect(code).not.toContain("'a CareerRai student'");
-    expect(code).toContain('isCuratedName');
+    expect(code).not.toContain('full_name');
+    expect(code).not.toContain('contributor_id');
+    expect(code).toContain('contributorName: null');
   });
 });

@@ -83,6 +83,14 @@ interface CallOpts {
    * which turns "scanner is busy" into a slow success for most 429s.
    */
   backoffBaseMs?: number;
+  /**
+   * Per-ATTEMPT timeout in ms. Without one, a single stalled connection to
+   * Google is bounded only by undici's defaults (~minutes) — which is how the
+   * first real community submission spent ~38 of its 42 seconds inside this
+   * function (21 Aug): four attempts, no timeout, a ~1 MB image re-sent each
+   * time. A hung attempt now aborts and falls into the normal retry path.
+   */
+  timeoutMs?: number;
 }
 
 interface GeminiResponse {
@@ -141,6 +149,8 @@ export async function callGemini(opts: CallOpts): Promise<string | null> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify(body),
+        // AbortSignal.timeout bounds THIS attempt; retries get a fresh signal.
+        ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
       });
 
       // Rate limit / transient server error → exponential backoff with jitter.

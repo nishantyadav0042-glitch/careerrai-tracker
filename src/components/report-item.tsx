@@ -20,9 +20,14 @@ export function ReportItem({ submissionId, onReported }: { submissionId: string;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  // A failed report used to do NOTHING — no message, sheet open, button
+  // re-enabled. A safety report the platform is required to accept cannot
+  // vanish without a word.
+  const [error, setError] = useState<string | null>(null);
 
   async function report(reason: string) {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch('/api/community/report', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -32,8 +37,10 @@ export function ReportItem({ submissionId, onReported }: { submissionId: string;
         track('content_reported', { reason });
         setDone(true);
         onReported?.();
+      } else {
+        setError('Couldn’t send the report — tap the reason again.');
       }
-    } catch { /* leave sheet open */ }
+    } catch { setError('Couldn’t send the report — tap the reason again.'); }
     setBusy(false);
   }
 
@@ -61,6 +68,7 @@ export function ReportItem({ submissionId, onReported }: { submissionId: string;
                 <X className="h-4 w-4" />
               </button>
             </div>
+            {error && <p className="mt-1 text-[11.5px] font-semibold text-rose-600">{error}</p>}
             <div className="mt-3 space-y-1.5">
               {REASONS.map((r) => (
                 <button

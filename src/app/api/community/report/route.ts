@@ -26,8 +26,13 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data: sub } = await admin.from('student_submissions')
+  const { data: sub, error: subErr } = await admin.from('student_submissions')
     .select('id, status').eq('id', sid).maybeSingle();
+  // A failed read is UNKNOWN, never "nothing to report" — a Play-required
+  // safety report must not be discarded because a query blipped.
+  if (subErr) {
+    return NextResponse.json({ error: 'Could not send the report — try again.', code: 'REPORT_UNAVAILABLE', retryable: true }, { status: 503 });
+  }
   // Live items are the reportable ones. This read 'voting'/'featured' until
   // 20 Aug — statuses the live-pool migration retired — so EVERY report
   // returned 400 and the Play-required "this shouldn't be here" button was
@@ -46,10 +51,14 @@ export async function POST(request: NextRequest) {
     if (!already) return NextResponse.json({ error: 'Could not save' }, { status: 500 });
   }
 
-  const { count } = await admin.from('community_reports')
+  const { count, error: countErr } = await admin.from('community_reports')
     .select('id', { count: 'exact', head: true }).eq('submission_id', sid);
+  // A failed count must not silently disarm the auto-pull; loud, and the
+  // report itself is already saved, so the student still gets their ok.
+  if (countErr) console.error('[community/report] count failed — auto-pull skipped this time', countErr.message);
   if ((count ?? 0) >= AUTO_PULL_AT && sub.status === 'live') {
-    await admin.from('student_submissions').update({ status: 'pending' }).eq('id', sid);
+    const { error: pullErr } = await admin.from('student_submissions').update({ status: 'pending' }).eq('id', sid);
+    if (pullErr) console.error('[community/report] AUTO-PULL FAILED for', sid, pullErr.message);
   }
 
   return NextResponse.json({ ok: true });

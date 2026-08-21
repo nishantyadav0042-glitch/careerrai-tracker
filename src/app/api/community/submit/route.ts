@@ -29,6 +29,23 @@ const SECTIONS: string[] = KNOWLEDGE_GRAPH.map((s) => s.id);
 const SENT_MESSAGE =
   'Sent! Students will now vote on it. If they find it genuinely helpful, it becomes a featured pick for the whole community.';
 
+// Part 7 of the hardening spec: NEVER tell a student their share is live when
+// it is actually held for review. With a Gemini outage, every submission goes
+// to the safety hold — telling them all "students will now vote on it" was a
+// lie that also burned their one-a-day. The status decides the sentence.
+const HELD_MESSAGE =
+  'We received it — it’s being checked before other students see it. No need to send it again.';
+
+function sentBody(status: string, extra: Record<string, unknown> = {}) {
+  return {
+    ok: true,
+    status,
+    published: status === 'live',
+    message: status === 'live' ? SENT_MESSAGE : HELD_MESSAGE,
+    ...extra,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
   const timing: Record<string, number> = {};
@@ -64,15 +81,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not confirm your share. Please try again.', code: 'RECONCILE_UNAVAILABLE' }, { status: 503 });
     }
     if (replay) {
-      return NextResponse.json({ ok: true, idempotent: true, status: replay.status, message: SENT_MESSAGE });
+      return NextResponse.json(sentBody(replay.status, { idempotent: true }));
     }
   }
 
   // One a day. Blocked/rejected attempts count too — retry-spam is spam.
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
-  const { count } = await admin
+  const { count, error: countErr } = await admin
     .from('student_submissions').select('id', { count: 'exact', head: true })
     .eq('student_id', user.id).gte('created_at', dayAgo);
+  // A failed count is UNKNOWN — it must neither waive the one-a-day limit
+  // (fail-open) nor consume the student's attempt on a guess.
+  if (countErr) {
+    return NextResponse.json({ error: 'Could not check your shares right now. Please try again.', code: 'SUBMIT_UNAVAILABLE' }, { status: 503 });
+  }
   if ((count ?? 0) >= MAX_SUBMISSIONS_PER_DAY) {
     // State, not backend rule. We only say "already in" after CONFIRMING the
     // row exists — a 429 is not by itself proof that their share landed.
@@ -90,48 +112,70 @@ export async function POST(request: NextRequest) {
 
   const displayName = randomDisplayName();
 
-  // ── Text safety — tips AND typed questions run the same gate ──
-  let textVerdict: Awaited<ReturnType<typeof checkTipSafety>> | null = null;
-  if (sub.text) {
-    const tText = Date.now();
-    textVerdict = await checkTipSafety(sub.text);
-    mark('textSafety', tText);
-    if (textVerdict.verdict === 'blocked') {
-      // Generic message on purpose — echoing what tripped the filter teaches
-      // how to evade it.
-      return NextResponse.json({
-        error: 'This can’t be shared. Keep it about CAT prep, with no links or contact details.',
-        code: 'MODERATION_BLOCKED',
-      }, { status: 400 });
-    }
-  }
-
-  // ── Image path (optional now) ──
-  let imagePath: string | null = null;
-  let imageVerdict: Awaited<ReturnType<typeof checkImageSafety>> | null = null;
+  // ── Image pre-checks before any AI runs ──
+  let bytes: Buffer | null = null;
   if (sub.image && sub.imageMime) {
-    const bytes = Buffer.from(sub.image, 'base64');
+    bytes = Buffer.from(sub.image, 'base64');
     if (bytes.length < 1024) {
       return NextResponse.json({ error: 'That photo looks empty — try again', code: 'IMAGE_TOO_SMALL' }, { status: 400 });
     }
     if (bytes.length > MAX_IMAGE_BYTES) {
       return NextResponse.json({ error: 'Photo must be under 4 MB', code: 'IMAGE_TOO_LARGE' }, { status: 400 });
     }
-
     timing.imageBytes = bytes.length;
-    const tImg = Date.now();
-    imageVerdict = await checkImageSafety(sub.image, sub.imageMime);
-    mark('imageSafety', tImg);
-    if (imageVerdict.verdict === 'blocked') {
+  }
+
+  // ── Safety — BOTH gates in parallel (hardening sprint, 21 Aug) ──
+  // They are independent reads of independent content, and the first real
+  // submission paid them serially inside a request a student was watching.
+  const tSafety = Date.now();
+  const [textVerdict, imageVerdict] = await Promise.all([
+    sub.text ? checkTipSafety(sub.text) : Promise.resolve(null),
+    sub.image && sub.imageMime ? checkImageSafety(sub.image, sub.imageMime) : Promise.resolve(null),
+  ]);
+  mark('safety', tSafety);
+
+  if (textVerdict?.verdict === 'blocked') {
+    // Generic message on purpose — echoing what tripped the filter teaches
+    // how to evade it.
+    return NextResponse.json({
+      error: 'This can’t be shared. Keep it about CAT prep, with no links or contact details.',
+      code: 'MODERATION_BLOCKED',
+    }, { status: 400 });
+  }
+  if (imageVerdict?.verdict === 'blocked') {
+    return NextResponse.json({
+      error: 'This image can’t be shared. Upload a clear photo of a CAT practice question.',
+      code: 'MODERATION_BLOCKED',
+    }, { status: 400 });
+  }
+
+  // ── Progressive friction (Part 3): only a problematic photo earns a step ──
+  // The primitive is ONE COHERENT LEARNING OBJECT — a DI set or a passage
+  // with sub-questions is coherent and sails through. Only clearly UNRELATED
+  // content or an unreadable photo asks the student to adjust, and the
+  // response tells the client exactly which help to offer (crop vs retake).
+  // 'unclear' is NEVER friction — doubt guides, it does not censor.
+  if (imageVerdict?.verdict === 'ok') {
+    if (imageVerdict.coherence === 'multiple') {
       return NextResponse.json({
-        error: 'This image can’t be shared. Upload a clear photo of a CAT practice question.',
-        code: 'MODERATION_BLOCKED',
+        error: 'This photo looks like several different questions. Crop it to the one you mean and send again.',
+        code: 'IMAGE_MULTIPLE_OBJECTS',
       }, { status: 400 });
     }
+    if (imageVerdict.quality === 'blurry' || imageVerdict.quality === 'blank') {
+      return NextResponse.json({
+        error: 'This photo is hard to read. Retake it a little closer and steadier.',
+        code: 'IMAGE_UNREADABLE',
+      }, { status: 400 });
+    }
+  }
 
-    // The image touches storage ONLY after the gate. A 'manual' verdict still
-    // uploads (a human must be able to see it to review it) but the row stays
-    // 'pending', which no student-facing query reads.
+  // ── Storage — the image touches storage ONLY after the gate ──
+  // A 'manual' verdict still uploads (a human must be able to see it to
+  // review it) but the row stays held, which no student-facing query reads.
+  let imagePath: string | null = null;
+  if (bytes && sub.imageMime) {
     const ext = sub.imageMime === 'image/png' ? 'png' : sub.imageMime === 'image/webp' ? 'webp' : 'jpg';
     imagePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
     const tUp = Date.now();
@@ -176,7 +220,11 @@ export async function POST(request: NextRequest) {
     // 23505 = the idempotency index fired: a concurrent delivery of the SAME
     // intent already created it. That is success, not failure.
     if ((error as { code?: string }).code === '23505') {
-      return NextResponse.json({ ok: true, idempotent: true, message: SENT_MESSAGE });
+      // The concurrent twin decided the status; report it truthfully.
+      const { data: twin } = await admin
+        .from('student_submissions').select('status')
+        .eq('student_id', user.id).eq('request_id', requestId!).maybeSingle();
+      return NextResponse.json(sentBody(twin?.status ?? 'pending', { idempotent: true }));
     }
     console.error('[community] submission insert failed', error.message);
     return NextResponse.json({ error: 'Could not save. Please try again.', code: 'SERVER_ERROR' }, { status: 500 });
@@ -187,7 +235,7 @@ export async function POST(request: NextRequest) {
   // a timeout without knowing WHICH stage is slow would just hide it.
   console.error('[community-submit-timing]', JSON.stringify(timing));
 
-  return NextResponse.json({ ok: true, message: SENT_MESSAGE });
+  return NextResponse.json(sentBody(anyManual ? 'pending' : 'live'));
 }
 
 // GET /api/community/submit?requestId=… — did my share actually land?
@@ -211,5 +259,9 @@ export async function GET(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: 'Could not check right now.', code: 'RECONCILE_UNAVAILABLE' }, { status: 503 });
   }
-  return NextResponse.json({ found: data != null, status: data?.status ?? null, message: data ? SENT_MESSAGE : null });
+  return NextResponse.json({
+    found: data != null,
+    status: data?.status ?? null,
+    message: data ? sentBody(data.status).message : null,
+  });
 }

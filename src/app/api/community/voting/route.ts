@@ -30,17 +30,33 @@ export async function GET() {
   // the feed showed the archived ones anyway, so most vote taps returned 400.
   // A live item is on the shelf and votable, permanently.
   const shelf = async () => {
-    const { data } = await admin.from('student_submissions')
+    const { data, error } = await admin.from('student_submissions')
       .select('id, kind, topic, payload, image_path, display_name, curated, student_id, status')
       .eq('status', 'live')
       .order('id');
+    // Hardening sprint (21 Aug): an unchecked failure here returned an empty
+    // ballot — the student saw "nothing to vote on" because the DATABASE was
+    // down, and the EMPTY-ballot warn below mislabelled the outage as a thin
+    // pool. UNKNOWN is a 503 the client can retry, never an empty shelf.
+    if (error) throw new Error(`shelf read failed: ${error.message}`);
     return data ?? [];
   };
 
-  const [pool, { data: myVotes }] = await Promise.all([
-    shelf(),
-    admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
-  ]);
+  let pool; let myVotes;
+  try {
+    const [poolR, votesR] = await Promise.all([
+      shelf(),
+      admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
+    ]);
+    // A failed my-votes read would re-offer everything the student already
+    // judged — their history erased by a blip. Same rule: UNKNOWN, not empty.
+    if (votesR.error) throw new Error(`myVotes read failed: ${votesR.error.message}`);
+    pool = poolR;
+    myVotes = votesR.data;
+  } catch (e) {
+    console.error('[community/voting]', e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: 'Could not load today’s ballot — try again.', code: 'BALLOT_UNAVAILABLE', retryable: true }, { status: 503 });
+  }
 
   const day = getLogDateString();
 
@@ -52,11 +68,15 @@ export async function GET() {
   // stamped it returns without writing, so a late vote can never swap the
   // winner mid-day.
   try { await promoteDailyPick(admin); } catch (e) { console.error('[community/voting] promote failed', e); }
-  const { data: topRows } = await admin
+  const { data: topRows, error: topErr } = await admin
     .from('student_submissions')
     .select('id, kind, topic, payload, image_path, display_name, curated')
     .eq('featured_on', day)
     .eq('status', 'live');
+  if (topErr) {
+    console.error('[community/voting] top-pick read failed', topErr.message);
+    return NextResponse.json({ error: 'Could not load today’s ballot — try again.', code: 'BALLOT_UNAVAILABLE', retryable: true }, { status: 503 });
+  }
   const topIds = new Set((topRows ?? []).map((r) => r.id as string));
 
   const voted = new Set((myVotes ?? []).map((v) => v.submission_id as string));
@@ -66,11 +86,23 @@ export async function GET() {
   const eligible = (pool ?? []).filter(
     (p) => p.student_id !== user.id && !voted.has(p.id as string) && !topIds.has(p.id as string)
   );
+  // A question whose section the screen could not infer is STILL a question
+  // (hardening sprint, 21 Aug): it used to be un-ballotable forever — live,
+  // visible in the feed, but never offered for a vote, and on thin days that
+  // made the rotation promise a ballot that rendered blank. A section-less
+  // item is assigned a stable pseudo-section from its id, so every live
+  // question is eligible somewhere and the pick stays deterministic.
+  const stableSection = (id: string): string => {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return ['QA', 'DILR', 'VARC'][h % 3];
+  };
   const pickBy = (kind: string, section?: string) => {
     const items = eligible.filter((p) => {
       if (p.kind !== kind) return false;
       if (!section) return true;
-      return ((p.payload ?? {}) as { section?: string }).section === section;
+      const declared = ((p.payload ?? {}) as { section?: string }).section;
+      return (declared ?? stableSection(p.id as string)) === section;
     });
     if (items.length === 0) return null;
     // Salt the hash with the section so a student doesn't get the same index

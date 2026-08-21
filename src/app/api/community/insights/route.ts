@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
-import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow } from '@/lib/os/insight-feed';
+import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow, netScore } from '@/lib/os/insight-feed';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 20;
@@ -35,15 +35,43 @@ export async function GET() {
   const admin = createAdminClient();
   const day = getLogDateString();
 
-  const [{ data: subs }, { data: votes }, { data: myVotes }] = await Promise.all([
+  const [subsR, votesR, myVotesR, featuredR, myOwnR] = await Promise.all([
     admin.from('student_submissions')
       .select('id, kind, payload, image_path, display_name, student_id, created_at, featured_on, status')
       .eq('status', 'live')
       .order('created_at', { ascending: false })
       .limit(60),
-    admin.from('submission_votes').select('submission_id, helpful'),
+    // Explicit bound (SCALE-CONTRACT): PostgREST silently truncates unbounded
+    // selects, which would quietly flatten every percentage on screen.
+    admin.from('submission_votes').select('submission_id, helpful').limit(10000),
     admin.from('submission_votes').select('submission_id, helpful').eq('student_id', user.id),
+    // Today's pick is fetched BY ITS STAMP, not hoped-for inside the newest 60
+    // (hardening sprint, 21 Aug): pickForKind deliberately recycles OLD items,
+    // so past 60 live rows the featured item fell outside the slice and
+    // "Today's Pick" silently vanished — live today at 89 items.
+    admin.from('student_submissions')
+      .select('id, kind, payload, image_path, display_name, student_id, created_at, featured_on, status')
+      .eq('status', 'live')
+      .eq('featured_on', getLogDateString()),
+    // The contributor's own latest share — their impact card. Their own item,
+    // their own tally, visible to nobody else. No rank, no board, no reward.
+    admin.from('student_submissions')
+      .select('id, kind, payload, image_path, display_name, student_id, created_at, featured_on, status')
+      .eq('student_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1),
   ]);
+  // Hardening sprint (21 Aug): these reads were unchecked. A failed subs read
+  // rendered "Be the one who adds something" over a full library; a failed
+  // myVotes read displayed the student's own votes as never cast. An
+  // infrastructure error is UNKNOWN — a 503 the client retries, never a
+  // false empty state.
+  const readErr = subsR.error ?? votesR.error ?? myVotesR.error ?? featuredR.error ?? myOwnR.error;
+  if (readErr) {
+    console.error('[community/insights] read failed', readErr.message);
+    return NextResponse.json({ error: 'Could not load the community right now — try again.', code: 'FEED_UNAVAILABLE', retryable: true }, { status: 503 });
+  }
+  const subs = subsR.data; const votes = votesR.data; const myVotes = myVotesR.data;
 
   const tally = new Map<string, { helpful: number; total: number }>();
   for (const v of (votes ?? []) as { submission_id: string; helpful: boolean }[]) {
@@ -88,13 +116,12 @@ export async function GET() {
   };
 
   const all = ((subs ?? []) as SubmissionRow[]).map(toRow);
-  const byId = new Map(((subs ?? []) as SubmissionRow[]).map((s) => [s.id, s]));
 
   // Today's Top Pick — chosen by promoteDailyPick, which already runs from the
   // 07:30 cron and lazily from the ballot route. RANK, not count: "today's most
   // helpful" says one thing beat the others and nothing at all about how many
   // of us there are.
-  const featured = all.filter((r) => byId.get(r.id)?.featured_on === day);
+  const featured = ((featuredR.data ?? []) as SubmissionRow[]).map(toRow);
   const shape = (r: InsightRow | undefined) => {
     if (!r) return null;
     const d = voteDisplay(r);
@@ -113,11 +140,31 @@ export async function GET() {
   // the existing promoter already writes.
   const pick = featured.find((r) => r.kind === 'question') ?? featured.find((r) => r.kind === 'tip');
 
+  // The Top tab was a lie (hardening sprint, 21 Aug): the client sorted on a
+  // delta map that is empty on load, so "Top" rendered the New order. The
+  // server now sends each card's netScore; the client sorts on real votes.
+  const withScore = (r: InsightRow) => {
+    const s2 = shape(r);
+    return s2 ? { ...s2, netScore: netScore(r) } : null;
+  };
   const feed = orderFeed(all.filter((r) => r.id !== pick?.id))
-    .slice(0, FEED_PAGE_SIZE)
-    .map(shape);
+    .slice(0, FEED_PAGE_SIZE * 5) // room for "See more" paging client-side
+    .map(withScore);
 
   // Contributor rank retired 20 Aug (founder: no superstars, no board).
 
-  return NextResponse.json({ topPick: shape(pick), feed });
+  // Impact, not status (Part 15): the contributor's own latest share with its
+  // own honest state — live/checked/held — and its own tally. helpfulPct's
+  // no-floor rule applies; raw counts stay behind the confidence threshold.
+  const myOwnRow = ((myOwnR.data ?? []) as SubmissionRow[])[0];
+  const myShare = myOwnRow
+    ? {
+        ...shape(toRow(myOwnRow)),
+        status: myOwnRow.status,
+        featuredToday: myOwnRow.featured_on === day,
+        totalVotes: (tally.get(myOwnRow.id) ?? { total: 0 }).total,
+      }
+    : null;
+
+  return NextResponse.json({ topPick: shape(pick), feed, pageSize: FEED_PAGE_SIZE, myShare });
 }

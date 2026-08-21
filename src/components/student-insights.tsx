@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowBigUp, ArrowBigDown, Sparkles } from 'lucide-react';
 import { track } from '@/lib/journey';
+import { ReportItem } from '@/components/report-item';
 
 // ── Student Insights — the community loop ───────────────────────────────────
 //
@@ -32,6 +33,9 @@ interface Item {
   section: string | null;
   displayName: string | null;
   imageUrl: string | null;
+  /** Real net vote score, sent so the Top tab ranks on actual votes —
+   *  displayed nowhere (the no-small-numbers rule is about display). */
+  netScore?: number;
   /** "% found this useful", or null below the sample floor. NEVER a raw
    *  count — founder, 20 Aug: the count is what makes the room look small. */
   helpfulPct: number | null;
@@ -45,6 +49,9 @@ interface Payload {
   /** ONE earned item, selected from the same contribution pool as the feed. */
   topPick: Item | null;
   feed: Item[];
+  pageSize?: number;
+  /** The caller's own latest share — impact, not status. Nobody else's. */
+  myShare?: (Item & { status?: string; featuredToday?: boolean; totalVotes?: number }) | null;
 }
 
 export function StudentInsights() {
@@ -64,13 +71,26 @@ export function StudentInsights() {
   // Votes are independent rows on independent items, so they run in parallel;
   // only a second tap on the SAME item is blocked.
   const [busy, setBusy] = useState<Set<string>>(new Set());
+  // Hardening sprint (21 Aug): a failed load used to render NOTHING — the
+  // student could not tell an outage from an empty community, and had no way
+  // to retry. Every load now ends in data or in a visible retryable state.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [visible, setVisible] = useState(8);
+  // A dropped vote must SAY so — the optimistic revert alone just un-lights
+  // a button the student may not even be looking at.
+  const [voteError, setVoteError] = useState<string | null>(null);
+  // Reported items disappear for this student immediately — their report is
+  // honoured in their own view (the report sheet has promised this in its
+  // header comment since it shipped; the feed never implemented it).
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
+    setLoadFailed(false);
     try {
       const res = await fetch('/api/community/insights');
-      if (!res.ok) return;
+      if (!res.ok) { setLoadFailed(true); return; }
       setData((await res.json()) as Payload);
-    } catch { /* a quiet section beats a broken one */ }
+    } catch { setLoadFailed(true); }
   }, []);
 
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch, same pattern as the challenge card */
@@ -96,19 +116,32 @@ export function StudentInsights() {
         body: JSON.stringify({ submission_id: item.id, dir: next }),
       });
       if (res.ok) {
+        setVoteError(null);
         track('community_voted', { dir: next ?? 'removed', from: prev ?? 'none' });
       } else {
         setMyVotes((v) => ({ ...v, [item.id]: prev ?? null }));
         setScoreDelta((d) => ({ ...d, [item.id]: (d[item.id] ?? 0) - (weight(next) - weight(prev)) }));
+        setVoteError('That vote didn’t save — tap it again.');
       }
     } catch {
       setMyVotes((v) => ({ ...v, [item.id]: prev ?? null }));
       setScoreDelta((d) => ({ ...d, [item.id]: (d[item.id] ?? 0) - (weight(next) - weight(prev)) }));
+      setVoteError('That vote didn’t save — tap it again.');
     } finally {
       setBusy((b) => { const n = new Set(b); n.delete(item.id); return n; });
     }
   }
 
+  if (loadFailed) {
+    return (
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
+        <p className="text-[13px] font-semibold text-stone-700">Couldn’t load the community right now.</p>
+        <button type="button" onClick={() => void load()} className="mt-3 rounded-xl bg-stone-900 px-4 py-2 text-[12.5px] font-bold text-white">
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const { topPick, feed } = data;
@@ -118,9 +151,13 @@ export function StudentInsights() {
   // Ranking still runs on the real score — it is just never printed. The
   // server sends the feed already ordered; scoreDelta only nudges the local
   // ordering so a fresh vote moves the card the student just voted on.
+  // Top ranks on the REAL score the server sends (fixed 21 Aug — it used to
+  // sort on a delta map that is empty on load, so Top rendered the New
+  // order); the local delta only nudges a card the student just voted on.
   const ordered = tab === 'top'
-    ? [...feed].sort((a, b) => (scoreDelta[b.id] ?? 0) - (scoreDelta[a.id] ?? 0))
+    ? [...feed].sort((a, b) => ((b.netScore ?? 0) + (scoreDelta[b.id] ?? 0)) - ((a.netScore ?? 0) + (scoreDelta[a.id] ?? 0)))
     : feed;
+  const page = ordered.filter((i) => !hidden.has(i.id)).slice(0, visible);
 
   return (
     <div className="space-y-5">
@@ -160,10 +197,49 @@ export function StudentInsights() {
               ))}
             </div>
           </div>
+          {voteError && <p className="mt-2 text-[11.5px] font-semibold text-rose-600">{voteError}</p>}
           <div className="mt-2.5 space-y-2">
-            {ordered.map((item) => (
-              <Card key={item.id} item={item} myVote={liveVote(item)} onVote={vote} busy={busy} />
+            {page.map((item) => (
+              <Card
+                key={item.id} item={item} myVote={liveVote(item)} onVote={vote} busy={busy}
+                onReported={() => setHidden((h) => new Set(h).add(item.id))}
+              />
             ))}
+          </div>
+          {ordered.length > visible && (
+            // FEED_PAGE_SIZE promised a "See more" that never existed — past
+            // the 8 newest, a contribution was permanently invisible.
+            <button
+              type="button" onClick={() => setVisible((v) => v + 8)}
+              className="mt-2.5 w-full rounded-xl border border-stone-200 bg-white py-2.5 text-[12.5px] font-bold text-stone-600"
+            >
+              See more
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* Impact, not status: the contributor's own latest share, its honest
+          state, and its own reception — visible to them alone. No rank, no
+          board, no reward, no comparison with anyone. */}
+      {data.myShare && (
+        <section>
+          <SectionLabel>Your share</SectionLabel>
+          <div className="mt-2 rounded-2xl border border-stone-200 bg-white p-4">
+            {data.myShare.text && <p className="text-[13.5px] leading-relaxed text-stone-800">{data.myShare.text}</p>}
+            <p className="mt-2 text-[11.5px] text-stone-500">
+              {data.myShare.status === 'live'
+                ? data.myShare.featuredToday
+                  ? 'Today’s Pick — the whole community is seeing this today.'
+                  : data.myShare.helpfulPct != null
+                    ? `Live in the pool · ${data.myShare.helpfulPct}% found it useful`
+                    : (data.myShare.totalVotes ?? 0) > 0
+                      ? 'Live in the pool — students are voting on it.'
+                      : 'Live in the pool — students will see it in the rotation.'
+                : data.myShare.status === 'pending'
+                  ? 'Being checked — not visible to students yet.'
+                  : 'Not published.'}
+            </p>
           </div>
         </section>
       )}
@@ -179,13 +255,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Card({
-  item, featured, myVote, onVote, busy,
+  item, featured, myVote, onVote, busy, onReported,
 }: {
   item: Item;
   featured?: boolean;
   myVote: 'up' | 'down' | null;
   onVote: (item: Item, dir: 'up' | 'down') => void;
   busy: Set<string>;
+  onReported?: () => void;
 }) {
   return (
     <article
@@ -207,7 +284,13 @@ function Card({
       )}
       {item.imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.imageUrl} alt="" className="mt-2.5 w-full rounded-xl border border-stone-200" />
+        <img
+          src={item.imageUrl} alt=""
+          className="mt-2.5 max-h-80 w-full rounded-xl border border-stone-200 object-contain"
+          // A missing storage object must degrade to a text card, never leave
+          // a card that is nothing but a byline and two buttons.
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
       )}
 
       <div className="mt-3 flex items-center justify-between">
@@ -260,6 +343,11 @@ function Card({
           </button>
         </div>
       </div>
+      {!item.isMine && (
+        <div className="mt-2 flex">
+          <ReportItem submissionId={item.id} onReported={onReported} />
+        </div>
+      )}
     </article>
   );
 }

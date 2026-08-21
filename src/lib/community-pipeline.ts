@@ -177,7 +177,17 @@ export function validateSubmission(
   // A photo OUTRANKS the hint. A stale client that still says 'tip' while
   // attaching a picture must not fall into the tip branch and be rejected for
   // having no text — the picture IS the content.
-  const kind: 'tip' | 'question' = hasImageEarly ? 'question' : (hinted ?? 'tip');
+  //
+  // FIXED 21 Aug (hardening sprint): unhinted text used to default to 'tip',
+  // whose 15–150 char band silently disagreed with the client — the sheet
+  // enabled Send at 10 chars and allowed 600, so a student who typed a real
+  // 200-character question was told "Tips are 15–150 characters", an error
+  // about a thing they were not writing. The real client sends NO kind (the
+  // founder's rule: never ask). Unhinted text now validates under the
+  // question band (10–600); the safety screen — which actually reads the
+  // words — settles what it is at insert time. The tip band applies only
+  // when a caller EXPLICITLY says 'tip'.
+  const kind: 'tip' | 'question' = hasImageEarly ? 'question' : (hinted ?? 'question');
   // Section is OPTIONAL (founder, 20 Aug): internal structure must not become
   // student friction. A student with a tough question in front of them should
   // not have to file it into our taxonomy first — the safety screen already
@@ -208,6 +218,12 @@ export function validateSubmission(
   const hasImage = typeof body.image === 'string' && body.image.length > 0;
   if (!hasImage && text.length === 0) {
     return { ok: false, code: 'CONTENT_REQUIRED', error: 'Type the question or attach a photo of it' };
+  }
+  // Mirrors the client's Send-enable rule exactly — the server must never
+  // reject something the UI invited (the 10-char / 15-char mismatch was how
+  // a legitimate short doubt died with a "tips are 15–150" message).
+  if (!hasImage && text.length < 10) {
+    return { ok: false, code: 'TEXT_TOO_SHORT', error: 'Say a little more — at least 10 characters' };
   }
   if (text.length > MAX_QUESTION_CHARS) {
     return { ok: false, code: 'TEXT_TOO_LONG', error: `Keep the question under ${MAX_QUESTION_CHARS} characters` };

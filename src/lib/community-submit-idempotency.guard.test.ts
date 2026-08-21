@@ -29,7 +29,9 @@ describe('same intent = same submission', () => {
   it('one id per share intent, reused by every retry — not regenerated per attempt', () => {
     // useRef, not useState/inline: a fresh id per press would defeat the
     // whole mechanism by making each retry a new intent.
-    expect(SHEET).toMatch(/requestId\s*=\s*useRef<string>\(crypto\.randomUUID\(\)\)/);
+    // safeUuid guards crypto.randomUUID for old webviews (a render-time throw
+    // white-screened the sheet); the idea pinned is useRef — one id per INTENT.
+    expect(SHEET).toMatch(/requestId\s*=\s*useRef<string>\(safeUuid\(\)\)/);
     expect(SHEET).toContain('requestId: requestId.current');
   });
 
@@ -44,7 +46,7 @@ describe('same intent = same submission', () => {
   });
 
   it('a concurrent duplicate insert (23505) is success, not an error', () => {
-    expect(ROUTE).toMatch(/23505[\s\S]{0,220}ok: true/);
+    expect(ROUTE).toMatch(/23505[\s\S]{0,600}sentBody\(/);
   });
 
   it('a failed replay lookup is UNKNOWN, never "no previous submission"', () => {
@@ -90,7 +92,9 @@ describe('the rate limit states the state, never scolds', () => {
 
 describe('the 27 seconds are measured, not guessed', () => {
   it('every stage is timed so the bottleneck is a number, not a theory', () => {
-    for (const stage of ['textSafety', 'imageSafety', 'storageUpload', 'insert', 'imageBytes']) {
+    // The two Gemini gates now run in Promise.all, timed as one 'safety'
+    // stage — the parallelism IS the fix the timing revealed.
+    for (const stage of ['safety', 'storageUpload', 'insert', 'imageBytes']) {
       expect(ROUTE, `${stage} is not timed`).toContain(stage);
     }
     expect(ROUTE).toContain('[community-submit-timing]');

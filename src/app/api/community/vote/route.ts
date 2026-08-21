@@ -36,8 +36,14 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data: sub } = await admin.from('student_submissions')
+  const { data: sub, error: subErr } = await admin.from('student_submissions')
     .select('id, status, student_id').eq('id', sid).maybeSingle();
+  // Hardening sprint (21 Aug): this read used to be unchecked, so a DB blip
+  // answered "This one is no longer available" — infrastructure ERROR dressed
+  // as a business FALSE, and the vote was discarded. UNKNOWN is retryable.
+  if (subErr) {
+    return NextResponse.json({ error: 'Could not save your vote right now — try again.', code: 'VOTE_UNAVAILABLE', retryable: true }, { status: 503 });
+  }
   // A live item is votable FOREVER (20 Aug). The old rule also accepted
   // 'featured' and a 72h 'voting' window — and refused 'archived', which was
   // 77% of what the feed displayed: 5 of the first 8 cards answered a vote

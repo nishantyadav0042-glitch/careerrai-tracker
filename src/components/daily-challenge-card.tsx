@@ -43,18 +43,33 @@ export function DailyChallengeCard() {
   // next?" never re-offers the one just solved.
   const [justAnswered, setJustAnswered] = useState<Set<string>>(new Set());
 
+  const [loadFailed, setLoadFailed] = useState(false);
   const load = useCallback(async () => {
+    setLoadFailed(false);
     try {
       const res = await fetch('/api/challenge/today');
-      if (!res.ok) return;
+      // Outage and no-question-today are different facts: the slot API said a
+      // question EXISTS, so a failed read here must offer a retry, never a
+      // silently blank hero.
+      if (!res.ok) { setLoadFailed(true); return; }
       const json = await res.json();
       setChallenges((json.challenges as ChallengeView[]) ?? []);
-    } catch { /* render nothing rather than a broken card */ }
+    } catch { setLoadFailed(true); }
   }, []);
 
   /* eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch */
   useEffect(() => { void load(); }, [load]);
 
+  if (loadFailed) {
+    return (
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
+        <p className="text-[13px] font-semibold text-stone-700">Couldn’t load today’s question.</p>
+        <button type="button" onClick={() => void load()} className="mt-3 rounded-xl bg-stone-900 px-4 py-2 text-[12.5px] font-bold text-white">
+          Try again
+        </button>
+      </div>
+    );
+  }
   // No challenge scheduled today — the card vanishes entirely. An empty
   // challenge card would advertise emptiness.
   if (!challenges || challenges.length === 0) return null;

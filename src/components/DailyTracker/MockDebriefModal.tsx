@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { prepareImage } from '@/lib/image-downscale';
 import { X, Loader2, Camera, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,24 +51,13 @@ interface ParsedScorecard {
   qa: ParsedSection;
 }
 
-/** Downscale to max 1568px long edge and re-encode as JPEG so uploads stay small. */
+/** Downscale to max 1568px long edge and re-encode as JPEG so uploads stay
+ *  small. One canonical implementation (lib/image-downscale) — this was the
+ *  third hand-rolled copy of the same canvas recipe (Incident #23 pattern). */
 async function fileToBase64Jpeg(file: File): Promise<{ data: string; mediaType: string }> {
-  const bitmap = await createImageBitmap(file);
-  const MAX_EDGE = 1568;
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas not supported');
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-  return { data: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
+  const out = await prepareImage(file, { maxDim: 1568, quality: 0.85, maxBytes: 8 * 1024 * 1024 });
+  if ('tooLarge' in out) throw new Error('Image too large');
+  return { data: out.data, mediaType: out.mime };
 }
 
 export function MockDebriefModal({

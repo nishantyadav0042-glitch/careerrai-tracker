@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { CalendarClock, Loader2, Upload, X, Check, Trash2 } from 'lucide-react';
 import { track } from '@/lib/journey';
+import { prepareImage } from '@/lib/image-downscale';
 import { whenLabel, timeLabel, type TimetableBlock, type TimetableKind, type CoachingTarget } from '@/lib/timetable';
 
 // "Upload your coaching timetable" — offered in a student's first days.
@@ -14,18 +15,12 @@ import { whenLabel, timeLabel, type TimetableBlock, type TimetableKind, type Coa
 
 const MAX_EDGE = 1568;
 
+// One canonical downscale (lib/image-downscale) — this was the second of
+// three hand-rolled copies of the same canvas recipe (Incident #23 pattern).
 async function imageToBase64Jpeg(file: File): Promise<{ data: string; mediaType: string }> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas not supported');
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-  return { data: canvas.toDataURL('image/jpeg', 0.85).split(',')[1], mediaType: 'image/jpeg' };
+  const out = await prepareImage(file, { maxDim: MAX_EDGE, quality: 0.85, maxBytes: 8 * 1024 * 1024 });
+  if ('tooLarge' in out) throw new Error('Image too large');
+  return { data: out.data, mediaType: out.mime };
 }
 
 function fileToBase64(file: File): Promise<string> {

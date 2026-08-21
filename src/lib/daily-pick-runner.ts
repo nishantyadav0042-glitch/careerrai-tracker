@@ -1,4 +1,5 @@
 import { pickForToday, runwayFor, type PickCandidate } from './daily-pick';
+import { studyDayString } from '@/lib/study-day';
 
 // ── Daily Pick runner ───────────────────────────────────────────────────────
 //
@@ -29,9 +30,15 @@ export interface PromoteResult {
   shortfall: { question: number; tip: number };
 }
 
-/** IST calendar date — the day boundary students actually experience. */
+// FIXED 21 Aug (hardening sprint): this file stamped featured_on with the
+// IST CALENDAR date while every reader (voting, insights) queries by the
+// 05:30-IST STUDY day — two definitions of "today" that disagree for 5.5
+// hours every night. In that window the lazy promoter stamped tomorrow's
+// slot and then queried yesterday's, so it could never fill an empty surface
+// (its whole purpose) and silently burned a fresh pick from the runway.
+// One clock now: the study day, same as the readers.
 function istToday(now: Date): string {
-  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return studyDayString(now);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,12 +111,19 @@ export async function promoteDailyPick(admin: any, now: Date = new Date()): Prom
   // Stamp only the kinds not already settled today. featured_on is the single
   // source of "held the top slot on this date", which is what caps a winner at
   // one day: tomorrow's run sees featured_on set and skips it.
+  // CONDITIONAL stamp (21 Aug): two concurrent promoters both used to read
+  // "nothing filled", then both write — and a vote landing between the reads
+  // could crown two different winners for one kind, permanently spending a
+  // submission's single featured day invisibly. The IS NULL guard makes the
+  // write first-wins: the loser's update matches zero rows and nothing burns.
   const stamp = async (id: string | null, kind: 'question' | 'tip') => {
     if (!id || filledToday.has(kind)) return;
-    await admin
+    const { error } = await admin
       .from('student_submissions')
       .update({ featured_on: today })
-      .eq('id', id);
+      .eq('id', id)
+      .is('featured_on', null);
+    if (error) console.error('[daily-pick] stamp failed', kind, error.message);
   };
   await stamp(pick.question.id, 'question');
   await stamp(pick.tip.id, 'tip');

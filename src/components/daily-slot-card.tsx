@@ -62,7 +62,20 @@ export function DailySlotCard() {
   // So the question always wins the hero slot when one exists. The other kinds
   // are not deleted — they still render below when there is no question for
   // the day, which keeps the rotation engine and its tests intact.
-  if (failed) return <CommunityVoteCard />;
+  // FIXED 21 Aug: a failed slot read used to silently swap the student onto
+  // the community ballot — a different product with no hint anything broke,
+  // and a blank page when the ballot was also empty. An outage is an outage:
+  // say so, offer retry.
+  if (failed) {
+    return (
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
+        <p className="text-[13px] font-semibold text-stone-700">Couldn’t load today’s pick.</p>
+        <button type="button" onClick={() => window.location.reload()} className="mt-3 rounded-xl bg-stone-900 px-4 py-2 text-[12.5px] font-bold text-white">
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (!slot) return null;
   if (slot.kind === 'question') return <DailyChallengeCard />;
   if (slot.kind === 'community' || slot.kind === null) return <CommunityVoteCard />;

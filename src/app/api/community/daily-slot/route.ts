@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
+import { studyDayStart } from '@/lib/study-day';
 import { activeChallengeDate } from '@/lib/challenge';
 import { loadPeerRows } from '@/lib/os/peer-cohort-data';
 import { peerPulse, cohortInsights, populationProofAllowed } from '@/lib/os/peer-cohort';
@@ -60,24 +61,41 @@ export async function GET() {
   // The community slot is only fillable if there is something open that this
   // student did not write and has not already judged. Counted, not assumed —
   // the 12 Aug investigation showed an "obviously fine" pool is worth checking.
+  // Hardening sprint (21 Aug): these reads sat inside a try/catch that could
+  // never fire — supabase-js RETURNS {data,error}, it does not throw — so a
+  // failed read silently dropped the community kind from the rotation, the
+  // exact bug the comment below says was already fixed once. Errors are now
+  // read where they actually arrive, and an unreadable availability is a
+  // retryable 503, never a silently smaller rotation.
   let communityOpen = false;
-  try {
-    const [{ data: open }, { data: mine }] = await Promise.all([
+  {
+    const [openR, mineR, featR] = await Promise.all([
       admin.from('student_submissions')
         .select('id, student_id')
         .eq('status', 'live'),
       admin.from('submission_votes').select('submission_id').eq('student_id', user.id),
+      // The ballot excludes today's featured items, so availability must too —
+      // otherwise the rotation can promise a ballot that renders empty.
+      admin.from('student_submissions')
+        .select('id')
+        .eq('status', 'live')
+        .eq('featured_on', day),
     ]);
-    const voted = new Set((mine ?? []).map((v: { submission_id: string }) => v.submission_id));
-    // A live item that is not mine and that I have not judged yet. The old
-    // rule also demanded an unexpired 72h ballot window; after that ballot
-    // retired on 20 Aug the clause could never be true, so the community slot
-    // silently stopped being offered by the rotation at all.
-    communityOpen = (open ?? []).some((s: { id: string; student_id: string | null }) =>
-      s.student_id !== user.id && !voted.has(s.id)
+    const availErr = openR.error ?? mineR.error ?? featR.error;
+    if (availErr) {
+      console.error('[daily-slot] community availability failed', availErr.message);
+      return NextResponse.json({ error: 'Could not load today’s pick — try again.', code: 'SLOT_UNAVAILABLE', retryable: true }, { status: 503 });
+    }
+    const voted = new Set((mineR.data ?? []).map((v: { submission_id: string }) => v.submission_id));
+    const featuredToday = new Set((featR.data ?? []).map((f: { id: string }) => f.id));
+    // A live item that is not mine, that I have not judged, and that is not
+    // already occupying today's top slot. The old rule also demanded an
+    // unexpired 72h ballot window; after that ballot retired on 20 Aug the
+    // clause could never be true, so the community slot silently stopped
+    // being offered by the rotation at all.
+    communityOpen = (openR.data ?? []).some((s: { id: string; student_id: string | null }) =>
+      s.student_id !== user.id && !voted.has(s.id) && !featuredToday.has(s.id)
     );
-  } catch (e) {
-    console.error('[daily-slot] community availability failed', e);
   }
 
   // The 'peer' slot is population proof, so it obeys the same density gate as
@@ -92,15 +110,19 @@ export async function GET() {
   // same active-date rule the challenge card itself uses, so the rotation can
   // never offer a question slot the card would then render as empty.
   let questionLive = false;
-  try {
-    const { count } = await admin
+  {
+    const { count, error: chalErr } = await admin
       .from('daily_challenges')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'live')
       .eq('live_date', activeChallengeDate(now));
+    if (chalErr) {
+      // A failed count must not quietly delete the day's question from the
+      // rotation (ERROR became FALSE here before). Retryable, like the rest.
+      console.error('[daily-slot] challenge availability failed', chalErr.message);
+      return NextResponse.json({ error: 'Could not load today’s pick — try again.', code: 'SLOT_UNAVAILABLE', retryable: true }, { status: 503 });
+    }
     questionLive = (count ?? 0) > 0;
-  } catch (e) {
-    console.error('[daily-slot] challenge availability failed', e);
   }
 
   const available: PickAvailability = {
@@ -114,19 +136,28 @@ export async function GET() {
   // What they were served the last two days, so the rotation can avoid a
   // three-peat. Best-effort: if this read fails the pick is still valid.
   let recent: PickKind[] = [];
-  try {
-    const { data } = await admin
+  {
+    // FIXED 21 Aug: this used to read the last two serves with no day filter,
+    // and the card logs a serve on EVERY mount — so a student's third open of
+    // the same day saw today's kind twice, tripped the three-peat guard, and
+    // was handed a DIFFERENT pick for the same day. "Recent" means previous
+    // study days only; today's own serves are not history. Still best-effort:
+    // an unreadable history yields no exclusions, which is a stable pick, not
+    // a wrong one.
+    const { data, error: recentErr } = await admin
       .from('student_events')
       .select('props, created_at')
       .eq('user_id', user.id)
       .eq('event', 'daily_slot_served')
+      .lt('created_at', studyDayStart(now).toISOString())
       .order('created_at', { ascending: false })
       .limit(2);
+    if (recentErr) console.error('[daily-slot] recent-serves read failed (pick proceeds unexcluded)', recentErr.message);
     recent = (data ?? [])
       .map((r: { props: { kind?: string } | null }) => r.props?.kind)
       .filter((k: unknown): k is PickKind => typeof k === 'string')
       .reverse();
-  } catch { /* best effort */ }
+  }
 
   // The question is the hero, every day it exists (founder, 13 Aug: "this mix
   // of screen should not exist"). A student must know what they are opening

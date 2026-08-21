@@ -52,12 +52,17 @@ export default function CommunityPage() {
             type="button" onClick={() => setShare(true)}
             className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 shadow-lg active:scale-[0.99]"
           >
-            {/* One line (founder, 13 Aug: "too verbose, no one will read
-                long lines — share tough question/tip you solved today,
-                simple and sorted"). The second explainer line is gone. */}
+            {/* ONE mental model, page and sheet (hardening sprint, 21 Aug).
+                The page asked for altruism — "share what you SOLVED today" —
+                while the sheet asked "stuck on something?". Help-seeking is
+                the frame that converts in this population (Doubtnut's ~2M
+                posts/day are all requests; anonymous channels flood with the
+                questions students won't ask under their name), and a question
+                someone is stuck on is content the next student can act on.
+                Still one line, per 13 Aug: no explainer paragraph. */}
             <span className="flex items-center justify-center gap-2 text-[13.5px] font-extrabold text-white">
               <HeartHandshake className="h-4 w-4 shrink-0" />
-              Share a tough question / tip you solved today 📷
+              Stuck on something? Share it 📷
             </span>
           </button>
         </div>
