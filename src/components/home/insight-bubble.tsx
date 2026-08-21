@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { studyDayString } from '@/lib/study-day';
 import { track } from '@/lib/journey';
 import { Eye, X } from 'lucide-react';
@@ -41,6 +41,19 @@ function seenKey(): string {
   return `cr_insight_seen_${studyDayString()}`;
 }
 
+/** Has THIS insight already made its entrance on this device? Keyed by the
+ *  insight's own text, not by the day: a genuinely new insight arriving later
+ *  the same day still deserves its moment, and the same one re-rendering
+ *  never gets a second. */
+function animKey(title: string): string {
+  let h = 0;
+  for (let i = 0; i < title.length; i++) h = (h * 31 + title.charCodeAt(i)) >>> 0;
+  return `cr_insight_anim_${h}`;
+}
+function alreadySeenThisInsight(title: string): boolean {
+  try { return localStorage.getItem(animKey(title)) === '1'; } catch { return false; }
+}
+
 function alreadySeen(): boolean {
   try { return localStorage.getItem(seenKey()) === '1'; } catch { return false; }
 }
@@ -49,6 +62,42 @@ export function InsightBubble({ title, text, kind }: { title: string; text: stri
   // Read once, on first render, so the card does not flash in and out when the
   // component re-renders for unrelated reasons.
   const [dismissed, setDismissed] = useState<boolean>(alreadySeen);
+  // ENTRANCE (founder, 22 Aug): the insight should arrive, not merely exist.
+  // It used to sit in the page like any other card, and a student never knew
+  // CareerRai had noticed something today.
+  //
+  // Three rules keep this an attention moment instead of a nuisance:
+  //   1. It animates for a NEW insight only. Re-opening the app on the same
+  //      day renders it static — the same drop three times a day is how a
+  //      product earns notification fatigue in a week.
+  //   2. It never moves layout. The card holds its space from first paint and
+  //      only its own transform/opacity animate, so nothing below it jumps
+  //      under a thumb already reaching for the plan.
+  //   3. prefers-reduced-motion gets the settled card immediately.
+  //
+  // Driven on the NODE, not through state. Toggling a class would mean
+  // setState inside an effect (cascading renders, and a server/client
+  // mismatch because the server cannot know whether this insight has already
+  // animated on this device). Touching the DOM is what an effect is actually
+  // for, and it keeps the rendered markup identical on both sides.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    if (alreadySeenThisInsight(title)) return;         // same insight → static
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+
+    el.style.transform = 'translateY(-1.5rem)';
+    el.style.opacity = '0';
+    const raf = requestAnimationFrame(() => {
+      el.style.transition = 'transform 700ms ease-out, opacity 700ms ease-out';
+      el.style.transform = 'translateY(0)';
+      el.style.opacity = '1';
+    });
+    try { localStorage.setItem(animKey(title), '1'); } catch { /* storage blocked */ }
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Observability only (Batch 8, Task 4): shown/dismissed is the pair that
   // separates "delivered" from "read". The old toast could not record either.
@@ -72,6 +121,7 @@ export function InsightBubble({ title, text, kind }: { title: string; text: stri
   return (
     <div
       role="status"
+      ref={cardRef}
       className="relative overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4 shadow-sm"
     >
       <button
@@ -89,11 +139,14 @@ export function InsightBubble({ title, text, kind }: { title: string; text: stri
           <Eye className="h-4 w-4 text-amber-700" />
         </span>
         <div className="min-w-0">
-          {/* The label names the app, not the feature. "Insight" is a product
-              word; "Rai noticed" is what actually happened -- CareerRai read
-              their own record and found something. */}
+          {/* CareerRai Insight (founder, 22 Aug). It read "Rai noticed" —
+              accurate about the mechanism, but it spent the moment on a
+              sentence instead of on the brand. A student should build ONE
+              association from this card: CareerRai is the system that
+              understands me. The full name earns that; a clever half-name
+              does not. */}
           <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
-            Rai noticed
+            ✨ CareerRai Insight
           </p>
           <p className="mt-1 text-[14px] font-bold leading-snug text-stone-900">{title}</p>
           <p className="mt-0.5 text-[13px] leading-snug text-stone-700">{text}</p>

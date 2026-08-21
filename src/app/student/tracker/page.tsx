@@ -9,7 +9,6 @@ import { StreakRestoreButton } from '@/components/streak-restore-button';
 import { InsightCloud } from '@/components/insight-cloud';
 import { daySlot, slotGreeting } from '@/lib/day-slot';
 import { InsightBubble } from '@/components/home/insight-bubble';
-import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 import { CampaignOfferCard } from '@/components/campaign/offer-card';
 import { computeDailyInsight, loadSuppressedInsightKeys, recordInsightShown } from '@/lib/daily-insight';
 import { CheckInGate } from '@/components/check-in-gate';
@@ -27,7 +26,7 @@ import { getStudentProfile } from '@/lib/student-profile';
 import { projectSyllabusFinish } from '@/lib/study-plan';
 import { catExamDate } from '@/lib/routine-engine';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
-import { Flame, CalendarCheck, CalendarDays } from 'lucide-react';
+import { Flame, CalendarCheck, CalendarDays, ChevronRight } from 'lucide-react';
 import { AppTour } from '@/components/app-tour';
 import type { StreakData } from '@/types';
 import { sessionsVisibleFrom } from '@/lib/session-window';
@@ -35,6 +34,7 @@ import { PlanExtendedAlert } from '@/components/home/plan-extended-alert';
 import { ConfirmHoursCard } from '@/components/home/confirm-hours-card';
 import { dailyHours, needsHoursConfirmation } from '@/lib/daily-hours';
 import { isCovered } from '@/lib/coverage-status';
+import { HomeTimetableCard } from '@/components/home/home-timetable-card';
 
 export const metadata = {
   title: 'CareerRai',
@@ -573,6 +573,27 @@ export default async function DailyTrackerPage() {
             rather than instructing them, so it opens the screen. */}
         {dailyInsight && <InsightBubble title={dailyInsight.title} text={dailyInsight.text} kind={dailyInsight.kind} />}
 
+        {/* 0b · THE ONE PAID DOOR ON HOME (founder, 22 Aug: do not complicate
+            Home — one line, nothing else).
+            It sells nothing here: it names the offer and hands the student to
+            /student/buddy, where the five recommended mentors, the reason for
+            each, and the ₹299 payment actually live. Home stays a study
+            screen; the decision happens on the screen built for it.
+            Hidden for anyone who already has a buddy or premium — showing a
+            paying student a "₹299" ask is the paywall-to-a-payer defect this
+            codebase has already paid for once. */}
+        {!profile?.is_premium && !buddyId && (
+          <Link
+            href="/student/buddy"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 shadow-sm active:scale-[0.99]"
+          >
+            <span className="text-[13.5px] font-extrabold leading-snug text-white">
+              Audit your preparation with an IIM Buddy — ₹299
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-white/80" />
+          </Link>
+        )}
+
         {pace && targetIso && (
           <PaceCard
             pace={pace} targetIso={targetIso} week={week} weekLabels={weekLabels}
@@ -607,7 +628,14 @@ export default async function DailyTrackerPage() {
             plus TimetableCard-which-contains-its-own-CoachingMirror rendered
             THREE upload prompts at once). HomeTimetableCard is now the single
             owner: the mirror when a timetable exists, one dismissible prompt
-            when it doesn't. */}
+            when it doesn't.
+            REMOVED AND RESTORED on 22 Aug. It was taken off Home as part of a
+            declutter, and the founder reversed that within the hour, rightly:
+            this is not decoration competing for attention, it is the
+            INGESTION POINT for coaching students — the thing that lets
+            CareerRai shape a study plan around the classes they already
+            attend, and one of the few capabilities a generic CAT app does not
+            have. Decluttering Home must never cost a capability. */}
         <HomeTimetableCard />
 
         {/* The daily insight, as a passing 7-second cloud. */}

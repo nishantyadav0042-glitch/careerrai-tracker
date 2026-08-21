@@ -52,17 +52,17 @@ export default function CommunityPage() {
             type="button" onClick={() => setShare(true)}
             className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 shadow-lg active:scale-[0.99]"
           >
-            {/* ONE mental model, page and sheet (hardening sprint, 21 Aug).
-                The page asked for altruism — "share what you SOLVED today" —
-                while the sheet asked "stuck on something?". Help-seeking is
-                the frame that converts in this population (Doubtnut's ~2M
-                posts/day are all requests; anonymous channels flood with the
-                questions students won't ask under their name), and a question
-                someone is stuck on is content the next student can act on.
-                Still one line, per 13 Aug: no explainer paragraph. */}
+            {/* CHALLENGE, not doubt-desk (founder, 22 Aug). "Stuck on
+                something?" framed the student as the one with a problem, and
+                framed CareerRai as a help desk — the Doubtnut position, whose
+                own commercial fate argues against it. This says the opposite
+                thing about the same act: I found something hard, can you
+                crack it? Status motivation, not confession. Deliberately NOT
+                "challenge your competitors" — competitive energy without
+                turning peers into rivals. Still one line (13 Aug). */}
             <span className="flex items-center justify-center gap-2 text-[13.5px] font-extrabold text-white">
               <HeartHandshake className="h-4 w-4 shrink-0" />
-              Stuck on something? Share it 📷
+              Solve something tough. Challenge others 📷
             </span>
           </button>
         </div>

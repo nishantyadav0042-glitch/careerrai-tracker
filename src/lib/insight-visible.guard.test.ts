@@ -30,13 +30,28 @@ const HOME = 'src/app/student/tracker/page.tsx';
 describe('the daily insight is visible', () => {
   it('does not remove itself on a timer', () => {
     const s = code(CARD);
-    expect(s, 'an insight that vanishes on a timer cannot be read late').not.toMatch(/setTimeout/);
+    // Sharpened 22 Aug. This banned setTimeout outright, which was the right
+    // instinct for the original bug (the card removed ITSELF after 7 seconds,
+    // so an insight could be invisible while every metric said delivered) but
+    // the wrong test: the entrance animation now uses a timer to START the
+    // card's slide in, which removes nothing. The invariant is that no timer
+    // ever DISMISSES or hides it — so that is what this asserts.
     expect(s).not.toMatch(/VISIBLE_MS/);
+    expect(s, 'no timer may dismiss the card').not.toMatch(/setTimeout\([^)]*(setDismissed|dismiss\(|setHidden)/);
+    // Any timer that survives must only drive the entrance.
+    for (const m of s.matchAll(/setTimeout\(\s*\(\)\s*=>\s*(\w+)/g)) {
+      expect(['setEntered'], `setTimeout drives ${m[1]}, which is not the entrance`).toContain(m[1]);
+    }
   });
 
   it('marks itself seen only on a deliberate dismiss, never on mount', () => {
     const s = code(CARD);
     expect(s, 'the seen key must be written exactly once, in the dismiss path').toMatch(/setItem/);
+    // Sharpened 22 Aug: the invariant is about the SEEN key specifically. The
+    // entrance also persists a key — animKey — so the same insight does not
+    // re-animate on every app open. That write says "this already made its
+    // entrance", never "this was read", so it does not resurrect the original
+    // defect (marking an insight read before the student looked at it).
     // The first version of this assertion was a 400-character proximity check
     // ("no setItem near a useEffect"), which tripped the moment an unrelated
     // effect was added ABOVE the dismiss handler -- flagging code where the
@@ -45,10 +60,19 @@ describe('the daily insight is visible', () => {
     // must contain none.
     const effects = [...s.matchAll(/useEffect\(\(\) => \{([\s\S]*?)\}, \[/g)];
     for (const m of effects) {
-      expect(m[1], 'no effect body may mark the insight as seen').not.toMatch(/setItem/);
+      // The SEEN key, precisely — an effect may persist the animation key.
+      expect(m[1], 'no effect body may mark the insight as seen').not.toMatch(/setItem\(seenKey\(\)/);
     }
-    const dismissBody = s.slice(s.indexOf('function dismiss'), s.indexOf('return ('));
-    expect(dismissBody, 'the dismiss handler is the only writer').toMatch(/setItem/);
+    // Positional, not slice-based: the old end-marker was the string
+    // "return (", which the entrance effect's cleanup ("return () =>
+    // clearTimeout") now matches earlier in the file, silently emptying the
+    // slice. Assert the invariant directly instead — every write of the SEEN
+    // key sits after the dismiss handler opens.
+    const dismissAt = s.indexOf('function dismiss');
+    expect(dismissAt, 'there must be a dismiss handler').toBeGreaterThan(-1);
+    const seenWrites = [...s.matchAll(/setItem\(seenKey\(\)/g)].map((m) => m.index ?? -1);
+    expect(seenWrites.length, 'the seen key is written exactly once').toBe(1);
+    expect(seenWrites[0], 'the dismiss handler is the only writer').toBeGreaterThan(dismissAt);
   });
 
   it('sits in the page flow, not pinned to the bottom of the viewport', () => {

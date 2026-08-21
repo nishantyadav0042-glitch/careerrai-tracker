@@ -8,7 +8,9 @@ import { track } from '@/lib/journey';
 import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS } from '@/lib/community-pipeline';
 import { prepareImage } from '@/lib/image-downscale';
 
-// "Stuck on something? Share it." — exactly two inputs, minimum friction:
+// "Solve something tough. Challenge others." — exactly two inputs, minimum
+// friction (22 Aug: the sheet used to open with "Stuck on something?", which
+// cast the student as the one with the problem and CareerRai as a help desk):
 // text, a photo, or both. No formatting, no titles, no classification — a
 // photo is a question, and the safety screen that already reads every
 // submission decides tip-vs-question and the section behind the scenes. It
@@ -232,9 +234,9 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
             {/* ONE screen, no form (founder, 20 Aug). No tip/question toggle,
                 no Section dropdown, no Topic dropdown — classification happens
                 behind the screen, where it costs the student nothing. */}
-            <p className="mt-3 text-[16px] font-bold text-stone-900">Stuck on something? Share it.</p>
+            <p className="mt-3 text-[16px] font-bold text-stone-900">Solve something tough. Challenge others.</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-stone-600">
-              Send it to other students — photo or text, whatever is easier. Nobody sees your name.
+              Share a question that tested you — photo or text, whatever is easier. Nobody sees your name.
             </p>
 
             <div className="mt-3 space-y-2">
@@ -242,7 +244,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                 value={questionText}
                 onChange={(e) => setQuestionText(e.target.value.slice(0, MAX_QUESTION_CHARS))}
                 rows={3}
-                placeholder="Type it… the question that beat you, or a doubt. Or just add a photo."
+                placeholder="Type the question that tested you — or just add a photo."
                 className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-[14px] text-stone-900"
               />
               <input
@@ -320,7 +322,7 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
                 ? 'Checking your submission…'
                 : busy
                   ? ['Sending…', 'Uploading your photo…', 'Checking it…', 'Almost there — still working'][stage]
-                  : 'Send to the community'}
+                  : 'Challenge the community'}
             </button>
             <p className="mt-1.5 text-center text-[10px] text-stone-400">
               One share a day · checked automatically before anyone sees it
