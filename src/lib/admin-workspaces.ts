@@ -85,17 +85,29 @@ export const WORKSPACES: AdminWorkspace[] = [
     id: 'sales',
     label: 'Sales',
     icon: 'PhoneCall',
-    href: '/admin/leads',
-    purpose: 'The CRM. Every lead, hottest first, with the message ready.',
+    href: '/admin/sales',
+    purpose: 'The CRM. Who to call now, what was said, and what is due next.',
     tabs: [
+      // THE CRM landing (21 Aug). It used to be /admin/leads, a flat signup
+      // list, while the actual call deck — dispositions, callbacks, retries,
+      // ownership — sat at /admin/sales with ZERO inbound links anywhere in
+      // the codebase. The founder's report was exact: "the CRM is basically
+      // not there." It was there; nothing could reach it.
+      { label: 'Call queue', href: '/admin/sales', status: 'live' },
       { label: 'Leads', href: '/admin/leads', status: 'live' },
-      { label: 'Buddy interest', href: '/admin/buddy-interest', status: 'live' },
-      { label: 'Call queue', href: '/admin/sales-queue', status: 'moved' },
-      { label: 'Remind to log', href: '/admin/reminders', status: 'moved' },
-      { label: 'Workspace', href: '/admin/sales', status: 'moved' },
       { label: 'Performance', href: '/admin/sales-performance', status: 'moved' },
+      { label: 'Buddy interest', href: '/admin/buddy-interest', status: 'live' },
+      // The drill-down for the Command card's "Sales-ready to call" count —
+      // the exact records behind that number, which is why it stays a page
+      // rather than folding into the call queue (a count must always open
+      // the rows it counted). It is a SIGNAL, not a second queue.
+      { label: 'Sales-ready', href: '/admin/sales-queue', status: 'moved' },
+      { label: 'Remind to log', href: '/admin/reminders', status: 'moved' },
+      // What the rep actually sees, one tap away. Same canonical queue
+      // (buildCallQueue), scoped to her book instead of the whole base.
+      { label: 'Rep view', href: '/sales', status: 'live' },
       { label: 'Call recordings', href: null, status: 'planned', blockedOn: 'No call recording is captured anywhere today.' },
-      { label: 'Rep assignment', href: null, status: 'planned', blockedOn: 'No sales-rep column on leads yet.' },
+      { label: 'Rep assignment', href: null, status: 'planned', blockedOn: 'The owner column and the reassign API both exist; no admin UI calls it yet, so ownership can only move by API.' },
     ],
   },
   {

@@ -51,6 +51,35 @@ function istTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
+/**
+ * Read the lead state for these students — or THROW.
+ *
+ * BOUNDARY 2 applied to sales (21 Aug). This read used to be destructured
+ * with the error never inspected, and it is the one read in the queue that
+ * carries BUSINESS STATE: who is converted, who said no, who owns the lead,
+ * and when the next action is due. A failed read made `outreach` null, so
+ * every lead looked fresh and unowned — a converted paying student and a
+ * student who explicitly said "never call me again" would both be handed
+ * back to a rep as a new lead, and another rep's claimed book would appear
+ * in your queue. That is an infrastructure failure wearing a business
+ * answer's clothes, in the surface where it costs the most trust.
+ *
+ * Retry once so a blip stays invisible, then throw. An unreadable queue must
+ * surface as an error the rep can retry, never as a confident wrong list.
+ */
+async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
+  let lastMessage = 'unknown';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await db
+      .from('lead_outreach')
+      .select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner')
+      .in('student_id', ids);
+    if (!error) return data ?? [];
+    lastMessage = error.message;
+  }
+  throw new Error(`Could not read the sales queue state: ${lastMessage}`);
+}
+
 // `repEmail` scopes the queue to one rep's actionable work (SA-1D): unclaimed
 // leads plus the leads they own. Omit it (the admin oversight frame) to see
 // everything, claimed or not.
@@ -65,11 +94,12 @@ export async function buildCallQueue(admin?: any, repEmail?: string | null): Pro
   const ids = free.map((r) => r.id);
   if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
 
-  const [{ data: profs }, { data: eng }, { data: reports }, { data: outreach }] = await Promise.all([
+  const [{ data: profs }, { data: eng }, { data: reports }, outreach] = await Promise.all([
     db.from('profiles').select('id, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
     db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
-    db.from('lead_outreach').select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner').in('student_id', ids),
+    // The only read here that decides a business state — checked, retried, or thrown.
+    readLeadOutreach(db, ids),
   ]);
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
@@ -133,9 +163,24 @@ export async function buildCallQueue(admin?: any, repEmail?: string | null): Pro
     let dueReason: DueReason = 'fresh';
     let dueLabel = 'New lead';
     let sort = conv; // fresh leads ranked by score
-    if (dueNow && status === 'follow_up') { dueReason = 'callback'; dueLabel = `Callback due ${o.callback_at ? istTime(o.callback_at) : 'now'}`; sort = 100000 - nextAction!; }
-    else if (dueNow && status === 'no_answer') { dueReason = 'retry'; dueLabel = `Retry — no answer${o.no_answer_count > 1 ? ` (${o.no_answer_count}×)` : ''}`; sort = 90000 - nextAction! / 1e6; }
-    else if (dueNow && status === 'interested') { dueReason = 'followup'; dueLabel = 'Follow up — was interested'; sort = 80000 - nextAction! / 1e6; }
+    //
+    // Ranking (fixed 21 Aug). These three lines used to subtract a raw epoch
+    // millisecond from a five-figure base — `100000 - nextAction` is about
+    // MINUS 1.8 trillion — so every due callback, retry and follow-up sorted
+    // BELOW a cold fresh lead scoring ~14. The priority order documented at
+    // the top of this file was exactly inverted in production: a student who
+    // said "call me at 6" sank under students nobody had ever spoken to.
+    // Nothing caught it because no test had ever driven a due lead and a
+    // fresh lead through the queue together.
+    //
+    // Tier first, time second: a tier base far above any conversion score
+    // (which tops out near 150), plus MINUTES OVERDUE inside the tier, so the
+    // longest-waiting promise is called first. A tier is 1,000,000 wide —
+    // roughly two years of overdue minutes — so tiers can never interleave.
+    const minutesOverdue = () => Math.min(999_999, Math.max(0, Math.round((now - nextAction!) / 60_000)));
+    if (dueNow && status === 'follow_up') { dueReason = 'callback'; dueLabel = `Callback due ${o.callback_at ? istTime(o.callback_at) : 'now'}`; sort = 3_000_000 + minutesOverdue(); }
+    else if (dueNow && status === 'no_answer') { dueReason = 'retry'; dueLabel = `Retry — no answer${o.no_answer_count > 1 ? ` (${o.no_answer_count}×)` : ''}`; sort = 2_000_000 + minutesOverdue(); }
+    else if (dueNow && status === 'interested') { dueReason = 'followup'; dueLabel = 'Follow up — was interested'; sort = 1_000_000 + minutesOverdue(); }
 
     cands.push({
       studentId: r.id, name: r.full_name ?? 'Student', firstName: (r.full_name ?? '').trim().split(' ')[0] || 'there',

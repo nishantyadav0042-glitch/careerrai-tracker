@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, PhoneCall, Flame, MousePointerClick } from 'lucide-react';
+import { PhoneCall, Flame, MousePointerClick } from 'lucide-react';
 import { getSalesReadyToCall } from '@/lib/admin-filters';
+import { WorkspaceShell } from '@/components/admin/workspace-shell';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,19 +23,12 @@ export default async function SalesQueuePage() {
     iso ? Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000)) : null;
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <Link href="/admin" className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-800">
-          <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
-        </Link>
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-stone-900 flex items-center gap-2">
-            <PhoneCall className="w-5 h-5" /> Sales queue
-          </h1>
-          <p className="text-sm text-stone-500 mt-0.5">
-            Free users ready for the buddy call — hottest first. {queue.length} waiting.
-          </p>
-        </div>
+    <WorkspaceShell
+      workspaceId="sales"
+      activeHref="/admin/sales-queue"
+      title="Sales-ready"
+      subtitle={`The ${queue.length} students behind the dashboard's sales-ready count — a signal, not the call queue.`}
+    >
 
         {queue.length === 0 ? (
           <Card className="p-8 text-center text-stone-500">
@@ -89,7 +82,6 @@ export default async function SalesQueuePage() {
             })}
           </div>
         )}
-      </div>
-    </div>
+    </WorkspaceShell>
   );
 }

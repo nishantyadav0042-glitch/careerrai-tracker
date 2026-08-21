@@ -1,8 +1,7 @@
-import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
 import { getRemindToLog } from '@/lib/admin-filters';
-import { ArrowLeft } from 'lucide-react';
 import { SITE_URL } from '@/lib/site';
+import { WorkspaceShell } from '@/components/admin/workspace-shell';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,18 +51,12 @@ export default async function AdminRemindersPage() {
   const noPhone = list.length - remindable.length;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-5 pb-20">
-      <Link href="/admin" className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-800">
-        <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
-      </Link>
-      <div className="mb-4 px-1">
-        <h1 className="text-xl font-bold tracking-tight text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>Remind to log today</h1>
-        <p className="mt-0.5 text-xs text-stone-500">
-          {list.length} onboarded {list.length === 1 ? 'student hasn’t' : 'students haven’t'} filled today’s log yet · tap to send a WhatsApp reminder
-          {noPhone > 0 ? ` · ${noPhone} have no phone on file` : ''}
-        </p>
-      </div>
-
+    <WorkspaceShell
+      workspaceId="sales"
+      activeHref="/admin/reminders"
+      title="Remind to log today"
+      subtitle={`${list.length} onboarded ${list.length === 1 ? 'student hasn’t' : 'students haven’t'} filled today’s log yet · tap to send a WhatsApp reminder${noPhone > 0 ? ` · ${noPhone} have no phone on file` : ''}`}
+    >
       {list.length === 0 ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-sm font-semibold text-emerald-800">
           Everyone has logged today. 🎉
@@ -100,6 +93,6 @@ export default async function AdminRemindersPage() {
           ))}
         </div>
       )}
-    </div>
+    </WorkspaceShell>
   );
 }

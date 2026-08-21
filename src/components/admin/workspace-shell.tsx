@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { WORKSPACES } from '@/lib/admin-workspaces';
 
 // One page frame for every admin screen: title, purpose, and the workspace's
@@ -12,7 +11,9 @@ import { WORKSPACES } from '@/lib/admin-workspaces';
 
 export function WorkspaceShell({
   workspaceId,
-  activeHref,
+  // activeHref stays in the API — callers name the tab they are — but the tab
+  // row itself moved to AdminNav (21 Aug) so a page can no longer orphan its
+  // siblings by forgetting the shell. The nav highlights from the pathname.
   title,
   subtitle,
   children,
@@ -36,41 +37,6 @@ export function WorkspaceShell({
         </h1>
         {subtitle && <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>}
       </div>
-
-      {ws && ws.tabs.length > 1 && (
-        <nav className="-mx-1 mb-4 flex gap-1 overflow-x-auto pb-1">
-          {ws.tabs.map((t) => {
-            // A tab with no data source is shown, disabled, with the reason on
-            // hover. Hiding it would let the gap be forgotten; faking a number
-            // would be worse than either.
-            if (t.status === 'planned') {
-              return (
-                <span
-                  key={t.label}
-                  title={t.blockedOn}
-                  className="shrink-0 cursor-help rounded-lg border border-dashed border-stone-200 px-2.5 py-1.5 text-[11px] font-semibold text-stone-300"
-                >
-                  {t.label}
-                </span>
-              );
-            }
-            const active = t.href === activeHref;
-            return (
-              <Link
-                key={t.href}
-                href={t.href!}
-                className={
-                  active
-                    ? 'shrink-0 rounded-lg bg-stone-900 px-2.5 py-1.5 text-[11px] font-semibold text-white'
-                    : 'shrink-0 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 hover:border-stone-400 hover:text-stone-900'
-                }
-              >
-                {t.label}
-              </Link>
-            );
-          })}
-        </nav>
-      )}
 
       {children}
     </div>

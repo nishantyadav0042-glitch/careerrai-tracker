@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
-import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WorkspaceShell } from '@/components/admin/workspace-shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales performance · CareerRai' };
@@ -104,15 +104,12 @@ export default async function SalesPerformancePage() {
   const working = port.length - won - notInterested;
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <div className="mx-auto max-w-2xl px-4 py-6 pb-24">
-        <Link href="/admin" className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-800">
-          <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
-        </Link>
-        <div className="mb-3">
-          <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>{repName} — portfolio</h1>
-          <p className="mt-0.5 text-xs text-stone-500">Only the leads {repName.split(' ')[0]} owns and works — her book, her numbers.</p>
-        </div>
+    <WorkspaceShell
+      workspaceId="sales"
+      activeHref="/admin/sales-performance"
+      title={`${repName} — portfolio`}
+      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — her book, her numbers.`}
+    >
 
         {/* Her portfolio summary */}
         <div className="rounded-2xl border border-teal-700 bg-teal-700 p-4 text-white">
@@ -157,7 +154,6 @@ export default async function SalesPerformancePage() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </WorkspaceShell>
   );
 }

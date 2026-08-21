@@ -60,6 +60,49 @@ export function AdminNav() {
             );
           })}
         </nav>
+
+        {/* The workspace's own destinations. This row used to live only in
+            WorkspaceShell, so a workspace whose LANDING page did not use the
+            shell orphaned all of its siblings — which is exactly how the whole
+            sales CRM became unreachable while sitting in the registry, and how
+            Command, Engagement and Analytics silently did the same. Rendering
+            it here makes reachability a property of the layout instead of
+            something each page has to remember. */}
+        {active && active.tabs.filter((t) => t.status !== 'planned').length > 1 && (
+          <nav className="-mx-1 flex gap-1 overflow-x-auto pb-2 pt-1.5">
+            {active.tabs.map((t) => {
+              // A tab with no data source is shown, disabled, with the reason
+              // on hover: hiding it lets the gap be forgotten, faking a number
+              // is worse than either.
+              if (t.status === 'planned') {
+                return (
+                  <span
+                    key={t.label}
+                    title={t.blockedOn}
+                    className="shrink-0 cursor-help rounded-lg border border-dashed border-stone-200 px-2.5 py-1 text-[11px] font-semibold text-stone-300"
+                  >
+                    {t.label}
+                  </span>
+                );
+              }
+              const on = pathname === t.href;
+              return (
+                <Link
+                  key={t.href}
+                  href={t.href!}
+                  className={cn(
+                    'shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                    on
+                      ? 'bg-stone-900 text-white'
+                      : 'border border-stone-200 bg-white text-stone-600 hover:border-stone-400 hover:text-stone-900',
+                  )}
+                >
+                  {t.label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
       </div>
     </div>
   );

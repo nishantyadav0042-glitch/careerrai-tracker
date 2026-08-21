@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin-auth';
-import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildCallQueue } from '@/lib/call-queue';
 import { CallDeck } from '@/components/call-deck';
+import { WorkspaceShell, AdminEmpty, AdminStat } from '@/components/admin/workspace-shell';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales — Calls · CareerRai' };
@@ -27,37 +26,45 @@ function istHour(): number {
 export default async function AdminSalesPage() {
   const { admin } = await requireAdmin();
 
-  const { queue, connectedToday, dueNow } = await buildCallQueue(admin);
+  const { queue, connectedToday, dueNow, totalOpen } = await buildCallQueue(admin);
   const primeTime = istHour() >= 18 && istHour() < 21;
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <div className="mx-auto max-w-xl px-4 py-6 pb-24">
-        <Link href="/admin" className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-800">
-          <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
-        </Link>
-
-        <div className="rounded-2xl border border-teal-700 bg-teal-700 p-5 text-white">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-teal-200">Sales — the calling queue</p>
-          <h1 className="mt-1 text-2xl font-bold">{connectedToday > 0 ? `${connectedToday} connected today` : 'Today’s calls'}</h1>
-          <p className="mt-1 text-sm text-teal-100">
-            {dueNow > 0 ? `${dueNow} callbacks/retries due now · ` : ''}{queue.length} in the queue, highest priority first — the same list the rep works.
-          </p>
-          <div className={cn('mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold', primeTime ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-teal-100')}>
-            {primeTime ? '🟢 Prime calling hours (6–9 PM) — best pickup.' : '⏰ Best pickup is 6–9 PM. Due callbacks and hottest leads first.'}
-          </div>
-        </div>
-
-        <div className="mt-4">
-          {queue.length === 0 ? (
-            <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center text-sm text-stone-500">
-              No one to call right now. Callbacks and fresh leads roll in through the day.
-            </div>
-          ) : (
-            <CallDeck queue={queue} />
-          )}
+    <WorkspaceShell
+      workspaceId="sales"
+      activeHref="/admin/sales"
+      title="Call queue"
+      subtitle="The same list the rep works — highest priority first."
+    >
+      <div className="rounded-2xl border border-teal-700 bg-teal-700 p-5 text-white">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-teal-200">Sales — the calling queue</p>
+        <h1 className="mt-1 text-2xl font-bold">{connectedToday > 0 ? `${connectedToday} connected today` : 'Today\u2019s calls'}</h1>
+        <p className="mt-1 text-sm text-teal-100">
+          {dueNow > 0 ? `${dueNow} callbacks/retries due now \u00b7 ` : ''}{queue.length} in the queue, highest priority first — the same list the rep works.
+        </p>
+        <div className={cn('mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold', primeTime ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-teal-100')}>
+          {primeTime ? '\ud83d\udfe2 Prime calling hours (6\u20139 PM) — best pickup.' : '\u23f0 Best pickup is 6\u20139 PM. Due callbacks and hottest leads first.'}
         </div>
       </div>
-    </div>
+
+      {/* The admin frame: the operation's shape, from the SAME queue build the
+          rep works. Every number here is one buildCallQueue call — there is no
+          second counting path that could disagree with the list below it. */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <AdminStat label="Due now" value={dueNow} hint="Callbacks + retries" tone={dueNow > 0 ? 'warn' : 'plain'} />
+        <AdminStat label="In today's queue" value={queue.length} hint="Capped rotation" />
+        <AdminStat label="Open leads" value={totalOpen} hint="Not converted/closed" />
+      </div>
+
+      <div className="mt-4">
+        {queue.length === 0 ? (
+          <AdminEmpty>
+            No one to call right now. Callbacks and fresh leads roll in through the day.
+          </AdminEmpty>
+        ) : (
+          <CallDeck queue={queue} />
+        )}
+      </div>
+    </WorkspaceShell>
   );
 }
