@@ -25,7 +25,6 @@ vi.mock('@/lib/daily-pick-runner', () => ({ promoteDailyPick: vi.fn(async () => 
 
 import { POST as votePost } from '@/app/api/community/vote/route';
 import { POST as reportPost } from '@/app/api/community/report/route';
-import { GET as votingGet } from '@/app/api/community/voting/route';
 import { GET as insightsGet } from '@/app/api/community/insights/route';
 
 type Res = { data: unknown; error: { message: string; code?: string } | null; count?: number | null };
@@ -143,47 +142,6 @@ describe('report: a safety report is never silently discarded', () => {
   });
 });
 
-// ── BALLOT (voting) ─────────────────────────────────────────────────────────
-
-describe('ballot: a DB failure is never an empty Daily Pick', () => {
-  it('a failed shelf read is a retryable 503, not {questions: []}', async () => {
-    currentAdmin = makeAdmin({
-      'student_submissions.select': () => ({ data: null, error: { message: 'down' } }),
-    });
-    const res = await votingGet();
-    expect(res.status).toBe(503);
-    expect((await res.json()).code).toBe('BALLOT_UNAVAILABLE');
-  });
-
-  it('a failed my-votes read does not re-offer everything the student judged', async () => {
-    currentAdmin = makeAdmin({
-      'student_submissions.select': () => ({ data: [], error: null }),
-      'submission_votes.select': () => ({ data: null, error: { message: 'down' } }),
-    });
-    const res = await votingGet();
-    expect(res.status).toBe(503);
-  });
-
-  it('a section-less live question is STILL ballot-eligible (stable pseudo-section)', async () => {
-    const sub = (id: string, section: string | null) => ({
-      id, kind: 'question', topic: null, payload: { text: `q-${id}`, section },
-      image_path: null, display_name: 'Aryan', curated: false, student_id: 'someone-else', status: 'live',
-    });
-    // Only section-less questions live — before the fix, communityOpen said
-    // yes while the ballot rendered nothing, forever.
-    currentAdmin = makeAdmin({
-      'student_submissions.select': (call) => call === 1
-        ? { data: [sub('a', null), sub('b', null), sub('c', null)], error: null } // shelf
-        : { data: [], error: null },                                             // featured today
-      'submission_votes.select': () => ({ data: [], error: null }),
-    });
-    const res = await votingGet();
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.questions.length).toBeGreaterThan(0);
-  });
-});
-
 // ── FEED (insights) ─────────────────────────────────────────────────────────
 
 describe('feed: a DB failure is never "Be the one who adds something"', () => {
@@ -235,10 +193,12 @@ describe('feed: a DB failure is never "Be the one who adds something"', () => {
         : { data: [], error: null },
       'submission_votes.select': () => ({ data: [], error: null }),
     });
+    // Response shape is now dailyPick.{question,tip} — one authority serving
+    // both the Daily Pick card and the feed.
     const res = await insightsGet();
-    const { topPick } = await res.json();
-    expect(topPick).not.toBeNull();
-    expect(topPick.id).toBe('old-featured');
+    const { dailyPick } = await res.json();
+    expect(dailyPick.question).not.toBeNull();
+    expect(dailyPick.question.id).toBe('old-featured');
   });
 });
 
@@ -275,5 +235,75 @@ describe('rotation: the same student, the same day, the same pick', () => {
     try { status = (await (await import('@/app/api/community/daily-slot/route')).GET()).status; }
     catch { status = 500; }
     expect(status).not.toBe(200);
+  });
+});
+
+// ── ONE SURFACE: the same submission can never render twice ─────────────────
+
+describe('deduplication is server-side, so no client can drift', () => {
+  const mk = (id: string, kind: string, featured: string | null) => ({
+    id, kind, payload: { text: id, section: 'QA' }, image_path: null,
+    display_name: 'Aryan', student_id: 'someone-else',
+    created_at: '2026-08-20', featured_on: featured, status: 'live',
+  });
+
+  it("today's pick is removed from the feed — a student never meets it twice", async () => {
+    const today = '2026-08-21';
+    currentAdmin = makeAdmin({
+      'student_submissions.select': (call) =>
+        call === 1 ? { data: [mk('picked-q', 'question', today), mk('other', 'tip', null)], error: null }
+        : call === 2 ? { data: [mk('picked-q', 'question', today)], error: null }
+        : { data: [], error: null },
+      'submission_votes.select': () => ({ data: [], error: null }),
+    });
+    const json = await (await insightsGet()).json();
+    expect(json.dailyPick.question.id).toBe('picked-q');
+    const feedIds = json.feed.map((f: { id: string }) => f.id);
+    expect(feedIds).not.toContain('picked-q');
+    expect(feedIds).toContain('other');
+  });
+
+  it("today's TIP is removed from the feed too", async () => {
+    const today = '2026-08-21';
+    currentAdmin = makeAdmin({
+      'student_submissions.select': (call) =>
+        call === 1 ? { data: [mk('picked-t', 'tip', today), mk('other', 'tip', null)], error: null }
+        : call === 2 ? { data: [mk('picked-t', 'tip', today)], error: null }
+        : { data: [], error: null },
+      'submission_votes.select': () => ({ data: [], error: null }),
+    });
+    const json = await (await insightsGet()).json();
+    expect(json.dailyPick.tip.id).toBe('picked-t');
+    expect(json.feed.map((f: { id: string }) => f.id)).not.toContain('picked-t');
+  });
+
+  it('no submission id appears more than once across the whole surface', async () => {
+    const today = '2026-08-21';
+    currentAdmin = makeAdmin({
+      'student_submissions.select': (call) =>
+        call === 1 ? { data: [mk('q', 'question', today), mk('t', 'tip', today), mk('a', 'tip', null), mk('b', 'question', null)], error: null }
+        : call === 2 ? { data: [mk('q', 'question', today), mk('t', 'tip', today)], error: null }
+        : { data: [], error: null },
+      'submission_votes.select': () => ({ data: [], error: null }),
+    });
+    const json = await (await insightsGet()).json();
+    const all = [
+      json.dailyPick.question?.id, json.dailyPick.tip?.id,
+      ...json.feed.map((f: { id: string }) => f.id),
+    ].filter(Boolean);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('the retired ballot endpoint is gone — no second selection universe', async () => {
+    const { existsSync } = await import('node:fs');
+    expect(existsSync('src/app/api/community/voting/route.ts')).toBe(false);
+  });
+
+  it('the vote contract is one shape: up / down / null', async () => {
+    const route = (await import('node:fs')).readFileSync('src/app/api/community/vote/route.ts', 'utf8');
+    // The ballot's `helpful: boolean` shape let one surface set a vote it
+    // could never change — two rules for one submission.
+    expect(route).not.toContain('helpful }');
+    expect(route).toMatch(/rawDir === 'up' \|\| rawDir === 'down' \|\| rawDir === null/);
   });
 });

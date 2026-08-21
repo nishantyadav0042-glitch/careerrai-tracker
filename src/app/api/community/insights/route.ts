@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLogDateString } from '@/lib/streak-utils';
 import { orderFeed, voteDisplay, FEED_PAGE_SIZE, type InsightRow, netScore } from '@/lib/os/insight-feed';
+import { promoteDailyPick } from '@/lib/daily-pick-runner';
+import { VOTE_PROMPT } from '@/lib/community-pipeline';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 20;
@@ -34,6 +36,13 @@ export async function GET() {
 
   const admin = createAdminClient();
   const day = getLogDateString();
+
+  // The lazy promotion MOVED here from the retired ballot route (21 Aug
+  // consolidation). Its reason is unchanged and still load-bearing: a cron
+  // that silently stops must never leave the surface empty. promoteDailyPick
+  // is idempotent — once today's slot is stamped it returns without writing,
+  // so a late vote can never swap the winner mid-day.
+  try { await promoteDailyPick(admin); } catch (e) { console.error('[community/insights] promote failed', e); }
 
   const [subsR, votesR, myVotesR, featuredR, myOwnR] = await Promise.all([
     admin.from('student_submissions')
@@ -130,15 +139,18 @@ export async function GET() {
       displayName: r.displayName, imageUrl: r.imageUrl,
       helpfulPct: d.helpfulPct, canVote: d.canVote, isMine: r.isMine,
       myVote: myVoteById.get(r.id) ?? null,
+      prompt: VOTE_PROMPT[r.kind],
     };
   };
 
-  // ONE Today's Pick, not two (founder spec). promoteDailyPick stamps both a
-  // question and a tip; the screen shows a single earned item, so a question is
-  // preferred — it asks something of the reader — and the tip is the fallback.
-  // Deliberately NOT a second pipeline: this reads the same featured_on stamp
-  // the existing promoter already writes.
-  const pick = featured.find((r) => r.kind === 'question') ?? featured.find((r) => r.kind === 'tip');
+  // ONE authority for "today's pick" (21 Aug consolidation). Both featured
+  // kinds are returned from HERE, and the Daily Pick card renders them — the
+  // UI no longer selects the day's item through a second endpoint with its
+  // own universe. featured_on means placement; it does not create a second
+  // content system.
+  const pickQuestion = featured.find((r) => r.kind === 'question');
+  const pickTip = featured.find((r) => r.kind === 'tip');
+  const pickIds = new Set([pickQuestion?.id, pickTip?.id].filter(Boolean) as string[]);
 
   // The Top tab was a lie (hardening sprint, 21 Aug): the client sorted on a
   // delta map that is empty on load, so "Top" rendered the New order. The
@@ -147,7 +159,10 @@ export async function GET() {
     const s2 = shape(r);
     return s2 ? { ...s2, netScore: netScore(r) } : null;
   };
-  const feed = orderFeed(all.filter((r) => r.id !== pick?.id))
+  // DEDUPLICATION IS SERVER-SIDE, so no client can drift back into rendering
+  // the same submission twice. Today's pick lives in the Daily Pick card; the
+  // feed is everything else.
+  const feed = orderFeed(all.filter((r) => !pickIds.has(r.id)))
     .slice(0, FEED_PAGE_SIZE * 5) // room for "See more" paging client-side
     .map(withScore);
 
@@ -166,5 +181,18 @@ export async function GET() {
       }
     : null;
 
-  return NextResponse.json({ topPick: shape(pick), feed, pageSize: FEED_PAGE_SIZE, myShare });
+  // A surface that can go quiet must announce itself (12 Aug: 12 students
+  // opened Daily Pick, 0 voted, and telling "got nothing" apart from "chose
+  // not to" took an hour of SQL). Moved here from the retired ballot route —
+  // this is now the one place that knows a student was handed nothing.
+  if (!pickQuestion && !pickTip && feed.length === 0) {
+    console.warn(`[community/insights] EMPTY surface student=${user.id} day=${day} livePool=${all.length}`);
+  }
+
+  return NextResponse.json({
+    dailyPick: { question: shape(pickQuestion), tip: shape(pickTip) },
+    feed,
+    pageSize: FEED_PAGE_SIZE,
+    myShare,
+  });
 }

@@ -24,13 +24,13 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const { submission_id: sid, dir: rawDir, helpful } = body as {
-    submission_id?: unknown; dir?: unknown; helpful?: unknown;
-  };
+  const { submission_id: sid, dir: rawDir } = body as { submission_id?: unknown; dir?: unknown };
+  // ONE contract (21 Aug consolidation): up / down / null. The `helpful:
+  // boolean` shape existed only for the retired ballot card, which could set
+  // a vote but never change or remove one — so the same submission obeyed
+  // two different rules depending on which of the two surfaces you tapped.
   const dir: 'up' | 'down' | null | undefined =
-    rawDir === 'up' || rawDir === 'down' || rawDir === null ? rawDir
-    : typeof helpful === 'boolean' ? (helpful ? 'up' : 'down')
-    : undefined;
+    rawDir === 'up' || rawDir === 'down' || rawDir === null ? rawDir : undefined;
   if (typeof sid !== 'string' || dir === undefined) {
     return NextResponse.json({ error: 'submission_id and dir (up/down/null) required' }, { status: 400 });
   }

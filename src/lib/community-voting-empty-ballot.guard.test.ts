@@ -13,17 +13,20 @@ import { readFileSync } from 'node:fs';
 // quiet must announce itself, so the next thin day is a log line, not an
 // investigation.
 
-describe('the voting route announces an empty ballot instead of staying silent', () => {
-  it('logs when an authenticated student is handed nothing to vote on', () => {
-    const route = readFileSync('src/app/api/community/voting/route.ts', 'utf8');
-    expect(route).toContain('EMPTY ballot');
-    // Must fire on the actual empty case: no tip AND no questions.
-    expect(route).toMatch(/!tip && questions\.length === 0/);
+// MOVED 21 Aug: the ballot route was retired in the Daily Pick consolidation
+// (it was a second selection authority over the same pool). The IDEA is
+// unchanged and now lives where the one surface is assembled.
+describe('the community surface announces an empty state instead of staying silent', () => {
+  it('logs when an authenticated student is handed nothing at all', () => {
+    const route = readFileSync('src/app/api/community/insights/route.ts', 'utf8');
+    expect(route).toContain('EMPTY surface');
+    // Must fire on the ACTUAL empty case: no pick of either kind, no feed.
+    expect(route).toMatch(/!pickQuestion && !pickTip && feed\.length === 0/);
   });
 
   it('the log carries enough to diagnose without a database query', () => {
-    const route = readFileSync('src/app/api/community/voting/route.ts', 'utf8');
+    const route = readFileSync('src/app/api/community/insights/route.ts', 'utf8');
     expect(route).toContain('student=${user.id}');
-    expect(route).toContain('eligiblePool=${eligible.length}');
+    expect(route).toContain('livePool=${all.length}');
   });
 });

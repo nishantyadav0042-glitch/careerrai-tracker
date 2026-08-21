@@ -80,8 +80,13 @@ describe('no student is turned into a superstar', () => {
   });
 
   it('the content still leads the screen', () => {
+    // Today's Pick moved to the canonical Daily Pick card (21 Aug): it used to
+    // render HERE as well, from the same featured_on stamp, so a student met
+    // the same question twice on one screen. The feed keeps its own label.
     const s = src();
-    expect(s).toContain("<SectionLabel>Today&apos;s Pick</SectionLabel>");
+    expect(s).not.toContain("<SectionLabel>Today&apos;s Pick</SectionLabel>");
     expect(s).toContain('<SectionLabel>Student Insights</SectionLabel>');
+    const card = readFileSync('src/components/community-vote-card.tsx', 'utf8');
+    expect(card).toContain("Today&apos;s Pick");
   });
 });

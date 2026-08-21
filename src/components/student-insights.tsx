@@ -46,8 +46,9 @@ interface Item {
 }
 
 interface Payload {
-  /** ONE earned item, selected from the same contribution pool as the feed. */
-  topPick: Item | null;
+  /** The feed ONLY. Today's pick is rendered by the Daily Pick card above,
+   *  from the same endpoint, and the server removes it from this list — a
+   *  student must never meet the same submission twice on one screen. */
   feed: Item[];
   pageSize?: number;
   /** The caller's own latest share — impact, not status. Nobody else's. */
@@ -144,8 +145,8 @@ export function StudentInsights() {
   }
   if (!data) return null;
 
-  const { topPick, feed } = data;
-  if (!topPick && feed.length === 0) return <EmptyState />;
+  const { feed } = data;
+  if (feed.length === 0 && !data.myShare) return <EmptyState />;
 
   const liveVote = (i: Item) => (myVotes[i.id] !== undefined ? myVotes[i.id] : i.myVote);
   // Ranking still runs on the real score — it is just never printed. The
@@ -168,15 +169,6 @@ export function StudentInsights() {
           board. What replaces it is nothing at all: the content is the
           surface, and the vote count on their own card is the only signal
           a contributor needs. */}
-      {topPick && (
-        <section>
-          <SectionLabel>Today&apos;s Pick</SectionLabel>
-          <div className="mt-2">
-            <Card item={topPick} featured myVote={liveVote(topPick)} onVote={vote} busy={busy} />
-          </div>
-        </section>
-      )}
-
       {feed.length > 0 && (
         <section>
           <div className="flex items-end justify-between">

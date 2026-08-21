@@ -33,7 +33,6 @@ const MIGRATION = 'supabase/migrations/20260820e_community_one_live_pool.sql';
 
 const READ_PATHS = [
   'src/app/api/community/insights/route.ts',
-  'src/app/api/community/voting/route.ts',
 ];
 
 describe('one vocabulary, and the database enforces it', () => {
