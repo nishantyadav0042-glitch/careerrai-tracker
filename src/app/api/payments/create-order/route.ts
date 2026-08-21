@@ -6,7 +6,7 @@ import { PLANS, isPlanId, addMonthsClamped } from '@/lib/plans';
 import { createRazorpayOrder } from '@/lib/razorpay';
 import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
-import { pickUpgradeCredit } from '@/lib/session-credit';
+import { pickUpgradeCredit, readUpgradeCredits } from '@/lib/session-credit';
 import { normalizeIndianPhone } from '@/lib/phone';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { taxForPlan } from '@/lib/gst';
@@ -34,11 +34,22 @@ export async function POST(request: NextRequest) {
     // The credit row is marked spent only when this payment activates
     // (lib/activate-payment), never here — an abandoned checkout must not
     // burn the student's credit.
-    const { data: creditRows } = await admin
-      .from('session_credits')
-      .select('id, created_at, status, amount_paise, credited_to_payment_id')
-      .eq('student_id', user.id);
-    const credit = pickUpgradeCredit((creditRows ?? []) as never[]);
+    //
+    // HARD STOP on a failed read (founder, 21 Aug): if we cannot establish
+    // whether this student owns a credit, we do not create an order at all.
+    // Creating one would commit a Razorpay transaction on an unknown pricing
+    // entitlement — "assume no credit" here is not a fallback, it is charging
+    // a paying student Rs 299 extra. UNKNOWN -> no order -> retryable 503.
+    let creditRows;
+    try {
+      creditRows = await readUpgradeCredits(admin, user.id);
+    } catch {
+      return NextResponse.json(
+        { error: 'Could not check your session credit — please try again in a moment.', code: 'CREDIT_READ_FAILED' },
+        { status: 503 },
+      );
+    }
+    const credit = pickUpgradeCredit(creditRows as never[]);
     const creditPaise = credit ? Math.min(credit.paise, price.finalPaise) : 0;
     const effectivePaise = price.finalPaise - creditPaise;
     const discountLabel = creditPaise > 0

@@ -204,6 +204,43 @@ export const SPECIALITY_LABEL: Record<Speciality, string> = {
  * against one plan is a discount we never agreed to. This is what turns the
  * ₹299 from a cheaper substitute into a low-risk way to find out.
  */
+/**
+ * Read a student's session credits for the upgrade discount — or THROW.
+ *
+ * BOUNDARY 2, change 1 (founder GO, 21 Aug). The old shape was
+ * `const { data: creditRows } = await ...` with the error never inspected:
+ * one failed read and `creditRows` was null, pickUpgradeCredit saw an empty
+ * list, and a student who had PAID Rs 299 was silently charged the full
+ * plan price. Infrastructure failure became "you have no credit", and
+ * because the amount goes into the Razorpay order, the wrong answer is a
+ * committed financial transaction — not a display bug a refresh can fix.
+ *
+ * Same contract as auth's readRole: retry once so a blip stays invisible,
+ * then throw. UNKNOWN is the caller's problem to surface loudly; it is
+ * never an answer about the student's money. Founder ruling: an order may
+ * not be created while the credit state is unknown.
+ */
+export async function readUpgradeCredits(
+  // Same loose client type the rest of the payment libs use — the callers
+  // pass either the real service-role client or a test fake.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  studentId: string,
+): Promise<{ id: string; created_at: string; status: string; amount_paise: number | null; credited_to_payment_id: string | null }[]> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from('session_credits')
+      .select('id, created_at, status, amount_paise, credited_to_payment_id')
+      .eq('student_id', studentId);
+    if (!error) return (data ?? []) as Awaited<ReturnType<typeof readUpgradeCredits>>;
+    if (attempt === 1) {
+      console.error('[readUpgradeCredits] read failed twice:', error.message);
+      throw new Error('Could not read session credits');
+    }
+  }
+  return [];
+}
+
 export function pickUpgradeCredit(
   credits: readonly { id: string; created_at: string; status: CreditStatus; amount_paise: number; credited_to_payment_id: string | null }[],
   now: Date = new Date(),
