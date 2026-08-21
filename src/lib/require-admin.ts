@@ -14,7 +14,11 @@ export async function isRequestAdmin(): Promise<boolean> {
   const user = await getAuthUser();
   if (!user) return false;
   const admin = createAdminClient();
-  const { data } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  const { data, error } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  // A failed read is not a "no" — but this helper returns a boolean, so the
+  // safe answer here is false. Callers that must distinguish the two use
+  // requireAdminCtx below, which reports a 503 instead of a 403.
+  if (error) console.error('[isRequestAdmin] role read failed:', error.message);
   return data?.role === 'admin';
 }
 
@@ -35,7 +39,14 @@ export async function requireAdminCtx(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const admin = createAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  const { data: profile, error } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  // 503, not 403 (21 Aug). A profiles read that FAILED tells us nothing about
+  // this user's rights; answering 403 would state as fact something we do not
+  // know, and on a page gate the same mistake logs a real admin out.
+  if (error) {
+    console.error('[requireAdminCtx] role read failed:', error.message);
+    return { error: NextResponse.json({ error: 'Could not verify access — try again.' }, { status: 503 }) };
+  }
   if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   return { admin, userId: user.id };
 }
