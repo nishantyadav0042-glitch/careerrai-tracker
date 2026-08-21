@@ -61,6 +61,9 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
 
   async function submit() {
     setBusy(true); setError(null);
+    // The student pressed Send. Everything after this is OUR problem, and any
+    // outcome other than a submission is a defect until proven otherwise.
+    track('community_share_attempted', { mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text' });
     try {
       const body = {
         text: questionText.trim() || undefined,
@@ -83,7 +86,13 @@ export function CommunitySubmit({ onClose }: { onClose: () => void }) {
         mode: image && questionText.trim() ? 'both' : image ? 'image' : 'text',
       });
       setSent(json.message as string);
-    } catch { setError('Could not send. Please try again.'); }
+    } catch (e) {
+      // Previously silent: a network drop or a runtime throw set an error on
+      // screen and left no trace, so an attempt that died here was
+      // indistinguishable from a student who never pressed Send.
+      track('community_share_failed', { reason: e instanceof Error ? e.name : 'unknown' });
+      setError('Could not send. Please try again.');
+    }
     setBusy(false);
   }
 

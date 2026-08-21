@@ -260,7 +260,14 @@ export type EventName =
   // Impressions of the daily rotation's winner — without this the next "are
   // students really picking anything?" question is unanswerable again.
   | 'top_pick_shown'
-  | 'community_share_opened' | 'community_share_blocked'
+  // The Share funnel's three rungs. 'opened' alone could not tell a student
+  // who looked and changed their mind from one whose send never completed —
+  // 11 students opened the sheet and 0 submitted, and the difference between
+  // "not compelling" and "broken" was unobservable. 'attempted' fires the
+  // moment they press Send; 'failed' fires when the request never produced a
+  // server answer at all (network/runtime), which used to be silent.
+  | 'community_share_opened' | 'community_share_attempted'
+  | 'community_share_blocked' | 'community_share_failed'
   | 'content_reported'
   | 'channel_prompt_shown' | 'channel_join_click' | 'channel_joined'
   | 'channel_referred'
