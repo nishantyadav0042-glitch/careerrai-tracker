@@ -49,14 +49,23 @@ async function activateSessionCredit(
   paymentId: string | null,
   source: ActivationSource,
 ): Promise<boolean> {
-  // Idempotent by the same guard the caller uses (status !== 'paid'), plus
-  // this: a second webhook delivery must never mint a second credit.
+  // A second delivery must never mint a second credit. This read USED to be
+  // the whole guard, and it is a read-then-write race: the webhook and the
+  // reconcile cron both read null and both insert. It happened on the very
+  // first real Rs 299 payment — two credits, 12 milliseconds apart, on one
+  // payment, each carrying a full Rs 299 mentor payout. The real guard is now
+  // the UNIQUE constraint on session_credits.payment_id; this read stays only
+  // to avoid a pointless insert attempt in the common case.
   const { data: existing } = await admin
     .from('session_credits').select('id').eq('payment_id', row.id).maybeSingle();
 
+  // paid_at is part of what "paid" MEANS — the subscription path has always
+  // stamped it (activate_payment RPC does `paid_at = now()`), and this path
+  // did not. Every Rs 299 payment therefore landed in the ledger as paid with
+  // no timestamp, which is the operations invariant that caught this.
   const { error: payErr } = await admin
     .from('student_payments')
-    .update({ status: 'paid', razorpay_payment_id: paymentId ?? null })
+    .update({ status: 'paid', paid_at: new Date().toISOString(), razorpay_payment_id: paymentId ?? null })
     .eq('id', row.id);
   if (payErr) {
     console.error(`[activate:${source}] session payment update failed:`, payErr.message);
@@ -72,7 +81,10 @@ async function activateSessionCredit(
       finding_kind: row.finding_kind ?? null,
       finding_evidence: row.finding_evidence ?? null,
     });
-    if (creditErr) {
+    // 23505 = the unique constraint fired, i.e. a concurrent delivery already
+    // minted this credit. That is SUCCESS, not failure: the entitlement the
+    // student paid for exists exactly once.
+    if (creditErr && creditErr.code !== '23505') {
       // The money arrived and the entitlement did not — the one failure here
       // that must be loud, because the student has paid for nothing.
       console.error(`[activate:${source}] SESSION CREDIT MINT FAILED`, creditErr.message);
