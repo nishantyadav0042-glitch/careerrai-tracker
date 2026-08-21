@@ -18,7 +18,6 @@ import { pushHealth } from '@/lib/push-state';
 import { OnboardingGate } from './onboarding/onboarding-gate';
 import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
-import { EvidenceAnnounce } from '@/components/evidence-announce';
 import { CrashReporter } from '@/components/crash-reporter';
 import { BuddyDemoTour } from '@/components/buddy-demo-tour';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
@@ -222,7 +221,17 @@ export default async function StudentLayout({ children }: { children: React.Reac
           first time, and the timetable ask owns the early-days slot. All
           three prompts share claimDailyModal, so at most one fires per day
           regardless. */}
-      {noBlockingModal && !showCoverageReview && !showTimetablePrompt && accountAgeDays > 2 && <EvidenceAnnounce />}
+      {/* EvidenceAnnounce removed 22 Aug. It told every student older than two
+          days: "New: log your correct answers — After you finish a topic, tell
+          us two numbers… Your progress then shows what you can actually score
+          on, not just what you've read." Its only button was "Got it", and
+          there was nowhere to go: the capture UI (evidence-capture.tsx) was
+          deleted on 14 Aug as an orphan — correctly, since nothing imported it
+          any more — while the announcement for it kept shipping.
+          We were advertising the one capability this product does not have, to
+          the students who most needed it. Zero real students have ever logged a
+          practice outcome; POST /api/evidence has no client caller at all.
+          The promise comes down until the capture goes back up. */}
       {showBuddyNudge && <DailyBuddyNudge fullName={profile?.full_name ?? undefined} />}
     </div>
   );
