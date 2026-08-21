@@ -54,3 +54,46 @@ export async function revokePremium(admin: SupabaseClient, studentId: string): P
     .eq('student_id', studentId)
     .eq('status', 'pending');
 }
+
+/**
+ * Read the premium/buddy state that gates the buddy surface — or THROW.
+ *
+ * BOUNDARY 2, change 2 (founder GO, 21 Aug). /student/buddy used to read
+ * this row with the error never inspected: one failed read and `profile`
+ * was null, isPremium(null) was false, and a PAYING student was shown the
+ * locked free experience with a "Rs 299 — book now" button. Infrastructure
+ * failure became "not premium" — the auth-gate disease on the paywall.
+ *
+ * Same contract as readRole and readUpgradeCredits: retry once so a blip
+ * stays invisible, then throw. UNKNOWN must surface as an error the student
+ * can retry, never as the locked page — a paywall shown to a paying student
+ * is, in the reconcile cron's own words, the worst bug this product can
+ * have. Deliberately NOT a generic entitlement abstraction: premium,
+ * credits and capacity share the error semantic, not a business primitive.
+ */
+export async function readPremiumProfile(
+  // Same loose client type the rest of the payment libs use.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (t: string) => any },
+  studentId: string,
+): Promise<{ full_name: string | null; buddy_id: string | null; is_premium: boolean | null }> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from('profiles')
+      .select('full_name, buddy_id, is_premium')
+      .eq('id', studentId)
+      .single();
+    if (!error) {
+      return {
+        full_name: data?.full_name ?? null,
+        buddy_id: data?.buddy_id ?? null,
+        is_premium: data?.is_premium ?? null,
+      };
+    }
+    if (attempt === 1) {
+      console.error('[readPremiumProfile] read failed twice:', error.message);
+      throw new Error('Could not load your membership state — please retry.');
+    }
+  }
+  throw new Error('unreachable');
+}

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/access';
+import { readPremiumProfile } from '@/lib/premium';
 import { BuddyConversionScreen } from '@/components/buddy/buddy-conversion-screen';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { loadStudentCase } from '@/lib/buddy-case-data';
@@ -30,11 +31,12 @@ export default async function BuddyPage({
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('full_name, buddy_id, is_premium')
-    .eq('id', user.id)
-    .single();
+  // Through the throwing primitive (Boundary 2, change 2). The old inline
+  // read ignored its error, so one flaky read rendered a PAYING student the
+  // locked page with a "Rs 299 — book now" button. UNKNOWN now surfaces as
+  // the error boundary — retryable and honest — and the locked experience
+  // below can only ever be reached by a premium answer we actually received.
+  const profile = await readPremiumProfile(admin, user.id);
 
   // Freemium (rebuilt 14 Aug, founder: "buddy screen is too much — keep only
   // the student's weakness, the buddy profile + why, and ₹299 book now").
