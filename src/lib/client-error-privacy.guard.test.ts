@@ -44,16 +44,21 @@ describe('the build identifier is a build identifier, nothing more', () => {
     expect(readDeploymentId(['https://x/y.js?dpl=dpl_ABC123'])).toBe('dpl_ABC123');
   });
 
-  it('a script URL carrying a token cannot smuggle it through', () => {
+  it('a script URL carrying a credential cannot smuggle it through', () => {
+    // The planted value is deliberately NOT shaped like a real provider token:
+    // an earlier version used a real Google OAuth token prefix and tripped
+    // the repo's own secret scanner — correct behaviour from the scanner, and
+    // an avoidable own-goal in a test. What is under test is the extractor's
+    // narrowness, and that is independent of which credential is planted.
     const out = readDeploymentId([
-      'https://x/y.js?token=SUPER_SECRET_VALUE&dpl=dpl_ABC123&access_token=ya29.SECRET',
+      'https://x/y.js?token=PLANTED_CREDENTIAL_VALUE&dpl=dpl_ABC123&session=PLANTED_SESSION_VALUE',
     ]);
     expect(out).toBe('dpl_ABC123');
-    expect(out).not.toContain('SECRET');
+    expect(out).not.toContain('PLANTED');
   });
 
   it('no deployment stamp yields null rather than an arbitrary URL fragment', () => {
-    expect(readDeploymentId(['https://x/y.js?token=SUPER_SECRET_VALUE'])).toBeNull();
+    expect(readDeploymentId(['https://x/y.js?token=PLANTED_CREDENTIAL_VALUE'])).toBeNull();
   });
 });
 
