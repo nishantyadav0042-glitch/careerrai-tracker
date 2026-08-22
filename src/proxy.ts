@@ -7,7 +7,7 @@ import {
 } from '@/lib/store-build';
 import { storeFunnelEnabled } from '@/lib/feature-flags';
 import { describeSbCookies, sbRemovalNames } from '@/lib/auth-observation';
-import { classifyAuth, shouldRetryAuth, type AuthOutcome, type AuthErrorLike } from '@/lib/auth-failure';
+import { resolveAuthWithRetry, type AuthErrorLike } from '@/lib/auth-failure';
 
 // Alternate hosts that must land on the canonical domain. The old
 // careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
@@ -117,25 +117,10 @@ export async function proxy(request: NextRequest) {
   // in, and redirected to /login exactly the same way. A student whose session
   // was completely valid could be logged out by one bad second at the auth
   // service. Classify the failure instead of assuming it (lib/auth-failure).
-  let user: unknown = null;
-  let outcome: AuthOutcome;
-  try {
+  const { user, outcome } = await resolveAuthWithRetry(async () => {
     const res = await supabase.auth.getUser();
-    user = res.data.user;
-    outcome = classifyAuth(user, res.error as AuthErrorLike | null);
-  } catch (err) {
-    outcome = classifyAuth(null, err as AuthErrorLike);
-  }
-
-  if (shouldRetryAuth(outcome)) {
-    try {
-      const res = await supabase.auth.getUser();
-      user = res.data.user;
-      outcome = classifyAuth(user, res.error as AuthErrorLike | null);
-    } catch (err) {
-      outcome = classifyAuth(null, err as AuthErrorLike);
-    }
-  }
+    return { user: res.data.user, error: res.error as AuthErrorLike | null };
+  });
 
   // ── Track B instrumentation (founder GO, 21 Aug) — observation only ──────
   // Correlates a forced login with the auth-cookie state that produced it.

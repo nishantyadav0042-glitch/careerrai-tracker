@@ -8,14 +8,22 @@ import { readFileSync } from 'node:fs';
 const proxy = readFileSync('src/proxy.ts', 'utf8');
 
 describe('middleware decides on a classified outcome, not on a bare null user', () => {
-  it('classifies every getUser result instead of discarding the error', () => {
-    expect(proxy).toContain('classifyAuth(');
+  it('the getUser error reaches the decision instead of being dropped', () => {
+    // The invariant, not the helper's name: every getUser result must be fed
+    // through the classifier, and the error must travel with it. Pinning the
+    // symbol was wrong — the retry loop was later extracted and the guard
+    // failed on a refactor that changed nothing about the behaviour.
+    const call = proxy.slice(proxy.indexOf('supabase.auth.getUser()') - 400, proxy.indexOf('supabase.auth.getUser()') + 200);
+    expect(call).toMatch(/error:\s*res\.error/);
     // The old shape — a bare destructure with the error dropped on the floor.
     expect(proxy).not.toMatch(/\(\{\s*data:\s*\{\s*user\s*\}\s*\}\s*=\s*await\s+supabase\.auth\.getUser\(\)\)/);
   });
 
-  it('retries only what a retry can fix', () => {
-    expect(proxy).toContain('shouldRetryAuth(');
+  it('the outcome the middleware branches on comes from the shared resolver', () => {
+    // One authority for "is this student authenticated", shared with the unit
+    // tests that prove retry-success and retry-exhaustion.
+    expect(proxy).toMatch(/resolveAuthWithRetry\(/);
+    expect(proxy).toMatch(/const\s*\{\s*user,\s*outcome\s*\}/);
   });
 });
 

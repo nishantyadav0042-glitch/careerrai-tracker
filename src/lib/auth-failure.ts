@@ -65,3 +65,41 @@ export function classifyAuth(
 export function shouldRetryAuth(outcome: AuthOutcome): boolean {
   return outcome === 'infrastructure';
 }
+
+/** How many times the middleware will ask. One retry: enough to ride out a
+ *  blip, few enough that a genuinely dead auth service does not multiply
+ *  every protected request into a queue of doomed round-trips. */
+export const MAX_AUTH_ATTEMPTS = 2;
+
+export interface AuthLookup {
+  user: unknown;
+  error?: AuthErrorLike | null;
+}
+
+/** The retry loop, extracted so it can be tested without an edge runtime or a
+ *  live Supabase. Retries ONLY an undetermined outcome, because that is the
+ *  only case another attempt can improve: a rejected credential rejects again,
+ *  and a valid user is already the answer. */
+export async function resolveAuthWithRetry(
+  lookup: () => Promise<AuthLookup>,
+  maxAttempts: number = MAX_AUTH_ATTEMPTS,
+): Promise<{ user: unknown; outcome: AuthOutcome; attempts: number }> {
+  let user: unknown = null;
+  let outcome: AuthOutcome = 'no-session';
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    attempts += 1;
+    try {
+      const res = await lookup();
+      user = res.user;
+      outcome = classifyAuth(res.user, res.error);
+    } catch (err) {
+      user = null;
+      outcome = classifyAuth(null, err as AuthErrorLike);
+    }
+    if (!shouldRetryAuth(outcome)) break;
+  }
+
+  return { user, outcome, attempts };
+}
