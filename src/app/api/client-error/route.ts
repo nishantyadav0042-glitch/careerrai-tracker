@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fingerprintFor } from '@/lib/client-error-meta';
 
 export const maxDuration = 15;
 
@@ -47,13 +48,10 @@ export async function POST(request: NextRequest) {
     }
 
     const message = String(body.message).slice(0, MAX_MESSAGE);
-    // Fingerprint = what makes two reports "the same bug". Line/col are
-    // included because the same generic message from two places is two bugs.
-    const fingerprint = [
-      message.replace(/\d+/g, 'N').slice(0, 120),
-      String(body.file ?? '').split('/').pop() ?? '',
-      String(body.line ?? ''),
-    ].join('|');
+    // Fingerprint = what makes two reports "the same bug". One authority, in
+    // lib/client-error-meta, because the rule that blanked every digit here
+    // was silently folding React #418 and #419 into one group.
+    const fingerprint = fingerprintFor(message, body.file, body.line);
 
     await admin.from('client_errors').insert({
       student_id: user?.id ?? null,

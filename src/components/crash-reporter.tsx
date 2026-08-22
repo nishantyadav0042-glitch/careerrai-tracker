@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { detectInstallSource } from '@/lib/install-source';
+import { readDeploymentId } from '@/lib/client-error-meta';
 
 // Client crash reporting, and the install-source stamp.
 //
@@ -28,7 +29,17 @@ export function CrashReporter() {
       body: JSON.stringify({ source: installSource }),
     }).catch(() => {});
 
+    // Which build served this page. Every client_errors row collected before
+    // 22 Aug had app_version null, so there was no way to tell whether a fix
+    // had actually landed — the single thing an error report most needs to
+    // answer. Read from the script URLs Next already stamps, so no build
+    // configuration and no env var has to be kept in sync.
+    const appVersion = readDeploymentId(
+      Array.from(document.getElementsByTagName('script')).map((el) => el.src),
+    );
+
     const context = () => ({
+      appVersion,
       path: window.location.pathname,
       displayMode: window.matchMedia?.('(display-mode: standalone)').matches ? 'standalone' : 'browser',
       installSource,
