@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
 import { reachableFiles, isReachable, entrypoints } from './reachability';
 
 // ── The orphan guard ────────────────────────────────────────────────────────
@@ -40,48 +39,41 @@ describe('the Evidence Layer reaches a student', () => {
   }
 });
 
-// ── The ratchet ─────────────────────────────────────────────────────────────
+// ── One orphan authority, and it is not this file ───────────────────────────
 //
-// Four components are unreachable today. They are listed rather than deleted
-// because each is a decision someone still has to make — peer-pulse is even
-// marked "completed" on the board, which is exactly how this class of bug
-// hides. The list may SHRINK freely. It may never grow: a new orphan fails
-// this test on the commit that creates it, not 34 days later.
+// This guard originally carried its own KNOWN_ORPHANS list and its own ratchet.
+// That was a mistake made in the same commit that added it: the repo ALREADY
+// had an orphan ledger — orphan-surfaces.guard.test.ts, pinned 19 Aug, with
+// better annotations than mine — and I did not look before building a second
+// one. Two lists of the same four components, each free to drift from the
+// other, is precisely the duplicate-authority failure this codebase keeps
+// paying for, committed by a guard written to prevent it.
+//
+// The ledger lives THERE. What lives here is the thing that file does not do:
+// a walked import graph from real routed entrypoints, which follows
+// next/dynamic and catches a file that is imported but only by other orphans —
+// transitively unreachable rather than merely un-imported.
 
-const KNOWN_ORPHANS = [
-  'src/components/buddy/buddy-intervention-card.tsx',
-  'src/components/home/peer-pulse-card.tsx',
-  'src/components/sample-debrief.tsx',
-  'src/components/testimonials.tsx',
-];
-
-function componentFiles(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      if (name === '__fixtures__') continue;
-      componentFiles(full, out);
-    } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !/\.guard\./.test(name)) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
-describe('no NEW component may ship unreachable', () => {
-  it('every component is reachable, or is on the known-orphan ledger', () => {
-    const orphans = componentFiles(join(process.cwd(), 'src/components'))
-      .filter((f) => !reachable.has(f))
-      .map((f) => relative(process.cwd(), f).replace(/\\/g, '/'))
-      .sort();
-    const unexpected = orphans.filter((o) => !KNOWN_ORPHANS.includes(o));
-    expect(unexpected).toEqual([]);
+describe('the orphan ledger has exactly one home', () => {
+  it('this guard declares no competing list', () => {
+    // The invariant is that no orphan list is DECLARED here — not that the
+    // name is never mentioned. An earlier version asserted the bare token and
+    // failed on its own assertion string, which is the same pin-the-characters
+    // mistake the ledger comment above is about.
+    const self = readFileSync('src/lib/reachability.guard.test.ts', 'utf8');
+    expect(self).not.toMatch(/const\s+KNOWN_ORPHANS/);
+    expect(self).not.toMatch(/KNOWN_ORPHANS\s*[:=]\s*[[{]/);
   });
 
-  it('the ledger stays honest — a fixed orphan must be removed from the list', () => {
-    const stillOrphaned = KNOWN_ORPHANS.filter(
-      (o) => !reachable.has(join(process.cwd(), o)),
-    );
-    expect(stillOrphaned).toEqual(KNOWN_ORPHANS);
+  it('the ledger that does own it is present and populated', () => {
+    const ledger = readFileSync('src/lib/orphan-surfaces.guard.test.ts', 'utf8');
+    expect(ledger).toContain('KNOWN_ORPHANS');
+    expect(ledger).toMatch(/DECIDED 22 Aug/);
+  });
+
+  it('the retired surface is gone from the tree and from the ledger', () => {
+    expect(existsSync('src/components/sample-debrief.tsx')).toBe(false);
+    const ledger = readFileSync('src/lib/orphan-surfaces.guard.test.ts', 'utf8');
+    expect(ledger).not.toContain("'src/components/sample-debrief.tsx':");
   });
 });
