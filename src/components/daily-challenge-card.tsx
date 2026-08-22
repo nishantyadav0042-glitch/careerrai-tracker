@@ -7,7 +7,7 @@ import { track } from '@/lib/journey';
 import { shareChallenge } from '@/lib/share-challenge';
 import { reactionLine } from '@/lib/challenge-reaction';
 import { CommunitySubmit } from '@/components/community-submit';
-import { TARGET_SECONDS, type ChallengeView } from '@/lib/challenge';
+import { TARGET_SECONDS, radarLabel, isRadar, type ChallengeView } from '@/lib/challenge';
 
 // Today's Proof — one question per section, same for every student, live
 // from 8am. What makes ours different from every other daily question in CAT
@@ -337,6 +337,15 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
           </button>
         </div>
 
+        {/* A radar drill must announce itself. Handed four dense set
+            descriptions with no framing, a student reads it as a question they
+            failed to solve rather than a decision they were asked to make. */}
+        {radarLabel(challenge.kind) && (
+          <p className="mt-3 inline-block rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-indigo-700">
+            {radarLabel(challenge.kind)}
+          </p>
+        )}
+
         <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-stone-900">{challenge.question}</p>
 
         <div className="mt-4 space-y-2">
@@ -348,17 +357,17 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
               <button
                 key={i} type="button" disabled={busy || verdict != null}
                 onClick={() => void submit(i)}
-                className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-3 text-left text-[14px] font-medium transition-colors ${
+                className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-3 text-left text-[14px] font-medium transition-colors ${
                   isRight ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
                   : isWrongPick ? 'border-rose-400 bg-rose-50 text-rose-900'
                   : isPick ? 'border-stone-900 bg-stone-50 text-stone-900'
                   : 'border-stone-200 text-stone-800'
                 }`}
               >
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-stone-100 text-[11px] font-bold text-stone-600">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-stone-100 text-[11px] font-bold text-stone-600">
                   {String.fromCharCode(65 + i)}
                 </span>
-                {opt}
+                <span className="min-w-0 flex-1 whitespace-pre-line leading-snug">{opt}</span>
                 {isRight && <Check className="ml-auto h-4 w-4 shrink-0 text-emerald-600" />}
                 {isWrongPick && <X className="ml-auto h-4 w-4 shrink-0 text-rose-500" />}
               </button>
@@ -369,7 +378,9 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
         {verdict && (
           <div className="mt-4 space-y-3">
             <p className={`text-[15px] font-bold ${verdict.isCorrect ? 'text-emerald-700' : 'text-rose-600'}`}>
-              {verdict.isCorrect ? 'Correct.' : 'Not this time.'}
+              {verdict.isCorrect
+                ? (isRadar(challenge.kind) ? 'Good call.' : 'Correct.')
+                : (isRadar(challenge.kind) ? 'There was a better opening move.' : 'Not this time.')}
             </p>
 
             {/* The beat before the teaching. Founder, 13 Aug: the question is

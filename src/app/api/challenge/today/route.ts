@@ -23,7 +23,7 @@ export async function GET() {
 
   const { data: challenges, error: chalErr } = await admin
     .from('daily_challenges')
-    .select('id, section, topic, question, options, correct_index, difficulty, explanation, source, target_seconds')
+    .select('id, section, topic, kind, question, options, correct_index, difficulty, explanation, source, target_seconds')
     .eq('status', 'live').eq('live_date', date)
     .order('section');
   // Hardening sprint (21 Aug): a failed read used to render as "no question
@@ -82,6 +82,7 @@ export async function GET() {
       id: c.id as string,
       section: c.section as string,
       topic: c.topic as string,
+      kind: ((c.kind as string) ?? 'question') as ChallengeView['kind'],
       question: c.question as string,
       options: (c.options as string[]) ?? [],
       difficulty: c.difficulty as string,
