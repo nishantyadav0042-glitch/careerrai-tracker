@@ -36,22 +36,46 @@ import { join, relative } from 'node:path';
 const ROOT = process.cwd();
 
 // Pinned 19 Aug. Each entry states why it is parked rather than retired.
+//
+// 22 Aug — the founder asked for a decision on all four. Three stay parked with
+// their reasons sharpened below. ONE WAS RETIRED: sample-debrief.tsx is gone.
+// It was the only one of the four with nothing to salvage — no live engine
+// behind it (unlike peer-pulse), no encoded copy rule worth keeping (unlike
+// buddy-intervention), and no real data authority in front of it (unlike
+// testimonials). What it did have was three hardcoded error counts — six silly
+// mistakes, four time, two conceptual — presented to a student as a taste of a
+// real mock analysis. Since 22 Aug this codebase states measured facts and
+// labels everything else; a component whose entire content is invented numbers
+// dressed as findings is not something to keep warm for later. The
+// sample_debrief_viewed engagement event stays: it records history that really
+// happened.
 const KNOWN_ORPHANS: Record<string, string> = {
   'src/components/buddy/buddy-intervention-card.tsx':
     'Built with its guard in d9044e6 and never mounted on any route. The copy ' +
     'discipline it encodes (no invented mentor speciality, diagnosis before ' +
-    'person) is still the rule we want when a mentor surface does ship.',
+    'person) is still the rule we want when a mentor surface does ship. ' +
+    'DECIDED 22 Aug: stays parked, and the reason is now specific rather than ' +
+    'sentimental. The card opens with the student\'s own trajectory, which it ' +
+    'reads from buddy-case. We hold 24 mocks across 20 students, so for almost ' +
+    'everyone that opening line would be empty or thin — the card would ship ' +
+    'its weakest possible version on the exact surface that asks for money. ' +
+    'Revisit at the Radar/Evidence review, not before.',
   'src/components/home/peer-pulse-card.tsx':
     'Mounted on the tracker page, then removed by 253485e in favour of one ' +
     'daily surface. Its ENGINE is NOT dead: lib/os/peer-cohort.ts is live ' +
     'behind /api/community/daily-slot, so deleting this card must not take the ' +
-    'engine with it. Parked until the peer surface is wanted again.',
-  'src/components/sample-debrief.tsx':
-    'From FREEMIUM_IMPLEMENTATION_PLAN.md, never wired to a route. Kept with ' +
-    'the rest of that plan rather than retired piecemeal.',
+    'engine with it. DECIDED 22 Aug: stays parked. The one daily surface it ' +
+    'was removed for is now the Daily Pick and the Radar drills; remounting ' +
+    'this would re-fragment Home against the ruling that removed it, and ' +
+    'would be building at a moment the instruction is to observe.',
   'src/components/testimonials.tsx':
     'From the same freemium plan, never wired. Reads lib/testimonials.ts, ' +
-    'which holds real quotes and IS the no-invented-testimonials authority.',
+    'which holds real quotes and IS the no-invented-testimonials authority. ' +
+    'DECIDED 22 Aug: stays parked and is the cheapest of the four to keep — ' +
+    'it renders nothing without real quotes, so it cannot misfire. Mounting ' +
+    'it is a marketing decision with consent implications (a student agreed ' +
+    'to a quote, not to a placement) and carries the App Store 2.3.10 ' +
+    'constraint. Not an engineering call to make unilaterally.',
 };
 
 // Its own dedicated /api/student/peer-pulse route has no client caller either,
