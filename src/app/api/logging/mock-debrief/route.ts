@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { getLogDateString } from '@/lib/streak-utils';
 
+import { readMockEvidence, headlineEvidence, type MockEvidence } from '@/lib/evidence/mock-evidence';
+
 interface DebriefRequest {
   log_date: string;
   overall_percentile?: number | null;
@@ -22,11 +24,21 @@ interface ErrorBuckets {
   selection: number;
 }
 
+// Precedence, locked 22 Aug: MEASURED EVIDENCE > SELF-REPORT > GENERIC.
+// The order below is that rule, not a style choice. What a student's own
+// scorecard measured about their ability outranks a rank movement, which
+// outranks the error buckets they hand-tagged (1 student in 24 mocks has
+// ever filled those), which outranks restating the percentile back at them.
 function computeInsight(
+  evidence: MockEvidence,
   overall_percentile: number | null,
   error_buckets: ErrorBuckets,
   prevPercentile: number | null
 ): string | null {
+  // 1. Measured ability from this mock's own numbers.
+  const measured = headlineEvidence(evidence);
+  if (measured) return measured.text;
+
   // Percentile movement takes priority if we have two data points
   if (overall_percentile != null && prevPercentile != null) {
     const delta = overall_percentile - prevPercentile;
@@ -165,7 +177,11 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id);
     }
 
+    // Evidence is read from the row we actually stored, never from the request
+    // body: what the student is told must match what the database now holds.
+    const evidence = readMockEvidence(row);
     const insight = computeInsight(
+      evidence,
       body.overall_percentile ?? null,
       row.error_buckets,
       prevPercentile
@@ -199,7 +215,10 @@ export async function POST(request: NextRequest) {
       }
     })();
 
-    return NextResponse.json({ success: true, insight }, { status: 200 });
+    return NextResponse.json(
+      { success: true, insight, evidence: evidence.items, measured: evidence.hasMeasuredAbility },
+      { status: 200 },
+    );
   } catch (err) {
     console.error('Mock debrief error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

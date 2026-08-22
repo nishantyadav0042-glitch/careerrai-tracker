@@ -9,10 +9,26 @@ import { cn } from '@/lib/utils';
 // too much effort for a student to fill in after a mock — nobody would. Down
 // to what a student will actually do: overall percentile, one percentile per
 // section, one observation.
+//
+// That remains the MANUAL contract (22 Aug). What changed is the scanned one:
+// when the scorecard is read by the parser, the student types nothing, so
+// there is no friction argument for discarding accuracy and time. Those are
+// kept now.
+/** A section as we store it. attempted/correct/time_min are what make a mock
+ *  DIAGNOSTIC rather than a scoreboard: percentile says you did badly, accuracy
+ *  and time say why. They are optional because a hand-typed entry may only
+ *  carry a percentile — but when the scanner reads them, we keep them. */
+export interface MockSectionData {
+  percentile: number | null;
+  attempted?: number | null;
+  correct?: number | null;
+  time_min?: number | null;
+}
+
 export interface MockDebriefData {
-  varc: { percentile: number | null };
-  dilr: { percentile: number | null };
-  qa: { percentile: number | null };
+  varc: MockSectionData;
+  dilr: MockSectionData;
+  qa: MockSectionData;
   strategy_note: string;
   overall_percentile: number | null;
 }
@@ -32,7 +48,7 @@ const SECTIONS = [
 ];
 
 type SectionKey = 'varc' | 'dilr' | 'qa';
-type SectionData = { percentile: number | null };
+type SectionData = MockSectionData;
 
 const defaultSection = (): SectionData => ({ percentile: null });
 
@@ -106,7 +122,25 @@ export function MockDebriefModal({
         for (const key of ['varc', 'dilr', 'qa'] as const) {
           const s = sc[key];
           if (!s) continue;
-          fresh[key] = { percentile: s.percentile ?? null };
+          // FIXED 22 Aug. This line used to be `{ percentile: s.percentile }`
+          // — it read attempted, correct and time_min out of the parsed
+          // scorecard and dropped them on the floor. Gemini extracts all
+          // fifteen fields, the server's DebriefRequest has always accepted
+          // them, and the jsonb column has always held them; the client threw
+          // eleven of fifteen away on every mock a student ever scanned.
+          //
+          // The 23 Jul simplification was right about MANUAL entry — nobody
+          // fills a five-bucket form after a three-hour paper. But it was
+          // applied to the MACHINE-READ path too, where the student does
+          // nothing. Sectional accuracy and time allocation are exactly what
+          // separates a 60th-percentile mock from an 85th, and we were paying
+          // to read them and then deleting them.
+          fresh[key] = {
+            percentile: s.percentile ?? null,
+            attempted: s.attempted ?? null,
+            correct: s.correct ?? null,
+            time_min: s.time_min ?? null,
+          };
         }
         return fresh;
       });

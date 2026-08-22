@@ -15,6 +15,8 @@ import { track } from '@/lib/journey';
 import { NOTIF_ASK_SETTLED_EVENT, TOUR_DONE_EVENT, INSIGHT_DONE_EVENT, insightVisible } from '@/lib/first-run-events';
 
 import { joinState, canJoinNow, shouldShowLink, countdownLabel } from '@/lib/session-link';
+import type { EvidenceItem } from '@/lib/evidence/mock-evidence';
+import { MockEvidenceCard } from './mock-evidence-card';
 
 const LoggingModal = dynamic(() => import('./LoggingModal').then((m) => m.LoggingModal), { ssr: false });
 const PlanRebuildPayoff = dynamic(() => import('@/components/plan-rebuild-payoff').then((m) => m.PlanRebuildPayoff), { ssr: false });
@@ -115,6 +117,10 @@ export function DailyTrackerApp({
   // mock: it is the rarer and more emotionally charged of the two.
   const [pendingRatingTrigger, setPendingRatingTrigger] = useState<RatingPromptTrigger | null>(null);
   const [debriefInsight, setDebriefInsight] = useState<string | null>(null);
+  // The evidence this mock actually produced. Separate from the insight string
+  // because a headline is one sentence and the contract needs three registers:
+  // what we measured, what we suspect, and what the scorecard cannot show.
+  const [debriefEvidence, setDebriefEvidence] = useState<EvidenceItem[]>([]);
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -307,8 +313,12 @@ export function DailyTrackerApp({
           body: JSON.stringify({ ...data.mock, log_date: reportDate }),
         });
         if (response.ok) {
-          const json = (await response.json()) as { insight?: string | null };
+          const json = (await response.json()) as {
+            insight?: string | null;
+            evidence?: EvidenceItem[];
+          };
           if (json.insight) setDebriefInsight(json.insight);
+          setDebriefEvidence(json.evidence ?? []);
           // A milestone already queued wins -- see the note on the state.
           setPendingRatingTrigger((prev) => prev ?? 'mock_completed');
         }
@@ -325,12 +335,12 @@ export function DailyTrackerApp({
 
   return (
     <div className="space-y-4">
-      {debriefInsight && (
-        <div className="flex items-start gap-2 bg-stone-100 border border-stone-300 rounded-2xl px-4 py-3">
-          <span className="text-xs font-bold text-stone-900 shrink-0 mt-0.5">📊</span>
-          <p className="flex-1 min-w-0 text-sm text-stone-900">{debriefInsight}</p>
-          <button onClick={() => setDebriefInsight(null)} className="text-stone-900 hover:text-stone-900 text-xs shrink-0" aria-label="Dismiss">✕</button>
-        </div>
+      {(debriefInsight || debriefEvidence.length > 0) && (
+        <MockEvidenceCard
+          items={debriefEvidence}
+          fallback={debriefInsight}
+          onDismiss={() => { setDebriefInsight(null); setDebriefEvidence([]); }}
+        />
       )}
 
       {/* The strip under the plan. Before 13 Aug this carried a full-width

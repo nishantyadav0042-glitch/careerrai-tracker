@@ -52,10 +52,42 @@ export function targetFor(row: { target_seconds?: number | null }): number {
 export const SPLIT_MIN_ATTEMPTS = 20;
 
 
+// ── What a challenge row is TESTING ─────────────────────────────────────────
+//
+// 'question' asks whether the student KNOWS something. The two radar kinds ask
+// something a lecture series cannot teach and a repeater is usually missing:
+// given four sets and forty minutes, which do you open, and which do you
+// refuse. Same four-option mechanic, same clock, same attempts table — but a
+// different faculty, and the whole reason for the marker is that we can ask
+// later how a student does at selection versus content.
+//
+// Standing caution (founder, 22 Aug): we are COLLECTING this, not asserting
+// it. Nothing yet shows that selection accuracy here predicts CAT percentile,
+// and no surface may claim it does until the data says so.
+export type ChallengeKind = 'question' | 'radar_first' | 'radar_discard';
+
+export const RADAR_KINDS: ChallengeKind[] = ['radar_first', 'radar_discard'];
+
+export function isRadar(kind: string | null | undefined): boolean {
+  return kind === 'radar_first' || kind === 'radar_discard';
+}
+
+/** The label a radar drill wears, so a student knows they are being asked to
+ *  DECIDE rather than to solve. Getting this wrong turns a selection drill
+ *  into a question they think they failed. */
+export function radarLabel(kind: string | null | undefined): string | null {
+  if (kind === 'radar_first') return 'Set selection · which one first';
+  if (kind === 'radar_discard') return 'Set selection · which one to drop';
+  return null;
+}
+
 export interface ChallengeView {
   id: string;
   section: string;
   topic: string;
+  /** What this row tests. Absent on rows written before kinds existed, which
+   *  the default makes 'question' — the honest reading of those. */
+  kind: ChallengeKind;
   question: string;
   options: string[];
   difficulty: string;
