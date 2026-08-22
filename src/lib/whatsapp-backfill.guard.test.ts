@@ -15,15 +15,41 @@ import { WHATSAPP_GROUP_URL } from '@/components/onboarding/whatsapp-optin';
 
 const ROUTE = 'src/app/api/cron/whatsapp-backfill/route.ts';
 
+/** The commit's author date, or null when this checkout cannot see it.
+ *
+ *  CI checks out at depth 1, so a commit from 15 Aug is simply not in the
+ *  runner's object store and `git log` exits 128. That is the environment
+ *  failing to answer the question — it is NOT the cutoff being wrong, and the
+ *  distinction is the same one the payment boundary is built on: an
+ *  infrastructure limitation must never be converted into a FALSE verdict
+ *  about business state. A guard that cannot see the evidence reports
+ *  UNKNOWN and checks what it still can. */
+function commitDateIso(sha: string): string | null {
+  try {
+    const out = execSync(`git log -1 --format=%aI ${sha}`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
 describe('the cutoff is the real deploy instant, not a rounded guess', () => {
   it('matches the commit that actually shipped the WhatsApp screen', () => {
     const src = readFileSync(ROUTE, 'utf8');
     const match = src.match(/WHATSAPP_SCREEN_SHIPPED_AT = '([^']+)'/);
     expect(match, 'cutoff constant not found').not.toBeNull();
-    const commitDate = execSync(
-      "git log -1 --format=%aI caa9d43", { encoding: 'utf8' }
-    ).trim();
-    expect(new Date(match![1]).getTime()).toBe(new Date(commitDate).getTime());
+
+    // Always true, history or not: the cutoff must be a real instant. A
+    // malformed constant would silently make every student pre-cutoff.
+    const cutoff = new Date(match![1]).getTime();
+    expect(Number.isFinite(cutoff), `cutoff is not a valid instant: ${match![1]}`).toBe(true);
+
+    const commitDate = commitDateIso('caa9d43');
+    if (commitDate === null) return; // shallow checkout — evidence unavailable
+    expect(cutoff).toBe(new Date(commitDate).getTime());
   });
 });
 
