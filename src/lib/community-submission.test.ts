@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { validateSubmission, MAX_QUESTION_CHARS, MIN_TIP_CHARS } from './community-pipeline';
 
@@ -127,7 +128,6 @@ describe('tips keep their existing contract', () => {
 
 describe('classification never becomes student friction', () => {
   it('the safety screen returns the section — no second classifier exists', () => {
-    const { readFileSync } = require('node:fs') as typeof import('node:fs');
     const safety = readFileSync('src/lib/community-safety.ts', 'utf8');
     // It rides the SAME Gemini call the screen already makes: no extra
     // request, no extra latency, and nowhere else in the codebase decides
@@ -139,13 +139,11 @@ describe('classification never becomes student friction', () => {
   });
 
   it('the submit route prefers the student choice, then the inference', () => {
-    const { readFileSync } = require('node:fs') as typeof import('node:fs');
     const route = readFileSync('src/app/api/community/submit/route.ts', 'utf8');
     expect(route).toContain('sub.section ?? imageVerdict?.section ?? textVerdict?.section ?? null');
   });
 
   it('the client requires content and nothing else', () => {
-    const { readFileSync } = require('node:fs') as typeof import('node:fs');
     const client = readFileSync('src/components/community-submit.tsx', 'utf8');
     const ready = client.slice(client.indexOf('const ready ='), client.indexOf('async function submit'));
     expect(ready, 'section must not gate the send button').not.toContain('section &&');
@@ -155,7 +153,6 @@ describe('classification never becomes student friction', () => {
 
 describe('the route and the client both speak this contract', () => {
   it('the route validates through validateSubmission, not inline checks', () => {
-    const { readFileSync } = require('node:fs') as typeof import('node:fs');
     const route = readFileSync('src/app/api/community/submit/route.ts', 'utf8');
     expect(route).toContain('validateSubmission(');
     expect(route).toMatch(/code: v\.code/);
@@ -166,7 +163,6 @@ describe('the route and the client both speak this contract', () => {
   });
 
   it('the client re-encodes photos to JPEG — the HEIC wall is gone', () => {
-    const { readFileSync } = require('node:fs') as typeof import('node:fs');
     // The canvas recipe moved into ONE canonical helper (21 Aug) — it was
     // hand-copied into three components, the Incident #23 pattern. The idea
     // pinned is unchanged: an iPhone HEIC decodes and leaves as JPEG.
