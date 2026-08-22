@@ -20,6 +20,7 @@ import { StoreBuildDetector } from '@/components/store-build-detector';
 import { TimetablePrompt } from '@/components/timetable-prompt';
 import { EvidenceAnnounce } from '@/components/evidence-announce';
 import { CrashReporter } from '@/components/crash-reporter';
+import { SessionLossNotice } from '@/components/session-loss-notice';
 import { BuddyDemoTour } from '@/components/buddy-demo-tour';
 import { CoverageReviewGate } from '@/components/coverage-review-gate';
 import { isReviewDue } from '@/lib/coverage-review';
@@ -160,6 +161,9 @@ export default async function StudentLayout({ children }: { children: React.Reac
           invisible to Play Console and Crashlytics; this is the only way we
           hear about a broken screen before a 1-star review does. */}
       <CrashReporter />
+      {/* One listener for every student route — mounting it per page would
+          stack duplicate notices on navigation. */}
+      <SessionLossNotice />
       {/* Buddy demo overlay: banner + guided tour, keyed off the cr_demo
           cookie set at login for buddydemo@careerrai.in. Renders null for
           everyone else. */}

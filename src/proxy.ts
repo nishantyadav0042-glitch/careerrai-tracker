@@ -7,6 +7,7 @@ import {
 } from '@/lib/store-build';
 import { storeFunnelEnabled } from '@/lib/feature-flags';
 import { describeSbCookies, sbRemovalNames } from '@/lib/auth-observation';
+import { classifyAuth, shouldRetryAuth, type AuthOutcome, type AuthErrorLike } from '@/lib/auth-failure';
 
 // Alternate hosts that must land on the canonical domain. The old
 // careerrai-daily.vercel.app is DELIBERATELY absent — existing installed PWAs
@@ -107,14 +108,32 @@ export async function proxy(request: NextRequest) {
   // normal request still makes exactly one call, same as before. If the
   // session really is dead, the retry fails identically and the existing
   // redirect-to-login below is unchanged.
-  let user = null;
+  //
+  // 22 Aug — the retry above was necessary but not sufficient, and this is why:
+  // getUser() does NOT throw for auth failures. It resolves as
+  // `{ data: { user: null }, error }`. So the catch only ever fired on a raw
+  // network throw, while a GoTrue 500, a timeout or a rate-limit arrived as a
+  // plain `user = null` — indistinguishable from a visitor who is not logged
+  // in, and redirected to /login exactly the same way. A student whose session
+  // was completely valid could be logged out by one bad second at the auth
+  // service. Classify the failure instead of assuming it (lib/auth-failure).
+  let user: unknown = null;
+  let outcome: AuthOutcome;
   try {
-    ({ data: { user } } = await supabase.auth.getUser());
-  } catch {
+    const res = await supabase.auth.getUser();
+    user = res.data.user;
+    outcome = classifyAuth(user, res.error as AuthErrorLike | null);
+  } catch (err) {
+    outcome = classifyAuth(null, err as AuthErrorLike);
+  }
+
+  if (shouldRetryAuth(outcome)) {
     try {
-      ({ data: { user } } = await supabase.auth.getUser());
-    } catch {
-      user = null;
+      const res = await supabase.auth.getUser();
+      user = res.data.user;
+      outcome = classifyAuth(user, res.error as AuthErrorLike | null);
+    } catch (err) {
+      outcome = classifyAuth(null, err as AuthErrorLike);
     }
   }
 
@@ -212,6 +231,27 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/student') ||
     pathname.startsWith('/buddy') ||
     pathname.startsWith('/admin');
+
+  // UNKNOWN is not FALSE. After a retry the auth service still could not tell
+  // us who this is, so we decline the request instead of asserting that the
+  // student is signed out. Access is still denied — nothing here weakens
+  // authorization — but they keep their session and their cookies, and they
+  // are told to try again rather than being sent to a login screen that
+  // silently discards a session which was never actually broken.
+  if (isProtected && outcome === 'infrastructure') {
+    console.error('[auth-infrastructure-unavailable]', JSON.stringify({ obsId, path: pathname }));
+    const body = pathname.startsWith('/api/')
+      ? JSON.stringify({ error: 'Sign-in service is unavailable right now. Please try again.', code: 'AUTH_UNAVAILABLE', retryable: true })
+      : '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Try again</title><body style="font-family:system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#fafaf9;color:#1c1917"><div style="max-width:22rem;padding:1.5rem;text-align:center"><p style="font-weight:700;font-size:1rem;margin:0 0 .5rem">We could not reach the sign-in service.</p><p style="font-size:.875rem;color:#57534e;margin:0 0 1.25rem">You are still signed in. This is on our side, not yours.</p><a href="" onclick="location.reload();return false" style="display:inline-block;background:#1c1917;color:#fff;text-decoration:none;padding:.625rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.875rem">Try again</a></div></body>';
+    return new NextResponse(body, {
+      status: 503,
+      headers: {
+        'Content-Type': pathname.startsWith('/api/') ? 'application/json' : 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Retry-After': '5',
+      },
+    });
+  }
 
   if (isProtected && !user) {
     // Track B: the moment the investigation exists for — a protected request
