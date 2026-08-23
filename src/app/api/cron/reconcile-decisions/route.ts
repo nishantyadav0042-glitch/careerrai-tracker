@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 export const maxDuration = 300;
 
@@ -33,92 +34,94 @@ const BATCH = 200;
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const admin = createAdminClient();
+  return withCronTracking('/api/cron/reconcile-decisions', async () => {
+    const admin = createAdminClient();
 
-  const { data: pending } = await admin
-    .from('decision_log')
-    .select('id, student_id, action_id, created_at, notification_id, send_status')
-    .is('outcome', null)
-    .order('created_at', { ascending: true })
-    .limit(BATCH);
-  if (!pending?.length) return NextResponse.json({ resolved: 0, skippedPendingApproval: 0, stillPending: 0 });
+    const { data: pending } = await admin
+      .from('decision_log')
+      .select('id, student_id, action_id, created_at, notification_id, send_status')
+      .is('outcome', null)
+      .order('created_at', { ascending: true })
+      .limit(BATCH);
+    if (!pending?.length) return NextResponse.json({ resolved: 0, skippedPendingApproval: 0, stillPending: 0 });
 
-  let resolved = 0;
-  let skippedPendingApproval = 0;
+    let resolved = 0;
+    let skippedPendingApproval = 0;
 
-  for (const d of pending) {
-    if (d.send_status === 'pending_approval') { skippedPendingApproval++; continue; }
+    for (const d of pending) {
+      if (d.send_status === 'pending_approval') { skippedPendingApproval++; continue; }
 
-    if (d.send_status === 'rejected') {
-      await admin.from('decision_log').update({
-        outcome: 'rejected_by_admin', business_impact: null, outcome_at: new Date().toISOString(),
-      }).eq('id', d.id);
-      resolved++;
-      continue;
-    }
+      if (d.send_status === 'rejected') {
+        await admin.from('decision_log').update({
+          outcome: 'rejected_by_admin', business_impact: null, outcome_at: new Date().toISOString(),
+        }).eq('id', d.id);
+        resolved++;
+        continue;
+      }
 
-    const window = GRACE_HOURS[d.action_id as string];
-    if (!window) continue; // hold, or an unrecognised action_id — nothing to reconcile
+      const window = GRACE_HOURS[d.action_id as string];
+      if (!window) continue; // hold, or an unrecognised action_id — nothing to reconcile
 
-    // Anchor the grace window on the real send time when we have one — more
-    // accurate than the decision's created_at (when the Brain merely proposed it).
-    let anchor = d.created_at as string;
-    if (d.notification_id) {
-      const { data: notif } = await admin.from('notifications').select('pushed_at').eq('id', d.notification_id).maybeSingle();
-      if (notif?.pushed_at) anchor = notif.pushed_at as string;
-    }
-    const elapsedHours = (Date.now() - Date.parse(anchor)) / 3_600_000;
-    const windowOver = elapsedHours >= window;
-
-    let outcome: string | null = null;
-    let impact: 'positive' | 'neutral' | null = null;
-
-    if (d.action_id === 'convert_now') {
-      const { data: paid } = await admin
-        .from('student_payments').select('id')
-        .eq('student_id', d.student_id).eq('status', 'paid')
-        .gte('paid_at', anchor)
-        .limit(1).maybeSingle();
-      if (paid) { outcome = 'purchased'; impact = 'positive'; }
-      else if (windowOver) { outcome = 'no_purchase'; impact = 'neutral'; }
-    } else if (d.action_id === 'winback_human' || d.action_id === 'reengage_dormant') {
-      const { data: moved } = await admin
-        .from('student_dna_history').select('prev_value, new_value')
-        .eq('student_id', d.student_id).eq('metric', 'churn_risk')
-        .gt('created_at', anchor)
-        .order('created_at', { ascending: true }).limit(1).maybeSingle();
-      if (moved && (moved.new_value as number) <= (moved.prev_value as number) - 20) { outcome = 'recovered'; impact = 'positive'; }
-      else if (windowOver) { outcome = 'no_response'; impact = 'neutral'; }
-    } else if (d.action_id === 'activate_first_value') {
-      const { data: moved } = await admin
-        .from('student_dna_history').select('new_value')
-        .eq('student_id', d.student_id).eq('metric', 'activation')
-        .gt('created_at', anchor)
-        .order('created_at', { ascending: true }).limit(1).maybeSingle();
-      if (moved && (moved.new_value as number) >= 100) { outcome = 'activated'; impact = 'positive'; }
-      else if (windowOver) { outcome = 'no_response'; impact = 'neutral'; }
-    } else if (d.action_id === 'celebrate') {
-      // Reinforcement — success = they were opened/clicked at all, real signal
-      // from the actual notification we sent, not a guess.
+      // Anchor the grace window on the real send time when we have one — more
+      // accurate than the decision's created_at (when the Brain merely proposed it).
+      let anchor = d.created_at as string;
       if (d.notification_id) {
-        const { data: notif } = await admin.from('notifications').select('clicked_at').eq('id', d.notification_id).maybeSingle();
-        if (notif?.clicked_at) { outcome = 'opened'; impact = 'positive'; }
-        else if (windowOver) { outcome = 'not_opened'; impact = 'neutral'; }
-      } else if (windowOver) {
-        outcome = 'no_notification'; impact = 'neutral';
+        const { data: notif } = await admin.from('notifications').select('pushed_at').eq('id', d.notification_id).maybeSingle();
+        if (notif?.pushed_at) anchor = notif.pushed_at as string;
+      }
+      const elapsedHours = (Date.now() - Date.parse(anchor)) / 3_600_000;
+      const windowOver = elapsedHours >= window;
+
+      let outcome: string | null = null;
+      let impact: 'positive' | 'neutral' | null = null;
+
+      if (d.action_id === 'convert_now') {
+        const { data: paid } = await admin
+          .from('student_payments').select('id')
+          .eq('student_id', d.student_id).eq('status', 'paid')
+          .gte('paid_at', anchor)
+          .limit(1).maybeSingle();
+        if (paid) { outcome = 'purchased'; impact = 'positive'; }
+        else if (windowOver) { outcome = 'no_purchase'; impact = 'neutral'; }
+      } else if (d.action_id === 'winback_human' || d.action_id === 'reengage_dormant') {
+        const { data: moved } = await admin
+          .from('student_dna_history').select('prev_value, new_value')
+          .eq('student_id', d.student_id).eq('metric', 'churn_risk')
+          .gt('created_at', anchor)
+          .order('created_at', { ascending: true }).limit(1).maybeSingle();
+        if (moved && (moved.new_value as number) <= (moved.prev_value as number) - 20) { outcome = 'recovered'; impact = 'positive'; }
+        else if (windowOver) { outcome = 'no_response'; impact = 'neutral'; }
+      } else if (d.action_id === 'activate_first_value') {
+        const { data: moved } = await admin
+          .from('student_dna_history').select('new_value')
+          .eq('student_id', d.student_id).eq('metric', 'activation')
+          .gt('created_at', anchor)
+          .order('created_at', { ascending: true }).limit(1).maybeSingle();
+        if (moved && (moved.new_value as number) >= 100) { outcome = 'activated'; impact = 'positive'; }
+        else if (windowOver) { outcome = 'no_response'; impact = 'neutral'; }
+      } else if (d.action_id === 'celebrate') {
+        // Reinforcement — success = they were opened/clicked at all, real signal
+        // from the actual notification we sent, not a guess.
+        if (d.notification_id) {
+          const { data: notif } = await admin.from('notifications').select('clicked_at').eq('id', d.notification_id).maybeSingle();
+          if (notif?.clicked_at) { outcome = 'opened'; impact = 'positive'; }
+          else if (windowOver) { outcome = 'not_opened'; impact = 'neutral'; }
+        } else if (windowOver) {
+          outcome = 'no_notification'; impact = 'neutral';
+        }
+      }
+
+      if (outcome) {
+        await admin.from('decision_log').update({
+          outcome, business_impact: impact, executed: true, outcome_at: new Date().toISOString(),
+        }).eq('id', d.id);
+        resolved++;
       }
     }
 
-    if (outcome) {
-      await admin.from('decision_log').update({
-        outcome, business_impact: impact, executed: true, outcome_at: new Date().toISOString(),
-      }).eq('id', d.id);
-      resolved++;
-    }
-  }
-
-  const { count: stillPending } = await admin.from('decision_log').select('id', { count: 'exact', head: true }).is('outcome', null);
-  return NextResponse.json({ resolved, skippedPendingApproval, stillPending: stillPending ?? 0 });
+    const { count: stillPending } = await admin.from('decision_log').select('id', { count: 'exact', head: true }).is('outcome', null);
+    return NextResponse.json({ resolved, skippedPendingApproval, stillPending: stillPending ?? 0 });
+  });
 }
 
 export { POST as GET };

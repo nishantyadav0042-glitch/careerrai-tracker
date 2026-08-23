@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 import { promoteDailyPick } from '@/lib/daily-pick-runner';
 
 export const maxDuration = 60;
@@ -16,6 +17,11 @@ export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Tracked so a failure is visible in cron_runs instead of silent.
+  return withCronTracking('/api/cron/community-recycle', () => community_recycleRun());
+}
+
+async function community_recycleRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   try {
     // The ballot recycle retired 20 Aug — there is no resting pool to revive

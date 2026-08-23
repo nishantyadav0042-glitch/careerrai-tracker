@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 
 // Memberships are one-time purchases, not auto-debit. When a term ends we flip
 // the student from 'active' to 'paused' (data fully preserved) so the membership
@@ -15,57 +16,59 @@ import { authorizedCron } from '@/lib/cron-auth';
 // false->true flip).
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return withCronTracking('/api/cron/expire-subscriptions', async () => {
 
-  const admin = createAdminClient();
-  const nowIso = new Date().toISOString();
+    const admin = createAdminClient();
+    const nowIso = new Date().toISOString();
 
-  // Find active subscriptions whose renewal date has already passed.
-  const { data: lapsed, error } = await admin
-    .from('profiles')
-    .select('id, full_name')
-    .eq('subscription_status', 'active')
-    .lt('subscription_renews_at', nowIso);
+    // Find active subscriptions whose renewal date has already passed.
+    const { data: lapsed, error } = await admin
+      .from('profiles')
+      .select('id, full_name')
+      .eq('subscription_status', 'active')
+      .lt('subscription_renews_at', nowIso);
 
-  if (error) {
-    console.error('[expire-subscriptions]', error);
-    return NextResponse.json({ error: 'query failed' }, { status: 500 });
-  }
-  if (!lapsed?.length) return NextResponse.json({ expired: 0 });
+    if (error) {
+      console.error('[expire-subscriptions]', error);
+      return NextResponse.json({ error: 'query failed' }, { status: 500 });
+    }
+    if (!lapsed?.length) return NextResponse.json({ expired: 0 });
 
-  const ids = lapsed.map((p) => p.id);
+    const ids = lapsed.map((p) => p.id);
 
-  const { error: updateErr } = await admin
-    .from('profiles')
-    .update({ subscription_status: 'paused', is_premium: false })
-    .in('id', ids);
+    const { error: updateErr } = await admin
+      .from('profiles')
+      .update({ subscription_status: 'paused', is_premium: false })
+      .in('id', ids);
 
-  if (updateErr) {
-    console.error('[expire-subscriptions]', updateErr);
-    return NextResponse.json({ error: 'update failed' }, { status: 500 });
-  }
+    if (updateErr) {
+      console.error('[expire-subscriptions]', updateErr);
+      return NextResponse.json({ error: 'update failed' }, { status: 500 });
+    }
 
-  // Cancel any still-pending buddy assignment for lapsed students (mirrors
-  // revokePremium's refund path) so a paused member isn't handed a new buddy.
-  await admin
-    .from('buddy_assignment_queue')
-    .update({ status: 'cancelled' })
-    .in('student_id', ids)
-    .eq('status', 'pending');
+    // Cancel any still-pending buddy assignment for lapsed students (mirrors
+    // revokePremium's refund path) so a paused member isn't handed a new buddy.
+    await admin
+      .from('buddy_assignment_queue')
+      .update({ status: 'cancelled' })
+      .in('student_id', ids)
+      .eq('status', 'pending');
 
-  // Nudge each student in-app — continuity, not a hard stop.
-  await admin.from('notifications').insert(
-    lapsed.map((p) => ({
-      user_id: p.id,
-      type: 'membership',
-      title: 'Your mentorship has ended',
-      body: 'Your streak, mocks and debriefs stay yours — keep using them free. Reactivate whenever you want your IIM mentor back.',
-      data: {},
-      read: false,
-      channel: 'in_app',
-    }))
-  );
+    // Nudge each student in-app — continuity, not a hard stop.
+    await admin.from('notifications').insert(
+      lapsed.map((p) => ({
+        user_id: p.id,
+        type: 'membership',
+        title: 'Your mentorship has ended',
+        body: 'Your streak, mocks and debriefs stay yours — keep using them free. Reactivate whenever you want your IIM mentor back.',
+        data: {},
+        read: false,
+        channel: 'in_app',
+      }))
+    );
 
-  return NextResponse.json({ expired: ids.length });
+    return NextResponse.json({ expired: ids.length });
+  });
 }
 
 export { POST as GET };

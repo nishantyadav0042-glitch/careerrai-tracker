@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendSecurityAlert } from '@/lib/alerting';
 
@@ -28,6 +29,12 @@ export async function GET(request: NextRequest) {
   if (!authorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Scheduled in vercel.json, so it is a cron in every sense except its
+  // folder — and it was the one scheduled job with no run record at all.
+  return withCronTracking('/api/admin/security-monitor', () => securityMonitorRun());
+}
+
+async function securityMonitorRun(): Promise<NextResponse> {
 
   const admin = createAdminClient();
   const sinceIso = new Date(Date.now() - 3_600_000).toISOString();
