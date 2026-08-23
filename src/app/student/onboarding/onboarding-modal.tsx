@@ -12,6 +12,7 @@ import ScreenRealityCheck from './screens/screen-reality-check';
 import ScreenFinishDate from './screens/screen-finish-date';
 import ScreenTopicCoverage from './screens/screen-topic-coverage';
 import ScreenWeakestSection from './screens/screen-weakest-section';
+import { coverageOrderFor, coverageDraftKey } from '@/lib/coverage-order';
 import ScreenRepeaterBuddyPitch from './screens/screen-repeater-buddy-pitch';
 import ScreenCoachingPlan from './screens/screen-coaching-plan';
 import ScreenMeetBuddy from './screens/screen-meet-buddy';
@@ -198,7 +199,13 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       // coverage taps into this account. userId is known by the time this
       // screen is reachable — screen 0 already needs a session.
       extraProps: {
-        draftKey: userId ? `cr_onboarding_topic_coverage_draft_v3_${userId}` : undefined,
+        // Same defect as the pre-auth funnel, quieter: this passed no order at
+        // all, so it always opened on VARC no matter what the student had just
+        // answered one screen earlier.
+        sectionOrder: coverageOrderFor(onboardingData.self_reported_weakest_section),
+        draftKey: userId
+          ? coverageDraftKey(userId, onboardingData.self_reported_weakest_section)
+          : undefined,
         // Keep the raw matrix, not just the counts. The insight screen below
         // needs which topics are untouched and how much mark-weight they carry;
         // coverage_practicing/learning/total cannot answer that.
