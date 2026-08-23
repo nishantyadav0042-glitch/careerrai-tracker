@@ -97,6 +97,43 @@ is what gate 1 detects, and it is why the failure being a *step change* —
 263 fine, 428 fine, 739 total failure, nothing in between — makes a guard the
 only real defence. There was no gradual signal to watch.
 
+## Test-discovery audit — the `vitest.config.ts` widening
+
+Required before continuing, because the first route test reported **"No test
+files found"** — a silent tooling failure of exactly the kind this workstream
+exists to remove from production code. Widening the include is only safe if the
+resulting test universe is measured rather than assumed.
+
+Measured by running the **previous config from git** against the current tree,
+then the current config, and diffing:
+
+| | Test files | Tests |
+|---|---|---|
+| Before — `include: ['src/lib/**/*.test.ts']` | 261 passed + 1 skipped = **262** | **2,932** passed + 1 skipped |
+| After — `+ 'src/app/api/**/*.test.ts'` | 262 passed + 1 skipped = **263** | **2,942** passed + 1 skipped |
+| **Delta** | **+1 file** | **+10 tests** |
+
+The delta is exactly `check-red-flags/mutation-safety.test.ts` and its 10 cases.
+**Nothing was lost**: no file discovered under the old pattern is missing under
+the new one.
+
+**Intentionally excluded, still excluded:** `src/app/student/today/form.test.ts`
+— a pre-existing `console.log` script that tests a local copy of some form logic
+rather than production code, and executes on import. Verified NOT discovered.
+
+**Proof the new API-route tests actually execute** (not merely matched): the
++10 test delta is precisely the 10 cases in that file, and the file appears in
+`vitest list`. A pattern that matched but did not run would show +1 file and +0
+tests.
+
+**A measurement error worth recording.** My first attempt at this audit used
+`vitest list --include 'src/lib/**/*.test.ts'` for the "before" number. That CLI
+flag returned **zero** files, which made the diff report all 262 pre-existing
+files as newly discovered — i.e. it looked like the widening had transformed the
+whole test universe. It had not; the flag simply did not apply. The table above
+comes from running the actual previous config file, which is the only
+measurement that answers the question.
+
 ## Order of migration
 
 Highest blast radius first, measured by what a failed read would do:
