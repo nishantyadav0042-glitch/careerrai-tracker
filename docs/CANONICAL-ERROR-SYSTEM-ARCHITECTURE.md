@@ -965,3 +965,319 @@ Without that guard this becomes the seventh system rather than the last one.
 | 6 | Singular notification ownership | **CLEARED — design + guard above** |
 | — | Canonical contract | **CLEARED — Artifact 1** |
 | — | Failure matrix + state machine | **CLEARED — Artifact 2** |
+
+---
+---
+
+# DDL RED-TEAM GATE
+
+**Nothing created. This is the hostile review that must pass before any
+`CREATE TABLE`.** 23 Aug 2026.
+
+## Blocker #1 — CLEARED, with a stated limit
+
+Founder, 23 Aug: *"yes I got those alerts."*
+
+The four over-threshold hours (15 Aug ×762, 11 Aug ×550, 9 Aug ×231, 14 Jul
+×27) did produce delivered alerts. **The webhook is configured and the
+transport works.** This is delivery evidence, not a config reading.
+
+**The limit, stated rather than glossed:** this proves the path worked *on
+those dates*. It does not prove it works *today* — an env var can change and
+nothing would notice. **Phase 3 must therefore ship a canary** that fires a
+synthetic P3 through the real transport on deploy and records the result. A
+path verified only by memory is a path that will fail silently later.
+
+---
+
+## 1–2. Schema and partitioning — and the problem partitioning creates
+
+```sql
+CREATE TABLE error_events (
+  event_id      uuid        NOT NULL,
+  incident_id   uuid        NOT NULL REFERENCES incidents(id),
+  occurred_at   timestamptz NOT NULL,
+  ingested_at   timestamptz NOT NULL DEFAULT now(),
+  student_id    uuid,
+  request_id    text,
+  severity      text        NOT NULL CHECK (severity IN ('P0','P1','P2','P3')),
+  route_pattern text        NOT NULL,
+  deploy_id     text,
+  origin        text        NOT NULL CHECK (origin IN ('server','client','cron')),
+  PRIMARY KEY (event_id, ingested_at)          -- ← see the problem below
+) PARTITION BY RANGE (ingested_at);
+```
+
+### THE PROBLEM: `UNIQUE(event_id)` is impossible on a partitioned table
+
+Postgres requires every unique constraint on a partitioned table to **include
+the partition key**. So `UNIQUE(event_id)` alone cannot exist, and my Artifact-3
+claim that `UNIQUE(event_id)` provides idempotency **was wrong**.
+
+`PRIMARY KEY (event_id, ingested_at)` deduplicates *within* a partition. A retry
+crossing a month boundary — original at 23:59:59 on the 31st, retry at 00:00:01
+— lands in a different partition and **inserts a duplicate row**.
+
+**Options considered:**
+
+| Option | Verdict |
+|---|---|
+| Separate non-partitioned dedup table, `UNIQUE(event_id)` | **Rejected.** A second table on the hot write path, itself unpartitioned and growing to 100M — it recreates the problem it solves |
+| Don't partition | **Rejected.** Then retention needs `DELETE` at 30M rows — a multi-minute lock, i.e. an outage caused by the observability system |
+| Accept the edge | **Chosen** |
+
+**Why accepting it is correct, not lazy.** The consequence of a duplicate
+observation row is bounded and small:
+
+- `affected_students` is `COUNT(DISTINCT student_id)` — **duplicate-immune**.
+- `observation_count` may be off by one. That is a P3 inaccuracy in a
+  diagnostic counter.
+- **Alerting is unaffected**, because deduplication that matters happens at the
+  *incident* level (`UNIQUE(incident_key)`), which is not partitioned.
+
+**The exposure is: one duplicate row, in a one-second window, once a month, on a
+counter nobody pages on.** Correcting the record: idempotency is guaranteed at
+the incident layer and best-effort at the observation layer, and the earlier
+claim of `UNIQUE(event_id)` was incorrect.
+
+### Partition lifecycle — and the failure mode it introduces
+
+**A partitioned table with no partition for `now()` rejects the INSERT.** If
+nobody creates next month's partition, **the error system stops recording
+errors** — the exact failure class this project exists to eliminate, introduced
+by the fix.
+
+Mitigation, three layers:
+1. **Create 12 months ahead at migration time.** Cheap, empty, no risk.
+2. **A monthly job extends the horizon**, and its own failure is a canonical
+   P1 (the system watches itself).
+3. **A `DEFAULT` partition as the backstop** so an INSERT can never fail even
+   if 1 and 2 both fail. Rows landing there are a P1 signal in themselves.
+
+> The `DEFAULT` partition has a known cost: attaching a new partition must scan
+> it for conflicting rows. Kept empty in the normal case, so the scan is
+> trivial. Stated because it is a real trade-off, not a free win.
+
+## 3–4. RLS, permissions, append-only
+
+```sql
+ALTER TABLE error_events     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incidents        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_deliveries ENABLE ROW LEVEL SECURITY;
+-- No policies at all → no role can read or write except service_role,
+-- which bypasses RLS. There is no student-facing read path by construction.
+
+REVOKE ALL ON error_events FROM anon, authenticated;
+GRANT INSERT, SELECT ON error_events TO service_role;   -- NO UPDATE, NO DELETE
+```
+
+**Append-only is enforced by the grant, not by convention.** `service_role` is
+physically unable to `UPDATE` or `DELETE` an observation. Retention deletes rows
+by `DROP PARTITION` (a DDL operation by the migration role), never by DML — so
+the append-only property survives its own retention policy.
+
+Evidence is never rewritten. Corrections live in `incidents.state`.
+
+## 5–7. Idempotency, fingerprint, delivery state
+
+| Layer | Key | Guarantee |
+|---|---|---|
+| Observation | `PK (event_id, ingested_at)` | in-partition |
+| **Incident** | **`UNIQUE (incident_key)`** | **absolute — not partitioned** |
+| Alert attempt | `UNIQUE (incident_id, reason, attempt)` | absolute |
+
+The incident layer is where alert deduplication lives, and it is the one that
+is fully guaranteed. That is the correct place for it.
+
+## 8. Concurrent workers
+
+Two access patterns, two mechanisms:
+
+```sql
+-- (a) Single incident, inline fast path: conditional UPDATE. No lock held.
+UPDATE incidents SET alert_state='DISPATCHING', claimed_at=now(), claimed_by=$1
+ WHERE id=$2 AND alert_state='DELIVERY_PENDING'
+RETURNING id;                       -- 0 rows ⇒ another worker owns it
+
+-- (b) Sweeper batch: SKIP LOCKED so N workers never collide or queue.
+SELECT id FROM incidents
+ WHERE alert_state='DELIVERY_PENDING'
+    OR (alert_state='DISPATCHING' AND claimed_at < now() - interval '2 minutes')
+ ORDER BY first_seen
+ FOR UPDATE SKIP LOCKED
+ LIMIT 50;
+```
+
+`SKIP LOCKED` is what makes the sweeper safe to run on overlapping schedules —
+which matters here, because this repo already runs **two schedulers**
+(`vercel.json` and `cron-fallback.yml`) and that duplication caused the Phase 11
+duplicate sends.
+
+## 9–12. Crash, duplicate delivery, retry, dead-letter
+
+| Case | Behaviour |
+|---|---|
+| Crash before dispatch | state `DELIVERY_PENDING` → sweeper claims |
+| Crash **between delivery and ack** | state `DISPATCHING`, `claimed_at` stale → reclaimed after 2 min. **Genuinely ambiguous** — we cannot know if the POST landed. **P0/P1 re-attempt; P2/P3 do not.** A duplicate page is cheap; a missed P0 is not |
+| Duplicate webhook delivery | **Cannot be prevented** — Slack/Discord webhooks have no idempotency key. Mitigated by making it *recognisable*: every alert carries `incident_key` and `reason`, so a duplicate is visibly the same alert rather than a second incident |
+| Retry | 2 attempts, backoff 1 s → 4 s, then channel fallback to Resend |
+| Dead-letter | after webhook + email both exhausted: `DEAD_LETTER`, surfaced in the existing daily founder digest. **Not silent, but not timely** |
+
+## 13. Retention without locking production
+
+```sql
+ALTER TABLE error_events DETACH PARTITION error_events_2026_07 CONCURRENTLY;
+DROP TABLE error_events_2026_07;
+```
+
+`DETACH … CONCURRENTLY` avoids the `ACCESS EXCLUSIVE` lock that plain `DETACH`
+takes on the parent. **A plain `DROP PARTITION` on a busy parent can block every
+concurrent INSERT** — the observability system stalling the app it observes.
+
+`student_id` NULLing at 30 days is the one exception to append-only: it is a
+**privacy erasure**, executed by the migration role per-partition, not by the
+application. Stated explicitly so it is not mistaken for a loophole.
+
+## 14. Index growth at 100M+
+
+| Index | Purpose | Cost at 30M rows/month |
+|---|---|---|
+| `PK (event_id, ingested_at)` | idempotency | ~1.4 GB/partition |
+| `(incident_id, ingested_at DESC)` | incident drill-down | ~1.1 GB/partition |
+| `(request_id) WHERE request_id IS NOT NULL` | client↔server correlation | ~0.9 GB/partition |
+| `(student_id, ingested_at) WHERE student_id IS NOT NULL` | **REJECTED** | see below |
+
+**Indexes are per-partition, and they are dropped with the partition.** That is
+the property that makes 100M+ survivable: no index ever accumulates beyond one
+month of data.
+
+**The per-student index is rejected.** "Which errors did this student hit?" is a
+support question answered rarely, and a partial-index scan is acceptable for it.
+Carrying ~1 GB/month for an interactive convenience is not.
+
+## 15. Supabase unavailable
+
+Unchanged and still honest: the event store is the thing that is down. One
+narrow best-effort direct webhook, flagged `unpersisted`, undeduplicated,
+no retry. **"Durable event persistence unavailable" is itself a P0.** Building a
+second durable store to cover it would be adding a system to avoid admitting a
+limitation.
+
+## 16–17. Rollback and migration safety
+
+**Migration safety: this migration touches no existing table.** Three new
+tables, no `ALTER`, no backfill, no lock on anything currently serving traffic.
+The blast radius on failure is "the new tables don't exist", which is today's
+state.
+
+**Rollback order is code-first, schema-second** — the reverse of deployment.
+Dropping tables while `captureError` still writes to them turns the error
+system into an error source.
+
+```
+1. revert the code that calls captureError
+2. verify no writer remains
+3. DROP TABLE alert_deliveries, error_events (+partitions), incidents
+```
+
+## 18. Preventing bypass — and the proof of ONE path
+
+Three enforcement layers, because a guard alone is a convention:
+
+1. **Module boundary.** `alerting.ts` and `email.ts::sendAdminAlert` become
+   internal to the dispatcher module; nothing else may import them.
+2. **CI guard**, modelled on `population-read.guard.test.ts`: pins the *idea*
+   (a student-facing or mutation-capable failure path must route through
+   `captureError`), with a shrinking allowlist that fails on both a new
+   offender and a stale entry.
+3. **Grant.** Only the dispatcher's code path holds the credentials that write
+   `alert_deliveries`.
+
+### Proof: exactly one path from application error to founder alert
+
+Every edge into the founder today, and where it goes:
+
+| Today's edge | After |
+|---|---|
+| `instrumentation.ts` → `security_events` | → `captureError` |
+| `/api/client-error` → `client_errors` | → `captureError` (origin `client`) |
+| `report-error.ts` | → `captureError` (origin `client`) |
+| `serverError()` ×15 | → `captureError` + `errorResponse` |
+| 670 hand-written `{ error }` | → `errorResponse` (registry-owned) |
+| 235 `console.error` | local debugging only; CI-forbidden on error paths |
+| `sendSecurityAlert` ×4 | **dispatcher-internal** |
+| `sendAdminAlert` ×7 | **dispatcher-internal** |
+| `security-monitor` hourly threshold | **retired as an alert path**; emits canonical events |
+| `founder-alerts` cron | **consumer** of the dispatcher |
+
+**Single remaining edge:** `dispatcher → webhook → (fallback) Resend`.
+It is reachable only from `incidents.alert_state`, which is reachable only from
+`captureError`. Any new edge fails CI at layer 2 and lacks credentials at
+layer 3.
+
+---
+
+## The four timestamps, per your ruling
+
+Persisted: `occurred_at` · `ingested_at` · `incident_created_at` ·
+`founder_alerted_at`.
+
+| Metric | Definition | Target |
+|---|---|---|
+| **Detection** | `ingested_at − occurred_at` | measured; **no target for client origin** |
+| **Processing** | `incident_created_at − ingested_at` | P95 ≤ 500 ms |
+| **Delivery** | `founder_alerted_at − incident_created_at` | P95 ≤ 4.5 s |
+| **End-to-end** | `founder_alerted_at − occurred_at` | **reported, never used as the SLA** |
+
+Four stored timestamps make T0 immovable. Nobody can turn the SLA green by
+redefining where the clock starts, because all four are on the row.
+
+## The contract, stated as you framed it
+
+> **No silent loss. Fastest achievable alerting. Durable recovery when the
+> primary path fails.**
+
+Not "every browser error reaches the founder in five seconds" — which is false
+for a disconnected client, and I will not ship a claim I know to be false.
+
+## Scope separation
+
+The **762-error hour (15 Aug)** is a separate P0 reconstruction workstream. It
+is deliberately **not** investigated here: designing the system around
+conclusions drawn after the fact about one historical incident is how you get a
+system that handles that incident and nothing else.
+
+---
+
+# GATE RESULT: **PASS, with two corrections and one new dependency**
+
+| Item | Status |
+|---|---|
+| 1–2 Schema + partitioning | **PASS** — with the `UNIQUE(event_id)` correction below |
+| 3–4 RLS, append-only | **PASS** — enforced by grant, not convention |
+| 5–7 Idempotency, fingerprint, state machine | **PASS** |
+| 8 Concurrency | **PASS** — `SKIP LOCKED` + conditional claim |
+| 9–12 Crash, duplicate, retry, dead-letter | **PASS** — with duplicate-delivery named as unpreventable |
+| 13 Retention | **PASS** — `DETACH CONCURRENTLY` |
+| 14 Index growth | **PASS** — per-partition, one index rejected |
+| 15 Supabase outage | **PASS as degraded** |
+| 16–17 Rollback, migration safety | **PASS** — no existing table touched |
+| 18 Bypass prevention + one-path proof | **PASS** |
+
+**Correction 1.** My Artifact-3 claim that `UNIQUE(event_id)` guarantees
+observation idempotency **was wrong** — Postgres forbids it on a partitioned
+table. Idempotency is absolute at the *incident* layer and best-effort at the
+observation layer; the exposure is one duplicate row per month on a
+non-alerting counter.
+
+**Correction 2.** Retention must use `DETACH … CONCURRENTLY`; a plain drop
+takes a lock that can block concurrent inserts.
+
+**New dependency.** Partition creation is now a load-bearing job: if it fails,
+inserts fail and the error system goes blind. Mitigated by 12 months
+pre-created, a self-watching extender, and a `DEFAULT` partition backstop.
+
+**Still open and NOT resolved by this gate:** blocker #3 (P2/P3 sampling
+threshold) — it still requires live volume, and I will not invent a number.
+It does not block DDL, because sampling is a write-path policy, not a schema
+property.
