@@ -644,3 +644,324 @@ retention policy, and the SLA definition.
 
 **What I got wrong and corrected:** `after()` as the delivery guarantee.
 That was a silent-loss path in the middle of an anti-silent-loss architecture.
+
+---
+---
+
+# BLOCKER #1 — WEBHOOK VERIFICATION RESULT
+
+**I could not verify it from here, and I am not going to guess.** Vercel's MCP
+does not expose environment variables, and reading production env from this
+session is not something I should do even if it did.
+
+**But the empirical evidence is better than reading the variable**, because it
+tests the whole path rather than one config value.
+
+## What production says
+
+| Fact | Value |
+|---|---|
+| `security_events` rows | **1,803** |
+| of which `server_error` | **1,642** |
+| **Hours where `server_error` ≥ 25** (the alert threshold) | **4** |
+| Busiest such hour | **762 errors** — 15 Aug 15:00 UTC, **30× the threshold** |
+| Others | 550 (11 Aug), 231 (9 Aug), 27 (14 Jul) |
+| `security-monitor` runs recorded in `cron_runs` | 4 |
+| …of which alerted | **0** |
+| Are any of the four over-threshold hours inside the tracked window? | **No — all four predate cron tracking (15:00 today)** |
+
+## The verification only you can perform
+
+`cron_runs` began on 23 Aug 15:00, so it cannot say what happened on 9, 11 or
+15 August. The alert path either fired four times or zero times, and the
+difference is decisive:
+
+> **Did you receive a CareerRai security alert on 15 Aug, 11 Aug, 9 Aug, or
+> 14 Jul?**
+>
+> - **Yes, four alerts** → the webhook is configured and the transport works.
+>   Blocker #1 clears on evidence, not on an env var.
+> - **No alerts** → `SECURITY_ALERT_WEBHOOK_URL` is unset in production,
+>   `sendSecurityAlert` has been writing to `console.warn`, and **the only
+>   founder-alert path in CareerRai has never delivered anything.**
+
+That is a stronger test than reading the variable: it proves delivery, not
+configuration.
+
+## A separate P0 nobody has looked at
+
+**762 server errors in one hour on 15 Aug. 550 on 11 Aug. 231 on 9 Aug.**
+
+Whatever those were, they were never investigated — there is no incident
+record, no post-mortem, and `security_events.metadata` is the only trace. At
+740 students, 762 errors in an hour is roughly one per student. **This is
+exactly the incident class the system being designed here exists to surface,
+and it has happened at least four times already.**
+
+I am flagging it, not investigating it — that is its own workstream and would
+be scope creep here.
+
+---
+
+# ARTIFACT 1 — THE CANONICAL ERROR CONTRACT
+
+Ownership rule, stated once: **application code supplies context; the system
+decides classification, shape, severity, alert-worthiness and persistence.** A
+route may not choose any of those.
+
+```ts
+// ── The four severities. No other value is legal anywhere. ──────────────────
+export type Severity = 'P0' | 'P1' | 'P2' | 'P3';
+
+// ── Expected vs unexpected — the ruling that makes alerting survivable. ─────
+// EXPECTED is a student ACTION with a business outcome (wrong OTP, cancelled
+// payment). It is recorded and rate-monitored; it NEVER pages.
+// UNEXPECTED is a system FAILURE. It pages per severity.
+export type ErrorClass = 'EXPECTED' | 'UNEXPECTED';
+
+export type Category =
+  | 'AUTH' | 'OTP' | 'ONBOARDING' | 'PROFILE' | 'TIMETABLE' | 'PLAN'
+  | 'DAILY_LOG' | 'BUDDY' | 'MENTOR_SESSION' | 'CHAT'
+  | 'PAYMENT' | 'SUBSCRIPTION' | 'WEBHOOK'
+  | 'NOTIFICATION' | 'EMAIL' | 'WHATSAPP'
+  | 'DATABASE' | 'EXTERNAL_API' | 'CRON' | 'CLIENT' | 'SERVER';
+
+/**
+ * The registry. ONE definition per code; every consequence of a code is
+ * declared beside it, so no route can disagree with another about what a
+ * failure means, what the student is told, or what status it returns.
+ */
+export interface ErrorDef {
+  readonly code: string;
+  readonly category: Category;
+  readonly errorClass: ErrorClass;
+  readonly severity: Severity;
+  readonly http: 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503;
+  /** Shown to the student. Never contains internals. */
+  readonly userMessage: string;
+  readonly retryable: boolean;
+  readonly studentImpact: 'blocked' | 'degraded' | 'none';
+}
+
+// Illustrative entries — the full registry is derived from the 670 existing
+// error responses during Phase 2, not invented.
+export const ERRORS = {
+  OTP_INCORRECT: {
+    code: 'OTP_INCORRECT', category: 'OTP', errorClass: 'EXPECTED',
+    severity: 'P3', http: 400, retryable: true, studentImpact: 'none',
+    userMessage: 'That code is not right. Please check and try again.',
+  },
+  PAYMENT_PROVIDER_UNAVAILABLE: {
+    code: 'PAYMENT_PROVIDER_UNAVAILABLE', category: 'PAYMENT',
+    errorClass: 'UNEXPECTED', severity: 'P0', http: 503,
+    retryable: true, studentImpact: 'blocked',
+    userMessage: "Payment couldn't be completed right now. Please try again.",
+  },
+  SOURCE_UNAVAILABLE: {
+    code: 'SOURCE_UNAVAILABLE', category: 'DATABASE',
+    errorClass: 'UNEXPECTED', severity: 'P1', http: 503,
+    retryable: true, studentImpact: 'degraded',
+    userMessage: "We couldn't load that just now. Please try again.",
+  },
+} as const satisfies Record<string, ErrorDef>;
+
+// ── What a route supplies. Note what is ABSENT: no severity, no http, no
+// userMessage, no alert decision. Those belong to the registry. ─────────────
+export interface CaptureContext {
+  code: keyof typeof ERRORS;
+  cause: unknown;                       // the original error, never discarded
+  operation: string;                    // 'create_checkout'
+  routePattern: string;                 // '/api/payments/create-order'
+  requestId: string;
+  studentId?: string | null;            // UUID only
+  mutationAttempted?: boolean;
+  moneyInvolved?: boolean;
+  metadata?: Record<string, unknown>;   // scrubbed before storage
+}
+
+/** The ONLY error primitive. Never throws. Returns the id for correlation. */
+export declare function captureError(ctx: CaptureContext): Promise<string>;
+
+/** The ONLY error response builder. */
+export declare function errorResponse(
+  code: keyof typeof ERRORS, requestId: string
+): Response; // { ok:false, error:{ code, message, request_id, retryable } }
+```
+
+**`SOURCE_UNAVAILABLE` deliberately reuses the `Source<T>` vocabulary already
+shipped** in `src/lib/truth/source.ts`. The source-validity invariant and the
+error contract are the same system seen from two ends, not two systems.
+
+---
+
+# ARTIFACT 2 — FAILURE MATRIX + STATE MACHINE
+
+## Delivery state machine (database-owned)
+
+```
+DETECTED ─► PERSISTED ─► INCIDENT_OPEN ─► DELIVERY_PENDING
+                                               │
+                                    ┌──claim───┴──────────┐
+                                    ▼                     │
+                              DISPATCHING                 │ (claim lost —
+                                    │                     │  another worker)
+                    ┌───────────────┼──────────┐          │
+                    ▼               ▼          ▼          │
+                DELIVERED   DELIVERY_FAILED  (timeout)────┘
+                    │               │
+                    │        RECOVERY_PENDING ──exhausted──► DEAD_LETTER
+                    ▼
+                RESOLVED ◄── no observation for 10 min ── ESCALATED
+```
+
+Claim is a conditional `UPDATE … WHERE state='DELIVERY_PENDING'`; zero rows
+means another worker owns it. **No in-memory state, no lock service.**
+
+**Append-only, per your ruling:** `error_events` is INSERT-only. No application
+path may UPDATE or DELETE an observation. Corrections live in incident state;
+evidence is never rewritten. Enforced by RLS grants (INSERT only for the
+service role on that table) *and* a CI guard, so it cannot be undone quietly.
+
+## The failure matrix — no row says "we assume"
+
+| Failure | Event lost? | Founder notified? | Max delay | Duplicate possible? | Recovery |
+|---|---|---|---|---|---|
+| Route throws | No | Yes | ≤5 s P95 | No | automatic |
+| Route returns `{error}` | No | Yes if UNEXPECTED | ≤5 s P95 | No | automatic |
+| Expected user error (wrong OTP) | No | **No — by design** | n/a | n/a | rate monitor only |
+| DB INSERT times out | **Yes — possible** | best-effort direct webhook, flagged `unpersisted` | ≤5 s | **Yes — undeduplicated** | reconciliation on next healthy event |
+| Worker crash before dispatch | No | Yes | **≤60 s** (sweeper; Vercel cron floor) | No | automatic |
+| Worker crash *during* dispatch | No | Yes | ≤60 s | **Yes for P0/P1 by policy** | claim timeout → reclaim |
+| Webhook timeout / 500 | No | Yes | ≤5 s target, then backoff | No | idempotent retry |
+| Webhook succeeds, DB update fails | No | Already notified | — | **Yes for P0/P1 by policy** | claim timeout → reclaim |
+| Both channels fail | No | **No** | — | No | `DEAD_LETTER`, surfaced in daily digest |
+| Deploy mid-delivery | No | Yes | ≤60 s | No | claim timeout → reclaim |
+| 100k-student burst | No | Yes — **grouped** | ≤5 s P95 | No | fingerprint + threshold updates |
+| Duplicate scheduler fires job twice | No | One incident | ≤5 s | No | `UNIQUE(event_id)` + fingerprint |
+| Supabase wholly down | **Yes** | best-effort only | — | Yes | **cannot be recovered — see below** |
+
+**Two rows are honestly bad, and I am not dressing them up.** A DB outage means
+the event store is the thing that is down; the direct-webhook mitigation is
+unpersisted and undeduplicated, and "durable event persistence unavailable" is
+itself a P0 infrastructure event. Everything else is guaranteed durable.
+
+---
+
+# ARTIFACT 3 — DDL PROPOSAL (nothing created)
+
+Three tables. `incident_observations` was rejected — it is
+`error_events.incident_id`.
+
+```sql
+-- 1. incidents — the operational object. Low cardinality, long retention.
+CREATE TABLE incidents (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  incident_key    text NOT NULL UNIQUE,        -- the fingerprint
+  environment     text NOT NULL,
+  category        text NOT NULL,
+  error_code      text NOT NULL,
+  route_pattern   text NOT NULL,
+  deploy_id       text,
+  severity        text NOT NULL CHECK (severity IN ('P0','P1','P2','P3')),
+  state           text NOT NULL DEFAULT 'INCIDENT_OPEN',
+  alert_state     text NOT NULL DEFAULT 'DELIVERY_PENDING',
+  claimed_at      timestamptz, claimed_by text,
+  first_seen      timestamptz NOT NULL DEFAULT now(),
+  last_seen       timestamptz NOT NULL DEFAULT now(),
+  observation_count      bigint NOT NULL DEFAULT 0,
+  affected_students      bigint NOT NULL DEFAULT 0,
+  last_alerted_threshold int NOT NULL DEFAULT 0,
+  exemplar_message text,      -- internal, ONE copy per incident, not per event
+  exemplar_stack   text,      -- the 100k-observation storage win
+  resolved_at     timestamptz
+);
+CREATE INDEX ON incidents (alert_state, claimed_at) WHERE alert_state <> 'RESOLVED';
+CREATE INDEX ON incidents (last_seen DESC);
+
+-- 2. error_events — APPEND ONLY. High volume. Monthly partitions.
+CREATE TABLE error_events (
+  event_id     uuid NOT NULL,
+  incident_id  uuid NOT NULL REFERENCES incidents(id),
+  occurred_at  timestamptz NOT NULL,
+  ingested_at  timestamptz NOT NULL DEFAULT now(),
+  student_id   uuid,                 -- NULLed at 30 days
+  request_id   text,
+  severity     text NOT NULL,
+  route_pattern text NOT NULL,
+  deploy_id    text,
+  origin       text NOT NULL CHECK (origin IN ('server','client','cron')),
+  PRIMARY KEY (event_id, ingested_at)
+) PARTITION BY RANGE (ingested_at);
+CREATE INDEX ON error_events (incident_id, ingested_at DESC);
+CREATE INDEX ON error_events (request_id);   -- client↔server correlation
+
+-- 3. alert_deliveries — one row per ATTEMPT. Proof the founder was told.
+CREATE TABLE alert_deliveries (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  incident_id  uuid NOT NULL REFERENCES incidents(id),
+  attempt      int NOT NULL,
+  channel      text NOT NULL CHECK (channel IN ('webhook','email')),
+  reason       text NOT NULL,   -- opened | escalated | recovered
+  state        text NOT NULL,
+  attempted_at timestamptz NOT NULL DEFAULT now(),
+  accepted_at  timestamptz,
+  error_text   text,
+  UNIQUE (incident_id, reason, attempt)   -- idempotency across retries
+);
+```
+
+| | Rows/day @740 | @100k | @1M events/day |
+|---|---|---|---|
+| `error_events` | ~20 | ~3,000 | 1,000,000 |
+| `incidents` | <5 | ~20 | ~50 |
+| `alert_deliveries` | <5 | ~40 | ~150 |
+
+**Why partitioning is not optional.** At 1M events/day, 30-day retention is 30M
+rows. `DELETE FROM error_events WHERE ingested_at < …` on that table is a
+multi-minute lock — an outage caused by the observability system. `DROP
+PARTITION` is instant. **Retrofitting partitions onto a live 30M-row table is
+itself an outage, which is why this must be right on day one and why I am not
+guessing at it under time pressure.**
+
+**RLS:** service-role only on all three; no student-facing read path.
+**Append-only enforcement:** grant INSERT (not UPDATE/DELETE) on `error_events`.
+**Rollback:** all three are new and unreferenced by existing code — `DROP TABLE`
+is clean. There is no data migration and nothing to reverse.
+
+**Retention:** P0/P1 events 90 d, P2/P3 30 d, `student_id` NULLed at 30 d,
+incidents 1 y, deliveries 90 d.
+
+---
+
+# BLOCKER #6 (yours) — SINGULAR NOTIFICATION OWNERSHIP
+
+Accepted, and it is the right addition. After migration these must be unable to
+become founder-alert paths:
+
+| Today | After |
+|---|---|
+| `security-monitor` (hourly threshold) | **retired as an alert path**; becomes an anomaly *rate* detector that emits canonical events |
+| `founder-alerts` cron | **consumer** of the dispatcher, per your ruling — its independent dispatch logic is deleted |
+| `instrumentation.ts` | calls `captureError`, never alerts |
+| `report-error.ts` / `client_errors` | feed ingestion, never alert |
+| `console.error` | permitted for local debugging; **CI-forbidden on production error paths** |
+| direct `sendSecurityAlert` / `sendAdminAlert` | **CI-forbidden outside the dispatcher** |
+
+Enforced by a guard modelled on `population-read.guard.test.ts`: the alert
+transports may be imported by exactly one module, with a shrinking allowlist.
+Without that guard this becomes the seventh system rather than the last one.
+
+---
+
+# STATUS: **STILL NOT READY** — 3 of 6 blockers cleared
+
+| # | Blocker | Status |
+|---|---|---|
+| 1 | Webhook verified | **OPEN — needs your one-line answer above** |
+| 2 | DDL authorised | **PROPOSED, awaiting review** |
+| 3 | P2/P3 sampling threshold | **OPEN — still a guess; needs live baseline** |
+| 4 | Recovery ≤60 s accepted as degraded | **OPEN — needs explicit acceptance** |
+| 5 | Supabase-outage best-effort accepted | **OPEN — needs explicit acceptance** |
+| 6 | Singular notification ownership | **CLEARED — design + guard above** |
+| — | Canonical contract | **CLEARED — Artifact 1** |
+| — | Failure matrix + state machine | **CLEARED — Artifact 2** |
