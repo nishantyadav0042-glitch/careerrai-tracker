@@ -4,6 +4,8 @@ import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gem
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { isCovered } from './coverage-status';
+import { getLogDateString } from './streak-utils';
+import { readDailyLogWindow, loggedDaysOrUnknown } from './reads/daily-log';
 
 // Shared generator behind the buddy's AI facts-briefing — used by the manual
 // "Refresh" button AND by ambient auto-triggers (mock submitted, emotional flag
@@ -32,17 +34,20 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
     .single();
   if (!student || student.buddy_id !== buddyId) return null;
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  // 0C.3 Wave 1. Was `now − 7d` — an EIGHT-day inclusive window rendered to a
+  // paid mentor as "{n}/7 days logged". This producer was MISSED by the first
+  // 0C.3 audit pass and found only when the bypass guard was written against
+  // the CLAIM ("/7 days") rather than against the arithmetic. Recorded because
+  // it is the argument for that guard: the sixth copy was found by hand, the
+  // seventh was found by the guard.
+  const todayKey = getLogDateString();
+  const logWindow = await readDailyLogWindow(admin, studentId, todayKey);
+  const daysLoggedFact = loggedDaysOrUnknown(logWindow);
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString().split('T')[0];
 
-  const [{ data: logs }, { data: debriefs }, { count: totalMocks }, topicMemory, { data: routines }, { data: completions }] = await Promise.all([
-    admin
-      .from('daily_reports')
-      .select('report_date, study_duration, topics_covered')
-      .eq('student_id', studentId)
-      .gte('report_date', sevenDaysAgo.toISOString().split('T')[0])
-      .order('report_date', { ascending: false }),
+  const logs = logWindow.state === 'value' ? logWindow.value.rows : null;
+
+  const [{ data: debriefs }, { count: totalMocks }, topicMemory, { data: routines }, { data: completions }] = await Promise.all([
     admin
       .from('mock_debriefs')
       .select('taken_on, overall_percentile, varc, dilr, qa, error_buckets')
@@ -94,7 +99,10 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
     .map((s) => `${s} tasks completed ${doneCount[s] ?? 0}/${served[s]} (last 14 days)`);
   const struggledMarks = (completions ?? []).filter((c) => c.confidence === 'red').length;
 
-  const daysLogged = logs?.length ?? 0;
+  // The registered fact. `null` when the read was UNAVAILABLE — the briefing
+  // then omits the line rather than telling a mentor "0/7 days logged" about a
+  // student who logged all seven.
+  const daysLogged = daysLoggedFact;
   // Wellbeing is NOT presented as measurement (J3, re-cut).
   //
   // This block used to state "Avg confidence: X/5, avg stress: Y/5" in the
@@ -115,8 +123,8 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
   // The fix is not a filter, which cannot be written. It is provenance: when
   // confidence carries a stamp the way study_duration does, the average of the
   // STAMPED rows can come back.
-  const avgHours = daysLogged > 0
-    ? ((logs ?? []).reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
+  const avgHours = daysLogged !== null && daysLogged > 0 && logs !== null
+    ? (logs.reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
     : '0';
 
   const topicsFlat = (logs ?? []).flatMap((r) => (r.topics_covered ?? []) as string[]);
@@ -146,7 +154,10 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
 
   const factsContext = [
     `Streak: ${liveStreak(student.current_streak, student.last_log_date)} days`,
-    `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
+    // UNKNOWN says so rather than borrowing the shape of a bad week.
+    daysLogged === null
+      ? 'Days logged this week: UNKNOWN — the log read failed. Do not treat as zero.'
+      : `Last 7 days: ${daysLogged}/7 days logged, avg ${avgHours} hrs/day`,
     topTopics ? `Topics covered: ${topTopics}` : 'No topics logged',
     ...syllabusFacts,
     debriefs?.length ? `Recent mocks:\n${mocksText}` : 'No mocks logged recently',
@@ -198,14 +209,16 @@ export async function generateBuddyBriefing(studentId: string, buddyId: string):
 // Refresh button — and `generateBuddyBriefing` above is the only export it needs.
 
 function fallbackBriefing(
-  daysLogged: number,
+  daysLogged: number | null,
   avgHours: string,
   streak: number,
   debriefs: MockDebrief[],
   syllabusFacts: string[] = []
 ): string {
   const lines = [
-    `• Logged ${daysLogged}/7 days, averaging ${avgHours} hrs/day. Streak: ${streak} days.`,
+    daysLogged === null
+      ? `• Days logged this week could not be read — unknown, not zero. Streak: ${streak} days.`
+      : `• Logged ${daysLogged}/7 days, averaging ${avgHours} hrs/day. Streak: ${streak} days.`,
     ...syllabusFacts.map((f) => `• ${f}`),
   ];
   if (debriefs.length > 0 && debriefs[0].overall_percentile != null) {

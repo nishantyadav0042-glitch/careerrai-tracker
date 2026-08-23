@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { liveStreak } from '@/lib/streak-utils';
+import { liveStreak, getLogDateString } from '@/lib/streak-utils';
+import { readDailyLogWindow, loggedDaysOrUnknown } from '@/lib/reads/daily-log';
 import { callGemini, GOVERNING_RULE, stripNames, geminiEnabled } from '@/lib/gemini';
 import { overAiHourlyLimit, recordAiCall } from '@/lib/ai-rate-limit';
 
@@ -33,15 +34,17 @@ export async function POST(request: NextRequest) {
     }
     await recordAiCall(admin, user.id, 'feedback_draft');
 
-    // Fetch last 7 days of logs
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const { data: logs } = await admin
-      .from('daily_reports')
-      .select('report_date, study_duration, topics_covered, mock_score, mock_taken')
-      .eq('student_id', studentId)
-      .gte('report_date', sevenDaysAgo.toISOString().split('T')[0])
-      .order('report_date', { ascending: false });
+    // 0C.3 Wave 1. Was an EIGHT-day window (`now − 7d` + `.gte()`) rendered
+    // to the model, and to the buddy, as "{n}/7 days logged".
+    const logWindow = await readDailyLogWindow(admin, studentId, getLogDateString());
+    const daysLoggedFact = loggedDaysOrUnknown(logWindow);
+    if (daysLoggedFact === null) {
+      // Refuse rather than draft. This text goes into a message a mentor sends
+      // to a student; a fabricated "0/7 days logged" caused by a dead query is
+      // worse than no draft at all.
+      return NextResponse.json({ error: 'Could not read this week\'s logs — try again shortly.' }, { status: 503 });
+    }
+    const logs = logWindow.state === 'value' ? logWindow.value.rows : [];
 
     // Fetch latest mock debrief
     const { data: latestDebrief } = await admin
@@ -52,9 +55,9 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .maybeSingle();
 
-    const daysLogged = logs?.length ?? 0;
+    const daysLogged = daysLoggedFact;
     const avgHours = daysLogged > 0
-      ? ((logs ?? []).reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
+      ? (logs.reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
       : '0';
 
     const factsContext = [

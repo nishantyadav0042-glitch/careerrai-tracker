@@ -14,6 +14,7 @@
 // caller supplies persisted rows; nothing in this module may query.
 
 import { type FactDef, type Provenance, known, unknown } from './contract';
+import { loggedDaysLast7, loggedToday } from './daily-log';
 import { type CanonicalQuestion } from './canonical';
 import { portionOf } from '../completion-portion';
 
@@ -85,5 +86,17 @@ export const observedDayOutcome: FactDef<
   },
 };
 
+// ── 0C.3 Wave 1 (23 Aug) ────────────────────────────────────────────────────
+//
+// The logged-day facts live in ./daily-log.ts rather than inline here: they
+// share a window authority (./window.ts) and an input shape, and the file
+// carries the reasoning for why zero is a measurement in this one case and a
+// lie in most others. Re-exported so `FACTS` stays the single index.
+export { loggedDaysLast7, loggedToday } from './daily-log';
+
 /** Every fact this registry defines, by key. One definition each. */
-export const FACTS = { observed_day_outcome: observedDayOutcome } as const;
+export const FACTS = {
+  observed_day_outcome: observedDayOutcome,
+  logged_days_last_7: loggedDaysLast7,
+  logged_today: loggedToday,
+} as const;

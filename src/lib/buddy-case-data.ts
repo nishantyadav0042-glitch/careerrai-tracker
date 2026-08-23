@@ -3,6 +3,8 @@ import { mockInformedFocus, type DebriefRow } from '@/lib/mock-informed-focus';
 import { remainingSyllabusHours } from '@/lib/study-pace';
 import { QUANT_TOPICS, VERBAL_TOPICS, LRDI_TOPICS } from '@/lib/topics-constants';
 import type { CoverageStatus } from '@/lib/coverage-status';
+import { getLogDateString } from './streak-utils';
+import { trailingWindow } from './facts/window';
 
 // ── The student's case, assembled from their real rows ──────────────────────
 //
@@ -23,8 +25,17 @@ export interface StudentCase {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadStudentCase(admin: any, studentId: string): Promise<StudentCase> {
-  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
+  // 0C.3 Wave 1. `since` was `now − 7d`, so the `.gte('report_date', since)`
+  // below spanned EIGHT inclusive days while the surface calls it "last 7
+  // days". The window now comes from the authority.
+  //
+  // Only the WINDOW is corrected here. What this file does with the rows —
+  // summing `study_duration` and firing "you're falling behind your own plan"
+  // on the paid-conversion screen — is G4 consumer #20, whose semantics are
+  // unresolved (credited vs total effort) and deferred to Wave 5. Nothing here
+  // canonises hours.
+  const today = getLogDateString();
+  const since = trailingWindow(today).start;
 
   const [
     { data: profile },

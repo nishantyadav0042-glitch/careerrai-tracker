@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/card';
 import { BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DailyReport } from '@/types';
+import { trailingWindow } from '@/lib/facts/window';
+import { getLogDateString } from '@/lib/streak-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,9 +30,15 @@ export const dynamic = 'force-dynamic';
 export default async function BuddyRosterPage() {
   const { admin } = await requireAdmin();
 
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekAgoStr = weekAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // 0C.3 Wave 1. Was `now − 7d`, i.e. an EIGHT-day inclusive window feeding a
+  // `daysSubmitted` that is rendered as "N/7". The window now comes from the
+  // authority; the day key comes from the 05:30-IST study day rather than an
+  // IST calendar date, which disagreed with it between 00:00 and 05:30.
+  //
+  // The BATCH READ itself is deliberately untouched — an unchecked
+  // `.in(student_id, …)` over the whole cohort is the weekly-plan-reconcile
+  // shape, and that migration is B3b, gated on cron telemetry.
+  const weekAgoStr = trailingWindow(getLogDateString()).start;
    
   const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
 

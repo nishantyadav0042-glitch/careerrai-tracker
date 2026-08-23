@@ -35,6 +35,7 @@ import { ConfirmHoursCard } from '@/components/home/confirm-hours-card';
 import { dailyHours, needsHoursConfirmation } from '@/lib/daily-hours';
 import { isCovered } from '@/lib/coverage-status';
 import { HomeTimetableCard } from '@/components/home/home-timetable-card';
+import { loggedToday } from '@/lib/facts/daily-log';
 
 export const metadata = {
   title: 'CareerRai',
@@ -253,9 +254,22 @@ export default async function DailyTrackerPage() {
   const serverPendingDebrief: { report_date: string; updated_at: string } | null =
     recentMock && !existingDebrief ? recentMock : null;
 
+  // 0C.3 Wave 1 — fact 6 (`logged_today`) from the registered producer, over
+  // the rows this page already holds. Was `logs[0].report_date === today`,
+  // which is right only while the query stays ordered descending; the fact
+  // asks whether today is in the set, and says so.
+  //
+  // UNKNOWN (a malformed date reaching the producer) renders as NOT LOGGED
+  // here, and that is the safe direction on this surface: the log sheet stays
+  // open. It is the only place in this wave where an unknown collapses, and it
+  // collapses toward asking the student rather than toward a claim about them.
+  const loggedTodayFact = loggedToday.produce({
+    reportDates: (logs ?? []).map((l) => l.report_date as string),
+    today: getLogDateString(),
+  });
   const initialLogging = {
     streak: (streakRow as StreakData | null) ?? null,
-    hasLoggedToday: (logs?.[0]?.report_date ?? null) === getLogDateString(),
+    hasLoggedToday: loggedTodayFact.known ? loggedTodayFact.value : false,
   };
 
   // Yesterday backlog — from already-fetched logs.

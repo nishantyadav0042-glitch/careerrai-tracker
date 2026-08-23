@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { callGemini, GOVERNING_RULE } from '@/lib/gemini';
+import { getLogDateString } from '@/lib/streak-utils';
+import { readDailyLogWindow, loggedDaysOrUnknown } from '@/lib/reads/daily-log';
 
 // Zero-cost fallback (founder, 5 Aug: "spend nothing"): when the AI is
 // unavailable for any reason, the card still shows a REAL observation
@@ -57,22 +59,23 @@ export async function POST(request: NextRequest) {
     const weekStartISO = weekStart.toISOString();
     const weekKey = weekStart.toISOString().split('T')[0];
 
-    // Fetch last 7 days of logs
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    // 0C.3 Wave 1. Was `sevenDaysAgo = now − 7d` + `.gte()`, i.e. EIGHT
+    // inclusive days, rendered on this very card as "{n}/7 days logged".
+    // The window and the count both come from the authority now.
+    const logWindow = await readDailyLogWindow(admin, studentId, getLogDateString());
+    const daysLoggedFact = loggedDaysOrUnknown(logWindow);
+    if (daysLoggedFact === null) {
+      // A failed read is not a quiet zero. The card says nothing rather than
+      // telling a buddy their student logged 0 of 7 days because a query died.
+      return NextResponse.json({ error: 'Could not read this week\'s logs — try again shortly.' }, { status: 503 });
+    }
+    const logs = logWindow.state === 'value' ? logWindow.value.rows : [];
 
-    const { data: logs } = await admin
-      .from('daily_reports')
-      .select('report_date, study_duration, topics_covered, mock_score, mock_taken')
-      .eq('student_id', studentId)
-      .gte('report_date', sevenDaysAgo.toISOString().split('T')[0])
-      .order('report_date', { ascending: true });
-
-    const daysLogged = logs?.length ?? 0;
+    const daysLogged = daysLoggedFact;
     const avgHours = daysLogged > 0
-      ? ((logs ?? []).reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
+      ? (logs.reduce((s, r) => s + (r.study_duration ?? 0), 0) / daysLogged).toFixed(1)
       : '0';
-    const mockLogs = (logs ?? []).filter(r => r.mock_taken);
+    const mockLogs = logs.filter(r => r.mock_taken);
     const latestMock = mockLogs.length > 0 ? mockLogs[mockLogs.length - 1] : null;
 
     const summaryJson = {

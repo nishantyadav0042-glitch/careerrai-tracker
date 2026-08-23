@@ -5,6 +5,8 @@ import { sendRedFlagAlert } from '@/lib/email';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
 import type { DailyReport } from '@/types';
+import { trailingWindow } from '@/lib/facts/window';
+import { getLogDateString } from '@/lib/streak-utils';
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -20,9 +22,15 @@ export async function POST(request: NextRequest) {
   return withCronTracking('/api/cron/check-red-flags', async () => {
 
     const admin = createAdminClient();
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekAgoStr = weekAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    // 0C.3 Wave 1. Was `now − 7d`, i.e. an EIGHT-day inclusive window feeding a
+    // `daysSubmitted` that is rendered as "N/7". The window now comes from the
+    // authority; the day key comes from the 05:30-IST study day rather than an
+    // IST calendar date, which disagreed with it between 00:00 and 05:30.
+    //
+    // The BATCH READ itself is deliberately untouched — an unchecked
+    // `.in(student_id, …)` over the whole cohort is the weekly-plan-reconcile
+    // shape, and that migration is B3b, gated on cron telemetry.
+    const weekAgoStr = trailingWindow(getLogDateString()).start;
 
     const { data: students } = await admin.from('profiles').select('id, full_name, buddy_id').eq('role', 'student');
     if (!students?.length) return NextResponse.json({ flagged: 0 });
