@@ -17,12 +17,19 @@ written today.
 | Week reconciled | Ran at (UTC) | Students penalised | Actually studied | Recorded correctly | **Wrongly zeroed** | Hours erased | Days wrongly added |
 |---|---|---|---|---|---|---|---|
 | 3–9 Aug | 9 Aug 13:31 | 228 | 2 | 2 | **0** | 0 | 0 |
-| 10–16 Aug | 16 Aug 13:30 | 373 | 21 | 20 | **1** | 6.9 | 2 |
+| 10–16 Aug | 16 Aug 13:30 | 373 | 21 | 20 | **0** *(corrected — see below)* | 0 | 0 |
 | **17–23 Aug** | **23 Aug 13:30** | **655** | **57** | **0** | **57** | **277.9** | **284** |
 
-**The failure is monotonic in cohort size.** At 228 students the read worked
-(2 of 2 correct). At 373 it worked (20 of 21). At 655 it failed completely —
-**0 of 57**, and every one of the 655 rows recorded `actual_hours = 0.00`.
+**CORRECTION (same day, after deeper checking — see
+`RECONCILE-RECOVERY-CLASSIFICATION.md` §1).** The "1 wrongly zeroed" on 16 Aug
+was an artefact of MY comparison, not a defect in that run. I compared the job's
+output against the FINAL state of the week; the student in question logged those
+6.9 hours at 16:20 UTC, **2h50m after the 13:30 run**. The read was correct.
+
+So the failure is not a gradient — it is a **step change**, and it began exactly
+on 23 Aug: 0 failures, 0 failures, then total failure. The correct denominator is
+the `.in()` list, which is EVERY student, not those extended: **263 students
+(worked), 428 (worked), 739 (failed completely).**
 
 That is the strongest evidence yet for the request-size hypothesis, which was
 previously recorded as **unproven**. It is still not a measurement of the URL
