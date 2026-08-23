@@ -76,8 +76,8 @@ UNAVAILABLE → [] → 0 → "student did nothing" → mutation
 | 3 | One failed chunk invalidates the aggregate unless partial data is explicitly designed for | `readRowsForIds` already all-or-nothing |
 | 4 | Source validity reaches the mutation boundary as a typed value | `gateOnSource`; per-call-site |
 | 5 | No `catch → []`, `catch → 0`, `\|\| 0` turning unavailable into a decision | needs its own guard — **not yet written** |
-| 6 | Every mutation-capable cron has a test proving: source failure → zero mutation | **not yet written** — one per cron |
-| 7 | Regression test at 656+ students and a substantially larger synthetic population | partially exists (`truth/batch` tested at 656/1,000/5,000/50,000); needs per-cron coverage |
+| 6 | Every mutation-capable cron has a test proving: source failure → zero mutation | **4 of 13 done** — `check-red-flags` (10), `study-companion` (23), `daily-reminder` (16), `onboarding-morning` (17) |
+| 7 | Regression test at 656+ students and a substantially larger synthetic population | **4 of 13 done** — each migrated cron asserts both failure and success at 2,000 students, well above the 739 at which production broke |
 | 8 | Do not claim the 24 KB PostgREST hypothesis as fact | **honoured** — recorded as bracketed (~19.3 KB worked, ~33.3 KB failed), not proven, in the guard's own header |
 | 9 | Keep the Sunday boundary decision separate from the mechanical migration | **honoured** — ruling recorded in `INVARIANT-RECONCILIATION-EVIDENCE.md`, not implemented here |
 | 10 | Re-scan after migration and prove the count actually fell | **built into gate 1** — the baseline test fails if a migrated file is left listed, so the number cannot be gamed by moving code into a helper |
@@ -133,6 +133,29 @@ files as newly discovered — i.e. it looked like the widening had transformed t
 whole test universe. It had not; the flag simply did not apply. The table above
 comes from running the actual previous config file, which is the only
 measurement that answers the question.
+
+## Migrated so far — read → decision → side effect
+
+The enumeration matters more than the chunking. "The read is chunked, so it is
+safe" is exactly the claim that misses a partial read becoming a student-facing
+statement.
+
+| # | Path | Read → derived decision → side effect | What a failed read did before |
+|---|---|---|---|
+| 1 | `check-red-flags` | `daily_reports` → `reports.length < 4` → in-app alert + **email to the mentor** | Every mentor told every student had "gone quiet". Dedup read also failed OPEN, so a broken query produced a **duplicate** alert |
+| 2 | `study-companion` | `daily_reports`/`streak_data`/`topic_coverage` → copy + eligibility → **push**; `notifications` → "already messaged today?" | An unavailable dedup read left `alreadySent` empty → **re-push the whole cohort** |
+| 3 | `daily-reminder` | `daily_reports(today)` → "logged today?"; `daily_reports(all)` → `size 0` = never logged → **which ladder**; `notifications` → duplicate | Already chunked, but each chunk ended `.data ?? []`, so **one failed chunk shrank a flattened aggregate** and the walk continued believing it was complete |
+| 4 | `onboarding-morning` | `daily_reports` → `loggedDays.size`, which gates the send **and becomes `dayNumber = size + 1`** | Not merely under-sending: **telling a student they are on day 2 of their arc when they are on day 5.** An infrastructure failure rendered as a student-facing claim |
+
+Row 4 is the case that justifies enumerating side effects rather than auditing
+reads. Chunking `daily_reports` would have looked sufficient; only tracing the
+value to where it is *rendered* shows that the number in the message is derived
+from a read that could be partial.
+
+Row 3 is the case that shows chunking alone is not safety. `daily-reminder`
+carried a correct comment about the PostgREST request-line limit and chunked
+accordingly — and was still unsafe, in a way that is harder to see than no
+chunking at all, because a partial aggregate looks like a complete one.
 
 ## Order of migration
 

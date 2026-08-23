@@ -4,9 +4,49 @@ import { sendDailyReminder } from '@/lib/email';
 import { onboardingCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
 import { ACTIVATION_DAYS, activationCopy, dispatch, BUDGET_ACTIVE, BUDGET_SETUP, dreamCollegeLabel } from '@/lib/notification-os';
-import { sweep, chunked, incompleteWarning } from '@/lib/cron-sweep';
+import { sweep, incompleteWarning } from '@/lib/cron-sweep';
 import { sendAdminAlert } from '@/lib/email';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { readRows, isUnavailable, type Source } from '@/lib/truth/source';
+import { readRowsForIds } from '@/lib/truth/batch';
+
+// ── B3b #3 — read safety ONLY ──────────────────────────────────────────────
+//
+// Activation/staging semantics are untouched: the 14-day candidate window, the
+// ACTIVATION_DAYS ladder, the `loggedDays.size >= 7` graduation, the IST
+// calendar `today`, and every piece of copy stay exactly as they were.
+//
+// READ -> DERIVED DECISION -> SIDE EFFECT, which is what a "the read is
+// chunked, so it is safe" claim misses:
+//
+//   profiles                -> who is a candidate at all      -> (gates everything)
+//   daily_reports(today)    -> "already logged today?"        -> reminder SUPPRESSED or sent
+//   daily_reports(all)      -> loggedDays.size: 0 = never
+//                              logged (activation ladder),
+//                              >=7 = graduated                -> WHICH ladder, and the day number
+//   notifications           -> "already reminded today?"      -> duplicate send
+//
+// Every one of those decisions reads a MISSING ROW as a fact about the student.
+// An empty result from a dead query says "never logged" just as loudly as a
+// genuinely empty table, and the student is then told so.
+interface ReminderStudent {
+  id: string;
+  full_name: string;
+  email: string | null;
+  notif_prefs: unknown;
+  created_at: string;
+  onboarding_completed: boolean | null;
+  onboarding_last_activity_at: string | null;
+  dream_colleges: unknown;
+}
+
+/** One shape for every "a source died, remind nobody" exit. */
+function reminderSourceDead(reason: string, candidates: number) {
+  console.error('[daily-reminder] source unavailable — nobody was reminded', reason);
+  return NextResponse.json(
+    { ok: false, skipped: 'source_unavailable', reason, reminded: 0, candidates },
+    { status: 503 });
+}
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -44,34 +84,55 @@ async function dailyReminderRun(): Promise<NextResponse> {
   const todayStart = new Date(today + 'T00:00:00+05:30').toISOString();
   const fourteenDaysAgoIso = new Date(Date.now() - 14 * 86_400_000).toISOString();
 
-  const { data: students } = await admin
-    .from('profiles')
-    .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_last_activity_at, dream_colleges')
-    .eq('role', 'student')
-    .gte('created_at', fourteenDaysAgoIso);
-  if (!students?.length) return NextResponse.json({ reminded: 0 });
+  const studentsSource = await readRows<ReminderStudent>('profiles(students)', () =>
+    admin
+      .from('profiles')
+      .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_last_activity_at, dream_colleges')
+      .eq('role', 'student')
+      .gte('created_at', fourteenDaysAgoIso));
+  if (isUnavailable(studentsSource)) return reminderSourceDead(studentsSource.reason, 0);
+  const students = studentsSource.state === 'value' ? studentsSource.value : [];
+  if (!students.length) return NextResponse.json({ ok: true, reminded: 0 });
 
   const studentIds = students.map((s) => s.id);
 
-  // Chunked because PostgREST puts `.in()` in the URL: at 10,000 students a
-  // single filter blows the request-line limit and fails as an unreadable HTTP
-  // error, nothing like "your list was too long".
-  const idChunks = chunked(studentIds);
-  const [todayReports, allReports, todayNotifs] = await Promise.all([
-    (async () => (await Promise.all(idChunks.map(async (ids) =>
-      (await admin.from('daily_reports').select('student_id').in('student_id', ids).eq('report_date', today)).data ?? []
-    ))).flat())(),
-    (async () => (await Promise.all(idChunks.map(async (ids) =>
-      (await admin.from('daily_reports').select('student_id, report_date').in('student_id', ids)).data ?? []
-    ))).flat())(),
-    (async () => (await Promise.all(idChunks.map(async (ids) =>
-      (await admin.from('notifications').select('user_id').in('user_id', ids)
-        .in('type', ['onboarding_evening', 'activation']).gte('created_at', todayStart)).data ?? []
-    ))).flat())(),
+  // ── B3b #3. This job was ALREADY chunked — and that made it look defended.
+  //
+  // Each chunk ended in `.data ?? []`, so ONE failed chunk contributed an empty
+  // array to a flattened aggregate and the job carried on with a partial answer
+  // it believed was complete. That is worse than not chunking: an unchunked
+  // read fails all at once and is at least obvious. Gate 3 is exactly this —
+  // one failed chunk must invalidate the aggregate, not shrink it.
+  //
+  // readRowsForIds keeps the chunking this file already had (its own comment,
+  // below, correctly anticipated the request-line limit) and makes the failure
+  // all-or-nothing.
+  const [todaySource, allSource, notifSource] = await Promise.all([
+    readRowsForIds<string, { student_id: string }>('daily_reports(today)', studentIds, (ids) =>
+      admin.from('daily_reports').select('student_id').in('student_id', ids).eq('report_date', today)),
+    readRowsForIds<string, { student_id: string; report_date: string }>('daily_reports(all)', studentIds, (ids) =>
+      admin.from('daily_reports').select('student_id, report_date').in('student_id', ids)),
+    readRowsForIds<string, { user_id: string }>('notifications(dedup)', studentIds, (ids) =>
+      admin.from('notifications').select('user_id').in('user_id', ids)
+        .in('type', ['onboarding_evening', 'activation']).gte('created_at', todayStart)),
   ]);
 
+  const dead = ([
+    ['daily_reports(today)', todaySource],
+    ['daily_reports(all)', allSource],
+    ['notifications', notifSource],
+  ] as Array<[string, Source<unknown[]>]>).find(([, src]) => isUnavailable(src));
+  if (dead) {
+    const src = dead[1] as Extract<Source<unknown[]>, { state: 'unavailable' }>;
+    return reminderSourceDead(`${dead[0]}: ${src.reason}`, students.length);
+  }
+
+  const rowsOf = <T,>(src: Source<T[]>): T[] => (src.state === 'value' ? src.value : []);
+  const todayReports = rowsOf(todaySource);
+  const allReports = rowsOf(allSource);
+
   const submittedIds = new Set(todayReports.map((r) => r.student_id));
-  const reminderSentToday = new Set(todayNotifs.map((n) => n.user_id));
+  const reminderSentToday = new Set(rowsOf(notifSource).map((n) => n.user_id));
 
   const loggedDaysByStudent = new Map<string, Set<string>>();
   for (const r of allReports) {
@@ -154,6 +215,7 @@ async function dailyReminderRun(): Promise<NextResponse> {
   }
 
   return NextResponse.json({
+    ok: true,
     reminded,
     total: students.length,
     complete: result.complete,
