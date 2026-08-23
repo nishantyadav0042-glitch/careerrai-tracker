@@ -31,11 +31,11 @@ on 23 Aug: 0 failures, 0 failures, then total failure. The correct denominator i
 the `.in()` list, which is EVERY student, not those extended: **263 students
 (worked), 428 (worked), 739 (failed completely).**
 
-That is the strongest evidence yet for the request-size hypothesis, which was
-previously recorded as **unproven**. It is still not a measurement of the URL
-limit itself, but "worked at 373, failed at 655, in the same job on consecutive
-Sundays" is no longer a guess. I am upgrading it from *unproven* to *strongly
-supported*, not to *confirmed*.
+That brackets the request-size hypothesis, previously recorded as **unproven**:
+~19.3 KB of ids worked, ~33.3 KB failed. Consistent with the 24 KB figure — and
+consistent is all it is. **Not reproduced, not proven.** Proving it needs a
+PostgREST GET with a growing `in()` list, which needs an API key I deliberately
+do not hold in this session.
 
 ## 2. The job reported success
 
@@ -78,13 +78,13 @@ row's `new_date`.
 |---|---|
 | Today's rows still the active cause | **655 of 655** |
 | Days recoverable from today's run | **3,690** |
-| Not reversible | **1** — Apeksha Bhadouriya's **16 Aug** row (+2 days, 6.9 h erased). Her date has since been moved again by today's run, so that older extension is no longer the active cause. |
+| Not reversible | **0 from this run.** Apeksha Bhadouriya's **16 Aug** row was previously listed here as damage. It is not: the correction above shows that run read correctly and her extension was valid on the evidence available. There is nothing to reverse. |
 
-This confirms rather than contradicts the earlier record. The previously logged
-"57 rows / 56 students / ~282 hours / ~282 days, 1 needing manual review
-(Apeksha)" describes **the harm**, and it matches today's wrongly-zeroed
-population (57 students, 277.9 h, 284 days) within rounding. What that record
-did not capture is that **655 students had a date moved, not 57.**
+This largely confirms the earlier record. The previously logged "57 rows / 56
+students / ~282 hours / ~282 days" describes **the harm**, and matches today's
+wrongly-zeroed population (57 students, 277.9 h, 284 days) within rounding. Two
+things that record got wrong: **655 students had a date moved, not 57**, and the
+"1 needing manual review" was not damage at all.
 
 ## 5. The decision I am not making
 
