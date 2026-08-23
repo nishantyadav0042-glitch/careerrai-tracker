@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 import { fetchOrderPayments } from '@/lib/razorpay';
 import { activatePaidOrder } from '@/lib/activate-payment';
 
@@ -27,63 +28,65 @@ const BATCH = 50;
 
 export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const admin = createAdminClient();
+  return withCronTracking('/api/cron/reconcile-payments', async () => {
+    const admin = createAdminClient();
 
-  const now = Date.now();
-  const { data: stuck } = await admin
-    .from('student_payments')
-    .select('id, student_id, plan, coupon_code, amount, session_credit_id, razorpay_order_id, created_at')
-    .eq('status', 'created')
-    .not('razorpay_order_id', 'is', null)
-    .lt('created_at', new Date(now - MIN_AGE_MINUTES * 60_000).toISOString())
-    .gt('created_at', new Date(now - MAX_AGE_DAYS * 86_400_000).toISOString())
-    .order('created_at', { ascending: true })
-    .limit(BATCH);
+    const now = Date.now();
+    const { data: stuck } = await admin
+      .from('student_payments')
+      .select('id, student_id, plan, coupon_code, amount, session_credit_id, razorpay_order_id, created_at')
+      .eq('status', 'created')
+      .not('razorpay_order_id', 'is', null)
+      .lt('created_at', new Date(now - MIN_AGE_MINUTES * 60_000).toISOString())
+      .gt('created_at', new Date(now - MAX_AGE_DAYS * 86_400_000).toISOString())
+      .order('created_at', { ascending: true })
+      .limit(BATCH);
 
-  if (!stuck?.length) return NextResponse.json({ checked: 0, rescued: 0, abandoned: 0 });
+    if (!stuck?.length) return NextResponse.json({ checked: 0, rescued: 0, abandoned: 0 });
 
-  let rescued = 0;
-  let abandoned = 0;
-  const errors: string[] = [];
+    let rescued = 0;
+    let abandoned = 0;
+    const errors: string[] = [];
 
-  for (const row of stuck) {
-    const orderId = row.razorpay_order_id as string;
-    try {
-      const payments = await fetchOrderPayments(orderId);
-      const captured = payments.find((p) => p.status === 'captured');
+    for (const row of stuck) {
+      const orderId = row.razorpay_order_id as string;
+      try {
+        const payments = await fetchOrderPayments(orderId);
+        const captured = payments.find((p) => p.status === 'captured');
 
-      if (captured) {
-        // Real money we never credited. Activate exactly as the webhook would.
-        const ok = await activatePaidOrder(
-          admin,
-          { id: row.id, student_id: row.student_id, plan: row.plan, coupon_code: row.coupon_code, amount: row.amount },
-          orderId,
-          captured.id,
-          'reconcile',
-        );
-        if (ok) {
-          rescued++;
-          console.error(`[reconcile-payments] RESCUED missed payment — order=${orderId} student=${row.student_id}`);
-        } else {
-          errors.push(orderId);
+        if (captured) {
+          // Real money we never credited. Activate exactly as the webhook would.
+          const ok = await activatePaidOrder(
+            admin,
+            { id: row.id, student_id: row.student_id, plan: row.plan, coupon_code: row.coupon_code, amount: row.amount },
+            orderId,
+            captured.id,
+            'reconcile',
+          );
+          if (ok) {
+            rescued++;
+            console.error(`[reconcile-payments] RESCUED missed payment — order=${orderId} student=${row.student_id}`);
+          } else {
+            errors.push(orderId);
+          }
+          continue;
         }
-        continue;
-      }
 
-      // No capture. Record the real end-state so abandoned checkouts stop
-      // being indistinguishable from in-flight ones — this is what makes
-      // checkout drop-off measurable instead of a permanent 'created' row.
-      if (payments.some((p) => p.status === 'failed')) {
-        await admin.from('student_payments').update({ status: 'failed' }).eq('id', row.id);
-        abandoned++;
+        // No capture. Record the real end-state so abandoned checkouts stop
+        // being indistinguishable from in-flight ones — this is what makes
+        // checkout drop-off measurable instead of a permanent 'created' row.
+        if (payments.some((p) => p.status === 'failed')) {
+          await admin.from('student_payments').update({ status: 'failed' }).eq('id', row.id);
+          abandoned++;
+        }
+      } catch (e) {
+        errors.push(orderId);
+        console.error(`[reconcile-payments] ${orderId}:`, e instanceof Error ? e.message : e);
       }
-    } catch (e) {
-      errors.push(orderId);
-      console.error(`[reconcile-payments] ${orderId}:`, e instanceof Error ? e.message : e);
     }
-  }
 
-  return NextResponse.json({ checked: stuck.length, rescued, abandoned, errors: errors.length });
+    return NextResponse.json({ checked: stuck.length, rescued, abandoned, errors: errors.length });
+  });
 }
 
 export { POST as GET };

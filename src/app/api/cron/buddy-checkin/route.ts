@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 import { getLogDateString } from '@/lib/streak-utils';
 import { chunked } from '@/lib/cron-sweep';
 import {
@@ -39,6 +40,11 @@ export async function GET(request: NextRequest) {
   if (!authorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Tracked so a failure is visible in cron_runs instead of silent.
+  return withCronTracking('/api/cron/buddy-checkin', () => buddy_checkinRun());
+}
+
+async function buddy_checkinRun(): Promise<NextResponse> {
   const admin = createAdminClient();
   const now = new Date();
   const today = getLogDateString(now);

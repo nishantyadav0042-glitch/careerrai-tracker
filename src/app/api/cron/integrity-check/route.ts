@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
+import { withCronTracking } from '@/lib/cron-run-tracker';
 import { sendSecurityAlert } from '@/lib/alerting';
 
 export const maxDuration = 60;
@@ -28,6 +29,11 @@ export async function POST(request: NextRequest) {
   if (!authorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Tracked so a failure is visible in cron_runs instead of silent.
+  return withCronTracking('/api/cron/integrity-check', () => integrity_checkRun());
+}
+
+async function integrity_checkRun(): Promise<NextResponse> {
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc('business_invariants');
