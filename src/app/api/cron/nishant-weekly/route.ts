@@ -3,6 +3,28 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { dispatch } from '@/lib/notification-os';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { readRows, isUnavailable } from '@/lib/truth/source';
+import { readRowsForIds } from '@/lib/truth/batch';
+
+// ── B3b #8 — read safety ONLY ──────────────────────────────────────────────
+//
+// The simplest of the four, and its whole risk is in one read:
+//
+//   profiles      → students        → who is eligible   → gates all
+//   notifications → alreadyPinged   → 6-day dedup       → DUPLICATE founder ping
+//
+// `(recentPings ?? [])` made an unavailable read indistinguishable from "nobody
+// has been pinged in six days", so a dead query would send the founder ping to
+// the ENTIRE cohort a second time inside the dedup window. There is no
+// numeric claim here and no scoring — the damage is purely repetition, which
+// on a personal-voice message is its own kind of untruth.
+type PingStudent = { id: string; full_name: string; notif_prefs: unknown };
+
+function pingSourceDead(reason: string, total: number) {
+  console.error('[nishant-weekly] source unavailable — no ping was sent', reason);
+  return NextResponse.json(
+    { ok: false, skipped: 'source_unavailable', reason, sent: 0, total }, { status: 503 });
+}
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -23,22 +45,24 @@ export async function POST(request: NextRequest) {
 async function nishantWeeklyRun(): Promise<NextResponse> {
   const admin = createAdminClient();
 
-  const { data: students } = await admin
-    .from('profiles')
-    .select('id, full_name, notif_prefs')
-    .eq('role', 'student');
-  if (!students?.length) return NextResponse.json({ sent: 0 });
+  const studentsSource = await readRows<PingStudent>('profiles(students)', () =>
+    admin.from('profiles').select('id, full_name, notif_prefs').eq('role', 'student'));
+  if (isUnavailable(studentsSource)) return pingSourceDead(studentsSource.reason, 0);
+  const students = studentsSource.state === 'value' ? studentsSource.value : [];
+  if (!students.length) return NextResponse.json({ ok: true, sent: 0 });
 
   // Dedup: don't send if already got one in the last 6 days
   const since6d = new Date(Date.now() - 6 * 86_400_000).toISOString();
   const studentIds = students.map((s) => s.id);
-  const { data: recentPings } = await admin
-    .from('notifications')
-    .select('user_id')
-    .in('user_id', studentIds)
-    .eq('type', 'founder_ping')
-    .gte('created_at', since6d);
-  const alreadyPinged = new Set((recentPings ?? []).map((n) => n.user_id));
+  const pingsSource = await readRowsForIds<string, { user_id: string }>(
+    'notifications(dedup)', studentIds, (chunk) =>
+      admin.from('notifications').select('user_id').in('user_id', chunk)
+        .eq('type', 'founder_ping').gte('created_at', since6d));
+  if (isUnavailable(pingsSource)) {
+    return pingSourceDead(`notifications(dedup): ${pingsSource.reason}`, students.length);
+  }
+  const alreadyPinged = new Set(
+    (pingsSource.state === 'value' ? pingsSource.value : []).map((n) => n.user_id));
 
   const eligible = students.filter((s) => !alreadyPinged.has(s.id));
 
@@ -55,7 +79,7 @@ async function nishantWeeklyRun(): Promise<NextResponse> {
     if (outcome === 'sent') sent++;
   }
 
-  return NextResponse.json({ sent, total: students.length });
+  return NextResponse.json({ ok: true, sent, total: students.length });
 }
 
 export { POST as GET };

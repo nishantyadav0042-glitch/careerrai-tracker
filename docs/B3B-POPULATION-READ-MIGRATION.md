@@ -76,8 +76,8 @@ UNAVAILABLE → [] → 0 → "student did nothing" → mutation
 | 3 | One failed chunk invalidates the aggregate unless partial data is explicitly designed for | `readRowsForIds` already all-or-nothing |
 | 4 | Source validity reaches the mutation boundary as a typed value | `gateOnSource`; per-call-site |
 | 5 | No `catch → []`, `catch → 0`, `\|\| 0` turning unavailable into a decision | needs its own guard — **not yet written** |
-| 6 | Every mutation-capable cron has a test proving: source failure → zero mutation | **5 of 13 done** — `check-red-flags` (10), `study-companion` (23), `daily-reminder` (16), `onboarding-morning` (17), `decision-engine` (29) |
-| 7 | Regression test at 656+ students and a substantially larger synthetic population | **5 of 13 done** — each migrated cron asserts both failure and success at 2,000 students, well above the 739 at which production broke |
+| 6 | Every mutation-capable cron has a test proving: source failure → zero mutation | **9 of 13 done** — `check-red-flags` (10), `study-companion` (23), `daily-reminder` (16), `onboarding-morning` (17), `decision-engine` (29), `weekly-digest` (13), `buddy-brief` (16), `nishant-weekly` (12), `builder-recovery` (13) |
+| 7 | Regression test at 656+ students and a substantially larger synthetic population | **9 of 13 done** — each migrated cron asserts both failure and success at 2,000 students, well above the 739 at which production broke |
 | 8 | Do not claim the 24 KB PostgREST hypothesis as fact | **honoured** — recorded as bracketed (~19.3 KB worked, ~33.3 KB failed), not proven, in the guard's own header |
 | 9 | Keep the Sunday boundary decision separate from the mechanical migration | **honoured** — ruling recorded in `INVARIANT-RECONCILIATION-EVIDENCE.md`, not implemented here |
 | 10 | Re-scan after migration and prove the count actually fell | **built into gate 1** — the baseline test fails if a migrated file is left listed, so the number cannot be gamed by moving code into a helper |
@@ -148,6 +148,22 @@ statement.
 | 4 | `onboarding-morning` | `daily_reports` → `loggedDays.size`, which gates the send **and becomes `dayNumber = size + 1`** | Not merely under-sending: **telling a student they are on day 2 of their arc when they are on day 5.** An infrastructure failure rendered as a student-facing claim |
 
 | 5 | `decision-engine` | `streak_data` → `daysSinceLastLog` → `computeStudentState`; `topic_coverage` → revision/earned; `daily_routines`×2 → mission_changed; `notifications` → dedup | **Silent total suppression reported as a normal day.** The detectors fail closed by construction, so nothing false was claimed — but a dead `streak_data` read made every student `plan_ready`, and the run answered `{ notified: 0, ownedElsewhere: everyone }`, byte-identical to a genuinely quiet cohort. The dedup read is the exception: unavailable → empty set → the Phase 11 duplicate-send bug, reachable again by a dead query |
+
+| 6 | `weekly-digest` | `daily_reports` → `computeSummary()` → **score + band + redFlags per NAMED student** → in-app row **and EMAIL to the mentor** | The strongest false-claim case in the migration. Every student got `reps = []`, and computeSummary on an empty week yields a bottom-band score plus "Fewer than 4 reports". The mentor was emailed `Priya: 25/100 (Needs intervention) • Arjun: 25/100 …` for their whole roster — **numeric scores about named students, delivered outside the product where they cannot be corrected** |
+| 7 | `buddy-brief` | `daily_reports` → `loggedYesterday` (**a count**) and `atRisk` (**names**) → `buddyBriefCopy(...)` | `reportDates` empty → "0 of 7 logged yesterday — at risk: Priya, Arjun, …" about a roster that may have logged perfectly |
+| 8 | `nishant-weekly` | `notifications` → `alreadyPinged` → 6-day dedup | Empty set → the founder ping re-sent to the **entire cohort** inside its own dedup window. No numeric claim; the damage is pure repetition, which on a personal-voice message is its own kind of untruth |
+| 9 | `builder-recovery` | `profiles` → open drops; `notifications` → `sentSinceAnchor` (**a count**) → ladder position | Both directions in one file: a dead roster read produced `{ sent: 0, reason: 'no_open_drops' }` (the `decision-engine` shape), and a dead ladder read put **every** open drop back at the bottom rung |
+
+Rows 6 and 7 are the ones that turn a read failure into a *statement about a
+named person*. `check-red-flags` said a student had gone quiet; these two
+attach a **number** to that student and, in the digest's case, send it by
+email. Chunking alone would have left both intact.
+
+Row 9 records a distinction the migration deliberately preserved:
+`onboarding_step_reached ?? 0` is left alone, because that is a NULL COLUMN on
+a row that was read successfully — not an unavailable source. Conflating the
+two is the confusion this workstream exists to remove, and a migration that
+"fixed" it would have been widening scope while claiming to narrow it.
 
 Row 5 is worth stating precisely rather than dramatising: `decision-engine`
 was the *least* dangerous of the five, because `detectMissionChanged` needs
