@@ -323,3 +323,129 @@ sentence is doing a great deal of work.
 from a user request and check whether any request-supplied identifier reaches a
 query without an ownership check. That single question can invalidate every
 positive finding above, and it is answerable in one focused pass.
+
+---
+---
+
+# AUDIT CHECKPOINT 2 — Phases 5, 6/7, 8, 11 (23 Aug)
+
+Audit base `223f3de`. **Working tree clean; no application change made during
+the audit.** The 10 non-doc files differing from `main` are the pre-audit B3b
+migrations, authorised earlier and unrelated to this audit.
+
+## PHASE 5 — service-role sweep · **STATUS: PARTIALLY VERIFIED**
+
+**208 `createAdminClient()` call sites**, classified by gate:
+
+| Gate | Count |
+|---|---|
+| `authorizedCron` | 36 |
+| `isRequestAdmin` / `requireAdmin` | 4 |
+| user-authenticated (`getAuthUser` / `getUser` / `getSession`) | 120 |
+| **ungated routes** | **14** |
+
+All 14 ungated routes are legitimately pre-authentication: login, OTP
+request/verify, funnel beacon, install handoff/exchange, push telemetry, lead
+capture, Razorpay webhook, Expedify callbacks.
+
+**Evidence class: A (static).** No dynamic test was possible.
+**Therefore the P0 question — "does any user-reachable route pass a
+request-supplied id into a service-role query without ownership proof" — is
+answered NO by code reading and UNKNOWN by execution.**
+
+## PHASE 6/7 — injection & XSS · **STATUS: PARTIALLY VERIFIED**
+
+**Exactly one `dangerouslySetInnerHTML` in the entire codebase:**
+
+```
+src/app/start/layout.tsx:32  <script dangerouslySetInnerHTML={{ __html: LANDED_BEACON }} />
+```
+
+`LANDED_BEACON` is a module-level constant — **no user-controlled data reaches
+it.** The XSS sink surface is unusually small for an app this size.
+
+**NOT verified:** markdown rendering, URL handling, open redirect, SSRF,
+PostgREST filter injection. Phase incomplete.
+
+## PHASE 8 — AI / LLM · **STATUS: VERIFIED SAFE for the decisive property**
+
+**The model has no tools, no function calling, and no database access.**
+`callGemini` sends `systemInstruction` + `contents` and returns text:
+
+```ts
+// src/lib/gemini.ts:129
+contents: [{ role: 'user', parts: opts.parts }]   // no tools:, no function_call
+```
+
+**A model that cannot call tools cannot be an authorization bypass.** Grep for
+`tools:`, `function_call`, `functionDecl`, `tool_choice`, `executeTool` returns
+nothing. This eliminates the highest-severity AI risks by construction:
+no model-triggered mutation, no model-initiated fetch, no privileged tool.
+
+**Residual AI risk, NOT eliminated:**
+- Prompt injection into mentor-facing drafts. Mitigated by design — the founder
+  ruled AI output must be human-triggered and human-reviewed ("someone has to
+  tap"), so a poisoned draft reaches a mentor's screen, not a student.
+- **Cross-user context leakage: UNKNOWN.** I did not verify that every prompt is
+  scoped to a single student. `stripNames()` exists, but whether it is applied
+  on every path is unverified.
+- Model output rendering: safe by the single-sink finding above.
+
+## PHASE 11 — secrets · **STATUS: PARTIALLY VERIFIED**
+
+**Every `NEXT_PUBLIC_*` variable is legitimately public:**
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` (public by design; RLS is the control),
+`VAPID_PUBLIC_KEY` (public by definition), `APP_VERSION`, `SITE_URL`,
+`META_PIXEL_ID`, `PAYMENTS_ENABLED`, `STORE_FUNNEL_ENABLED`, two WhatsApp
+numbers.
+
+**No server secret is exposed to the browser bundle by name.** ✅
+
+**NOT verified:** git history for historically committed secrets, and the built
+client bundle itself. Both require work not done here.
+
+### SEC-0010 · P2 · Cryptographic key reuse — VERIFIED VULNERABLE (design)
+
+```ts
+// src/lib/session-handoff-crypto.ts:11
+const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+```
+
+**The database service-role key is reused as the encryption key for session
+handoff payloads** — payloads that contain live `access_token` and
+`refresh_token` values.
+
+One secret serves two unrelated trust domains. Consequences:
+
+- Rotating the service-role key (a routine security action, and mandatory after
+  any suspected exposure) **silently invalidates every outstanding handoff
+  payload** — and, worse, the rotation would be done *for* a database reason
+  while breaking an *authentication* mechanism nobody connected to it.
+- A compromise of either domain compromises both.
+- It creates a reason **not** to rotate the most powerful credential in the
+  system, which is the real damage.
+
+**Not exploitable on its own** — the key is server-side and not exposed. This is
+a key-management defect, not an access-control one. **P2.**
+
+**Remediation (do not apply during the audit):** a dedicated
+`SESSION_HANDOFF_KEY`, with the migration handling in-flight tokens.
+
+## Checkpoint status
+
+| Phase | Status |
+|---|---|
+| 0 scope/git | **COMPLETE** |
+| 4 RLS/database | **COMPLETE** |
+| 5 service-role | **PARTIALLY VERIFIED** (static only) |
+| 6/7 injection/XSS | **PARTIAL** |
+| 8 AI/LLM | **VERIFIED SAFE** on tools; cross-user context **UNKNOWN** |
+| 9 payments | **PARTIAL** |
+| 11 secrets | **PARTIAL** |
+| 13 cron/webhook | **COMPLETE** |
+| 19 adversarial | **NOT TESTABLE** |
+| 2, 3, 10, 12, 14, 15, 16, 17, 18, 20, 21 | **NOT STARTED** |
+
+**SECURITY GATE: FAIL** — SEC-0001 and SEC-0002 (P1) remain open, and
+11 phases are unstarted.
