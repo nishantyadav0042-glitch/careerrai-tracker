@@ -3,6 +3,13 @@
 **Status:** ARCHITECTURE ONLY. No implementation, no schema created, nothing
 deployed. 23 Aug 2026 · `main` @ `a6cb0d7`.
 
+> **⚠ SUPERSEDED IN PART.** Sections C and G below describe an `after()`-based
+> alert path. **That design was wrong and is replaced by the RED TEAM / SCALE
+> REVIEW at the end of this document.** `after()` is an execution opportunity,
+> not a durable queue: DB write succeeds → process dies → alert never happens.
+> The original text is left in place so the correction is legible rather than
+> quietly rewritten.
+
 It answers one question:
 
 > If any student experiences any error anywhere in CareerRai, how does that
@@ -339,3 +346,301 @@ migrated into the very duplication this architecture removes.
 | Error code registry | **0** | 1 |
 | Single-student P0 alert | **impossible** | ≤1.5 s server-side |
 | Handled server errors captured | **0 of ~670** | all |
+
+---
+---
+
+# RED TEAM / SCALE REVIEW
+
+**Added 23 Aug 2026 after founder review. This section supersedes C and G.**
+
+## 0. The flaw in my own architecture
+
+I built the alert path on `after()`. That is wrong, and the founder named it
+before I did.
+
+```
+DB INSERT succeeds  →  process dies  →  after() never runs  →  alert lost
+```
+
+`after()` is an **execution opportunity**, not durable messaging. Vercel makes
+no guarantee it runs — not on container kill, not on OOM, not on deploy
+rollover. A design whose alert delivery depends on it has a silent-loss path,
+which is the exact defect this whole workstream exists to remove. I reproduced
+the bug I was hired to fix, one layer up.
+
+**The correction is a hard separation:**
+
+> **Event durability ≠ alert delivery.**
+
+```
+Student failure
+   → Canonical Error Event
+   → DURABLE EVENT            (committed, synchronously, before the response)
+   → INCIDENT FINGERPRINT     (atomic upsert; decides "is this new?")
+   → ALERT DELIVERY STATE     (a state machine in the database)
+   → Founder
+```
+
+`after()` survives only as the **fast path** that attempts delivery
+immediately. It is never the thing that *guarantees* delivery. The guarantee
+comes from the delivery state machine plus a sweeper.
+
+## A. EVENT VOLUME — modelled, with assumptions stated
+
+Assumptions: 30% DAU, ~20 requests per active student per day, 0.5% baseline
+error rate. These are estimates, not measurements — the real numbers arrive
+once ingestion is live, and this model should be re-run then.
+
+| Students | Requests/day | Baseline events/day | Broken-deploy storm (10 min) | Full-day outage |
+|---|---|---|---|---|
+| 740 | ~4,400 | ~22 | ~30 | ~4,400 |
+| 10,000 | ~60,000 | ~300 | ~420 | ~60,000 |
+| 100,000 | ~600,000 | ~3,000 | ~4,200 | ~600,000 |
+| 1M events/day | — | — | — | the stated ceiling |
+
+**One root cause ≠ one event.** A broken `/api/plan/full` at 100k students is
+one incident and up to 600,000 observations. The three objects are distinct and
+must never be conflated:
+
+| Object | Cardinality | Retention | Purpose |
+|---|---|---|---|
+| **error_event** | up to 10⁶/day | short | forensic detail, affected-student counting |
+| **incident** | 10¹–10²/day | long | the operational object a human reasons about |
+| **alert_delivery** | ≤ a handful per incident | medium | proof the founder was actually told |
+
+**The storage insight that makes 100M rows survivable:** the stack trace and
+the internal message live on the **incident**, as one exemplar — not on every
+event. 600,000 events referencing one incident cost ~120 bytes each, not ~2 KB.
+That is the difference between 1.2 GB/day and 20 GB/day.
+
+**Sampling.** P0/P1 events are stored in full, always — they are rare by
+definition. P2/P3 events above a per-incident threshold (proposal: 1,000/hour)
+are **counted but not individually stored**. The count stays exact; the rows do
+not. Without this, a single P3 loop can fill the database, and a full disk is
+itself a P0.
+
+## B. INCIDENT FINGERPRINT
+
+```
+incident_key = sha256(environment, category, error_code, route_pattern, deploy_id)
+```
+
+| Dimension | In? | Why |
+|---|---|---|
+| `environment` | ✅ | preview noise must never page |
+| `category` + `error_code` | ✅ | the canonical identity of the failure |
+| `route_pattern` | ✅ | `/student/[id]/plan`, **never** the raw URL — raw paths make cardinality unbounded |
+| `deploy_id` | ✅ | founder ruling: "same error tomorrow after a deployment = potentially a NEW incident". It also answers "did this start after deploy X?" without a query |
+| **stack signature** | ❌ | line numbers change on every build; cardinality explodes and the same bug fragments into hundreds of incidents |
+| `student_id` | ❌ | that is what makes 10,000 alerts |
+
+**Named trade-off:** including `deploy_id` means a rolling deploy *during* an
+incident splits it into two. I accept that — a version boundary is exactly
+where a human wants the split — but it is a real cost and is stated, not hidden.
+
+## C. THREE LEVELS OF DEDUPLICATION — none in memory
+
+| Level | Mechanism | Scope |
+|---|---|---|
+| 1 · event idempotency | `UNIQUE (event_id)`; client generates a UUID per capture | retries, double-submit |
+| 2 · incident grouping | `UNIQUE (incident_key)` + atomic upsert | 600k events → 1 incident |
+| 3 · alert suppression | delivery state machine + cooldown, in the DB | 1 incident → controlled alerts |
+
+**No in-memory Sets anywhere.** They vanish on cold start and differ per
+instance, so they cannot deduplicate across a serverless fleet. (`report-error.ts`
+uses one today for client-side throttling — acceptable there because it is
+per-browser-session and best-effort, but it must not be the model for this.)
+
+**Client + server correlation.** One request carries one `request_id`
+(generated server-side, returned in the error envelope, echoed by the browser
+reporter). Two observations sharing a `request_id` are **one root cause**: the
+server event owns the incident, the client event attaches to it. Without this,
+every failed request that also renders an error box becomes two incidents.
+
+## D. ALERT POLICY — what actually reaches the founder
+
+| Trigger | Alert? |
+|---|---|
+| Incident **opens** (first P0/P1 observation) | ✅ immediately |
+| Escalation crossing 10 / 100 / 1,000 affected students | ✅ one update per threshold |
+| Every subsequent observation | ❌ never |
+| Severity escalates P1 → P0 | ✅ |
+| Incident **recovers** (no observation for 10 min) | ✅ one recovery notice |
+| P2 | aggregated into the existing daily digest |
+| P3 | stored only |
+
+Founder ruling applied: **a P0 wakes you at 03:00.** P1 also alerts
+immediately; P2/P3 never do.
+
+**P0 bypasses cooldown, never deduplication.** 500 students hitting one
+provider timeout is one incident with one open alert and threshold updates —
+not 500 pages.
+
+## E. EXPECTED vs UNEXPECTED — the ruling that makes this survivable
+
+This is the difference between an alerting system and a nuisance.
+
+| Class | Examples | Alert? |
+|---|---|---|
+| **EXPECTED** (business outcome) | wrong OTP, wrong password, validation failure, student cancels payment, no timetable uploaded yet, mentor unavailable | **never** — recorded as observations only |
+| **UNEXPECTED** (system failure) | timeout, 500, provider outage, `Source` UNAVAILABLE, invariant violation, corrupted state | **per severity** |
+
+A wrong OTP is a **student action**, not a system failure. It must be
+*observable* — a spike in wrong-OTP rate is a real signal, and it is detected
+on the **rate**, never per event — but it must never page.
+
+Without this line, "every error reaches me" becomes an unreadable feed within a
+week, and an unread alert channel is functionally the same as no alert channel.
+
+## F. DELIVERY STATE MACHINE — the crash-safety answer
+
+```
+pending ──claim──► dispatching ──ok──► delivered
+                        │
+                        └──fail──► retrying(n) ──exhausted──► dead_letter
+```
+
+**Claim is atomic, so concurrent instances cannot double-send:**
+
+```sql
+UPDATE incidents
+   SET alert_state = 'dispatching', claimed_at = now(), claimed_by = $1
+ WHERE incident_key = $2 AND alert_state = 'pending'
+```
+
+Zero rows updated ⇒ another instance owns it ⇒ this one does nothing.
+
+**Crash between write and alert** → state stays `pending` → the sweeper claims
+it. **Crash between alert and state update** → state is `dispatching` with a
+stale `claimed_at` → reclaimed after a timeout.
+
+That second case is genuinely ambiguous: we cannot know whether the webhook
+POST landed. **Explicit policy, chosen rather than defaulted:**
+
+- **P0/P1 → re-attempt.** A duplicate page is cheap; a missed P0 is not.
+- **P2/P3 → do not re-attempt.** Not worth the noise.
+
+Webhooks have no idempotency key, so no amount of engineering removes this
+ambiguity. Choosing which way to fail is the honest response.
+
+## G. FAILURE HIERARCHY — what is guaranteed, what is not
+
+| Failure | Behaviour | Guarantee |
+|---|---|---|
+| INSERT fails | attempt the alert anyway, flagged `unpersisted`; never block the student | **best-effort** |
+| Process dies before dispatch | state `pending` → sweeper | **guaranteed eventually, NOT within 5 s** |
+| Webhook fails | 2 retries with backoff → Resend fallback | best-effort |
+| Both channels fail | `dead_letter`, visible in the daily digest | **durable, not timely** |
+| Duplicate event | `UNIQUE (event_id)` | **guaranteed** |
+| Alerting throws | wrapped; cannot break the request | **guaranteed** |
+| **Supabase wholly down** | **the event store IS Supabase — see below** | **NOT guaranteed** |
+
+**The recursive-dependency problem, stated plainly.** If Supabase is down, the
+error store is down, and the thing that must be reported is the thing that
+cannot be recorded. There is no way to durably record a database outage in that
+same database.
+
+The mitigation is *narrow and honest*: on INSERT failure the dispatcher fires
+the webhook **directly**, carrying "event not persisted". That is a
+best-effort, unpersisted, non-deduplicated alert — precisely the properties this
+architecture otherwise forbids — and it exists solely so a total DB outage is
+not silent. It protects against exactly one failure, retains nothing, retries
+nothing, and is the only place in the design where those weaknesses are
+accepted. **Building a second durable store to cover this would be adding a
+system to avoid admitting a limitation.**
+
+## H. SCHEMA — three tables, and one rejected
+
+**DDL is NOT authorised. Nothing below is created.**
+
+| Table | Justification |
+|---|---|
+| `error_events` | high-volume observations; forensic detail; affected-student counting |
+| `incidents` | the operational object; holds the exemplar stack, state machine, counts |
+| `alert_deliveries` | one row per attempt — escalations and recovery mean several per incident; proves the founder was told |
+| ~~`incident_observations`~~ | **REJECTED.** It is `error_events.incident_id`. A join table between an entity and its own rows is a table that exists to look thorough |
+
+Sketch only — full DDL, indexes, RLS and rollback come as a separate document
+if and when authorised:
+
+- `error_events`: `event_id` PK, `incident_id` FK, `occurred_at`, `ingested_at`,
+  `student_id`, `request_id`, `severity`, `route_pattern`, `deploy_id`.
+  **Monthly partitions**, dropped wholesale on expiry — `DELETE` at 100M rows
+  is an outage, `DROP PARTITION` is instant.
+  Indexes: `(incident_id, ingested_at)`, `(request_id)`, `(student_id, ingested_at)`.
+- `incidents`: `incident_key` UNIQUE, state, counts, `first_seen`, `last_seen`,
+  exemplar stack + internal message, `deploy_id`.
+- `alert_deliveries`: `incident_id`, `attempt`, `channel`, `state`, the four
+  latency timestamps.
+
+**RLS: service-role only on all three.** No student may read them. `student_id`
+is a UUID; no names, no emails, no phone numbers, ever.
+
+## I. RETENTION
+
+| Data | Hot | Then |
+|---|---|---|
+| `error_events` P0/P1 | 90 days | drop partition |
+| `error_events` P2/P3 | 30 days | drop partition |
+| **`student_id` on events** | **30 days** | **NULLed — counts survive, identity does not** |
+| `incidents` | 1 year | archive |
+| `alert_deliveries` | 90 days | drop |
+
+Debugging convenience is not a reason to hold student identifiers forever.
+
+## J. THE 5-SECOND SLA — defined precisely, P95 not P50
+
+Timestamps: `occurred_at` · `captured_at` · `ingested_at` · `persisted_at` ·
+`alert_attempted_at` · `alert_accepted_at` · `alert_delivered_at`.
+
+| Metric | Definition | Target |
+|---|---|---|
+| `T_ingest` | `occurred_at → ingested_at` | **measured, no target** — browser network is outside our control |
+| **`T_dispatch`** | **`ingested_at → alert_attempted_at`** | **P95 ≤ 5 s** ← the contractual SLA |
+| `T_delivery` | `alert_attempted_at → alert_accepted_at` | measured; provider-bound |
+
+Founder ruling applied: the SLA is **from successful ingestion to alert
+dispatch**, and browser latency is measured separately and never folded in.
+
+**P50 is not reported as the headline.** An 0.8 s average hides a 2 % tail, and
+that tail is where the missed P0 lives.
+
+**P99 cannot be guaranteed**, and I will not claim it. Cold starts (200–900 ms),
+Postgres connection saturation under storm, and webhook provider variance are
+all outside this design's control. The honest statement: **P95 ≤ 5 s is a
+design target; P99 will be measured and reported, not promised.**
+
+**The recovery path cannot meet 5 s at all.** An alert lost to a mid-flight
+crash is recovered by the sweeper, and Vercel's cron floor is 1 minute — so
+that path is **≤ 60 s, not ≤ 5 s**. It is a safety net, not the SLA, and
+conflating the two would be exactly the kind of number-massaging this document
+was asked to eliminate.
+
+## K. NON-GOALS
+
+Not building: a log aggregator, an APM, a metrics/tracing system, a
+multi-provider notification framework, a status page, or on-call rotation. This
+is an **error → incident → founder** control plane and nothing else.
+
+---
+
+# ARCHITECTURE STATUS: **NOT READY**
+
+Five items block implementation. Four are yours to decide; one is mine to
+finish.
+
+| # | Blocker | Owner |
+|---|---|---|
+| 1 | **`SECURITY_ALERT_WEBHOOK_URL` unverified in production.** If unset, `sendSecurityAlert` no-ops to `console.warn` and the entire pipeline ends in a log line. Your ruling #1 was "verify first" — it is not yet verified, and I cannot verify it from here without reading production env | founder |
+| 2 | **DDL not authorised.** Phase 3 cannot start. Partitioning in particular must be right on day one — retrofitting partitions onto a live 100M-row table is an outage | founder |
+| 3 | **P2/P3 sampling threshold (1,000/hr) is a guess.** It is not grounded in measured volume, because we have no ingestion yet. Shipping a guessed threshold that silently drops observations would reproduce this workstream's core defect | me — needs live baseline |
+| 4 | **Recovery-path latency is ≤60 s, not ≤5 s.** Architecturally unavoidable on Vercel's 1-minute cron floor. Needs explicit acceptance that the *guarantee* is "durably recorded, alerted within 60 s worst case", while the *target* is P95 ≤ 5 s on the fast path | founder |
+| 5 | **Supabase-outage alerting is best-effort and undeduplicated** by construction. Accepted as a named limitation rather than engineered around | founder |
+
+**What is now ready:** the fingerprint, the three-level dedup, the delivery
+state machine, the expected/unexpected split, the volume and storage model, the
+retention policy, and the SLA definition.
+
+**What I got wrong and corrected:** `after()` as the delivery guarantee.
+That was a silent-loss path in the middle of an anti-silent-loss architecture.
