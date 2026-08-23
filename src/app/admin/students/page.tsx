@@ -4,6 +4,7 @@ import { AdminMatchPanel } from '../admin-match-panel';
 import { AdminStudentsList } from '../admin-students-list';
 import type { Profile, DailyReport } from '@/types';
 import { getLogDateString } from '@/lib/streak-utils';
+import { trailingWindow } from '@/lib/facts/window';
 
 // This page used to carry its own getTodayIST(), an en-CA date at IST MIDNIGHT.
 // daily_reports.report_date is written on the STUDY day (05:30 IST rollover,
@@ -42,9 +43,15 @@ export default async function AdminStudentsPage() {
   );
 
   const today = getLogDateString();
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekAgoStr = weekAgo.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // 0C.3 Wave 1. Was `now − 7d`, i.e. an EIGHT-day inclusive window feeding a
+  // `daysSubmitted` that is rendered as "N/7". The window now comes from the
+  // authority; the day key comes from the 05:30-IST study day rather than an
+  // IST calendar date, which disagreed with it between 00:00 and 05:30.
+  //
+  // The BATCH READ itself is deliberately untouched — an unchecked
+  // `.in(student_id, …)` over the whole cohort is the weekly-plan-reconcile
+  // shape, and that migration is B3b, gated on cron telemetry.
+  const weekAgoStr = trailingWindow(today).start;
 
   const studentIds = students.map(s => s.id);
   const { data: reportsData } = studentIds.length > 0

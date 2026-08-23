@@ -166,7 +166,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     onboardingStepReached: (profile.onboarding_step_reached as number | null) ?? 0,
     daysSinceJoin,
     daysSinceLastLog,
-    loggedDaysLast7: prepMemory.last7.daysStudied,
+    tickedDaysLast7: prepMemory.last7.daysStudied,   // ticks, not logs — see lead-intel.ts
     currentStreak: momentumStreak(streak?.current_streak as number | null, (streak?.shields as number | null) ?? null, streak?.last_log_date as string | null).streak,
     buddyCtaClicks: (engagement?.buddy_cta_clicks as number | null) ?? 0,
     mocksLogged: prepMemory.mockTrend.count,

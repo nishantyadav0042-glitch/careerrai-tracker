@@ -30,7 +30,14 @@ export interface LeadSignals {
   onboardingStepReached: number;
   daysSinceJoin: number;
   daysSinceLastLog: number | null; // null = never logged a day
-  loggedDaysLast7: number;
+  // 0C.3 Wave 1 rename. This was called `loggedDaysLast7` and is NOT the
+  // logged-days fact: it comes from prep-memory's `last7.daysStudied`, which
+  // counts days with a ROUTINE TICK (routine_task_completions), not days with
+  // a submitted log (daily_reports). Per facts/canonical.ts those are two
+  // different canonical questions that are allowed to disagree — a student who
+  // logs by hand without ticking counts in one and not the other. The value is
+  // unchanged; only the name stops lying about which one it is.
+  tickedDaysLast7: number;
   currentStreak: number;
   buddyCtaClicks: number;
   mocksLogged: number;
@@ -87,7 +94,7 @@ export function assessLead(s: LeadSignals): LeadAssessment {
   const readyReasons: string[] = [];
   if (s.buddyCtaClicks > 0) readyReasons.push(`Clicked buddy unlock ${s.buddyCtaClicks}× — actively considering`);
   if (s.currentStreak >= 3) readyReasons.push(`${s.currentStreak}-day streak — habit is forming`);
-  if (s.mocksLogged >= 1 && s.loggedDaysLast7 >= 3) readyReasons.push(`${s.mocksLogged} mock${s.mocksLogged === 1 ? '' : 's'} logged + active this week`);
+  if (s.mocksLogged >= 1 && s.tickedDaysLast7 >= 3) readyReasons.push(`${s.mocksLogged} mock${s.mocksLogged === 1 ? '' : 's'} logged + ticked the plan on 3+ days this week`);
   if (readyReasons.length > 0) {
     return { tier: 'ready', reasons: readyReasons };
   }
@@ -100,7 +107,7 @@ export function assessLead(s: LeadSignals): LeadAssessment {
     return { tier: 'inactive', reasons: ['Finished setup but never logged a single day'] };
   }
 
-  return { tier: 'warming', reasons: [`Active ${s.loggedDaysLast7}/7 days this week — not hot yet`] };
+  return { tier: 'warming', reasons: [`Ticked the plan ${s.tickedDaysLast7}/7 days this week — not hot yet`] };
 }
 
 // ─── Human Intervention Queue ────────────────────────────────────────────────
@@ -151,14 +158,14 @@ export function whyContactToday(s: WhyTodayInput): string | null {
   if (s.daysSinceLastMock != null && s.daysSinceLastMock <= 2) {
     return `Logged a mock ${s.daysSinceLastMock === 0 ? 'today' : `${s.daysSinceLastMock}d ago`} — perfect time for a mock-analysis pitch.`;
   }
-  if (s.daysSinceLastLog != null && s.daysSinceLastLog >= 4 && s.daysSinceLastLog < 10 && s.currentStreak === 0 && s.loggedDaysLast7 === 0) {
+  if (s.daysSinceLastLog != null && s.daysSinceLastLog >= 4 && s.daysSinceLastLog < 10 && s.currentStreak === 0 && s.tickedDaysLast7 === 0) {
     return `Went quiet ${s.daysSinceLastLog} days ago after real usage — recovery call, not a sales call.`;
   }
   if (s.avoidedSection && s.currentStreak >= 3) {
     return `Studying consistently but avoiding ${s.avoidedSection} — they can't see it themselves; a buddy naming it is the pitch.`;
   }
-  if (s.mocksLogged === 0 && s.loggedDaysLast7 >= 4) {
-    return `Active ${s.loggedDaysLast7}/7 days but zero mocks — "who checks your level?" is the opener.`;
+  if (s.mocksLogged === 0 && s.tickedDaysLast7 >= 4) {
+    return `Ticked the plan ${s.tickedDaysLast7}/7 days but zero mocks — "who checks your level?" is the opener.`;
   }
   return null;
 }

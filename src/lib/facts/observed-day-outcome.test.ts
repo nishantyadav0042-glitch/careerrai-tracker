@@ -104,7 +104,17 @@ describe('the contract is enforced, not merely described', () => {
   });
 
   it('one definition per key', () => {
-    expect(Object.keys(FACTS)).toEqual(['observed_day_outcome']);
+    // Re-cut 23 Aug (0C.3 Wave 1). This asserted the literal list
+    // `['observed_day_outcome']`, so registering a SECOND, unrelated fact
+    // failed it — a guard pinning the registry's CONTENTS instead of its
+    // INVARIANT. The invariant is one definition per key, not one fact.
+    // (Sixth time this repo has had to re-point a guard from characters to
+    // the idea; the pattern is now itself worth watching for in review.)
+    const keys = Object.values(FACTS).map((d) => d.key);
+    expect(new Set(keys).size, 'a key is defined twice').toBe(keys.length);
+    for (const [k, def] of Object.entries(FACTS)) {
+      expect(def.key, `FACTS['${k}'] is filed under a name it does not declare`).toBe(k);
+    }
     expect(FACTS.observed_day_outcome.key).toBe('observed_day_outcome');
   });
 });

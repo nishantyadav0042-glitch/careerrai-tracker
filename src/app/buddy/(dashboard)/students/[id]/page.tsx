@@ -6,6 +6,8 @@ import { buddyBookingReadiness } from '@/lib/buddy-room';
 import { computeWeeklyDiagnosis } from '@/lib/weekly-diagnosis';
 import { getAuthUser } from '@/lib/auth';
 import { computeSummary } from '@/lib/analytics';
+import { getLogDateString } from '@/lib/streak-utils';
+import { readDailyLogWindow, loggedDaysOrUnknown } from '@/lib/reads/daily-log';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { FeedbackList } from './feedback-form';
@@ -55,19 +57,21 @@ const BUCKET_LABELS: { key: keyof MockDebrief['error_buckets']; emoji: string; l
 
 function computeNeedsAttentionFlags(
   reports: DailyReport[],
-  debriefs: MockDebrief[]
+  debriefs: MockDebrief[],
+  // 0C.3 Wave 1: the registered fact, passed in. `null` = the log read was
+  // UNAVAILABLE, and an unknown count may not raise a flag — a mentor chasing
+  // a student over a dead query is the failure this wave exists to prevent.
+  loggedDaysLast7: number | null,
 ): string[] {
   const flags: string[] = [];
 
-  // Consistency — logged < 3/7 days
-  const last7 = reports.filter((r) => {
-    const d = new Date(r.report_date + 'T00:00:00');
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
-    return d >= cutoff;
-  });
-  if (last7.length < 3) {
-    flags.push(`Only ${last7.length}/7 days logged this week — consistency is the foundation`);
+  // Consistency — logged < 3/7 days.
+  //
+  // This used to filter the rows locally against a `cutoff` rebuilt inside the
+  // filter callback, which is a third definition of the window in a file that
+  // already had two. The count is no longer computed here at all.
+  if (loggedDaysLast7 !== null && loggedDaysLast7 < 3) {
+    flags.push(`Only ${loggedDaysLast7}/7 days logged this week — consistency is the foundation`);
   }
 
   // Avoidance — section skipped 3+ consecutive days
@@ -238,8 +242,11 @@ export default async function BuddyStudentDetailPage({
   // API enforces with.
   const calendarConnected = bookingReadiness.ready;
 
+  // 0C.3 Wave 1 — the canonical seven-day log window, read once for this page.
+  const logWindow = await readDailyLogWindow(admin, id, getLogDateString());
+
   const summary = computeSummary(reports, period);
-  const needsAttentionFlags = computeNeedsAttentionFlags(reports, debriefs);
+  const needsAttentionFlags = computeNeedsAttentionFlags(reports, debriefs, loggedDaysOrUnknown(logWindow));
   const firstName = student.full_name?.split(' ')[0] ?? 'Student';
   const baseUrl = `/buddy/students/${id}`;
 
