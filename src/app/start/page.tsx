@@ -17,6 +17,7 @@ import ScreenInstantInsight from './screens/screen-instant-insight';
 import ScreenMentor from './screens/screen-mentor';
 import ScreenLoginBuild from './screens/screen-login-build';
 import type { CoverageSectionId } from '@/lib/topics-constants';
+import { coverageOrderFor, coverageDraftKey } from '@/lib/coverage-order';
 import { VERBAL_TOPICS, LRDI_TOPICS, QUANT_TOPICS, MOCK_PREP_UNITS, READING_HABIT_UNITS } from '@/lib/topics-constants';
 import { trackFunnel } from '@/lib/funnel';
 import { START_STEP_KEYS } from '@/lib/funnel-steps';
@@ -134,7 +135,11 @@ const DRAFT_KEY = 'cr_preauth_draft_v9';
 // dropping them prevents a week-old half-journey from resurrecting.
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
 
-const TOPIC_SECTION_ORDER: CoverageSectionId[] = ['DILR', 'VARC', 'QA', 'MOCKS', 'READING'];
+// 22 Aug — this was ['DILR','VARC','QA','MOCKS','READING'], a constant, and a
+// student reported the consequence exactly: "I am clicking on QA and VARC,
+// it's coming DILR." The screen immediately before this one asks which section
+// costs her the most marks; the grid then opened on DILR whatever she said.
+// The order is derived from her answer now (lib/coverage-order).
 const TOPIC_SECTION_INTRO: Partial<Record<CoverageSectionId, string>> = {
   DILR: 'Set selection wins DILR — let\'s see where you stand.',
   VARC: 'Reading habits move VARC more than any drill.',
@@ -242,7 +247,11 @@ function StartPageInner() {
           onNext={advance}
           {...shared}
           deferSave
-          sectionOrder={TOPIC_SECTION_ORDER}
+          sectionOrder={coverageOrderFor(data.self_reported_weakest_section)}
+          // Keyed to the answer: the grid stores a stepIdx, and a stepIdx only
+          // means something relative to an order. Going back and changing the
+          // answer must start the sequence, not resume someone else's.
+          draftKey={coverageDraftKey('preauth', data.self_reported_weakest_section)}
           sectionIntro={TOPIC_SECTION_INTRO}
           onMatrixReady={(matrix) => setData((prev) => ({ ...prev, topic_matrix: matrix }))}
         />
