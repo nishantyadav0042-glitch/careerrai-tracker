@@ -151,13 +151,25 @@ export async function computeWeeklyDiagnosis(admin: any, studentId: string): Pro
   // The report — plain language, ready for the buddy to deliver.
   const fmt = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   const lines: string[] = [];
-  // UNKNOWN says so. It does not borrow the shape of a bad week — a mentor
-  // reading "Studied 0 of 7" out loud to a student who studied all seven is
-  // the exact harm this wave exists to make impossible.
+  // ONE sentence shape for every value of the fact, including zero.
+  //
+  // Founder ruling, 23 Aug: the zero case used to read "Studied 0 of the last
+  // 7 days — THE WEEK SLIPPED ENTIRELY." That trailing clause is an
+  // INTERPRETATION ("slipped" asserts a cause and a verdict), and it was
+  // welded onto the fact so tightly that no consumer could take the fact
+  // without it. Same principle the architecture enforces: a fact does not
+  // smuggle a conclusion into its renderers. What the diagnostic layer makes
+  // of a zero is the diagnostic layer's business, and it is a separate
+  // product-copy decision — not part of this migration.
+  //
+  // The special-cased zero branch is gone rather than reworded, because a
+  // branch is where the two shapes drift apart again.
+  //
+  // UNKNOWN still says so, and does NOT borrow the shape of a bad week: a
+  // mentor reading "0 of 7" out loud to a student who logged all seven is the
+  // exact harm this wave exists to make impossible.
   lines.push(daysStudied === null
     ? '❓ Could not read this week\'s logs — no day count. (Not zero: unknown.)'
-    : daysStudied === 0
-    ? '⚠️ Studied 0 of the last 7 days — the week slipped entirely.'
     : `${daysStudied >= 5 ? '✅' : '⚠️'} Studied ${daysStudied} of 7 days${hoursLogged === null ? '' : ` (${hoursLogged}h logged)`}.`);
   if (topicsTouched.size > 0) lines.push(`✅ Worked on ${topicsTouched.size} topic${topicsTouched.size === 1 ? '' : 's'}: ${[...topicsTouched].slice(0, 4).join(', ')}${topicsTouched.size > 4 ? '…' : ''}.`);
   for (const s of skippedSections) lines.push(`⚠️ ${s} was planned but skipped all week.`);
