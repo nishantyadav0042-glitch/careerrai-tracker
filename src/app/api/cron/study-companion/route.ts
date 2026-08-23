@@ -15,6 +15,57 @@ import { computeTodaysPlan, type TodaysPlan } from '@/lib/routine-plan';
 import { resolveFocusSections } from '@/lib/focus-sections';
 import { getLogDateString } from '@/lib/streak-utils';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { readRows, isUnavailable, type Source } from '@/lib/truth/source';
+import { readRowsForIds } from '@/lib/truth/batch';
+
+// ── B3b migration #2 — read safety ONLY ────────────────────────────────────
+//
+// Founder constraint, 23 Aug, and it is the point of doing this file second:
+// NOTHING about this job's behaviour changes. Not what counts as "today"
+// (still the IST calendar date this file deliberately kept — see the note
+// above `const today`), not the cadence, not the 21-day window, not the
+// eligibility rules, not the copy, not the timing. Those are a notification
+// product decision and they stay open.
+//
+// What changes is that five population-scaled reads can no longer turn a
+// failure into a push. The worst was the dedup read: `.in('user_id', ids)`
+// with no error check, so an unavailable read left `alreadySent` empty and
+// EVERY eligible student was pushed again. Same class as check-red-flags'
+// duplicate alert — an unavailable read manufacturing a side effect rather
+// than suppressing one, at whole-cohort scale.
+//
+//     UNAVAILABLE → no decision → no dispatch, no push, no email
+interface CompanionStudent {
+  id: string;
+  full_name: string | null;
+  notif_prefs: unknown;
+  created_at: string;
+  is_working_professional: boolean | null;
+  self_reported_weakest_section: unknown;
+  self_reported_weak_topic: unknown;
+  // Typed as the numeric columns they are. First draft said `unknown`, which
+  // tripped daily-hours.test.ts — its "no second writer of study_target_hours"
+  // guard exempts a type declaration only when the annotation is literally
+  // `number`. Accurate types are the right fix here; the guard's narrow
+  // exemption is noted in the commit rather than widened, because weakening a
+  // one-writer invariant to accommodate my own annotation is the wrong trade.
+  study_target_hours: number | null;
+  hours_available: number | null;
+  weekend_hours_available: number | null;
+  dream_colleges: unknown;
+}
+type StreakRow = { student_id: string; current_streak: number | null; last_log_date: string | null };
+type ReportDayRow = { student_id: string; report_date: string };
+type SentRow = { user_id: string };
+type CoverageRow = { student_id: string; section: string; status: string };
+
+/** One shape for every "a source died, send nobody anything" exit. */
+function sourceUnavailable(slot: string, reason: string, candidates: number) {
+  console.error(`[study-companion] ${slot}: source unavailable — nobody was pushed`, reason);
+  return NextResponse.json(
+    { ok: false, slot, skipped: 'source_unavailable', reason, sent: 0, candidates },
+    { status: 503 });
+}
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -81,12 +132,18 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
   if (now > examDate) examDate = catExamDate(examYr + 1);
   const daysToExam = Math.max(0, Math.ceil((examDate.getTime() - now.getTime()) / 86_400_000));
 
-  const { data: students } = await admin
-    .from('profiles')
-    .select('id, full_name, notif_prefs, created_at, is_working_professional, self_reported_weakest_section, self_reported_weak_topic, study_target_hours, hours_available, weekend_hours_available, dream_colleges')
-    .eq('role', 'student')
-    .eq('onboarding_completed', true);
-  if (!students?.length) return NextResponse.json({ slot, sent: 0 });
+  // Was `{ data: students }` unguarded: an unavailable roster fell through
+  // `!students?.length` and the slot reported `{ sent: 0 }` — indistinguishable
+  // from a slot where nobody was eligible.
+  const studentsSource = await readRows<CompanionStudent>('profiles(students)', () =>
+    admin
+      .from('profiles')
+      .select('id, full_name, notif_prefs, created_at, is_working_professional, self_reported_weakest_section, self_reported_weak_topic, study_target_hours, hours_available, weekend_hours_available, dream_colleges')
+      .eq('role', 'student')
+      .eq('onboarding_completed', true));
+  if (isUnavailable(studentsSource)) return sourceUnavailable(slot, studentsSource.reason, 0);
+  const students = studentsSource.state === 'value' ? studentsSource.value : [];
+  if (!students.length) return NextResponse.json({ ok: true, slot, sent: 0 });
 
   const ids = students.map((s) => s.id);
   // IST calendar dates, same derivation as `today`, so day comparisons never
@@ -99,29 +156,45 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
   const reportsWindowStart = new Date(now.getTime() - 21 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const needsCoverage = slot === 'morning' || slot === 'open' || slot === 'fact' || slot === 'close' || slot === 'kickoff' || slot === 'wind';
 
-  const [
-    { data: streaks },
-    { data: recentReports },
-    { data: sentToday },
-    { data: coverageRows },
-  ] = await Promise.all([
-    admin.from('streak_data').select('student_id, current_streak, last_log_date').in('student_id', ids),
-    admin.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', reportsWindowStart),
-    admin.from('notifications').select('user_id').in('user_id', ids).eq('type', companionType(slot)).gte('created_at', todayStart),
+  // All four chunked: request size is bounded by CHUNK, never by how many
+  // students CareerRai has. Same queries, same filters, same windows.
+  const [streaksSource, reportsSource, sentSource, coverageSource] = await Promise.all([
+    readRowsForIds<string, StreakRow>('streak_data', ids, (chunk) =>
+      admin.from('streak_data').select('student_id, current_streak, last_log_date').in('student_id', chunk)),
+    readRowsForIds<string, ReportDayRow>('daily_reports', ids, (chunk) =>
+      admin.from('daily_reports').select('student_id, report_date').in('student_id', chunk).gte('report_date', reportsWindowStart)),
+    readRowsForIds<string, SentRow>('notifications(dedup)', ids, (chunk) =>
+      admin.from('notifications').select('user_id').in('user_id', chunk).eq('type', companionType(slot)).gte('created_at', todayStart)),
     needsCoverage
-      ? admin.from('topic_coverage').select('student_id, section, status').in('student_id', ids)
-      : Promise.resolve({ data: [] as { student_id: string; section: string; status: string }[] }),
+      ? readRowsForIds<string, CoverageRow>('topic_coverage', ids, (chunk) =>
+          admin.from('topic_coverage').select('student_id, section, status').in('student_id', chunk))
+      : Promise.resolve({ state: 'no_data' } as Source<CoverageRow[]>),
   ]);
 
-  const streakById = new Map((streaks ?? []).map((r) => [r.student_id, r]));
-  const alreadySent = new Set((sentToday ?? []).map((n) => n.user_id));
+  // Any one of them unavailable stops the whole slot. Not a partial send:
+  // streaks decide the copy, reports decide who looks inactive, coverage
+  // decides the tip, and the dedup read decides whether a student has ALREADY
+  // been messaged today. Proceeding on a subset would push the wrong thing to
+  // the wrong people, or push twice.
+  const dead = ([
+    ['streak_data', streaksSource], ['daily_reports', reportsSource],
+    ['notifications', sentSource], ['topic_coverage', coverageSource],
+  ] as Array<[string, Source<unknown[]>]>).find(([, src]) => isUnavailable(src));
+  if (dead) {
+    const src = dead[1] as Extract<Source<unknown[]>, { state: 'unavailable' }>;
+    return sourceUnavailable(slot, `${dead[0]}: ${src.reason}`, students.length);
+  }
+
+  const rowsOf = <T,>(s: Source<T[]>): T[] => (s.state === 'value' ? s.value : []);
+  const streakById = new Map(rowsOf(streaksSource).map((r) => [r.student_id, r]));
+  const alreadySent = new Set(rowsOf(sentSource).map((n) => n.user_id));
   const reportDays = new Map<string, Set<string>>();
-  for (const r of recentReports ?? []) {
+  for (const r of rowsOf(reportsSource)) {
     if (!reportDays.has(r.student_id)) reportDays.set(r.student_id, new Set());
     reportDays.get(r.student_id)!.add(r.report_date);
   }
   const coverageById = new Map<string, { section: string; status: string }[]>();
-  for (const c of coverageRows ?? []) {
+  for (const c of rowsOf(coverageSource)) {
     if (!coverageById.has(c.student_id)) coverageById.set(c.student_id, []);
     coverageById.get(c.student_id)!.push(c);
   }
@@ -341,7 +414,7 @@ async function studyCompanionRun(slot: CompanionSlot): Promise<NextResponse> {
     if (outcome === 'sent') sent++;
   }
 
-  return NextResponse.json({ slot, sent, skipped, candidates: students.length });
+  return NextResponse.json({ ok: true, slot, sent, skipped, candidates: students.length });
 }
 
 export { POST as GET };

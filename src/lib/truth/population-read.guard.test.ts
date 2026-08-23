@@ -56,7 +56,8 @@ const POPULATION_IN = /\.in\(\s*['"]\w+['"]\s*,\s*([A-Za-z_$][\w$.[\]]*)\s*\)/g;
  * Known offenders as of 23 Aug 2026, each still to be migrated. REMOVE an entry
  * when the file is migrated; never add one to make a build pass.
  *
- * Started at 13. `check-red-flags` migrated 23 Aug (B3b #1) — 12 remain.
+ * Started at 13. Migrated 23 Aug: `check-red-flags` (#1), `study-companion` (#2).
+ * 11 remain.
  */
 const KNOWN_UNBOUNDED: readonly string[] = [
   'src/app/api/admin/expedify-followups/route.ts',
@@ -69,7 +70,6 @@ const KNOWN_UNBOUNDED: readonly string[] = [
   'src/app/api/cron/nishant-weekly/route.ts',
   'src/app/api/cron/onboarding-morning/route.ts',
   'src/app/api/cron/sales-ready/route.ts',
-  'src/app/api/cron/study-companion/route.ts',
   'src/app/api/cron/weekly-digest/route.ts',
 ];
 
