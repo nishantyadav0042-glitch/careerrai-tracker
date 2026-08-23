@@ -14,6 +14,24 @@ And its corollary, which is the part that was actually violated:
 
 > **A failed source read is `UNAVAILABLE`. It is not `VALUE(0)`.**
 
+## The general form — permanent CareerRai engineering invariant
+
+Founder ruling, 23 Aug: this is not a B3b task requirement, it is permanent.
+
+> **Source validity must travel auditably all the way to the mutation boundary.**
+>
+> **A system must never convert "I don't know" into "zero" when zero causes a
+> student-state mutation.**
+
+"The query didn't throw" is not source validity. A mutation-capable path must be
+able to answer, after the fact: *what data did you use, was it complete, which
+fact produced the decision, and which mutation did it cause?*
+
+The generality is the point. The lesson of this incident is **not** "don't send
+739 UUIDs in one request" — that is the mechanism, and the next incident will
+have a different one. The rule above holds whatever the infrastructure failure
+turns out to be.
+
 Automated reconciliation may **calculate** and **propose** state changes freely.
 It may **commit** one only when the evidence the decision rests on is valid and
 complete.
@@ -104,10 +122,51 @@ fixed a cron". It is:
 263 students: fine. 428 students: fine. 739 students: total failure. Nothing
 warned in between.
 
+## The temporal model — founder ruling, 23 Aug
+
+The incident also exposed that the job judged a week **while that week's Sunday
+was still running** (13:30 UTC / 19:00 IST, five hours before the CareerRai day
+closes). Apeksha Bhadouriya's 16 Aug extension is the live example: correct when
+written, wrong three hours later because she studied that evening.
+
+**The ruling, and the rejected alternative, both matter:**
+
+> **The canonical weekly window closes only after the CareerRai study day closes.
+> The reconciliation is then scheduled to run after that boundary.**
+
+REJECTED: *"end the weekly window at the reconciliation boundary."* That would
+make the meaning of **a week** depend on infrastructure scheduling — the exact
+class of hidden inconsistency this whole workstream exists to remove. A week is
+a business fact; when a cron happens to fire is an operational detail. Defining
+the first in terms of the second inverts them.
+
+One coherent temporal chain, in this order and no other:
+
+```
+study-day boundary  →  weekly window  →  reconciliation
+   (05:30 IST)          [Mon … Sun,          runs strictly
+                         closed]              after close
+```
+
+Not implemented yet. Kept deliberately OUT of the B3b mechanical migration
+unless a specific cron's correctness depends on it — mixing a temporal-semantics
+change into a read-safety migration would make both harder to verify.
+
+## Student communication — founder ruling, 23 Aug
+
+For the 23 Aug repair: **no student-facing notification.** The repair restored
+each student's prior state and requires no action from them; an explanation of an
+internal reconciliation failure serves us, not them.
+
+**Internal audit record: yes.** The 635 affected student IDs, their removed bad
+date, restored date and days are held in a private artifact so support can answer
+"why did my target date change?" with the actual trail. Not committed — this
+repository is public.
+
 ## The open product question this does not settle
 
 Should a scheduled job move a student's syllabus date **at all**, with no human
 in the loop, even when every read succeeds?
 
-598 students were told their plan slipped by a cron. This invariant makes the
-mutation *evidence-gated*; it does not make it *reviewed*. That remains open.
+598 students had their plan moved by a cron on this run alone. This invariant
+makes the mutation *evidence-gated*; it does not make it *reviewed*. Still open.
