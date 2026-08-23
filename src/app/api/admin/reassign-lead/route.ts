@@ -30,9 +30,13 @@ export async function POST(request: NextRequest) {
   }
 
   // The target must be a real rep — a canonical record, not a typed name.
+  // R3 (23 Aug): the target must be a real staff record, addressed by id. The
+  // previous version ALSO required `target.email` — which meant the founder's
+  // own account, which has no email, could never be assigned a lead. Ownership
+  // no longer depends on a column that is allowed to be null.
   const { data: target } = await admin
     .from('profiles').select('id, email, role').eq('id', newOwnerId).single();
-  if (!target || (target.role !== 'sales' && target.role !== 'admin') || !target.email) {
+  if (!target || (target.role !== 'sales' && target.role !== 'admin')) {
     return NextResponse.json({ error: 'New owner must be a sales or admin account.' }, { status: 400 });
   }
 
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
   // Admin override is unconditional by design — that is what reassignment IS.
   const { error: stateError } = await admin.from('lead_outreach').upsert({
     student_id: studentId,
-    owner: target.email,
+    owner: target.id,
     updated_at: now,
   });
   if (stateError) {
@@ -49,17 +53,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not reassign — try again.' }, { status: 500 });
   }
 
-  const actor = (me?.email as string | null) ?? 'admin';
+  const actor = user.id;
   const { error: historyError } = await admin.from('sales_activity').insert({
     student_id: studentId,
     actor,
     status: 'reassigned',
-    note: `Reassigned to ${target.email}`,
+    note: `Reassigned to ${target.id}`,
   });
   if (historyError) {
     console.error('[reassign-lead] sales_activity insert failed:', historyError.message);
     return NextResponse.json({ error: 'Owner changed but history write failed — retry to record it.' }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, owner: target.email });
+  return NextResponse.json({ ok: true, owner: target.id });
 }

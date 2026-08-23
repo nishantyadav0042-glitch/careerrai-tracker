@@ -63,11 +63,15 @@ function waNumber(phone: string | null): string | null {
 // Active pipeline first (interested → callbacks → working), closed last.
 const RANK: Record<string, number> = { interested: 0, follow_up: 1, no_answer: 2, called: 3, converted: 8, not_interested: 9 };
 
-export async function getRepPortfolio(admin: any, repEmail: string): Promise<{ leads: PortfolioLead[]; summary: PortfolioSummary }> {
+// R3 (23 Aug): keyed on profiles.id, not the rep's email. Both sales tables
+// held ZERO rows when this changed, so `owner`/`actor` now carry the uuid with
+// nothing to migrate. A caller that cannot identify the rep must pass an id
+// that matches nothing — never an empty string, which would widen the query.
+export async function getRepPortfolio(admin: any, repId: string): Promise<{ leads: PortfolioLead[]; summary: PortfolioSummary }> {
   const db = admin ?? createAdminClient();
   const { data: rows } = await db.from('lead_outreach')
     .select('student_id, status, callback_at, notes, updated_at')
-    .eq('owner', repEmail);
+    .eq('owner', repId);
   const list = (rows ?? []) as any[];
   if (list.length === 0) {
     return { leads: [], summary: summarizePortfolio([], []) };
@@ -96,10 +100,10 @@ export async function getRepPortfolio(admin: any, repEmail: string): Promise<{ l
 }
 
 // Her own call activity (from the append-only log), for her summary.
-export async function getRepCallStats(admin: any, repEmail: string): Promise<{ today: CallStats; week: CallStats }> {
+export async function getRepCallStats(admin: any, repId: string): Promise<{ today: CallStats; week: CallStats }> {
   const db = admin ?? createAdminClient();
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { data } = await db.from('sales_activity').select('status, created_at').eq('actor', repEmail).gte('created_at', since);
+  const { data } = await db.from('sales_activity').select('status, created_at').eq('actor', repId).gte('created_at', since);
   const rows = (data ?? []) as any[];
   const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const isToday = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIst;

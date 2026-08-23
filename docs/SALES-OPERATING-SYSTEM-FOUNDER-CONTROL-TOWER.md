@@ -11,8 +11,8 @@ Where something is unknown, it says UNKNOWN.
 
 # THE ANSWER TO YOUR QUESTION
 
-You asked: *"इतने दिन से तुम तीन-चार दिन से उस चीज को बनाने की कोशिश कर रहे थे,
-तो क्या फायदा हुआ?"*
+You asked, translated: *"You have been trying to build this thing for three or
+four days now — so what was the use?"*
 
 The honest answer is not "it's missing" and it is not "it's done".
 
@@ -361,7 +361,8 @@ app.
 | Payment succeeded | `student_payments.status='paid'` | 5 | 100% | yes | yes |
 | Subscription | `profiles.subscription_status` | — | 100% | yes | no |
 
-**Your question — "कब कितना किस पे टैप किया" — is answerable for roughly a
+**Your question, translated — "when, and how much, did they tap on what" — is
+answerable for roughly a
 third of taps and half of app opens, and not at all before signup.** The
 anonymous→identified stitch (`anon_id` → `user_id`) is the missing link, and it
 is the honest ceiling on any Student 360 built today.

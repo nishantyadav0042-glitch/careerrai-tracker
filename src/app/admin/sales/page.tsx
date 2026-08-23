@@ -24,9 +24,15 @@ function istHour(): number {
 }
 
 export default async function AdminSalesPage() {
-  const { admin } = await requireAdmin();
+  const { user, admin } = await requireAdmin();
 
-  const { queue, connectedToday, dueNow, totalOpen } = await buildCallQueue(admin);
+  // R3: oversight is now requested EXPLICITLY by role. It used to be granted by
+  // omitting the argument — the same "absence means everything" shape that let a
+  // rep with no email inherit this frame on /sales.
+  const { queue, connectedToday, dueNow, totalOpen } = await buildCallQueue(admin, {
+    id: user.id,
+    role: 'admin',
+  });
   const primeTime = istHour() >= 18 && istHour() < 21;
 
   return (

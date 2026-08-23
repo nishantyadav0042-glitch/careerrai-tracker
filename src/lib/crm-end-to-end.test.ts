@@ -29,6 +29,21 @@ vi.mock('@/lib/momentum', async (orig) => ({
 
 import { buildCallQueue } from './call-queue';
 
+// R3 (23 Aug): identity is profiles.id. The staff directory is a real query
+// now (lib/sales-authz), so the fake DB must serve it. PRIYA deliberately has
+// NO email — the production shape that used to hand an email-less rep the
+// founder's oversight frame.
+const PRIYA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const BOSS  = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const STAFF = [
+  { id: PRIYA, email: null, full_name: 'Priya', role: 'sales' },
+  { id: OTHER, email: 'other@careerrai.in', full_name: 'Other Rep', role: 'sales' },
+  { id: BOSS, email: null, full_name: 'Founder', role: 'admin' },
+];
+const asRep = (id: string) => ({ id, role: 'sales' as const });
+const asAdmin = { id: BOSS, role: 'admin' as const };
+
 /** Fake DB: `outreach` rows drive lead state; everything else is empty but OK. */
 function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean } = {}) {
   const chain = (table: string) => {
@@ -36,6 +51,7 @@ function db(outreach: Record<string, unknown>[], opts: { outreachFails?: boolean
     const c: any = {};
     for (const m of ['select', 'in', 'eq', 'gte', 'lt', 'gt', 'not', 'order', 'limit']) c[m] = () => c;
     c.then = (ok: (r: unknown) => unknown) => {
+      if (table === 'profiles') return Promise.resolve({ data: STAFF, error: null }).then(ok);
       if (table === 'lead_outreach') {
         return Promise.resolve(
           opts.outreachFails ? { data: null, error: { message: 'connection reset' } } : { data: outreach, error: null },
@@ -53,7 +69,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('Scenario A — a new lead reaches the rep', () => {
   it('a student nobody has called appears in the queue as fresh work', async () => {
-    const { queue, totalOpen } = await buildCallQueue(db([]));
+    const { queue, totalOpen } = await buildCallQueue(db([]), asAdmin);
     const lead = queue.find((l) => l.studentId === 'fresh-1');
     expect(lead, 'a never-called free student must surface as a lead').toBeTruthy();
     expect(lead!.dueReason).toBe('fresh');
@@ -62,14 +78,14 @@ describe('Scenario A — a new lead reaches the rep', () => {
   });
 
   it('the card carries the brief the rep reads before dialing — never a blank row', async () => {
-    const { queue } = await buildCallQueue(db([]));
+    const { queue } = await buildCallQueue(db([]), asAdmin);
     const lead = queue.find((l) => l.studentId === 'fresh-1')!;
     expect(lead.brief.length).toBeGreaterThan(2);
     expect(lead.phone, 'a lead with no way to call it is not work').toBeTruthy();
   });
 
   it('higher intent is called first — the queue is ordered work, not a table', async () => {
-    const { queue } = await buildCallQueue(db([]));
+    const { queue } = await buildCallQueue(db([]), asAdmin);
     expect(queue[0].studentId).toBe('fresh-1'); // 2 buddy taps, logged 2 days ago
   });
 });
@@ -87,14 +103,14 @@ describe('Scenario B — the call is recorded and the state moves', () => {
     const pending = await buildCallQueue(db([{
       student_id: 'fresh-1', status: 'no_answer', next_action_at: new Date(Date.now() + 3 * HOUR).toISOString(),
       last_attempt_at: new Date().toISOString(), no_answer_count: 1, callback_at: null, owner: null,
-    }]));
+    }]), asAdmin);
     expect(pending.queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
 
     // Once due, it is back — labelled as a retry, above fresh leads.
     const due = await buildCallQueue(db([{
       student_id: 'fresh-1', status: 'no_answer', next_action_at: new Date(Date.now() - HOUR).toISOString(),
       last_attempt_at: new Date(Date.now() - 26 * HOUR).toISOString(), no_answer_count: 1, callback_at: null, owner: null,
-    }]));
+    }]), asAdmin);
     const lead = due.queue.find((l) => l.studentId === 'fresh-1');
     expect(lead!.dueReason).toBe('retry');
     expect(due.queue[0].studentId).toBe('fresh-1');
@@ -105,7 +121,7 @@ describe('Scenario B — the call is recorded and the state moves', () => {
     const { queue, connectedToday } = await buildCallQueue(db([{
       student_id: 'fresh-1', status: 'interested', next_action_at: new Date(Date.now() + 48 * HOUR).toISOString(),
       last_attempt_at: new Date().toISOString(), no_answer_count: 0, callback_at: null, owner: null,
-    }]));
+    }]), asAdmin);
     expect(connectedToday).toBe(1);
     expect(queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
   });
@@ -124,7 +140,7 @@ describe('Scenario C — a promised follow-up never disappears', () => {
       student_id: 'lead-2', status: 'follow_up', next_action_at: new Date(Date.now() - 5 * 60_000).toISOString(),
       callback_at: new Date(Date.now() - 5 * 60_000).toISOString(),
       last_attempt_at: new Date(Date.now() - 30 * HOUR).toISOString(), no_answer_count: 0, owner: null,
-    }]));
+    }]), asAdmin);
     const lead = due.queue.find((l) => l.studentId === 'lead-2')!;
     expect(lead.dueReason).toBe('callback');
     // A promise to a student outranks any cold lead, however hot the cold one is.
@@ -135,7 +151,7 @@ describe('Scenario C — a promised follow-up never disappears', () => {
     const due = await buildCallQueue(db([{
       student_id: 'lead-2', status: 'interested', next_action_at: new Date(Date.now() - HOUR).toISOString(),
       last_attempt_at: new Date(Date.now() - 50 * HOUR).toISOString(), no_answer_count: 0, callback_at: null, owner: null,
-    }]));
+    }]), asAdmin);
     expect(due.queue.find((l) => l.studentId === 'lead-2')!.dueReason).toBe('followup');
   });
 });
@@ -145,7 +161,7 @@ describe('Scenario D — a closed lead stays closed', () => {
     for (const status of ['converted', 'not_interested']) {
       const { queue, totalOpen } = await buildCallQueue(db([
         { student_id: 'fresh-1', status, next_action_at: null, last_attempt_at: null, no_answer_count: 0, callback_at: null, owner: null },
-      ]));
+      ]), asAdmin);
       expect(queue.find((l) => l.studentId === 'fresh-1'), `${status} must never be called again`).toBeFalsy();
       expect(totalOpen).toBe(1);
     }
@@ -155,22 +171,35 @@ describe('Scenario D — a closed lead stays closed', () => {
 describe('Scenario E — the rep and the admin see the same truth, framed differently', () => {
   const claimed = [{
     student_id: 'fresh-1', status: 'interested', next_action_at: null, callback_at: null,
-    last_attempt_at: null, no_answer_count: 0, owner: 'priya@careerrai.in',
+    last_attempt_at: null, no_answer_count: 0, owner: PRIYA,
   }];
 
   it("another rep's claimed lead is not in your book", async () => {
-    const { queue } = await buildCallQueue(db(claimed), 'other@careerrai.in');
+    const { queue } = await buildCallQueue(db(claimed), asRep(OTHER));
     expect(queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
   });
 
-  it('the owning rep keeps her own lead', async () => {
-    const { queue } = await buildCallQueue(db(claimed), 'priya@careerrai.in');
+  it('the owning rep keeps her own lead — and she has NO email', async () => {
+    const { queue } = await buildCallQueue(db(claimed), asRep(PRIYA));
     expect(queue.find((l) => l.studentId === 'fresh-1')).toBeTruthy();
   });
 
   it('the admin oversight frame sees every lead, claimed or not', async () => {
-    const { queue } = await buildCallQueue(db(claimed));
+    const { queue } = await buildCallQueue(db(claimed), asAdmin);
     expect(queue.find((l) => l.studentId === 'fresh-1')).toBeTruthy();
+  });
+
+  // SEC-S2b, pinned at the queue: oversight must be asked for by ROLE. The old
+  // signature granted it to anyone the caller could not name.
+  it('an unidentified viewer gets NOTHING — absence is never oversight', async () => {
+    const { queue } = await buildCallQueue(db(claimed), null);
+    expect(queue.length).toBe(0);
+  });
+
+  it('a legacy email-encoded owner still resolves to the right rep', async () => {
+    const legacy = [{ ...claimed[0], owner: 'other@careerrai.in' }];
+    expect((await buildCallQueue(db(legacy), asRep(OTHER))).queue.length).toBeGreaterThan(0);
+    expect((await buildCallQueue(db(legacy), asRep(PRIYA))).queue.find((l) => l.studentId === 'fresh-1')).toBeFalsy();
   });
 });
 
@@ -178,7 +207,7 @@ describe('Scenario F — a broken read is never a confident wrong queue', () => 
   it('an unreadable lead state THROWS instead of resurrecting closed leads', async () => {
     // The defect: `outreach` null on error meant converted/not-interested
     // students came back as fresh leads and claimed books lost their owner.
-    await expect(buildCallQueue(db([], { outreachFails: true }))).rejects.toThrow(/Could not read the sales queue state/);
+    await expect(buildCallQueue(db([], { outreachFails: true }), asAdmin)).rejects.toThrow(/Could not read the sales queue state/);
   });
 });
 

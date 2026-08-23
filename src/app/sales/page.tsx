@@ -1,4 +1,5 @@
 import { requireSales } from '@/lib/admin-auth';
+import { salesPrincipal } from '@/lib/sales-authz';
 import { cn } from '@/lib/utils';
 import { buildCallQueue } from '@/lib/call-queue';
 import { CallDeck } from '@/components/call-deck';
@@ -12,12 +13,14 @@ function istHour(): number {
 
 export default async function SalesCallsPage() {
   const { user, admin } = await requireSales();
-  const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
 
   // A rep sees unclaimed leads + her own book; an admin visiting the rep
   // workspace sees everything (oversight, same as /admin/sales).
-  const repEmail = me?.role === 'sales' ? ((me?.email as string | null) ?? null) : undefined;
-  const { queue, connectedToday, dueNow } = await buildCallQueue(admin, repEmail);
+  //
+  // R3: the identity is profiles.id, never the email. The previous line read
+  // `email ?? null`, and a null there granted the oversight frame.
+  const principal = await salesPrincipal(admin, user.id);
+  const { queue, connectedToday, dueNow } = await buildCallQueue(admin, principal);
   const primeTime = istHour() >= 18 && istHour() < 21;
 
   return (

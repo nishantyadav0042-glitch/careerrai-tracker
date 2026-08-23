@@ -67,15 +67,16 @@ export default async function SalesPerformancePage() {
   const { data: reps } = await admin.from('profiles').select('id, email, full_name').eq('role', 'sales').order('created_at', { ascending: true });
   const rep = (reps ?? [])[0] as any;
   const repName = rep?.full_name ?? 'Sales';
-  const repEmail = rep?.email ?? '__none__';
+  // R3: activity and ownership are keyed on profiles.id, not the email.
+  const repId = (rep?.id as string | undefined) ?? '__none__';
 
   // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
   const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const [{ data: acts }, { data: portfolio }] = await Promise.all([
     // HER calls only.
-    admin.from('sales_activity').select('student_id, status, note, created_at').eq('actor', repEmail).gte('created_at', since7).order('created_at', { ascending: false }),
+    admin.from('sales_activity').select('student_id, status, note, created_at').eq('actor', repId).gte('created_at', since7).order('created_at', { ascending: false }),
     // HER portfolio = leads she owns.
-    admin.from('lead_outreach').select('student_id, status, callback_at, updated_at').eq('owner', repEmail),
+    admin.from('lead_outreach').select('student_id, status, callback_at, updated_at').eq('owner', repId),
   ]);
   const actList = (acts ?? []) as any[];
   const port = (portfolio ?? []) as any[];

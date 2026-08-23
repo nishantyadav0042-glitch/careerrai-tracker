@@ -376,23 +376,203 @@ rates (5 paid customers total).
 
 ---
 
+# PART II — IMPLEMENTATION RECORD (R2 + R3)
+
+**Authorized 23 Aug. Implemented. Not deployed. No production DDL.**
+
+## 17. EXACT FILES CHANGED
+
+| File | Change |
+|---|---|
+| `src/lib/sales-authz.ts` | **NEW** — the one authorization authority: `SalesPrincipal`, `salesPrincipal()`, `loadStaffDirectory()`, `resolveOwnerToken()`, `resolveLeadOwner()`, `canAccessLead()`, `ownerToken()` |
+| `src/app/sales/student/[id]/page.tsx` | **R2** — authorize before loading; single denial surface |
+| `src/lib/call-queue.ts` | `repEmail` → `viewer: SalesPrincipal`; id-based visibility |
+| `src/lib/sales-disposition.ts` | `leadVisibleTo` **removed** (re-keyed into `sales-authz`, not duplicated) |
+| `src/lib/sales-portfolio.ts` | `repEmail` → `repId` |
+| `src/app/sales/page.tsx` | principal, not email |
+| `src/app/sales/leads/page.tsx` | `user.id` |
+| `src/app/sales/summary/page.tsx` | `user.id` |
+| `src/app/admin/sales/page.tsx` | oversight requested **explicitly** by role |
+| `src/app/admin/sales-performance/page.tsx` | queries keyed on `rep.id` |
+| `src/app/api/sales/log/route.ts` | actor = `principal.id`; 409 no longer echoes an owner |
+| `src/app/api/admin/reassign-lead/route.ts` | owner = `target.id`; **the `!target.email` gate that locked out the founder is gone** |
+| `src/lib/sales-authz.guard.test.ts` | **NEW** — 26 regression tests |
+| `src/lib/sales-claim.guard.test.ts` | re-pinned on the new authority |
+| `src/lib/crm-end-to-end.test.ts` | principals; Priya deliberately has **no email** |
+| `docs/SALES-OPERATING-SYSTEM-FOUNDER-CONTROL-TOWER.md` | two founder quotes translated — see §25 |
+
+## 18. AUTHORIZATION FLOW AFTER THE FIX
+
 ```
-VERDICT:          NOT READY
+GET /sales/student/<id>
+ ├─ requireSales()                        role ∈ {sales, admin}, else redirect
+ ├─ salesPrincipal(admin, user.id)        → { id, role } | null   (fail closed)
+ ├─ loadStaffDirectory(admin)             → token→id bridge | null (fail closed)
+ ├─ resolveLeadOwner(admin, id, dir)      → unclaimed | owned | unresolvable | unavailable
+ ├─ canAccessLead(resolution, principal)  → boolean
+ └─ allowed ? getSalesConversionView(...) : null   →  one "Student not found"
+```
+
+## 19. CANONICAL IDENTITY FLOW
+
+`auth.getUser()` → `user.id` → `profiles.id` → **the security principal**.
+`salesPrincipal` selects `id, role` and **does not select email at all** — a
+guard test asserts that, so the field cannot creep back in.
+
+Storage: `lead_outreach.owner` and `sales_activity.actor` are TEXT columns that
+now receive `profiles.id`. **Both tables held 0 rows, so there was nothing to
+migrate and no legacy value to guess.** A legacy email token would still
+resolve correctly through the staff directory; an unresolvable token is denied,
+never treated as unclaimed.
+
+## 20. OWNERSHIP RULE
+
+| Resolution | sales | admin |
+|---|---|---|
+| unclaimed | ALLOW *(SA-1D, proven — §5.1)* | ALLOW |
+| owned, `ownerId === principal.id` | ALLOW | ALLOW |
+| owned, different | **DENY** | ALLOW |
+| unresolvable token | **DENY** | ALLOW *(by role)* |
+| read unavailable | **DENY** | ALLOW *(by role)* |
+| no principal | **DENY** | — |
+
+**The shared-book rule was proven, not assumed:** stated in
+`sales-disposition.ts`, `call-queue.ts`, `app/sales/page.tsx`,
+`api/sales/log`, pinned by `sales-claim.guard.test.ts`, and structurally
+required by `claim_lead` — a rep must be able to act on an unclaimed lead in
+order to claim it on first disposition. Removing it would break claiming.
+
+## 21. RED-TEAM RESULTS — ALTERNATE PATHS
+
+Swept every consumer of the same data:
+
+| Path | Callers | Verdict |
+|---|---|---|
+| `getSalesConversionView` | **1** — the fixed route | authorized |
+| `getRepPortfolio` / `getRepCallStats` | 2 — both scoped to `user.id` | own book only |
+| `buildCallQueue` | 2 — both pass an explicit viewer | no implicit oversight |
+| `getStudentMomentum` | `sales-conversion` + `student-360` | `student-360` is rendered only by `/admin/student/[id]`, which is `requireAdmin` — **sales is rejected** |
+| Surfaces accepting `sales` | `/sales`, `/sales/leads`, `/sales/summary`, `/sales/student/[id]`, `POST /api/sales/log` | unchanged; only one takes a URL id, and it is now authorized |
+| `/api/sales/log` as a read oracle | error bodies | the 409 **no longer echoes the owner**; other errors are generic |
+
+**No unresolved alternate path.**
+
+Also closed: `buildCallQueue()` with no viewer used to mean *oversight*. It now
+means **nothing** — the typecheck and the end-to-end suite both caught callers
+relying on the old default, which is precisely the class of bug this phase
+exists to remove.
+
+## 22. REGRESSION TESTS
+
+`src/lib/sales-authz.guard.test.ts` — **26 tests**, covering all fifteen
+required cases: own → allow · another rep's → deny · unassigned → allow ·
+null-email rep identical to an email rep · null-email admin keeps oversight ·
+student / buddy / null role / unreadable profile → no principal · malformed and
+nonexistent ids → identical surface · body cannot supply actor/owner/email/phone
+· no query parameter participates in authorization · the write token is a uuid ·
+an unattributable owner is withheld · a failed read denies.
+
+Architecture guard: the bodies of `canAccessLead` and `salesPrincipal` are
+extracted and asserted to contain no `email`/`phone`/`full_name` — **not a
+file-wide grep**, because `loadStaffDirectory` legitimately reads email to build
+the legacy bridge. A planted-violation case keeps the guard from being vacuous.
+
+```
+sales-authz.guard.test.ts        26 passed
+sales-claim.guard.test.ts        16 passed
+crm-end-to-end.test.ts           19 passed
+FULL SUITE   271 files, 3,112 passed, 1 skipped, 0 failed
+tsc --noEmit                     clean
+next build                       success
+eslint (changed files)           0 errors, 1 pre-existing warning
+```
+
+## 23. SCHEMA DEPENDENCY
+
+**None was required and none was applied.** Because both tables were empty, the
+uuid could be written into the existing TEXT columns without DDL.
+
+Still outstanding and **not** part of this phase: `owner_id` / `actor_id` as
+real `uuid REFERENCES profiles(id)`, and the missing FK on
+`sales_activity.student_id` (Stop 1). Those remain unapplied.
+
+## 24. REMAINING P0 / P1
+
+**SEC-S2 and SEC-S2b are closed in code.** Still open, unchanged by this phase:
+Stop 1 (`/api/sales/log` accepts an arbitrary `studentId`; no FK) · Stop 3
+(vendor callback selects the student) · Stop 4 (null `dedupe_key` bypass) ·
+Stop 5 (audit coverage) · P1-A (502 retained handoff payloads).
+
+## 25. A FOUNDER RULE I BROKE, CAUGHT BY THE SUITE
+
+`english-only.guard.test.ts` failed on **my own** Phase-0 document: I had pasted
+two of your questions in Devanagari. Your instruction of 8 Aug is in that
+guard's header — *"Quote the founder by all means — in English, as a
+translation."* Both quotes are now translated. Guard green.
+
+## 26. ROLLBACK
+
+`git revert` of this commit. No migration, no data change, no deployment — there
+is no state to unwind. `student_crm`, `cat_test_leads`, B3b, `reconcile-payments`
+and `claim_lead` were not touched.
+
+## 27. ACCEPTANCE CRITERIA
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Rep A cannot load Rep B's student; denial indistinguishable from "not found" | **MET** — tested |
+| 2 | Authorization never consults email/phone/name | **MET** — guard-tested |
+| 3 | An unidentifiable viewer gets less access, never more | **MET** — tested |
+| 4 | Admin oversight granted by role only | **MET** — tested |
+| 5 | Unclaimed leads still visible to every rep | **MET** — tested, contract proven |
+| 6 | The queue's existing guard still passes | **MET** — 16/16 |
+| 7 | Full suite, typecheck, build green | **MET** |
+| 8 | **Production behaviour verified** | **NOT MET — not deployed** |
+
+Criterion 8 is deliberately unmet: deployment was not authorized. Per your own
+rule, this is not "fixed in production" — it is **fixed in code and proven by
+tests**.
+
+---
+
+```
+VERDICT:          PASS
+
+R2:               PASS  — ownership enforced before the student view loads
+R3:               PASS  — five email/name/string identity expressions replaced
+                          by the authenticated profiles.id
 
 P0:               0
 
-P1:               2
-                  SEC-S2  — /sales/student/[id] cross-rep IDOR over 763 real
-                            students, including another rep's notes
-                  SEC-S2b — NULL-email sales profile receives the admin
-                            oversight frame
+P1:               5 remaining, none from this phase:
+                  Stop 1  /api/sales/log accepts an arbitrary studentId; no FK
+                          on sales_activity.student_id
+                  Stop 3  Expedify callback selects the student by phone
+                  Stop 4  null dedupe_key bypasses replay protection
+                  Stop 5  admin_audit_log coverage (9 rows, 3 actions)
+                  P1-A    502 retained pwa_session_handoff payloads
 
-PHASE 2:          PASS  (trace + red-team complete; one prior finding corrected
-                        and narrowed by tracing the actual query)
+TESTS:            271 files, 3,112 passed, 1 skipped, 0 failed
+                  tsc clean · next build success · eslint 0 errors
+                  (1 pre-existing warning, present identically before my change)
 
-IMPLEMENTED:      NONE
+ALTERNATE PATHS:  verified — every consumer of the same data swept; none
+                  unresolved
 
-NEXT DEPENDENCY:  Authorization for R2 + R3 — resolve the actor from the
-                  authenticated profiles.id and fail closed — as code-only
-                  changes with tests, before any schema work.
+SCHEMA CHANGE:    none — not required, because both tables held 0 rows
+
+PRODUCTION:       untouched — no deploy, no DDL, no data change
+
+IMPLEMENTED:      lib/sales-authz.ts (new) · sales/student/[id]/page.tsx ·
+                  lib/call-queue.ts · lib/sales-disposition.ts ·
+                  lib/sales-portfolio.ts · sales/{page,leads,summary} ·
+                  admin/sales/page.tsx · admin/sales-performance/page.tsx ·
+                  api/sales/log · api/admin/reassign-lead ·
+                  3 test files (1 new)
+
+NEXT DEPENDENCY:  Stop 1 — validate that `studentId` in /api/sales/log is a
+                  real student, and add the missing foreign key on
+                  sales_activity.student_id. That FK is the first schema
+                  change and needs careerrai-test verification before
+                  production.
 ```

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isCallOutcome, isConnectedOutcome, planDisposition } from '@/lib/sales-disposition';
+import { salesPrincipal } from '@/lib/sales-authz';
 
 // Disposition endpoint — the heart of the dialer CRM. Every call MUST end in a
 // disposition. The vocabulary and the disposition → state mapping live in ONE
@@ -24,8 +25,12 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: me } = await admin.from('profiles').select('role, email, full_name').eq('id', user.id).single();
-  if (me?.role !== 'admin' && me?.role !== 'sales') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // R3 (23 Aug): the actor is the authenticated profiles.id. This used to be
+  // `email ?? full_name ?? 'sales'` — three different encodings of one person,
+  // so two staff without an email collapsed into the literal actor 'sales' and
+  // history could not name who made a call.
+  const principal = await salesPrincipal(admin, user.id);
+  if (!principal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const { studentId, outcome, note, callbackAt, hot } = body ?? {};
@@ -42,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
   }
 
-  const actor = (me?.email as string | null) ?? (me?.full_name as string | null) ?? 'sales';
+  const actor = principal.id;
 
   // SA-1D: claim before write. One shared book — logging a call claims the
   // lead atomically (single conditional statement in the claim_lead RPC).
@@ -59,7 +64,10 @@ export async function POST(request: NextRequest) {
   const claim = Array.isArray(claimRows) ? claimRows[0] : claimRows;
   if (!claim?.claimed) {
     return NextResponse.json(
-      { error: `This lead is owned by ${claim?.current_owner ?? 'another rep'} — ask an admin to reassign it.` },
+      // Deliberately does NOT echo `claim.current_owner`: that value is now a
+      // staff profiles.id, and a rep has no business learning another rep's
+      // identity key from an error body.
+      { error: 'This lead is owned by another rep — ask an admin to reassign it.' },
       { status: 409 },
     );
   }
