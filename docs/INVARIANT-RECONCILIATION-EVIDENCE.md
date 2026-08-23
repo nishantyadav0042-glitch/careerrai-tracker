@@ -122,6 +122,35 @@ fixed a cron". It is:
 263 students: fine. 428 students: fine. 739 students: total failure. Nothing
 warned in between.
 
+## "No side effect occurred" is NOT evidence of safety — founder ruling, 23 Aug
+
+`decision-engine` established this, and it belongs in the permanent rationale
+rather than in one migration's notes.
+
+A path can be **fail-closed at the detector level and still violate the
+invariant**, because `UNAVAILABLE` can collapse into a legitimate-looking
+business outcome instead of into a wrong action.
+
+Both directions were present in the same file:
+
+| Read | Failure | Result |
+|---|---|---|
+| `streak_data` | unavailable → every `daysSinceLastLog` null → every student `plan_ready` → skipped as owned elsewhere | `{ notified: 0, ownedElsewhere: everyone }` — **byte-identical to a genuinely quiet run** |
+| `notifications` (dedup) | unavailable → empty set → "nothing sent today" | **duplicate notifications** |
+
+The first produced no side effect at all. It was still a violation: the entire
+cohort was silently suppressed and the run reported a normal day. A reviewer
+checking "did anything wrong get written?" would have passed it.
+
+So the test for a mutation-capable path is not *"did a bad thing happen?"* but:
+
+> **Could an observer tell this run apart from a healthy one?**
+
+A run that silently suppresses the whole cohort is as inconsistent as one that
+sends the wrong thing — the damage is to what we can conclude from our own
+telemetry, and that damage compounds silently. This is why every migrated cron
+answers `503 skipped: source_unavailable` rather than a plausible-looking zero.
+
 ## The temporal model — founder ruling, 23 Aug
 
 The incident also exposed that the job judged a week **while that week's Sunday
