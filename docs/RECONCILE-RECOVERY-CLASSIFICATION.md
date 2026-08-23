@@ -1,8 +1,12 @@
 # Reconciliation recovery — read-only row-level classification
 
-**SELECT only. No UPDATE, no DELETE, no INSERT. Nothing repaired. Phase D
-frozen. This document exists so a repair can be authorised from evidence, not
-from a summary.**
+**This document was the read-only classification that the repair was authorised
+from. It is preserved as written; the classification was SELECT-only.**
+
+**> REPAIR HAS SINCE BEEN EXECUTED — see `PHASE-D-REPAIR-RECORD.md`.** The 635
+`SAFE_AUTO_REVERSE` rows were reversed on 23 Aug: 635 attempted, 635 reversed,
+0 skipped, 3,690 days restored, 0 extensions from the failed run still active.
+The 20 `NO_MUTATION_HIT_EXAM_WALL` rows and both earlier runs were untouched.
 
 **Date:** 23 Aug 2026 · **Scope:** all 1,256 `plan_extensions` rows ever written
 · **Row-level table:** `2026-08-plan-extension-recovery.csv` (1,256 rows), sent
@@ -67,8 +71,9 @@ correlation and the step change; the causal mechanism remains inference.
 | Classification | Rows | Students | Days | Reason |
 |---|---|---|---|---|
 | **SAFE_AUTO_REVERSE** | **635** | **635** | **3,690** | Current `syllabus_target_date` still equals this extension's `new_date`, so this extension is still the active cause. |
-| **ALREADY_CORRECTED** | 20 | 20 | 0 | `hit_exam_wall`: the date was already at the exam boundary and could not move. `days_added = 0`, `previous_date = new_date`. **No mutation occurred, so there is nothing to reverse.** |
+| **NO_MUTATION_HIT_EXAM_WALL** | 20 | 20 | 0 | The date was already at the exam boundary and could not move. `days_added = 0`, `previous_date = new_date`. **No mutation occurred, so there is nothing to reverse.** |
 | LATER_STATE_CHANGE | 0 | 0 | 0 | — |
+| ALREADY_CORRECTED | 0 | 0 | 0 | — |
 | UNKNOWN | 0 | 0 | 0 | — |
 
 **Recoverable: 635 rows, 635 students, 3,690 days.**
@@ -78,10 +83,12 @@ That dismisses a notification, not the date change, so they stay in
 SAFE_AUTO_REVERSE. Flagging it because a repair script must not treat
 `dismissed_at` as "handled".
 
-**A note on where I bent the taxonomy.** The 20 `hit_exam_wall` rows are not
-"someone already reversed it" — they are "no state change ever happened". I
-filed them under ALREADY_CORRECTED because the *action* is identical (none), but
-the reason column says exactly what they are rather than pretending.
+**Category renamed on the founder's instruction, 23 Aug.** These 20 rows were
+first filed under `ALREADY_CORRECTED` because the *action* is identical (none).
+They are not corrections — nothing ever changed — so the category is now
+`NO_MUTATION_HIT_EXAM_WALL`. `ALREADY_CORRECTED` still exists in the taxonomy and
+is genuinely empty for this run; conflating the two would have left a future
+reader believing someone had already repaired 20 rows.
 
 ## 3. The other two runs — valid, and must NOT be reversed
 
