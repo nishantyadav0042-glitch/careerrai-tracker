@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readRowsForIds } from '@/lib/truth/batch';
+import { gateOnSource } from '@/lib/truth/mutation-gate';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch } from '@/lib/notification-os';
@@ -70,16 +72,46 @@ async function weeklyPlanReconcileRun(): Promise<NextResponse> {
   const ids = (students ?? []).map((s) => s.id);
   if (ids.length === 0) return NextResponse.json({ ok: true, examined: 0, extended: 0 });
 
-  const { data: reports } = await admin
-    .from('daily_reports')
-    .select('student_id, report_date, study_duration')
-    .in('student_id', ids)
-    .gte('report_date', week.start)
-    .lte('report_date', week.end);
+  // 23 Aug incident. This read used to be `.in('student_id', ids)` with every
+  // student in one request — about 24KB of URL at 656 students — and its result
+  // was destructured as `{ data: reports }` with the error discarded. The
+  // request failed, `reports ?? []` produced an empty map, and all 655 students
+  // were reconciled as having studied [0,0,0,0,0,0,0]. Fifty-six who HAD
+  // studied lost 282 days off their syllabus dates, and the job logged ok:true.
+  //
+  // Now: chunked so request size is bounded by the chunk rather than by the
+  // student base, and all-or-nothing so a partial read cannot masquerade as a
+  // quiet week. If it could not be read, nothing below runs.
+  const reportsSource = await readRowsForIds<string, {
+    student_id: string; report_date: string; study_duration: number | null; study_duration_source: string | null;
+  }>('daily_reports', ids, (chunk) =>
+    admin
+      .from('daily_reports')
+      .select('student_id, report_date, study_duration, study_duration_source')
+      .in('student_id', chunk)
+      .gte('report_date', week.start)
+      .lte('report_date', week.end));
+
+  const gate = gateOnSource(reportsSource);
+  if (!gate.proceed) {
+    // The distinction the old job could not make: "we could not tell" is not
+    // "nobody studied". No deficit, no extension, no date moved, and a result
+    // a human can tell apart from a genuinely quiet week.
+    console.error('[weekly-reconcile] source unavailable — no student was reconciled', gate.reason);
+    return NextResponse.json(
+      { ok: false, skipped: 'source_unavailable', reason: gate.reason, examined: ids.length, extended: 0 },
+      { status: 503 },
+    );
+  }
 
   const hoursByStudentDay = new Map<string, number>();
-  for (const r of reports ?? []) {
-    hoursByStudentDay.set(`${r.student_id}|${r.report_date}`, Number(r.study_duration ?? 0));
+  const unmeasuredByStudentDay = new Set<string>();
+  for (const r of gate.data) {
+    const key = `${r.student_id}|${r.report_date}`;
+    // 'not_collected' means OUR surface never asked for a duration. Counting
+    // that as zero studied is the row-level version of the same bug.
+    if (r.study_duration_source === 'not_collected') { unmeasuredByStudentDay.add(key); continue; }
+    hoursByStudentDay.set(key, Number(r.study_duration ?? 0));
   }
 
   const isWeekendByDay = week.days.map((d) => {
@@ -99,6 +131,7 @@ async function weeklyPlanReconcileRun(): Promise<NextResponse> {
       weekdayHours,
       weekendHours: s.weekend_hours_available as number | null,
       loggedHoursByDay: week.days.map((d) => hoursByStudentDay.get(`${s.id}|${d}`) ?? 0),
+      unmeasuredByDay: week.days.map((d) => unmeasuredByStudentDay.has(`${s.id}|${d}`)),
       isWeekendByDay,
       currentTargetDate: s.syllabus_target_date as string,
       examDate: iso(resolveCatExamDate(now, s.attempt_year as number | null)),

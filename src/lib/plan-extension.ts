@@ -28,6 +28,22 @@ export interface WeekInput {
   weekendHours?: number | null;
   /** study_duration for each of the 7 days, indexed Mon..Sun. Missing = 0. */
   loggedHoursByDay: (number | null)[];
+  /**
+   * Days where our own surface never asked for a duration, Mon..Sun.
+   *
+   * 23 Aug. A row whose study_duration_source is 'not_collected' is the daily
+   * check-in gate having posted hours: 0 because "a check-in is not a study
+   * claim" (see lib/study-duration-source). Counting it as zero studied is
+   * UNKNOWN becoming ZERO at the row level — the same mistake as the failed
+   * read, one layer down, and it survives fixing that one.
+   *
+   * This does NOT touch the founder's standing call that a day with NO log at
+   * all is a day with no study. That stays. This is only the narrower case
+   * where a row exists and we are the reason it holds no number: such a day is
+   * removed from BOTH sides of the arithmetic, so a student is judged on the
+   * days we actually measured and never billed for a question we never asked.
+   */
+  unmeasuredByDay?: boolean[];
   /** Which of those 7 days were Saturday/Sunday. Same Mon..Sun indexing. */
   isWeekendByDay: boolean[];
   /** The student's current syllabus finish date, yyyy-mm-dd. */
@@ -84,8 +100,11 @@ export function reconcileWeek(input: WeekInput): WeekResult {
   const joined = input.joinedOn ?? null;
   let expected = 0;
   let countedDays = 0;
+  const unmeasured = input.unmeasuredByDay ?? [];
   for (let i = 0; i < 7; i++) {
     if (joined && input.daysInWeek && input.daysInWeek[i] < joined) continue;
+    // A day we never asked about cannot be a day they owe us hours for.
+    if (unmeasured[i]) continue;
     expected += input.isWeekendByDay[i] ? weekend : weekday;
     countedDays++;
   }
@@ -97,6 +116,7 @@ export function reconcileWeek(input: WeekInput): WeekResult {
     .slice(0, 7)
     .reduce((sum: number, h, i) => {
       if (joined && input.daysInWeek && input.daysInWeek[i] < joined) return sum;
+      if (unmeasured[i]) return sum;   // excluded from expected too — both sides or neither
       return sum + Math.max(0, Number(h ?? 0));
     }, 0);
 
