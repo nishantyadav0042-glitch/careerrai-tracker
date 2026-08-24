@@ -6,6 +6,8 @@ import {
   canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
 } from '@/lib/sales-authz';
 import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
+import { captureStateSnapshot, recordIntervention, interventionTypeForLane } from '@/lib/intervention-ledger';
+import { isReasonCategory, reasonNeedsVerbatim } from '@/lib/intervention-taxonomy';
 
 // Disposition endpoint — the heart of the dialer CRM. Every call MUST end in a
 // disposition. The vocabulary and the disposition → state mapping live in ONE
@@ -46,9 +48,23 @@ export async function POST(request: NextRequest) {
   if (!principal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  const { studentId, outcome, note, callbackAt, hot } = body ?? {};
+  const { studentId, outcome, note, callbackAt, hot,
+          reasonCategory, reasonVerbatim, askMade, microCommitment, channel } = body ?? {};
   if (!isCallOutcome(outcome)) {
     return NextResponse.json({ error: 'Invalid disposition' }, { status: 400 });
+  }
+  // The learning fields are validated HERE, before anything is written, so a
+  // malformed reason fails the whole request rather than silently producing a
+  // call with no lesson attached.
+  if (reasonCategory != null && !isReasonCategory(reasonCategory)) {
+    return NextResponse.json({ error: 'Unknown reason category.' }, { status: 400 });
+  }
+  if (reasonNeedsVerbatim(reasonCategory) &&
+      !(typeof reasonVerbatim === 'string' && reasonVerbatim.trim().length >= 3)) {
+    return NextResponse.json(
+      { error: "Choosing 'Other' needs the student's own words — that free text is the whole point." },
+      { status: 400 },
+    );
   }
 
   // ── GATE 1: is this id even allowed to be a sales subject? ────────────────
@@ -80,6 +96,18 @@ export async function POST(request: NextRequest) {
   // A callback needs a time.
   if (outcome === 'callback' && !(typeof callbackAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(callbackAt))) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
+  }
+
+  // ── The learning snapshot, taken BEFORE anything is written ───────────────
+  // The student's state at the moment of the intervention is the baseline the
+  // outcome will later be judged against, so it must be read before this
+  // request mutates lead state. Best-effort: a snapshot we cannot complete
+  // must not block a rep from logging their call.
+  let snapshot = null as Awaited<ReturnType<typeof captureStateSnapshot>> | null;
+  try {
+    snapshot = await captureStateSnapshot(admin, studentId);
+  } catch (e) {
+    console.error('[sales/log] state snapshot failed:', (e as Error).message);
   }
 
   // ── GATE 3: claim before write ────────────────────────────────────────────
@@ -174,5 +202,32 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true });
+  // ── The learning record ───────────────────────────────────────────────────
+  // Written LAST and never allowed to fail the request: the rep's call is
+  // already saved and confirmed, and losing the lesson must not tell them
+  // their logged call did not stick.
+  //
+  // But the failure IS returned (`ledgerRecorded: false`) rather than
+  // swallowed — a ledger that quietly stops being complete is worse than one
+  // that is obviously broken, because every trend built on it would be wrong
+  // and nothing would say so.
+  let ledgerRecorded = false;
+  if (snapshot) {
+    const written = await recordIntervention(admin, {
+      studentId,
+      repId: principal.id,
+      activityId: activity?.id as number | undefined,
+      channel: channel === 'whatsapp' ? 'whatsapp' : 'phone',
+      // Derived from the lane the rep was working, so it stays consistent
+      // across reps and is one fewer field to fill.
+      interventionType: interventionTypeForLane(snapshot.lane),
+      askMade: typeof askMade === 'string' ? askMade : null,
+      microCommitment: microCommitment === true,
+      reasonCategory: reasonCategory ?? null,
+      reasonVerbatim: typeof reasonVerbatim === 'string' ? reasonVerbatim : null,
+    }, snapshot);
+    ledgerRecorded = written.ok;
+  }
+
+  return NextResponse.json({ ok: true, ledgerRecorded });
 }

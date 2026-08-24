@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { Check } from 'lucide-react';
+import { REASON_CATEGORIES, REASON_LABEL, reasonNeedsVerbatim,
+  type ReasonCategory } from '@/lib/intervention-taxonomy';
 
 // Keys are the API's disposition vocabulary (lib/sales-disposition
 // CALL_OUTCOMES) — 'callback', not the stored 'follow_up'. The original
@@ -35,6 +37,13 @@ export function QuickLog({ studentId }: { studentId: string }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const needsCallback = status === 'callback';
+  // The learning fields. One student saying "the timetable clashes with my
+  // coaching" is an anecdote; thirty-seven saying it is a product requirement —
+  // but only if it was recorded as a CATEGORY. Free text cannot aggregate.
+  const [reason, setReason] = useState<ReasonCategory | ''>('');
+  const [reasonVerbatim, setReasonVerbatim] = useState('');
+  const [microCommitment, setMicroCommitment] = useState(false);
+  const needsVerbatim = reasonNeedsVerbatim(reason || null);
 
   // "Call logged ✓" is shown only after the server confirms the write —
   // never optimistically (20 Aug, Sales Phase 1).
@@ -44,7 +53,13 @@ export function QuickLog({ studentId }: { studentId: string }) {
     try {
       const res = await fetch('/api/sales/log', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, outcome: status, note, callbackAt: needsCallback ? (callbackAt || defaultCallback()) : null }),
+        body: JSON.stringify({
+          studentId, outcome: status, note,
+          callbackAt: needsCallback ? (callbackAt || defaultCallback()) : null,
+          reasonCategory: reason || null,
+          reasonVerbatim: reasonVerbatim.trim() || null,
+          microCommitment,
+        }),
       });
       const json = await res.json().catch(() => null);
       if (res.ok && json?.ok === true) setSaved(true);
@@ -78,6 +93,39 @@ export function QuickLog({ studentId }: { studentId: string }) {
       )}
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What did they say? Objections, next step…"
         className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" />
+
+      {/* ── The learning fields ──────────────────────────────────────────
+          This is the part that turns a call into product intelligence. */}
+      <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-2.5">
+        <label className="text-[11px] font-bold uppercase tracking-wide text-teal-800">
+          Why aren&apos;t they studying? (their reason, not yours)
+        </label>
+        <select
+          value={reason}
+          onChange={(e) => setReason(e.target.value as ReasonCategory | '')}
+          className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+        >
+          <option value="">— pick what they actually said —</option>
+          {REASON_CATEGORIES.map((r) => (
+            <option key={r} value={r}>{REASON_LABEL[r]}</option>
+          ))}
+        </select>
+
+        {needsVerbatim && (
+          <input
+            value={reasonVerbatim}
+            onChange={(e) => setReasonVerbatim(e.target.value)}
+            placeholder="Their words — this is how a new category gets discovered"
+            className="mt-1.5 w-full rounded-lg border border-amber-400 bg-white px-3 py-2 text-sm"
+          />
+        )}
+
+        <label className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-stone-700">
+          <input type="checkbox" checked={microCommitment} onChange={(e) => setMicroCommitment(e.target.checked)}
+            className="h-4 w-4 rounded border-stone-300" />
+          They committed to one task today
+        </label>
+      </div>
       {error && <p className="text-[12px] font-semibold text-rose-600">{error}</p>}
       <button onClick={save} disabled={saving}
         className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-stone-900 py-2.5 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-60">
