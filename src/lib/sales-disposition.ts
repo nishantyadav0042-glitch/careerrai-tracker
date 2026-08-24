@@ -17,8 +17,15 @@
 // migration (20260820a_lead_outreach_no_answer_status.sql) and fails the
 // build if the two vocabularies drift apart again.
 
-/** Connected-call outcomes — a human actually spoke. Feedback is mandatory. */
-export const CONNECTED_OUTCOMES = ['interested', 'callback', 'converted', 'not_interested'] as const;
+/** Connected-call outcomes — a human actually spoke. Feedback is mandatory.
+ *  `dnd` (24 Aug, Sales Phase 1 foundation): the student said "stop calling
+ *  me". It is a CONNECTED outcome — someone answered and said so, and the
+ *  mandatory note records who and how — and it closes the lead permanently,
+ *  exactly like not_interested, but with a different meaning: not_interested
+ *  is "no to the offer", dnd is "no to the contact". The queue already
+ *  suppressed 'dnd' before any writer could produce it; this makes the
+ *  status writable instead of leaving a rep no honest way to record it. */
+export const CONNECTED_OUTCOMES = ['interested', 'callback', 'converted', 'not_interested', 'dnd'] as const;
 
 /** Everything a rep can report about a call attempt. */
 export const CALL_OUTCOMES = [...CONNECTED_OUTCOMES, 'no_answer'] as const;
@@ -34,6 +41,7 @@ export const LEAD_STATUSES = [
   'converted',
   'not_interested',
   'no_answer',
+  'dnd',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
@@ -96,6 +104,7 @@ export interface DispositionPlan {
  *   callback        → at the exact time the student asked for
  *   converted       → closed (won)
  *   not_interested  → closed forever (never resurface)
+ *   dnd             → closed forever — the student said stop calling
  *   no_answer       → retry this evening or next day; hot leads always roll to
  *                     tomorrow morning; after repeated misses go cold (+3 days)
  *
@@ -129,6 +138,8 @@ export function planDisposition(
     }
     return { status: 'no_answer', nextActionAt, callbackAt: null, noAnswerCount: misses };
   }
-  // converted / not_interested → closed, no re-queue clock.
+  // converted / not_interested / dnd → closed, no re-queue clock. dnd is the
+  // strongest close: the student asked not to be contacted, so nothing may
+  // ever schedule this lead again.
   return { status: outcome, nextActionAt: null, callbackAt: null, noAnswerCount: prevMisses };
 }

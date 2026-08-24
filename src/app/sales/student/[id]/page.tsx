@@ -87,6 +87,32 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
       {/* Their prep — reference on the call */}
       <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-stone-400">Their prep — reference this on the call</p>
+
+        {/* 14-day study strip (24 Aug foundation) — the retention call's
+            opening line lives here: "you studied 6 days straight and stopped
+            Tuesday — what happened Tuesday?" */}
+        <div className="mb-3">
+          <p className="mb-1 text-[10px] font-semibold text-stone-400">Last 14 days — did they study?</p>
+          <div className="flex gap-1">
+            {v.studyStrip.map((d) => (
+              <div key={d.date} title={`${d.date}${d.logged ? ' — studied' : ' — no log'}`}
+                className={cn('h-5 flex-1 rounded', d.logged ? 'bg-teal-500' : 'bg-stone-100')} />
+            ))}
+          </div>
+          <div className="mt-0.5 flex justify-between text-[9px] text-stone-400"><span>2 weeks ago</span><span>today</span></div>
+        </div>
+
+        {/* Latest mock — evidence with its date, never an inference */}
+        {v.latestMock && (
+          <p className="mb-3 rounded-lg bg-indigo-50 px-3 py-1.5 text-[12px] font-semibold text-indigo-800">
+            Last mock{v.latestMock.takenOn ? ` (${new Date(v.latestMock.takenOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})` : ''}:
+            {v.latestMock.overall != null && <> {v.latestMock.overall}%ile overall</>}
+            {v.latestMock.varc != null && <> · VARC {v.latestMock.varc}</>}
+            {v.latestMock.dilr != null && <> · DILR {v.latestMock.dilr}</>}
+            {v.latestMock.qa != null && <> · QA {v.latestMock.qa}</>}
+          </p>
+        )}
+
         {v.prep.sections.length > 0 ? (
           <div className="space-y-1.5">
             {v.prep.sections.map((s) => (
@@ -147,15 +173,35 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
         <QuickLog studentId={v.studentId} />
       </div>
 
-      {/* Call history */}
-      {v.history.length > 0 && (
+      {/* Open promises — what this student is owed */}
+      {v.followups.some((f) => f.status === 'open') && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-amber-700">Open follow-ups — promises made</p>
+          <div className="space-y-1.5">
+            {v.followups.filter((f) => f.status === 'open').map((f) => (
+              <p key={f.id} className="text-[12.5px] font-semibold text-stone-800">
+                Due {new Date(f.dueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}
+                {f.reason && <span className="font-normal text-stone-600"> — {f.reason}</span>}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Interaction timeline — calls, WhatsApp, promises and their outcomes,
+          one chronological stream (founder, 24 Aug: "complete interaction
+          timeline"). Every entry carries its provenance. */}
+      {v.timeline.length > 0 && (
         <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-stone-400">Call history</p>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-stone-400">Interaction timeline</p>
           <div className="space-y-2">
-            {v.history.map((h, i) => (
+            {v.timeline.map((t, i) => (
               <div key={i} className="border-l-2 border-stone-200 pl-3">
-                <p className="text-[12px] font-semibold text-stone-700">{h.status ?? 'note'} · <span className="font-normal text-stone-400">{new Date(h.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}</span></p>
-                {h.note && <p className="text-[12px] text-stone-600">{h.note}</p>}
+                <p className="text-[12px] font-semibold text-stone-700">
+                  {t.label} · <span className="font-normal text-stone-400">{new Date(t.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}</span>
+                  {t.provenance === 'self_reported' && <span className="ml-1 rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-400">SELF-REPORTED</span>}
+                </p>
+                {t.note && <p className="text-[12px] text-stone-600">{t.note}</p>}
               </div>
             ))}
           </div>

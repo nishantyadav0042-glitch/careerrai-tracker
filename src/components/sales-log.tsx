@@ -13,6 +13,9 @@ const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'converted', label: 'Converted', cls: 'bg-emerald-600 text-white' },
   { key: 'no_answer', label: 'No answer', cls: 'bg-stone-200 text-stone-700' },
   { key: 'not_interested', label: 'Not interested', cls: 'bg-stone-200 text-stone-700' },
+  // "Stop calling me" — closes the lead forever. A connected outcome, so the
+  // note (who said it, how) is required by the API.
+  { key: 'dnd', label: 'Stop calling (DND)', cls: 'bg-rose-700 text-white' },
 ];
 
 function defaultCallback(): string {

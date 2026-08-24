@@ -5,13 +5,19 @@ import type { CallLead } from '@/lib/call-queue';
 
 const TIER: Record<string, string> = { hot: 'bg-rose-50 text-rose-700', warm: 'bg-amber-50 text-amber-800', cool: 'bg-stone-100 text-stone-500' };
 const DUE_CLS: Record<string, string> = {
-  callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white', fresh: 'bg-stone-200 text-stone-600',
+  callback: 'bg-sky-600 text-white', retry: 'bg-orange-500 text-white', followup: 'bg-amber-500 text-white',
+  going_cold: 'bg-rose-600 text-white', broken_streak: 'bg-violet-600 text-white',
+  new_never_logged: 'bg-teal-600 text-white', conversion: 'bg-emerald-600 text-white',
+  fresh: 'bg-stone-200 text-stone-600',
 };
 const OUTCOMES: { key: string; label: string; cls: string }[] = [
   { key: 'interested', label: 'Interested', cls: 'bg-amber-500 text-white' },
   { key: 'callback', label: 'Callback', cls: 'bg-sky-600 text-white' },
   { key: 'converted', label: 'Converted', cls: 'bg-emerald-600 text-white' },
   { key: 'not_interested', label: 'Not interested', cls: 'bg-stone-700 text-white' },
+  // The student said stop calling. Closes the lead forever (dnd ≠ "no to the
+  // offer" — it's "no to the contact"). Note is mandatory: record who said it.
+  { key: 'dnd', label: 'Stop calling (DND)', cls: 'bg-rose-700 text-white' },
 ];
 
 function defaultCallback(): string {
@@ -75,6 +81,15 @@ export function CallDeck({ queue }: { queue: CallLead[] }) {
               <p className="text-xs text-stone-500">{lead.phone ?? 'no phone'}</p>
               <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${TIER[lead.tier]}`}>{lead.tier.toUpperCase()}</span>
               <span className="text-[11px] text-stone-400">momentum {lead.momentumScore}</span>
+            </div>
+            {/* WHY THIS STUDENT IS HERE (founder, 24 Aug): the lane's trigger
+                with real numbers, then the recommended move. This block is
+                what makes the card intelligence, not a phone list. */}
+            <div className="mt-2 rounded-lg bg-stone-50 px-2.5 py-2">
+              {lead.why.map((w, i) => (
+                <p key={i} className="text-[12px] font-semibold leading-snug text-stone-700">{w}</p>
+              ))}
+              <p className="mt-1 text-[12px] font-bold text-teal-700">→ {lead.action}</p>
             </div>
             {/* The weakness brief — what she reads before dialing */}
             <ul className="mt-2 space-y-0.5">

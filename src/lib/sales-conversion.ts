@@ -25,6 +25,22 @@ import { isCovered } from './coverage-status';
 export interface Symptom { label: string; strong: boolean }
 export interface Objection { objection: string; response: string }
 export interface CallHistoryItem { at: string; actorId: string | null; activityType: string | null; channel: string | null; provenance: string | null; status: string | null; note: string | null }
+/** One cell of the 14-day study strip — the single highest-value view for a
+ *  retention call ("you studied 6 days straight and stopped Tuesday — what
+ *  happened Tuesday?"). PRODUCT FACT layer: read from daily_reports, never
+ *  writable from any sales surface. */
+export interface StudyDay { date: string; logged: boolean }
+export interface FollowupItem { id: number; dueAt: string; status: string; reason: string | null; channel: string | null; completedAt: string | null; outcome: string | null }
+/** The merged interaction timeline: CRM activity + follow-up promises in one
+ *  chronological stream. One canonical model — the rep page and any founder
+ *  drill-down render THIS, never their own joins (founder rule, 24 Aug). */
+export interface TimelineItem {
+  at: string;
+  kind: 'activity' | 'followup_created' | 'followup_closed';
+  label: string;
+  note: string | null;
+  provenance: string | null;
+}
 
 export interface ConversionView {
   studentId: string; name: string; firstName: string; phone: string | null; waNumber: string | null;
@@ -43,6 +59,12 @@ export interface ConversionView {
   history: CallHistoryItem[];
   status: string | null;
   recommendedBuddy: { name: string; percentile: number | null; college: string | null; reason: string | null } | null;
+  /** Oldest → newest, exactly 14 entries (IST days). */
+  studyStrip: StudyDay[];
+  /** Latest mock debrief, if any — evidence, shown with its own date. */
+  latestMock: { takenOn: string | null; overall: number | null; varc: number | null; dilr: number | null; qa: number | null } | null;
+  followups: FollowupItem[];
+  timeline: TimelineItem[];
 }
 
 
@@ -56,14 +78,55 @@ function waNumber(phone: string | null): string | null {
 }
 
 export async function getSalesConversionView(admin: any, id: string): Promise<ConversionView | null> {
-  const [{ data: p }, momentum, { data: eng }, { data: acts }, { data: lead }] = await Promise.all([
+  const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
+  const [{ data: p }, momentum, { data: eng }, { data: acts }, { data: lead }, { data: strip14 }, { data: mocks }, { data: fups }] = await Promise.all([
     admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription').eq('id', id).single(),
     getStudentMomentum(admin, id),
     admin.from('student_engagement').select('buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').eq('student_id', id).maybeSingle(),
     admin.from('sales_activity').select('created_at, actor_id, activity_type, channel, provenance, status, note').eq('student_id', id).order('created_at', { ascending: false }).limit(20),
     admin.from('lead_outreach').select('status').eq('student_id', id).maybeSingle(),
+    // PRODUCT FACTS for the 360 (24 Aug foundation): the day-by-day pattern,
+    // the latest mock, and the promise history. All read-only to sales.
+    admin.from('daily_reports').select('report_date').eq('student_id', id).gte('report_date', since14),
+    admin.from('mock_debriefs').select('taken_on, overall_percentile, varc, dilr, qa').eq('student_id', id).order('taken_on', { ascending: false }).limit(1),
+    admin.from('sales_followup').select('id, due_at, status, reason, channel, created_at, completed_at, outcome').eq('student_id', id).order('due_at', { ascending: false }).limit(15),
   ]);
   if (!p || !momentum) return null;
+
+  // ── 14-day study strip (oldest → newest, IST days) ──
+  const loggedDays = new Set((strip14 ?? []).map((r: any) => r.report_date as string));
+  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const studyStrip: StudyDay[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const date = new Date(Date.parse(todayIst) - i * 86_400_000).toISOString().slice(0, 10);
+    studyStrip.push({ date, logged: loggedDays.has(date) });
+  }
+
+  const m0 = (mocks ?? [])[0] as any | undefined;
+  const latestMock = m0
+    ? { takenOn: m0.taken_on ?? null, overall: m0.overall_percentile ?? null, varc: m0.varc ?? null, dilr: m0.dilr ?? null, qa: m0.qa ?? null }
+    : null;
+
+  const followups: FollowupItem[] = (fups ?? []).map((f: any) => ({
+    id: f.id, dueAt: f.due_at, status: f.status, reason: f.reason ?? null, channel: f.channel ?? null,
+    completedAt: f.completed_at ?? null, outcome: f.outcome ?? null,
+  }));
+
+  // ── Merged interaction timeline (newest first) ──
+  const timeline: TimelineItem[] = [];
+  for (const a of acts ?? []) {
+    timeline.push({
+      at: a.created_at, kind: 'activity',
+      label: a.activity_type === 'assigned' || a.activity_type === 'reassigned'
+        ? 'Lead assigned' : `${a.channel === 'whatsapp' ? 'WhatsApp' : 'Call'} — ${String(a.status ?? 'logged').replace(/_/g, ' ')}`,
+      note: a.note ?? null, provenance: a.provenance ?? null,
+    });
+  }
+  for (const f of followups) {
+    timeline.push({ at: (fups ?? []).find((x: any) => x.id === f.id)?.created_at ?? f.dueAt, kind: 'followup_created', label: `Follow-up promised for ${new Date(f.dueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`, note: f.reason, provenance: 'system_generated' });
+    if (f.completedAt) timeline.push({ at: f.completedAt, kind: 'followup_closed', label: `Follow-up ${f.status === 'no_response' ? 'attempted — no response' : f.status}`, note: f.outcome, provenance: 'system_generated' });
+  }
+  timeline.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
   const e = (eng ?? {}) as any;
   const buddyTaps = (e.buddy_cta_clicks as number | null) ?? 0;
@@ -156,5 +219,9 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     history: (acts ?? []).map((a: any) => ({ at: a.created_at, actorId: a.actor_id ?? null, activityType: a.activity_type ?? null, channel: a.channel ?? null, provenance: a.provenance ?? null, status: a.status, note: a.note })),
     status: (lead?.status as string | null) ?? null,
     recommendedBuddy,
+    studyStrip,
+    latestMock,
+    followups,
+    timeline,
   };
 }
