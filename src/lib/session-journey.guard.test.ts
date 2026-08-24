@@ -96,8 +96,25 @@ describe('the ₹299 boundary survived this pass', () => {
       ACTIVATE.indexOf('export async function activatePaidOrder'));
     expect(fn).not.toMatch(/is_premium/);
     expect(fn).not.toMatch(/grantPremiumAndQueueBuddy/);
-    // The one-time relationship must NOT become the ongoing one.
-    expect(fn).not.toMatch(/buddy_id:/);
+
+    // The one-time relationship must NOT become the ongoing one — meaning the
+    // ₹299 path never writes profiles.buddy_id.
+    //
+    // The first version of this banned the STRING `buddy_id:` and fired the
+    // moment assignment legitimately set it on mentor_grants. Pin the
+    // behaviour: which TABLE is being updated, not which words appear.
+    const profileWrites = [...fn.matchAll(/\.from\(['"]profiles['"]\)([\s\S]{0,240})/g)]
+      .map((m) => m[1])
+      .filter((tail) => /\.update\s*\(/.test(tail));
+    for (const w of profileWrites) {
+      expect(w, 'the ₹299 path writes profiles.buddy_id — that is the premium relationship')
+        .not.toMatch(/buddy_id/);
+    }
+    // And the grant write, which IS allowed, must target mentor_grants.
+    if (/buddy_id: assigned\.buddyId/.test(fn)) {
+      const grantBlock = fn.slice(fn.lastIndexOf("from('mentor_grants')", fn.indexOf('buddy_id: assigned.buddyId')));
+      expect(grantBlock).toMatch(/buddy_id: assigned\.buddyId/);
+    }
   });
 
   it('it still issues exactly the three messages', () => {

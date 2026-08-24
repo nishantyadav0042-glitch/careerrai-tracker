@@ -44,9 +44,23 @@ describe('every surface that reads a live session includes active', () => {
     if (NOT_JOIN_SURFACES.includes(file)) return;
     const src = readFileSync(file, 'utf8');
 
-    // The exact shape that caused the bug: an equality filter pinning the
-    // query to the one state a session begins in.
-    const scheduledOnly = /\.eq\(\s*['"]session_status['"]\s*,\s*['"]scheduled['"]\s*\)/.test(src);
+    // The exact shape that caused the bug: a READ pinned to the one state a
+    // session begins in.
+    //
+    // A conditional UPDATE guard — `.update({...}).eq('session_status',
+    // 'scheduled')` — is the opposite of the bug: it is how a write refuses to
+    // clobber a session that moved on. Flagging those made this guard fire on
+    // correct code, so each video_sessions statement is classified before it
+    // is judged.
+    const statements = src.split(/\.from\(\s*['"]video_sessions['"]\s*\)/).slice(1);
+    const scheduledOnly = statements.some((stmt) => {
+      // Only look at this statement, not the rest of the file.
+      const body = stmt.split(/\n\s*\n/)[0];
+      const pinned = /\.eq\(\s*['"]session_status['"]\s*,\s*['"]scheduled['"]\s*\)/.test(body);
+      if (!pinned) return false;
+      const isWrite = /\.(update|delete|upsert)\s*\(/.test(body);
+      return !isWrite;
+    });
 
     expect(
       scheduledOnly,

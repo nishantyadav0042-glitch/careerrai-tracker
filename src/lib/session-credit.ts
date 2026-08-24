@@ -85,14 +85,34 @@ export type Speciality =
 
 export const MAX_SPECIALITIES = 2;
 
-/** Which speciality answers which finding. One vocabulary, both directions. */
+/**
+ * Which speciality answers which problem. ONE map, both directions, and both
+ * PROVENANCES — the product's own findings (mock_plateau…) and the student's
+ * stated intents (varc_weak…) resolve through the same table.
+ *
+ * Extended 24 Aug with the student-facing intents. 'section_depth' was already
+ * declared as a speciality with nothing pointing at it: the answer to a
+ * section weakness existed before the question did, which is why this is an
+ * extension rather than a second matcher.
+ */
 export const FINDING_TO_SPECIALITY: Record<string, Speciality> = {
+  // Product-observed findings.
   mock_plateau: 'mock_analysis',
   mock_drop: 'mock_analysis',
   no_strategy: 'strategy',
   behind_timeline: 'strategy',
   consistency: 'consistency',
   repeating_pattern: 'second_attempt',
+  // Student-stated intents.
+  varc_weak: 'section_depth',
+  dilr_weak: 'section_depth',
+  qa_weak: 'section_depth',
+  mock_performance: 'mock_analysis',
+  time_management: 'strategy',
+  coaching_conflict: 'strategy',
+  interview_prep: 'second_attempt',
+  other: 'strategy',
+  unreviewed: 'strategy',
 };
 
 export interface MentorProfile extends MentorLoad {

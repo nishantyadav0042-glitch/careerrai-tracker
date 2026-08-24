@@ -1,4 +1,4 @@
-import type { Speciality } from '@/lib/session-credit';
+import { FINDING_TO_SPECIALITY, type Speciality } from '@/lib/session-credit';
 
 // ── Why the student bought this session ─────────────────────────────────────
 //
@@ -52,26 +52,14 @@ export const INTENT_LABEL: Record<IntentKind, string> = {
 };
 
 /**
- * Which mentor speciality answers each intent. Mirrors the DB table, which the
- * guard test reads to prove the two cannot drift.
+ * Which mentor speciality answers each intent.
+ *
+ * NOT a second map — this IS FINDING_TO_SPECIALITY, re-exported under the name
+ * that reads correctly at the call site. A rival table here would drift from
+ * the one matchMentor actually consults, and the first symptom would be
+ * students quietly matched to the wrong mentor.
  */
-export const INTENT_TO_SPECIALITY: Record<IntentKind, Speciality> = {
-  no_strategy: 'strategy',
-  varc_weak: 'section_depth',
-  dilr_weak: 'section_depth',
-  qa_weak: 'section_depth',
-  mock_performance: 'mock_analysis',
-  time_management: 'strategy',
-  consistency: 'consistency',
-  coaching_conflict: 'strategy',
-  interview_prep: 'second_attempt',
-  other: 'strategy',
-  mock_plateau: 'mock_analysis',
-  mock_drop: 'mock_analysis',
-  behind_timeline: 'strategy',
-  repeating_pattern: 'second_attempt',
-  unreviewed: 'strategy',
-};
+export const INTENT_TO_SPECIALITY = FINDING_TO_SPECIALITY as Record<IntentKind, Speciality>;
 
 export function isSessionIntent(v: unknown): v is SessionIntent {
   return typeof v === 'string' && (SESSION_INTENTS as readonly string[]).includes(v);

@@ -6,6 +6,7 @@ import { emitTimeline } from '@/lib/os/timeline';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
 import { SESSION_PLAN_ID, SESSION_PRICE_PAISE } from '@/lib/session-credit';
 import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
+import { assignBuddyToCredit } from '@/lib/session-assignment';
 
 // The ONE path that turns a real Razorpay capture into a paid, premium student.
 // Shared by the webhook (normal case) and the reconcile-payments cron (the
@@ -199,6 +200,40 @@ async function activateSessionCredit(
     // Reported, not fatal: the session they paid for is the product. Losing
     // the three messages must not fail the payment activation.
     console.error(`[activate:${source}] session chat grant failed:`, grantErr.message);
+  }
+
+  // ── Assign a mentor, right now ───────────────────────────────────────────
+  //
+  // The gap this closes: a credit was minted and then nothing happened. Nobody
+  // was assigned, no session existed, and a human had to build the row by hand.
+  //
+  // NEVER fatal, and never consumes the credit. If no mentor has capacity the
+  // student still owns exactly what they paid for — the credit waits at `paid`
+  // and the founder view can see it waiting. Losing an entitlement because the
+  // roster was briefly empty is the one outcome to avoid.
+  //
+  // Assigns session_credits.buddy_id ONLY. profiles.buddy_id is the ongoing
+  // premium relationship and is deliberately untouched: a one-off session must
+  // never become a permanent mentorship.
+  const { data: fresh } = await admin
+    .from('session_credits').select('id').eq('payment_id', row.id).maybeSingle();
+  if (fresh?.id) {
+    const assigned = await assignBuddyToCredit(admin, {
+      creditId: fresh.id as string,
+      studentId: row.student_id,
+      sessionIntent: row.session_intent ?? null,
+      findingKind: row.finding_kind ?? null,
+    });
+    if (!assigned.ok) {
+      console.error(`[activate:${source}] session not assigned yet:`, assigned.failure);
+    } else {
+      // The three messages become spendable only now — the grant was minted
+      // with no buddy, and an un-buddied grant is unspendable by design.
+      await admin.from('mentor_grants')
+        .update({ buddy_id: assigned.buddyId })
+        .eq('student_id', row.student_id)
+        .is('buddy_id', null);
+    }
   }
 
   await logSecurityEvent(admin, {
