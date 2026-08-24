@@ -115,7 +115,7 @@ is a design flaw, not a tuning problem, and no capacity number fixes it.
 | Concept | Meaning | Counts against capacity? |
 |---|---|---|
 | **Owned relationship** | `lead_outreach.owner_id = rep`. Sticky. This student is *theirs*; their history, their notes. | **No** |
-| **Active working set** | Owned **and** carrying live work: never contacted, OR an open follow-up, OR currently in a retention/conversion lane. | **Yes** |
+| **Active working set** | Owned **and** carrying live work. ⚠️ The phrase "currently in a lane" used here was **too vague and is superseded — see §23 for the canonical definition** (founder review, 24 Aug). | **Yes** |
 
 `open_now(rep)` counts the **active working set**, not the owned book. A
 student who is healthy and logging goes *dormant* — still owned, still
@@ -615,5 +615,403 @@ when it *does* bind.
 
 ---
 
-**Status: awaiting founder review. No Phase 2 code will be written until this
-document is approved.**
+---
+---
+
+# AMENDMENTS (v2) — founder review 24 Aug, CONDITIONAL GO
+
+Sections 23–31 supersede any conflicting text above. Where I changed my mind
+under the founder's argument, it says so.
+
+## 23. AMENDMENT 1 — ACTIVE WORK ITEM, canonically defined
+
+**Founder: "currently in a lane" is too vague.** Correct — and the ambiguity
+is worse than it looks, because `classifyLane` is a TypeScript function that
+needs each student's 30-day log history. Computing it live for every owned
+student on every capacity check would be both expensive and, worse,
+*non-deterministic across a day* (a student silently crosses the 3-day line at
+midnight and a capacity number changes with no event recorded anywhere).
+
+**The canonical definition — four disjuncts, all SQL-computable in one
+indexed query, no TypeScript classifier involved:**
+
+```
+ACTIVE(lead) ⟺ owner_id IS NOT NULL
+             AND status NOT IN ('converted','not_interested','dnd')
+             AND (
+   A1  status = 'not_contacted'                                     -- never contacted
+   OR A2  next_action_at IS NOT NULL AND next_action_at <= now()    -- promise/retry due
+   OR A3  EXISTS (sales_followup WHERE status='open'
+                    AND due_at <= now())                            -- overdue promise
+   OR A4  attention_since IS NOT NULL                               -- retention lane stamped
+             )
+
+DORMANT(lead) ⟺ owner_id IS NOT NULL
+             AND status NOT IN ('converted','not_interested','dnd')
+             AND NOT ACTIVE
+
+CLOSED(lead)  ⟺ status IN ('converted','not_interested','dnd')
+                 -- never active, never dormant, never counted, never re-assigned
+
+URGENT REACTIVATION ⟺ A4 fires on a lead that was DORMANT
+                       (attention_since set while previously dormant)
+                       -- the overflow class, §24
+```
+
+**A4 and the attention stamp — the one new mechanism, and why it is not a
+second engine.** `lead_outreach.attention_since` / `attention_lane` are
+written **only** by the daily lane sweep, and that sweep's only source of
+truth is `classifyLane()` — the existing, guard-locked authority. The stamp is
+**materialisation of the canonical engine's verdict, not a rival computation.**
+Rules that keep it honest, all guard-testable:
+
+- The sweep is the sole writer of `attention_since`; it must import
+  `classifyLane` and must not contain its own predicates.
+- The stamp is **never read for display.** The rep's card and 360 always show
+  the live `classifyLane` verdict. The stamp exists solely for capacity
+  accounting and the overflow signal, so a stale stamp can never put a wrong
+  sentence in front of a rep.
+- Cleared when the student logs again, is dispositioned, or the sweep finds
+  no lane. Staleness is bounded by one sweep interval — acceptable for a
+  day-granularity concept like capacity, and unacceptable for display, which
+  is exactly why display does not use it.
+
+**On the founder's fifth proposed disjunct, "student explicitly requested
+contact":** **FACT (verified)** — there is no in-app surface where a student
+can request a call; no `request_call`/`contact_request` feature exists. The
+only student-requested-callback signal is `callback_requested_at` arriving on
+the Expedify vendor callback, and that route already writes it into
+`callback_at`/`next_action_at` — so it is **already covered by A2**, with no
+new disjunct needed. If an in-app "ask for a call" button is ever built, it
+becomes A5 and must write `next_action_at` like every other promise, not a
+parallel field.
+
+**`wants_mentor` deliberately excluded:** it is a standing flag, not an event.
+As a disjunct it would make a student *permanently* active and silently eat a
+slot forever — the exact failure mode §2 exists to prevent. It stays a
+conversion-lane input.
+
+## 24. AMENDMENT 2 — sticky-owner reactivation overflow (Scenario E)
+
+**Founder's principle accepted in full: the existing relationship wins; never
+silently exceed capacity, never silently transfer a relationship.**
+
+The formula already handles it without special-casing, which is the sign it is
+the right shape:
+
+```
+active_now(rep)     = Σ weight(active work items)        -- may exceed capacity
+assignable_now(rep) = in_window ? max(0, min(capacity − active_now,
+                                             daily_cap − new_today)) : 0
+                                  ↑ naturally 0 when active_now ≥ capacity
+```
+
+Rep A at 48/50 when eight dormant students reactivate becomes `active_now=56`,
+`assignable_now=0`. A keeps all 56 — they are A's students. A receives **no new
+leads** until the overflow clears. Nothing is transferred, nothing is hidden.
+
+**The founder screen shows the honest decomposition, not a single number:**
+
+```
+REP A          50 / 50  +6 overflow          ⚠ CAPACITY OVERFLOW
+               ├ within capacity   50
+               ├ sticky reactivations  +6   ← existing relationships turned urgent
+               └ assignable now         0
+```
+
+**A provable invariant, and the reason this design is safe: the assignment
+engine can never cause overflow.** It checks `assignable_now` before every
+write and that value is floored at 0. Therefore `active_now > capacity` has
+exactly two possible causes — (a) sticky reactivation, or (b) a human's manual
+assignment. Both are intentional acts by design. This is stated as an
+invariant because it is **testable**: a property test can drive arbitrary
+reactivation storms through the engine and assert it never adds a lead to a
+rep at or over capacity.
+
+**Exception raised** (`owner:'sales'`, existing primitive — not a new
+dashboard): `CAPACITY OVERFLOW — STICKY REACTIVATIONS`, severity scaled by
+overflow size, evidence = the exact reactivated students, drill-down to that
+list, suggested actions: reassign some, raise the ceiling temporarily
+(`capacity_override`, expiring), or accept and let the rep work through it.
+
+**Why this is genuinely better than the alternatives**, stated plainly so the
+choice is on record: auto-transferring the 6 would hand a student in a fragile
+moment to a stranger — the worst possible time to break a relationship.
+Silently exceeding would make every capacity number a lie. Refusing to
+reactivate would mean the system *knows* a student is going cold and says
+nothing. The overflow signal is the only option that keeps the relationship,
+the honesty, and the retention response simultaneously.
+
+## 25. AMENDMENT 3 — three ceilings, and always name the binding one
+
+**I concede this one.** My "default `max_new_per_day` to unbounded" was
+reasoning from current volume only; the founder's argument is defence in
+depth, and it is stronger: *if a capacity computation is ever wrong, the daily
+cap is the fuse that stops hundreds of leads landing before anyone notices.*
+A safety fuse whose value is "∞" is not a fuse. **Finite configurable default
+for both reps.**
+
+```
+Ceiling 1  ACTIVE CAPACITY      max_capacity_units      -- primary, business meaning
+Ceiling 2  DAILY INTAKE         max_new_per_day         -- safety fuse, finite
+Ceiling 3  GLOBAL KILL SWITCH   assignment_enabled      -- emergency, one flag
+```
+
+The capacity computation returns a **reason**, never a bare number:
+
+```
+ASSIGNABLE            n slots free
+CAPACITY_BINDING      active work is at the ceiling
+DAILY_CAP_BINDING     capacity exists, today's intake fuse is spent
+OVERFLOW              active work exceeds capacity (§24)
+OUT_OF_HOURS          outside work_days/hours
+UNAVAILABLE           leave / paused (unavailable_until)
+INACTIVE              active = false
+NOT_CONFIGURED        no sales_rep_config row — never render as "0"
+```
+
+Pool level: `NO_ELIGIBLE_REP` · `POOL_EMPTY` · `ENGINE_DISABLED`. The founder
+never sees "assignment did not happen" without the reason it did not.
+
+## 26. AMENDMENT 4 — the temperature firewall
+
+Permanent rule: **system priority ≠ rep judgement ≠ commercial outcome.**
+`rep_temperature` (F6-approved, not yet built) is display-and-MIS only. It must
+never touch: assignment, lane order, priority, capacity, or any performance /
+compensation calculation.
+
+**Guard, written before the field exists** (so it cannot be forgotten when it
+is): `rep_temperature` must not appear in `call-queue.ts`, the assignment
+engine, `sales-score.ts`, `sales-portfolio.ts`, or `sales-control-tower.ts`
+ranking. Rationale recorded in the test: if a rep's own label could pull leads
+toward them or raise their rank, the label stops being a judgement and becomes
+a lever — and a CRM that can be farmed stops being evidence.
+
+## 27. AMENDMENT 5 — future-ready weighted capacity, not built now
+
+Phase 2 ships **1 active student = 1 capacity unit**. The model is shaped so
+weights can arrive later without touching the engine:
+
+- The column is `max_capacity_units` (not `max_open_leads`) — the semantic is
+  already "units of work", so no rename or migration is needed later.
+- The counter is `Σ weight(item)` where `weight()` currently returns `1` for
+  every item. Introducing weights later changes **one pure function**, not the
+  algorithm, not the schema, not the allocation.
+- Nothing stores a weight today. No dead column, no unused config.
+
+## 28. AMENDMENT 6 — architecture debt register (recorded, not fixed here)
+
+| Debt | Class | Today | Trigger to act |
+|---|---|---|---|
+| `getRosterMomentum` five unbounded reads per queue build | **P1 architecture debt** | 786 students — acceptable | ~5,000 students, or the row-limit answer coming back "capped" |
+| Data-API row limit behaviour | **UNKNOWN — must be verified, not inferred** | probe blocked by this environment's network policy | before Phase 2B-3; 60-second authenticated test specified in §3 |
+| Typed Supabase read boundary (C0 class) | P2 tech debt | contained by guard test | repo-wide, outside sales |
+| `student_events` no TTL | P2 | fine | ~10k students |
+| Rep offboarding / book rehoming | P2 | not needed at 2 reps | first rep departure, or ~20 reps |
+
+**Phase 2 does not depend on any of these**, which is why none is being fixed
+inside it. The assignment engine deliberately does not call the roster loader.
+
+## 29. AMENDMENT 7 — scenario stress test
+
+Columns: **Owner** → **Capacity consumed?** → **Assignment occurs?** →
+**Rep sees** → **Founder sees** → **Audit written**.
+
+**A · 2 reps, normal volume.** Pool ranked by lane; FT 12 free, PT 3 free →
+largest-remainder 4:1 split. → Owner: engine-assigned. → Yes, 1 unit each. →
+Yes. → New cards with lane/why/action + SLA countdown. → Today panel: assigned
+today, per-rep utilisation. → One `sales_activity('assigned',
+system_generated)` per lead + one audit row for the run with the full
+allocation and capacity snapshot.
+
+**B · One rep unavailable** (`unavailable_until` set, or off-shift). → Owner:
+unchanged for their existing book. → Their active work still counts (it is
+still work). → No new assignments to them; the whole allocation goes to the
+available rep, capped by *their* ceilings. → Absent rep: nothing changes.
+Present rep: more cards. → `UNAVAILABLE` reason beside that rep; their overdue
+follow-ups become Exceptions after 24h. → Config change audited; assignments
+audited as normal.
+
+**C · Both reps at capacity.** → Owner: nobody; leads stay pooled. → n/a. →
+**No.** → Nothing new. → `CAPACITY_BINDING` for both + Exception "N eligible
+leads waiting, 0 assignable capacity — raise a ceiling or hire", drill-down to
+the waiting students. → Run audit records: pool size, zero assigned, reason.
+
+**D · 100 leads arrive suddenly** (campaign). → Owner: only as many as
+capacity allows. → Yes, up to the ceilings. → Partially — the top-priority
+slice by lane rank. → A normal day's deck; no flood. → Pool pressure rising +
+whichever ceiling bound first (likely `DAILY_CAP_BINDING` — **this is the
+scenario the founder's safety fuse was kept for**). → Audit shows requested
+vs assigned vs skipped.
+
+**E · 10 of Rep A's dormant students go urgent at once** ⭐ *(the founder's
+key test)*. A is at 48/50.
+→ **Owner: unchanged — all 10 stay with A.** Never transferred.
+→ **Capacity: yes — `active_now` goes 48 → 58, i.e. 50/50 + 8 overflow.**
+→ **Assignment: none. `assignable_now` = max(0, 50−58) = 0.** A receives no
+new leads until the overflow clears. The engine could not have caused this and
+provably cannot add to it.
+→ **Rep A sees:** 10 reactivated students at the top of the deck (retention
+lanes outrank fresh work), each with its evidence, plus "0 slots free —
+working through 8 over capacity". Nothing was taken from them; nothing new was
+pushed onto them.
+→ **Founder sees:** `CAPACITY OVERFLOW — STICKY REACTIVATIONS · Rep A · +8`,
+with the exact 8 students one click away, and three offered actions (reassign
+some / temporary override / accept).
+→ **Audit:** each reactivation stamped by the sweep with its lane and
+evidence; the Exception carries `detectedAt` and the evidence list; any
+founder reassignment writes its own before/after audit row.
+**This is the scenario that decides whether the model is real. It resolves
+with zero silent behaviour: no hidden transfer, no inflated capacity, no
+suppressed retention signal — and the rep's most fragile students go to the
+person who already knows them.**
+
+**F · Rep A at capacity while performing excellently** (most owned students
+healthy). → Owner: unchanged. → Only the genuinely-active minority consumes
+slots — the healthy 200 are dormant and cost nothing. → Yes, A keeps
+receiving leads. → Normal. → High utilisation with a *large dormant book* — the
+signal that says "this rep is retaining well", which the old model would have
+shown as "full, stop feeding them". → Normal. *(This is §2's whole point,
+demonstrated.)*
+
+**G · Founder manually reassigns.** → Owner: changes, immediately and
+permanently. → Yes, on the new owner (and freed on the old). → Manual, not
+engine. → Old rep loses the card; new rep gains it with full history and
+notes intact. → The change plus its reason. → `admin_audit_log`:
+who, when, why, previous owner, new owner + a `reassigned` activity row.
+**The engine can never undo it** — it only ever touches `owner_id IS NULL`.
+
+**H · Assignment request retries twice.** → Owner: whoever the first
+successful write set. → Once. → **Exactly once.** Retries update 0 rows
+(`WHERE owner_id IS NULL` no longer matches) and are skipped. → One card, not
+three. → One assignment. → One activity row; the retry is a no-op and is
+recorded as such in the run audit.
+
+**I · Two workers race the same lead.** → Owner: exactly one, decided by the
+database. → Once. → Once. → One card. → One assignment. → One activity row;
+the loser logs a skip. Guaranteed by the guarded conditional write, the same
+property that already protects `claim_lead`. **A concurrency test asserting
+this is a Phase 2B-3 acceptance gate, not an afterthought.**
+
+**J · A rep games HOT/WARM/COLD.** → Owner: unchanged. → **No effect on
+capacity.** → **No effect on assignment — the firewall (§26) means the field is
+not an input to any routing or ranking code, enforced by guard test.** → Their
+own label on their own card. → The label *beside* the system's verdict, never
+merged — so a rep whose "HOT" calls never convert becomes visible as a
+calibration signal rather than an advantage. → Normal.
+
+## 30. AMENDMENT 8 — Phase 2B acceptance contract
+
+**Data model.** NEW `sales_rep_config` (§4, with `max_capacity_units` per
+§27, plus `assignment_enabled` global flag in `scale-config`). EXTEND
+`lead_outreach` with 5 additive columns: `assigned_at`,
+`first_contact_sla_due`, `assignment_reason`, `attention_since`,
+`attention_lane`. NEW indexes: 2 partial (§14) + one on `attention_since`
+where not null. **No other schema change. Nothing dropped.**
+
+**State machine** (the lead, not the student):
+```
+UNOWNED ──engine/claim/manual──► ACTIVE ──work discharged──► DORMANT
+   ▲                                │                           │
+   └──── founder release ───────────┤                    lane sweep stamps A4
+                                    │                           │
+                                    │◄──── URGENT REACTIVATION ──┘
+                                    │
+                                    └── disposition ──► CLOSED (terminal)
+```
+Overflow is a property **of the rep**, not a state of the lead.
+
+**Algorithms:** assignment §5 (unchanged), capacity §24 + §25 (amended).
+
+**Failure/retry:** §6 + §17 — idempotent by state, fail-closed on unreadable
+config or partial pool, never assign from an incomplete read.
+
+**Audit:** per-assignment activity row + per-run audit row + per-override
+audit row. No ownership write exists without one.
+
+**Security/RLS:** `sales_rep_config` RLS-on, deny-by-default, service-role
+only; admin-write via audited route; rep reads own row. Identity stays
+`profiles.id`; no email/phone/name shortcut anywhere.
+
+**Kill switch:** `assignment_enabled=false` → engine no-ops → shared-pool
+claiming, which is today's live behaviour (not an untested path).
+
+**Files/modules to modify:** `lib/os/scale-config.ts` (EXTEND),
+`lib/sales-capacity.ts` (NEW — pure capacity math + reasons),
+`lib/sales-assignment.ts` (NEW — allocation, pure + writer),
+`api/cron/sales-assign/route.ts` (NEW), `api/cron/sales-attention/route.ts`
+(NEW — lane sweep + SLA sweep), `lib/sales-control-tower.ts` (EXTEND —
+capacity panel), `app/admin/sales/tower/*` (EXTEND), `app/sales/page.tsx`
+(EXTEND — capacity line), `api/admin/rep-config/route.ts` (NEW — audited
+config writes). **Untouched:** `call-queue.ts` ranking, `sales-disposition`,
+`sales-authz`, `claim_lead`, `sales-followup`, every student-facing surface.
+
+**Classification:** NEW — `sales_rep_config`, 2 crons, 2 libs, 1 admin route.
+EXTEND — 5 columns, 3 indexes, scale-config, control-tower, 2 pages.
+REUSE — lead_outreach, sales_activity, sales_followup, claim_lead,
+classifyLane, dispositions, authz, audit log, Exception primitive.
+CONSOLIDATE — none outstanding (done in 1.5). DEPRECATE — `student_crm`
+dual-write, `cat_test_leads` (founder decisions). DELETE — nothing.
+
+**Acceptance tests (all must pass before 2B ships):**
+1. `active/dormant/closed` classification — table-driven over all four
+   disjuncts and every boundary.
+2. Healthy student frees a slot; going cold reclaims it, **to the same owner**.
+3. Determinism: identical inputs ⇒ identical allocation, repeatedly.
+4. **Concurrency: N workers, one lead ⇒ exactly one owner** (Scenario I).
+5. **Idempotency: re-run assigns nothing new** (Scenario H).
+6. **Overflow invariant: no reactivation storm can make the engine assign to a
+   rep at/over capacity** (Scenario E, property test).
+7. Every ceiling reports its binding reason; unconfigured rep ⇒
+   `NOT_CONFIGURED`, never 0.
+8. **Firewall: `rep_temperature` appears in no routing/ranking module.**
+9. Kill switch ⇒ engine no-ops, queue behaves exactly as today.
+10. Manual override always wins; engine never touches an owned lead.
+11. Every assignment carries a human-readable explanation.
+12. Every founder count drills to the exact student list (count == list).
+
+## 31. The honest co-founder answer
+
+*"Designing from scratch, knowing we reach 20–100 reps — would you keep this?"*
+
+**Mostly yes, with one thing I would genuinely build differently and two I
+would not.**
+
+**What I would change from scratch: ownership history as a first-class
+relation.** Today ownership is a single mutable column, and "who owned this
+student in March, and why did it move?" is reconstructable only by reading
+`sales_activity` notes in sequence. At 2 reps that question is rare. At 20+,
+with reps joining and leaving, it becomes routine — for MIS, for disputes,
+and for rehoming a departed rep's book. From scratch I would model
+`lead_assignment(lead, owner, from, to, reason)` with `lead_outreach.owner_id`
+as a denormalised pointer. **I am not proposing we change it now**, because
+introducing a second ownership structure is exactly the duplication this whole
+workstream exists to prevent, and the history *is* recoverable. The honest
+trigger: if ownership-history queries become common, add a **view** over
+`sales_activity` first, and materialise only if it is measured slow.
+
+**What I would not change, even knowing 100 reps are coming:** sticky
+relationship ownership, and the retention-first lane order. Both get *more*
+valuable with scale, not less — at 100 reps the temptation to treat students
+as interchangeable leads is enormous, and these two decisions are what stop
+that.
+
+**The two honest gaps at 20–100 that this design does not solve, and should
+not solve today:** (1) **overflow resolution does not scale as a founder
+task** — at 100 reps someone must triage overflow constantly, so it has to
+become policy-driven (e.g. "unresolved 24h → offer to the team pool"). The
+design is ready for that because overflow is already a first-class,
+evidence-carrying state; only the resolution policy is missing. (2) **rep
+offboarding** — a departing rep's book needs a rehoming workflow; today it is
+manual reassignment in batches, which is fine for one departure and painful
+for ten.
+
+**And the thing I would insist on regardless of team size:** the temperature
+firewall (§26) and the provenance separation. Every incentive at 20+ reps
+pushes toward letting reps influence their own queue and letting claimed
+activity count as real activity. Those two rules are what keep the MIS
+evidence rather than theatre — and they are far cheaper to enforce from the
+first row than to retrofit after a year of gamed data.
+
+**Status: amendments complete. Awaiting founder approval for Phase 2B.
+No code written.**
