@@ -2,18 +2,32 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isCallOutcome, isConnectedOutcome, planDisposition } from '@/lib/sales-disposition';
-import { salesPrincipal } from '@/lib/sales-authz';
+import {
+  canAccessLead, checkSalesTarget, loadStaffDirectory, resolveLeadOwner, salesPrincipal,
+} from '@/lib/sales-authz';
+import { completeDueFollowups, scheduleFollowup } from '@/lib/sales-followup';
 
 // Disposition endpoint — the heart of the dialer CRM. Every call MUST end in a
 // disposition. The vocabulary and the disposition → state mapping live in ONE
 // place (lib/sales-disposition) shared with the DB CHECK; this route only
-// authenticates, validates, and persists.
+// authenticates, authorizes, validates, and persists.
 //
 // TRUTH RULE (20 Aug, Sales Phase 1): a failed DB write returns non-2xx. The
 // original version ignored both write errors and returned {ok:true} while the
 // production CHECK rejected status='no_answer' — the lead silently left the
-// queue forever and history said the call happened. Never again: the client
-// only advances on a confirmed write.
+// queue forever and history said the call happened.
+//
+// SECURITY STOP 1 (23 Aug): `studentId` was validated as `typeof === 'string'`
+// and nothing else. A rep could POST any uuid — including the admin's — and
+// claim that person as her lead, and sales_activity had no foreign key, so a
+// wholly invented uuid persisted as history. Three gates now stand in front of
+// the write: the id must be a uuid, it must resolve to a real non-test STUDENT,
+// and the caller must be allowed to act on that lead.
+//
+// PROVENANCE (23 Aug): a rep typing "called" is not evidence that a call
+// happened. Every row this route writes is provenance='self_reported'. The
+// system has no telephony record, and a founder dashboard that renders a
+// self-report as observed fact is a fiction with a chart on it.
 
 export async function POST(request: NextRequest) {
   const supabase = createServerClient(
@@ -25,18 +39,39 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const admin = createAdminClient();
-  // R3 (23 Aug): the actor is the authenticated profiles.id. This used to be
-  // `email ?? full_name ?? 'sales'` — three different encodings of one person,
-  // so two staff without an email collapsed into the literal actor 'sales' and
-  // history could not name who made a call.
+  // The actor is the authenticated profiles.id. This used to be
+  // `email ?? full_name ?? 'sales'` — three encodings of one person, so two
+  // staff without an email collapsed onto the literal actor 'sales'.
   const principal = await salesPrincipal(admin, user.id);
   if (!principal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const { studentId, outcome, note, callbackAt, hot } = body ?? {};
-  if (typeof studentId !== 'string' || !isCallOutcome(outcome)) {
+  if (!isCallOutcome(outcome)) {
     return NextResponse.json({ error: 'Invalid disposition' }, { status: 400 });
   }
+
+  // ── GATE 1: is this id even allowed to be a sales subject? ────────────────
+  const target = await checkSalesTarget(admin, studentId);
+  if (!target.ok) {
+    if (target.reason === 'unavailable') {
+      // A read we could not complete is not a rejection of the student — say so
+      // with a 503 rather than a 404 that would read as "no such person".
+      return NextResponse.json({ error: 'Could not verify the student — try again.' }, { status: 503 });
+    }
+    // One response for malformed / not-found / not-a-student / test-account, so
+    // a rep cannot use this endpoint to enumerate who exists or what role they
+    // hold.
+    return NextResponse.json({ error: 'Not a valid lead.' }, { status: 404 });
+  }
+
+  // ── GATE 2: may THIS actor act on THIS lead? ──────────────────────────────
+  const dir = await loadStaffDirectory(admin);
+  const ownership = await resolveLeadOwner(admin, studentId, dir);
+  if (!canAccessLead(ownership, principal)) {
+    return NextResponse.json({ error: 'This lead belongs to another rep.' }, { status: 403 });
+  }
+
   const noteText = typeof note === 'string' ? note.trim() : '';
   // Feedback is mandatory on a connected call (not on a no-answer).
   if (isConnectedOutcome(outcome) && noteText.length === 0) {
@@ -47,15 +82,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Pick a callback time.' }, { status: 400 });
   }
 
-  const actor = principal.id;
-
-  // SA-1D: claim before write. One shared book — logging a call claims the
-  // lead atomically (single conditional statement in the claim_lead RPC).
-  // If another rep already owns it, NOTHING is written and the client keeps
-  // the card: a failed claim must never look like a logged call.
+  // ── GATE 3: claim before write ────────────────────────────────────────────
+  // SA-1D: one shared book — logging a call claims the lead atomically (a
+  // single conditional statement inside the claim_lead RPC). If another rep
+  // already owns it, NOTHING is written and the client keeps the card: a failed
+  // claim must never look like a logged call.
   const { data: claimRows, error: claimError } = await admin.rpc('claim_lead', {
     p_student_id: studentId,
-    p_owner: actor,
+    p_owner_id: principal.id,
   });
   if (claimError) {
     console.error('[sales/log] claim_lead failed:', claimError.message);
@@ -63,10 +97,10 @@ export async function POST(request: NextRequest) {
   }
   const claim = Array.isArray(claimRows) ? claimRows[0] : claimRows;
   if (!claim?.claimed) {
+    // Deliberately does NOT echo claim.current_owner: that is a staff
+    // profiles.id, and a rep has no business learning another rep's identity
+    // key from an error body.
     return NextResponse.json(
-      // Deliberately does NOT echo `claim.current_owner`: that value is now a
-      // staff profiles.id, and a rep has no business learning another rep's
-      // identity key from an error body.
       { error: 'This lead is owned by another rep — ask an admin to reassign it.' },
       { status: 409 },
     );
@@ -84,8 +118,8 @@ export async function POST(request: NextRequest) {
 
   const now = new Date().toISOString();
 
-  // State first, then history — and BOTH checked. If state fails we stop
-  // before writing history, so the two can never contradict each other.
+  // State first, then history — and BOTH checked. If state fails we stop before
+  // writing history, so the two can never contradict each other.
   const { error: stateError } = await admin.from('lead_outreach').upsert({
     student_id: studentId,
     status: plan.status,
@@ -94,7 +128,7 @@ export async function POST(request: NextRequest) {
     last_attempt_at: now,
     no_answer_count: plan.noAnswerCount,
     notes: noteText || null,
-    // owner is deliberately absent: ownership is written ONLY by the atomic
+    // owner_id is deliberately absent: ownership is written ONLY by the atomic
     // claim above and by the admin reassign route — never by a plain upsert.
     updated_at: now,
   });
@@ -103,16 +137,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not save the call — try again.' }, { status: 500 });
   }
 
-  const { error: historyError } = await admin.from('sales_activity').insert({
+  const { data: activity, error: historyError } = await admin.from('sales_activity').insert({
     student_id: studentId,
-    actor,
+    actor_id: principal.id,
+    activity_type: 'call',
+    channel: 'phone',
+    // The honest default. Nothing in this system independently observes that a
+    // call took place — no call id, no duration, no recording.
+    provenance: 'self_reported',
     status: outcome,
     note: noteText || (outcome === 'no_answer' ? 'Did not pick up' : null),
     callback_at: plan.callbackAt,
-  });
+  }).select('id').single();
   if (historyError) {
     console.error('[sales/log] sales_activity insert failed:', historyError.message);
     return NextResponse.json({ error: 'Call state saved but history write failed — retry to record it.' }, { status: 500 });
+  }
+
+  // ── Follow-up history ─────────────────────────────────────────────────────
+  // next_action_at drives the queue and is OVERWRITTEN on every disposition, so
+  // it can never answer "was the promised follow-up actually done?". These two
+  // calls are that record. Neither may fail the request: the call itself is
+  // saved and confirmed, and losing the history footnote must not tell the rep
+  // her logged call did not stick.
+  await completeDueFollowups(admin, {
+    studentId, actorId: principal.id, outcome, activityId: activity?.id as number | undefined,
+  });
+  if (plan.nextActionAt) {
+    await scheduleFollowup(admin, {
+      studentId,
+      ownerId: principal.id,
+      createdBy: principal.id,
+      dueAt: plan.nextActionAt,
+      reason: outcome === 'callback' ? 'Student asked for a callback' : `Cadence after '${outcome}'`,
+      channel: 'phone',
+    });
   }
 
   return NextResponse.json({ ok: true });

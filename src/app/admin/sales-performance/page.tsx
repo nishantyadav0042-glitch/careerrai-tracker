@@ -74,9 +74,9 @@ export default async function SalesPerformancePage() {
   const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const [{ data: acts }, { data: portfolio }] = await Promise.all([
     // HER calls only.
-    admin.from('sales_activity').select('student_id, status, note, created_at').eq('actor', repId).gte('created_at', since7).order('created_at', { ascending: false }),
+    admin.from('sales_activity').select('student_id, status, note, created_at').eq('actor_id', repId).gte('created_at', since7).order('created_at', { ascending: false }),
     // HER portfolio = leads she owns.
-    admin.from('lead_outreach').select('student_id, status, callback_at, updated_at').eq('owner', repId),
+    admin.from('lead_outreach').select('student_id, status, callback_at, updated_at').eq('owner_id', repId),
   ]);
   const actList = (acts ?? []) as any[];
   const port = (portfolio ?? []) as any[];

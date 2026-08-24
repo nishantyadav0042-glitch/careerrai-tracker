@@ -8,6 +8,7 @@ import { resolvePrice, MIN_CHARGE_PAISE } from '@/lib/pricing';
 import { grantPremiumAndQueueBuddy } from '@/lib/premium';
 import { pickUpgradeCredit, readUpgradeCredits } from '@/lib/session-credit';
 import { normalizeIndianPhone } from '@/lib/phone';
+import { emitPaymentFunnel } from '@/lib/payment-funnel';
 import { recordSacredFailure } from '@/lib/os/sacred-failure';
 import { taxForPlan } from '@/lib/gst';
 
@@ -225,6 +226,13 @@ export async function POST(request: NextRequest) {
       session_credit_paise: creditPaise || null,
       razorpay_order_id: order.id,
       status: 'created',
+    });
+
+    // Server-side and therefore trustworthy: WE minted this order. Paired with
+    // the client's payment_checkout_opened, the gap between the two is exactly
+    // the "never saw Razorpay" population the payment audit could not isolate.
+    await emitPaymentFunnel(admin, user.id, 'payment_order_created', {
+      order_id: order.id, plan, amount: order.amount,
     });
 
     return NextResponse.json({

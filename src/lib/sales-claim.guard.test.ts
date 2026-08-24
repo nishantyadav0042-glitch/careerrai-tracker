@@ -134,6 +134,8 @@ describe('queue visibility (one shared book), keyed on profiles.id', () => {
     const s = readFileSync('src/lib/call-queue.ts', 'utf8');
     expect(s).toMatch(/canAccessLead\(/);
     expect(s).toMatch(/resolveOwnerToken\(/);
-    expect(s).toMatch(/select\('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner'\)/);
+    // The queue must read BOTH ownership encodings: owner_id is the authority,
+    // `owner` is the legacy text still resolved for pre-migration rows.
+    expect(s).toMatch(/owner_id, owner/);
   });
 });

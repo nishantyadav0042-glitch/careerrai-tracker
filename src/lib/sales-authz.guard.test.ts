@@ -157,7 +157,10 @@ describe('R3 — request data can never become identity', () => {
   const reassign = readFileSync('src/app/api/admin/reassign-lead/route.ts', 'utf8');
 
   it('14. the actor comes from the session, never from the body', () => {
-    expect(log).toMatch(/const actor = principal\.id;/);
+    // The idea, not one line: the actor written to history is the authenticated
+    // principal, and nothing else in the file may supply it.
+    expect(log).toMatch(/actor_id: principal\.id/);
+    expect(log).not.toMatch(/actor_id:\s*(body|req|request)/);
     // The body destructure must not contain any identity field.
     const destructure = log.match(/const \{[^}]*\} = body \?\? \{\};/)?.[0] ?? '';
     expect(destructure).not.toMatch(/actor|owner|repId|email|phone/);

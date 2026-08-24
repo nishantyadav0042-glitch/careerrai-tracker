@@ -24,7 +24,7 @@ import { isCovered } from './coverage-status';
 
 export interface Symptom { label: string; strong: boolean }
 export interface Objection { objection: string; response: string }
-export interface CallHistoryItem { at: string; actor: string | null; status: string | null; note: string | null }
+export interface CallHistoryItem { at: string; actorId: string | null; activityType: string | null; channel: string | null; provenance: string | null; status: string | null; note: string | null }
 
 export interface ConversionView {
   studentId: string; name: string; firstName: string; phone: string | null; waNumber: string | null;
@@ -60,7 +60,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription').eq('id', id).single(),
     getStudentMomentum(admin, id),
     admin.from('student_engagement').select('buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').eq('student_id', id).maybeSingle(),
-    admin.from('sales_activity').select('created_at, actor, status, note').eq('student_id', id).order('created_at', { ascending: false }).limit(20),
+    admin.from('sales_activity').select('created_at, actor_id, activity_type, channel, provenance, status, note').eq('student_id', id).order('created_at', { ascending: false }).limit(20),
     admin.from('lead_outreach').select('status').eq('student_id', id).maybeSingle(),
   ]);
   if (!p || !momentum) return null;
@@ -153,7 +153,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     prep: { sections, strongSection, weakSection, topUntouched, finished, started, untouched, activeDays14: momentum.signals.activeDays14, openedMock: mock },
     objections,
     pitch,
-    history: (acts ?? []).map((a: any) => ({ at: a.created_at, actor: a.actor, status: a.status, note: a.note })),
+    history: (acts ?? []).map((a: any) => ({ at: a.created_at, actorId: a.actor_id ?? null, activityType: a.activity_type ?? null, channel: a.channel ?? null, provenance: a.provenance ?? null, status: a.status, note: a.note })),
     status: (lead?.status as string | null) ?? null,
     recommendedBuddy,
   };

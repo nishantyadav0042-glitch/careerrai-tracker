@@ -114,6 +114,45 @@ export function ownerToken(principal: SalesPrincipal): string {
   return principal.id;
 }
 
+/** A well-formed uuid. Cheap, and the first gate on any request-supplied id. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function isUuid(v: unknown): v is string {
+  return typeof v === 'string' && UUID_RE.test(v);
+}
+
+/**
+ * SECURITY STOP 1 — may this id be the SUBJECT of a sales activity?
+ *
+ * /api/sales/log used to validate `studentId` with `typeof === 'string'` and
+ * nothing else, so a rep could claim any person in the system — including the
+ * admin — as her lead, and `sales_activity` had no foreign key, so even a
+ * non-existent uuid persisted as history.
+ *
+ * A sales subject must be a real, non-test, non-demo STUDENT. Staff and
+ * mentors are people we employ, not leads.
+ */
+export type SalesTargetCheck =
+  | { ok: true }
+  | { ok: false; reason: 'malformed' | 'not_found' | 'not_a_student' | 'test_account' | 'unavailable' };
+
+export async function checkSalesTarget(admin: any, studentId: unknown): Promise<SalesTargetCheck> {
+  if (!isUuid(studentId)) return { ok: false, reason: 'malformed' };
+  const { data, error } = await admin
+    .from('profiles')
+    .select('id, role, is_test_account, is_demo')
+    .eq('id', studentId)
+    .maybeSingle();
+  // A read we could not complete is not "this student is fine".
+  if (error) {
+    console.error('[sales-authz] target check read failed:', error.message);
+    return { ok: false, reason: 'unavailable' };
+  }
+  if (!data) return { ok: false, reason: 'not_found' };
+  if (data.role !== 'student') return { ok: false, reason: 'not_a_student' };
+  if (data.is_test_account === true || data.is_demo === true) return { ok: false, reason: 'test_account' };
+  return { ok: true };
+}
+
 /** Resolve a stored owner/actor token to a canonical profiles.id. */
 export function resolveOwnerToken(
   token: string | null | undefined,
@@ -191,12 +230,17 @@ export async function resolveLeadOwner(
 ): Promise<OwnerResolution> {
   const { data, error } = await admin
     .from('lead_outreach')
-    .select('owner')
+    .select('owner_id, owner')
     .eq('student_id', studentId)
     .maybeSingle();
   if (error) {
     console.error('[sales-authz] lead owner read failed:', error.message);
     return { kind: 'unavailable', reason: 'lead_read_failed' };
   }
+  // owner_id is the authority. `owner` (TEXT) is the legacy encoding, still
+  // read so a row written before the migration resolves correctly; it is never
+  // preferred over the uuid.
+  const ownerId = (data?.owner_id as string | null) ?? null;
+  if (ownerId) return { kind: 'owned', ownerId };
   return resolveOwnerToken((data?.owner as string | null) ?? null, dir);
 }

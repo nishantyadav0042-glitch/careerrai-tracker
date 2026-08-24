@@ -216,8 +216,13 @@ describe('Scenario F — a broken read is never a confident wrong queue', () => 
 describe('the CRM is reachable, not merely registered', () => {
   const sales = WORKSPACES.find((w) => w.id === 'sales')!;
 
-  it('the Sales workspace lands on the call queue — the CRM, not a signup list', () => {
-    expect(sales.href).toBe('/admin/sales');
+  it('the Sales workspace lands on the operating surface, not a signup list', () => {
+    // Was pinned to the literal '/admin/sales'. The landing moved to the
+    // Control Tower on 23 Aug, so this now pins the INTENT the original test
+    // had: the workspace must land inside the sales operation and never on
+    // /admin/leads, the flat signup list it was rescued from.
+    expect(sales.href).toMatch(/^\/admin\/sales/);
+    expect(sales.href).not.toBe('/admin/leads');
   });
 
   it('the tab row is rendered by the LAYOUT, so no page can orphan its siblings', () => {

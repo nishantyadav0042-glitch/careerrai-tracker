@@ -72,7 +72,7 @@ async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await db
       .from('lead_outreach')
-      .select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner')
+      .select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner_id, owner')
       .in('student_id', ids);
     if (!error) return data ?? [];
     lastMessage = error.message;
@@ -131,7 +131,13 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // through profiles.id: an owner token we cannot attribute is withheld, not
     // treated as unclaimed — an unattributable owner is an unanswered question,
     // not a free lead.
-    if (!canAccessLead(resolveOwnerToken((o?.owner as string | null) ?? null, staff), viewer ?? null)) continue;
+    // owner_id is the authority; `owner` (TEXT) is the legacy encoding, still
+    // resolved so a pre-migration row attributes correctly.
+    const ownerId = (o?.owner_id as string | null) ?? null;
+    const ownership = ownerId
+      ? ({ kind: 'owned', ownerId } as const)
+      : resolveOwnerToken((o?.owner as string | null) ?? null, staff);
+    if (!canAccessLead(ownership, viewer ?? null)) continue;
     totalOpen++;
 
     const nextAction = o?.next_action_at ? new Date(o.next_action_at).getTime() : null;

@@ -71,7 +71,7 @@ export async function getRepPortfolio(admin: any, repId: string): Promise<{ lead
   const db = admin ?? createAdminClient();
   const { data: rows } = await db.from('lead_outreach')
     .select('student_id, status, callback_at, notes, updated_at')
-    .eq('owner', repId);
+    .eq('owner_id', repId);
   const list = (rows ?? []) as any[];
   if (list.length === 0) {
     return { leads: [], summary: summarizePortfolio([], []) };
@@ -103,7 +103,7 @@ export async function getRepPortfolio(admin: any, repId: string): Promise<{ lead
 export async function getRepCallStats(admin: any, repId: string): Promise<{ today: CallStats; week: CallStats }> {
   const db = admin ?? createAdminClient();
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { data } = await db.from('sales_activity').select('status, created_at').eq('actor', repId).gte('created_at', since);
+  const { data } = await db.from('sales_activity').select('status, created_at').eq('actor_id', repId).gte('created_at', since);
   const rows = (data ?? []) as any[];
   const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const isToday = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIst;
