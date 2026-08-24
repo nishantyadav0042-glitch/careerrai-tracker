@@ -22,6 +22,9 @@ export interface PayableRow {
    *  carried onto the credit so the mentor opens knowing the problem. */
   finding_kind?: string | null;
   finding_evidence?: string | null;
+  /** What the STUDENT said they wanted, chosen at booking. */
+  session_intent?: string | null;
+  session_intent_note?: string | null;
   /** Plan purchases only: the ₹299 session credit applied at order creation. */
   session_credit_id?: string | null;
 }
@@ -63,7 +66,10 @@ export async function readWebhookPaymentRow(
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await admin
       .from('student_payments')
-      .select('id, student_id, plan, status, coupon_code, amount, session_credit_id')
+      // finding_kind / session_intent belong here. They were read by
+      // activateSessionCredit and NEVER SELECTED, so `row.finding_kind` was
+      // always undefined and every credit was minted with a null reason.
+      .select('id, student_id, plan, status, coupon_code, amount, session_credit_id, finding_kind, finding_evidence, session_intent, session_intent_note')
       .eq('razorpay_order_id', orderId)
       .maybeSingle();
     if (!error) return (data as WebhookPaymentRow | null) ?? null;
@@ -152,6 +158,10 @@ async function activateSessionCredit(
       amount_paise: row.amount ?? SESSION_PRICE_PAISE,
       finding_kind: row.finding_kind ?? null,
       finding_evidence: row.finding_evidence ?? null,
+      // The student's stated reason, carried from the payment onto the
+      // entitlement so the mentor opens the call already knowing the problem.
+      session_intent: row.session_intent ?? null,
+      session_intent_note: row.session_intent_note ?? null,
     });
     // 23505 = the unique constraint fired, i.e. a concurrent delivery already
     // minted this credit. That is SUCCESS, not failure: the entitlement the
