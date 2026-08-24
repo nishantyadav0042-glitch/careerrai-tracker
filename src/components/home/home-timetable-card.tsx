@@ -14,13 +14,18 @@ import { TimetableUpload } from '@/components/timetable-upload';
 //   · no timetable      → ONE prompt card, whose ✕ removes it from the home
 //                         screen forever on this device (founder's rule); the
 //                         full card stays reachable in Profile → Settings
-//   · not coaching-enrolled and never uploaded → hidden entirely
+//
+// REMOVED 24 Aug: a `coachingEnrolled === false` check used to hide this card
+// entirely for any student not flagged coaching-enrolled — 548 of 780 real
+// students (70%), including the founder's own test account. The premise for
+// making the upload FREE (timetable-free.guard.test.ts, 8 Aug) was that most
+// aspirants already have a timetable; hiding the button from 70% of students
+// worked directly against that. Founder, 24 Aug: show it to everyone.
 const DISMISS_KEY = 'cr_home_timetable_dismissed';
 
 export function HomeTimetableCard() {
   const [dismissed, setDismissed] = useState(true); // hidden until storage read
   const [hasTimetable, setHasTimetable] = useState<boolean | null>(null); // null = loading
-  const [hidden, setHidden] = useState(false);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -29,7 +34,6 @@ export function HomeTimetableCard() {
       const json = await res.json();
       const blocks = json.timetable?.blocks ?? null;
       setHasTimetable(Array.isArray(blocks) && blocks.length > 0);
-      if (json.coachingEnrolled === false && !json.timetable) setHidden(true);
     } catch {
       setHasTimetable(false);
     }
@@ -42,7 +46,7 @@ export function HomeTimetableCard() {
     void load();
   }, [load]);
 
-  if (hidden || hasTimetable === null) return null;
+  if (hasTimetable === null) return null;
 
   // A saved timetable: show the progress mirror, never a prompt.
   if (hasTimetable) return <CoachingMirror />;
