@@ -28,7 +28,11 @@ export type BindingReason =
   | 'OUT_OF_HOURS'        // outside work_days / work hours
   | 'UNAVAILABLE'         // leave / paused
   | 'INACTIVE'            // active = false
-  | 'NOT_CONFIGURED';     // no config row — never render this as "0"
+  | 'NOT_CONFIGURED'      // no config row — never render this as "0"
+  // NOT the same as UNAVAILABLE, which means the rep is on leave. This means
+  // the DATABASE could not be read. "She is away" and "we could not look" are
+  // different facts and must never share a label.
+  | 'READ_FAILED';
 
 export interface RepConfig {
   repId: string;
@@ -64,10 +68,19 @@ export interface RepCapacity {
   capacity: number | null;      // null when NOT_CONFIGURED
   activeNow: number;
   available: number;
-  newToday: number;
+  /** NULL = not instrumented. `lead_outreach.assigned_at` does not exist until
+   *  2B-2, and the existing manual `claim_lead` path records no claim time, so
+   *  "new leads today" is genuinely unmeasurable in this phase. It renders as
+   *  NOT INSTRUMENTED, never as 0 — a fake zero here would tell the founder a
+   *  rep took no leads today when the truth is that nothing counts them. */
+  newToday: number | null;
   overflow: number;
   inWindow: boolean;
   binding: BindingReason;
+  /** True when the owned-lead read failed. Every number below is then
+   *  UNAVAILABLE rather than zero (Boundary 2: an unreadable input must never
+   *  render as a confident business answer). */
+  readFailed: boolean;
   /** THE list behind activeNow. The count is `.length` of this array, so a
    *  displayed number and its drill-down cannot diverge (SCALE-CONTRACT §4). */
   workItems: WorkItem[];
@@ -166,6 +179,7 @@ export const BINDING_LABEL: Record<BindingReason, string> = {
   UNAVAILABLE: 'On leave / paused',
   INACTIVE: 'Rep switched off',
   NOT_CONFIGURED: 'Not configured',
+  READ_FAILED: 'Could not read — not zero',
 };
 
 /**
@@ -243,12 +257,26 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
   const repIds = reps.map((r) => r.id as string);
   // Every owned, non-closed lead across the team — the only population this
   // module ever touches.
+  //
+  // THE ERROR IS CHECKED (Boundary 2). This read decides every capacity number
+  // on the founder's screen. An earlier version of this function selected a
+  // column that does not exist yet (`assigned_at`, which arrives in 2B-2) and
+  // discarded the error — so the read would have failed, `data` would have been
+  // null, and every rep would have rendered "0 active work" as a confident
+  // fact. That is the same defect class as the queue's unchecked lead read:
+  // an infrastructure failure wearing a business answer's clothes.
   const owned: any[] = [];
+  let readFailed = false;
   for (const chunk of chunkIds(repIds)) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from('lead_outreach')
-      .select('student_id, owner_id, status, next_action_at, assigned_at')
+      .select('student_id, owner_id, status, next_action_at')
       .in('owner_id', chunk);
+    if (error) {
+      console.error('[capacity] owned-lead read failed:', error.message);
+      readFailed = true;
+      break;
+    }
     for (const row of data ?? []) owned.push(row);
   }
 
@@ -282,7 +310,6 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
   const todayIst = new Date(nowMs).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const itemsByRep = new Map<string, WorkItem[]>();
   const dormantByRep = new Map<string, number>();
-  const newTodayByRep = new Map<string, number>();
 
   for (const o of owned) {
     const sid = o.student_id as string;
@@ -305,30 +332,34 @@ export async function getTeamCapacity(admin: any, nowMs: number = Date.now()): P
     } else if (!(o.status && CLOSED_STATUSES.has(o.status))) {
       dormantByRep.set(rep, (dormantByRep.get(rep) ?? 0) + 1);
     }
-    if (o.assigned_at && new Date(o.assigned_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIst) {
-      newTodayByRep.set(rep, (newTodayByRep.get(rep) ?? 0) + 1);
-    }
   }
 
   return reps.map((r) => {
     const cfg = cfgById.get(r.id) ?? null;
-    const workItems = itemsByRep.get(r.id) ?? [];
+    const workItems = readFailed ? [] : (itemsByRep.get(r.id) ?? []);
     const activeNow = activeUnits(workItems);
-    const newToday = newTodayByRep.get(r.id) ?? 0;
     const capacity = cfg ? capacityOf(cfg, nowMs) : null;
     const inWindow = cfg ? inWorkingWindow(cfg, nowMs) : false;
-    const binding = bindingReason({
-      configured: cfg != null, cfg, nowMs, capacity: capacity ?? 0, activeNow,
-      maxNewPerDay: cfg?.maxNewPerDay ?? 0, newToday,
-    });
+    const binding: BindingReason = readFailed
+      ? 'READ_FAILED'
+      : bindingReason({
+          configured: cfg != null, cfg, nowMs, capacity: capacity ?? 0, activeNow,
+          // The daily fuse cannot bind in this phase because newToday is not
+          // instrumented; passing 0 keeps it out of the way rather than
+          // inventing a constraint we cannot measure.
+          maxNewPerDay: cfg?.maxNewPerDay ?? 0, newToday: 0,
+        });
     return {
       repId: r.id, name: r.full_name ?? r.email ?? 'Staff', configured: cfg != null, config: cfg,
       capacity, activeNow,
-      available: cfg && capacity != null
-        ? assignableNow({ capacity, activeNow, maxNewPerDay: cfg.maxNewPerDay, newToday, inWindow })
+      available: !readFailed && cfg && capacity != null
+        ? assignableNow({ capacity, activeNow, maxNewPerDay: cfg.maxNewPerDay, newToday: 0, inWindow })
         : 0,
-      newToday, overflow: capacity != null ? overflowOf(activeNow, capacity) : 0,
-      inWindow, binding, workItems, dormantCount: dormantByRep.get(r.id) ?? 0,
+      newToday: null,   // NOT INSTRUMENTED until 2B-2 adds assigned_at
+      overflow: !readFailed && capacity != null ? overflowOf(activeNow, capacity) : 0,
+      inWindow, binding, workItems,
+      dormantCount: readFailed ? 0 : (dormantByRep.get(r.id) ?? 0),
+      readFailed,
     };
   });
 }

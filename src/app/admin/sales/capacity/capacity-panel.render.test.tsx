@@ -26,24 +26,24 @@ const CONFIGURED: RepCapacity = {
     maxCapacityUnits: 50, maxNewPerDay: 15, firstContactSlaMinutes: 120,
     unavailableUntil: null, capacityOverride: null, overrideUntil: null,
   },
-  capacity: 50, activeNow: 3, available: 12, newToday: 3, overflow: 0,
-  inWindow: true, binding: 'ASSIGNABLE',
+  capacity: 50, activeNow: 3, available: 12, newToday: null, overflow: 0,
+  inWindow: true, binding: 'ASSIGNABLE', readFailed: false,
   workItems: [item(1, 'never_contacted'), item(2, 'action_due'), item(3, 'retention_lane')],
   dormantCount: 200,
 };
 
 const OVERFLOWING: RepCapacity = {
   ...CONFIGURED, repId: 'r2', name: 'Part-timer',
-  capacity: 20, activeNow: 28, available: 0, newToday: 0, overflow: 8,
-  binding: 'OVERFLOW',
+  capacity: 20, activeNow: 28, available: 0, newToday: null, overflow: 8,
+  binding: 'OVERFLOW', readFailed: false,
   workItems: Array.from({ length: 28 }, (_, i) => item(i, 'retention_lane')),
   dormantCount: 40,
 };
 
 const UNCONFIGURED: RepCapacity = {
   repId: 'r3', name: 'New hire', configured: false, config: null,
-  capacity: null, activeNow: 0, available: 0, newToday: 0, overflow: 0,
-  inWindow: false, binding: 'NOT_CONFIGURED', workItems: [], dormantCount: 0,
+  capacity: null, activeNow: 0, available: 0, newToday: null, overflow: 0,
+  inWindow: false, binding: 'NOT_CONFIGURED', workItems: [], dormantCount: 0, readFailed: false,
 };
 
 describe('the capacity panel renders real shapes without throwing', () => {

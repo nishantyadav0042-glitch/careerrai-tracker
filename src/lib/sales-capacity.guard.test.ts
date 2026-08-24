@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   assignableNow, bindingReason, capacityOf, classifyWorkItem, inWorkingWindow,
-  overflowOf, activeUnits, workItemWeight, type RepConfig, type WorkItem,
+  overflowOf, activeUnits, workItemWeight, BINDING_LABEL,
+  type RepConfig, type WorkItem,
 } from './sales-capacity';
 import { RETENTION_LANES } from './call-queue';
 
@@ -161,9 +162,14 @@ describe('Phase 2B-1 is observation only — nothing here can move a student', (
   const ROUTE = readFileSync('src/app/api/admin/rep-config/route.ts', 'utf8');
 
   it('the capacity module never writes ownership or any lead state', () => {
-    expect(CAP).not.toMatch(/owner_id\s*:/);          // no assignment write
-    expect(CAP).not.toMatch(/\.update\(|\.upsert\(|\.insert\(|\.delete\(/);
-    expect(CAP).not.toContain('claim_lead');
+    // Pin the CALL, never the vocabulary. A guard that banned the string
+    // "claim_lead" failed on this module's own comment explaining why it does
+    // not claim anything — the third time in this workstream that a guard
+    // pinned a word instead of a behaviour. Documentation must be free to name
+    // what the code deliberately avoids.
+    expect(CAP).not.toMatch(/owner_id\s*:/);                              // no assignment write
+    expect(CAP).not.toMatch(/\.update\(|\.upsert\(|\.insert\(|\.delete\(/); // no mutation
+    expect(CAP).not.toMatch(/\.rpc\(/);                                   // no procedure call
   });
 
   it('the capacity page renders only — it has no write path', () => {
@@ -186,6 +192,40 @@ describe('Phase 2B-1 is observation only — nothing here can move a student', (
     // absence is the guarantee.
     const files = ['src/lib/sales-capacity.ts', 'src/app/admin/sales/capacity/page.tsx'];
     for (const f of files) expect(readFileSync(f, 'utf8')).not.toContain('assign_lead');
+  });
+
+  it('the owned-lead read is CHECKED — a failed read is never a confident zero', () => {
+    // Boundary 2. This read decides every capacity number the founder sees.
+    // An earlier version selected a column that does not exist yet
+    // (assigned_at, which arrives in 2B-2) and discarded the error, so the
+    // read would have failed and every rep would have rendered "0 active
+    // work" as fact — invisible today only because no lead exists yet.
+    expect(CAP).toMatch(/const \{ data, error \}/);
+    expect(CAP).toContain('readFailed = true');
+    expect(CAP).toContain("'READ_FAILED'");
+  });
+
+  it('"could not read" and "on leave" are different labels', () => {
+    // They were briefly the same enum value. A founder must never read a
+    // database failure as "Priya is away today".
+    expect(BINDING_LABEL.READ_FAILED).not.toBe(BINDING_LABEL.UNAVAILABLE);
+  });
+
+  it('only columns that exist are selected from lead_outreach', () => {
+    // The columns lead_outreach actually has in this phase. assigned_at and
+    // first_contact_sla_due arrive in 2B-2 and must not be referenced before.
+    const select = CAP.match(/\.select\('([^']*)'\)\s*\n?\s*\.in\('owner_id'/)?.[1] ?? '';
+    expect(select.length).toBeGreaterThan(0);
+    for (const col of select.split(',').map((s) => s.trim())) {
+      expect(['student_id', 'owner_id', 'status', 'next_action_at'], `unknown column ${col}`).toContain(col);
+    }
+  });
+
+  it('an unmeasurable number renders as not-instrumented, never as 0', () => {
+    // Nothing records when a lead was claimed in this phase, so "new leads
+    // today" is unknowable. A 0 there would tell the founder a rep took no
+    // leads when the truth is that nothing counts them.
+    expect(CAP).toMatch(/newToday: null/);
   });
 
   it('capacity is read from the owned book, never from the whole roster', () => {

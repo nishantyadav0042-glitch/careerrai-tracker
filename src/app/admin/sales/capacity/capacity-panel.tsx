@@ -62,7 +62,13 @@ export function CapacityPanel({ reps }: { reps: RepCapacity[] }) {
                 )}
               </div>
 
-              {!r.configured ? (
+              {r.readFailed ? (
+                <p className="mt-1.5 rounded-lg bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-800">
+                  Could not read this rep&apos;s leads. Every number here is <strong>UNAVAILABLE</strong>, not zero —
+                  &ldquo;nothing to do&rdquo; and &ldquo;we could not look&rdquo; must never look the same. Retry, and if it
+                  persists check the data-quality panel.
+                </p>
+              ) : !r.configured ? (
                 <p className="mt-1.5 text-[12px] text-stone-500">
                   No capacity row for this account, so no capacity can be stated. This is missing setup, not zero capacity.
                 </p>
@@ -72,7 +78,9 @@ export function CapacityPanel({ reps }: { reps: RepCapacity[] }) {
                     <Num label="Capacity" value={r.capacity ?? '—'} />
                     <Num label="Active work" value={r.activeNow} sub="click to see who" />
                     <Num label="Available" value={r.available} tone={r.available > 0 ? 'good' : undefined} />
-                    <Num label="New today" value={`${r.newToday} / ${r.config?.maxNewPerDay ?? '—'}`} />
+                    {/* NOT INSTRUMENTED, not 0: nothing records when a lead was
+                        claimed until 2B-2 adds assigned_at. */}
+                    <Num label="New today" value="—" sub={`cap ${r.config?.maxNewPerDay ?? '—'} · not instrumented`} />
                     <Num label="Overflow" value={r.overflow} tone={r.overflow > 0 ? 'bad' : undefined} />
                     <Num label="Dormant" value={r.dormantCount} sub="owned, no work" />
                   </div>
