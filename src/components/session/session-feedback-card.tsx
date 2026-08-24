@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { RESOLUTIONS, RESOLUTION_LABEL, MIN_RATING, MAX_RATING,
-  type Resolution } from '@/lib/session-feedback';
+import { RESOLUTIONS, RESOLUTION_LABEL, USEFULNESS, USEFULNESS_LABEL,
+  BOOK_AGAIN, BOOK_AGAIN_LABEL, MIN_RATING, MAX_RATING,
+  type Resolution, type Usefulness, type BookAgain } from '@/lib/session-feedback';
 
 // ── "How was your session?" ─────────────────────────────────────────────────
 //
@@ -23,7 +24,8 @@ export function SessionFeedbackCard({ videoSessionId, buddyName, onDone }: {
 }) {
   const [rating, setRating] = useState<number | null>(null);
   const [resolved, setResolved] = useState<Resolution | null>(null);
-  const [again, setAgain] = useState<boolean | null>(null);
+  const [useful, setUseful] = useState<Usefulness | null>(null);
+  const [again, setAgain] = useState<BookAgain | null>(null);
   const [helped, setHelped] = useState('');
   const [missing, setMissing] = useState('');
   const [saving, setSaving] = useState(false);
@@ -41,7 +43,8 @@ export function SessionFeedbackCard({ videoSessionId, buddyName, onDone }: {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videoSessionId, rating, issueResolved: resolved,
-          wouldBookAgain: again, whatHelped: helped, whatWasMissing: missing,
+          usefulness: useful, bookAgain: again,
+          whatHelped: helped, whatWasMissing: missing,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -105,17 +108,36 @@ export function SessionFeedbackCard({ videoSessionId, buddyName, onDone }: {
         </div>
       </div>
 
+      {/* The hour itself — separate again. A student can like the mentor,
+          leave partly solved, and still feel the hour was thin. */}
       <div>
-        <p className="text-[11px] font-semibold text-stone-500">Would you book another?</p>
-        <div className="mt-1 flex gap-1.5">
-          {[['Yes', true], ['Not now', false]].map(([label, v]) => (
+        <p className="text-[11px] font-semibold text-stone-500">How useful was the session?</p>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {USEFULNESS.map((u) => (
             <button
-              key={String(label)} type="button" aria-pressed={again === v}
-              onClick={() => setAgain(v as boolean)}
+              key={u} type="button" aria-pressed={useful === u}
+              onClick={() => setUseful(u)}
               className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
-                again === v ? 'bg-stone-900 text-white' : 'border border-stone-200 bg-white text-stone-600'
+                useful === u ? 'bg-teal-700 text-white' : 'border border-stone-200 bg-white text-stone-600'
               }`}
-            >{label as string}</button>
+            >{USEFULNESS_LABEL[u]}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Three options, not two. "Maybe" is a real answer, and a yes/no would
+          have recorded a rejection from a student who was simply undecided. */}
+      <div>
+        <p className="text-[11px] font-semibold text-stone-500">Would you book another session?</p>
+        <div className="mt-1 flex gap-1.5">
+          {BOOK_AGAIN.map((b) => (
+            <button
+              key={b} type="button" aria-pressed={again === b}
+              onClick={() => setAgain(b)}
+              className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                again === b ? 'bg-stone-900 text-white' : 'border border-stone-200 bg-white text-stone-600'
+              }`}
+            >{BOOK_AGAIN_LABEL[b]}</button>
           ))}
         </div>
       </div>

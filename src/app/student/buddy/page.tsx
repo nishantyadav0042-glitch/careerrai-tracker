@@ -13,6 +13,7 @@ import { BuddyOverview } from './buddy-overview';
 import { BuddyPanelTabs } from '@/components/buddy-panel-tabs';
 import { ChatThread } from '@/components/chat/chat-thread';
 import { SessionDebrief } from '@/components/student/session-debrief';
+import { SessionFeedbackCard } from '@/components/session/session-feedback-card';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -89,7 +90,7 @@ export default async function BuddyPage({
     // VIEW FILTER ONLY — no data is ever deleted, all sessions persist forever
     admin
       .from('video_sessions')
-      .select('id, title, scheduled_at, session_type, session_status')
+      .select('id, title, scheduled_at, session_type, session_status, buddy_id')
       .eq('student_id', user.id)
       .eq('session_status', 'completed')
       .gte('scheduled_at', sevenDaysAgo)
@@ -161,6 +162,29 @@ export default async function BuddyPage({
 
   const nextSession = (upcoming ?? [])[0] ?? null;
 
+  // ── The one completed session still waiting for a verdict ────────────────
+  // Asked only after the session actually reached `completed` — the database
+  // refuses feedback on anything else, so this can never become a rating for a
+  // call that did not happen. One card, for the most recent unrated session:
+  // a stack of feedback forms is a stack nobody fills.
+  const completedIds = (recentCompleted ?? []).map((x) => x.id as string);
+  let awaitingFeedback: { id: string; buddyId: string } | null = null;
+  if (completedIds.length > 0) {
+    const { data: rated, error: ratedError } = await admin
+      .from('session_feedback')
+      .select('video_session_id')
+      .in('video_session_id', completedIds);
+    // A failed read means we simply do not ask — better a missing prompt than
+    // asking a student to rate the same session twice.
+    if (!ratedError) {
+      const done = new Set((rated ?? []).map((r) => r.video_session_id as string));
+      const pending = (recentCompleted ?? []).find(
+        (x) => !done.has(x.id as string) && x.buddy_id != null,
+      );
+      if (pending) awaitingFeedback = { id: pending.id as string, buddyId: pending.buddy_id as string };
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-white p-4 sm:p-6">
       <div className="max-w-md mx-auto pb-24">
@@ -181,6 +205,14 @@ export default async function BuddyPage({
             weakness={debrief?.weakness ?? null}
             tasks={(assignments ?? []).map((a) => ({ id: a.id, task: a.task, completedAt: a.completed_at }))}
           />
+        )}
+        {awaitingFeedback && (
+          <div className="mb-3">
+            <SessionFeedbackCard
+              videoSessionId={awaitingFeedback.id}
+              buddyName={buddyName}
+            />
+          </div>
         )}
         <BuddyPanelTabs
           chatUnread={chatUnread}

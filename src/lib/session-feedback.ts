@@ -23,6 +23,36 @@ export const RESOLUTION_LABEL: Record<Resolution, string> = {
   not_at_all: 'Not really',
 };
 
+// How useful the HOUR was — separate from rating (the person) and
+// issue_resolved (the outcome). A student can like their mentor, leave with
+// the issue partly solved, and still feel the hour was only somewhat useful.
+// Those are three facts, and only three fields can hold them.
+export const USEFULNESS = ['very', 'useful', 'somewhat', 'not'] as const;
+export type Usefulness = (typeof USEFULNESS)[number];
+
+export const USEFULNESS_LABEL: Record<Usefulness, string> = {
+  very: 'Very useful',
+  useful: 'Useful',
+  somewhat: 'Somewhat useful',
+  not: 'Not useful',
+};
+
+// 'maybe' is a real answer, not a soft no. A boolean here would have
+// manufactured a rejection from a student who was simply undecided.
+export const BOOK_AGAIN = ['yes', 'maybe', 'no'] as const;
+export type BookAgain = (typeof BOOK_AGAIN)[number];
+
+export const BOOK_AGAIN_LABEL: Record<BookAgain, string> = {
+  yes: 'Yes', maybe: 'Maybe', no: 'No',
+};
+
+export function isUsefulness(v: unknown): v is Usefulness {
+  return typeof v === 'string' && (USEFULNESS as readonly string[]).includes(v);
+}
+export function isBookAgain(v: unknown): v is BookAgain {
+  return typeof v === 'string' && (BOOK_AGAIN as readonly string[]).includes(v);
+}
+
 export const MIN_RATING = 1;
 export const MAX_RATING = 5;
 
@@ -30,7 +60,8 @@ export interface FeedbackInput {
   videoSessionId: string;
   rating: number;
   issueResolved: Resolution;
-  wouldBookAgain?: boolean | null;
+  usefulness?: Usefulness | null;
+  bookAgain?: BookAgain | null;
   whatHelped?: string | null;
   whatWasMissing?: string | null;
   sessionIntent?: SessionIntent | null;
@@ -41,8 +72,10 @@ export function isResolution(v: unknown): v is Resolution {
 }
 
 export type FeedbackValidation =
-  | { ok: true; value: Required<Pick<FeedbackInput, 'rating' | 'issueResolved'>>
-      & { wouldBookAgain: boolean | null; whatHelped: string | null; whatWasMissing: string | null } }
+  | { ok: true; value: {
+      rating: number; issueResolved: Resolution;
+      usefulness: Usefulness | null; bookAgain: BookAgain | null;
+      whatHelped: string | null; whatWasMissing: string | null } }
   | { ok: false; error: string };
 
 /**
@@ -50,7 +83,7 @@ export type FeedbackValidation =
  * to produce a sentence a student can act on rather than a constraint name.
  */
 export function validateFeedback(input: {
-  rating?: unknown; issueResolved?: unknown; wouldBookAgain?: unknown;
+  rating?: unknown; issueResolved?: unknown; usefulness?: unknown; bookAgain?: unknown;
   whatHelped?: unknown; whatWasMissing?: unknown;
 }): FeedbackValidation {
   const rating = typeof input.rating === 'number' ? input.rating : Number(input.rating);
@@ -70,7 +103,10 @@ export function validateFeedback(input: {
     value: {
       rating,
       issueResolved: input.issueResolved,
-      wouldBookAgain: typeof input.wouldBookAgain === 'boolean' ? input.wouldBookAgain : null,
+      // Unanswered stays null. "Did not say" and "said no" are different facts,
+      // and only one of them is a rejection.
+      usefulness: isUsefulness(input.usefulness) ? input.usefulness : null,
+      bookAgain: isBookAgain(input.bookAgain) ? input.bookAgain : null,
       whatHelped: text(input.whatHelped),
       whatWasMissing: text(input.whatWasMissing),
     },
@@ -82,7 +118,8 @@ export function validateFeedback(input: {
 export interface FeedbackRow {
   rating: number;
   issue_resolved: string;
-  would_book_again: boolean | null;
+  usefulness: string | null;
+  book_again: string | null;
   session_intent: string | null;
 }
 
@@ -94,6 +131,7 @@ export interface FeedbackSummary {
   resolvedPartly: number;
   notResolved: number;
   wouldBookAgain: number;
+  foundItUseful: number;
 }
 
 /** Below this an average is one student's mood wearing a decimal point. */
@@ -110,6 +148,10 @@ export function summarise(rows: readonly FeedbackRow[]): FeedbackSummary {
     resolvedFully: rows.filter((r) => r.issue_resolved === 'fully').length,
     resolvedPartly: rows.filter((r) => r.issue_resolved === 'partly').length,
     notResolved: rows.filter((r) => r.issue_resolved === 'not_at_all').length,
-    wouldBookAgain: rows.filter((r) => r.would_book_again === true).length,
+    // Only an explicit yes counts. 'maybe' is neither a yes nor a no, and
+    // folding it either way would be the company deciding on the student's
+    // behalf what they meant.
+    wouldBookAgain: rows.filter((r) => r.book_again === 'yes').length,
+    foundItUseful: rows.filter((r) => r.usefulness === 'very' || r.usefulness === 'useful').length,
   };
 }

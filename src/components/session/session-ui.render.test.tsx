@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { IntentPicker, intentIsComplete } from './intent-picker';
 import { SessionFeedbackCard } from './session-feedback-card';
 import { SESSION_INTENTS, INTENT_LABEL, PRODUCT_FINDINGS } from '@/lib/session-intent';
-import { RESOLUTIONS, RESOLUTION_LABEL, MAX_RATING } from '@/lib/session-feedback';
+import { RESOLUTIONS, RESOLUTION_LABEL, USEFULNESS, USEFULNESS_LABEL,
+  BOOK_AGAIN, BOOK_AGAIN_LABEL, MAX_RATING } from '@/lib/session-feedback';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
@@ -95,8 +96,17 @@ describe('the feedback card asks three separate questions', () => {
     for (const r of RESOLUTIONS) expect(html).toContain(RESOLUTION_LABEL[r]);
   });
 
-  it('asks whether they would book again', () => {
-    expect(html).toMatch(/Would you book another\?/);
+  it('asks about USEFULNESS separately from rating and resolution', () => {
+    // Three facts about one call: the person, the outcome, the hour.
+    expect(html).toMatch(/How useful was the session\?/);
+    for (const u of USEFULNESS) expect(html).toContain(USEFULNESS_LABEL[u]);
+  });
+
+  it('offers Yes / Maybe / No — "maybe" is a real answer', () => {
+    // A boolean would have recorded a rejection from a student who was
+    // simply undecided.
+    expect(html).toMatch(/Would you book another session\?/);
+    for (const b of BOOK_AGAIN) expect(html).toContain(BOOK_AGAIN_LABEL[b]);
   });
 
   it('cannot be submitted before the two required answers', () => {

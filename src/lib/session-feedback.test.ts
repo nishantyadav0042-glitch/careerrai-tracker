@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   validateFeedback, summarise, isResolution, RESOLUTIONS, RESOLUTION_LABEL,
+  USEFULNESS, USEFULNESS_LABEL, BOOK_AGAIN, BOOK_AGAIN_LABEL,
   MIN_RATING, MAX_RATING, MIN_FEEDBACK_FOR_AVERAGE, type FeedbackRow,
 } from './session-feedback';
 
 const SQL = readFileSync('supabase/migrations/20260824j_session_intent_and_feedback.sql', 'utf8');
+const SHAPE = readFileSync('supabase/migrations/20260824k_feedback_shape_and_live.sql', 'utf8');
 const ROUTE = readFileSync('src/app/api/sessions/feedback/route.ts', 'utf8');
 
 // A mentor pressing "Complete" is not what makes a session real. started_at /
@@ -52,7 +54,7 @@ describe('only a completed session can be rated', () => {
 
 describe('validation', () => {
   it('accepts a well-formed answer', () => {
-    const r = validateFeedback({ rating: 4, issueResolved: 'partly', wouldBookAgain: true });
+    const r = validateFeedback({ rating: 4, issueResolved: 'partly', bookAgain: 'yes', usefulness: 'very' });
     expect(r.ok).toBe(true);
     expect(r.ok && r.value.rating).toBe(4);
   });
@@ -76,10 +78,32 @@ describe('validation', () => {
     expect(r.ok && (r.value.whatHelped?.length ?? 0)).toBeLessThanOrEqual(2000);
   });
 
-  it('a missing would-book-again is null, never false', () => {
-    // "Did not answer" and "said no" are different facts.
+  it('an unanswered would-book-again is null, never "no"', () => {
+    // "Did not answer" and "said no" are different facts, and only one of them
+    // is a rejection.
     const r = validateFeedback({ rating: 5, issueResolved: 'fully' });
-    expect(r.ok && r.value.wouldBookAgain).toBeNull();
+    expect(r.ok && r.value.bookAgain).toBeNull();
+    expect(r.ok && r.value.usefulness).toBeNull();
+  });
+
+  it('an invented usefulness or book-again value is dropped, not stored', () => {
+    const r = validateFeedback({ rating: 5, issueResolved: 'fully', usefulness: 'amazing', bookAgain: 'sure' });
+    expect(r.ok && r.value.usefulness).toBeNull();
+    expect(r.ok && r.value.bookAgain).toBeNull();
+  });
+
+  it('usefulness and book_again vocabularies match the DB constraints', () => {
+    const u = SHAPE.match(/usefulness in \(([^)]*)\)/);
+    expect(u).toBeTruthy();
+    expect([...u![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]).sort()).toEqual([...USEFULNESS].sort());
+    const b = SHAPE.match(/book_again in \(([^)]*)\)/);
+    expect(b).toBeTruthy();
+    expect([...b![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]).sort()).toEqual([...BOOK_AGAIN].sort());
+  });
+
+  it('every usefulness and book-again value has a human label', () => {
+    for (const u of USEFULNESS) expect(USEFULNESS_LABEL[u]).toBeTruthy();
+    for (const b of BOOK_AGAIN) expect(BOOK_AGAIN_LABEL[b]).toBeTruthy();
   });
 
   it('the resolution vocabulary matches the DB constraint', () => {
@@ -101,9 +125,9 @@ describe('validation', () => {
 });
 
 describe('summarising refuses a confident average over a thin sample', () => {
-  const rows = (n: number, rating = 5, res = 'fully'): FeedbackRow[] =>
+  const rows = (n: number, rating = 5, res = 'fully', book = 'yes', use = 'very'): FeedbackRow[] =>
     Array.from({ length: n }, () => ({
-      rating, issue_resolved: res, would_book_again: true, session_intent: 'qa_weak',
+      rating, issue_resolved: res, book_again: book, usefulness: use, session_intent: 'qa_weak',
     }));
 
   it('below the floor there is no average, only counts', () => {
@@ -130,6 +154,21 @@ describe('summarising refuses a confident average over a thin sample', () => {
     const mixed = [...rows(2, 5, 'fully'), ...rows(2, 3, 'partly'), ...rows(2, 1, 'not_at_all')];
     const s = summarise(mixed);
     expect(s.resolvedFully + s.resolvedPartly + s.notResolved).toBe(s.count);
+  });
+
+  it('"maybe" counts as neither a yes nor a no', () => {
+    // Folding maybe either way would be the company deciding, on the
+    // student's behalf, what they meant.
+    const s = summarise(rows(6, 4, 'partly', 'maybe', 'somewhat'));
+    expect(s.count).toBe(6);
+    expect(s.wouldBookAgain).toBe(0);
+    expect(s.foundItUseful).toBe(0);
+  });
+
+  it('counts usefulness independently of rating', () => {
+    const s = summarise(rows(5, 5, 'fully', 'yes', 'not'));
+    expect(s.averageRating).toBe(5);
+    expect(s.foundItUseful).toBe(0);
   });
 
   it('an empty set is null, not zero or NaN', () => {

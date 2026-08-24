@@ -7,6 +7,8 @@ import { track } from '@/lib/journey';
 import { escapeToBrowserForPayment, readPaymentSurfaceSignals } from '@/lib/store-build';
 import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
 import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
+import { IntentPicker, intentIsComplete } from '@/components/session/intent-picker';
+import type { SessionIntent } from '@/lib/session-intent';
 
 // ── The ₹299 door, in the Buddy section ─────────────────────────────────────
 //
@@ -48,6 +50,12 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   // careerrai.in yourself" sentence is a dead end on a phone — always leave a
   // tappable link behind.
   const [manualUrl, setManualUrl] = useState<string | null>(null);
+  // WHY, captured before the money. The mentor opens the call already knowing
+  // the problem, and the company can finally answer what students are actually
+  // paying ₹299 to solve.
+  const [intent, setIntent] = useState<SessionIntent | null>(null);
+  const [intentNote, setIntentNote] = useState('');
+  const readyToPay = intentIsComplete(intent, intentNote);
   const iosUrl = useIosPayUrl('/student/buddy');
 
   useEffect(() => {
@@ -63,7 +71,10 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
 
   async function book() {
     if (busy) return;
-    track('session_book_click', { finding: findingKind ?? null });
+    // Guarded here AND on the server AND by a CHECK constraint. A student must
+    // never reach Razorpay for a booking the database would then refuse.
+    if (!readyToPay) return;
+    track('session_book_click', { finding: findingKind ?? null, intent });
 
     // Where checkout is allowed to open — see lib/payment-surface. iOS (store
     // wrapper or installed PWA) cannot complete a payment inline; it must
@@ -98,7 +109,15 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
       const res = await fetch('/api/sessions/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ finding_kind: findingKind ?? null, finding_evidence: findingEvidence ?? null }),
+        body: JSON.stringify({
+          finding_kind: findingKind ?? null,
+          finding_evidence: findingEvidence ?? null,
+          // The student's own words. Kept SEPARATE from finding_kind, which is
+          // what the product diagnosed — a student who says "QA is weak" while
+          // the mocks say DILR is the most interesting row we can hold.
+          session_intent: intent,
+          session_intent_note: intentNote.trim() || null,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setError(json.error ?? 'Could not start checkout — try again.'); return; }
@@ -164,7 +183,20 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
       <div className="p-4">
         {state.available ? (
           <>
-            {iosUrl ? (
+            {/* WHY, before the money. Asked here rather than after payment so
+                the mentor is never handed a session with no stated problem,
+                and so a student is never charged for a booking the database
+                would then refuse. */}
+            <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
+              <IntentPicker
+                value={intent}
+                note={intentNote}
+                disabled={busy}
+                onChange={(v) => { setIntent(v.intent); setIntentNote(v.note); }}
+              />
+            </div>
+
+            {iosUrl && readyToPay ? (
               <a
                 href={iosUrl}
                 target="_blank"
@@ -175,12 +207,20 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
                 {`Book my session — ${state.priceLabel}`}
               </a>
             ) : (
+              // The iOS handoff is an anchor, which navigates whatever the
+              // handler does — so when the intent is incomplete it must not be
+              // an anchor at all. A disabled button is the only honest form.
               <button
-                type="button" onClick={() => void book()} disabled={busy}
+                type="button" onClick={() => void book()} disabled={busy || !readyToPay}
                 className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-extrabold text-white transition-transform active:scale-[0.99] disabled:opacity-60"
               >
                 {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
               </button>
+            )}
+            {!readyToPay && (
+              <p className="mt-1.5 text-center text-[11px] font-semibold text-stone-500">
+                Pick what you need help with first.
+              </p>
             )}
             <p className="mt-2 text-center text-[10.5px] text-stone-400">One-time. Nothing renews.</p>
             {manualUrl && (
