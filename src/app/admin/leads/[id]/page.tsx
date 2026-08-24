@@ -144,7 +144,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     computeTopicMemory(admin, id, archetype),
     admin.from('streak_data').select('current_streak, last_log_date, shields').eq('student_id', id).maybeSingle(),
     admin.from('student_engagement').select('buddy_cta_clicks').eq('student_id', id).maybeSingle(),
-    admin.from('lead_outreach').select('owner, status, next_action_at, notes').eq('student_id', id).maybeSingle(),
+    admin.from('lead_outreach').select('owner_id, owner, status, next_action_at, notes').eq('student_id', id).maybeSingle(),
     admin.from('daily_reports').select('report_date, study_duration, mock_taken').eq('student_id', id).order('report_date', { ascending: false }).limit(10),
     admin.from('mock_debriefs').select('taken_on, overall_percentile').eq('student_id', id).order('taken_on', { ascending: false }),
     // Does a plan REALLY exist? The WhatsApp composer gates every

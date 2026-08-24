@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { payFunnel } from '@/lib/payment-funnel-client';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
@@ -70,6 +71,9 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
     }
     setBusy(planId);
     setMessage(null);
+    // Intent, recorded BEFORE any network call — so "tapped Pay but the order
+    // never minted" is distinguishable from "never tapped Pay".
+    payFunnel('payment_cta_clicked', { plan: planId, surface: 'membership' });
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
@@ -97,6 +101,11 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       const ok = await loadRazorpay();
       if (!ok || !window.Razorpay) { setMessage('Could not load the payment window. Try again.'); return; }
 
+      // THE split event. Everything above proves intent; this proves the
+      // student actually saw a payment window. Without it, "never reached
+      // Razorpay" and "reached it and left" are the same abandoned order.
+      payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership' });
+
       const rzp = new window.Razorpay({
         key: data.keyId,
         order_id: data.orderId,
@@ -110,6 +119,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
         theme: { color: '#E8652D' },
         modal: {
           ondismiss: () => {
+            payFunnel('payment_checkout_dismissed', { plan: planId, orderId: data.orderId, surface: 'membership' });
             track('pay_dismissed', { plan: planId, orderId: data.orderId, surface: 'membership' });
             setMessage('Payment cancelled — nothing was charged. Tap again whenever you’re ready.');
           },

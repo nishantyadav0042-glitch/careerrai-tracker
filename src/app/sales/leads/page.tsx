@@ -25,9 +25,11 @@ function istWhen(iso: string | null): string {
 export default async function MyLeadsPage({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
   const { f } = await searchParams;
   const { user, admin } = await requireSales();
-  const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
 
-  const { leads } = await getRepPortfolio(admin, (me?.email as string) ?? '__none__');
+  // R3: the book is keyed on profiles.id. `user.id` IS the authenticated
+  // principal, so a rep with no email now sees exactly the same book as one
+  // with an email — a missing column can no longer change what she sees.
+  const { leads } = await getRepPortfolio(admin, user.id);
   const filter = f && FILTERS.some((x) => x.key === f) ? f : 'active';
   const flt = FILTERS.find((x) => x.key === filter)!;
   const list = leads.filter((l) => flt.match(l));

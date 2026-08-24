@@ -8,12 +8,11 @@ export const metadata = { title: 'My summary · CareerRai' };
 
 export default async function SalesSummaryPage() {
   const { user, admin } = await requireSales();
-  const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
-  const email = (me?.email as string) ?? '__none__';
 
+  // R3: keyed on profiles.id (the authenticated principal), not the email.
   const [{ summary: s, leads }, calls] = await Promise.all([
-    getRepPortfolio(admin, email),
-    getRepCallStats(admin, email),
+    getRepPortfolio(admin, user.id),
+    getRepCallStats(admin, user.id),
   ]);
   const inr = (n: number) => `Rs ${n.toLocaleString('en-IN')}`;
   const hottest = leads.filter((l) => l.status === 'interested' || l.status === 'follow_up').slice(0, 8);

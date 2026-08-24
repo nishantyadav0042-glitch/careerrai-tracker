@@ -5,6 +5,40 @@ import { sendBuilderRecovery } from '@/lib/email';
 import { BUILDER_STEPS, stepLabel } from '@/lib/lead-intel';
 import { builderRecoveryCopy, dispatch, BUDGET_SETUP } from '@/lib/notification-os';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { readRows, isUnavailable } from '@/lib/truth/source';
+import { readRowsForIds } from '@/lib/truth/batch';
+
+// ── B3b #9 — read safety ONLY ──────────────────────────────────────────────
+//
+// READ → DERIVED VALUE → DECISION → SIDE EFFECT:
+//
+//   profiles      → open drops        → who is recovered  → gates all
+//   notifications → sentSinceAnchor
+//                   (a COUNT)         → ladder position   → send / stay silent
+//
+// Two distinct failures, one in each direction:
+//
+//  · `(candidates ?? [])` → an unavailable roster produced `open = []` and the
+//    run answered `{ sent: 0, reason: 'no_open_drops' }` — the decision-engine
+//    shape again, a dead read reported as a legitimately empty day.
+//  · `(prior ?? [])` → an unavailable dedup read made `sentSinceAnchor` 0 for
+//    everyone, which is the bottom of the ladder, so every open drop would be
+//    messaged again regardless of how many times they already had been.
+//
+// `stepReached = c.onboarding_step_reached ?? 0` is left alone: that is a NULL
+// COLUMN on a row we successfully read, not an unavailable source. Conflating
+// the two is exactly the confusion this workstream exists to remove.
+type RecoveryCandidate = {
+  id: string; full_name: string; email: string | null; notif_prefs: unknown;
+  created_at: string; onboarding_completed: boolean | null;
+  onboarding_step_reached: number | null; onboarding_last_activity_at: string | null;
+};
+
+function recoverySourceDead(reason: string, openDrops: number) {
+  console.error('[builder-recovery] source unavailable — nobody was recovered', reason);
+  return NextResponse.json(
+    { ok: false, skipped: 'source_unavailable', reason, sent: 0, openDrops }, { status: 503 });
+}
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -45,23 +79,28 @@ async function builderRecoveryRun(): Promise<NextResponse> {
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
 
-  const { data: candidates } = await admin
-    .from('profiles')
-    .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_step_reached, onboarding_last_activity_at')
-    .eq('role', 'student')
-    .gte('created_at', sevenDaysAgo);
+  const candidatesSource = await readRows<RecoveryCandidate>('profiles(candidates)', () =>
+    admin
+      .from('profiles')
+      .select('id, full_name, email, notif_prefs, created_at, onboarding_completed, onboarding_step_reached, onboarding_last_activity_at')
+      .eq('role', 'student')
+      .gte('created_at', sevenDaysAgo));
+  if (isUnavailable(candidatesSource)) return recoverySourceDead(candidatesSource.reason, 0);
+  const candidates = candidatesSource.state === 'value' ? candidatesSource.value : [];
 
-  const open = (candidates ?? []).filter((c) => c.onboarding_completed !== true);
-  if (!open.length) return NextResponse.json({ sent: 0, reason: 'no_open_drops' });
+  const open = candidates.filter((c) => c.onboarding_completed !== true);
+  if (!open.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no_open_drops' });
 
   const ids = open.map((c) => c.id);
-  const { data: prior } = await admin
-    .from('notifications')
-    .select('user_id, created_at')
-    .eq('type', 'builder_recovery')
-    .in('user_id', ids);
+  const priorSource = await readRowsForIds<string, { user_id: string; created_at: string }>(
+    'notifications(ladder)', ids, (chunk) =>
+      admin.from('notifications').select('user_id, created_at')
+        .eq('type', 'builder_recovery').in('user_id', chunk));
+  if (isUnavailable(priorSource)) {
+    return recoverySourceDead(`notifications(ladder): ${priorSource.reason}`, open.length);
+  }
   const priorByUser = new Map<string, string[]>();
-  for (const n of prior ?? []) {
+  for (const n of (priorSource.state === 'value' ? priorSource.value : [])) {
     if (!priorByUser.has(n.user_id)) priorByUser.set(n.user_id, []);
     priorByUser.get(n.user_id)!.push(n.created_at as string);
   }
@@ -106,7 +145,7 @@ async function builderRecoveryRun(): Promise<NextResponse> {
     if (outcome === 'sent') sent++;
   }
 
-  return NextResponse.json({ sent, openDrops: open.length });
+  return NextResponse.json({ ok: true, sent, openDrops: open.length });
 }
 
 export { POST as GET };

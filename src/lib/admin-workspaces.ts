@@ -85,15 +85,21 @@ export const WORKSPACES: AdminWorkspace[] = [
     id: 'sales',
     label: 'Sales',
     icon: 'PhoneCall',
-    href: '/admin/sales',
-    purpose: 'The CRM. Who to call now, what was said, and what is due next.',
+    href: '/admin/sales/tower',
+    purpose: 'The Control Tower. Who owns what, what was done, and what can be trusted.',
     tabs: [
       // THE CRM landing (21 Aug). It used to be /admin/leads, a flat signup
       // list, while the actual call deck — dispositions, callbacks, retries,
       // ownership — sat at /admin/sales with ZERO inbound links anywhere in
       // the codebase. The founder's report was exact: "the CRM is basically
       // not there." It was there; nothing could reach it.
+      // The Control Tower is the workspace's landing surface (23 Aug): six
+      // levels, every metric labelled OBSERVED / SELF-REPORTED / NOT
+      // INSTRUMENTED. It replaced a grid of confident zeros that could not tell
+      // "no calls were made" from "no calls were recorded".
+      { label: 'Control Tower', href: '/admin/sales/tower', status: 'live' },
       { label: 'Call queue', href: '/admin/sales', status: 'live' },
+      { label: 'Data quality', href: '/admin/sales/quality', status: 'live' },
       { label: 'Leads', href: '/admin/leads', status: 'live' },
       { label: 'Performance', href: '/admin/sales-performance', status: 'moved' },
       { label: 'Buddy interest', href: '/admin/buddy-interest', status: 'live' },
@@ -107,7 +113,8 @@ export const WORKSPACES: AdminWorkspace[] = [
       // (buildCallQueue), scoped to her book instead of the whole base.
       { label: 'Rep view', href: '/sales', status: 'live' },
       { label: 'Call recordings', href: null, status: 'planned', blockedOn: 'No call recording is captured anywhere today.' },
-      { label: 'Rep assignment', href: null, status: 'planned', blockedOn: 'The owner column and the reassign API both exist; no admin UI calls it yet, so ownership can only move by API.' },
+      // Shipped 23 Aug — the preview-then-confirm distributor lives on the
+      // Control Tower, so this is no longer a planned gap.
     ],
   },
   {

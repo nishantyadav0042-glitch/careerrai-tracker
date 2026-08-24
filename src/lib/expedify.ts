@@ -105,6 +105,13 @@ export async function sendExpedifyLead(lead: ExpedifyLead): Promise<ExpedifyResu
         ...(key ? { 'X-API-Key': key } : {}),
       },
       body: JSON.stringify({
+        // THE correlation key (23 Aug). `studentId` has been in this interface
+        // since the integration was written and was deliberately left OUT of
+        // the request body — so the vendor was never handed a CareerRai
+        // identifier and could not possibly echo one back. Every inbound event
+        // therefore had to be phone-matched, and 239 of 239 events resolved to
+        // the wrong person. The missing key was ours.
+        external_ref: lead.studentId ?? undefined,
         name: lead.name,
         phone: lead.phone,
         // Expedify requires `email` (422 without it), but our signups are

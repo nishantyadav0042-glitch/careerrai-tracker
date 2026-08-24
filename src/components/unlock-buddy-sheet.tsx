@@ -11,6 +11,7 @@ import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
+import { payFunnel } from '@/lib/payment-funnel-client';
 
 // Buddy checkout. Two entry points share ONE payment path (useBuddyCheckout):
 //  • BuddyBuyButtons — the price choice rendered DIRECTLY on the sales page,
@@ -106,6 +107,7 @@ function useBuddyCheckout() {
 
     if (surface !== 'inline') {
       setBusy(planId);
+    payFunnel('payment_cta_clicked', { plan: planId, surface: 'unlock_buddy' });
       try {
         if (surface === 'ios_link_handoff') {
           const url = await paymentHandoffUrl('/student/buddy');
@@ -161,6 +163,10 @@ function useBuddyCheckout() {
         return;
       }
 
+      // The split event — see lib/payment-funnel. Proves a payment window was
+      // actually shown, not merely that an order was minted.
+      payFunnel('payment_checkout_opened', { plan: planId, surface: 'unlock_buddy' });
+
       const rzp = new window.Razorpay({
         key: data.keyId,
         order_id: data.orderId,
@@ -177,6 +183,7 @@ function useBuddyCheckout() {
           // Razorpay keeps the sheet open on a failed attempt so they can retry
           // with another method; only a real close lands here.
           ondismiss: () => {
+            payFunnel('payment_checkout_dismissed', { plan: planId, surface: 'unlock_buddy' });
             track('pay_dismissed', { plan: planId, orderId: data.orderId });
             setMessage('Payment cancelled. Your spot is still open — tap again when you’re ready.');
           },

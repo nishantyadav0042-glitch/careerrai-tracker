@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
+import { normalizeIndianPhone } from '@/lib/phone';
+import { correlate, deriveDedupeKey } from '@/lib/vendor-correlation';
+import { flattenExpedifyPayload } from '@/lib/expedify-payload';
 import { mergeCallFeedback, parseBool, type PriorFeedback } from '@/lib/call-feedback';
 
 // Inbound webhook for Expedify's post-call workflow: after every AI call,
@@ -15,8 +17,9 @@ export async function POST(request: NextRequest) {
   }
 
   const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  // Phone is stored for a human repairing an unmatched event; it is no longer
+  // consulted for identity. See lib/vendor-correlation.
   const phone = normalizeIndianPhone(typeof b.phone === 'string' ? b.phone : null);
-  if (!phone) return NextResponse.json({ error: 'valid phone required' }, { status: 400 });
 
   const clean = (v: unknown, max = 300) => (typeof v === 'string' ? v.slice(0, max) : null);
   // Second call on the same student must not blank the fields this payload
@@ -40,17 +43,35 @@ export async function POST(request: NextRequest) {
   };
 
   const admin = createAdminClient();
-  // Read before writing, so the merge has something to fold onto. Match across
-  // stored phone formats (+91… / 91… / bare) so a drifted number never causes
-  // a missed match.
+  const flat = flattenExpedifyPayload(b);
+
+  // IDENTITY: our correlation reference only. This route previously resolved
+  // the student with `.in('phone', variants).limit(1)` — the vendor payload
+  // chose the row, and an ambiguous number picked one arbitrarily.
+  const correlation = await correlate(admin, flat);
+  if (correlation.kind !== 'matched') {
+    // The two inbound routes used to disagree: /outcome stored the event and
+    // returned success, this one 404'd and stored NOTHING, so an unmatched
+    // callback vanished. One policy now — always audit, never guess.
+    const { key } = deriveDedupeKey(flat, b, incoming.event ?? 'callback');
+    await admin.from('expedify_events').insert({
+      event: incoming.event ?? 'callback',
+      phone,
+      student_id: null,
+      dedupe_key: key,
+      resolution: 'unmatched',
+      payload: b,
+    });
+    return NextResponse.json({ ok: true, matched: false, resolution: 'unmatched', why: correlation.why }, { status: 200 });
+  }
+
   const { data: existing, error: readError } = await admin
     .from('profiles')
     .select('id, call_feedback')
-    .in('phone', phoneVariants(phone))
-    .limit(1)
+    .eq('id', correlation.studentId)
     .maybeSingle();
-  if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
-  if (!existing) return NextResponse.json({ error: 'no student with that phone' }, { status: 404 });
+  if (readError) return NextResponse.json({ error: 'lookup failed' }, { status: 503 });
+  if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   const { error } = await admin
     .from('profiles')

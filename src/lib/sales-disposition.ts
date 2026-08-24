@@ -43,15 +43,14 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number];
  *  Mirrors the DB CHECK in 20260820c_sales_claim.sql — guard-pinned. */
 export const ACTIVITY_STATUSES = [...CALL_OUTCOMES, 'reassigned'] as const;
 
-/**
- * SA-1D visibility rule (one shared book): an unclaimed lead is available to
- * every rep; a claimed lead is actionable ONLY for its owner. No rep context
- * (repEmail undefined — the admin oversight frame) sees everything.
- */
-export function leadVisibleTo(owner: string | null | undefined, repEmail?: string | null): boolean {
-  if (!owner || !repEmail) return true;
-  return owner === repEmail;
-}
+// SA-1D's visibility rule used to live here as `leadVisibleTo(owner, repEmail)`.
+// It has MOVED, not been duplicated: it is re-keyed onto profiles.id as
+// `canAccessLead` in lib/sales-authz.ts. The rule itself is unchanged — an
+// unclaimed lead is available to every rep, a claimed lead only to its owner —
+// but the old signature carried the defect that made this phase necessary:
+// `if (!owner || !repEmail) return true` meant a rep whose email was NULL was
+// handed the admin oversight frame. Oversight is now granted by ROLE, and an
+// unidentifiable viewer is denied. This module stays pure vocabulary.
 
 export function isCallOutcome(v: unknown): v is CallOutcome {
   return typeof v === 'string' && (CALL_OUTCOMES as readonly string[]).includes(v);

@@ -4,6 +4,40 @@ import { dispatch } from '@/lib/notification-os';
 import { buddyBriefCopy } from '@/lib/notification-engine';
 import { authorizedCron } from '@/lib/cron-auth';
 import { withCronTracking } from '@/lib/cron-run-tracker';
+import { readRows, isUnavailable, type Source } from '@/lib/truth/source';
+import { readRowsForIds } from '@/lib/truth/batch';
+
+// ── B3b #7 — read safety ONLY ──────────────────────────────────────────────
+//
+// READ → DERIVED VALUE → DECISION → SIDE EFFECT:
+//
+//   profiles(students) → byBuddy roster    → who is briefed    → gates all
+//   daily_reports      → reportDates       → loggedYesterday
+//                                             (A COUNT) and
+//                                             atRisk (NAMES)   → the brief text
+//   notifications      → already           → dedup             → duplicate push
+//   profiles(buddies)  → notif_prefs       → send gate         → push or not
+//
+// The middle row is the reason this one matters. `reportDates` does not merely
+// gate the send — it produces both numbers in the message:
+//
+//     buddyBriefCopy(loggedYesterday, roster.length, atRisk)
+//
+// A failed read left `reportDates` empty, so `loggedYesterday` was 0 and
+// `atRisk` was EVERY STUDENT BY NAME. The mentor's 9am push then read
+// "0 of 7 logged yesterday — at risk: Priya, Arjun, …" about a roster that may
+// have logged perfectly. Named students, a count, and a risk claim, all
+// manufactured by one dead query.
+type BriefStudent = { id: string; full_name: string; buddy_id: string | null };
+type BriefReport = { student_id: string; report_date: string };
+type BriefSent = { user_id: string };
+type BriefBuddy = { id: string; notif_prefs: unknown };
+
+function briefSourceDead(reason: string, buddies: number) {
+  console.error('[buddy-brief] source unavailable — no brief was sent', reason);
+  return NextResponse.json(
+    { ok: false, skipped: 'source_unavailable', reason, sent: 0, buddies }, { status: 503 });
+}
 
 // Every invocation of this route walks the whole student roster. Vercel's
 // default ceiling was never a decision anyone made here — it was simply
@@ -29,12 +63,15 @@ async function buddyBriefRun(): Promise<NextResponse> {
     .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const todayStart = new Date(todayIST + 'T00:00:00+05:30').toISOString();
 
-  const { data: students } = await admin
-    .from('profiles')
-    .select('id, full_name, buddy_id')
-    .eq('role', 'student')
-    .not('buddy_id', 'is', null);
-  if (!students?.length) return NextResponse.json({ sent: 0, reason: 'no_assigned_students' });
+  const studentsSource = await readRows<BriefStudent>('profiles(students)', () =>
+    admin
+      .from('profiles')
+      .select('id, full_name, buddy_id')
+      .eq('role', 'student')
+      .not('buddy_id', 'is', null));
+  if (isUnavailable(studentsSource)) return briefSourceDead(`profiles(students): ${studentsSource.reason}`, 0);
+  const students = studentsSource.state === 'value' ? studentsSource.value : [];
+  if (!students.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no_assigned_students' });
 
   const byBuddy = new Map<string, { id: string; name: string }[]>();
   for (const s of students) {
@@ -44,19 +81,35 @@ async function buddyBriefRun(): Promise<NextResponse> {
 
   const studentIds = students.map((s) => s.id);
   const buddyIds = [...byBuddy.keys()];
-  const [{ data: recentReports }, { data: sentToday }, { data: buddyProfiles }] = await Promise.all([
-    admin.from('daily_reports').select('student_id, report_date').in('student_id', studentIds).gte('report_date', new Date(Date.now() - 4 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })),
-    admin.from('notifications').select('user_id').in('user_id', buddyIds).eq('type', 'buddy_brief').gte('created_at', todayStart),
-    admin.from('profiles').select('id, notif_prefs').in('id', buddyIds),
+  const fourDaysAgo = new Date(Date.now() - 4 * 86_400_000)
+    .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const [reportsSource, sentSource, buddySource] = await Promise.all([
+    readRowsForIds<string, BriefReport>('daily_reports', studentIds, (chunk) =>
+      admin.from('daily_reports').select('student_id, report_date').in('student_id', chunk)
+        .gte('report_date', fourDaysAgo)),
+    readRowsForIds<string, BriefSent>('notifications(dedup)', buddyIds, (chunk) =>
+      admin.from('notifications').select('user_id').in('user_id', chunk)
+        .eq('type', 'buddy_brief').gte('created_at', todayStart)),
+    readRowsForIds<string, BriefBuddy>('profiles(buddies)', buddyIds, (chunk) =>
+      admin.from('profiles').select('id, notif_prefs').in('id', chunk)),
   ]);
 
+  const deadRead = ([
+    ['daily_reports', reportsSource], ['notifications', sentSource], ['profiles(buddies)', buddySource],
+  ] as Array<[string, Source<unknown[]>]>).find(([, src]) => isUnavailable(src));
+  if (deadRead) {
+    const src = deadRead[1] as Extract<Source<unknown[]>, { state: 'unavailable' }>;
+    return briefSourceDead(`${deadRead[0]}: ${src.reason}`, byBuddy.size);
+  }
+
+  const rowsOf = <T,>(src: Source<T[]>): T[] => (src.state === 'value' ? src.value : []);
   const reportDates = new Map<string, string[]>();
-  for (const r of recentReports ?? []) {
+  for (const r of rowsOf(reportsSource)) {
     if (!reportDates.has(r.student_id)) reportDates.set(r.student_id, []);
     reportDates.get(r.student_id)!.push(r.report_date);
   }
-  const already = new Set((sentToday ?? []).map((n) => n.user_id));
-  const buddyById = new Map((buddyProfiles ?? []).map((b) => [b.id, b]));
+  const already = new Set(rowsOf(sentSource).map((n) => n.user_id));
+  const buddyById = new Map(rowsOf(buddySource).map((b) => [b.id, b]));
 
   let sent = 0;
   for (const [buddyId, roster] of byBuddy) {
@@ -99,7 +152,7 @@ async function buddyBriefRun(): Promise<NextResponse> {
     if (outcome === 'sent') sent++;
   }
 
-  return NextResponse.json({ sent, buddies: byBuddy.size });
+  return NextResponse.json({ ok: true, sent, buddies: byBuddy.size });
 }
 
 export { POST as GET };

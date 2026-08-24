@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ACTIVITY_STATUSES, leadVisibleTo } from './sales-disposition';
+import { ACTIVITY_STATUSES } from './sales-disposition';
+import { canAccessLead, resolveOwnerToken, type SalesPrincipal, type StaffDirectory } from './sales-authz';
 
 // ── SA-1D: one shared book, atomic claim, auditable reassignment ───────────
 //
@@ -77,25 +78,64 @@ describe('ownership is written only by claim and reassign', () => {
   });
 });
 
-describe('queue visibility (one shared book)', () => {
+describe('queue visibility (one shared book), keyed on profiles.id', () => {
+  const REP_A = '11111111-1111-4111-8111-111111111111';
+  const REP_B = '22222222-2222-4222-8222-222222222222';
+  const ADMIN = '33333333-3333-4333-8333-333333333333';
+  const repA: SalesPrincipal = { id: REP_A, role: 'sales' };
+  const admin: SalesPrincipal = { id: ADMIN, role: 'admin' };
+  const dir: StaffDirectory = {
+    byToken: new Map([
+      [REP_A, REP_A], ['a@careerrai.in', REP_A],
+      [REP_B, REP_B], ['b@careerrai.in', REP_B],
+    ]),
+    labelById: new Map(),
+  };
+  const own = (t: string | null) => resolveOwnerToken(t, dir);
+
   it('unclaimed leads are available to every rep', () => {
-    expect(leadVisibleTo(null, 'priya@careerrai.in')).toBe(true);
-    expect(leadVisibleTo(undefined, 'priya@careerrai.in')).toBe(true);
+    expect(canAccessLead(own(null), repA)).toBe(true);
+    expect(canAccessLead(own(''), repA)).toBe(true);
   });
 
   it('a claimed lead is actionable only for its owner', () => {
-    expect(leadVisibleTo('priya@careerrai.in', 'priya@careerrai.in')).toBe(true);
-    expect(leadVisibleTo('nishant@careerrai.in', 'priya@careerrai.in')).toBe(false);
+    expect(canAccessLead(own(REP_A), repA)).toBe(true);
+    expect(canAccessLead(own(REP_B), repA)).toBe(false);
   });
 
-  it('the admin oversight frame (no rep context) sees everything', () => {
-    expect(leadVisibleTo('priya@careerrai.in', undefined)).toBe(true);
-    expect(leadVisibleTo('priya@careerrai.in', null)).toBe(true);
+  it('a legacy email token still resolves to the right person', () => {
+    // The bridge: lead_outreach.owner is TEXT and historically held an email.
+    expect(canAccessLead(own('a@careerrai.in'), repA)).toBe(true);
+    expect(canAccessLead(own('b@careerrai.in'), repA)).toBe(false);
+  });
+
+  it('admin oversight is granted by ROLE, never by an absent value', () => {
+    expect(canAccessLead(own(REP_B), admin)).toBe(true);
+  });
+
+  // THE regression this phase exists for. Before R3 a rep with no email was
+  // passed `repEmail = null`, and `leadVisibleTo(owner, null)` returned true
+  // for every lead — a missing column granted the founder's oversight frame.
+  it('an unidentifiable viewer is DENIED, never given oversight', () => {
+    expect(canAccessLead(own(REP_B), null)).toBe(false);
+    expect(canAccessLead(own(REP_A), null)).toBe(false);
+    // ...and an unclaimed lead is withheld too: no identity, no book.
+    expect(canAccessLead(own(null), null)).toBe(false);
+  });
+
+  it('an owner we cannot attribute is withheld, not treated as unclaimed', () => {
+    expect(canAccessLead(own('someone-who-left@careerrai.in'), repA)).toBe(false);
+    expect(canAccessLead({ kind: 'unavailable', reason: 'x' }, repA)).toBe(false);
+    // A failed read must never become a business answer.
+    expect(canAccessLead({ kind: 'unavailable', reason: 'x' }, admin)).toBe(true); // admin is role-based
   });
 
   it('the canonical queue actually applies the rule', () => {
     const s = readFileSync('src/lib/call-queue.ts', 'utf8');
-    expect(s).toMatch(/leadVisibleTo\(/);
-    expect(s).toMatch(/select\('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner'\)/);
+    expect(s).toMatch(/canAccessLead\(/);
+    expect(s).toMatch(/resolveOwnerToken\(/);
+    // The queue must read BOTH ownership encodings: owner_id is the authority,
+    // `owner` is the legacy text still resolved for pre-migration rows.
+    expect(s).toMatch(/owner_id, owner/);
   });
 });

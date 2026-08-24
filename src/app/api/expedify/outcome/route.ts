@@ -1,26 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { normalizeIndianPhone, phoneVariants } from '@/lib/phone';
+import { normalizeIndianPhone } from '@/lib/phone';
 import { mergeCallFeedback, parseBool, type PriorFeedback } from '@/lib/call-feedback';
 import { flattenExpedifyPayload, pickScore } from '@/lib/expedify-payload';
+import { correlate, deriveDedupeKey, readVendorCallId } from '@/lib/vendor-correlation';
 
-// Inbound Expedify webhook — the RETURN pipe. Their workflow POSTs here after
-// every call attempt / reschedule / CRM contact update, and everything lands in
-// our database:
-//   1. The raw payload is ALWAYS stored in expedify_events (audit + replay),
-//      keyed by their event identifier — so whichever identifiers their team
-//      configures (call reports vs rescheduled calls vs contact updates), we
-//      capture them all and can wire new behaviour later without a re-send.
-//   2. When the payload matches a student (by phone), the profile's
-//      expedify_status is updated and the agent summary is APPENDED to
-//      call_feedback — never overwriting founder-written notes.
+// Inbound Expedify webhook — the RETURN pipe.
 //
-// Auth: ?key=<EXPEDIFY_INBOUND_SECRET> in the URL (their builder can't set
-// custom headers on every node) — also accepted as x-expedify-secret header.
-// The secret lives in the Vercel env, never in this public repo.
+// REWRITTEN 23 Aug 2026. What it used to do, and why that had to stop:
 //
-// Idempotency: when the payload carries a lead id + attempt number, retried
-// deliveries collapse onto one row via dedupe_key.
+//   1. It resolved the student with `.in('phone', variants).limit(1)
+//      .maybeSingle()`, so the VENDOR PAYLOAD chose which student row was
+//      written, and an ambiguous phone silently picked an arbitrary profile.
+//   2. It derived `dedupe_key` only when the vendor supplied a lead id, and
+//      NULL otherwise — which slips straight past the UNIQUE index. 239 of 239
+//      production rows were NULL, and 220 duplicates of one payload landed on
+//      12 August.
+//   3. An unmatched event was stored and answered 200, so nobody ever learned
+//      it happened. All 239 rows were, in fact, one test string
+//      ("first webhook test") attached to the admin's own phone number.
+//
+// Now: identity comes from OUR correlation reference only, every event carries
+// a deterministic idempotency key, and anything we cannot attribute becomes a
+// visible UNMATCHED row for the founder to repair by hand.
+//
+// Auth: shared secret. The header form is preferred; the query-string form is
+// still accepted because their builder cannot set headers on every node, and
+// removing it unilaterally would silently drop live traffic.
 
 export async function POST(request: NextRequest) {
   const secret = process.env.EXPEDIFY_INBOUND_SECRET;
@@ -28,7 +34,7 @@ export async function POST(request: NextRequest) {
     // Deliberately inert until configured — never accept unauthenticated data.
     return NextResponse.json({ error: 'Webhook not configured.' }, { status: 503 });
   }
-  const provided = request.nextUrl.searchParams.get('key') ?? request.headers.get('x-expedify-secret');
+  const provided = request.headers.get('x-expedify-secret') ?? request.nextUrl.searchParams.get('key');
   if (provided !== secret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -42,98 +48,120 @@ export async function POST(request: NextRequest) {
   }
 
   const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
-  // Both dialects Expedify speaks, read as one (lib/expedify-payload).
   const flat = flattenExpedifyPayload(payload);
 
-  // Their event identifier — accept the common field names so whatever the
-  // founder agrees with their team ("I will tell you the identifiers") just works.
   const event =
     str(payload.event) ?? str(payload.type) ?? str(payload.identifier) ?? str(payload.event_type) ?? 'unknown';
 
-  // Phone — accept the likely field names, normalize to +91 E.164.
-  const rawPhone =
-    str(flat.lead_phone) ?? str(flat.phone) ?? str(flat.contact_phone) ?? str(flat.mobile);
+  // Phone is still STORED — a human repairing an unmatched event needs it — but
+  // it is no longer consulted for identity.
+  const rawPhone = str(flat.lead_phone) ?? str(flat.phone) ?? str(flat.contact_phone) ?? str(flat.mobile);
   const phone = rawPhone ? normalizeIndianPhone(rawPhone) : null;
 
   const admin = createAdminClient();
 
-  // Match to a student when possible (never required — unknown numbers still audit).
-  let studentId: string | null = null;
-  if (phone) {
-    // Match across every stored phone format (+91… / 91… / bare 10-digit) so a
-    // drifted number never causes a missed match.
-    const { data } = await admin.from('profiles').select('id, call_feedback').in('phone', phoneVariants(phone)).limit(1).maybeSingle();
-    studentId = data?.id ?? null;
+  // ── Identity: OUR reference, or nothing ───────────────────────────────────
+  const correlation = await correlate(admin, flat);
+  const studentId = correlation.kind === 'matched' ? correlation.studentId : null;
 
-    if (studentId) {
-      // Compact status for the admin Leads card: "event · outcome · category".
-      const outcome = str(flat.outcome);
-      const category = str(flat.category) ?? str(flat.lead_status);
-      const callbackAt = str(flat.callback_at) ?? str(flat.callback_requested_at);
-      const statusBits = [event, outcome, category, callbackAt ? `callback ${callbackAt}` : null].filter(Boolean);
+  // ── Idempotency: a key ALWAYS exists ──────────────────────────────────────
+  const { key: dedupeKey, basis } = deriveDedupeKey(flat, payload, event);
+  const callId = readVendorCallId(flat);
 
-      // call_feedback is jsonb, and this route used to write a bare STRING into
-      // it while /expedify/callback wrote an object and the leads export read
-      // `.disposition` / `.notes` off that object. Result: every outcome this
-      // route recorded exported as blank columns, and folding a string onto an
-      // existing object produced "[object Object]". One shared merge now owns
-      // the shape, and a sparse event can no longer erase what an earlier call
-      // learned (lib/call-feedback).
-      // Riya's own post-call record (EXPEDIFY-RIYA-PROMPT.txt), plus the names
-      // their CRM extraction already uses on real calls (`pain_point`,
-      // `reason`, `lead_status`) — observed in a live 29 Jul payload. Accepting
-      // both means neither side has to be rebuilt to match the other.
-      const summary = str(flat.agent_summary) ?? str(flat.notes) ?? str(flat.summary) ?? str(flat.reason);
-      const feedback = mergeCallFeedback(data?.call_feedback as PriorFeedback, {
-        disposition: str(flat.disposition) ?? outcome ?? category,
-        reason_code: str(flat.reason_code),
-        drop_reason: str(flat.drop_reason),
-        momentum_score: pickScore(flat, 'momentum_score'),
-        emotional_trigger: str(flat.emotional_trigger) ?? str(flat.pain_point),
-        notes: summary,
-        event,
-        at: new Date().toISOString(),
-        lead_type: str(flat.lead_type) ?? str(flat.student_type),
-        installed: parseBool(flat.installed ?? flat.app_installed),
-        plan_opened: parseBool(flat.plan_opened ?? flat.plan_seen),
-        next_step: str(flat.next_step) ?? str(flat.next_action),
-      });
-
-      await admin.from('profiles').update({
-        expedify_status: statusBits.join(' · ').slice(0, 200),
-        expedify_synced_at: new Date().toISOString(),
-        call_feedback: feedback,
-      }).eq('id', studentId);
-    }
-  }
-
-  // Always audit the raw event. Dedupe on their lead id + attempt + event when present.
-  // NOT keyed on their `entity_id`: contact.updated fires repeatedly for the
-  // same contact and carries no attempt number, so an entity-keyed dedupe
-  // would collapse every later call onto the first row and silently discard
-  // the newer outcomes. Only ids that identify one call attempt belong here.
-  const leadId = str(flat.expedify_lead_id) ?? str(flat.lead_id) ?? str(flat.contact_id);
-  const attempt = flat.attempt_number != null ? String(flat.attempt_number) : null;
-  const dedupeKey = leadId ? [leadId, attempt ?? 'x', event].join(':') : null;
-
-  const { error: insertError } = await admin.from('expedify_events').insert({
+  // Store first, act second. The audit row is the durable fact; anything we
+  // derive from it can be recomputed, but an event we failed to record is gone.
+  const { data: inserted, error: insertError } = await admin.from('expedify_events').insert({
     event,
     phone,
     student_id: studentId,
     dedupe_key: dedupeKey,
+    resolution: studentId ? 'matched' : 'unmatched',
     payload,
-  });
-  // Unique-violation on dedupe_key = a retried delivery — that's success, not failure.
+  }).select('id').maybeSingle();
+
+  // A unique violation is a REDELIVERY — success, and deliberately a no-op.
   const duplicate = insertError?.code === '23505';
   if (insertError && !duplicate) {
     console.error('[expedify-outcome] audit insert failed:', insertError.message);
     return NextResponse.json({ error: 'Storage failed — please retry.' }, { status: 500 });
   }
+  if (duplicate) {
+    return NextResponse.json({ ok: true, event, duplicate: true, matched: correlation.kind === 'matched' });
+  }
+
+  // ── Only a correlated event may touch a student ───────────────────────────
+  if (correlation.kind !== 'matched') {
+    // 200, not an error: the vendor delivered correctly and we stored it. The
+    // problem is ours to repair, and it is now visible in the Data Quality
+    // panel rather than dissolving into a success response.
+    return NextResponse.json({
+      ok: true,
+      event,
+      matched: false,
+      resolution: 'unmatched',
+      why: correlation.why,
+      hint: 'Return external_ref (the CareerRai student id we send you) on every event.',
+    });
+  }
+
+  const outcome = str(flat.outcome);
+  const category = str(flat.category) ?? str(flat.lead_status);
+  const callbackAt = str(flat.callback_at) ?? str(flat.callback_requested_at);
+  const statusBits = [event, outcome, category, callbackAt ? `callback ${callbackAt}` : null].filter(Boolean);
+  const summary = str(flat.agent_summary) ?? str(flat.notes) ?? str(flat.summary) ?? str(flat.reason);
+
+  const { data: prior } = await admin.from('profiles').select('call_feedback').eq('id', studentId).maybeSingle();
+  const feedback = mergeCallFeedback(prior?.call_feedback as PriorFeedback, {
+    disposition: str(flat.disposition) ?? outcome ?? category,
+    reason_code: str(flat.reason_code),
+    drop_reason: str(flat.drop_reason),
+    momentum_score: pickScore(flat, 'momentum_score'),
+    emotional_trigger: str(flat.emotional_trigger) ?? str(flat.pain_point),
+    notes: summary,
+    event,
+    at: new Date().toISOString(),
+    lead_type: str(flat.lead_type) ?? str(flat.student_type),
+    installed: parseBool(flat.installed ?? flat.app_installed),
+    plan_opened: parseBool(flat.plan_opened ?? flat.plan_seen),
+    next_step: str(flat.next_step) ?? str(flat.next_action),
+  });
+
+  await admin.from('profiles').update({
+    expedify_status: statusBits.join(' · ').slice(0, 200),
+    expedify_synced_at: new Date().toISOString(),
+    call_feedback: feedback,
+  }).eq('id', studentId);
+
+  // ── A vendor-confirmed call is a different KIND of fact from a rep's note ──
+  // It only earns provenance='vendor_reported' when the vendor supplied their
+  // own call id; the DB CHECK enforces that pairing. Without one we still
+  // record the activity, but as 'unknown' rather than dressing a summary up as
+  // independent evidence.
+  if (event === 'call_report' || outcome || callId) {
+    const { error: actErr } = await admin.from('sales_activity').insert({
+      student_id: studentId,
+      // NULL, deliberately. A vendor call has no CareerRai actor, and naming
+      // one — the founder, the student, a placeholder — would be a fabricated
+      // attribution in the exact table this workstream exists to make
+      // trustworthy. The DB constraint permits NULL only for non-human
+      // provenance, so this cannot become a way to write anonymous rep activity.
+      actor_id: null,
+      activity_type: 'call',
+      channel: 'phone',
+      provenance: callId ? 'vendor_reported' : 'unknown',
+      external_ref: callId,
+      status: null,
+      note: summary ? summary.slice(0, 2000) : null,
+    });
+    if (actErr) console.error('[expedify-outcome] activity insert failed:', actErr.message);
+  }
 
   return NextResponse.json({
     ok: true,
     event,
-    matched_student: !!studentId,
-    duplicate,
+    matched: true,
+    resolution: 'matched',
+    idempotency_basis: basis,
+    stored: inserted?.id ?? null,
   });
 }

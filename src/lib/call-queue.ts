@@ -1,4 +1,4 @@
-import { leadVisibleTo } from '@/lib/sales-disposition';
+import { canAccessLead, loadStaffDirectory, resolveOwnerToken, type SalesPrincipal } from '@/lib/sales-authz';
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -72,7 +72,7 @@ async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await db
       .from('lead_outreach')
-      .select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner')
+      .select('student_id, status, callback_at, next_action_at, last_attempt_at, no_answer_count, owner_id, owner')
       .in('student_id', ids);
     if (!error) return data ?? [];
     lastMessage = error.message;
@@ -80,11 +80,18 @@ async function readLeadOutreach(db: any, ids: string[]): Promise<any[]> {
   throw new Error(`Could not read the sales queue state: ${lastMessage}`);
 }
 
-// `repEmail` scopes the queue to one rep's actionable work (SA-1D): unclaimed
-// leads plus the leads they own. Omit it (the admin oversight frame) to see
-// everything, claimed or not.
-export async function buildCallQueue(admin?: any, repEmail?: string | null): Promise<CallQueue> {
+// `viewer` scopes the queue to one rep's actionable work (SA-1D): unclaimed
+// leads plus the leads they own. An `admin` viewer sees everything.
+//
+// R3 (23 Aug): this used to take `repEmail`, and the caller derived it as
+// `role==='sales' ? (email ?? null) : undefined`. A rep with no email therefore
+// passed null, and the old `leadVisibleTo(owner, null)` returned true for every
+// lead — a missing column silently granted the founder's oversight frame.
+// Oversight is now granted by ROLE, never by absence, and ownership is compared
+// on profiles.id. A viewer we cannot identify sees only unclaimed leads.
+export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null): Promise<CallQueue> {
   const db = admin ?? createAdminClient();
+  const staff = await loadStaffDirectory(db);
   const now = Date.now();
   const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const since30 = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
@@ -120,8 +127,17 @@ export async function buildCallQueue(admin?: any, repEmail?: string | null): Pro
     const o = outById.get(r.id) as any;
     const status = (o?.status as string | null) ?? null;
     if (status && CLOSED.has(status)) continue; // gone forever
-    // Another rep's claimed lead is not this rep's work (SA-1D).
-    if (!leadVisibleTo((o?.owner as string | null) ?? null, repEmail)) continue;
+    // Another rep's claimed lead is not this rep's work (SA-1D). Resolved
+    // through profiles.id: an owner token we cannot attribute is withheld, not
+    // treated as unclaimed — an unattributable owner is an unanswered question,
+    // not a free lead.
+    // owner_id is the authority; `owner` (TEXT) is the legacy encoding, still
+    // resolved so a pre-migration row attributes correctly.
+    const ownerId = (o?.owner_id as string | null) ?? null;
+    const ownership = ownerId
+      ? ({ kind: 'owned', ownerId } as const)
+      : resolveOwnerToken((o?.owner as string | null) ?? null, staff);
+    if (!canAccessLead(ownership, viewer ?? null)) continue;
     totalOpen++;
 
     const nextAction = o?.next_action_at ? new Date(o.next_action_at).getTime() : null;

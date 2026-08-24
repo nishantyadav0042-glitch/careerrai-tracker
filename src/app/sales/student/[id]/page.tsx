@@ -3,6 +3,7 @@ import { requireSales } from '@/lib/admin-auth';
 import { ArrowLeft, Phone, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSalesConversionView } from '@/lib/sales-conversion';
+import { canAccessLead, loadStaffDirectory, resolveLeadOwner, salesPrincipal } from '@/lib/sales-authz';
 import { QuickLog } from '@/components/sales-log';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +16,28 @@ const TIER: Record<string, string> = {
 export default async function ConvertPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, admin } = await requireSales();
-  const { data: me } = await admin.from('profiles').select('role, email').eq('id', user.id).single();
 
-  const v = await getSalesConversionView(admin, id);
+  // AUTHORIZATION (R2, 23 Aug). This page used to read `me` — the viewer's own
+  // role and email — on this exact line and then never use it again: the input
+  // needed to authorize was in scope and discarded, so any rep could open any
+  // real student by editing the URL, including another rep's lead and that
+  // rep's private call notes.
+  //
+  // Ownership now resolves through profiles.id (lib/sales-authz). A viewer we
+  // cannot identify, an owner token we cannot attribute, and a read we could
+  // not complete all DENY — absence is never promoted to access.
+  const [principal, dir] = await Promise.all([
+    salesPrincipal(admin, user.id),
+    loadStaffDirectory(admin),
+  ]);
+  const owner = await resolveLeadOwner(admin, id, dir);
+  const allowed = canAccessLead(owner, principal);
+
+  const v = allowed ? await getSalesConversionView(admin, id) : null;
+  // One surface for every denial — not-a-student, test account, nonexistent id,
+  // malformed id, and "belongs to another rep" are indistinguishable. That
+  // property already existed by accident (`if (!p || !momentum) return null`);
+  // it is now deliberate, so guessing a uuid never confirms a student exists.
   if (!v) return <div className="p-8 text-center text-sm text-stone-500">Student not found. <Link href="/sales" className="underline">Back</Link></div>;
 
   return (
