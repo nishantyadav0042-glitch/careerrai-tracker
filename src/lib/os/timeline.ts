@@ -32,6 +32,11 @@ export const TIMELINE_KINDS = {
   payment_stuck: 'money',
   buddy_assigned: 'mentor',
   buddy_unassigned: 'mentor',
+  // The delivery record. Added 24 Aug 2026: `session_expired` existed, so the
+  // timeline could say a session FAILED but never that one happened — the
+  // student's story recorded only the disappointments.
+  session_started: 'mentor',
+  session_completed: 'mentor',
   session_expired: 'mentor',
   ocr_failed: 'study',
   scholarship_granted: 'money',

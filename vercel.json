@@ -89,6 +89,10 @@
       "schedule": "30 9 * * *"
     },
     {
+      "path": "/api/cron/outcome-sweep",
+      "schedule": "45 1 * * *"
+    },
+    {
       "path": "/api/cron/builder-recovery",
       "schedule": "*/30 4-15 * * *"
     },

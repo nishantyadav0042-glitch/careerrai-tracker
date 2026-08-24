@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { emitTimeline } from '@/lib/os/timeline';
 
 // Close out a call in one request: the mentor's read of the student + the ONE
 // thing the student committed to. Built to be ~15 seconds on a phone, because
@@ -99,11 +100,36 @@ export async function POST(request: NextRequest) {
   }).then(({ error: e }) => { if (e) console.error('debrief notification failed:', e.message); });
 
   // Mark the session done — the gap that made a 10/10 orientation invisible.
+  //
+  // 24 Aug: ended_at is no longer set here. The DB trigger stamps it in the
+  // same statement that changes the state, so the close-out cannot record a
+  // time that disagrees with the transition — and a second debrief for the
+  // same session can no longer quietly move it.
+  //
+  // The status guard makes this a conditional update: a session already
+  // completed, cancelled or expired matches zero rows and writes nothing,
+  // rather than the trigger raising an error into a result nobody read.
+  let sessionCompleted = false;
   if (sessionId) {
-    await admin.from('video_sessions')
-      .update({ session_status: 'completed', ended_at: new Date().toISOString() })
-      .eq('id', sessionId).eq('buddy_id', user.id);
+    const { data: done, error: doneError } = await admin.from('video_sessions')
+      .update({ session_status: 'completed' })
+      .eq('id', sessionId).eq('buddy_id', user.id)
+      .in('session_status', ['scheduled', 'active'])
+      .select('id, student_id')
+      .maybeSingle();
+    if (doneError) {
+      // Reported, never fatal: the debrief itself IS saved. But a silent
+      // failure here is precisely how "0 completed sessions" happened.
+      console.error('[commitment] session completion failed:', doneError.message);
+    } else if (done) {
+      sessionCompleted = true;
+      await emitTimeline(admin, {
+        entity: 'student', entityId: done.student_id as string, kind: 'session_completed',
+        summary: 'Session completed', actor: 'buddy',
+        metadata: { sessionId, buddyId: user.id },
+      });
+    }
   }
 
-  return NextResponse.json({ ok: true, commitment: data });
+  return NextResponse.json({ ok: true, commitment: data, sessionCompleted });
 }
