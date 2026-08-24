@@ -5,6 +5,8 @@ import { isUuid, salesPrincipal } from '@/lib/sales-authz';
 import { auditSales } from '@/lib/sales-audit';
 import { chunkIds } from '@/lib/truth/batch';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Distribute leads from a named pool according to an allocation the founder has
 // already SEEN. The UI computes and displays the split; this route re-derives
 // the pool server-side and applies exactly the counts requested.
