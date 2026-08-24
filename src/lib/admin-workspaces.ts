@@ -60,6 +60,11 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'The five-minute morning screen. What needs you right now.',
     tabs: [
       { label: 'Today', href: '/admin', status: 'live' },
+      // The loop: student -> signal -> intervention -> response -> outcome ->
+      // learning. It lives in COMMAND, not in Sales, on purpose — the human
+      // layer is a mechanism inside Student Success, not a separate product
+      // with its own dashboard.
+      { label: 'Student Success', href: '/admin/student-success', status: 'live' },
       { label: 'Launch', href: '/admin/launch', status: 'moved' },
       { label: 'Mission control', href: '/admin/mission-control', status: 'moved' },
     ],
