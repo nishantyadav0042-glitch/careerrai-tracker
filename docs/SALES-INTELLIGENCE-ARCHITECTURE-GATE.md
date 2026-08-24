@@ -403,6 +403,32 @@ revisit caps when signups pass ~500/week. (6) Metric gaming — provenance
 discipline + outcome join; temperature (F6) stays a labeled belief. (7) Scope
 creep into enterprise CRM — §20's Phase 4+ list is the fence.
 
+## 24b. KNOWN OPEN DEBT — C0 is contained, not permanently solved
+
+**Founder condition on accepting Phase 1.5 (24 Aug): keep this debt visible
+rather than treating C0 as closed forever.**
+
+C0 (a JSONB column rendered into JSX, crashing the rep's page) is fixed at the
+point where it occurred, and a guard test pins the defect signature. But the
+*class* of bug is not eliminated:
+
+- **FACT:** Supabase rows arrive typed `any` throughout this codebase. If a
+  future writer assigns a raw column onto a view object, TypeScript will not
+  object — only the guard test catches it, and only for the three columns it
+  names.
+- **FACT:** the 3,124-test suite passed with a page-crashing bug in it,
+  because no test renders that page. "Tests pass" is evidence about logic, not
+  about screens. The same blind spot covers every other server-rendered sales
+  surface.
+- **RECOMMENDATION (not scheduled, deliberately):** a typed row contract at
+  the Supabase read boundary would close the class, but it is a repo-wide
+  change touching every read in the app — far outside sales, and not worth
+  bundling into a sales phase. It belongs on the tech-debt register alongside
+  the profiles-split and the `student_events` TTL.
+- **Cheaper partial mitigation, worth doing when sales UI is next touched:**
+  one smoke render of `/sales/student/[id]` against a student fixture that has
+  a mock debrief. It would have caught C0 in one second.
+
 ## 25. Final go/no-go
 
 **If I owned CareerRai: CONDITIONAL GO.** Phase 1 stands — nothing in it is a
