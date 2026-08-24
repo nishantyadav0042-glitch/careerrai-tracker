@@ -38,7 +38,7 @@ const STEPS: Step[] = [
   },
   {
     sel: '[data-tour="daily-pick"]',
-    title: 'Daily Pick — peers, not loneliness',
+    title: 'Daily Tips — peers, not loneliness',
     body: 'One tip or question from a fellow aspirant daily; students vote what gets featured. Small, but it makes prep less alone.',
   },
   {

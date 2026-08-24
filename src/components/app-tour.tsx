@@ -24,7 +24,7 @@ const STEPS: TourStep[] = [
   // now the log, and this is where a new student is told so (founder, 13 Aug:
   // "just guide the new students the way they can log").
   { sel: '[data-tour="plan"]',  title: 'Logging takes one tap', body: 'Finished a task? Tap its circle — got halfway, or finished it. That is your log for the day; there is nothing else to fill in.' },
-  { sel: '[data-tour="daily-pick"]', title: 'Daily Pick 🤝', body: 'A tip and questions from fellow aspirants, every day. Your vote decides what gets featured — and you can share yours too. By the students, for the students.' },
+  { sel: '[data-tour="daily-pick"]', title: 'Daily Tips 🤝', body: 'A tip and questions from fellow aspirants, every day. Your vote decides what gets featured — and you can share yours too. By the students, for the students.' },
   { sel: '[data-tour="buddy"]', title: 'Your IIM buddy',       body: 'Your 1:1 IIM buddy reviews your prep and tells you what to fix — right here.' },
 ];
 const KEY = TOUR_KEY;

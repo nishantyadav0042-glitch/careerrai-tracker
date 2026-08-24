@@ -145,7 +145,7 @@ function NavBar({ items, moreItems }: { items: NavItem[]; moreItems?: NavItem[] 
 const STUDENT_MAIN: NavItem[] = [
   { href: '/student/tracker', icon: Home, label: 'Home' },
   { href: '/student/buddy', icon: Users, label: 'My Buddy' },
-  { href: '/student/community', icon: Lightbulb, label: 'Daily Pick' },
+  { href: '/student/community', icon: Lightbulb, label: 'Daily Tips' },
 ];
 
 // Mocks folded into Analysis (one "how am I doing" panel with two tabs),

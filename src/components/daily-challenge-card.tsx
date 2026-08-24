@@ -88,7 +88,7 @@ export function DailyChallengeCard() {
             card is what is on screen, so it carries the line, on every surface
             the card appears on. */}
         <div className="bg-stone-900 px-4 py-2.5 text-white">
-          <p className="text-[15px] font-black uppercase leading-none tracking-[0.14em]">Daily Pick</p>
+          <p className="text-[15px] font-black uppercase leading-none tracking-[0.14em]">Daily Tips</p>
           <p className="mt-1 text-[10.5px] font-black uppercase leading-none tracking-[0.09em] text-orange-400">
             By the students, for the students
           </p>
@@ -301,7 +301,7 @@ function ChallengeModal({ challenge, next, onNext, onClose }: {
             content we publish, it is students helping students — and that is
             the whole reason to open it. */}
         <p className="mb-3 rounded-lg bg-stone-900 px-3 py-2 text-center text-[11.5px] font-extrabold uppercase tracking-wider text-white">
-          Daily Pick — by the students, for the students
+          Daily Tips — by the students, for the students
         </p>
 
         <div className="flex items-start justify-between gap-2">
