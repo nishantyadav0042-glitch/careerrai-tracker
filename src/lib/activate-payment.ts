@@ -5,6 +5,7 @@ import { logSecurityEvent } from '@/lib/security-log';
 import { emitTimeline } from '@/lib/os/timeline';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
 import { SESSION_PLAN_ID, SESSION_PRICE_PAISE } from '@/lib/session-credit';
+import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
 
 // The ONE path that turns a real Razorpay capture into a paid, premium student.
 // Shared by the webhook (normal case) and the reconcile-payments cron (the
@@ -161,6 +162,33 @@ async function activateSessionCredit(
       console.error(`[activate:${source}] SESSION CREDIT MINT FAILED`, creditErr.message);
       return false;
     }
+  }
+
+  // ── The three messages the ₹299 actually buys ────────────────────────────
+  //
+  // Until 24 Aug this line did not exist, and a ₹299 buyer received ZERO
+  // messages — the 3-message entitlement was real but only the admin Mentor
+  // Doors route ever issued one.
+  //
+  // Reuses mentor_grants rather than minting a second entitlement store. The
+  // buddy is left NULL: it is filled when the session is assigned, and an
+  // un-buddied grant is unspendable, so this cannot leak chat before there is
+  // a mentor to chat with.
+  //
+  // ON CONFLICT DO NOTHING via the UNIQUE(student_id) constraint: a student who
+  // already holds a grant (an earned door, or a previous ₹299) keeps the one
+  // they have. Buying twice must not silently reset a spent counter — the
+  // allowance is raised deliberately, by a human, not by a repeat purchase.
+  const { error: grantErr } = await admin.from('mentor_grants').insert({
+    student_id: row.student_id,
+    door: 'session',
+    activated_at: new Date().toISOString(),
+    messages_allowance: MENTOR_FREE_MESSAGES,
+  });
+  if (grantErr && grantErr.code !== '23505') {
+    // Reported, not fatal: the session they paid for is the product. Losing
+    // the three messages must not fail the payment activation.
+    console.error(`[activate:${source}] session chat grant failed:`, grantErr.message);
   }
 
   await logSecurityEvent(admin, {

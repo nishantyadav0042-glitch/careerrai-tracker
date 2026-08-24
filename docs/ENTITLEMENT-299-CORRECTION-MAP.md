@@ -82,7 +82,7 @@ Plan authority is `lib/plans.ts`; the session price is
 | Session credit row | YES | no | no | no |
 
 **Ambiguity to confirm (§10 stop rule):** the written brief says "₹999 and
-₹2,499"; the spoken note said *"triple nine और two triple nine"* (₹999 and
+₹2,499"; the spoken note said "triple nine and two-triple-nine" (₹999 and
 ₹2,999). The repo has **three** subscription plans — ₹999, ₹2,499, ₹2,999.
 I have assumed **all three** are the continuous-chat tier, since the rule is
 "₹299 is narrow, subscriptions are continuous". Flagging rather than silently
