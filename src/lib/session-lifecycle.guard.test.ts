@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import {
   SESSION_STATUSES, TERMINAL_STATUSES, LEGAL_TRANSITIONS, MIN_SESSIONS_FOR_RATE,
   canTransition, isTerminal, isSessionStatus, transitionRefusal,
@@ -224,18 +225,25 @@ describe('the start transition exists and stays the mentor’s act', () => {
 });
 
 describe('no writer of session_status bypasses the state machine', () => {
-  const WRITERS = [
-    'src/app/api/buddy/commitment/route.ts',
-    'src/app/api/calendar/complete-orientation/route.ts',
-    'src/app/api/admin/buddy-integration/route.ts',
-    'src/app/api/cron/release-stale-sessions/route.ts',
-    'src/app/api/sessions/start/route.ts',
-  ];
+  // DISCOVERED, not hardcoded. The first version of this guard listed five
+  // files by hand and passed — while two more writers (calendar/cancel-meeting
+  // and calendar/schedule-meeting) sat outside the list entirely. A guard whose
+  // scope is a literal array only ever protects what its author remembered.
+  const WRITERS = execSync(
+    `grep -rl "session_status: '" src/app --include=*.ts || true`,
+    { encoding: 'utf8' },
+  ).split('\n').filter(Boolean);
+
+  it('found the writers at all — an empty sweep would pass vacuously', () => {
+    expect(WRITERS.length).toBeGreaterThanOrEqual(5);
+  });
 
   it.each(WRITERS)('%s guards its transition', (file) => {
     const src = readFileSync(file, 'utf8');
-    const writes = src.includes("session_status: '");
-    if (!writes) return;
+    // An INSERT creates a session at its starting state; the trigger is BEFORE
+    // UPDATE, so only updates need a guard.
+    const updatesStatus = /\.update\(\{[\s\S]*?session_status:/.test(src);
+    if (!updatesStatus) return;
     // Either it filters on the current status (a conditional update that
     // matches zero rows when the session has moved on) or it asks the shared
     // transition table first. Both are fine; writing blind is not.

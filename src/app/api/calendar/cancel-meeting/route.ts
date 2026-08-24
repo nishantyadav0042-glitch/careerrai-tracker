@@ -86,10 +86,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { error: updateError } = await admin
+    // Terminal is terminal (migration 20260824e). Without the status filter the
+    // DB trigger refuses the transition and this route tells the mentor to
+    // "try again" — advice that can never work, for a session that is already
+    // finished. A zero-row update instead means there was nothing to cancel.
+    const { data: cancelled, error: updateError } = await admin
       .from('video_sessions')
       .update({ session_status: 'cancelled', updated_at: new Date().toISOString() })
-      .eq('id', meetingId);
+      .eq('id', meetingId)
+      .in('session_status', ['scheduled', 'active'])
+      .select('id');
 
     if (updateError) {
       console.error('Cancel update failed:', updateError);
@@ -98,6 +104,9 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+    // Zero rows means it had already finished or been cancelled. Not an error
+    // — the caller's intent (this session should not go ahead) already holds.
+    const alreadySettled = (cancelled?.length ?? 0) === 0;
 
     await admin
       .from('notifications')
@@ -120,7 +129,7 @@ export async function POST(request: NextRequest) {
       detail: { sessionId: session.id, studentId: session.student_id, calendarRemoved, calendarError },
     });
 
-    return NextResponse.json({ success: true, calendarRemoved, calendarError });
+    return NextResponse.json({ success: true, calendarRemoved, calendarError, alreadySettled });
   } catch (error) {
     console.error('cancel-meeting error:', error);
     return NextResponse.json(
