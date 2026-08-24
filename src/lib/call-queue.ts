@@ -1,6 +1,12 @@
 import { canAccessLead, loadStaffDirectory, resolveOwnerToken, type SalesPrincipal } from '@/lib/sales-authz';
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { scoreConversion, conversionTier } from '@/lib/sales-score';
+import {
+  GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
+  BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
+  NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
+} from '@/lib/os/scale-config';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -119,18 +125,18 @@ export function classifyLane(s: LaneSignals): LaneVerdict {
     .filter((n) => n >= 0)
     .sort((a, b) => a - b);
   const lastLog = daysAgo[0] ?? null;
-  const last3 = daysAgo.filter((n) => n <= 2).length;
-  const prevWeek = daysAgo.filter((n) => n >= 3 && n <= 9).length;
+  const last3 = daysAgo.filter((n) => n < GOING_COLD_SILENT_DAYS).length;
+  const prevWeek = daysAgo.filter((n) => n >= GOING_COLD_SILENT_DAYS && n <= GOING_COLD_SILENT_DAYS + 6).length;
   const signupDaysAgo = s.createdAt ? daysBetweenIst(istDateStr(s.createdAt), s.todayIst) : null;
   const fmt = (n: number) => (n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`);
 
   // Going cold: a real study rhythm existed, then went silent. The founder's
   // own example: "Studied 5 of last 7 days → 0 of last 3".
-  if (last3 === 0 && prevWeek >= 3) {
+  if (last3 === 0 && prevWeek >= GOING_COLD_MIN_PRIOR_DAYS) {
     return {
       dueReason: 'going_cold', dueLabel: 'Going cold',
       why: [
-        `Studied ${prevWeek} of the 7 days before → 0 in the last 3`,
+        `Studied ${prevWeek} of the 7 days before → 0 in the last ${GOING_COLD_SILENT_DAYS}`,
         lastLog != null ? `Last study: ${fmt(lastLog)}` : 'Last study: unknown',
       ],
       action: 'Call today — ask what changed, get one small task done tonight',
@@ -141,7 +147,7 @@ export function classifyLane(s: LaneSignals): LaneVerdict {
   // Broken streak: a 5+ day daily run that ended within the last 3 days —
   // the habit is still warm, so this outranks the colder lanes' urgency.
   const run = trailingRunLength(daysAgo);
-  if (run >= 5 && lastLog != null && lastLog >= 1 && lastLog <= 3) {
+  if (run >= BROKEN_STREAK_MIN_RUN && lastLog != null && lastLog >= 1 && lastLog <= BROKEN_STREAK_MAX_DAYS_SINCE) {
     return {
       dueReason: 'broken_streak', dueLabel: 'Broken streak',
       why: [`${run}-day streak ended ${fmt(lastLog)}`, 'The habit is still warm — this is the win-back window'],
@@ -153,7 +159,7 @@ export function classifyLane(s: LaneSignals): LaneVerdict {
   // New and never logged: the activation call. 1-day grace after signup (a
   // call two hours after joining reads as surveillance, not help); after 7
   // days they fall through to fresh — the moment has passed.
-  if (signupDaysAgo != null && signupDaysAgo >= 1 && signupDaysAgo <= 7 && daysAgo.length === 0) {
+  if (signupDaysAgo != null && signupDaysAgo >= NEW_LEAD_MIN_AGE_DAYS && signupDaysAgo <= NEW_LEAD_MAX_AGE_DAYS && daysAgo.length === 0) {
     return {
       dueReason: 'new_never_logged', dueLabel: 'New — never logged',
       why: [`Joined ${fmt(signupDaysAgo)}`, 'No first study log yet'],
@@ -296,12 +302,14 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const dates = logDates.get(r.id) ?? [];
     const nLogs = dates.length;
 
-    // Conversion score (intent-weighted), matches the rest of the system.
-    let conv = Math.round(r.score * 0.35);
-    if (buddyTaps >= 2) conv += 30; else if (buddyTaps >= 1) conv += 18;
-    if (mock) conv += 8; if (intentDoor) conv += 12;
-    if (r.daysSinceLastLog != null && r.daysSinceLastLog <= 3) conv += 15;
-    const tier: CallLead['tier'] = (buddyTaps >= 1 && r.daysSinceLastLog != null && r.daysSinceLastLog <= 3) ? 'hot' : (buddyTaps >= 1 || mock || r.score >= 50) ? 'warm' : 'cool';
+    // Conversion score + tier — ONE implementation, shared with the rep's
+    // student page (lib/sales-score). It used to be hand-copied into both.
+    const signals = {
+      momentumScore: r.score, buddyTaps, mockOpened: mock, intentDoor,
+      activeRecently: r.daysSinceLastLog != null && r.daysSinceLastLog <= 3,
+    };
+    const conv = scoreConversion(signals);
+    const tier = conversionTier(signals);
 
     // ── Weakness BRIEF (what she reads before dialing) ──
     const brief: string[] = [];

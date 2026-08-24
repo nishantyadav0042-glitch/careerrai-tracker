@@ -13,6 +13,19 @@ const TIER: Record<string, string> = {
   hot: 'bg-rose-50 text-rose-700 border-rose-200', warm: 'bg-amber-50 text-amber-800 border-amber-200', cool: 'bg-stone-100 text-stone-500 border-stone-200',
 };
 
+// WHICH rung of the shared evidence chain named the weak section. A rep must
+// know whether they are quoting the student's mock or the chain's fallback —
+// "your weakest is DILR" is a fact in the first case and a guess in the last,
+// and saying the guess as a fact is the defect class this repo keeps paying
+// for (ENGINEERING-MEMORY L1: a trustworthy UNKNOWN beats a precise lie).
+const WEAKEST_SOURCE_LABEL: Record<string, string> = {
+  mock: 'from their mock',
+  self_report: 'they told us',
+  baseline: 'from signup scores',
+  coverage: 'from syllabus gaps',
+  default: 'no evidence yet — do not assert',
+};
+
 export default async function ConvertPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, admin } = await requireSales();
@@ -67,6 +80,24 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
         {(v.isPremium || v.hasBuddy) && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-800">Already {v.isPremium ? 'premium' : 'has a buddy'} — no sales ask needed.</p>}
       </div>
 
+      {/* WHY THIS STUDENT IS HERE — the same verdict the queue card shows, so
+          the reason survives opening the student directly (C4, 24 Aug). */}
+      <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-stone-400">Why call {v.firstName} today</p>
+        <p className="text-[13px] font-extrabold text-stone-900">{v.lane.dueLabel}</p>
+        {v.lane.why.map((w, i) => (
+          <p key={i} className="mt-0.5 text-[12.5px] font-semibold leading-snug text-stone-700">{w}</p>
+        ))}
+        <p className="mt-1.5 text-[12.5px] font-bold text-teal-700">→ {v.lane.action}</p>
+        {/* The student's own words at signup — the most quotable thing a rep
+            has, and it previously died inside the queue brief. */}
+        {v.painPoints.length > 0 && (
+          <p className="mt-2 border-t border-stone-100 pt-2 text-[12px] text-stone-600">
+            They told us: <span className="font-semibold text-stone-800">{v.painPoints.join(' · ')}</span>
+          </p>
+        )}
+      </div>
+
       {/* WHY they'll convert */}
       <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-emerald-600">Why this student will convert</p>
@@ -102,11 +133,13 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
           <div className="mt-0.5 flex justify-between text-[9px] text-stone-400"><span>2 weeks ago</span><span>today</span></div>
         </div>
 
-        {/* Latest mock — evidence with its date, never an inference */}
+        {/* Latest mock — evidence with its date, never an inference.
+            Percentiles arrive as plain numbers from lib/sales-score; the DB
+            columns are JSONB and rendering them raw crashed this page (C0). */}
         {v.latestMock && (
           <p className="mb-3 rounded-lg bg-indigo-50 px-3 py-1.5 text-[12px] font-semibold text-indigo-800">
             Last mock{v.latestMock.takenOn ? ` (${new Date(v.latestMock.takenOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})` : ''}:
-            {v.latestMock.overall != null && <> {v.latestMock.overall}%ile overall</>}
+            {v.latestMock.overall != null ? <> {v.latestMock.overall}%ile overall</> : <> percentile not recorded</>}
             {v.latestMock.varc != null && <> · VARC {v.latestMock.varc}</>}
             {v.latestMock.dilr != null && <> · DILR {v.latestMock.dilr}</>}
             {v.latestMock.qa != null && <> · QA {v.latestMock.qa}</>}
@@ -128,7 +161,11 @@ export default async function ConvertPage({ params }: { params: Promise<{ id: st
           <span className="rounded bg-stone-100 px-2 py-0.5 font-semibold text-stone-600">{v.prep.finished} finished · {v.prep.started} started · {v.prep.untouched} untouched</span>
           <span className="rounded bg-stone-100 px-2 py-0.5 font-semibold text-stone-600">{v.prep.activeDays14}/14 days studied</span>
           {v.prep.strongSection && <span className="rounded bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">strong: {v.prep.strongSection}</span>}
-          {v.prep.weakSection && <span className="rounded bg-rose-50 px-2 py-0.5 font-semibold text-rose-700">weak: {v.prep.weakSection}</span>}
+          {v.prep.weakSection && (
+            <span className="rounded bg-rose-50 px-2 py-0.5 font-semibold text-rose-700">
+              weak: {v.prep.weakSection} <span className="font-normal opacity-70">({WEAKEST_SOURCE_LABEL[v.prep.weakestSource]})</span>
+            </span>
+          )}
         </div>
         {v.prep.topUntouched.length > 0 && (
           <p className="mt-2 text-[12px] text-stone-500">High-value topics still untouched: <span className="font-semibold text-stone-700">{v.prep.topUntouched.join(', ')}</span> — a buddy prioritizes exactly these.</p>

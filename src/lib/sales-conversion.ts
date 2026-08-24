@@ -5,6 +5,11 @@ import { bandMeta } from '@/lib/momentum';
 import { getRecommendedBuddiesForStudent } from '@/lib/buddy-match';
 import { SITE_URL } from '@/lib/site';
 import { SESSION_PRICE_PAISE, SESSION_MINUTES, CREDIT_WINDOW_DAYS } from '@/lib/session-credit';
+import { resolveFocusSections, type WeakestSource } from '@/lib/focus-sections';
+import { type DebriefRow } from '@/lib/mock-informed-focus';
+import { getLogDateString } from '@/lib/streak-utils';
+import { scoreConversion, conversionTier, mockPercentiles } from '@/lib/sales-score';
+import { classifyLane, type LaneVerdict } from '@/lib/call-queue';
 
 // FOUNDER RULING (20 Aug 2026): the 10-call experiment sells ONE offer — the
 // Rs 299 single session. The price is imported from the checkout's own
@@ -51,6 +56,10 @@ export interface ConversionView {
   prep: {
     sections: { section: string; finished: number; total: number; pct: number }[];
     strongSection: string | null; weakSection: string | null;
+    /** WHICH rung of the shared evidence chain decided weakSection. A rep
+     *  quoting a mock and a rep quoting a hard default are making different
+     *  claims, and only one of them is a fact about the student. */
+    weakestSource: WeakestSource;
     topUntouched: string[]; finished: number; started: number; untouched: number;
     activeDays14: number; openedMock: boolean;
   };
@@ -61,10 +70,17 @@ export interface ConversionView {
   recommendedBuddy: { name: string; percentile: number | null; college: string | null; reason: string | null } | null;
   /** Oldest → newest, exactly 14 entries (IST days). */
   studyStrip: StudyDay[];
-  /** Latest mock debrief, if any — evidence, shown with its own date. */
+  /** Latest mock debrief, if any — evidence, shown with its own date.
+   *  Percentiles are plain numbers: the DB columns are JSONB and unwrapping
+   *  happens once, in lib/sales-score (C0). */
   latestMock: { takenOn: string | null; overall: number | null; varc: number | null; dilr: number | null; qa: number | null } | null;
   followups: FollowupItem[];
   timeline: TimelineItem[];
+  /** WHY this student is worth calling — the same verdict the queue card
+   *  shows, so the reason survives a rep opening the student directly (C4). */
+  lane: LaneVerdict;
+  /** What the student said their problem was, in their own words, at signup. */
+  painPoints: string[];
 }
 
 
@@ -79,8 +95,11 @@ function waNumber(phone: string | null): string | null {
 
 export async function getSalesConversionView(admin: any, id: string): Promise<ConversionView | null> {
   const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
-  const [{ data: p }, momentum, { data: eng }, { data: acts }, { data: lead }, { data: strip14 }, { data: mocks }, { data: fups }] = await Promise.all([
-    admin.from('profiles').select('id, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription').eq('id', id).single(),
+  const [{ data: p }, momentum, { data: eng }, { data: acts }, { data: lead }, { data: strip14 }, { data: mocks }, { data: fups }, { data: coverage }] = await Promise.all([
+    // The baseline + self-report columns are here because the SHARED focus
+    // chain needs them (C1) — sales must not answer "what is this student
+    // weak at" from a narrower input set than the student's own planner uses.
+    admin.from('profiles').select('id, created_at, full_name, phone, is_premium, buddy_id, is_repeater, is_working_professional, push_subscription, pain_points, baseline_varc, baseline_dilr, baseline_qa, self_reported_weakest_section, self_reported_strongest_section').eq('id', id).single(),
     getStudentMomentum(admin, id),
     admin.from('student_engagement').select('buddy_cta_clicks, mock_opened, intent_door_at, buddy_cta_last_at').eq('student_id', id).maybeSingle(),
     admin.from('sales_activity').select('created_at, actor_id, activity_type, channel, provenance, status, note').eq('student_id', id).order('created_at', { ascending: false }).limit(20),
@@ -88,8 +107,12 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     // PRODUCT FACTS for the 360 (24 Aug foundation): the day-by-day pattern,
     // the latest mock, and the promise history. All read-only to sales.
     admin.from('daily_reports').select('report_date').eq('student_id', id).gte('report_date', since14),
-    admin.from('mock_debriefs').select('taken_on, overall_percentile, varc, dilr, qa').eq('student_id', id).order('taken_on', { ascending: false }).limit(1),
+    // Several debriefs, not one: the shared chain applies its own recency and
+    // completeness rules, and reading only the newest row would quietly make
+    // sales stricter than the planner.
+    admin.from('mock_debriefs').select('taken_on, overall_percentile, varc, dilr, qa').eq('student_id', id).order('taken_on', { ascending: false }).limit(5),
     admin.from('sales_followup').select('id, due_at, status, reason, channel, created_at, completed_at, outcome').eq('student_id', id).order('due_at', { ascending: false }).limit(15),
+    admin.from('topic_coverage').select('topic, status').eq('student_id', id),
   ]);
   if (!p || !momentum) return null;
 
@@ -102,9 +125,11 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     studyStrip.push({ date, logged: loggedDays.has(date) });
   }
 
+  // C0: varc/dilr/qa are JSONB ({percentile: n}). Unwrapped in ONE place so a
+  // column shape can never reach JSX as an object again.
   const m0 = (mocks ?? [])[0] as any | undefined;
   const latestMock = m0
-    ? { takenOn: m0.taken_on ?? null, overall: m0.overall_percentile ?? null, varc: m0.varc ?? null, dilr: m0.dilr ?? null, qa: m0.qa ?? null }
+    ? { takenOn: m0.taken_on ?? null, ...mockPercentiles(m0, m0.overall_percentile) }
     : null;
 
   const followups: FollowupItem[] = (fups ?? []).map((f: any) => ({
@@ -158,9 +183,23 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     topUntouched = untouchedByWeight.sort((a, b) => b.w - a.w).slice(0, 3).map((x) => x.topic);
   } catch { /* topic memory best-effort — the rest of the view still stands */ }
 
-  const withCoverage = sections.filter((s) => s.total > 0);
-  const strongSection = withCoverage.length ? withCoverage.reduce((a, b) => (b.pct > a.pct ? b : a)).section : null;
-  const weakSection = withCoverage.length ? withCoverage.reduce((a, b) => (b.pct < a.pct ? b : a)).section : null;
+  // ── Weak/strong section: THE shared chain, not a sales opinion (C1) ──
+  //
+  // This used to pick the least-covered section from the bars above. Coverage
+  // is the BOTTOM rung of the canonical ladder (mock → self-report → baseline
+  // → coverage → default), so a student whose 20 Aug mock says DILR could be
+  // told "your weak area is VARC" by a rep while their own plan worked DILR.
+  // The same resolver that api/next-action, api/plan/full and buddy-match use
+  // now answers here too — and `weakestSource` tells the rep which rung spoke,
+  // because a default is not a fact about a student.
+  const focus = resolveFocusSections(
+    p as Record<string, unknown>,
+    ((coverage ?? []) as any[]).map((c) => ({ section: TOPIC_METADATA[c.topic as string]?.section ?? '', status: c.status as string })),
+    ((mocks ?? []) as unknown) as DebriefRow[],
+    getLogDateString(),
+  );
+  const weakSection = focus.weakest;
+  const strongSection = focus.strongest;
 
   // ── Buying symptoms (why they'll convert) ──
   const symptoms: Symptom[] = [];
@@ -173,11 +212,23 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
   if (active) symptoms.push({ label: 'Active in the last 3 days — strike while engaged', strong: false });
   if (weakSection) symptoms.push({ label: `Weakest in ${weakSection} — a clear pain a buddy fixes`, strong: false });
 
-  // ── Conversion score + tier (same shape as the queue) ──
-  let conv = Math.round(momentum.score * 0.35);
-  if (buddyTaps >= 2) conv += 30; else if (buddyTaps === 1) conv += 18;
-  if (mock) conv += 8; if (intentDoor) conv += 12; if (active) conv += 15;
-  const tier: ConversionView['tier'] = (buddyTaps >= 1 && active) ? 'hot' : (buddyTaps >= 1 || mock || momentum.score >= 50) ? 'warm' : 'cool';
+  // ── Conversion score + tier: ONE implementation, shared with the queue ──
+  const convSignals = { momentumScore: momentum.score, buddyTaps, mockOpened: mock, intentDoor, activeRecently: active };
+  const conv = scoreConversion(convSignals);
+  const tier = conversionTier(convSignals);
+
+  // ── WHY this student is worth calling (C4) ──
+  // The same verdict the queue card renders. Without this, a rep who opens a
+  // student from search or a timeline link loses the reason entirely and has
+  // to reconstruct it from raw numbers.
+  const painPoints = (Array.isArray(p.pain_points) ? (p.pain_points as unknown[]) : [])
+    .map((x) => String(x).replace(/_/g, ' ')).slice(0, 3);
+  const lane = classifyLane({
+    todayIst: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+    createdAt: (p.created_at as string | null) ?? null,
+    logDates: ((strip14 ?? []) as any[]).map((r) => r.report_date as string),
+    buddyTaps, intentDoor, momentumScore: momentum.score,
+  });
 
   // ── Objection playbook (tailored) ──
   // HONESTY RULE (20 Aug, Sales Phase 1 — same audit standard as the queue
@@ -213,7 +264,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     convScore: conv, tier, momentumLabel: bandMeta(momentum.band).label, momentumScore: momentum.score,
     reachable, lastActivity: dsl == null ? 'never logged' : dsl === 0 ? 'logged today' : `${dsl}d since last study`,
     symptoms,
-    prep: { sections, strongSection, weakSection, topUntouched, finished, started, untouched, activeDays14: momentum.signals.activeDays14, openedMock: mock },
+    prep: { sections, strongSection, weakSection, weakestSource: focus.weakestSource, topUntouched, finished, started, untouched, activeDays14: momentum.signals.activeDays14, openedMock: mock },
     objections,
     pitch,
     history: (acts ?? []).map((a: any) => ({ at: a.created_at, actorId: a.actor_id ?? null, activityType: a.activity_type ?? null, channel: a.channel ?? null, provenance: a.provenance ?? null, status: a.status, note: a.note })),
@@ -223,5 +274,7 @@ export async function getSalesConversionView(admin: any, id: string): Promise<Co
     latestMock,
     followups,
     timeline,
+    lane,
+    painPoints,
   };
 }
