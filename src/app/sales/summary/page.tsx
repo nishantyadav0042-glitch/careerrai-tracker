@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireSales } from '@/lib/admin-auth';
 import { cn } from '@/lib/utils';
 import { getRepPortfolio, getRepCallStats } from '@/lib/sales-portfolio';
+import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My summary · CareerRai' };
@@ -21,7 +22,10 @@ export default async function SalesSummaryPage() {
     <div>
       <div className="mb-3">
         <h1 className="text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>My summary</h1>
-        <p className="mt-0.5 text-xs text-stone-500">Your book of business. Rs 999 per Exam Buddy.</p>
+        {/* Price imported from the checkout's own constant — never typed by
+            hand here. This line used to hard-code "Rs 999 per Exam Buddy"
+            while the script (and Razorpay) sold the Rs 299 session. */}
+        <p className="mt-0.5 text-xs text-stone-500">Your book of business. Rs {SESSION_PRICE_PAISE / 100} per session.</p>
       </div>
 
       {/* Portfolio */}
