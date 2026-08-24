@@ -45,7 +45,8 @@ export async function GET() {
       .from('video_sessions')
       .select('id, title, scheduled_at, duration_minutes, google_meet_link, student_id, buddy_id')
       .eq(ownerCol, user.id)
-      .eq('session_status', 'scheduled')
+      // 'active' belongs here — see the note on the student surfaces (24 Aug).
+      .in('session_status', ['scheduled', 'active'])
       .gte('scheduled_at', windowStart)
       .order('scheduled_at', { ascending: true })
       .limit(3);
@@ -57,7 +58,7 @@ export async function GET() {
         .from('video_sessions')
         .select('id, title, scheduled_at, duration_minutes, student_id, buddy_id')
         .eq(ownerCol, user.id)
-        .eq('session_status', 'scheduled')
+        .in('session_status', ['scheduled', 'active'])
         .gte('scheduled_at', windowStart)
         .order('scheduled_at', { ascending: true })
         .limit(3);

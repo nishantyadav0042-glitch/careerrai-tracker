@@ -5,6 +5,7 @@ import {
   returnPicture, interventionPicture, conversionPicture, learningPicture, reachPicture,
   type LedgerRow, type ReturnRow,
 } from '@/lib/student-success-mis';
+import { tailPicture } from '@/lib/notification-tail';
 
 // ── The C0 lesson, applied ──────────────────────────────────────────────────
 //
@@ -43,6 +44,10 @@ function render(over: Partial<Parameters<typeof MisView>[0]> = {}) {
         ...Array.from({ length: 611 }, () => ({ hasPush: false, hasPhone: true })),
       ])}
       pushesPerReachedStudentPerDay={5.2}
+      tail={tailPicture(
+        Array.from({ length: 40 }, (_, i) => ({ userId: `s${i}`, day: '2026-08-20', clicked: i < 2 })),
+        new Map([['s0', new Set(['2026-08-20'])]]),
+      )}
       {...over}
     />,
   );
@@ -74,7 +79,13 @@ describe('the screen cannot show a number the sample did not earn', () => {
     const html = render({ conversion: conversionPicture([sess('expired'), sess('cancelled')]) });
     expect(html).toContain('UNAVAILABLE');
     expect(html).toMatch(/too few to state a completion rate/i);
-    expect(html).not.toMatch(/>0%</);
+    // Scoped to the completion card. A genuine 0% elsewhere (say, 0 of 40
+    // pushes followed by a next-day log) is a FACT and must still render — the
+    // rule is that a NULL rate becomes a dash, not that zero is unprintable.
+    const card = html.slice(html.indexOf('Sessions completed'));
+    const upToNextCard = card.slice(0, card.indexOf('Completed with an observed start'));
+    expect(upToNextCard).not.toMatch(/>0%</);
+    expect(upToNextCard).toMatch(/—/);
   });
 
   it('a thin lane comparison shows counts and refuses a percentage', () => {
@@ -102,6 +113,25 @@ describe('the screen cannot show a number the sample did not earn', () => {
     const html = render({ ret: returnPicture(ret(30, { d7: null })) });
     expect(html).toContain('UNKNOWN');
     expect(html).toMatch(/No student is old enough/i);
+  });
+});
+
+describe('the notification tail is shown without becoming a causal claim', () => {
+  it('renders the tail and labels it ASSOCIATED', () => {
+    const html = render();
+    expect(html).toMatch(/After a push, last 7 days/);
+    expect(html).toContain('ASSOCIATED');
+    expect(html).toMatch(/not what the push caused/i);
+  });
+
+  it('names the pushes that produced nothing observable', () => {
+    // NOTIFICATION-OS #22: a tap that changes no behaviour is a vanity win.
+    expect(render()).toMatch(/pushes with no log either day/);
+  });
+
+  it('an empty push window renders UNKNOWN rather than 0%', () => {
+    const html = render({ tail: tailPicture([], new Map()) });
+    expect(html).toMatch(/No pushes were delivered/i);
   });
 });
 
@@ -154,6 +184,7 @@ describe('empty state', () => {
         learning={learningPicture([])}
         reach={reachPicture([])}
         pushesPerReachedStudentPerDay={null}
+        tail={tailPicture([], new Map())}
       />,
     );
     expect(html).toMatch(/No structured reasons captured yet/);

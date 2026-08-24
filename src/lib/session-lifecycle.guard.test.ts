@@ -123,6 +123,36 @@ describe('the database stamps the times, and they are facts', () => {
   });
 });
 
+describe('re-asserting a finished state is refused', () => {
+  // Found by the end-to-end probe, not by reasoning: the lifecycle trigger
+  // guards TRANSITIONS (`new_s is distinct from old_s`), so completed ->
+  // completed never reached the legality check and succeeded silently. No data
+  // was corrupted — ended_at is immutable — but the CALLER was told their write
+  // worked, so a close-out submitted twice was indistinguishable from one
+  // submitted once.
+  const REASSERT = readFileSync('supabase/migrations/20260824g_session_terminal_reassert.sql', 'utf8');
+
+  it('uses UPDATE OF, the only form that fires on the SET list', () => {
+    // A row-level BEFORE UPDATE trigger cannot tell "set to the same value"
+    // from "never mentioned" — NEW carries the old value either way.
+    expect(REASSERT).toMatch(/before update of session_status on public\.video_sessions/);
+  });
+
+  it('refuses when the session is already terminal', () => {
+    const m = REASSERT.match(/if old\.session_status in \(([^)]*)\) then/);
+    expect(m).toBeTruthy();
+    const guarded = [...m![1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]).sort();
+    expect(guarded).toEqual([...TERMINAL_STATUSES].sort());
+  });
+
+  it('leaves unrelated edits to a finished session legal', () => {
+    // Notes, a calendar id, updated_at — a finished session is still editable.
+    // Only re-asserting its STATE is refused, which is why the trigger is
+    // scoped to the session_status column rather than to the whole row.
+    expect(REASSERT).not.toMatch(/before update on public\.video_sessions/);
+  });
+});
+
 describe('delivery is counted honestly', () => {
   const rows = (spec: [string, boolean, boolean][]): SessionRow[] =>
     spec.map(([session_status, s, e]) => ({

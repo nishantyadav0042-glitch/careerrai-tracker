@@ -74,7 +74,11 @@ export default async function BuddyPage({
       .from('video_sessions')
       .select('id, title, scheduled_at, google_meet_link, session_status, session_type')
       .eq('student_id', user.id)
-      .eq('session_status', 'scheduled')
+      // 'active' BELONGS HERE (24 Aug). A session the mentor has STARTED is
+      // the most live a session ever gets — filtering to 'scheduled' alone
+      // would make the Join button vanish at the exact moment the call began.
+      // Same failure as the 4 Aug grace-window incident, one state later.
+      .in('session_status', ['scheduled', 'active'])
       .gte('scheduled_at', sessionsVisibleFrom(now))
       .order('scheduled_at', { ascending: true })
       // Tie-break: two sessions at the same minute must resolve IDENTICALLY on

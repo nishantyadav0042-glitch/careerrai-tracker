@@ -8,6 +8,7 @@ import {
 } from '@/lib/student-success-mis';
 import type { SessionRow } from '@/lib/session-lifecycle';
 import type { ReasonCategory } from '@/lib/intervention-taxonomy';
+import { tailPicture, type PushRow } from '@/lib/notification-tail';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Student Success · CareerRai' };
@@ -41,7 +42,7 @@ export default async function StudentSuccessPage() {
     admin.from('intervention_ledger')
       .select('student_id, rep_id, lane, reason_category, logged_d3, logged_d7').limit(5000),
     admin.from('video_sessions').select('session_status, started_at, ended_at').limit(5000),
-    admin.from('notifications').select('user_id, pushed_at')
+    admin.from('notifications').select('user_id, pushed_at, clicked_at')
       .gte('pushed_at', new Date(now - 7 * DAY).toISOString()).limit(50000),
   ]);
 
@@ -55,7 +56,7 @@ export default async function StudentSuccessPage() {
   const reports = take<{ student_id: string; report_date: string }>(reportsR, 'daily logs');
   const ledger = take<{ student_id: string; rep_id: string; lane: string | null; reason_category: string | null; logged_d3: boolean | null; logged_d7: boolean | null }>(ledgerR, 'intervention ledger');
   const sessions = take<SessionRow>(sessionsR, 'sessions');
-  const pushes = take<{ user_id: string; pushed_at: string | null }>(pushR, 'push delivery');
+  const pushes = take<{ user_id: string; pushed_at: string | null; clicked_at: string | null }>(pushR, 'push delivery');
 
   // ── Return, computed cohort-correctly ─────────────────────────────────────
   const logsByStudent = new Map<string, string[]>();
@@ -98,6 +99,19 @@ export default async function StudentSuccessPage() {
     pushesPerDay = reached === 0 ? null : Math.round((delivered.length / reached / 7) * 10) / 10;
   }
 
+  // NOTIFICATION-OS §8's tail. The IST study day a push landed on is what a
+  // daily_reports row is keyed by — comparing against a UTC date would credit
+  // the wrong day for anything sent after 18:30 UTC.
+  const pushRows: PushRow[] = pushes.ok
+    ? pushes.rows.filter((p) => p.pushed_at != null).map((p) => ({
+      userId: p.user_id,
+      day: new Date(p.pushed_at!).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+      clicked: p.clicked_at != null,
+    }))
+    : [];
+  const logDaySets = new Map<string, Set<string>>();
+  for (const [id, days] of logsByStudent) logDaySets.set(id, new Set(days));
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <div className="flex items-center gap-2">
@@ -139,6 +153,7 @@ export default async function StudentSuccessPage() {
           hasPhone: typeof p.phone === 'string' && p.phone.trim().length > 0,
         })) : [])}
         pushesPerReachedStudentPerDay={pushesPerDay}
+        tail={tailPicture(pushRows, logDaySets)}
       />
     </div>
   );

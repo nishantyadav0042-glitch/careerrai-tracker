@@ -3,6 +3,7 @@ import type {
   Measure, ReturnPicture, InterventionPicture, ConversionPicture,
   LearningPicture, ReachPicture, Evidence,
 } from '@/lib/student-success-mis';
+import type { TailPicture } from '@/lib/notification-tail';
 
 // ── The founder's control tower ─────────────────────────────────────────────
 //
@@ -80,9 +81,11 @@ export interface MisProps {
   reach: ReachPicture;
   /** Notification pressure on the students we CAN reach. Null = not measured. */
   pushesPerReachedStudentPerDay: number | null;
+  /** NOTIFICATION-OS §8's tail: what happened AFTER a push. */
+  tail: TailPicture;
 }
 
-export function MisView({ ret, intervention, conversion, learning, reach, pushesPerReachedStudentPerDay }: MisProps) {
+export function MisView({ ret, intervention, conversion, learning, reach, pushesPerReachedStudentPerDay, tail }: MisProps) {
   return (
     <div className="space-y-6 pb-16">
       <Section n={1} q="Are students coming back?">
@@ -124,6 +127,35 @@ export function MisView({ ret, intervention, conversion, learning, reach, pushes
                 : 'Counted only over students who actually received one.'}
             </p>
           </div>
+        </div>
+
+        {/* NOTIFICATION-OS §8: the tail matters more than delivery. Nothing
+            measured it until 24 Aug, so the OS's own KPI — notifications that
+            cause STUDYING — was unfalsifiable. */}
+        <div className="rounded-xl border border-stone-200 bg-white p-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[12px] font-bold text-stone-800">
+              After a push, last 7 days
+            </p>
+            <Badge e={tail.evidence} />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[tail.tapped, tail.loggedSameDay, tail.loggedNextDay].map((m) => (
+              <div key={m.label}>
+                <p className="text-lg font-bold tabular-nums text-stone-900">
+                  {m.rate == null ? <span className="text-stone-400">—</span> : `${Math.round(m.rate * 1000) / 10}%`}
+                </p>
+                <p className="text-[10px] leading-snug text-stone-500">{m.label}</p>
+              </div>
+            ))}
+            <div>
+              <p className="text-lg font-bold tabular-nums text-stone-900">{tail.noObservedStudy}</p>
+              <p className="text-[10px] leading-snug text-stone-500">
+                pushes with no log either day
+              </p>
+            </div>
+          </div>
+          <p className="mt-1.5 text-[10px] leading-snug text-stone-400">{tail.note}</p>
         </div>
       </Section>
 
