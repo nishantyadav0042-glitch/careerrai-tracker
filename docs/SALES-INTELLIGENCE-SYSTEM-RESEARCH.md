@@ -579,10 +579,10 @@ materialization only if measured.
 
 ## FOUNDER DECISIONS REQUIRED
 
-- **F1 — PR #99:** review + merge + one verified live payment. Everything gates on this.
-- **F2 — Assignment autonomy:** recommended: intake automatic (audited, kill-switch), reassignment manual. Approve or change.
-- **F3 — Capacity numbers:** FT and PT working hours (IST), max open leads, max new/day, and the first-touch SLA. (Illustrative only: FT 40 open/15 per day, PT 15 open/6 per day, 24h SLA.)
-- **F4 — Money visibility for reps:** recommended: paid/not-paid status only, never amounts.
-- **F5 — Orphans:** `student_crm` finish or drop; `cat_test_leads` merge into the pool or retire.
-- **F6 — Hot/warm/cold:** recommended: rep-declared `rep_temperature` as labeled observation beside the computed tier. Approve or drop.
-- **F7 — Who are the two hires' accounts:** names/emails for the two `role='sales'` profiles, and whether "Priya" (existing references) is one of them.
+- **F1 — PR #99:** review + merge + one verified live payment. Everything gates on this. **OPEN — founder asked for the risk explained before deciding (24 Aug).**
+- **F2 — Assignment autonomy:** **DECIDED 24 Aug: auto intake, manual moves** — new leads flow automatically by capacity with full audit; reassignment stays founder-manual.
+- **F3 — Capacity numbers:** FT and PT working hours (IST), max open leads, max new/day, and the first-touch SLA. (Illustrative only: FT 40 open/15 per day, PT 15 open/6 per day, 24h SLA.) **OPEN.**
+- **F4 — Money visibility for reps:** **DECIDED 24 Aug: paid/not-paid status only, never amounts.**
+- **F5 — Orphans:** `student_crm` finish or drop; `cat_test_leads` merge into the pool or retire. **OPEN.**
+- **F6 — Hot/warm/cold:** **DECIDED 24 Aug: both, kept separate** — rep-declared `rep_temperature` as a labeled observation beside the computed tier, never mixed in founder metrics.
+- **F7 — Who are the two hires' accounts:** names/emails for the two `role='sales'` profiles, and whether "Priya" (existing references) is one of them. **OPEN.**
