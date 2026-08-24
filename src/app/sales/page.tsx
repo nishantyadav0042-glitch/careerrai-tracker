@@ -3,6 +3,7 @@ import { salesPrincipal } from '@/lib/sales-authz';
 import { cn } from '@/lib/utils';
 import { buildCallQueue } from '@/lib/call-queue';
 import { CallDeck } from '@/components/call-deck';
+import { getTeamCapacity, BINDING_LABEL } from '@/lib/sales-capacity';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales — Calls · CareerRai' };
@@ -20,8 +21,13 @@ export default async function SalesCallsPage() {
   // R3: the identity is profiles.id, never the email. The previous line read
   // `email ?? null`, and a null there granted the oversight frame.
   const principal = await salesPrincipal(admin, user.id);
-  const { queue, connectedToday, dueNow } = await buildCallQueue(admin, principal);
+  const [{ queue, connectedToday, dueNow }, team] = await Promise.all([
+    buildCallQueue(admin, principal),
+    getTeamCapacity(admin),
+  ]);
   const primeTime = istHour() >= 18 && istHour() < 21;
+  // A rep sees only their OWN capacity line — never the team's book.
+  const mine = team.find((t) => t.repId === user.id) ?? null;
 
   return (
     <div>
@@ -36,6 +42,26 @@ export default async function SalesCallsPage() {
           {primeTime ? '🟢 Prime calling hours (6–9 PM) — best pickup. Push hard now.' : '⏰ Best pickup is 6–9 PM. Work the due callbacks and top leads first.'}
         </div>
       </div>
+
+      {/* Phase 2B-1: the rep's own workload, one line. Nothing here changes
+          how leads reach them — claiming is still manual and unchanged. */}
+      {mine?.configured && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-[12px]">
+          <span className="font-bold text-stone-800">
+            {mine.activeNow} of {mine.capacity} active
+          </span>
+          <span className={mine.available > 0 ? 'font-semibold text-emerald-700' : 'text-stone-500'}>
+            {mine.available} slot{mine.available === 1 ? '' : 's'} free
+          </span>
+          {mine.dormantCount > 0 && (
+            <span className="text-stone-500">{mine.dormantCount} healthy (no work needed)</span>
+          )}
+          {mine.overflow > 0 && (
+            <span className="font-bold text-rose-700">{mine.overflow} over capacity — work through these first</span>
+          )}
+          <span className="text-stone-400">· {BINDING_LABEL[mine.binding]}</span>
+        </div>
+      )}
 
       <div className="mt-4">
         {queue.length === 0 ? (

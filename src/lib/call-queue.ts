@@ -95,6 +95,27 @@ export interface LaneSignals {
   momentumScore: number;
 }
 
+/**
+ * The lanes that represent a student needing INTERVENTION — the ones that
+ * consume a rep's active capacity (Phase 2B-1).
+ *
+ * `conversion` is deliberately EXCLUDED, and the reason matters: buddy intent
+ * is measured by `student_engagement.buddy_cta_clicks`, a cumulative counter
+ * that never resets. A student who tapped the buddy option once in July would
+ * sit in the conversion lane forever, and if that counted as active work they
+ * would consume one of their rep's capacity units permanently — the exact
+ * failure mode the working-set model exists to prevent (and the same reason
+ * `wants_mentor` is not an active-work condition).
+ *
+ * The retention lanes below are all TRANSIENT: they clear the moment the
+ * student logs again. Genuine conversion work is still counted — as a first
+ * contact (never_contacted) or as a scheduled follow-up — both of which are
+ * events that end, rather than a flag that never does.
+ */
+export const RETENTION_LANES: ReadonlySet<DueReason> = new Set<DueReason>([
+  'going_cold', 'broken_streak', 'new_never_logged',
+]);
+
 export interface LaneVerdict {
   dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'conversion' | 'fresh'>;
   dueLabel: string;

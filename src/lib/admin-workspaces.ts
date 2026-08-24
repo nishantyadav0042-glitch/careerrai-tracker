@@ -99,6 +99,10 @@ export const WORKSPACES: AdminWorkspace[] = [
       // "no calls were made" from "no calls were recorded".
       { label: 'Control Tower', href: '/admin/sales/tower', status: 'live' },
       { label: 'Call queue', href: '/admin/sales', status: 'live' },
+      // Phase 2B-1 (24 Aug): capacity VISIBILITY only — how much live work
+      // each rep holds and how much more they could take. No automatic
+      // assignment exists; every lead is still claimed manually.
+      { label: 'Capacity', href: '/admin/sales/capacity', status: 'live' },
       { label: 'Data quality', href: '/admin/sales/quality', status: 'live' },
       { label: 'Leads', href: '/admin/leads', status: 'live' },
       { label: 'Performance', href: '/admin/sales-performance', status: 'moved' },
