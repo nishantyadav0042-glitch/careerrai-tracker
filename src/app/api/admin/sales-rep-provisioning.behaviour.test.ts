@@ -53,12 +53,19 @@ function makeAdmin(handlers: Record<string, Handler>) {
     return c;
   };
   const createUser = vi.fn(async () => ({ data: { user: { id: 'new-user-1', email: 'part@careerrai.in' } }, error: null }));
+  // attach mode looks the id up in Supabase Auth first; `existingAuthUser`
+  // makes that id resolve, so the test can then say who owns it in profiles.
+  const getUserById = vi.fn(async () => ({ data: { user: existingAuthUser }, error: null }));
   return {
     from: (t: string) => chain(t),
-    auth: { admin: { createUser, getUserById: vi.fn(async () => ({ data: { user: null }, error: null })) } },
-    writes, counts, createUser,
+    auth: { admin: { createUser, getUserById } },
+    writes, counts, createUser, getUserById,
   };
 }
+
+/** The auth user that attach mode will find, if any. */
+let existingAuthUser: { id: string; email: string } | null = null;
+const ATTACH_ID = '33333333-3333-4333-8333-333333333333';
 
 const post = (body: unknown): NextRequest => ({ json: async () => body, cookies: { getAll: () => [] } } as unknown as NextRequest);
 
@@ -82,6 +89,7 @@ const PART_TIME_TERMS = {
 beforeEach(() => {
   vi.clearAllMocks();
   currentUser = { id: 'admin-1' };
+  existingAuthUser = null;
   capacityMock.getTeamCapacity.mockResolvedValue([]);
 });
 
@@ -134,6 +142,70 @@ describe('POST /api/admin/create-sales-rep', () => {
 
     const cfgWrite = currentAdmin.writes.find((w: any) => w.table === 'sales_rep_config');
     expect(cfgWrite.payload).toMatchObject({ rep_id: 'new-user-1', employment_type: 'part_time', max_capacity_units: 12, max_new_per_day: 4 });
+  });
+
+  // ── attach mode ───────────────────────────────────────────────────────────
+  //
+  // The PR audit found create mode refused to promote an existing person and
+  // attach mode did not. These four run the same rule down the other key.
+
+  it('never converts a STUDENT whose auth uuid is pasted into attach mode', async () => {
+    existingAuthUser = { id: ATTACH_ID, email: 'a.student@gmail.com' };
+    currentAdmin = makeAdmin({
+      'profiles.select': principalThen(() => ({ data: { id: ATTACH_ID, role: 'student', full_name: 'A Student' }, error: null })),
+    });
+    const res = await createRep(post({ mode: 'attach', userId: ATTACH_ID, employment_type: 'part_time', fullName: 'Part Time', ...PART_TIME_TERMS }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('student');
+    // The student's row is untouched — no role rewrite, no config row.
+    expect(currentAdmin.writes).toHaveLength(0);
+  });
+
+  it('refuses a buddy/mentor uuid too — the rule is "not already someone else"', async () => {
+    existingAuthUser = { id: ATTACH_ID, email: 'mentor@careerrai.in' };
+    currentAdmin = makeAdmin({
+      'profiles.select': principalThen(() => ({ data: { id: ATTACH_ID, role: 'buddy', full_name: 'A Mentor' }, error: null })),
+    });
+    const res = await createRep(post({ mode: 'attach', userId: ATTACH_ID, employment_type: 'full_time', fullName: 'Part Time' }));
+    expect(res.status).toBe(400);
+    expect(currentAdmin.writes).toHaveLength(0);
+  });
+
+  it('still attaches and configures an EXISTING sales account', async () => {
+    existingAuthUser = { id: ATTACH_ID, email: 'parttime@careerrai.in' };
+    currentAdmin = makeAdmin({
+      'profiles.select': principalThen(() => ({ data: { id: ATTACH_ID, role: 'sales', full_name: 'Part Time' }, error: null })),
+      'sales_rep_config.upsert': () => ({ data: { rep_id: ATTACH_ID, employment_type: 'part_time', ...PART_TIME_TERMS }, error: null }),
+    });
+    const res = await createRep(post({ mode: 'attach', userId: ATTACH_ID, employment_type: 'part_time', fullName: 'Part Time', ...PART_TIME_TERMS }));
+    expect(res.status).toBe(200);
+    // No new login is minted for someone who already has one.
+    expect(currentAdmin.createUser).not.toHaveBeenCalled();
+    expect(currentAdmin.writes.find((w: any) => w.table === 'profiles').payload).toMatchObject({ id: ATTACH_ID, role: 'sales' });
+    expect(currentAdmin.writes.find((w: any) => w.table === 'sales_rep_config').payload).toMatchObject({ rep_id: ATTACH_ID, employment_type: 'part_time', max_capacity_units: 12 });
+  });
+
+  it('attaches an auth user with no CareerRai profile yet', async () => {
+    // The documented Supabase-Dashboard-first flow: the login exists, nobody
+    // is on the other end of it in profiles.
+    existingAuthUser = { id: ATTACH_ID, email: 'parttime@careerrai.in' };
+    currentAdmin = makeAdmin({
+      'profiles.select': principalThen(() => ({ data: null, error: null })),
+      'sales_rep_config.upsert': () => ({ data: { rep_id: ATTACH_ID }, error: null }),
+    });
+    const res = await createRep(post({ mode: 'attach', userId: ATTACH_ID, employment_type: 'full_time', fullName: 'Part Time' }));
+    expect(res.status).toBe(200);
+    expect(currentAdmin.writes.find((w: any) => w.table === 'profiles').payload).toMatchObject({ role: 'sales' });
+  });
+
+  it('does not treat an unreadable profile as "nobody is there"', async () => {
+    existingAuthUser = { id: ATTACH_ID, email: 'parttime@careerrai.in' };
+    currentAdmin = makeAdmin({
+      'profiles.select': principalThen(() => ({ data: null, error: { message: 'timeout' } })),
+    });
+    const res = await createRep(post({ mode: 'attach', userId: ATTACH_ID, employment_type: 'full_time', fullName: 'Part Time' }));
+    expect(res.status).toBe(503);
+    expect(currentAdmin.writes).toHaveLength(0);
   });
 
   it('never writes the password anywhere', async () => {

@@ -104,8 +104,32 @@ export async function POST(request: NextRequest) {
     const { data: found, error: authErr } = await admin.auth.admin.getUserById(body.userId);
     if (authErr || !found?.user) return badRequest('No Supabase auth user exists with that id.');
     userId = found.user.id;
+
+    // THE SAME REFUSAL AS CREATE MODE, ON THE OTHER KEY.
+    //
+    // Create mode looks a person up by EMAIL and refuses to promote them.
+    // Attach mode arrives with a uuid, and until the PR audit caught it, it
+    // went straight to the profiles upsert below — so pasting a student's
+    // auth id into the form silently rewrote that student's role to 'sales',
+    // leaving their student rows attached to a staff account. Admin-only and
+    // requiring a mistyped uuid, but it is precisely the thing the founder
+    // prohibited, and a mode-specific hole is still a hole.
+    const { data: existingById, error: byIdErr } = await admin
+      .from('profiles').select('id, role, full_name').eq('id', userId).maybeSingle();
+    // A read we could not complete is not "nobody is there" — the whole point
+    // of this check is who is already on the other end of that id.
+    if (byIdErr) return NextResponse.json({ error: 'Could not check who that user already is — try again.' }, { status: 503 });
+    if (existingById && existingById.role !== 'sales' && existingById.role !== 'admin') {
+      return badRequest(
+        `That auth user is already a ${existingById.role} account (${existingById.full_name}). ` +
+        `A staff seat is never created by converting an existing account — create a separate login for the rep.`
+      );
+    }
+
     email = (found.user.email ?? '').toLowerCase();
-    fullName = typeof body.fullName === 'string' && body.fullName.trim() ? body.fullName.trim() : (email || 'Sales');
+    fullName = typeof body.fullName === 'string' && body.fullName.trim()
+      ? body.fullName.trim()
+      : ((existingById?.full_name as string | null) ?? email ?? 'Sales');
     phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null;
   } else {
     const check = checkNewRep(body);
