@@ -45,14 +45,28 @@ describe('the installed iOS PWA gets ONE tap', () => {
 
 describe('the surfaces that already worked are untouched', () => {
   it.each([
-    ['iOS App Store wrapper', sig({ iosStoreBuild: true }), 'ios_link_handoff'],
-    ['Android Play wrapper', sig({ androidStoreBuild: true }), 'popup_handoff'],
+    ['iOS App Store wrapper', sig({ iosStoreBuild: true }), 'redirect'],
+    ['Android Play wrapper', sig({ androidStoreBuild: true }), 'redirect'],
+    ['installed iOS PWA', sig({ ios: true, standalone: true }), 'redirect'],
     ['desktop / mobile browser', sig(), 'inline'],
     ['installed Android PWA', sig({ standalone: true }), 'inline'],
     ['iOS browser TAB (not installed)', sig({ ios: true }), 'inline'],
-    ['the escaped tab itself', sig({ escapedTab: true, ios: true, standalone: true }), 'inline'],
-  ])('%s still resolves to %s', (_label, s, expected) => {
+    ['a tab that already escaped', sig({ escapedTab: true, ios: true, standalone: true }), 'inline'],
+  ])('%s resolves to %s', (_label, s, expected) => {
     expect(paymentSurface(s)).toBe(expected);
+  });
+
+  it('NO surface hands off any more — every one pays in place', () => {
+    // The hand-off is gone entirely. /go's own measured result was 160 tokens
+    // minted against 7 consumed: a 96% drop-off before Razorpay was reached.
+    for (const s of [
+      sig(), sig({ ios: true }), sig({ standalone: true }),
+      sig({ ios: true, standalone: true }), sig({ iosStoreBuild: true }),
+      sig({ androidStoreBuild: true }), sig({ escapedTab: true }),
+    ]) {
+      expect(needsBrowserHandoff(s)).toBe(false);
+      expect(['inline', 'redirect']).toContain(paymentSurface(s));
+    }
   });
 
   it('the Android installed PWA keeps the inline modal', () => {

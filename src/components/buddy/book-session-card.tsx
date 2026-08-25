@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
-import { escapeToBrowserForPayment, readPaymentSurfaceSignals } from '@/lib/store-build';
+import { readPaymentSurfaceSignals } from '@/lib/store-build';
 import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
-import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
 import { IntentPicker, intentIsComplete } from '@/components/session/intent-picker';
 import type { SessionIntent } from '@/lib/session-intent';
+import { payFunnel } from '@/lib/payment-funnel-client';
 
 // ── The ₹299 door, in the Buddy section ─────────────────────────────────────
 //
@@ -56,7 +56,6 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   const [intent, setIntent] = useState<SessionIntent | null>(null);
   const [intentNote, setIntentNote] = useState('');
   const readyToPay = intentIsComplete(intent, intentNote);
-  const iosUrl = useIosPayUrl('/student/buddy');
 
   useEffect(() => {
     let alive = true;
@@ -75,34 +74,6 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
     // never reach Razorpay for a booking the database would then refuse.
     if (!readyToPay) return;
     track('session_book_click', { finding: findingKind ?? null, intent });
-
-    // Where checkout is allowed to open — see lib/payment-surface. iOS (store
-    // wrapper or installed PWA) cannot complete a payment inline; it must
-    // finish in the real browser. This used to skip that check entirely and
-    // always open Razorpay in-page, which is why this surface has 0
-    // successful payments in its history regardless of platform.
-    const surface = paymentSurface(readPaymentSurfaceSignals());
-    if (surface !== 'inline') {
-      setBusy(true); setError(null);
-      try {
-        if (surface === 'ios_link_handoff') {
-          // The anchor itself is the navigation (see render below); this only
-          // records the tap so the funnel shows intent even though iosUrl was
-          // already minted on mount.
-          track('pay_escape_browser', { plan: 'session', opened: true, ios: true, mode: 'ios_link', linkReady: iosUrl != null });
-          return;
-        }
-        const opened = await escapeToBrowserForPayment('/student/buddy');
-        track('pay_escape_browser', { plan: 'session', opened, mode: 'popup' });
-        if (!opened) {
-          setError(HANDOFF_COPY.noLink);
-          setManualUrl('https://careerrai.in/student/buddy');
-        }
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
 
     setBusy(true); setError(null);
     try {
@@ -131,6 +102,10 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
       // what produced the "tap share, choose Open in Safari" screen. Redirect
       // mode keeps the SAME order id, so the webhook path is unchanged.
       if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
+        // Recorded BEFORE the navigation, because after it this page is gone.
+        // Without this, "checkout never rendered" and "rendered and they left"
+        // are the same row — which is why three iOS fixes shipped blind.
+        payFunnel('payment_checkout_opened', { plan: 'session', orderId: json.orderId, surface: 'session_redirect' });
         track('pay_redirect', { plan: 'session', intent });
         new window.Razorpay(redirectCheckoutOptions({
           keyId: json.keyId,
@@ -144,6 +119,8 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
         })).open();
         return;
       }
+
+      payFunnel('payment_checkout_opened', { plan: 'session', orderId: json.orderId, surface: 'session_inline' });
 
       const rzp = new window.Razorpay({
         key: json.keyId,
@@ -216,27 +193,16 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
               />
             </div>
 
-            {iosUrl && readyToPay ? (
-              <a
-                href={iosUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => void book()}
-                className="block w-full rounded-xl bg-orange-500 py-3 text-center text-[14px] font-extrabold text-white transition-transform active:scale-[0.99]"
-              >
-                {`Book my session — ${state.priceLabel}`}
-              </a>
-            ) : (
-              // The iOS handoff is an anchor, which navigates whatever the
-              // handler does — so when the intent is incomplete it must not be
-              // an anchor at all. A disabled button is the only honest form.
-              <button
-                type="button" onClick={() => void book()} disabled={busy || !readyToPay}
-                className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-extrabold text-white transition-transform active:scale-[0.99] disabled:opacity-60"
-              >
-                {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
-              </button>
-            )}
+            {/* ONE button on every platform. There used to be an anchor
+                variant here for the iOS hand-off; that path is gone, so the
+                intent gate can no longer be bypassed by a link that navigates
+                whatever the handler decides. */}
+            <button
+              type="button" onClick={() => void book()} disabled={busy || !readyToPay}
+              className="w-full rounded-xl bg-orange-500 py-3 text-[14px] font-extrabold text-white transition-transform active:scale-[0.99] disabled:opacity-60"
+            >
+              {busy ? 'Opening checkout…' : `Book my session — ${state.priceLabel}`}
+            </button>
             {!readyToPay && (
               <p className="mt-1.5 text-center text-[11px] font-semibold text-stone-500">
                 Pick what you need help with first.

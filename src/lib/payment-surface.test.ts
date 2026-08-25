@@ -38,8 +38,10 @@ describe('the iOS installed PWA never opens checkout in-page', () => {
     }
   });
 
-  it('the wrapper keeps the link — an anchor genuinely escapes there', () => {
-    expect(at({ iosStoreBuild: true })).toBe('ios_link_handoff');
+  it('the wrapper redirects too — no copy-the-link screen anywhere', () => {
+    // The wrapper CAN escape with an anchor, but escaping only ever led to
+    // /go and its 96% drop-off. Navigating straight to Razorpay is one tap.
+    expect(at({ iosStoreBuild: true })).toBe('redirect');
   });
 });
 
@@ -65,8 +67,10 @@ describe('Android keeps the path that actually converted', () => {
     expect(at({ standalone: true })).toBe('inline');
   });
 
-  it('still opens a popup for the Play wrapper', () => {
-    expect(at({ androidStoreBuild: true })).toBe('popup_handoff');
+  it('the Play wrapper redirects rather than opening a second tab', () => {
+    // window.open works there, but it only moved the student to /go. One tap
+    // in place beats a new tab that then asks them to continue.
+    expect(at({ androidStoreBuild: true })).toBe('redirect');
   });
 });
 

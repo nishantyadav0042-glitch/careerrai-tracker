@@ -20,11 +20,17 @@ describe('WHY is asked before the money — on EVERY payment path', () => {
     expect(BOOK).toMatch(/disabled=\{busy \|\| !readyToPay\}/);
   });
 
-  it('THE iOS PATH IS GATED TOO', () => {
-    // The iOS handoff is an <a href>, which navigates whatever its onClick
-    // does. Gating only the button would have left a whole platform able to
+  it('THERE IS NO ANCHOR PATH LEFT TO BYPASS THE GATE', () => {
+    // The iOS hand-off was an <a href>, which navigates whatever its onClick
+    // does — so gating only the button once left a whole platform able to
     // reach checkout with no stated reason.
-    expect(BOOK).toMatch(/iosUrl && readyToPay \?/);
+    //
+    // That anchor is now gone entirely (25 Aug: every surface pays in place),
+    // which is strictly stronger than gating it: there is one button, and the
+    // gate is on the button.
+    expect(BOOK).not.toMatch(/href=\{iosUrl\}/);
+    expect(BOOK).not.toMatch(/useIosPayUrl/);
+    expect(BOOK).toMatch(/disabled=\{busy \|\| !readyToPay\}/);
   });
 
   it('the handler refuses even if a CTA is somehow reached', () => {
