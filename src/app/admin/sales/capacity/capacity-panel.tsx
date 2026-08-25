@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { RepCapacity, WorkItem } from '@/lib/sales-capacity';
 import { BINDING_LABEL } from '@/lib/sales-capacity';
+import { EMPLOYMENT_LABEL } from '@/lib/sales-rep-provisioning';
 
 // Founder capacity view. Founder, 24 Aug: "Do not make the capacity dashboard
 // merely a number. If it says 37 active, I should be able to see the exact 37
@@ -22,6 +23,16 @@ const REASON_CLS: Record<WorkItem['reason'], string> = {
   followup_overdue: 'bg-amber-50 text-amber-800',
   retention_lane: 'bg-rose-50 text-rose-700',
 };
+
+// Working days, written out. "Mon–Sat" and "Tue, Thu" are the difference
+// between full-time and part-time made legible; an array of integers is not.
+const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function DAY_LABEL(days: number[]): string {
+  const d = [...days].sort((a, b) => a - b);
+  if (d.length === 0) return '—';
+  const contiguous = d.every((v, i) => i === 0 || v === d[i - 1] + 1);
+  return contiguous && d.length > 2 ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length - 1]]}` : d.map((x) => DAY_NAMES[x]).join(', ');
+}
 
 function Num({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: 'good' | 'warn' | 'bad' }) {
   return (
@@ -50,7 +61,17 @@ export function CapacityPanel({ reps }: { reps: RepCapacity[] }) {
           <div key={r.repId} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
             <div className="border-b border-stone-100 px-4 py-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-[15px] font-bold text-stone-900">{r.name}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-[15px] font-bold text-stone-900">{r.name}</p>
+                  {/* Employment terms belong next to the ceiling they explain.
+                      A part-time rep showing 12 units is correctly configured;
+                      the same 12 on a full-time rep is a question. */}
+                  {r.config && (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${r.config.employmentType === 'part_time' ? 'bg-indigo-50 text-indigo-700' : 'bg-stone-100 text-stone-600'}`}>
+                      {EMPLOYMENT_LABEL[r.config.employmentType]}
+                    </span>
+                  )}
+                </div>
                 {/* NOT CONFIGURED must never render as "0 capacity" — the
                     founder must not read missing setup as a full rep. */}
                 {r.configured ? (
@@ -86,7 +107,7 @@ export function CapacityPanel({ reps }: { reps: RepCapacity[] }) {
                   </div>
                   <p className="mt-2 text-[11px] text-stone-500">
                     Binding constraint: <span className="font-bold text-stone-700">{BINDING_LABEL[r.binding]}</span>
-                    {r.config && <> · {r.config.workStartIst}–{r.config.workEndIst} IST · SLA {r.config.firstContactSlaMinutes} working min</>}
+                    {r.config && <> · {DAY_LABEL(r.config.workDays)} {r.config.workStartIst}–{r.config.workEndIst} IST · SLA {r.config.firstContactSlaMinutes} working min</>}
                     {!r.inWindow && r.config?.active && <> · <span className="font-semibold text-stone-600">outside working hours right now</span></>}
                   </p>
                   {r.overflow > 0 && (

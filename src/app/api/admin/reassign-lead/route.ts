@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { checkSalesTarget, isUuid, salesPrincipal } from '@/lib/sales-authz';
 import { auditSales } from '@/lib/sales-audit';
+import { getTeamCapacity } from '@/lib/sales-capacity';
+import { repAllocationLimit, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
 import { chunkIds } from '@/lib/truth/batch';
 
 // SA-1D: the ONE way ownership moves between people. Reassignment is an
@@ -116,7 +118,25 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Admin override is unconditional by design — that is what reassignment IS.
+  // ── Capacity is REPORTED here, not enforced ───────────────────────────────
+  //
+  // Admin override is unconditional by design — that is what reassignment IS,
+  // and that decision predates this code. What was wrong was that it was also
+  // BLIND: naming a rep and handing them 40 students told the founder nothing
+  // about whether that rep is switched off, on leave, unconfigured, or already
+  // past a ceiling he set himself. Pool distribution (/api/admin/
+  // distribute-leads) refuses in that situation because nobody named the rep;
+  // here he did, so the answer is a fact in the response, not a refusal.
+  const targetCapacity = (await getTeamCapacity(admin)).find((r) => r.repId === target.id) ?? null;
+  const targetLimit = targetCapacity ? repAllocationLimit(targetCapacity) : null;
+  const capacityNote = !targetLimit
+    ? 'Their capacity could not be read, so the effect on their workload is UNKNOWN — not "fine".'
+    : targetLimit.ok
+      ? (unique.length > targetLimit.max
+        ? `This is ${unique.length} leads to someone with room for ${targetLimit.max}. Assigned anyway — you named them — but they are now over the ceiling you configured.`
+        : null)
+      : `This account is ${REFUSAL_COPY[targetLimit.reason]}. Assigned anyway — you named them.`;
+
   // It deliberately does NOT go through claim_lead, whose guard exists to stop
   // one rep taking another's lead.
   const { error: stateError } = await admin.from('lead_outreach').upsert(unique.map((id) => ({
@@ -153,5 +173,5 @@ export async function POST(request: NextRequest) {
     },
   );
 
-  return NextResponse.json({ ok: true, owner: target.id, assigned: unique.length });
+  return NextResponse.json({ ok: true, owner: target.id, assigned: unique.length, capacityNote });
 }

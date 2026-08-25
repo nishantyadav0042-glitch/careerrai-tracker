@@ -2,6 +2,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
 import { getTeamCapacity } from '@/lib/sales-capacity';
 import { CapacityPanel } from './capacity-panel';
+import { NewRepForm } from './new-rep-form';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales capacity · CareerRai' };
@@ -55,6 +56,8 @@ export default async function SalesCapacityPage() {
           from the shared pool, exactly as before this screen was added.
         </p>
       </div>
+
+      <NewRepForm />
 
       <div className="mt-3">
         <CapacityPanel reps={reps} />

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { isUuid, salesPrincipal } from '@/lib/sales-authz';
 import { auditSales } from '@/lib/sales-audit';
+import { checkEmploymentStatement } from '@/lib/sales-rep-provisioning';
 
 // Phase 2B-1 — the ONLY write this phase adds, and it writes configuration,
 // never ownership. There is deliberately no code path here (or anywhere in
@@ -83,7 +84,23 @@ export async function POST(request: NextRequest) {
     patch[t] = new Date(ms).toISOString();
   }
 
-  const { data: before } = await admin.from('sales_rep_config').select('*').eq('rep_id', repId).maybeSingle();
+  const { data: before, error: beforeErr } = await admin.from('sales_rep_config').select('*').eq('rep_id', repId).maybeSingle();
+  // The before-row decides whether this write is a TRANSITION into part-time,
+  // so a failed read here cannot be shrugged off as "no existing row" — that
+  // would let the one write this rule exists to catch through unchecked.
+  if (beforeErr) return NextResponse.json({ error: 'Could not read the current configuration — try again.' }, { status: 503 });
+
+  // Part-time is not a label. An account may not ARRIVE at part_time while
+  // silently inheriting the table's full-time defaults (Mon–Sat, 10:00–19:00,
+  // 50 units, 15/day) — the numbers are what part-time means, so they must be
+  // stated. CareerRai invents no part-time defaults of its own.
+  const statement = checkEmploymentStatement(patch, before ?? null);
+  if (!statement.ok) {
+    return badRequest(
+      `Part-time must be described, not just labelled. Missing: ${statement.missing.join(', ')}. ` +
+      `Send working days, hours, capacity and the daily intake fuse in the same request — there is no part-time default.`
+    );
+  }
 
   const { data: after, error } = await admin
     .from('sales_rep_config').upsert(patch, { onConflict: 'rep_id' }).select('*').single();

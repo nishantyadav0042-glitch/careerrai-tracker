@@ -60,12 +60,24 @@ function ActivityRow({ title, s }: { title: string; s: Tally }) {
   );
 }
 
-export default async function SalesPerformancePage() {
+export default async function SalesPerformancePage({ searchParams }: { searchParams: Promise<{ rep?: string }> }) {
   const { admin } = await requireAdmin();
+  const { rep: requestedRep } = await searchParams;
 
-  // The rep whose portfolio this is (single sales user today = Priya).
-  const { data: reps } = await admin.from('profiles').select('id, email, full_name').eq('role', 'sales').order('created_at', { ascending: true });
-  const rep = (reps ?? [])[0] as any;
+  // WHOSE portfolio this is.
+  //
+  // This used to be `.eq('role','sales')` then `[0]` — written when there was
+  // exactly one rep, and silently wrong the moment there were two: the second
+  // hire's entire book became invisible on the one screen that shows a rep's
+  // book, with no indication anyone was missing. A part-time rep created after
+  // the full-time one sorts second by created_at, so they would have been the
+  // one who vanished.
+  const { data: reps } = await admin
+    .from('profiles').select('id, email, full_name')
+    .in('role', ['sales', 'admin'])
+    .order('full_name', { ascending: true });
+  const repList = (reps ?? []) as any[];
+  const rep = (requestedRep ? repList.find((r) => r.id === requestedRep) : null) ?? repList[0];
   const repName = rep?.full_name ?? 'Sales';
   // R3: activity and ownership are keyed on profiles.id, not the email.
   const repId = (rep?.id as string | undefined) ?? '__none__';
@@ -109,8 +121,18 @@ export default async function SalesPerformancePage() {
       workspaceId="sales"
       activeHref="/admin/sales-performance"
       title={`${repName} — portfolio`}
-      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — her book, her numbers.`}
+      subtitle={`Only the leads ${repName.split(' ')[0]} owns and works — their book, their numbers.`}
     >
+        {repList.length > 1 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {repList.map((r: any) => (
+              <Link key={r.id} href={`/admin/sales-performance?rep=${r.id}`}
+                className={`rounded-full px-3 py-1 text-[12px] font-bold ${r.id === rep?.id ? 'bg-stone-900 text-white' : 'border border-stone-300 bg-white text-stone-700'}`}>
+                {r.full_name ?? r.email ?? r.id}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {/* Her portfolio summary */}
         <div className="rounded-2xl border border-teal-700 bg-teal-700 p-4 text-white">
