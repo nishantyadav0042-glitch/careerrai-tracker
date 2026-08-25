@@ -1284,3 +1284,47 @@ to the sales CRM and not to a booking migration.
 2. On Supabase, a new function in `public` is world-callable until three roles
    are named. `from public` is not one of them.
 3. Every SECURITY DEFINER function is an API endpoint. Count them deliberately.
+
+---
+
+## Incident #34 — `claim_lead` is SECURITY DEFINER and callable by anyone (2026-08-26, OPEN)
+
+**STATUS: OPEN. Reported, not fixed.** Found while sweeping function grants for
+Incident #33; deliberately NOT patched inside the booking migration, because a
+security fix smuggled into an unrelated change is a fix nobody reviewed.
+
+**What it is.** `public.claim_lead` is `SECURITY DEFINER` — it runs with the
+definer's rights, bypassing RLS — and both of its overloads are executable by
+`anon` and `authenticated`. PostgREST exposes it at `/rest/v1/rpc/claim_lead`.
+Anyone holding the public anon key can therefore reassign ownership of any
+student lead to any owner, by student id, without being logged in as anybody.
+
+**Two overloads, and the older one is the worse one:**
+- `claim_lead(p_student_id uuid, p_owner_id uuid)` validates that `p_owner_id`
+  is a `sales` or `admin` profile. It does not validate the CALLER.
+- `claim_lead(p_student_id uuid, p_owner text)` validates only that `p_owner`
+  is a non-empty string. Any text becomes an owner.
+
+**Blast radius.** `lead_outreach` is the sales CRM's ownership table. Rewriting
+it does not touch student data or money, but it can silently reassign the whole
+pipeline, misdirect follow-ups, and corrupt every ownership-based report. It is
+also a write path that leaves no trace of who called it.
+
+**Why it was invisible.** Nothing in the repo asserts who may execute a
+function. Guard tests read source; grants live in the database. The sweep that
+found it counted 206 of 224 public functions executable by `authenticated` —
+almost all `btree_gist` internals and trigger functions that PostgREST will not
+call. Filtering to app-owned, non-trigger, student-callable functions leaves
+four: `claim_lead`, `is_admin`, `refresh_buddy_demo_account`,
+`refresh_review_account_logs`. Only `claim_lead` both mutates business state
+and accepts caller-controlled targets.
+
+**The fix when it is scheduled** (not applied): revoke from `public, anon,
+authenticated` and grant to `service_role` only — naming the roles, per
+Incident #33 — then drop the `text` overload, which no current caller needs.
+Both changes belong to the sales workstream with its own review.
+
+**Lesson.** Every SECURITY DEFINER function in `public` is an unauthenticated
+API endpoint until proven otherwise. The repo needs one test that enumerates
+them and fails on any that is callable by `anon` — a list, not a per-function
+assertion, so a new one cannot be added quietly.
