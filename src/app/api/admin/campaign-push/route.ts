@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { dispatch } from '@/lib/notification-os';
 import { campaignState, CAMPAIGN, mayShowSeatsLeft } from '@/lib/campaign';
 import { campaignSeatsSold } from '@/lib/pricing';
+import { claimBuddyPitch } from '@/lib/promo-impression';
 
 // ── Campaign push waves — the REACTIVATION layer, not the sales engine ──────
 //
@@ -24,6 +25,13 @@ import { campaignSeatsSold } from '@/lib/pricing';
 export const maxDuration = 300;
 
 type Wave = 'soft' | 'wide' | 'peak' | 'closing';
+
+// EVERY wave in this table sells the Buddy — which makes this whole route a
+// BUDDY PROMOTIONAL CAMPAIGN, and therefore an interruptive pitch under the
+// one-per-study-day rule. The flag is explicit rather than inferred so that a
+// future non-Buddy campaign added here does NOT silently inherit the gate:
+// whoever adds one must decide, in this line, whether it pitches Buddy.
+const IS_BUDDY_CAMPAIGN = true;
 
 const COPY: Record<Wave, { title: string; body: (seats: number) => string }> = {
   soft: {
@@ -103,8 +111,21 @@ export async function POST(request: NextRequest) {
   }
 
   let sent = 0;
+  let alreadyPitched = 0;
   for (const r of audience as { id: string; notif_prefs?: Record<string, unknown> | null }[]) {
     try {
+      // ONE PITCH PER STUDY DAY, PER STUDENT — claimed individually, before
+      // the send, inside the loop. Per-student on purpose: a student whose
+      // day is already taken (the morning modal, the evening cron, an
+      // approved Brain push) is skipped and COUNTED, and every other eligible
+      // student in the wave is untouched by that refusal. A claim that fails
+      // for any other reason also skips — fail closed, never fail loud into
+      // a double pitch. The approval workflow above (dryRun default, live
+      // window, seats) is unchanged; this is the last gate before the wire.
+      if (IS_BUDDY_CAMPAIGN) {
+        const pitch = await claimBuddyPitch(admin, r.id, 'approved_push');
+        if (!pitch.show) { alreadyPitched++; continue; }
+      }
       const outcome = await dispatch({
         userId: r.id, type: 'broadcast',
         title: COPY[wave].title, body: COPY[wave].body(state.seatsLeft),
@@ -118,5 +139,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ dryRun: false, wave, sent, audience: audience.length, seatsLeft: state.seatsLeft });
+  return NextResponse.json({ dryRun: false, wave, sent, alreadyPitched, audience: audience.length, seatsLeft: state.seatsLeft });
 }
