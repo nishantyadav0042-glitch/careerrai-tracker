@@ -9,7 +9,7 @@ import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
+import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
@@ -92,6 +92,12 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
         payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership_redirect' });
         track('pay_redirect', { plan: planId, surface: 'membership' });
+        // Recorded BEFORE the navigation, because one line later this page is
+        // gone and nothing client-side can report again. The server records
+        // the matching 'returned' event, so a gap between the two is exactly
+        // "left for Razorpay and never came back" — the failure that was
+        // invisible while the modal era's events were the only ones we had.
+        payFunnel('payment_checkout_navigating', { plan: planId, orderId: data.orderId, surface: 'membership' });
         new window.Razorpay(redirectCheckoutOptions({
           keyId: data.keyId,
           orderId: data.orderId,
@@ -101,7 +107,7 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
           description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
           prefill: data.prefill ?? (fullName ? { name: fullName } : undefined),
           themeColor: '#E8652D',
-          callbackUrl: checkoutCallbackUrl('/student/profile'),
+          callbackUrl: checkoutCallbackUrl('profile'),
         })).open();
         return;
       }

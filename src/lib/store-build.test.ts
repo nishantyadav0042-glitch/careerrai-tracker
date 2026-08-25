@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  normalizeStoreSource, isIosStoreBuildFrom, buildGoUrl, userAgentFamily,
+  normalizeStoreSource, isIosStoreBuildFrom, userAgentFamily,
   shouldStampStoreCookie, storeCookieContradictsDevice, type IosStoreSignals,
 } from './store-build';
 
@@ -139,28 +139,6 @@ describe('isIosStoreBuildFrom — outside a store build', () => {
   });
 });
 
-describe('buildGoUrl', () => {
-  it('carries the token and the destination, on our own origin', () => {
-    const url = new URL(buildGoUrl('tok_123', '/student/buddy', 'https://careerrai.in'));
-    expect(url.origin).toBe('https://careerrai.in');
-    expect(url.pathname).toBe('/go');
-    expect(url.searchParams.get('k')).toBe('tok_123');
-    expect(url.searchParams.get('dest')).toBe('/student/buddy');
-  });
-
-  it('encodes a destination with a query string rather than truncating it', () => {
-    const url = new URL(buildGoUrl('t', '/student/plan/topics?status=revision', 'https://careerrai.in'));
-    expect(url.searchParams.get('dest')).toBe('/student/plan/topics?status=revision');
-  });
-
-  it('produces a link /go will accept — same-origin, internal dest', () => {
-    // /go only redirects to a dest starting with a single "/", so a URL built
-    // here must always satisfy that or the student lands on the tracker.
-    const dest = new URL(buildGoUrl('t', '/student/profile', 'https://careerrai.in')).searchParams.get('dest')!;
-    expect(dest.startsWith('/')).toBe(true);
-    expect(dest.startsWith('//')).toBe(false);
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Who is allowed to be marked a store build in the first place.

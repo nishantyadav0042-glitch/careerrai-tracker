@@ -7,7 +7,7 @@ import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
+import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 import { payFunnel } from '@/lib/payment-funnel-client';
@@ -133,6 +133,12 @@ function useBuddyCheckout() {
       if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
         payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'unlock_buddy_redirect' });
         track('pay_redirect', { plan: planId, surface: 'unlock_buddy' });
+        // Recorded BEFORE the navigation, because one line later this page is
+        // gone and nothing client-side can report again. The server records
+        // the matching 'returned' event, so a gap between the two is exactly
+        // "left for Razorpay and never came back" — the failure that was
+        // invisible while the modal era's events were the only ones we had.
+        payFunnel('payment_checkout_navigating', { plan: planId, orderId: data.orderId, surface: 'unlock_buddy' });
         new window.Razorpay(redirectCheckoutOptions({
           keyId: data.keyId,
           orderId: data.orderId,
@@ -142,7 +148,7 @@ function useBuddyCheckout() {
           description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
           prefill: data.prefill ?? (fullName ? { name: fullName } : undefined),
           themeColor: '#E8652D',
-          callbackUrl: checkoutCallbackUrl('/student/buddy'),
+          callbackUrl: checkoutCallbackUrl('buddy'),
         })).open();
         return;
       }

@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   SESSION_INTENTS, PRODUCT_FINDINGS, INTENT_LABEL, INTENT_TO_SPECIALITY,
-  isSessionIntent, intentNeedsNote, validateIntent, MIN_NOTE_LENGTH,
+  isSessionIntent, intentNeedsNote, validateIntents, MAX_INTENTS, MIN_NOTE_LENGTH,
 } from './session-intent';
 import { FINDING_TO_SPECIALITY } from './session-credit';
 
 const MIGRATION = 'supabase/migrations/20260824j_session_intent_and_feedback.sql';
 const SQL = readFileSync(MIGRATION, 'utf8');
+const MULTI_SQL = readFileSync('supabase/migrations/20260825b_session_intent_multi.sql', 'utf8');
 const BOOK = readFileSync('src/app/api/sessions/book/route.ts', 'utf8');
 const ACTIVATE = readFileSync('src/lib/activate-payment.ts', 'utf8');
 
@@ -86,18 +87,24 @@ describe('"Something else" must be explained', () => {
   });
 
   it('other with no note is rejected', () => {
-    const r = validateIntent('other', '');
-    expect(r.ok).toBe(false);
+    expect(validateIntents(['other'], '').ok).toBe(false);
   });
 
   it('other with whitespace only is rejected', () => {
-    expect(validateIntent('other', '   ').ok).toBe(false);
+    expect(validateIntents(['other'], '   ').ok).toBe(false);
   });
 
   it('other with a real note is accepted and trimmed', () => {
-    const r = validateIntent('other', '  coaching moved to mornings  ');
+    const r = validateIntents(['other'], '  coaching moved to mornings  ');
     expect(r.ok).toBe(true);
     expect(r.ok && r.note).toBe('coaching moved to mornings');
+  });
+
+  it('other as a SECOND pick still needs the note', () => {
+    // The gap the single-value CHECK could not see: a real reason, then
+    // "Something else", with nothing written after it.
+    expect(validateIntents(['qa_weak', 'other'], '').ok).toBe(false);
+    expect(validateIntents(['qa_weak', 'other'], 'abc').ok).toBe(true);
   });
 
   it('THE DATABASE enforces it too', () => {
@@ -106,20 +113,70 @@ describe('"Something else" must be explained', () => {
     expect(SQL).toMatch(/session_intent is distinct from 'other'\s*\n?\s*or \(session_intent_note is not null and length\(btrim\(session_intent_note\)\) >= 3\)/);
   });
 
-  it('a missing intent is rejected outright', () => {
-    expect(validateIntent(undefined, '').ok).toBe(false);
-    expect(validateIntent('made_up_kind', '').ok).toBe(false);
+  it('a missing intent is rejected outright — the reason is MANDATORY', () => {
+    expect(validateIntents(undefined, '').ok).toBe(false);
+    expect(validateIntents([], '').ok).toBe(false);
+    expect(validateIntents(['made_up_kind'], '').ok).toBe(false);
+    // One bad apple in an otherwise valid list still fails the whole list.
+    expect(validateIntents(['qa_weak', 'made_up_kind'], '').ok).toBe(false);
   });
 
   it('a long note is truncated rather than rejected', () => {
-    const r = validateIntent('qa_weak', 'x'.repeat(900));
+    const r = validateIntents(['qa_weak'], 'x'.repeat(900));
     expect(r.ok).toBe(true);
     expect(r.ok && (r.note?.length ?? 0)).toBeLessThanOrEqual(500);
   });
 
   it('an optional empty note becomes null, not an empty string', () => {
-    const r = validateIntent('qa_weak', '   ');
+    const r = validateIntents(['qa_weak'], '   ');
     expect(r.ok && r.note).toBeNull();
+  });
+});
+
+describe('a student may state up to three reasons', () => {
+  it('accepts one, two or three and keeps the picking order', () => {
+    const r = validateIntents(['dilr_weak', 'qa_weak', 'consistency'], '');
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.intents).toEqual(['dilr_weak', 'qa_weak', 'consistency']);
+  });
+
+  it('the FIRST pick is the primary — it is what chooses the mentor', () => {
+    const r = validateIntents(['consistency', 'qa_weak'], '');
+    expect(r.ok && r.primary).toBe('consistency');
+    // Not the alphabetically first, not the "most severe" by some hidden
+    // ranking. The student's own first tap.
+    const flipped = validateIntents(['qa_weak', 'consistency'], '');
+    expect(flipped.ok && flipped.primary).toBe('qa_weak');
+  });
+
+  it(`refuses more than ${MAX_INTENTS}`, () => {
+    const r = validateIntents(['qa_weak', 'dilr_weak', 'consistency', 'varc_weak'], '');
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toMatch(/up to 3/);
+  });
+
+  it('refuses a repeated reason rather than silently collapsing it', () => {
+    // Silently deduping would mean the student taps three things and the
+    // mentor is briefed on two, with nothing saying so.
+    expect(validateIntents(['qa_weak', 'qa_weak'], '').ok).toBe(false);
+  });
+
+  it('still accepts a bare string, so an un-updated client keeps working', () => {
+    const r = validateIntents('qa_weak', '');
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.intents).toEqual(['qa_weak']);
+    expect(r.ok && r.primary).toBe('qa_weak');
+  });
+
+  it('THE DATABASE enforces every one of these too', () => {
+    // Verified against careerrai-test with real INSERTs before this shipped:
+    // 4 reasons, a primary that disagrees with element 1, a duplicate, an
+    // unknown kind in a non-primary slot, and "other" without a note were all
+    // refused, each with its own distinct message.
+    expect(MULTI_SQL).toMatch(/must hold 1 to 3 reasons/);
+    expect(MULTI_SQL).toMatch(/must equal the first reason picked/);
+    expect(MULTI_SQL).toMatch(/must not repeat a reason/);
+    expect(MULTI_SQL).toMatch(/unknown session intent/);
   });
 });
 
@@ -134,7 +191,7 @@ describe('type guard', () => {
 
 describe('the reason now actually reaches the credit', () => {
   it('booking validates the intent BEFORE creating a Razorpay order', () => {
-    const validateAt = BOOK.indexOf('validateIntent(');
+    const validateAt = BOOK.indexOf('validateIntents(');
     const orderAt = BOOK.indexOf('createRazorpayOrder(');
     expect(validateAt).toBeGreaterThan(-1);
     expect(validateAt, 'a student must never be charged for a booking the DB would refuse')
@@ -142,7 +199,8 @@ describe('the reason now actually reaches the credit', () => {
   });
 
   it('the intent is written onto the payment row', () => {
-    expect(BOOK).toMatch(/session_intent: intent\.intent/);
+    expect(BOOK).toMatch(/session_intent: intent\.primary/);
+    expect(BOOK).toMatch(/session_intent_all: intent\.intents/);
     expect(BOOK).toMatch(/session_intent_note: intent\.note/);
   });
 
@@ -159,7 +217,9 @@ describe('the reason now actually reaches the credit', () => {
   });
 
   it('matching prefers the student’s stated intent over the diagnosis', () => {
-    expect(BOOK).toMatch(/findingKind: intent\.intent/);
+    // And with several reasons stated it is the PRIMARY — the student's first
+    // pick — never an arbitrary one of the three.
+    expect(BOOK).toMatch(/findingKind: intent\.primary/);
   });
 
   it('the ₹299 path still refuses to grant premium', () => {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 import { readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
+import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
 import { IntentPicker, intentIsComplete } from '@/components/session/intent-picker';
 import type { SessionIntent } from '@/lib/session-intent';
 import { payFunnel } from '@/lib/payment-funnel-client';
@@ -53,9 +53,9 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   // WHY, captured before the money. The mentor opens the call already knowing
   // the problem, and the company can finally answer what students are actually
   // paying ₹299 to solve.
-  const [intent, setIntent] = useState<SessionIntent | null>(null);
+  const [intents, setIntents] = useState<SessionIntent[]>([]);
   const [intentNote, setIntentNote] = useState('');
-  const readyToPay = intentIsComplete(intent, intentNote);
+  const readyToPay = intentIsComplete(intents, intentNote);
 
   useEffect(() => {
     let alive = true;
@@ -73,7 +73,7 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
     // Guarded here AND on the server AND by a CHECK constraint. A student must
     // never reach Razorpay for a booking the database would then refuse.
     if (!readyToPay) return;
-    track('session_book_click', { finding: findingKind ?? null, intent });
+    track('session_book_click', { finding: findingKind ?? null, intents, primary: intents[0] ?? null });
 
     setBusy(true); setError(null);
     try {
@@ -86,7 +86,10 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
           // The student's own words. Kept SEPARATE from finding_kind, which is
           // what the product diagnosed — a student who says "QA is weak" while
           // the mocks say DILR is the most interesting row we can hold.
-          session_intent: intent,
+          // The full list, in the student's own picking order. The server
+          // takes element 0 as the primary and writes it to session_intent,
+          // which is the key mentor matching reads.
+          session_intents: intents,
           session_intent_note: intentNote.trim() || null,
         }),
       });
@@ -106,7 +109,13 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
         // Without this, "checkout never rendered" and "rendered and they left"
         // are the same row — which is why three iOS fixes shipped blind.
         payFunnel('payment_checkout_opened', { plan: 'session', orderId: json.orderId, surface: 'session_redirect' });
-        track('pay_redirect', { plan: 'session', intent });
+        track('pay_redirect', { plan: 'session', primary: intents[0] ?? null });
+        // Recorded BEFORE the navigation, because one line later this page is
+        // gone and nothing client-side can report again. The server records
+        // the matching 'returned' event, so a gap between the two is exactly
+        // "left for Razorpay and never came back" — the failure that was
+        // invisible while the modal era's events were the only ones we had.
+        payFunnel('payment_checkout_navigating', { plan: 'session', orderId: json.orderId, surface: 'session' });
         new window.Razorpay(redirectCheckoutOptions({
           keyId: json.keyId,
           orderId: json.orderId,
@@ -115,7 +124,7 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
           name: 'CareerRai',
           description: `${json.minutes}-min 1:1 session with an IIM Buddy`,
           prefill: json.prefill,
-          callbackUrl: checkoutCallbackUrl('/student/buddy'),
+          callbackUrl: checkoutCallbackUrl('buddy'),
         })).open();
         return;
       }
@@ -186,10 +195,10 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
                 would then refuse. */}
             <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
               <IntentPicker
-                value={intent}
+                value={intents}
                 note={intentNote}
                 disabled={busy}
-                onChange={(v) => { setIntent(v.intent); setIntentNote(v.note); }}
+                onChange={(v) => { setIntents(v.intents); setIntentNote(v.note); }}
               />
             </div>
 
