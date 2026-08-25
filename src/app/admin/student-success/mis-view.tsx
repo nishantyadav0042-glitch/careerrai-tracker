@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import type {
   Measure, ReturnPicture, InterventionPicture, ConversionPicture,
-  LearningPicture, ReachPicture, Evidence,
+  LearningPicture, ReachPicture, Evidence, RepOutcome,
 } from '@/lib/student-success-mis';
 import type { TailPicture } from '@/lib/notification-tail';
 
@@ -83,9 +83,11 @@ export interface MisProps {
   pushesPerReachedStudentPerDay: number | null;
   /** NOTIFICATION-OS §8's tail: what happened AFTER a push. */
   tail: TailPicture;
+  /** Per rep. Empty until reps start logging — then it is the whole point. */
+  reps: RepOutcome[];
 }
 
-export function MisView({ ret, intervention, conversion, learning, reach, pushesPerReachedStudentPerDay, tail }: MisProps) {
+export function MisView({ ret, intervention, conversion, learning, reach, pushesPerReachedStudentPerDay, tail, reps }: MisProps) {
   return (
     <div className="space-y-6 pb-16">
       <Section n={1} q="Are students coming back?">
@@ -205,6 +207,73 @@ export function MisView({ ret, intervention, conversion, learning, reach, pushes
           </div>
         )}
       </Section>
+
+      {/* Per rep. Deliberately inside question 2 — a rep's numbers are an
+          answer to "are interventions helping?", not a section of their own,
+          and certainly not a scoreboard. */}
+      {reps.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+            By rep · ordered by name, never by outcome
+          </p>
+          {reps.map((r) => (
+            <div key={r.repId} className="rounded-xl border border-stone-200 bg-white p-3">
+              <p className="text-[13px] font-bold text-stone-900">{r.name}</p>
+
+              <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div>
+                  <p className="text-lg font-bold tabular-nums text-stone-900">{r.studentsContacted}</p>
+                  <p className="text-[10px] leading-snug text-stone-500">students contacted</p>
+                </div>
+                {[r.loggedD3, r.loggedD7].map((m) => (
+                  <div key={m.label}>
+                    <p className="text-lg font-bold tabular-nums text-emerald-800">
+                      {m.count}
+                      {m.of != null && <span className="text-[11px] font-semibold opacity-60">/{m.of}</span>}
+                    </p>
+                    <p className="text-[10px] leading-snug text-stone-500">
+                      {m.label}
+                      {/* A rate ONLY when the sample earned one. Below the floor
+                          this says UNAVAILABLE rather than inventing a percent. */}
+                      {m.rate != null
+                        ? <span className="font-semibold text-emerald-700"> · {Math.round(m.rate * 1000) / 10}%</span>
+                        : <span className="text-stone-400"> · UNAVAILABLE</span>}
+                    </p>
+                  </div>
+                ))}
+                <div>
+                  <p className="text-lg font-bold tabular-nums text-teal-800">
+                    {r.sessionsCompleted == null
+                      ? <span className="text-teal-400">—</span>
+                      : r.sessionsCompleted}
+                  </p>
+                  <p className="text-[10px] leading-snug text-stone-500">
+                    sessions completed <span className="text-stone-400">(delivered, not booked)</span>
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-1.5 text-[11px] text-stone-500">
+                Reasons captured {r.reasonsCaptured.count}/{r.reasonsCaptured.of ?? 0}
+                {r.awaitingOutcome > 0 && (
+                  <> · <b className="tabular-nums">{r.awaitingOutcome}</b> still inside their 7-day window</>
+                )}
+              </p>
+
+              {/* Throughput: last, small, grey. Never the score. */}
+              <p className="mt-1 border-t border-stone-100 pt-1.5 text-[10.5px] text-stone-400">
+                For planning only: {r.callsLogged} call{r.callsLogged === 1 ? '' : 's'} logged.
+              </p>
+            </div>
+          ))}
+          <p className="text-[10px] leading-snug text-stone-400">
+            ASSOCIATED, not caused. Reps choose whom to contact, so a better number
+            can mean better targeting rather than better calling — and the
+            lane-matched comparison arm is not yet instrumented. Completed sessions
+            were delivered by a mentor, not by the rep.
+          </p>
+        </div>
+      )}
 
       <Section n={3} q="Are students converting into COMPLETED sessions?">
         {conversion.neverDelivered && (

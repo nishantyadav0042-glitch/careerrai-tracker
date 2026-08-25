@@ -246,6 +246,84 @@ export function interventionPicture(
   };
 }
 
+// ── Per rep: what happened after THEIR calls ───────────────────────────────
+//
+// With one rep, aggregate intervention outcomes were enough. With two, they
+// are exactly the wrong shape: they cannot tell you whether one rep's students
+// came back and the other's did not, which is the entire question two hires
+// exist to answer.
+//
+// NOT A LEADERBOARD, and the ordering is the proof: reps are sorted by NAME,
+// never by outcome. A sorted-by-performance list is a ranking, a ranking is a
+// target, and a target gets gamed — which is how a student-success rep quietly
+// becomes a dialler.
+//
+// The data was always here (intervention_ledger.rep_id joined to the outcome
+// sweep). Nothing surfaced it split.
+
+export interface RepOutcome {
+  repId: string;
+  name: string;
+  /** Distinct students this rep contacted. A count is a FACT at any size. */
+  studentsContacted: number;
+  /** Interventions whose 7-day window has not elapsed. Not failures. */
+  awaitingOutcome: number;
+  loggedD3: Measure;
+  loggedD7: Measure;
+  reasonsCaptured: Measure;
+  /**
+   * Completed sessions among the students this rep contacted. ASSOCIATED —
+   * the rep did not deliver the session, a mentor did, and the student may
+   * have booked for reasons of their own. null = not measured.
+   */
+  sessionsCompleted: number | null;
+  /**
+   * Calls logged. Deliberately last in the interface and rendered last, small
+   * and grey: a rep needs their own throughput to plan a day, and it is never
+   * the score.
+   */
+  callsLogged: number;
+}
+
+export interface RepOutcomeInput {
+  /** Display names by rep id. A missing name renders as the id, never blank. */
+  names?: ReadonlyMap<string, string>;
+  /** Completed sessions among each rep's contacted students, when measured. */
+  sessionsByRep?: ReadonlyMap<string, number>;
+}
+
+export function repOutcomes(
+  ledger: readonly LedgerRow[], input: RepOutcomeInput = {},
+): RepOutcome[] {
+  const byRep = new Map<string, LedgerRow[]>();
+  for (const r of ledger) {
+    const a = byRep.get(r.repId);
+    if (a) a.push(r); else byRep.set(r.repId, [r]);
+  }
+
+  const rows: RepOutcome[] = [...byRep.entries()].map(([repId, own]) => {
+    const measuredD3 = own.filter((r) => r.loggedD3 !== null);
+    const measuredD7 = own.filter((r) => r.loggedD7 !== null);
+    const withReason = own.filter((r) => r.reasonCategory != null);
+    return {
+      repId,
+      name: input.names?.get(repId) ?? repId,
+      studentsContacted: new Set(own.map((r) => r.studentId)).size,
+      awaitingOutcome: own.length - measuredD7.length,
+      loggedD3: measure('Logged within 3 days',
+        measuredD3.filter((r) => r.loggedD3 === true).length, measuredD3.length),
+      loggedD7: measure('Logged within 7 days',
+        measuredD7.filter((r) => r.loggedD7 === true).length, measuredD7.length),
+      reasonsCaptured: measure('Calls with a reason captured', withReason.length, own.length),
+      sessionsCompleted: input.sessionsByRep?.get(repId) ?? null,
+      callsLogged: own.length,
+    };
+  });
+
+  // BY NAME. Never by any outcome — see the note above.
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // ── Question 3: are students converting into COMPLETED sessions? ────────────
 
 export interface ConversionPicture {

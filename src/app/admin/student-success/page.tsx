@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { MisView } from './mis-view';
 import {
   returnPicture, interventionPicture, conversionPicture, learningPicture, reachPicture,
-  type ReturnRow, type LedgerRow,
+  repOutcomes, type ReturnRow, type LedgerRow,
 } from '@/lib/student-success-mis';
 import type { SessionRow } from '@/lib/session-lifecycle';
 import type { ReasonCategory } from '@/lib/intervention-taxonomy';
@@ -112,6 +112,45 @@ export default async function StudentSuccessPage() {
   const logDaySets = new Map<string, Set<string>>();
   for (const [id, days] of logsByStudent) logDaySets.set(id, new Set(days));
 
+  // ── Per rep ───────────────────────────────────────────────────────────────
+  // Names come from profiles; a rep with no name renders as their id rather
+  // than blank, so a row can never silently belong to nobody.
+  const repIds = [...new Set(ledgerRows.map((r) => r.repId))].filter(Boolean);
+  const repNames = new Map<string, string>();
+  const sessionsByRep = new Map<string, number>();
+  if (repIds.length > 0) {
+    const { data: staff } = await admin
+      .from('profiles').select('id, full_name').in('id', repIds);
+    for (const p of staff ?? []) {
+      if (p.full_name) repNames.set(p.id as string, p.full_name as string);
+    }
+
+    // Completed sessions among each rep's contacted students. ASSOCIATED: the
+    // mentor delivered it, and the student may have booked for their own
+    // reasons — so this is counted, never credited.
+    const contactedByRep = new Map<string, Set<string>>();
+    for (const r of ledgerRows) {
+      const set = contactedByRep.get(r.repId) ?? new Set<string>();
+      set.add(r.studentId);
+      contactedByRep.set(r.repId, set);
+    }
+    const allContacted = [...new Set(ledgerRows.map((r) => r.studentId))];
+    if (allContacted.length > 0) {
+      const { data: done, error: doneErr } = await admin
+        .from('video_sessions')
+        .select('student_id')
+        .eq('session_status', 'completed')
+        .in('student_id', allContacted);
+      // A failed read leaves the column unmeasured (null → em dash) rather
+      // than reporting zero delivered sessions, which would read as a verdict.
+      if (!doneErr) {
+        for (const [repId, students] of contactedByRep) {
+          sessionsByRep.set(repId, (done ?? []).filter((d) => students.has(d.student_id as string)).length);
+        }
+      }
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <div className="flex items-center gap-2">
@@ -154,6 +193,7 @@ export default async function StudentSuccessPage() {
         })) : [])}
         pushesPerReachedStudentPerDay={pushesPerDay}
         tail={tailPicture(pushRows, logDaySets)}
+        reps={repOutcomes(ledgerRows, { names: repNames, sessionsByRep })}
       />
     </div>
   );

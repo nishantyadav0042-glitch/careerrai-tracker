@@ -6,6 +6,7 @@ import {
   type LedgerRow, type ReturnRow,
 } from '@/lib/student-success-mis';
 import { tailPicture } from '@/lib/notification-tail';
+import { repOutcomes } from '@/lib/student-success-mis';
 
 // ── The C0 lesson, applied ──────────────────────────────────────────────────
 //
@@ -44,6 +45,7 @@ function render(over: Partial<Parameters<typeof MisView>[0]> = {}) {
         ...Array.from({ length: 611 }, () => ({ hasPush: false, hasPhone: true })),
       ])}
       pushesPerReachedStudentPerDay={5.2}
+      reps={[]}
       tail={tailPicture(
         Array.from({ length: 40 }, (_, i) => ({ userId: `s${i}`, day: '2026-08-20', clicked: i < 2 })),
         new Map([['s0', new Set(['2026-08-20'])]]),
@@ -156,6 +158,79 @@ describe('the screen tells the truth about delivery', () => {
   });
 });
 
+describe('the per-rep block appears and stays honest', () => {
+  // Two reps with deliberately different sample sizes: one above the floor,
+  // one far below it.
+  const twoReps = repOutcomes([
+    ...Array.from({ length: 25 }, (_, i) => ({
+      studentId: `a${i}`, repId: 'a', lane: 'going_cold', reasonCategory: 'no_time',
+      loggedD3: i < 10, loggedD7: i < 12,
+    } as LedgerRow)),
+    ...Array.from({ length: 3 }, (_, i) => ({
+      studentId: `b${i}`, repId: 'b', lane: 'going_cold', reasonCategory: null,
+      loggedD3: true, loggedD7: true,
+    } as LedgerRow)),
+  ], {
+    names: new Map([['a', 'Asha'], ['b', 'Bhavna']]),
+    sessionsByRep: new Map([['a', 2]]),
+  });
+
+  const html = render({ reps: twoReps });
+
+  it('renders BOTH reps by name', () => {
+    expect(html).toMatch(/Asha/);
+    expect(html).toMatch(/Bhavna/);
+  });
+
+  it('shows a rate for the rep above the floor', () => {
+    expect(html).toMatch(/40%/); // 10 of 25 logged within 3 days
+  });
+
+  /** Bhavna's card ONLY — bounded at the caveat that closes the block, so an
+   *  unrelated percentage elsewhere on the page cannot fail (or pass) this. */
+  const bhavnaCard = () => {
+    const start = html.indexOf('Bhavna');
+    return html.slice(start, html.indexOf('ASSOCIATED, not caused', start));
+  };
+
+  it('shows UNAVAILABLE for the thin rep, never a flattering 100%', () => {
+    // Bhavna is 3 of 3 — the most misleading number available.
+    const card = bhavnaCard();
+    expect(card).toContain('UNAVAILABLE');
+    expect(card).not.toMatch(/100%/);
+    expect(card).toMatch(/3<span[^>]*>\/3</); // the counts still show
+  });
+
+  it('an unmeasured session count renders as a dash, not zero', () => {
+    const card = bhavnaCard();
+    expect(card).toMatch(/—/);
+    expect(card).not.toMatch(/>0<\/p><p[^>]*>sessions completed/);
+  });
+
+  it('puts outcomes BEFORE call volume for every rep', () => {
+    const logged = html.indexOf('students contacted');
+    const calls = html.indexOf('For planning only');
+    expect(logged).toBeGreaterThan(-1);
+    expect(calls).toBeGreaterThan(logged);
+  });
+
+  it('carries the caveat and the ordering statement', () => {
+    expect(html).toMatch(/ordered by name, never by outcome/i);
+    expect(html).toMatch(/ASSOCIATED, not caused/);
+  });
+
+  it('renders nothing at all when no rep has logged anything', () => {
+    const empty = render({ reps: [] });
+    expect(empty).not.toMatch(/ordered by name/i);
+  });
+
+  it('leaks no broken value', () => {
+    expect(html).not.toContain('[object Object]');
+    expect(html).not.toContain('undefined');
+    expect(html).not.toContain('NaN');
+  });
+});
+
 describe('this is NOT a sales dashboard', () => {
   const html = render();
 
@@ -185,6 +260,7 @@ describe('empty state', () => {
         reach={reachPicture([])}
         pushesPerReachedStudentPerDay={null}
         tail={tailPicture([], new Map())}
+        reps={[]}
       />,
     );
     expect(html).toMatch(/No structured reasons captured yet/);
