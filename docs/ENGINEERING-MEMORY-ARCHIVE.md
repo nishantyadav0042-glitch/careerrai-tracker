@@ -1112,3 +1112,76 @@ route sends hours unrounded, the migration declares NUMERIC and DROPs the old
 integer overload (leaving both would let Postgres still pick the broken one),
 and it restores the grants the DROP removes. Verified in production: the RPC
 called with 4.6 stores 4.6, one function version present.
+
+---
+
+## Incident #31 — a paid ₹299 student fell out of the lifecycle and nothing was wrong (2026-08-24)
+
+**Symptom.** Dhruv Vakadia paid ₹299 at 18:34 IST on 24 Aug. The credit was
+minted 14 seconds later. Then nothing: no mentor, no session, no reminder, for
+**24 hours**. He was rescued ~5h later only because a human used `retry_unlock`
+— a manual admin tool — which unstuck him and granted `is_premium: true` as an
+undocumented side effect. Scheduling happened as *text in a chat* ("Scheduling
+for 8 pm"), so no session row existed, so no reminder fired, so he missed it
+and the conversation moved to WhatsApp.
+
+**Root cause — and it is not a bug.** Every row was valid. The ledger balanced.
+`session_credits.status = 'paid'` means BOTH "the money just arrived, all is
+well" and "the money arrived a day ago and nobody ever came." One state,
+two opposite realities, and no column anywhere that answered the only two
+questions that matter when a student is stuck: **who owns this, and what has to
+happen next.** The schema had no way to *say* a credit was in trouble, so the
+system could not report a failure it was structurally unable to name.
+
+**How it hid.** Perfectly. There was nothing to hide — no error, no exception,
+no failed job. The forensic pass found the deeper shape: in this database's
+entire life there had been **2 credits and 18 video_sessions, with 0 sessions
+ever linked to a credit and 0 ever completed.** `session_credits.video_session_id`
+had never once been non-null in production. Two partial indexes existed,
+purpose-built for the orphan query — with no reader. The machinery to notice
+had been built and never wired up.
+
+**What the investigation got wrong first, and what corrected it.** Phase 1
+inferred a missing-integrity gap from a nullable column *without first reading
+`session_credit_coherent_guard`*. About 80% of the integrity was already
+built. Probing the database — 14 adversarial writes against real fixtures —
+found **9 of 13 attacks already refused**. The planned migration shrank to
+roughly 40% of what the architecture phase implied. Reading a schema is not
+knowing what it enforces; only attacking it is.
+
+**The fix.** `20260826b_session_lifecycle_ownership.sql`. Two states the
+lifecycle could not express (`assignment_failed`, `booking_blocked`); five
+operational columns (`owner` as a four-value enum, `next_action` as deliberate
+free text, `failure_reason`, `failure_at`, `last_attempt_at`); four new rules
+**appended to** the existing coherence guard, which stays the authority; one
+CHECK making owner and next_action inseparable; the video-session FK hardened
+from SET NULL to RESTRICT. Preceded by `20260826a_session_credits_parity.sql`,
+because the test database was missing five of nine constraints and
+`student_payments` had **no primary key** — the seventh prod/test divergence
+this repo has logged, and one that would have let every probe "pass" against a
+schema physically incapable of refusing.
+
+**The fix NOT taken.** A new table, a new dashboard, or a second trigger for
+the credit↔session relationship. Two pointers that can disagree is worse than
+one pointer that can be null. The founder's constraint held the design down:
+*extend the guard, never replace it.*
+
+**Lessons.**
+1. A state machine that cannot NAME a failure will never REPORT one. "Paid" and
+   "paid, and abandoned" are different facts and need different names.
+2. Work that is visible and unowned is indistinguishable from work that is
+   done. `(owner IS NULL) = (next_action IS NULL)` is now a database
+   constraint, and probe #22 replays Dhruv's exact shape against it.
+3. Manual admin tools with side effects are how a boolean nobody can account
+   for ends up on a student's row. Recovery must be an operation, not a flip.
+4. An index with no reader is not preparation; it is a decision someone forgot
+   to finish.
+
+**Teeth.** `supabase/tests/session_credit_lifecycle_probes.sql` — 30 probes, 22
+attacks and 8 legal shapes, run against the real database and raising if any
+misbehaves. Every new rule was proved non-vacuous by removing it: with the
+guard disabled, probes 16/17/18/20/25/27/30 all become ACCEPTED; with the CHECK
+dropped, 21/22/23/28 become ACCEPTED; with the FK back to SET NULL *and* the
+guard disabled, deleting a linked session is ACCEPTED and silently orphans the
+credit. The verdict block was itself proved non-vacuous by feeding it a false
+expectation and confirming it raises.

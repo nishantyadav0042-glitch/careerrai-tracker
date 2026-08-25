@@ -43,6 +43,7 @@
 | 28 | 2026-08-12 | Whole Plan re-rolled the day the student was holding | Learning | 1 visible (all exposed) |
 | 29 | 2026-08-12 | git reset --hard destroyed a verified change pre-commit | Process / agent | — (caught next day) |
 | 30 | 2026-08-12 | Daily log rejected fractional hours — students could not log | Learning (P0) | all who marked a task "Half" |
+| 31 | 2026-08-24 | A paid ₹299 student fell out of the lifecycle and no row was wrong | Trust (P0) | 1 of 2 paying students |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code
