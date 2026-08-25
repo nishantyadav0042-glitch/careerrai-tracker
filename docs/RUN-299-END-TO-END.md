@@ -43,7 +43,47 @@ select p.full_name, a.work_days, a.start_minute, a.end_minute, a.active
 
 ---
 
-## 1–9. The chain, with what to check after each step
+## The order (agreed 26 Aug)
+
+Steps A1–A5 run against **today's** production, before anything is deployed.
+They cost nothing and need no payment — they only ask whether a real mentor
+became genuinely bookable. Only then do 2B and 2C go out, together, and only
+then does a real student pay.
+
+```
+Shreya saves availability
+  -> A1-A5  verify bookability + slots      (today's production, no deploy)
+  -> apply 20260826b + 20260826c together   (one migration window)
+  -> the real ₹299 journey, steps 1-11
+  -> the controlled concurrent-booking check (9b)
+```
+
+Deploying first would mean debugging two things at once: whether the mentor is
+bookable, and whether the new lifecycle behaves. Those are separable, so keep
+them separate.
+
+### A1–A5 — before the deploy
+
+| | Check | How |
+|---|---|---|
+| A1 | Shreya reads as bookable | `mentorBookability` returns `bookable: true` — visible as the picker moving off `needs_team` |
+| A2 | Her slots generate correctly | the picker shows real days and times inside the hours she saved, in her timezone |
+| A3 | Her existing Meet URL is the room | the booked room is her current `buddy_meet_url`, not a newly minted one — `buddy_meet_event_id` must still be NULL afterwards |
+| A4 | A ₹299 student can see and select a slot | state is `choose_slot`, and a slot is tappable |
+| A5 | A slot that stops being available is refused | Shreya narrows her saved hours so an offered slot falls outside them, the student refreshes, the slot is gone; she restores her hours |
+
+A5 is deliberately done by **editing her own availability**, not by inserting a
+competing session. `buddy_time_off` would be the natural instrument — the
+availability trigger already reads it — but that table has **no API and no UI**:
+nothing in the product can write it. Noted, not fixed here.
+
+A3 matters more than it looks. If `buddy_meet_event_id` becomes non-null,
+something minted a *new* Google room for a mentor who never connected Google,
+and the "one permanent room per buddy" invariant has been broken silently.
+
+---
+
+## 1–11. The chain, with what to check after each step
 
 Use a real student account and a real ₹299 payment. Dhruv's existing credit is
 **not** the right vehicle — it is evidence in Incident #31 and is mid-recovery.
@@ -112,8 +152,12 @@ mentor's expense, buys nothing.
 
 ## What this run is allowed to conclude
 
-- **It passes** → approve `20260826b` + `20260826c` to production together,
-  then re-run step 9b as post-deploy verification.
+- **A1–A5 pass** → apply `20260826b` + `20260826c` to production together, then
+  run the journey.
+- **The journey passes** → run step 9b as post-deploy verification, and the
+  chain is proved end to end on real infrastructure: real mentor, real
+  availability, real payment, real slot, real Meet, real completion, real
+  feedback.
 - **It fails at step 2 on a UPI deep link** → that is the known native-shell
   defect (no `apple-app-site-association`, non-HTTP schemes cancelled by
   WKWebView). It does not block 2B/2C.
