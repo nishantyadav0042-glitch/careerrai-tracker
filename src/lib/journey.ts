@@ -197,6 +197,11 @@ let seq = 0;
 // 'timetable_saved' vs 'timetable_confirmed'). A typo now fails the build
 // instead of silently minting a new metric. Add new events HERE first.
 export type EventName =
+  // ── TEMPORARY, 25 Aug: the WKWebView escape probe ────────────────────────
+  // Answers one question — does window.open() from the iOS App Store build
+  // reach real Safari or another WKWebView? Delete both members, and
+  // src/app/probe/*, once the answer is recorded.
+  | 'probe_escape_origin' | 'probe_escape_landed'
   | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
   // G10B: the outcome of every complete-task call made by the INTEGRATED log
