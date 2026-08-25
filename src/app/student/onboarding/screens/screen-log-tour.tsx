@@ -32,6 +32,32 @@ import { track } from '@/lib/journey';
 // Copy is English throughout, in plain everyday words (founder, 13 Aug:
 // "everything should be in english… use simple words which students use in
 // daily life") — short sentences, no clever phrasing.
+//
+// ── 26 Aug: the practice now PAYS OFF ───────────────────────────────────────
+//
+// Measured: 403 students reached this screen, 317 skipped it (79%), and the
+// 64 who practised logged at the same rate as the skippers — 26.6% vs 25.4%.
+// Teaching the gesture changed nothing, because the gesture was never the
+// problem. The student left this screen knowing HOW to log and having no idea
+// WHY they would.
+//
+// So the practice now ends in a SAMPLE INSIGHT — one page that shows what a
+// week of logs lets CareerRai see: not hours, a pattern the student in the
+// sample didn't notice about themselves. Observation → meaning → action.
+// The founder's bar, paraphrased: the student should feel "if I log daily,
+// I get told things about my own prep that I genuinely didn't know."
+//
+// THE SAMPLE IS A SAMPLE. It is labelled, it writes nothing, it calls no
+// insight engine — postLogInsight and computePrescriptiveLine stay the only
+// real-insight authorities, and this screen is hardcoded copy. The ladder at
+// the bottom promises ONLY what those engines already do today (day-2
+// comparison, avoidance patterns, plan-vs-actual) — a promise the product
+// can't keep yet would poison the exact trust this screen exists to build.
+//
+// And the word "Skip" is gone (founder: "that was part of the original
+// problem"). The early exit REMAINS — Incident #2's rule that nothing may
+// gate completion is untouched — but it now reads as deferral, not
+// permission to ignore.
 
 interface PracticeTask {
   id: string;
@@ -63,6 +89,7 @@ interface ScreenLogTourProps {
 export default function ScreenLogTour({ onNext, isLoading, firstName = null }: ScreenLogTourProps) {
   const [marks, setMarks] = useState<Record<string, Mark>>({});
   const [choosingId, setChoosingId] = useState<string | null>(null);
+  const [phase, setPhase] = useState<'practice' | 'insight'>('practice');
   // Stamped after mount (render must stay pure); read once in finish().
   const openedAt = useRef<number | null>(null);
   useEffect(() => {
@@ -76,6 +103,15 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
     setMarks((prev) => ({ ...prev, [taskId]: mark }));
   }
 
+  function reveal() {
+    setPhase('insight');
+    // Same fire-and-forget contract as log_tour_done: measurement never blocks.
+    track('sample_insight_shown', {
+      practiced: doneCount,
+      seconds: openedAt.current == null ? null : Math.round((Date.now() - openedAt.current) / 1000),
+    });
+  }
+
   function finish(skipped: boolean) {
     // Measurement, not a write: lets us cohort "practised the log in
     // onboarding" against first real daily_report. Fire-and-forget —
@@ -86,6 +122,100 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
       seconds: openedAt.current == null ? null : Math.round((Date.now() - openedAt.current) / 1000),
     });
     void onNext({ onboardingCompleted: true });
+  }
+
+  // ── THE SAMPLE INSIGHT ────────────────────────────────────────────────────
+  //
+  // One fictional student's week, deliberately MESSY — a tidy 2h/2h/2h demo
+  // reads as demo and teaches nothing. This week has the single most common
+  // real pattern in our logs: planning the feared section and doing the
+  // comfortable one instead. The reveal is that pattern, not the hours.
+  //
+  // Structure is fixed: OBSERVATION (what the logs show) → MEANING (what it
+  // says about the student) → ACTION (the one thing to do tomorrow). One
+  // discovery only — a second finding would turn the page into a dashboard,
+  // and dashboards get admired and closed.
+  if (phase === 'insight') {
+    return (
+      <div className="space-y-4">
+        <div>
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800">
+            Sample — from one week of logs
+          </span>
+          <h3 className="mt-2 text-xl font-bold text-stone-900" style={{ fontFamily: 'Georgia, serif' }}>
+            This is what your logs unlock
+          </h3>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
+            Here&apos;s a student who logged 6 days. Watch what their own logs caught:
+          </p>
+        </div>
+
+        {/* The week — planned vs what actually happened. Messy on purpose. */}
+        <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+          <div className="grid grid-cols-[44px_1fr_1fr] gap-x-2 border-b border-stone-100 bg-stone-50 px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-stone-400">
+            <span /> <span>Planned</span> <span>Actually did</span>
+          </div>
+          {([
+            ['Mon', 'Quant + DILR', 'Quant', true],
+            ['Tue', 'VARC + Quant', 'VARC + Quant', false],
+            ['Wed', 'DILR', 'Quant', true],
+            ['Thu', 'Quant + DILR', 'Quant', true],
+            ['Fri', 'VARC', 'VARC', false],
+            ['Sat', 'DILR', 'DILR ✓', false],
+          ] as const).map(([day, plan, did, slipped]) => (
+            <div key={day} className="grid grid-cols-[44px_1fr_1fr] gap-x-2 border-b border-stone-50 px-3.5 py-1.5 text-[12px]">
+              <span className="font-bold text-stone-400">{day}</span>
+              <span className="text-stone-600">{plan}</span>
+              <span className={slipped ? 'font-semibold text-amber-700' : 'text-stone-800'}>{did}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Observation → meaning → action. THE discovery. */}
+        <div className="rounded-2xl bg-stone-900 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400">What the logs caught</p>
+          <p className="mt-1.5 text-[15px] font-bold leading-snug text-white">
+            They planned DILR on 4 days — and did it on 1.
+          </p>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-stone-300">
+            Every time, Quant took its place. So their problem isn&apos;t study time —
+            it&apos;s that their best hours keep going to the section they already like.
+            <b className="text-white"> They never noticed. Their logs did.</b>
+          </p>
+          <div className="mt-3 rounded-xl bg-white/10 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">So tomorrow</p>
+            <p className="text-[12.5px] font-semibold text-white">Start with DILR — 45 minutes — before Quant gets the day.</p>
+          </div>
+        </div>
+
+        {/* The ladder. Every rung is something the REAL engines do today —
+            postLogInsight compares to yesterday, computePrescriptiveLine finds
+            avoided sections at ~2 weeks, plan tasks make plan-vs-actual real.
+            Nothing here promises a feature that doesn't exist. */}
+        <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">The more you log, the more it sees</p>
+          <div className="mt-2 space-y-1.5 text-[12px] leading-relaxed">
+            <p><b className="text-stone-900">2 logs</b><span className="text-stone-500"> — how today compared to yesterday</span></p>
+            <p><b className="text-stone-900">1 week</b><span className="text-stone-500"> — which section you&apos;re quietly avoiding</span></p>
+            <p><b className="text-stone-900">2 weeks</b><span className="text-stone-500"> — your plan vs what you actually do</span></p>
+          </div>
+        </div>
+
+        <p className="text-center text-[11px] text-stone-400">
+          That was a sample. Yours starts with your first real log — tomorrow&apos;s taps build it.
+        </p>
+
+        <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+          <button
+            onClick={() => finish(false)}
+            disabled={isLoading}
+            className="w-full rounded-2xl bg-stone-900 py-3.5 text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-60"
+          >
+            {isLoading ? 'Finishing up…' : 'Start my prep →'}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -187,11 +317,10 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
         <div className="rounded-2xl bg-stone-900 p-4 text-center">
           <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-white">
             <Flame className="h-4 w-4 text-orange-400" />
-            Done — that&apos;s all you do.
+            Done — that&apos;s the whole log. 3 taps.
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-stone-300">
-            3 taps and your day is marked. From tomorrow you&apos;ll see this on Home with
-            your real topics — and half done also counts, so never skip a day.
+            Now the part that matters: what CareerRai can <b>do</b> with a week of these.
           </p>
         </div>
       ) : (
@@ -203,21 +332,23 @@ export default function ScreenLogTour({ onNext, isLoading, firstName = null }: S
       <div className="sticky bottom-0 z-20 bg-white/95 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         {allDone ? (
           <button
-            onClick={() => finish(false)}
+            onClick={reveal}
             disabled={isLoading}
             className="w-full rounded-2xl bg-stone-900 py-3.5 text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-60"
           >
-            {isLoading ? 'Finishing up…' : 'Start my prep →'}
+            See what your logs unlock →
           </button>
         ) : (
           // The always-open exit. A tutorial may invite; it must never gate
           // (Incident #2) — completion goes through with zero practice taps.
+          // But it is DEFERRAL, not "Skip": that word taught 79% of students
+          // this screen was optional noise.
           <button
             onClick={() => finish(true)}
             disabled={isLoading}
             className="w-full rounded-2xl border border-stone-200 bg-white py-3 text-[13px] font-semibold text-stone-500 transition-all active:scale-[0.98] disabled:opacity-60"
           >
-            {isLoading ? 'Finishing up…' : 'Skip practice — start my prep →'}
+            {isLoading ? 'Finishing up…' : 'I&apos;ll learn this on my real plan →'}
           </button>
         )}
       </div>

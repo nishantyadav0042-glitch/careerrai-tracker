@@ -4,11 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { NotifPrefs } from '@/types';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { getActiveScholarship, scholarshipDisplay } from '@/lib/pricing';
-import { rankBuddies, matchReason, type MatchBuddy, type MatchStudent } from '@/lib/buddy-match';
-import type { RecommendedBuddy } from '@/components/recommended-buddies';
 import { ProfilePanelTabs } from '@/components/profile-panel-tabs';
 import { ProfileOverview } from './profile-overview';
-import { EveningBuddyPop } from '@/components/evening-buddy-pop';
 import { HistorySection } from './history-section';
 import { SettingsSection } from './settings-section';
 
@@ -30,7 +27,7 @@ export default async function StudentProfilePage() {
   const firstMonthEnd = new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   const isInFirstMonth = new Date() <= new Date(joinedAt.getTime() + 30 * 24 * 3600 * 1000);
   const REFUND_DAYS_REQUIRED = 20;
-  // eslint-disable-next-line react-hooks/purity -- server component, per-request "now" is correct here
+   
   const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
 
   // Fire all remaining queries in parallel — reduces 7 sequential round-trips to 1 batch.
@@ -43,7 +40,6 @@ export default async function StudentProfilePage() {
     firstMonthDaysResult,
     refundReqResult,
     activeScholarship,
-    showcaseBuddiesResult,
   ] = await Promise.all([
     profile.buddy_id
       ? admin.from('profiles').select('full_name, college, cat_percentile, buddy_bio').eq('id', profile.buddy_id).single()
@@ -57,14 +53,6 @@ export default async function StudentProfilePage() {
     admin.from('daily_reports').select('id', { count: 'exact', head: true }).eq('student_id', user.id).lte('report_date', firstMonthEnd),
     admin.from('refund_requests').select('status, requested_at').eq('student_id', user.id).maybeSingle(),
     paymentsEnabled() ? getActiveScholarship(user.id) : Promise.resolve(null),
-    // Free students browse real, setup-complete buddies; contact is what they pay for.
-    profile.buddy_id
-      ? Promise.resolve({ data: null })
-      : admin.from('profiles')
-          .select('id, full_name, avatar_url, cat_percentile, first_attempt_percentile, cat_year, iim_converted, current_company, strongest_section, student_types_helped, how_i_work, linkedin_url')
-          .eq('role', 'buddy').eq('buddy_onboarding_completed', true)
-          .not('cat_percentile', 'is', null)
-          .not('is_test_account', 'is', true),
   ]);
 
   const buddy = buddyResult.data as { full_name: string; college: string | null; cat_percentile: number | null; buddy_bio: string | null } | null;
@@ -96,11 +84,6 @@ export default async function StudentProfilePage() {
   let scholarship: { label: string; pricing: ReturnType<typeof scholarshipDisplay> } | null = null;
   if (activeScholarship) scholarship = { label: 'Founder scholarship', pricing: scholarshipDisplay(activeScholarship) };
 
-  // Rank showcase buddies for this student (weakest section + profile type)
-  const showcaseRaw = (showcaseBuddiesResult.data ?? []) as unknown as MatchBuddy[];
-  const recommendedBuddies: RecommendedBuddy[] = rankBuddies(profile as MatchStudent, showcaseRaw)
-    .slice(0, 4)
-    .map((b) => ({ ...b, reason: matchReason(profile as MatchStudent, b) }));
 
   const displayName = profile.full_name ?? 'Student';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -132,7 +115,6 @@ export default async function StudentProfilePage() {
             latestPercentile={latestPercentile}
             targetPercentile={targetPercentile}
             progressPct={progressPct}
-            recommendedBuddies={recommendedBuddies}
             isInFirstMonth={isInFirstMonth}
             refundDaysLogged={refundDaysLogged}
             refundEligible={refundEligible}
@@ -148,16 +130,11 @@ export default async function StudentProfilePage() {
         settings={<SettingsSection />}
       />
 
-      {/* Evening nudge: free students (no buddy yet) get a once-a-evening pop
-          of their best-matched mentor, linking to the full buddy profile. */}
-      {!profile.buddy_id && recommendedBuddies.length > 0 && (
-        <EveningBuddyPop
-          name={recommendedBuddies[0].full_name}
-          avatarUrl={recommendedBuddies[0].avatar_url}
-          college={recommendedBuddies[0].iim_converted}
-          percentile={recommendedBuddies[0].cat_percentile}
-        />
-      )}
+      {/* EveningBuddyPop stood here — a THIRD buddy-pitch mechanism with its
+          own localStorage throttle, on the student's own profile screen.
+          Removed with the storefront (founder, 26 Aug): one pitch per student
+          per study day, owned by promo_impressions, and My Profile is not a
+          sales surface. */}
     </div>
   );
 }

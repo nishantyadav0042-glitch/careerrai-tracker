@@ -203,6 +203,7 @@ export type EventName =
   // src/app/probe/*, once the answer is recorded.
   | 'probe_escape_origin' | 'probe_escape_landed'
   | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
+  | 'sample_insight_shown'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
   // G10B: the outcome of every complete-task call made by the INTEGRATED log
   // fan-out. That call site is the only one that cannot tell success from an

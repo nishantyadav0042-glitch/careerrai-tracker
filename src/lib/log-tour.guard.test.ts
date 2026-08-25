@@ -80,12 +80,30 @@ describe('it never gates completion', () => {
   // Incident #2: the last time anything stood between a student and
   // finishing, a cohort's logging died behind it. The skip path must always
   // exist and must fire the same completion as the earned path.
-  it('has a skip that completes onboarding without any practice taps', () => {
+  it('has an always-open exit that completes onboarding without any practice taps', () => {
     const s = screen();
-    expect(s).toContain('Skip practice');
+    // 26 Aug: the word "Skip" is gone — 79% of students took it as permission
+    // to ignore the screen. The EXIT is not: a deferral-worded button still
+    // calls the same finish(true) with zero taps. The mechanism this guard
+    // protects (Incident #2: nothing gates completion) is unchanged; only the
+    // label moved from "skip this" to "do this later".
+    expect(s).toContain("I&apos;ll learn this on my real plan");
+    expect(s).toContain('finish(true)');
     // Both exits call the same finish() → onNext({ onboardingCompleted: true }).
     expect(s).toContain('onboardingCompleted: true');
     expect((s.match(/finish\((true|false)\)/g) ?? []).length).toBe(2);
+  });
+
+  it('the sample insight promises only what the real engines deliver', () => {
+    // The ladder sells 2-log comparison, week-scale avoidance and
+    // plan-vs-actual — capabilities postLogInsight and
+    // computePrescriptiveLine actually have. A rung promising something the
+    // product cannot do yet would spend the trust this screen exists to earn.
+    const s = screen();
+    expect(s).toContain('Sample — from one week of logs');
+    expect(s).not.toMatch(/AI predicts|percentile forecast|guarantee/i);
+    // and it stays a sample: the insight phase writes nothing.
+    expect(s).not.toContain("from('daily_reports')");
   });
 });
 

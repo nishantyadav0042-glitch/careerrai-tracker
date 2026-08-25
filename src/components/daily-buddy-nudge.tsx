@@ -45,12 +45,29 @@ export function DailyBuddyNudge({ fullName }: { fullName?: string }) {
       // (700ms after tour) claim the screen first if it's going to.
       timer = setTimeout(() => {
         if (shown || !tourDone() || notifAskVisible() || insightVisible() || logModalOpen()) return;
-         
-        // Emitted here because this is where the modal actually becomes
-        // visible. Claiming the daily slot is an INTENT to show; an impression
-        // count that can exceed the impressions is precisely the overstatement
-        // this codebase has spent the week removing.
-        if (claimDailyModal()) { shown = true; setShow(true); track('buddy_nudge_shown', {}); }
+
+        // TWO gates, in order, and only the second one is the law.
+        //
+        // claimDailyModal() (localStorage) stays as the cheap FIRST check —
+        // it still arbitrates the shared one-auto-modal-per-day slot against
+        // the timetable prompt without a network call. But it is per-browser
+        // and fails open, which is exactly how the founder's one-pitch-a-day
+        // rule was being broken by a second device or a blocked storage jar.
+        //
+        // The SERVER claim is the authority (promo_impressions, one row per
+        // student per study day, all channels — including the evening
+        // notification). It fails CLOSED: no proof the day is unpitched, no
+        // pitch. Claimed only here, at the moment of showing, so a mount that
+        // never happens cannot burn the day's slot.
+        if (!claimDailyModal()) return;
+        void fetch('/api/promo/claim', { method: 'POST' })
+          .then((r) => r.json())
+          .then((claim: { show?: boolean }) => {
+            if (claim?.show === true && !shown) {
+              shown = true; setShow(true); track('buddy_nudge_shown', {});
+            }
+          })
+          .catch(() => { /* fail closed: no proof, no pitch */ });
       }, 1400);
     };
     attempt();
