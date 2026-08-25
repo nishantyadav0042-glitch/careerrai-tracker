@@ -14,6 +14,7 @@ import { BuddyPanelTabs } from '@/components/buddy-panel-tabs';
 import { ChatThread } from '@/components/chat/chat-thread';
 import { SessionDebrief } from '@/components/student/session-debrief';
 import { SessionFeedbackCard } from '@/components/session/session-feedback-card';
+import { SchedulePicker } from '@/components/session/schedule-picker';
 
 export const metadata = {
   title: 'Buddy · CareerRai',
@@ -206,6 +207,12 @@ export default async function BuddyPage({
             tasks={(assignments ?? []).map((a) => ({ id: a.id, task: a.task, completedAt: a.completed_at }))}
           />
         )}
+        {/* Scheduling. Renders nothing when there is no credit, and never a
+            picker the product cannot fulfil — see SchedulePicker's states. */}
+        <div className="mb-3">
+          <SchedulePicker />
+        </div>
+
         {awaitingFeedback && (
           <div className="mb-3">
             <SessionFeedbackCard
