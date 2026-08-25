@@ -44,6 +44,8 @@
 | 29 | 2026-08-12 | git reset --hard destroyed a verified change pre-commit | Process / agent | — (caught next day) |
 | 30 | 2026-08-12 | Daily log rejected fractional hours — students could not log | Learning (P0) | all who marked a task "Half" |
 | 31 | 2026-08-24 | A paid ₹299 student fell out of the lifecycle and no row was wrong | Trust (P0) | 1 of 2 paying students |
+| 32 | 2026-08-26 | The test database is a scaffold, not a replica — probes certified a hole | Process / testing | — (caught pre-prod) |
+| 33 | 2026-08-26 | `revoke from public` did not revoke it — Supabase grants anon/authenticated explicitly | Security | — (caught pre-prod) |
 
 > Entries 12 and 13 were never written. The gap is left visible rather than
 > renumbered — the numbers are referenced from commit messages and code

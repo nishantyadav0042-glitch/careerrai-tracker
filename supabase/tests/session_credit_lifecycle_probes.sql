@@ -67,7 +67,12 @@ insert into public.student_payments (id, student_id, amount, plan, status) value
 insert into public.video_sessions (id, student_id, buddy_id, session_status) values
  ('66666666-6666-4666-8666-666666666666','11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','scheduled'),
  ('77777777-7777-4777-8777-777777777777','33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222','scheduled'),
- ('99999999-9999-4999-8999-999999999999','11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','scheduled');
+ -- 'cancelled', not 'scheduled': one_live_session_per_pair (restored to this
+ -- database by 20260826d) allows only ONE live session per (mentor, student),
+ -- and probe 14 needs a SECOND session for the same pair to relink towards.
+ -- The coherence guard does not consult session_status when validating a link,
+ -- so a cancelled session is a perfectly good relink target for that probe.
+ ('99999999-9999-4999-8999-999999999999','11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','cancelled');
 
 insert into public.session_credits (id, student_id, payment_id, status) values
  ('88888888-8888-4888-8888-888888888888','11111111-1111-4111-8111-111111111111','55555555-5555-4555-8555-555555555555','paid');
@@ -143,10 +148,10 @@ with p(n, family, label, stmt) as (values
  (28,'check','whitespace-only failure_reason',
   $$update session_credits set status='assignment_failed', owner='ops', next_action='assign', failure_reason='  ', failure_at=now() where id='88888888-8888-4888-8888-888888888888'$$),
  (29,'baseline','a completed credit with no debt',
-  $$update video_sessions set session_status='completed' where id='66666666-6666-4666-8666-666666666666';
+  $$update video_sessions set session_status='completed', ended_at=now() where id='66666666-6666-4666-8666-666666666666';
     update session_credits set status='completed', buddy_id='22222222-2222-4222-8222-222222222222', video_session_id='66666666-6666-4666-8666-666666666666' where id='88888888-8888-4888-8888-888888888888'$$),
  (30,'guard-9','a COMPLETED credit still owing work',
-  $$update video_sessions set session_status='completed' where id='66666666-6666-4666-8666-666666666666';
+  $$update video_sessions set session_status='completed', ended_at=now() where id='66666666-6666-4666-8666-666666666666';
     update session_credits set status='completed', buddy_id='22222222-2222-4222-8222-222222222222', video_session_id='66666666-6666-4666-8666-666666666666', owner='ops', next_action='chase feedback' where id='88888888-8888-4888-8888-888888888888'$$)
 )
 select n, family, label,

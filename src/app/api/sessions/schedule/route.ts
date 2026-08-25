@@ -158,60 +158,66 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // The DATABASE validates the slot: the availability trigger refuses anything
-  // outside the mentor's week or during time off, and the exclusion constraint
-  // refuses an overlap. The client's slot list is never trusted.
-  const { data: session, error: insertError } = await admin
-    .from('video_sessions')
-    .insert({
-      student_id: user.id,
-      buddy_id: credit.buddy_id,
-      title: '1:1 session',
-      scheduled_at: new Date(startIso).toISOString(),
-      duration_minutes: SESSION_MINUTES,
-      session_status: 'scheduled',
-      session_type: 'guidance',
-      google_meet_link: room.meetUrl,
-    })
-    .select('id')
-    .single();
+  // ── ONE OPERATION ─────────────────────────────────────────────────────────
+  //
+  // This used to be an insert followed by a separate update, with nothing
+  // spanning them. If the process died in between, the session existed and the
+  // credit did not know — which is the shape Phase 0 found at rest: 18
+  // sessions, none linked to any credit, ever.
+  //
+  // Worse, the link step was `.update(...).is('video_session_id', null)` with
+  // no `.select()` and no `{ count: 'exact' }`, so PostgREST answered a
+  // ZERO-ROW update with `{ data: null, error: null }` — indistinguishable
+  // from success. Two concurrent taps therefore made two sessions, linked one,
+  // orphaned the other, and told the student both were booked. The
+  // compensating "cancel the orphan" only ran on `linkError`, which was null
+  // in exactly that case, so it never fired.
+  //
+  // book_session_credit() locks the credit, creates the session, links it and
+  // moves the state inside ONE transaction. It does not decide anything new:
+  // video_sessions' own guards still validate the slot, and
+  // session_credit_coherent() still governs the credit.
+  const { data: booking, error: rpcError } = await admin.rpc('book_session_credit', {
+    p_credit_id: credit.id,
+    p_student_id: user.id,
+    p_expected_buddy_id: credit.buddy_id,
+    p_start: new Date(startIso).toISOString(),
+    p_duration_minutes: SESSION_MINUTES,
+    p_meet_url: room.meetUrl,
+  });
 
-  if (insertError || !session) {
-    const refused = constraintFailure(insertError, 'student');
-    if (refused) {
-      // Somebody took it between the list and the tap. The credit is untouched.
-      return NextResponse.json(
-        { error: 'That time was just taken. Please choose another.', reason: refused.reason },
-        { status: 409 },
-      );
-    }
-    console.error('[sessions/schedule] insert failed:', insertError?.message);
+  if (rpcError || !booking?.[0]) {
+    console.error('[sessions/schedule] booking failed:', rpcError?.message);
     return NextResponse.json({ error: 'Could not book that time — try again.' }, { status: 500 });
   }
 
-  // Link the credit. The unique index and the coherence trigger make a second
-  // link impossible, so a race here loses cleanly rather than double-spending.
-  const { error: linkError } = await admin
-    .from('session_credits')
-    .update({ video_session_id: session.id, status: 'scheduled' })
-    .eq('id', credit.id)
-    .is('video_session_id', null);
+  const { outcome, session_id: sessionId, detail } = booking[0];
 
-  if (linkError) {
-    // The session exists but the credit did not attach. Cancel the orphan
-    // rather than leave a session no entitlement paid for.
-    console.error('[sessions/schedule] credit link failed:', linkError.message);
-    await admin.from('video_sessions')
-      .update({ session_status: 'cancelled' })
-      .eq('id', session.id).eq('session_status', 'scheduled');
-    return NextResponse.json({ error: 'Could not confirm that booking — try again.' }, { status: 500 });
+  // A booking rule the student can act on is a 409, never a 500 — a 500 tells
+  // them something is broken and invites a retry that can only fail the same
+  // way forever (lib/booking-constraints.ts).
+  if (outcome === 'slot_taken' || outcome === 'session_exists') {
+    // The wording lives in ONE module so the two write paths cannot drift.
+    const refused = constraintFailure(
+      { code: outcome === 'slot_taken' ? '23P01' : '23505' }, 'student',
+    )!;
+    return NextResponse.json({ error: refused.message, reason: refused.reason }, { status: 409 });
+  }
+  if (outcome === 'unavailable' || outcome === 'not_eligible' || outcome === 'mentor_changed') {
+    // `detail` is already written for a student — the availability guard's
+    // messages are prose, not error codes.
+    return NextResponse.json({ error: detail ?? 'That booking is not available.', reason: outcome }, { status: 409 });
+  }
+
+  if (outcome === 'already_booked') {
+    return NextResponse.json({ ok: true, sessionId, already: true });
   }
 
   await emitTimeline(admin, {
     entity: 'student', entityId: user.id, kind: 'buddy_assigned',
     summary: 'Session booked', actor: 'student',
-    metadata: { sessionId: session.id, buddyId: credit.buddy_id, intent: credit.session_intent },
+    metadata: { sessionId, buddyId: credit.buddy_id, intent: credit.session_intent },
   });
 
-  return NextResponse.json({ ok: true, sessionId: session.id, meetUrl: room.meetUrl });
+  return NextResponse.json({ ok: true, sessionId, meetUrl: room.meetUrl });
 }

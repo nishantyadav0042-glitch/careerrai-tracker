@@ -1185,3 +1185,102 @@ dropped, 21/22/23/28 become ACCEPTED; with the FK back to SET NULL *and* the
 guard disabled, deleting a linked session is ACCEPTED and silently orphans the
 credit. The verdict block was itself proved non-vacuous by feeding it a false
 expectation and confirming it raises.
+
+---
+
+## Incident #32 — the test database is a scaffold, not a replica (2026-08-26)
+
+**Symptom.** A Phase 2C probe asked whether a student with a live session can
+book a second one with the same mentor. Production says no — `one_live_session_
+per_pair` is a unique index, and Incident #21 is why it exists. The probe came
+back **`booked`, sessions=2**. The code was correct. The test database had no
+such index.
+
+**Root cause.** `careerrai-test` was stood up on 22 Aug to reproduce one React
+error and was never a copy of production. Counting constraints + indexes +
+triggers per table across both:
+
+| table | production | test (before) |
+|---|---|---|
+| `video_sessions` | 25 | 11 |
+| `student_payments` | 11 | 5 |
+| `profiles` | 36 | 2 |
+
+and 76 of production's 91 tables had **no** constraints on test at all. Phase 2A
+had already found this class once and fixed `session_credits` — including a
+`student_payments` table with no primary key — but fixed only the table it was
+looking at.
+
+**How it hid.** By passing. A probe fired at a schema that cannot refuse always
+returns "accepted", which reads identically to "the code allowed it". Every
+green probe on a divergent table is a certificate for a hole.
+
+**The fix.** `20260826d_booking_chain_parity.sql` restores video_sessions and
+student_payments verbatim from production's `pg_get_constraintdef()`/`indexdef`
+output, md5-verified byte-for-byte afterwards. `profiles` is left divergent and
+logged rather than silently skipped — 34 objects governing role, premium and
+allowlist deserve their own pass, not a footnote in a booking migration.
+
+**A detail worth keeping.** Two CHECKs and one index were semantically correct
+but rendered differently by `pg_get_constraintdef()` because the cast was
+written per-element instead of per-array. Byte-identity matters here: the whole
+point of a fingerprint comparison is that a future divergence stands out, and a
+permanent cosmetic difference trains you to ignore it. Written as
+`array[...]::character varying[]` so the two databases render identically.
+
+**Lessons.**
+1. Before probing a table, prove the table can refuse. Compare the schema
+   first; a probe suite's first assertion should be about the schema, not the
+   data.
+2. Parity is per-chain, not per-table. Phase 2A fixed the table it was staring
+   at and left the one next to it.
+3. "We have a test database" and "we have a replica" are different claims. Say
+   which one is true.
+
+**Teeth.** A per-table object count and an md5 fingerprint of every constraint,
+index and trigger, run against both databases. Any table can now be checked in
+one query instead of discovered by a failing probe.
+
+---
+
+## Incident #33 — `revoke from public` did not revoke it (2026-08-26)
+
+**Symptom.** The Phase 2C migration created `book_session_credit()` — a
+SECURITY-sensitive RPC that books a paid ₹299 session — and carefully revoked
+it: `revoke all on function ... from public`. The comment above that line
+explained, correctly, that PostgREST exposes every public function at
+`/rest/v1/rpc/` and that leaving it open would let any logged-in student book
+against a credit they did not pay for.
+
+Probe 13 then reported: **`anon=true authenticated=true`.**
+
+**Root cause.** Supabase ships `ALTER DEFAULT PRIVILEGES` that grant EXECUTE on
+new functions in `public` to `anon`, `authenticated` and `service_role`
+**explicitly**. An explicit grant to a role is not touched by a revoke from
+PUBLIC. The revoke succeeded and changed nothing.
+
+**How it hid.** It didn't — for one turn. The hole existed underneath a comment
+describing the hole. What caught it was that the probe tested the *actual
+privilege* with `has_function_privilege()` rather than asserting that the
+migration file contained the word `revoke`. A source-reading guard would have
+passed on the broken version.
+
+**The fix.** `revoke all on function ... from public, anon, authenticated;`
+then `grant execute ... to service_role;`. Verified with
+`has_function_privilege()` on all three roles, and pinned by a guard test that
+requires the roles to be named.
+
+**What the sweep found.** 206 of production's 224 public functions are
+executable by `authenticated`. Almost all are `btree_gist` internals or trigger
+functions, which PostgREST will not call. The real list of app-owned,
+student-callable, non-trigger functions is four — and one of them,
+**`claim_lead`, is SECURITY DEFINER and lets any caller reassign lead ownership
+for any student**. Reported to the founder; not fixed here, because it belongs
+to the sales CRM and not to a booking migration.
+
+**Lessons.**
+1. Test the privilege, not the DDL. `has_function_privilege()` is one line and
+   it is the only thing that knows the truth.
+2. On Supabase, a new function in `public` is world-callable until three roles
+   are named. `from public` is not one of them.
+3. Every SECURITY DEFINER function is an API endpoint. Count them deliberately.
