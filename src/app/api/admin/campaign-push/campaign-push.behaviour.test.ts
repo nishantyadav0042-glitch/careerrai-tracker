@@ -11,7 +11,6 @@ import type { NextRequest } from 'next/server';
 // another's send. Non-vacuity is proved by removing the gate (see the sweep
 // script in the audit): with the claim gone, the double-pitch test fails.
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const dispatch = vi.hoisted(() => vi.fn(async () => 'sent'));
 const claim = vi.hoisted(() => vi.fn());
