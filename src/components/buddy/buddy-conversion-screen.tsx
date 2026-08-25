@@ -1,6 +1,8 @@
 import { REPEATER_HEADLINE, type CaseFinding } from '@/lib/buddy-case';
 import type { RecommendedBuddyResult } from '@/lib/buddy-match';
 import { BookSessionCard } from '@/components/buddy/book-session-card';
+import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
+import { PLANS } from '@/lib/plans';
 
 // ── The Buddy screen: five blocks, pointer-first, zero paragraphs ───────────
 //
@@ -143,10 +145,21 @@ export function BuddyConversionScreen({ firstName, findings, bullets, gapCount, 
         hasGaps={gapCount > 0}
       />
 
-      {/* ── 5. TILL CAT — an active choice, not a footnote ───────────────── */}
-      <a href="/offer" className="block rounded-2xl bg-stone-900 px-4 py-3.5 text-white active:scale-[0.99]">
-        <p className="text-[15px] font-extrabold leading-tight">{buddyFirst} till CAT — ₹2,999 →</p>
-      </a>
+      {/* ── 5. TILL CAT — an active choice, not a footnote ─────────────────
+          Pointed at /offer until 25 Aug, which is the Independence Day
+          campaign page. That campaign closes ITSELF after 15 Aug by design, so
+          every student tapping the main upsell landed on "This offer has
+          closed" with nothing to buy — the price was not even the live one.
+          It now opens the real paywall sheet, the same one the timetable and
+          nudge surfaces use, so there is ONE purchase path rather than a
+          campaign fork that can expire. */}
+      <UnlockBuddyButton
+        variant="primary"
+        size="lg"
+        className="w-full rounded-2xl bg-stone-900 px-4 py-3.5 text-[15px] font-extrabold leading-tight text-white active:scale-[0.99]"
+      >
+        {buddyFirst} till CAT — {PLANS.tillcat.display} →
+      </UnlockBuddyButton>
     </div>
   );
 }

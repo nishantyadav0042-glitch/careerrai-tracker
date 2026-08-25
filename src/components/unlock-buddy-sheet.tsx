@@ -7,8 +7,8 @@ import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
 import { escapeToBrowserForPayment, paymentHandoffUrl, readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
-import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
+import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
+import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
 import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
 import { payFunnel } from '@/lib/payment-funnel-client';
@@ -166,6 +166,27 @@ function useBuddyCheckout() {
       // The split event — see lib/payment-funnel. Proves a payment window was
       // actually shown, not merely that an order was minted.
       payFunnel('payment_checkout_opened', { plan: planId, surface: 'unlock_buddy' });
+
+      // ── Installed iOS PWA: navigate, never a modal ─────────────────────
+      // This surface blocks the popups the modal needs AND cannot escape to
+      // Safari with an anchor, which is what produced the "tap share, choose
+      // Open in Safari" dead end. Redirect mode keeps the SAME order id, so
+      // the webhook and activate-payment path are unchanged.
+      if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
+        track('pay_redirect', { plan: planId, surface: 'unlock_buddy' });
+        new window.Razorpay(redirectCheckoutOptions({
+          keyId: data.keyId,
+          orderId: data.orderId,
+          amount: data.amount,
+          currency: data.currency,
+          name: 'CareerRai',
+          description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
+          prefill: data.prefill ?? (fullName ? { name: fullName } : undefined),
+          themeColor: '#E8652D',
+          callbackUrl: checkoutCallbackUrl('/student/buddy'),
+        })).open();
+        return;
+      }
 
       const rzp = new window.Razorpay({
         key: data.keyId,

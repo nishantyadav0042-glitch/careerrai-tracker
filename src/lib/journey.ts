@@ -233,6 +233,9 @@ export type EventName =
   // the only question that matters: does seeing the real plan move installs?
   | 'plan_snapshot_shown'
   | 'pay_escape_browser' | 'pay_exception' | 'pay_failed' | 'pay_free_unlock'
+  // Full-page redirect checkout (installed iOS PWA). Distinct from
+  // pay_escape_browser: nothing escapes, this page navigates and comes back.
+  | 'pay_redirect'
   | 'pay_order_created' | 'pay_order_failed' | 'pay_script_failed'
   | 'pay_success_callback'
   | 'push_enabled' | 'shield_intro_shown'

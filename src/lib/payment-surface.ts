@@ -36,6 +36,12 @@
 export type PaymentSurface =
   /** Open Razorpay in-page. Only where a popup and a redirect both work. */
   | 'inline'
+  /**
+   * Razorpay in FULL-PAGE REDIRECT mode: no modal, no popup, no new tab — the
+   * page itself navigates to Razorpay and comes back via callback_url. Same
+   * order id, so reconciliation is untouched.
+   */
+  | 'redirect'
   /** Render a real <a target="_blank"> to `/go`. Never a scripted popup. */
   | 'ios_link_handoff'
   /** window.open inside the gesture, then point it at `/go`. */
@@ -68,10 +74,20 @@ export function paymentSurface(s: PaymentSurfaceSignals): PaymentSurface {
   // view over the app, so the student sees white. A real link is honoured.
   if (s.iosStoreBuild) return 'ios_link_handoff';
 
-  // THE FIX. An installed iOS PWA has the same popup and navigation limits as
-  // the WKWebView wrapper, and until now was the one iOS surface that got the
-  // inline modal. 0 payments in 21 attempts.
-  if (s.ios && s.standalone) return 'ios_link_handoff';
+  // An installed iOS PWA has the same popup limits as the WKWebView wrapper,
+  // so the inline modal never worked here: 0 payments in 21 attempts.
+  //
+  // BUT IT IS NOT THE SAME AS THE WRAPPER, and treating it as such was its own
+  // bug. A WKWebView honours a real anchor and escapes to Safari; an installed
+  // PWA does NOT — target="_blank" navigates INSIDE the app. So the hand-off
+  // link landed on /go within the PWA, which then asked the student to tap
+  // share and choose "Open in Safari" by hand. Three taps and a system menu to
+  // buy a ₹299 session (founder, on an iPhone, 25 Aug).
+  //
+  // Redirect mode needs no popup and no escape: the page navigates to
+  // Razorpay's hosted checkout and returns through callback_url. One tap, and
+  // the SAME order id, so the webhook and activate-payment path do not change.
+  if (s.ios && s.standalone) return 'redirect';
 
   // Android's TWA does honour window.open inside a user gesture, and opening
   // the tab synchronously is what keeps it from being popup-blocked.
@@ -84,9 +100,21 @@ export function paymentSurface(s: PaymentSurfaceSignals): PaymentSurface {
   return 'inline';
 }
 
-/** True when checkout must leave this context to have any chance of working. */
+/**
+ * True when checkout must leave this context to have any chance of working.
+ *
+ * Redirect mode does NOT leave — it stays in this context and navigates it, so
+ * it is deliberately not a hand-off. Callers use this to decide whether to
+ * mint a /go link, and minting one for redirect would resurrect the extra tap.
+ */
 export function needsBrowserHandoff(s: PaymentSurfaceSignals): boolean {
-  return paymentSurface(s) !== 'inline';
+  const surface = paymentSurface(s);
+  return surface === 'ios_link_handoff' || surface === 'popup_handoff';
+}
+
+/** True when Razorpay should navigate the page instead of opening a modal. */
+export function usesRedirectCheckout(s: PaymentSurfaceSignals): boolean {
+  return paymentSurface(s) === 'redirect';
 }
 
 /**

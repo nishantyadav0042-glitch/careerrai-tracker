@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
+import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 import { escapeToBrowserForPayment, readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
+import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
 import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
 import { IntentPicker, intentIsComplete } from '@/components/session/intent-picker';
 import type { SessionIntent } from '@/lib/session-intent';
@@ -124,6 +124,26 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
 
       const ok = await loadRazorpay();
       if (!ok || !window.Razorpay) { setError('Could not load the payment window. Try again.'); return; }
+
+      // ── Installed iOS PWA: navigate, never a modal ─────────────────────
+      // The modal needs popups this surface blocks, and an anchor cannot
+      // escape to Safari from a standalone PWA either — that combination is
+      // what produced the "tap share, choose Open in Safari" screen. Redirect
+      // mode keeps the SAME order id, so the webhook path is unchanged.
+      if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
+        track('pay_redirect', { plan: 'session', intent });
+        new window.Razorpay(redirectCheckoutOptions({
+          keyId: json.keyId,
+          orderId: json.orderId,
+          amount: json.amount,
+          currency: json.currency,
+          name: 'CareerRai',
+          description: `${json.minutes}-min 1:1 session with an IIM Buddy`,
+          prefill: json.prefill,
+          callbackUrl: checkoutCallbackUrl('/student/buddy'),
+        })).open();
+        return;
+      }
 
       const rzp = new window.Razorpay({
         key: json.keyId,
