@@ -80,15 +80,36 @@ next step:
 
 | planned adversarial test | table it needs | state |
 |---|---|---|
-| duplicate payment / duplicate callback | `idempotency_keys` | **zero objects** |
-| "3 messages" counted against real rows | `chat_messages` | **zero objects** |
-| duplicate notification / dedup | `notifications`, `notification_duplicate_suppressions` | **zero objects** |
-| refund cannot re-grant | `refund_requests` | **zero objects** |
-| mentor Google connection | `google_oauth_tokens` | **zero objects** |
+| duplicate payment / duplicate callback | `idempotency_keys` | **restored** `20260826e` |
+| "3 messages" counted against real rows | `chat_messages` | **restored** `20260826e` |
+| duplicate notification / dedup | `notifications`, `notification_duplicate_suppressions` | **restored** `20260826e` |
+| refund cannot re-grant | `refund_requests` | **restored** `20260826e` |
+| mentor Google connection | `google_oauth_tokens` | **restored** `20260826e` |
 | promotion impression, once per day | *(table does not exist yet)* | — |
 | booking, credit lifecycle, feedback | `session_credits`, `video_sessions`, `session_feedback` | ready |
 
-The booking chain is ready. Everything else in that list is not.
+**All six restored on 26 Aug and verified three ways** — byte-identical md5 to
+production, 15/15 functional probes, and non-vacuity by dropping all ten
+protections at once (12/12 attacks became ACCEPTED, then refused again on
+restore). See `supabase/tests/audit_gate_constraints_probes.sql`.
+
+The adversarial round is no longer blocked by parity. The other 73 zero-object
+tables remain divergent by decision, not oversight: restore what an audit gate
+needs, when it needs it.
+
+### The once-per-day pattern already exists
+
+`notifications_once_per_day_per_type` is a UNIQUE index on
+`(user_id, type, (created_at AT TIME ZONE 'Asia/Kolkata')::date)` covering 21
+notification types. Proved by probe: two sends in one IST day are refused;
+23:50 IST and 00:10 IST are correctly different days; uncapped types repeat
+freely.
+
+That is the buddy-promotion requirement, already solved, already in production,
+for a different surface. The promotion cap needs this mechanism — not a new
+one — and the day boundary question is answered: **Asia/Kolkata calendar day**
+is the established convention. Being a unique index, it fails CLOSED, which is
+exactly where the current `localStorage` throttle fails open.
 
 ---
 
