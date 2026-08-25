@@ -34,7 +34,11 @@ export async function POST(request: NextRequest) {
     const now = Date.now();
     const { data: stuck } = await admin
       .from('student_payments')
-      .select('id, student_id, plan, coupon_code, amount, session_credit_id, razorpay_order_id, created_at')
+      // Same columns as the webhook path: a reconciled payment must mint a
+      // credit carrying the same reason the webhook would have. Written as ONE
+      // string literal — a concatenated select defeats the client's column
+      // type inference and every field comes back as an error type.
+      .select('id, student_id, plan, coupon_code, amount, session_credit_id, razorpay_order_id, created_at, finding_kind, finding_evidence, session_intent, session_intent_note')
       .eq('status', 'created')
       .not('razorpay_order_id', 'is', null)
       .lt('created_at', new Date(now - MIN_AGE_MINUTES * 60_000).toISOString())

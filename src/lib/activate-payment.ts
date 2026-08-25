@@ -5,6 +5,8 @@ import { logSecurityEvent } from '@/lib/security-log';
 import { emitTimeline } from '@/lib/os/timeline';
 import { sendMetaCapiEvent } from '@/lib/meta-capi';
 import { SESSION_PLAN_ID, SESSION_PRICE_PAISE } from '@/lib/session-credit';
+import { MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
+import { assignBuddyToCredit } from '@/lib/session-assignment';
 
 // The ONE path that turns a real Razorpay capture into a paid, premium student.
 // Shared by the webhook (normal case) and the reconcile-payments cron (the
@@ -21,6 +23,9 @@ export interface PayableRow {
    *  carried onto the credit so the mentor opens knowing the problem. */
   finding_kind?: string | null;
   finding_evidence?: string | null;
+  /** What the STUDENT said they wanted, chosen at booking. */
+  session_intent?: string | null;
+  session_intent_note?: string | null;
   /** Plan purchases only: the ₹299 session credit applied at order creation. */
   session_credit_id?: string | null;
 }
@@ -62,7 +67,10 @@ export async function readWebhookPaymentRow(
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await admin
       .from('student_payments')
-      .select('id, student_id, plan, status, coupon_code, amount, session_credit_id')
+      // finding_kind / session_intent belong here. They were read by
+      // activateSessionCredit and NEVER SELECTED, so `row.finding_kind` was
+      // always undefined and every credit was minted with a null reason.
+      .select('id, student_id, plan, status, coupon_code, amount, session_credit_id, finding_kind, finding_evidence, session_intent, session_intent_note')
       .eq('razorpay_order_id', orderId)
       .maybeSingle();
     if (!error) return (data as WebhookPaymentRow | null) ?? null;
@@ -151,6 +159,10 @@ async function activateSessionCredit(
       amount_paise: row.amount ?? SESSION_PRICE_PAISE,
       finding_kind: row.finding_kind ?? null,
       finding_evidence: row.finding_evidence ?? null,
+      // The student's stated reason, carried from the payment onto the
+      // entitlement so the mentor opens the call already knowing the problem.
+      session_intent: row.session_intent ?? null,
+      session_intent_note: row.session_intent_note ?? null,
     });
     // 23505 = the unique constraint fired, i.e. a concurrent delivery already
     // minted this credit. That is SUCCESS, not failure: the entitlement the
@@ -160,6 +172,67 @@ async function activateSessionCredit(
       // that must be loud, because the student has paid for nothing.
       console.error(`[activate:${source}] SESSION CREDIT MINT FAILED`, creditErr.message);
       return false;
+    }
+  }
+
+  // ── The three messages the ₹299 actually buys ────────────────────────────
+  //
+  // Until 24 Aug this line did not exist, and a ₹299 buyer received ZERO
+  // messages — the 3-message entitlement was real but only the admin Mentor
+  // Doors route ever issued one.
+  //
+  // Reuses mentor_grants rather than minting a second entitlement store. The
+  // buddy is left NULL: it is filled when the session is assigned, and an
+  // un-buddied grant is unspendable, so this cannot leak chat before there is
+  // a mentor to chat with.
+  //
+  // ON CONFLICT DO NOTHING via the UNIQUE(student_id) constraint: a student who
+  // already holds a grant (an earned door, or a previous ₹299) keeps the one
+  // they have. Buying twice must not silently reset a spent counter — the
+  // allowance is raised deliberately, by a human, not by a repeat purchase.
+  const { error: grantErr } = await admin.from('mentor_grants').insert({
+    student_id: row.student_id,
+    door: 'session',
+    activated_at: new Date().toISOString(),
+    messages_allowance: MENTOR_FREE_MESSAGES,
+  });
+  if (grantErr && grantErr.code !== '23505') {
+    // Reported, not fatal: the session they paid for is the product. Losing
+    // the three messages must not fail the payment activation.
+    console.error(`[activate:${source}] session chat grant failed:`, grantErr.message);
+  }
+
+  // ── Assign a mentor, right now ───────────────────────────────────────────
+  //
+  // The gap this closes: a credit was minted and then nothing happened. Nobody
+  // was assigned, no session existed, and a human had to build the row by hand.
+  //
+  // NEVER fatal, and never consumes the credit. If no mentor has capacity the
+  // student still owns exactly what they paid for — the credit waits at `paid`
+  // and the founder view can see it waiting. Losing an entitlement because the
+  // roster was briefly empty is the one outcome to avoid.
+  //
+  // Assigns session_credits.buddy_id ONLY. profiles.buddy_id is the ongoing
+  // premium relationship and is deliberately untouched: a one-off session must
+  // never become a permanent mentorship.
+  const { data: fresh } = await admin
+    .from('session_credits').select('id').eq('payment_id', row.id).maybeSingle();
+  if (fresh?.id) {
+    const assigned = await assignBuddyToCredit(admin, {
+      creditId: fresh.id as string,
+      studentId: row.student_id,
+      sessionIntent: row.session_intent ?? null,
+      findingKind: row.finding_kind ?? null,
+    });
+    if (!assigned.ok) {
+      console.error(`[activate:${source}] session not assigned yet:`, assigned.failure);
+    } else {
+      // The three messages become spendable only now — the grant was minted
+      // with no buddy, and an un-buddied grant is unspendable by design.
+      await admin.from('mentor_grants')
+        .update({ buddy_id: assigned.buddyId })
+        .eq('student_id', row.student_id)
+        .is('buddy_id', null);
     }
   }
 

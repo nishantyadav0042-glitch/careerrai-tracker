@@ -28,7 +28,9 @@ export async function GET() {
   const [{ data: buddies }, { data: tokens }, { data: liveSessions }] = await Promise.all([
     admin.from('profiles').select('id, full_name, buddy_meet_url').eq('role', 'buddy'),
     admin.from('google_oauth_tokens').select('user_id, google_email'),
-    admin.from('video_sessions').select('buddy_id, student_id').eq('session_status', 'scheduled'),
+    // 'active' included: a LIVE session with a broken room is the worst case
+    // this health check exists to catch, not one to filter out.
+    admin.from('video_sessions').select('buddy_id, student_id').in('session_status', ['scheduled', 'active']),
   ]);
 
   const connected = new Map((tokens ?? []).map((t) => [t.user_id, t.google_email]));

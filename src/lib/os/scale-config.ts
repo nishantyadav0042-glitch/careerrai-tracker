@@ -33,6 +33,41 @@ export const ABANDONED_CHECKOUT_LOOKBACK_DAYS = 14;
 /** How far back an expired (nobody-joined) session still counts as a fresh miss (days). */
 export const EXPIRED_SESSION_LOOKBACK_DAYS = 3;
 
+// ── Sales call-queue lanes (founder, 24 Aug · Phase 1.5 debt C3) ────────────
+// The numbers that decide WHY a student is in a rep's queue today. They live
+// here, not as literals inside classifyLane, so that "silent" means one thing
+// across every surface that reasons about a student going quiet — the sales
+// lane, the mission-deck root-cause census, and anything added later. Tuning
+// the definition is a config change, not an engine edit.
+//
+// classifyLane (lib/call-queue) is THE per-student sales lane authority. The
+// mission-deck census (lib/mission-queue) answers a different question — which
+// branch of the whole roster is biggest — and keeps its own aggregation, but
+// must share these thresholds when it is next touched.
+
+/** Consecutive days with no log before a previously-active student is "going
+ *  cold". Three days is the first point at which silence is a pattern rather
+ *  than a weekend. */
+export const GOING_COLD_SILENT_DAYS = 3;
+
+/** How many of the preceding days must carry a log for the silence to mean
+ *  something. Below this the student never had a rhythm to lose. */
+export const GOING_COLD_MIN_PRIOR_DAYS = 3;
+
+/** A daily run at least this long is a habit worth winning back by name. */
+export const BROKEN_STREAK_MIN_RUN = 5;
+
+/** How recently the run must have ended to still be warm enough to recover. */
+export const BROKEN_STREAK_MAX_DAYS_SINCE = 3;
+
+/** Days after signup before the activation call is appropriate. Calling two
+ *  hours after someone joins reads as surveillance, not help. */
+export const NEW_LEAD_MIN_AGE_DAYS = 1;
+
+/** After this many days a never-logged signup has missed the activation
+ *  moment and falls through to the ordinary fresh lane. */
+export const NEW_LEAD_MAX_AGE_DAYS = 7;
+
 // ── Buddy check-in (founder, 10 Aug) ────────────────────────────────────────
 // "Agar mere paas 5 student assigned hain aur unme se kisi ek ne bhi kal log
 // nahi bhara, to agle din buddy ki ID se message jaayega." The numbers that

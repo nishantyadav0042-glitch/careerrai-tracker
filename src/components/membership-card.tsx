@@ -8,9 +8,9 @@ import { payFunnel } from '@/lib/payment-funnel-client';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { Sparkles, Heart } from 'lucide-react';
 import { trackMeta } from '@/lib/track';
-import { escapeToBrowserForPayment, paymentHandoffUrl, readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
-import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
+import { readPaymentSurfaceSignals } from '@/lib/store-build';
+import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
+import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { track } from '@/lib/journey';
 
 // Two kinds of student, and nothing else (founder, 10 Aug): PREMIUM has paid
@@ -39,7 +39,6 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
   const router = useRouter();
   const [busy, setBusy] = useState<PlanId | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [payUrl, setPayUrl] = useState<string | null>(null);
   const [coupon, setCoupon] = useState('');
 
   async function upgrade(planId: PlanId) {
@@ -48,27 +47,6 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
     // an iOS branch nested inside, and an installed iOS PWA is neither store
     // build — so it fell through to the inline modal below and could not
     // complete a payment. 7 opens, 7 dismissals, 0 payments.
-    const surface = paymentSurface(readPaymentSurfaceSignals());
-
-    if (surface === 'ios_link_handoff') {
-      const url = await paymentHandoffUrl('/student/profile');
-      track('pay_escape_browser', { plan: planId, surface: 'membership', mode: 'ios_link', linkReady: url != null });
-      setPayUrl(url ?? 'https://careerrai.in/student/profile');
-      setMessage(url ? HANDOFF_COPY.ready : HANDOFF_COPY.noLink);
-      return;
-    }
-
-    if (surface === 'popup_handoff') {
-      const opened = await escapeToBrowserForPayment('/student/profile');
-      track('pay_escape_browser', { plan: planId, surface: 'membership', mode: 'popup', opened });
-      if (!opened) {
-        // A sentence telling the student to go and find the site themselves is
-        // a dead end on a phone. Always leave a tappable link behind.
-        setPayUrl('https://careerrai.in/student/profile');
-        setMessage(HANDOFF_COPY.noLink);
-      }
-      return;
-    }
     setBusy(planId);
     setMessage(null);
     // Intent, recorded BEFORE any network call — so "tapped Pay but the order
@@ -105,6 +83,28 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       // student actually saw a payment window. Without it, "never reached
       // Razorpay" and "reached it and left" are the same abandoned order.
       payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership' });
+
+      // ── Installed iOS PWA: navigate, never a modal ─────────────────────
+      // This surface blocks the popups the modal needs AND cannot escape to
+      // Safari with an anchor, which is what produced the "tap share, choose
+      // Open in Safari" dead end. Redirect mode keeps the SAME order id, so
+      // the webhook and activate-payment path are unchanged.
+      if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
+        payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'membership_redirect' });
+        track('pay_redirect', { plan: planId, surface: 'membership' });
+        new window.Razorpay(redirectCheckoutOptions({
+          keyId: data.keyId,
+          orderId: data.orderId,
+          amount: data.amount,
+          currency: data.currency,
+          name: 'CareerRai',
+          description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
+          prefill: data.prefill ?? (fullName ? { name: fullName } : undefined),
+          themeColor: '#E8652D',
+          callbackUrl: checkoutCallbackUrl('/student/profile'),
+        })).open();
+        return;
+      }
 
       const rzp = new window.Razorpay({
         key: data.keyId,
@@ -268,16 +268,6 @@ export function MembershipCard({ status, plan, renewsAt, fullName, scholarship }
       )}
 
       {message && <p className="text-xs text-stone-600 mt-3">{message}</p>}
-      {payUrl && (
-        <a
-          href={payUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-900"
-        >
-          {payUrl.includes('/go?') ? 'Continue to secure payment →' : 'Open careerrai.in to pay →'}
-        </a>
-      )}
     </Card>
   );
 }

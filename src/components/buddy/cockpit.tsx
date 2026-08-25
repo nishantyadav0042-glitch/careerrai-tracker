@@ -5,6 +5,7 @@ import { computeBreach } from '@/lib/plan-breach';
 import { computeRequiredPace, remainingSyllabusHours, remainingMockHours, studentEffortMultiplier } from '@/lib/study-pace';
 import { CallCloseout } from './call-closeout';
 import { QuickNote } from './quick-note';
+import { SessionStart } from './session-start';
 import { joinState, canJoinNow, countdownLabel } from '@/lib/session-link';
 import { isCovered } from '@/lib/coverage-status';
 
@@ -55,7 +56,12 @@ export interface CockpitProps {
   lastYearPercentile: number | null;
   isWorkingProfessional: boolean | null;
   syllabusTargetDate: string | null;
-  nextSession: { id: string; scheduled_at: string; google_meet_link: string | null } | null;
+  nextSession: {
+    id: string; scheduled_at: string; google_meet_link: string | null;
+    // Carried so the card can show Start / Live. Without these the cockpit
+    // cannot tell a booked call from one already running.
+    session_status?: string | null; started_at?: string | null;
+  } | null;
 }
 
 export async function BuddyCockpit(p: CockpitProps) {
@@ -156,18 +162,30 @@ export async function BuddyCockpit(p: CockpitProps) {
           {/* Both sides open on the SAME rule (lib/session-link). Two different
               gates is how one person ends up alone in a room wondering whether
               the other is coming. */}
-          {canJoinNow(sessionJoinState) && p.nextSession?.google_meet_link ? (
-            <a href={p.nextSession.google_meet_link} target="_blank" rel="noopener noreferrer"
-               className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-[14px] font-extrabold text-teal-700">
-              Join →
-            </a>
-          ) : (
-            <span className="shrink-0 rounded-lg bg-teal-800 px-2.5 py-1 text-[12px] font-semibold">
-              {p.nextSession
-                ? countdownLabel({ scheduledAtIso: p.nextSession.scheduled_at, nowMs: sessionNowMs })
-                : ''}
-            </span>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {canJoinNow(sessionJoinState) && p.nextSession?.google_meet_link ? (
+              <a href={p.nextSession.google_meet_link} target="_blank" rel="noopener noreferrer"
+                 className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-[14px] font-extrabold text-teal-700">
+                Join →
+              </a>
+            ) : (
+              <span className="shrink-0 rounded-lg bg-teal-800 px-2.5 py-1 text-[12px] font-semibold">
+                {p.nextSession
+                  ? countdownLabel({ scheduledAtIso: p.nextSession.scheduled_at, nowMs: sessionNowMs })
+                  : ''}
+              </span>
+            )}
+            {/* Start is gated on the SAME window as Join. A mentor cannot mark
+                a call live three hours before it is due — that would make
+                started_at meaningless as evidence that the call happened. */}
+            {p.nextSession && (canJoinNow(sessionJoinState) || p.nextSession.session_status === 'active') && (
+              <SessionStart
+                sessionId={p.nextSession.id}
+                status={p.nextSession.session_status ?? 'scheduled'}
+                startedAt={p.nextSession.started_at ?? null}
+              />
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3">

@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { PLANS, type PlanId } from '@/lib/plans';
 import { trackMeta } from '@/lib/track';
 import { track } from '@/lib/journey';
-import { escapeToBrowserForPayment, paymentHandoffUrl, readPaymentSurfaceSignals } from '@/lib/store-build';
-import { paymentSurface, HANDOFF_COPY } from '@/lib/payment-surface';
-import { loadRazorpay, failureMessage } from '@/lib/razorpay-checkout';
+import { readPaymentSurfaceSignals } from '@/lib/store-build';
+import { paymentSurface, usesRedirectCheckout, HANDOFF_COPY } from '@/lib/payment-surface';
+import { loadRazorpay, failureMessage, redirectCheckoutOptions, checkoutCallbackUrl } from '@/lib/razorpay-checkout';
 import { catUrgencyLabel } from '@/lib/cat-countdown';
-import { useIosPayUrl } from '@/hooks/use-ios-pay-url';
 import { payFunnel } from '@/lib/payment-funnel-client';
 
 // Buddy checkout. Two entry points share ONE payment path (useBuddyCheckout):
@@ -38,32 +37,17 @@ function logCtaClick() {
  * because only iOS needs a real navigation to escape the webview.
  */
 function PlanCta({
-  iosUrl, onClick, disabled, className, analytics, children,
+  onClick, disabled, className, analytics, children,
 }: {
-  iosUrl: string | null;
   onClick: () => void;
   disabled?: boolean;
   className: string;
   analytics?: string;
   children: React.ReactNode;
 }) {
-  if (iosUrl) {
-    return (
-      <a
-        href={iosUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        data-analytics={analytics}
-        data-section="paywall"
-        // Fires before the navigation, and the wrapper stays open (the link
-        // opens a separate browser), so a plain fire-and-forget beacon lands.
-        onClick={onClick}
-        className={className}
-      >
-        {children}
-      </a>
-    );
-  }
+  // Always a button. There used to be an anchor variant for the iOS hand-off,
+  // which navigated to /go and asked the student to reach Safari by hand.
+  // Every surface now pays in place, so there is nothing to navigate to.
   return (
     <button
       type="button"
@@ -103,32 +87,6 @@ function useBuddyCheckout() {
     // installed iOS PWA is neither store build, so it "fell straight through to
     // inline Razorpay" (the comment above used to say exactly that). Measured
     // result of falling through: 0 payments in 21 attempts.
-    const surface = paymentSurface(readPaymentSurfaceSignals());
-
-    if (surface !== 'inline') {
-      setBusy(planId);
-    payFunnel('payment_cta_clicked', { plan: planId, surface: 'unlock_buddy' });
-      try {
-        if (surface === 'ios_link_handoff') {
-          const url = await paymentHandoffUrl('/student/buddy');
-          track('pay_escape_browser', { plan: planId, opened: false, ios: true, mode: 'ios_link', linkReady: url != null });
-          setMessage(url ? HANDOFF_COPY.ready : HANDOFF_COPY.noLink);
-          // Signed-in hand-off when we have it; the bare paywall (which will
-          // ask them to log in) only as a last resort, never a dead end.
-          setManualUrl(url ?? 'https://careerrai.in/student/buddy');
-          return;
-        }
-        const opened = await escapeToBrowserForPayment('/student/buddy');
-        track('pay_escape_browser', { plan: planId, opened, mode: 'popup' });
-        if (!opened) {
-          setMessage(HANDOFF_COPY.noLink);
-          setManualUrl('https://careerrai.in/student/buddy');
-        }
-      } finally {
-        setBusy(null);
-      }
-      return;
-    }
     setBusy(planId);
     setMessage(null);
     setManualUrl(null);
@@ -166,6 +124,28 @@ function useBuddyCheckout() {
       // The split event — see lib/payment-funnel. Proves a payment window was
       // actually shown, not merely that an order was minted.
       payFunnel('payment_checkout_opened', { plan: planId, surface: 'unlock_buddy' });
+
+      // ── Installed iOS PWA: navigate, never a modal ─────────────────────
+      // This surface blocks the popups the modal needs AND cannot escape to
+      // Safari with an anchor, which is what produced the "tap share, choose
+      // Open in Safari" dead end. Redirect mode keeps the SAME order id, so
+      // the webhook and activate-payment path are unchanged.
+      if (usesRedirectCheckout(readPaymentSurfaceSignals())) {
+        payFunnel('payment_checkout_opened', { plan: planId, orderId: data.orderId, surface: 'unlock_buddy_redirect' });
+        track('pay_redirect', { plan: planId, surface: 'unlock_buddy' });
+        new window.Razorpay(redirectCheckoutOptions({
+          keyId: data.keyId,
+          orderId: data.orderId,
+          amount: data.amount,
+          currency: data.currency,
+          name: 'CareerRai',
+          description: `1:1 CAT mentorship (${PLANS[planId].label}) — live sessions with an IIM mentor`,
+          prefill: data.prefill ?? (fullName ? { name: fullName } : undefined),
+          themeColor: '#E8652D',
+          callbackUrl: checkoutCallbackUrl('/student/buddy'),
+        })).open();
+        return;
+      }
 
       const rzp = new window.Razorpay({
         key: data.keyId,
@@ -214,13 +194,7 @@ function useBuddyCheckout() {
   // funnel still shows the tap. `opened:true` because the browser really does
   // open here — unlike the old two-tap flow, which logged opened:false and
   // then waited for a second tap that never came.
-  function trackIosTap(planId: PlanId) {
-    track('buddy_plan_click', { plan: planId, price: PLANS[planId].display, amountPaise: PLANS[planId].amountPaise });
-    track('pay_escape_browser', { plan: planId, opened: true, ios: true, oneTap: true });
-    logCtaClick();
-  }
-
-  return { pay, trackIosTap, busy, message, callMe, setCallMe, manualUrl };
+  return { pay, busy, message, callMe, setCallMe, manualUrl };
 }
 
 // Shown only when the browser hand-off failed: a real link they can tap, so
@@ -261,15 +235,13 @@ function CallMeModal({ onClose }: { onClose: () => void }) {
 
 // The price choice, rendered inline on the sales page. One tap → Razorpay.
 export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: string; sticky?: boolean }) {
-  const { pay, trackIosTap, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
-  const iosUrl = useIosPayUrl('/student/buddy');
-  const tap = (plan: PlanId) => (iosUrl ? trackIosTap(plan) : pay(plan, fullName));
+  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const tap = (plan: PlanId) => pay(plan, fullName);
 
   if (sticky) {
     return (
       <>
         <PlanCta
-          iosUrl={iosUrl}
           analytics="buy_tillcat_sticky"
           onClick={() => tap('tillcat')}
           disabled={busy !== null}
@@ -290,7 +262,6 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
     <div>
       {/* Hero — one payment, buddy till exam day */}
       <PlanCta
-        iosUrl={iosUrl}
         analytics="buy_tillcat"
         onClick={() => tap('tillcat')}
         disabled={busy !== null}
@@ -313,7 +284,6 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
 
       {/* Low-commitment option */}
       <PlanCta
-        iosUrl={iosUrl}
         analytics="buy_monthly"
         onClick={() => tap('monthly')}
         disabled={busy !== null}
@@ -362,9 +332,8 @@ export function UnlockBuddyButton({
   fullName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { pay, trackIosTap, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
-  const iosUrl = useIosPayUrl('/student/buddy');
-  const tap = (plan: PlanId) => (iosUrl ? trackIosTap(plan) : pay(plan, fullName));
+  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const tap = (plan: PlanId) => pay(plan, fullName);
 
   function openSheet() {
     logCtaClick();
@@ -421,7 +390,6 @@ export function UnlockBuddyButton({
               </a>
 
               <PlanCta
-                iosUrl={iosUrl}
                 onClick={() => tap('monthly')}
                 disabled={busy !== null}
                 className="block w-full rounded-2xl border border-stone-200 px-4 py-3 text-left transition-colors hover:border-stone-400 disabled:opacity-50"
@@ -434,7 +402,6 @@ export function UnlockBuddyButton({
               </PlanCta>
 
               <PlanCta
-                iosUrl={iosUrl}
                 onClick={() => tap('tillcat')}
                 disabled={busy !== null}
                 className="block w-full rounded-2xl border border-stone-300 px-4 py-3 text-left transition-colors hover:border-stone-500 disabled:opacity-50"

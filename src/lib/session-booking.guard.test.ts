@@ -89,7 +89,10 @@ describe('the conversion screen: weakness → person → price, nothing else', (
     const red = s.indexOf('bg-red-600');
     const person = s.indexOf('Your IIM Buddy');
     const price = s.indexOf('<BookSessionCard');
-    const tillcat = s.indexOf('till CAT — ₹2,999');
+    // Anchored on the CTA itself, not a hardcoded price. Pinning '₹2,999'
+    // here is part of how the card drifted out of step with lib/plans while
+    // the campaign page quoted ₹2,499.
+    const tillcat = s.indexOf('till CAT —');
     expect(diagnosis).toBeGreaterThan(-1);
     expect(red).toBeGreaterThan(diagnosis);
     expect(person).toBeGreaterThan(red);
@@ -108,9 +111,21 @@ describe('the conversion screen: weakness → person → price, nothing else', (
 
   it('the Till-CAT plan is one line, not the price-card stack', () => {
     const s = readFileSync(SCREEN, 'utf8');
-    expect(s).toContain('₹2,999');
+    expect(s).toContain('till CAT —');
+    // The price comes from the plan authority, never a literal — the literal
+    // is what let this card say ₹2,999 while /offer said ₹2,499.
+    expect(s).toContain('PLANS.tillcat.display');
     // ...but the big subscription price cards do not come back.
     expect(s).not.toContain('BuddyBuyButtons');
+  });
+
+  it('the Till-CAT line opens a LIVE purchase path', () => {
+    // It pointed at /offer — the Independence Day campaign, which closes
+    // itself after 15 Aug — so the main upsell led to "This offer has closed"
+    // with nothing to buy.
+    const s = readFileSync(SCREEN, 'utf8');
+    expect(s).not.toMatch(/href="\/offer"/);
+    expect(s).toContain('UnlockBuddyButton');
   });
 
   it('the red strip is ONE sourced line and nothing after it', () => {

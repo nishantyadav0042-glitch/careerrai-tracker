@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { MeetingWidget } from '@/components/meeting-widget';
 import { MeetingRoomSetup } from '@/components/buddy/meeting-room-setup';
+import { SessionReadiness } from '@/components/buddy/session-readiness';
 import { buddyBookingReadiness } from '@/lib/buddy-room';
 
 export default async function BuddySchedulePage({
@@ -21,13 +22,16 @@ export default async function BuddySchedulePage({
   // here from a read that may have failed can only misfire — a flaky profiles
   // read would bounce a real buddy, which is exactly the 21 Aug defect.
 
-  const [{ data: students }, readiness] = await Promise.all([
+  const [{ data: students }, readiness, { data: availabilityRow }] = await Promise.all([
     admin.from('profiles').select('id, full_name').eq('buddy_id', user.id).order('full_name'),
     // Booking needs BOTH a live Google connection and a permanent room. Asking
     // for the full readiness — rather than just "is a token present" — is what
     // catches the mentor whose grant died since their last visit, or whose room
     // was never minted because Google was down that minute.
     buddyBookingReadiness(user.id),
+    // The mentor's described week. Absent means NOT bookable — students see a
+    // team-confirmation path rather than an empty picker.
+    admin.from('buddy_availability').select('*').eq('buddy_id', user.id).maybeSingle(),
   ]);
 
   return (
@@ -50,6 +54,18 @@ export default async function BuddySchedulePage({
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         {/* Pasting a link beats waiting on Google's verification queue, so it
             leads. Google stays available as the "make one for me" shortcut. */}
+        <SessionReadiness
+          googleConnected={readiness.googleConnected}
+          availability={{
+            configured: availabilityRow != null,
+            work_days: (availabilityRow?.work_days as number[] | undefined),
+            start_minute: (availabilityRow?.start_minute as number | undefined),
+            end_minute: (availabilityRow?.end_minute as number | undefined),
+            slot_minutes: (availabilityRow?.slot_minutes as number | undefined),
+            buffer_minutes: (availabilityRow?.buffer_minutes as number | undefined),
+            active: (availabilityRow?.active as boolean | undefined),
+          }}
+        />
         <MeetingRoomSetup currentRoom={readiness.roomUrl} from="/buddy/schedule" googleStatus={googleStatus} />
         {/* The widget is ALWAYS shown now. Hiding it when Google was not
             connected meant a mentor lost the whole surface and had to go find

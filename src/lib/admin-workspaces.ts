@@ -60,6 +60,11 @@ export const WORKSPACES: AdminWorkspace[] = [
     purpose: 'The five-minute morning screen. What needs you right now.',
     tabs: [
       { label: 'Today', href: '/admin', status: 'live' },
+      // The loop: student -> signal -> intervention -> response -> outcome ->
+      // learning. It lives in COMMAND, not in Sales, on purpose — the human
+      // layer is a mechanism inside Student Success, not a separate product
+      // with its own dashboard.
+      { label: 'Student Success', href: '/admin/student-success', status: 'live' },
       { label: 'Launch', href: '/admin/launch', status: 'moved' },
       { label: 'Mission control', href: '/admin/mission-control', status: 'moved' },
     ],
@@ -99,6 +104,10 @@ export const WORKSPACES: AdminWorkspace[] = [
       // "no calls were made" from "no calls were recorded".
       { label: 'Control Tower', href: '/admin/sales/tower', status: 'live' },
       { label: 'Call queue', href: '/admin/sales', status: 'live' },
+      // Phase 2B-1 (24 Aug): capacity VISIBILITY only — how much live work
+      // each rep holds and how much more they could take. No automatic
+      // assignment exists; every lead is still claimed manually.
+      { label: 'Capacity', href: '/admin/sales/capacity', status: 'live' },
       { label: 'Data quality', href: '/admin/sales/quality', status: 'live' },
       { label: 'Leads', href: '/admin/leads', status: 'live' },
       { label: 'Performance', href: '/admin/sales-performance', status: 'moved' },

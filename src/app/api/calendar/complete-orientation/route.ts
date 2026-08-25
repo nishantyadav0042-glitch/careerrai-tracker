@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { canTransition, transitionRefusal, type SessionStatus } from '@/lib/session-lifecycle';
 
 /**
  * POST /api/calendar/complete-orientation { sessionId }
@@ -39,13 +40,25 @@ export async function POST(request: NextRequest) {
     if (session.session_status === 'completed') {
       return NextResponse.json({ ok: true, alreadyCompleted: true });
     }
+    // A cancelled or expired orientation cannot be completed. The DB trigger
+    // (20260824e) refuses it; this returns the reason instead of letting the
+    // write fail inside a Promise.all whose errors nobody reads.
+    if (!canTransition(session.session_status as SessionStatus, 'completed')) {
+      return NextResponse.json(
+        { error: transitionRefusal(session.session_status as SessionStatus, 'completed') },
+        { status: 409 },
+      );
+    }
 
     // Mark session complete and student orientation used — both atomic
     await Promise.all([
       admin
         .from('video_sessions')
-        .update({ session_status: 'completed', ended_at: new Date().toISOString() })
-        .eq('id', sessionId),
+        // ended_at is stamped by the DB trigger in the same statement that
+        // changes the state (20260824e), so the two can never disagree.
+        .update({ session_status: 'completed' })
+        .eq('id', sessionId)
+        .in('session_status', ['scheduled', 'active']),
       admin
         .from('profiles')
         .update({ free_onboarding_used: true })

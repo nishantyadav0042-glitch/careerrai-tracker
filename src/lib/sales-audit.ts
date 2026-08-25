@@ -26,6 +26,10 @@ export const SALES_AUDIT_ACTIONS = [
   'vendor_event_discarded',
   'followup_cancelled',
   'handoff_purged',
+  // Phase 2B-1: capacity configuration. A ceiling that can be changed
+  // invisibly is not a control, it is a rumour — so every change records
+  // before/after like every other privileged sales mutation.
+  'rep_config_updated',
 ] as const;
 export type SalesAuditAction = (typeof SALES_AUDIT_ACTIONS)[number];
 
@@ -39,7 +43,7 @@ export type SalesAuditAction = (typeof SALES_AUDIT_ACTIONS)[number];
 export async function auditSales(
   actorId: string,
   action: SalesAuditAction,
-  target: { type: 'lead' | 'vendor_event' | 'followup' | 'system'; id: string | null },
+  target: { type: 'lead' | 'vendor_event' | 'followup' | 'system' | 'rep'; id: string | null },
   detail: { before?: unknown; after?: unknown; reason?: string; count?: number } = {},
 ): Promise<void> {
   await logAdminAction(actorId, action, target.type, target.id, {

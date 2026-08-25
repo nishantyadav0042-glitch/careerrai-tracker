@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolvePair } from '@/lib/chat';
-import { resolveGrantAccess, MENTOR_FREE_MESSAGES } from '@/lib/mentor-doors';
+import { resolveChatEntitlement, consumeChatMessage, upgradeMessage } from '@/lib/chat-entitlement';
 import { serverError } from '@/lib/api-error';
 import { pairIsBlocked, deliverPairMessage } from '@/lib/chat-deliver';
 import { verifyUploadedAttachment, discardAttachment } from '@/lib/chat-attachment-verify';
@@ -43,24 +43,52 @@ export async function POST(request: NextRequest) {
   const studentId = typeof payload.studentId === 'string' ? payload.studentId : undefined;
 
   const admin = createAdminClient();
-  let pair = await resolvePair(admin, user.id, studentId);
-  // Mentor Doors: a free student with an ACTIVE grant (or their granted buddy)
-  // chats through the same pipe — capped at 3 student messages, ever, to one
-  // buddy. The 4th attempt returns the upgrade ask instead of a send.
-  if (!pair) {
-    const grantAccess = await resolveGrantAccess(admin, user.id, studentId);
-    if (!grantAccess) return NextResponse.json({ error: 'Not paired' }, { status: 403 });
-    if (user.id === grantAccess.studentId && grantAccess.remaining <= 0) {
-      return NextResponse.json(
-        {
-          error: 'free_messages_used',
-          upgrade: true,
-          message: `You've used all ${MENTOR_FREE_MESSAGES} free questions. Upgrade to keep talking to your buddy — unlimited chat, weekly 1-on-1s, every mock decoded.`,
-        },
-        { status: 403 }
-      );
+
+  // ── PAIRING and ENTITLEMENT are two questions ────────────────────────────
+  //
+  // They used to be one, and that was the leak. resolvePair asks only "does
+  // this student hold a profiles.buddy_id?" — no plan, no premium, no
+  // entitlement. The 3-message cap sat inside `if (!pair)`, so any student
+  // with a buddy_id skipped it and received the continuous chat that only the
+  // subscription plans buy. For the ₹299 product that is not an edge case:
+  // pairing a session buyer with their mentor is exactly how they would get a
+  // buddy_id.
+  //
+  // Now the cap is evaluated on EVERY send, whichever way the pair resolved.
+  const entitlement = await resolveChatEntitlement(admin, user.id, studentId);
+  if (entitlement.kind === 'none') {
+    if (entitlement.reason === 'lookup_failed') {
+      // A read we could not complete must not read as "you have no access".
+      return NextResponse.json({ error: 'Could not check your access — try again.' }, { status: 503 });
     }
-    pair = { studentId: grantAccess.studentId, buddyId: grantAccess.buddyId };
+    return NextResponse.json({ error: 'Not paired' }, { status: 403 });
+  }
+
+  let pair = await resolvePair(admin, user.id, studentId);
+  if (!pair) {
+    // Not paired by profiles.buddy_id, but the entitlement names the buddy —
+    // a ₹299 buyer or a Mentor Door student talking to their matched mentor.
+    if (entitlement.kind === 'unlimited') {
+      return NextResponse.json({ error: 'Not paired' }, { status: 403 });
+    }
+    pair = { studentId: user.id, buddyId: entitlement.buddyId };
+  }
+
+  // The student is the one spending; a mentor's reply is never metered.
+  const senderIsStudent = user.id === pair.studentId;
+  // Surfaced to the composer so it can show "2 left" honestly, from the
+  // server's own count rather than a number the client kept.
+  let remainingAfterSend: number | null = null;
+  if (senderIsStudent && entitlement.kind === 'exhausted') {
+    return NextResponse.json(
+      {
+        error: 'free_messages_used',
+        upgrade: true,
+        remaining: 0,
+        message: upgradeMessage(entitlement.allowance),
+      },
+      { status: 403 }
+    );
   }
 
   // Blocks are enforced HERE, before the attachment bytes are touched, so a
@@ -107,6 +135,28 @@ export async function POST(request: NextRequest) {
     };
   }
 
+  // ── Spend the entitlement, atomically, BEFORE delivering ─────────────────
+  //
+  // One guarded UPDATE inside the database. Two tabs both reading "one left"
+  // and both sending is precisely what the old count-then-compare allowed;
+  // here the second caller serialises on the row lock, re-evaluates against
+  // the first's committed value, and matches zero rows.
+  //
+  // Debited BEFORE the send so a crash between the two costs the student a
+  // message rather than giving them a free one — and because the reverse
+  // order is the bug: deliver, then fail to debit, forever.
+  if (senderIsStudent) {
+    const spend = await consumeChatMessage(admin, entitlement, pair.studentId);
+    if (!spend.ok) {
+      if (hasAttachment) await discardAttachment(String(att!.path));
+      return NextResponse.json(
+        { error: 'free_messages_used', upgrade: true, remaining: 0, message: upgradeMessage(spend.allowance) },
+        { status: 403 },
+      );
+    }
+    if (!spend.unlimited) remainingAfterSend = spend.remaining;
+  }
+
   const { message, error } = await deliverPairMessage({
     admin, pair, senderId: user.id, body, attachmentColumns,
   });
@@ -134,5 +184,7 @@ export async function POST(request: NextRequest) {
   }
 
   // The push to the other side already went out from deliverPairMessage.
-  return NextResponse.json({ message });
+  // `remaining` comes from the SERVER's debit, never from a client counter —
+  // a number the browser keeps is a number the browser can edit.
+  return NextResponse.json({ message, remaining: remainingAfterSend });
 }

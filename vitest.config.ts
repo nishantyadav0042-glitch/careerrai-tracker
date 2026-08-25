@@ -21,7 +21,16 @@ export default defineConfig({
     // the client and touch no database, so the "runs in about a second" rule
     // still holds. src/app/student/** stays out, which is what the note below
     // was actually protecting.
-    include: ['src/lib/**/*.test.ts', 'src/app/api/**/*.test.ts'],
+    // *.render.test.tsx (24 Aug) is a deliberate, narrow third category. C0
+    // shipped a page that threw for any student with a mock debrief while
+    // 3,124 tests passed, because NOTHING in this repo could render a
+    // component — the include patterns made that test class impossible to
+    // write. React refuses to render an object as a child and throws during
+    // render, so rendering a component against representative data is the
+    // cheapest possible catch for that entire defect class. Named
+    // `.render.test.tsx` so it stays opt-in and obvious rather than pulling
+    // every .tsx in src/app into the unit run.
+    include: ['src/lib/**/*.test.ts', 'src/app/api/**/*.test.ts', 'src/**/*.render.test.tsx'],
     exclude: ['e2e/**', 'node_modules/**'],
     environment: 'node',
   },

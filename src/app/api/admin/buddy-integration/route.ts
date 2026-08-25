@@ -4,6 +4,7 @@ import { regenerateBuddyRoom } from '@/lib/buddy-room';
 import { clearGoogleState } from '@/lib/google-oauth';
 import { statusFor } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
+import { canTransition, transitionRefusal, type SessionStatus } from '@/lib/session-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,10 +116,25 @@ export async function POST(request: NextRequest) {
       .single();
     if (!session) return NextResponse.json({ error: 'Session not found.' }, { status: 404 });
 
+    // Terminal is terminal (migration 20260824e). Without this guard the DB
+    // trigger raises and an admin cancelling an already-finished session gets a
+    // raw Postgres string in a 500 — when the honest answer is "there is no
+    // lock left to release".
+    const wasStatus = session.session_status as SessionStatus;
+    if (!canTransition(wasStatus, 'cancelled')) {
+      return NextResponse.json(
+        { error: transitionRefusal(wasStatus, 'cancelled'), alreadySettled: true },
+        { status: 409 },
+      );
+    }
+
     const { error } = await admin
       .from('video_sessions')
       .update({ session_status: 'cancelled', updated_at: new Date().toISOString() })
-      .eq('id', sessionId);
+      .eq('id', sessionId)
+      // Conditional: if the session settled between our read and this write,
+      // nothing is written rather than the trigger raising.
+      .eq('session_status', wasStatus);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     await audit({

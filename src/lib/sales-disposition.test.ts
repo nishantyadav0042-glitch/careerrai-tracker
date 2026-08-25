@@ -37,7 +37,9 @@ describe('vocabulary', () => {
 // (written before the dialer existed) rejected it.
 describe('code and database share ONE status vocabulary', () => {
   it('the CHECK constraint in the migration lists exactly LEAD_STATUSES', () => {
-    const sql = readFileSync('supabase/migrations/20260820a_lead_outreach_no_answer_status.sql', 'utf8');
+    // 20260824b supersedes 20260820a: it re-creates the same constraint with
+    // 'dnd' added. The guard always reads the NEWEST definition of the CHECK.
+    const sql = readFileSync('supabase/migrations/20260824b_dnd_status.sql', 'utf8');
     const checkBlock = sql.match(/check \(status in \(([\s\S]*?)\)\)/i);
     expect(checkBlock).not.toBeNull();
     const dbValues = [...checkBlock![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
@@ -94,13 +96,21 @@ describe('planDisposition — the cadence engine', () => {
     expect(p.nextActionAt).toBe('2026-08-23T12:30:00.000Z'); // 23 Aug 18:00 IST
   });
 
-  it('converted and not_interested close the lead — no re-queue clock', () => {
-    for (const o of ['converted', 'not_interested'] as const) {
+  it('converted, not_interested and dnd close the lead — no re-queue clock', () => {
+    // dnd is the strongest close: "stop calling me" must never produce a
+    // next_action_at, or the queue would re-surface a student who explicitly
+    // asked to be left alone.
+    for (const o of ['converted', 'not_interested', 'dnd'] as const) {
       const p = planDisposition(o, { prevMisses: 1, hot: true, nowMs: NOW });
       expect(p.status).toBe(o);
       expect(p.nextActionAt).toBeNull();
       expect(p.callbackAt).toBeNull();
     }
+  });
+
+  it('dnd is a CONNECTED outcome — the note naming who said it is mandatory', () => {
+    // isConnectedOutcome gates the mandatory-note rule in /api/sales/log.
+    expect(isConnectedOutcome('dnd')).toBe(true);
   });
 });
 

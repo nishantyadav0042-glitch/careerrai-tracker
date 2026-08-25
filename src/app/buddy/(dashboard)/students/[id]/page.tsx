@@ -206,10 +206,15 @@ export default async function BuddyStudentDetailPage({
     buddyBookingReadiness(user.id),
     admin
       .from('video_sessions')
-      .select('id, title, scheduled_at, google_meet_link, session_type')
+      .select('id, title, scheduled_at, google_meet_link, session_type, session_status, started_at')
       .eq('student_id', id)
       .eq('buddy_id', user.id)
-      .eq('session_status', 'scheduled')
+      // 'active' BELONGS HERE. Filtering to 'scheduled' alone meant that the
+      // instant a mentor pressed Start, the session left this list and took
+      // the Join button AND the close-out's sessionId with it — so the call
+      // could never be completed. Same shape as the 4 Aug grace-window
+      // incident the comment below records, one state later.
+      .in('session_status', ['scheduled', 'active'])
       // Shared grace window — see lib/session-window. Without it this
       // row vanished at T+0 and took the Join button with it (4 Aug).
       .gte('scheduled_at', sessionsVisibleFrom())

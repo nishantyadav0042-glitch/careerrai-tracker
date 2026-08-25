@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { SESSION_PRICE_PAISE } from '@/lib/session-credit';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -8,7 +9,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // her workspace. Don't overshare, don't undershare — everything she needs to
 // close, nothing that isn't hers.
 
-const PRICE = 999;
+// The one price a rep sells: the ₹299 session, imported from the same
+// constant checkout charges (sales-script-honesty rule). A hard-coded 999
+// here had the rep's pipeline valued against an offer the script doesn't
+// make — two prices on two rep surfaces (found in the 24 Aug research pass).
+const PRICE = SESSION_PRICE_PAISE / 100;
 
 export interface PortfolioLead {
   studentId: string; name: string; phone: string | null; waNumber: string | null;

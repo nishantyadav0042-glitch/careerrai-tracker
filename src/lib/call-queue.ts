@@ -1,27 +1,47 @@
 import { canAccessLead, loadStaffDirectory, resolveOwnerToken, type SalesPrincipal } from '@/lib/sales-authz';
 import { getRosterMomentum, bandMeta } from '@/lib/momentum';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { scoreConversion, conversionTier } from '@/lib/sales-score';
+import {
+  GOING_COLD_SILENT_DAYS, GOING_COLD_MIN_PRIOR_DAYS,
+  BROKEN_STREAK_MIN_RUN, BROKEN_STREAK_MAX_DAYS_SINCE,
+  NEW_LEAD_MIN_AGE_DAYS, NEW_LEAD_MAX_AGE_DAYS,
+} from '@/lib/os/scale-config';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // The dialer work-queue — how a call centre actually runs a day. Not the whole
 // base: a capped, prioritized rotation that refreshes every day.
 //
-// Priority order (top = call first):
-//   1. Callbacks due    — a promise to the student ("call me at 6"), at its time
-//   2. Retry due        — a no-answer whose evening/next-day retry has arrived
+// Priority order (top = call first) — founder build order, 24 Aug: the rep's
+// Job #1 is retention, so the retention lanes sit ABOVE fresh conversion work
+// and only below promises already made:
+//   1. Callback due      — a promise to the student ("call me at 6"), at its time
+//   2. Retry due         — a no-answer whose evening/next-day retry has arrived
 //   3. Follow-up due     — an interested lead's scheduled nudge
-//   4. Fresh leads       — never called, highest conversion score first
+//   4. Going cold        — studied most of the previous week, silent 3+ days
+//   5. Broken streak     — a 5+ day daily run that ended in the last 3 days
+//   6. New, never logged — joined 1–7 days ago, still no first study log
+//   7. Conversion        — buddy-intent signals (taps / intent door)
+//   8. Fresh             — everyone else, highest conversion score first
+//
+// EVERY card explains itself (founder, 24 Aug: "WHY THIS STUDENT IS HERE").
+// `lane`/`why`/`action` are the explanation: the trigger, the evidence with
+// real numbers, and the recommended move. Deterministic predicates over named
+// tables — never an opaque score (blueprint §20).
 //
 // Suppression (why a lead is NOT shown):
-//   • converted / not_interested        → closed forever
+//   • converted / not_interested / dnd  → closed forever
 //   • dispositioned today (not due now) → no repeat calls the same day
 //
-// Every card carries a weakness BRIEF (what she reads to have a real
+// Every card also carries the weakness BRIEF (what she reads to have a real
 // conversation) — buddy intent, tracking quality, mock analysis, onboarding
 // goals — never a canned message.
 
-export type DueReason = 'callback' | 'retry' | 'followup' | 'fresh';
+export type DueReason =
+  | 'callback' | 'retry' | 'followup'
+  | 'going_cold' | 'broken_streak' | 'new_never_logged'
+  | 'conversion' | 'fresh';
 
 export interface CallLead {
   studentId: string; name: string; firstName: string; phone: string | null; waNumber: string | null;
@@ -29,6 +49,8 @@ export interface CallLead {
   hot: boolean;
   brief: string[];              // the diagnostic the rep reads before dialing
   dueReason: DueReason; dueLabel: string;
+  why: string[];                // WHY THIS STUDENT IS HERE — evidence, real numbers
+  action: string;               // the recommended move, one line
   status: string | null; noAnswerCount: number;
   buddyTaps: number;
 }
@@ -36,6 +58,11 @@ export interface CallLead {
 export interface CallQueue { queue: CallLead[]; connectedToday: number; dueNow: number; totalOpen: number }
 
 const CAP = 60; // 50–70 band — a real day's dialing list, not the whole base
+// With ~340 signups a week, the never-logged lane alone could fill the whole
+// deck and starve every other lane. Per-lane ceilings keep the day balanced;
+// priority still decides WHICH never-logged students make the cut (newest
+// first — day-1 is when the activation call lands).
+const LANE_CAPS: Partial<Record<DueReason, number>> = { new_never_logged: 25, fresh: 15 };
 
 function waNumber(phone: string | null): string | null {
   if (!phone) return null;
@@ -49,6 +76,141 @@ function istDateStr(iso: string): string {
 }
 function istTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+}
+
+// ── Lane classification — pure and unit-tested (sales-lanes.guard.test.ts) ──
+//
+// Input is what the queue already loads (log dates, signup date, intent
+// signals); output is the lane with its evidence and recommended action.
+// Day arithmetic runs on IST calendar dates — the same day boundary the rest
+// of the queue uses — so "0 of the last 3 days" means the same thing to the
+// classifier, the student's streak, and the rep reading the card.
+
+export interface LaneSignals {
+  todayIst: string;             // 'YYYY-MM-DD' in Asia/Kolkata
+  createdAt: string | null;     // profiles.created_at (ISO)
+  logDates: string[];           // daily_reports.report_date values, last 30d
+  buddyTaps: number;
+  intentDoor: boolean;
+  momentumScore: number;
+}
+
+/**
+ * The lanes that represent a student needing INTERVENTION — the ones that
+ * consume a rep's active capacity (Phase 2B-1).
+ *
+ * `conversion` is deliberately EXCLUDED, and the reason matters: buddy intent
+ * is measured by `student_engagement.buddy_cta_clicks`, a cumulative counter
+ * that never resets. A student who tapped the buddy option once in July would
+ * sit in the conversion lane forever, and if that counted as active work they
+ * would consume one of their rep's capacity units permanently — the exact
+ * failure mode the working-set model exists to prevent (and the same reason
+ * `wants_mentor` is not an active-work condition).
+ *
+ * The retention lanes below are all TRANSIENT: they clear the moment the
+ * student logs again. Genuine conversion work is still counted — as a first
+ * contact (never_contacted) or as a scheduled follow-up — both of which are
+ * events that end, rather than a flag that never does.
+ */
+export const RETENTION_LANES: ReadonlySet<DueReason> = new Set<DueReason>([
+  'going_cold', 'broken_streak', 'new_never_logged',
+]);
+
+export interface LaneVerdict {
+  dueReason: Extract<DueReason, 'going_cold' | 'broken_streak' | 'new_never_logged' | 'conversion' | 'fresh'>;
+  dueLabel: string;
+  why: string[];
+  action: string;
+  /** Sort value INSIDE the lane band — the caller adds the band base. */
+  sortBoost: number;
+}
+
+function daysBetweenIst(dateStr: string, todayIst: string): number {
+  return Math.round((Date.parse(todayIst) - Date.parse(dateStr)) / 86_400_000);
+}
+
+/** Longest consecutive-day run ending at the most recent log. */
+function trailingRunLength(sortedDaysAgo: number[]): number {
+  if (sortedDaysAgo.length === 0) return 0;
+  let run = 1;
+  for (let i = 1; i < sortedDaysAgo.length; i++) {
+    if (sortedDaysAgo[i] === sortedDaysAgo[i - 1] + 1) run++;
+    else break;
+  }
+  return run;
+}
+
+export function classifyLane(s: LaneSignals): LaneVerdict {
+  const daysAgo = [...new Set(s.logDates)]
+    .map((d) => daysBetweenIst(d, s.todayIst))
+    .filter((n) => n >= 0)
+    .sort((a, b) => a - b);
+  const lastLog = daysAgo[0] ?? null;
+  const last3 = daysAgo.filter((n) => n < GOING_COLD_SILENT_DAYS).length;
+  const prevWeek = daysAgo.filter((n) => n >= GOING_COLD_SILENT_DAYS && n <= GOING_COLD_SILENT_DAYS + 6).length;
+  const signupDaysAgo = s.createdAt ? daysBetweenIst(istDateStr(s.createdAt), s.todayIst) : null;
+  const fmt = (n: number) => (n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`);
+
+  // Going cold: a real study rhythm existed, then went silent. The founder's
+  // own example: "Studied 5 of last 7 days → 0 of last 3".
+  if (last3 === 0 && prevWeek >= GOING_COLD_MIN_PRIOR_DAYS) {
+    return {
+      dueReason: 'going_cold', dueLabel: 'Going cold',
+      why: [
+        `Studied ${prevWeek} of the 7 days before → 0 in the last ${GOING_COLD_SILENT_DAYS}`,
+        lastLog != null ? `Last study: ${fmt(lastLog)}` : 'Last study: unknown',
+      ],
+      action: 'Call today — ask what changed, get one small task done tonight',
+      sortBoost: prevWeek * 1000 + s.momentumScore,
+    };
+  }
+
+  // Broken streak: a 5+ day daily run that ended within the last 3 days —
+  // the habit is still warm, so this outranks the colder lanes' urgency.
+  const run = trailingRunLength(daysAgo);
+  if (run >= BROKEN_STREAK_MIN_RUN && lastLog != null && lastLog >= 1 && lastLog <= BROKEN_STREAK_MAX_DAYS_SINCE) {
+    return {
+      dueReason: 'broken_streak', dueLabel: 'Broken streak',
+      why: [`${run}-day streak ended ${fmt(lastLog)}`, 'The habit is still warm — this is the win-back window'],
+      action: 'Win-back call — name the streak, help restart today',
+      sortBoost: run * 1000,
+    };
+  }
+
+  // New and never logged: the activation call. 1-day grace after signup (a
+  // call two hours after joining reads as surveillance, not help); after 7
+  // days they fall through to fresh — the moment has passed.
+  if (signupDaysAgo != null && signupDaysAgo >= NEW_LEAD_MIN_AGE_DAYS && signupDaysAgo <= NEW_LEAD_MAX_AGE_DAYS && daysAgo.length === 0) {
+    return {
+      dueReason: 'new_never_logged', dueLabel: 'New — never logged',
+      why: [`Joined ${fmt(signupDaysAgo)}`, 'No first study log yet'],
+      action: 'Help them finish Day 1 — one logged task is the hook',
+      sortBoost: (7 - signupDaysAgo) * 1000,
+    };
+  }
+
+  // Conversion: declared buddy intent. The evidence is the student's own
+  // taps, never an inferred "readiness".
+  if (s.buddyTaps >= 1 || s.intentDoor) {
+    const why: string[] = [];
+    if (s.buddyTaps >= 2) why.push(`Tapped the buddy option ${s.buddyTaps}× — actively wants a mentor`);
+    else if (s.buddyTaps === 1) why.push('Opened the buddy option once');
+    if (s.intentDoor) why.push('Came back to the buddy a second time (intent door)');
+    if (lastLog != null && lastLog <= 3) why.push(`Active — studied ${fmt(lastLog)}`);
+    return {
+      dueReason: 'conversion', dueLabel: 'Buddy interest',
+      why,
+      action: 'Pitch the ₹299 session — intent is warm, lead with their prep',
+      sortBoost: s.buddyTaps * 1000 + (s.intentDoor ? 500 : 0) + s.momentumScore,
+    };
+  }
+
+  return {
+    dueReason: 'fresh', dueLabel: 'New lead',
+    why: [lastLog != null ? `Last study: ${fmt(lastLog)}` : 'No study logs in 30 days'],
+    action: 'Introduction call — learn where they are in prep',
+    sortBoost: 0,
+  };
 }
 
 /**
@@ -102,7 +264,7 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   if (ids.length === 0) return { queue: [], connectedToday: 0, dueNow: 0, totalOpen: 0 };
 
   const [{ data: profs }, { data: eng }, { data: reports }, outreach] = await Promise.all([
-    db.from('profiles').select('id, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
+    db.from('profiles').select('id, created_at, target_percentile, cat_percentile, starting_percentile, pain_points, dream_colleges, is_repeater').in('id', ids),
     db.from('student_engagement').select('student_id, buddy_cta_clicks, mock_opened, intent_door_at').in('student_id', ids),
     db.from('daily_reports').select('student_id, report_date').in('student_id', ids).gte('report_date', since30),
     // The only read here that decides a business state — checked, retried, or thrown.
@@ -110,8 +272,13 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
   ]);
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]));
   const engById = new Map((eng ?? []).map((e: any) => [e.student_id, e]));
-  const logs30 = new Map<string, number>();
-  for (const r of reports ?? []) logs30.set(r.student_id, (logs30.get(r.student_id) ?? 0) + 1);
+  // Per-student log DATES, not just counts — the lane classifier reads the
+  // pattern ("5 of the previous 7 → 0 of the last 3"), not the total.
+  const logDates = new Map<string, string[]>();
+  for (const r of reports ?? []) {
+    if (!logDates.has(r.student_id)) logDates.set(r.student_id, []);
+    logDates.get(r.student_id)!.push(r.report_date);
+  }
   const outById = new Map((outreach ?? []).map((o: any) => [o.student_id, o]));
 
   let connectedToday = 0;
@@ -153,14 +320,17 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     const buddyTaps = (e?.buddy_cta_clicks as number | null) ?? 0;
     const intentDoor = e?.intent_door_at != null;
     const mock = e?.mock_opened === true;
-    const nLogs = logs30.get(r.id) ?? 0;
+    const dates = logDates.get(r.id) ?? [];
+    const nLogs = dates.length;
 
-    // Conversion score (intent-weighted), matches the rest of the system.
-    let conv = Math.round(r.score * 0.35);
-    if (buddyTaps >= 2) conv += 30; else if (buddyTaps >= 1) conv += 18;
-    if (mock) conv += 8; if (intentDoor) conv += 12;
-    if (r.daysSinceLastLog != null && r.daysSinceLastLog <= 3) conv += 15;
-    const tier: CallLead['tier'] = (buddyTaps >= 1 && r.daysSinceLastLog != null && r.daysSinceLastLog <= 3) ? 'hot' : (buddyTaps >= 1 || mock || r.score >= 50) ? 'warm' : 'cool';
+    // Conversion score + tier — ONE implementation, shared with the rep's
+    // student page (lib/sales-score). It used to be hand-copied into both.
+    const signals = {
+      momentumScore: r.score, buddyTaps, mockOpened: mock, intentDoor,
+      activeRecently: r.daysSinceLastLog != null && r.daysSinceLastLog <= 3,
+    };
+    const conv = scoreConversion(signals);
+    const tier = conversionTier(signals);
 
     // ── Weakness BRIEF (what she reads before dialing) ──
     const brief: string[] = [];
@@ -176,11 +346,8 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     for (const p of pains.slice(0, 2)) brief.push(String(p).replace(/_/g, ' '));
 
     // ── Why it's in today's queue + priority ──
-    let dueReason: DueReason = 'fresh';
-    let dueLabel = 'New lead';
-    let sort = conv; // fresh leads ranked by score
     //
-    // Ranking (fixed 21 Aug). These three lines used to subtract a raw epoch
+    // Ranking (fixed 21 Aug). These lines used to subtract a raw epoch
     // millisecond from a five-figure base — `100000 - nextAction` is about
     // MINUS 1.8 trillion — so every due callback, retry and follow-up sorted
     // BELOW a cold fresh lead scoring ~14. The priority order documented at
@@ -189,26 +356,66 @@ export async function buildCallQueue(admin?: any, viewer?: SalesPrincipal | null
     // Nothing caught it because no test had ever driven a due lead and a
     // fresh lead through the queue together.
     //
-    // Tier first, time second: a tier base far above any conversion score
-    // (which tops out near 150), plus MINUTES OVERDUE inside the tier, so the
-    // longest-waiting promise is called first. A tier is 1,000,000 wide —
+    // Tier first, time second: a tier base far above any lane boost (which
+    // tops out near 10,000), plus MINUTES OVERDUE inside the due tiers, so
+    // the longest-waiting promise is called first. A tier is 1,000,000 wide —
     // roughly two years of overdue minutes — so tiers can never interleave.
+    let dueReason: DueReason;
+    let dueLabel: string;
+    let why: string[];
+    let action: string;
+    let sort: number;
     const minutesOverdue = () => Math.min(999_999, Math.max(0, Math.round((now - nextAction!) / 60_000)));
-    if (dueNow && status === 'follow_up') { dueReason = 'callback'; dueLabel = `Callback due ${o.callback_at ? istTime(o.callback_at) : 'now'}`; sort = 3_000_000 + minutesOverdue(); }
-    else if (dueNow && status === 'no_answer') { dueReason = 'retry'; dueLabel = `Retry — no answer${o.no_answer_count > 1 ? ` (${o.no_answer_count}×)` : ''}`; sort = 2_000_000 + minutesOverdue(); }
-    else if (dueNow && status === 'interested') { dueReason = 'followup'; dueLabel = 'Follow up — was interested'; sort = 1_000_000 + minutesOverdue(); }
+    if (dueNow && status === 'follow_up') {
+      dueReason = 'callback'; dueLabel = `Callback due ${o.callback_at ? istTime(o.callback_at) : 'now'}`;
+      why = [`They asked to be called${o.callback_at ? ` at ${istTime(o.callback_at)}` : ' back'} — a promise was made`];
+      action = 'Call now — keep the promise';
+      sort = 7_000_000 + minutesOverdue();
+    } else if (dueNow && status === 'no_answer') {
+      dueReason = 'retry'; dueLabel = `Retry — no answer${o.no_answer_count > 1 ? ` (${o.no_answer_count}×)` : ''}`;
+      why = [`No answer ${o.no_answer_count > 1 ? `${o.no_answer_count} times` : 'last time'} — the retry window has arrived`];
+      action = 'Try again — a different hour often lands';
+      sort = 6_000_000 + minutesOverdue();
+    } else if (dueNow && status === 'interested') {
+      dueReason = 'followup'; dueLabel = 'Follow up — was interested';
+      why = ['Said interested on the last call — the scheduled nudge is due'];
+      action = 'Follow up and close the next concrete step';
+      sort = 5_000_000 + minutesOverdue();
+    } else {
+      // No promise pending — the lane classifier decides why today's call
+      // exists at all: retention first, conversion second, fresh last.
+      const lane = classifyLane({
+        todayIst, createdAt: (prof?.created_at as string | null) ?? null, logDates: dates,
+        buddyTaps, intentDoor, momentumScore: r.score,
+      });
+      dueReason = lane.dueReason; dueLabel = lane.dueLabel; why = lane.why; action = lane.action;
+      const BAND: Record<string, number> = { going_cold: 4_000_000, broken_streak: 3_500_000, new_never_logged: 3_000_000, conversion: 1_000_000, fresh: 0 };
+      sort = BAND[lane.dueReason] + lane.sortBoost + (lane.dueReason === 'fresh' ? conv : 0);
+    }
 
     cands.push({
       studentId: r.id, name: r.full_name ?? 'Student', firstName: (r.full_name ?? '').trim().split(' ')[0] || 'there',
       phone: r.phone, waNumber: waNumber(r.phone),
       convScore: conv, tier, momentumScore: r.score, momentumBand: bandMeta(r.band).label, hot: tier === 'hot',
-      brief, dueReason, dueLabel, status, noAnswerCount: (o?.no_answer_count as number | null) ?? 0, buddyTaps,
+      brief, dueReason, dueLabel, why, action, status, noAnswerCount: (o?.no_answer_count as number | null) ?? 0, buddyTaps,
       _sort: sort,
     });
   }
 
   cands.sort((a, b) => b._sort - a._sort);
-  const dueNow = cands.filter((c) => c.dueReason !== 'fresh').length;
-  const queue = cands.slice(0, CAP).map(({ _sort, ...c }) => { void _sort; return c; });
+  const dueNow = cands.filter((c) => c.dueReason === 'callback' || c.dueReason === 'retry' || c.dueReason === 'followup').length;
+  // Per-lane ceilings (see LANE_CAPS above), then the day cap. Priority
+  // within a lane already decided who makes the cut.
+  const laneCount = new Map<DueReason, number>();
+  const capped: typeof cands = [];
+  for (const c of cands) {
+    const cap = LANE_CAPS[c.dueReason];
+    const n = laneCount.get(c.dueReason) ?? 0;
+    if (cap != null && n >= cap) continue;
+    laneCount.set(c.dueReason, n + 1);
+    capped.push(c);
+    if (capped.length >= CAP) break;
+  }
+  const queue = capped.map(({ _sort, ...c }) => { void _sort; return c; });
   return { queue, connectedToday, dueNow, totalOpen };
 }

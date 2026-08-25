@@ -8,25 +8,40 @@ const base: PaymentSurfaceSignals = {
 const at = (o: Partial<PaymentSurfaceSignals>) => paymentSurface({ ...base, ...o });
 
 describe('the iOS installed PWA never opens checkout in-page', () => {
-  it('hands an installed iOS PWA a real link instead of the inline modal', () => {
-    // THE BUG, in one assertion. This surface produced 7 opens, 7 dismissals
-    // and 0 payments across 3 students and 21 taps, because it was neither
-    // store build and so "fell straight through to inline Razorpay".
-    expect(at({ ios: true, standalone: true })).toBe('ios_link_handoff');
+  it('never gives an installed iOS PWA the inline modal', () => {
+    // THE ORIGINAL BUG, still guarded. This surface produced 7 opens, 7
+    // dismissals and 0 payments across 3 students and 21 taps, because it was
+    // neither store build and so "fell straight through to inline Razorpay".
+    expect(at({ ios: true, standalone: true })).not.toBe('inline');
+  });
+
+  it('uses REDIRECT here, not the hand-off that cannot escape', () => {
+    // 25 Aug: the hand-off was the wrong cure. A WKWebView honours a real
+    // anchor and reaches Safari; an installed PWA does NOT — target="_blank"
+    // navigates inside the app, so the link landed on our own /go page, which
+    // then asked the student to tap share and choose "Open in Safari" by hand.
+    // Three taps and a system menu to buy. Redirect needs no escape at all.
+    expect(at({ ios: true, standalone: true })).toBe('redirect');
   });
 
   it('leaves an iOS browser TAB inline — it is the one iOS path that has paid', () => {
     expect(at({ ios: true, standalone: false })).toBe('inline');
   });
 
-  it('uses a link, never a scripted popup, on every iOS surface', () => {
+  it('never uses a scripted popup on any iOS surface', () => {
     // window.open is ignored by WKWebView and blocked in a home-screen PWA,
     // and the wrapper paints a blank view over the app when it is called — so
     // the student gets a white screen with the fallback stranded underneath.
+    // This rule is unchanged; only the cure differs per surface.
     for (const s of [{ iosStoreBuild: true }, { ios: true, standalone: true }]) {
       expect(at(s)).not.toBe('popup_handoff');
-      expect(at(s)).toBe('ios_link_handoff');
     }
+  });
+
+  it('the wrapper redirects too — no copy-the-link screen anywhere', () => {
+    // The wrapper CAN escape with an anchor, but escaping only ever led to
+    // /go and its 96% drop-off. Navigating straight to Razorpay is one tap.
+    expect(at({ iosStoreBuild: true })).toBe('redirect');
   });
 });
 
@@ -52,8 +67,10 @@ describe('Android keeps the path that actually converted', () => {
     expect(at({ standalone: true })).toBe('inline');
   });
 
-  it('still opens a popup for the Play wrapper', () => {
-    expect(at({ androidStoreBuild: true })).toBe('popup_handoff');
+  it('the Play wrapper redirects rather than opening a second tab', () => {
+    // window.open works there, but it only moved the student to /go. One tap
+    // in place beats a new tab that then asks them to continue.
+    expect(at({ androidStoreBuild: true })).toBe('redirect');
   });
 });
 

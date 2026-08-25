@@ -9,6 +9,7 @@ import {
   SESSION_PLAN_ID, SESSION_PRICE_PAISE, SESSION_MINUTES,
   rosterCapacity, matchMentor, readMentorRoster, hasOpenSessionCredit,
 } from '@/lib/session-credit';
+import { validateIntent } from '@/lib/session-intent';
 
 // POST /api/sessions/book — buy ONE 1:1 session.
 //
@@ -37,8 +38,21 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!paymentsEnabled()) return NextResponse.json({ error: 'Payments are temporarily off.' }, { status: 503 });
 
-  const body = (await request.json().catch(() => ({}))) as { finding_kind?: string; finding_evidence?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    finding_kind?: string; finding_evidence?: string;
+    session_intent?: string; session_intent_note?: string;
+  };
   const admin = createAdminClient();
+
+  // ── WHY, before the money ────────────────────────────────────────────────
+  // Validated first so a student is never charged for a booking that the
+  // database would then refuse, and so the mentor is never handed a session
+  // with no stated problem. Until today the reason for purchase was never
+  // recorded at all: this route accepted finding_kind and matched a mentor
+  // with it, but student_payments had no such column, so every credit was
+  // minted with finding_kind = null.
+  const intent = validateIntent(body.session_intent, body.session_intent_note);
+  if (!intent.ok) return NextResponse.json({ error: intent.error }, { status: 400 });
 
   // 1. CAPACITY, before anything else — through the throwing primitives.
   // UNKNOWN answers 503 and stops here: it must never become "sold out"
@@ -80,7 +94,11 @@ export async function POST(request: NextRequest) {
   const { data: me } = await admin.from('profiles')
     .select('self_reported_weakest_section, is_repeater').eq('id', user.id).maybeSingle();
   const match = matchMentor(roster, {
-    findingKind: typeof body.finding_kind === 'string' ? body.finding_kind : 'unreviewed',
+    // The student's own words outrank the product's diagnosis for MATCHING —
+    // they are the one who has to feel understood in the first two minutes.
+    // Both are still recorded; only the match preference is opinionated.
+    findingKind: intent.intent
+      ?? (typeof body.finding_kind === 'string' ? body.finding_kind : 'unreviewed'),
     studentWeakSection: (me?.self_reported_weakest_section as string | null) ?? null,
     studentIsRepeater: !!me?.is_repeater,
   });
@@ -126,6 +144,13 @@ export async function POST(request: NextRequest) {
     tax_mode: tax.mode,
     razorpay_order_id: order.id,
     status: 'created',
+    // Carried on the payment because the credit is minted later by the
+    // verified webhook — the payment row is the only thing that survives the
+    // round trip through Razorpay.
+    session_intent: intent.intent,
+    session_intent_note: intent.note,
+    finding_kind: typeof body.finding_kind === 'string' ? body.finding_kind : null,
+    finding_evidence: typeof body.finding_evidence === 'string' ? body.finding_evidence : null,
   });
   if (error) {
     console.error('[sessions/book] payment row failed', error.message);
