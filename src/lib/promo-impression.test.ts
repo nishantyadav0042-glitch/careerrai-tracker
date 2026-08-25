@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { claimBuddyPitch } from './promo-impression';
+import { claimBuddyPitch, buddyPitchedToday } from './promo-impression';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const adminWith = (error: { code?: string; message: string } | null) => ({
@@ -25,5 +25,34 @@ describe('the one-pitch-a-day claim', () => {
       .toEqual({ show: false, reason: 'claim_failed' });
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe('the read-only pitched-today check (inline surfaces)', () => {
+  const adminReading = (data: unknown, error: { message: string } | null = null) => ({
+    from: () => ({
+      select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data, error }) }) }) }) }),
+    }),
+  }) as any;
+
+  it('no row today → the inline card may render', async () => {
+    expect(await buddyPitchedToday(adminReading(null), 's1')).toBe(false);
+  });
+
+  it('a row today → the card goes quiet', async () => {
+    expect(await buddyPitchedToday(adminReading({ student_id: 's1' }), 's1')).toBe(true);
+  });
+
+  it('FAILS CLOSED: an unreadable answer hides the promo, never stacks it', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await buddyPitchedToday(adminReading(null, { message: 'down' }), 's1')).toBe(true);
+    spy.mockRestore();
+  });
+
+  it('it READS, it never claims — no insert exists on its path', async () => {
+    // A check that consumed the slot would burn the modal's pitch every time
+    // a student merely opened the tracker. The fake above has no insert; if
+    // the implementation ever calls one, this test throws on the missing stub.
+    await buddyPitchedToday(adminReading(null), 's1');
   });
 });

@@ -23,7 +23,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // (the modal's mount conditions failed after claiming) would silently eat the
 // day's one pitch. Callers claim only when they are definitely about to show.
 
-export type PromoChannel = 'modal' | 'notification' | 'onboarding';
+export type PromoChannel = 'modal' | 'notification' | 'onboarding' | 'approved_push';
 
 export type PromoClaim =
   | { show: true }
@@ -45,4 +45,34 @@ export async function claimBuddyPitch(
   // week of zero pitches into a same-day page instead of a month-end mystery.
   console.error('[promo] buddy_pitch claim failed (failing CLOSED):', error.message);
   return { show: false, reason: 'claim_failed' };
+}
+
+/**
+ * Has this student already received today's pitch? READ-ONLY — never consumes.
+ *
+ * For the passive inline surfaces (the tracker teaser, the blueprint banner).
+ * Founder's correction, 26 Aug: those cards must go QUIET once the day's
+ * pitch has happened, but they must never claim the day themselves — a card
+ * the student scrolled past would silently burn the slot the modal (the main
+ * interruption, the pitch that actually converts) was waiting for.
+ *
+ * FAILS CLOSED like the claim: an unreadable answer is treated as "already
+ * pitched", so a broken read hides promos rather than stacking them.
+ */
+export async function buddyPitchedToday(
+  admin: SupabaseClient,
+  studentId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from('promo_impressions')
+    .select('student_id')
+    .eq('student_id', studentId)
+    .eq('promo_type', 'buddy_pitch')
+    .eq('study_day', new Date().toISOString().slice(0, 10))
+    .maybeSingle();
+  if (error) {
+    console.error('[promo] pitched-today read failed (treating as pitched):', error.message);
+    return true;
+  }
+  return data != null;
 }

@@ -32,6 +32,7 @@ interface PlanData {
   hasBuddy: boolean;
   isPremium: boolean;
   buddyBanner: BuddyBannerData;
+  pitchedToday?: boolean;
 }
 
 // Pure B&W: the ✓ / ⚠ glyph carries the signal, not colour.
@@ -108,7 +109,7 @@ export default function MyCatPlanPage() {
 
   const {
     totalTopics, studiedOnceCount, learningCount, notStartedCount, dueForRevisionCount, mocksCompleted,
-    finishProjection, roadmapDates, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner, weekPlan,
+    finishProjection, roadmapDates, thisWeek, biggestPriority, hasBuddy, isPremium, buddyBanner, pitchedToday, weekPlan,
   } = data;
   const verdict = VERDICT[finishProjection.status];
 
@@ -217,7 +218,10 @@ export default function MyCatPlanPage() {
           </div>
         )}
 
-        {!hasBuddy && !isPremium && <BuddyBanner banner={buddyBanner} />}
+        {/* Quiet after the day's one pitch — read-only check, never a claim.
+            See the tracker teaser for the reasoning; one authority, two
+            passive readers. */}
+        {!hasBuddy && !isPremium && !pitchedToday && <BuddyBanner banner={buddyBanner} />}
 
         <div className="pb-16" />
       </div>

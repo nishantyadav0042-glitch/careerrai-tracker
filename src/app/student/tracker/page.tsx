@@ -19,6 +19,7 @@ import { IndependenceStrip } from '@/components/home/independence-strip';
 import { InstallButton } from '@/components/install/install-button';
 import { PaceCard } from '@/components/home/pace-card';
 import { MentorTeaserCard } from '@/components/home/mentor-teaser-card';
+import { buddyPitchedToday } from '@/lib/promo-impression';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { computeTopicMemory, buildCompletionRecords } from '@/lib/prep-memory-data';
 import { computePrepGain } from '@/lib/prep-gain';
@@ -637,7 +638,13 @@ export default async function DailyTrackerPage() {
             assigned buddy if one exists, else the real top match from the
             same showcase engine My Buddy uses. Never a claim of assignment
             that has not happened. */}
-        <MentorTeaserCard studentId={user.id} buddyId={buddyId} isPremium={!!profile?.is_premium} />
+        {/* Once the day's ONE pitch has happened (modal, notification or
+            onboarding), the teaser goes quiet — same authority, read-only.
+            It never claims: a passive card must not burn the slot the modal
+            converts with. Fails closed: unreadable ⇒ treated as pitched. */}
+        {!(await buddyPitchedToday(admin, user.id)) && (
+          <MentorTeaserCard studentId={user.id} buddyId={buddyId} isPremium={!!profile?.is_premium} />
+        )}
 
         {/* 3 · LOG + MENTOR — the streak hero, the log, the buddy insight. */}
         {logBlock}
