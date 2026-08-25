@@ -1241,6 +1241,13 @@ permanent cosmetic difference trains you to ignore it. Written as
 index and trigger, run against both databases. Any table can now be checked in
 one query instead of discovered by a failing probe.
 
+**The full inventory, taken 26 Aug** (`docs/SCHEMA-PARITY.md`): every one of
+production's 94 tables EXISTS on test — nothing is missing by name, which is
+why this hid so long. But 79 of them carry **zero** integrity objects, and 80
+of 95 tables on test have **no primary key**. 498 production objects absent.
+Nine tables are byte-identical; six are partially enforced. A test fired at one
+of the 79 cannot fail on an integrity rule, because there is none to fail.
+
 ---
 
 ## Incident #33 — `revoke from public` did not revoke it (2026-08-26)
