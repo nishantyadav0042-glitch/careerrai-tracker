@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { studyDayString } from '@/lib/study-day';
 import { getAuthUser } from '@/lib/auth';
 import { StudentBottomNav } from '@/components/bottom-nav';
 import { NotificationBell } from '@/components/notification-bell';
@@ -147,8 +148,22 @@ export default async function StudentLayout({ children }: { children: React.Reac
   // Buddy nudge stands down while the timetable ask is live — one auto-modal a
   // day is the rule, and in the first 2 days the timetable is the better use of
   // that single slot.
+  //
+  // AND IT STANDS DOWN ON THE STUDY DAY ONBOARDING FINISHED (founder, 26 Aug):
+  // the journey's last screen is now the sample insight — "log daily and
+  // CareerRai shows you things about yourself" — and the nudge was wired to
+  // fire 1.4s after that very moment. A sales modal stacked onto the insight
+  // is the exact sequence the retention principle forbids: Buddy is a
+  // conversion opportunity, not a recurring interruption, and day 0 belongs
+  // to the habit loop. Flows that DO pitch during onboarding already consume
+  // the day via the promo claim; this covers the flows that don't, so no
+  // path ends its first insight staring at a checkout.
+  const onboardedTodayIst = (() => {
+    const at = (profile?.onboarding_last_activity_at as string | null) ?? null;
+    return at != null && at.slice(0, 10) === studyDayString();
+  })();
   const showBuddyNudge = noBlockingModal && !showCoverageReview && appInstalled && !showTimetablePrompt
-    && !profile?.buddy_id && profile?.is_premium !== true;
+    && !onboardedTodayIst && !profile?.buddy_id && profile?.is_premium !== true;
 
   return (
     <div className="min-h-screen bg-stone-50">

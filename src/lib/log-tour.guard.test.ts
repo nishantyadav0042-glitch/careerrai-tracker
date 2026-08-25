@@ -94,6 +94,19 @@ describe('it never gates completion', () => {
     expect((s.match(/finish\((true|false)\)/g) ?? []).length).toBe(2);
   });
 
+  it('no sales modal stacks onto the sample-insight moment', () => {
+    // Founder principle, 26 Aug: Buddy is a conversion opportunity, not a
+    // recurring interruption — and day 0 belongs to the habit loop. The nudge
+    // used to fire 1.4s after tour-done, i.e. directly on top of the sample
+    // insight. The layout now stands it down on the study day onboarding
+    // finished; flows that pitch DURING onboarding already consume the day
+    // through the promo claim.
+    const layout = readFileSync('src/app/student/layout.tsx', 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+    expect(layout).toMatch(/onboardedTodayIst/);
+    expect(layout).toMatch(/!onboardedTodayIst && !profile\?\.buddy_id/);
+  });
+
   it('the sample insight promises only what the real engines deliver', () => {
     // The ladder sells 2-log comparison, week-scale avoidance and
     // plan-vs-actual — capabilities postLogInsight and
