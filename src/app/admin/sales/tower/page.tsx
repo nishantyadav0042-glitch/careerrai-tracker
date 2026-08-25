@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 import { WorkspaceShell } from '@/components/admin/workspace-shell';
 import { buildTower, renderMetric, type Metric } from '@/lib/sales-control-tower';
 import { AssignPanel } from './assign-panel';
+import { getTeamCapacity } from '@/lib/sales-capacity';
+import { repAllocationLimit, EMPLOYMENT_LABEL, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Sales Control Tower · CareerRai' };
@@ -52,6 +54,11 @@ function MetricCard({ m }: { m: Metric }) {
 export default async function SalesControlTower() {
   const { user, admin } = await requireAdmin();
   const t = await buildTower(admin);
+  // Same authority the distribute route enforces with — the preview and the
+  // refusal must be computed from one function, or the founder is shown a
+  // split the server will reject.
+  const capacity = await getTeamCapacity(admin);
+  const capById = new Map(capacity.map((c) => [c.repId, c]));
   const inr = (paise: number) => `Rs ${Math.round(paise / 100).toLocaleString('en-IN')}`;
 
   return (
@@ -97,6 +104,7 @@ export default async function SalesControlTower() {
             <thead className="bg-stone-50 text-[10px] uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="p-2 text-left">Rep</th>
+                <th className="p-2 text-left">Employment</th>
                 <th className="p-2 text-right">Leads owned</th>
                 <th className="p-2 text-right" title="A rep typed this. Not independently confirmed.">Contacted (claimed)</th>
                 <th className="p-2 text-right" title="Vendor returned its own call id.">Calls (confirmed)</th>
@@ -112,6 +120,19 @@ export default async function SalesControlTower() {
               {t.reps.map((r) => (
                 <tr key={r.id} className="border-t border-stone-100">
                   <td className="p-2 font-semibold text-stone-800">{r.name}</td>
+                  {/* Shown so the founder can read the row in context — a
+                      part-time book is smaller by design, not by underperformance.
+                      NOT CONFIGURED is its own state: never silently "full-time". */}
+                  <td className="p-2">
+                    {r.employmentType ? (
+                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold',
+                        r.employmentType === 'part_time' ? 'bg-indigo-50 text-indigo-700' : 'bg-stone-100 text-stone-600')}>
+                        {EMPLOYMENT_LABEL[r.employmentType]}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">NOT CONFIGURED</span>
+                    )}
+                  </td>
                   <td className="p-2 text-right tabular-nums">{r.leadsOwned}</td>
                   <td className="p-2 text-right tabular-nums text-amber-700">{r.contactedSelfReported}</td>
                   <td className="p-2 text-right tabular-nums text-emerald-700">{r.callsVendorConfirmed}</td>
@@ -143,7 +164,19 @@ export default async function SalesControlTower() {
       {/* L3 — DISTRIBUTION */}
       <h2 className="mt-6 text-[11px] font-bold uppercase tracking-widest text-stone-400">Level 3 · Lead distribution</h2>
       <AssignPanel
-        reps={(t.reps ?? []).map((r) => ({ id: r.id, name: r.name }))}
+        reps={(t.reps ?? []).map((r) => {
+          const cap = capById.get(r.id);
+          const limit = cap ? repAllocationLimit(cap) : null;
+          return {
+            id: r.id,
+            name: r.name,
+            // The headroom the server will enforce, computed by the SAME
+            // function the route uses — so the preview cannot promise a split
+            // the API is about to refuse.
+            headroom: limit?.ok ? limit.max : 0,
+            blockedWhy: limit && !limit.ok ? REFUSAL_COPY[limit.reason] : null,
+          };
+        })}
         unassignedCount={t.unassignedCount}
         staleCount={t.staleCount}
         actorId={user.id}

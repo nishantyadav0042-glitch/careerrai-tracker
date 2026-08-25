@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isUuid, salesPrincipal } from '@/lib/sales-authz';
 import { auditSales } from '@/lib/sales-audit';
 import { chunkIds } from '@/lib/truth/batch';
+import { getTeamCapacity } from '@/lib/sales-capacity';
+import { repAllocationLimit, REFUSAL_COPY } from '@/lib/sales-rep-provisioning';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -56,6 +58,48 @@ export async function POST(request: NextRequest) {
   }
   if (repIds.some((id) => !ok.has(id))) {
     return NextResponse.json({ error: 'One or more targets are not sales or admin accounts.' }, { status: 400 });
+  }
+
+  // ── The stated ceiling binds here ─────────────────────────────────────────
+  //
+  // Until now this route read `role` and nothing else: not sales_rep_config,
+  // not `active`, not `unavailable_until`, not max_capacity_units. So a rep
+  // configured for 12 units could be handed 250, and "part-time" meant nothing
+  // at the one moment it should have meant everything — the moment work is
+  // handed out.
+  //
+  // This is still NOT an allocator. It never picks who gets a lead; the
+  // founder's previewed split is unchanged whenever it fits. It refuses to
+  // exceed a number the founder himself configured, and names the rep and the
+  // reason when it does — a silent clamp would be worse than the old bug,
+  // because he would believe 50 leads moved when 12 did.
+  const team = await getTeamCapacity(admin);
+  const capById = new Map(team.map((r) => [r.repId, r]));
+  const rejected: { repId: string; name: string; requested: number; allowed: number; why: string }[] = [];
+  for (const a of alloc) {
+    const cap = capById.get(a.repId);
+    if (!cap) {
+      rejected.push({ repId: a.repId, name: a.repId, requested: a.count, allowed: 0, why: 'no capacity record could be read for this account' });
+      continue;
+    }
+    const limit = repAllocationLimit(cap);
+    const allowed = limit.ok ? limit.max : 0;
+    if (a.count > allowed) {
+      rejected.push({
+        repId: a.repId, name: cap.name, requested: a.count, allowed,
+        why: limit.ok
+          ? `they can take ${allowed} right now (${limit.boundBy === 'daily_fuse' ? 'daily intake fuse' : 'capacity'})`
+          : REFUSAL_COPY[limit.reason],
+      });
+    }
+  }
+  if (rejected.length > 0) {
+    return NextResponse.json({
+      error: 'Nothing was assigned. ' + rejected
+        .map((r) => `${r.name}: asked for ${r.requested}, ${r.why}`)
+        .join('; ') + '. Lower the numbers or raise the configuration on the capacity screen.',
+      rejected,
+    }, { status: 409 });
   }
 
   // Re-derive the pool server-side. The client's count is a request, not a fact.

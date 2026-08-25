@@ -70,6 +70,11 @@ export interface RepRow {
   paidObserved: number;
   revenueObservedPaise: number;
   lastActivityAt: string | null;
+  /** How this person is employed. A LABEL on the row, never a sort key and
+   *  never a modifier applied to their numbers — a part-time rep's 8 calls
+   *  are 8 calls. NULL when no capacity row exists (NOT CONFIGURED), which is
+   *  a setup gap and must not render as "full-time by default". */
+  employmentType: 'full_time' | 'part_time' | null;
 }
 
 export interface TowerData {
@@ -135,11 +140,15 @@ export async function buildTower(admin: any): Promise<TowerData> {
       .from('profiles').select('id, full_name, email, role').in('role', ['sales', 'admin']);
     if (staffErr) throw new Error(staffErr.message);
 
-    const [{ data: leads }, { data: acts }, { data: paidRows }] = await Promise.all([
+    const [{ data: leads }, { data: acts }, { data: paidRows }, { data: cfgRows }] = await Promise.all([
       admin.from('lead_outreach').select('student_id, owner_id, status, updated_at').not('owner_id', 'is', null),
       admin.from('sales_activity').select('actor_id, student_id, provenance, external_ref, created_at, status'),
       admin.from('student_payments').select('student_id, amount').eq('status', 'paid'),
+      admin.from('sales_rep_config').select('rep_id, employment_type'),
     ]);
+    const employmentById = new Map<string, 'full_time' | 'part_time'>(
+      ((cfgRows ?? []) as any[]).map((c) => [c.rep_id as string, c.employment_type as 'full_time' | 'part_time']),
+    );
 
     const paidByStudent = new Map<string, number>();
     for (const p of (paidRows ?? []) as any[]) {
@@ -185,11 +194,19 @@ export async function buildTower(admin: any): Promise<TowerData> {
         lastActivityAt: mine.length
           ? mine.map((a) => a.created_at as string).sort().slice(-1)[0]
           : null,
+        employmentType: employmentById.get(s.id) ?? null,
       };
     // Every rep, including ones with an empty book — a rep who did nothing is
     // exactly who the founder is looking for, and dropping empty rows would
     // hide them.
-    }).sort((a, b) => b.leadsOwned - a.leadsOwned);
+    // BY NAME — the same rule as repOutcomes() in student-success-mis.ts.
+    //
+    // This used to sort by leadsOwned descending, which reads as a ranking
+    // and behaves as one: a part-time rep works a deliberately smaller book,
+    // so employment terms the founder set would have permanently pinned them
+    // to the bottom of the team table. A stable alphabetical order says what
+    // this table is — a roster with each person's numbers beside them.
+    }).sort((a, b) => a.name.localeCompare(b.name));
   } catch (e) {
     console.error('[tower] rep rollup failed:', e);
     reps = null;

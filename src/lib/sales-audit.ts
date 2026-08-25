@@ -30,6 +30,10 @@ export const SALES_AUDIT_ACTIONS = [
   // invisibly is not a control, it is a rumour — so every change records
   // before/after like every other privileged sales mutation.
   'rep_config_updated',
+  // A new staff seat is the most privileged thing the sales workspace can
+  // create — it mints a login. The record names the account and its
+  // employment terms; the credential is never part of it.
+  'sales_rep_provisioned',
 ] as const;
 export type SalesAuditAction = (typeof SALES_AUDIT_ACTIONS)[number];
 

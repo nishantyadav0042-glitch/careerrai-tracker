@@ -12,8 +12,20 @@ import { useRouter } from 'next/navigation';
 // One honest note rendered on the page: with every current workload at zero,
 // "equal" and "workload-balanced" produce identical results. Implying
 // intelligence the data cannot yet exercise would be its own small lie.
+//
+// EQUAL IS NOT FAIR WHEN THE TEAM IS NOT UNIFORM. A straight `take / n` split
+// hands a part-time rep the same number of students as a full-time one, which
+// is how "part-time" quietly becomes a label with no consequences. So the
+// split still starts equal — the founder's decision, unchanged — and is then
+// bounded by each rep's own configured headroom, with the leftover shown
+// rather than silently dropped.
 
-type Rep = { id: string; name: string };
+// `headroom` is what the SERVER will allow this rep right now — capacity minus
+// active work, capped by their daily intake fuse, zero if they are inactive, on
+// leave, over their ceiling, or unconfigured. It comes from the same function
+// /api/admin/distribute-leads enforces with, so the preview and the outcome
+// cannot disagree.
+type Rep = { id: string; name: string; headroom: number; blockedWhy: string | null };
 type Strategy = 'equal' | 'single';
 type Pool = 'unassigned' | 'stale';
 
@@ -25,7 +37,7 @@ export function AssignPanel({ reps, unassignedCount, staleCount, actorId }: {
   const [strategy, setStrategy] = useState<Strategy>('equal');
   const [chosen, setChosen] = useState<string[]>(reps.map((r) => r.id));
   const [howMany, setHowMany] = useState(50);
-  const [preview, setPreview] = useState<{ repId: string; name: string; n: number }[] | null>(null);
+  const [preview, setPreview] = useState<{ repId: string; name: string; n: number; wanted: number; blockedWhy: string | null }[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -37,13 +49,26 @@ export function AssignPanel({ reps, unassignedCount, staleCount, actorId }: {
     const targets = strategy === 'single' ? chosen.slice(0, 1) : chosen;
     if (targets.length === 0) { setMsg('Pick at least one rep.'); return; }
     if (take <= 0) { setMsg('Nothing in this pool to distribute.'); return; }
+    // Equal split first, then bound each share by that rep's headroom. What
+    // does not fit is REPORTED, never quietly reassigned to whoever has room —
+    // moving a student because a colleague was full is an allocation decision,
+    // and this panel does not make those.
     const base = Math.floor(take / targets.length);
     const rem = take % targets.length;
-    setPreview(targets.map((id, i) => ({
-      repId: id,
-      name: reps.find((r) => r.id === id)?.name ?? id,
-      n: base + (i < rem ? 1 : 0),
-    })));
+    const rows = targets.map((id, i) => {
+      const rep = reps.find((r) => r.id === id);
+      const wanted = base + (i < rem ? 1 : 0);
+      const cap = rep?.headroom ?? 0;
+      return { repId: id, name: rep?.name ?? id, n: Math.min(wanted, cap), wanted, blockedWhy: rep?.blockedWhy ?? null };
+    });
+    const placed = rows.reduce((s, r) => s + r.n, 0);
+    if (placed === 0) {
+      setPreview(null);
+      setMsg('No selected rep has room right now. Raise a ceiling on the capacity screen, or pick someone else.');
+      return;
+    }
+    if (placed < take) setMsg(`${take - placed} lead${take - placed === 1 ? '' : 's'} stay unassigned — the team has room for ${placed} right now.`);
+    setPreview(rows.filter((r) => r.n > 0));
   }
 
   async function confirm() {
@@ -94,6 +119,12 @@ export function AssignPanel({ reps, unassignedCount, staleCount, actorId }: {
             <input type="checkbox" checked={chosen.includes(r.id)}
               onChange={(e) => { setChosen((c) => e.target.checked ? [...c, r.id] : c.filter((x) => x !== r.id)); setPreview(null); }} />
             {r.name}{r.id === actorId ? ' (you)' : ''}
+            {/* Room, stated per rep. Without it "split equally" is a guess the
+                server then rejects — and a blocked rep looks identical to one
+                with a full book. */}
+            {r.blockedWhy
+              ? <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">{r.blockedWhy}</span>
+              : <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${r.headroom > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>room {r.headroom}</span>}
           </label>
         ))}
       </div>
@@ -110,7 +141,10 @@ export function AssignPanel({ reps, unassignedCount, staleCount, actorId }: {
           <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500">Preview — nothing has moved yet</p>
           <ul className="mt-1.5 space-y-0.5 text-[13px]">
             {preview.map((p) => (
-              <li key={p.repId} className="flex justify-between"><span>{p.name}</span><span className="font-bold tabular-nums">{p.n}</span></li>
+              <li key={p.repId} className="flex justify-between">
+                <span>{p.name}{p.n < p.wanted ? <span className="ml-1 text-[11px] text-amber-700">(asked {p.wanted}, capped by their configuration)</span> : null}</span>
+                <span className="font-bold tabular-nums">{p.n}</span>
+              </li>
             ))}
           </ul>
           <button onClick={confirm} disabled={busy}
