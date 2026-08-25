@@ -16,7 +16,7 @@ const noop = () => {};
 
 describe('the intent picker asks a real question', () => {
   const html = renderToStaticMarkup(
-    <IntentPicker value={null} note="" onChange={noop} />);
+    <IntentPicker value={[]} note="" onChange={noop} />);
 
   it('offers every student-selectable intent', () => {
     for (const k of SESSION_INTENTS) {
@@ -32,7 +32,11 @@ describe('the intent picker asks a real question', () => {
   });
 
   it('tells the student their buddy will read it', () => {
-    expect(html).toMatch(/buddy sees this before the call/i);
+    expect(html).toMatch(/buddy sees these before the call/i);
+  });
+
+  it('says how many they may pick', () => {
+    expect(html).toMatch(/pick up to 3/i);
   });
 
   it('renders cleanly', () => {
@@ -45,35 +49,81 @@ describe('the intent picker asks a real question', () => {
 describe('"Something else" demands an explanation', () => {
   it('the note becomes required and says so', () => {
     const html = renderToStaticMarkup(
-      <IntentPicker value="other" note="" onChange={noop} />);
+      <IntentPicker value={['other']} note="" onChange={noop} />);
     expect(html).toMatch(/required/i);
     expect(html).toMatch(/needs them/i);
   });
 
   it('the warning clears once a real note is typed', () => {
     const html = renderToStaticMarkup(
-      <IntentPicker value="other" note="coaching moved to mornings" onChange={noop} />);
+      <IntentPicker value={['other']} note="coaching moved to mornings" onChange={noop} />);
     expect(html).not.toMatch(/needs them/i);
   });
 
   it('the note stays optional for every other intent', () => {
     const html = renderToStaticMarkup(
-      <IntentPicker value="qa_weak" note="" onChange={noop} />);
+      <IntentPicker value={['qa_weak']} note="" onChange={noop} />);
     expect(html).toMatch(/optional/i);
   });
 
+  it('demands the note when "other" is picked SECOND, not just first', () => {
+    // The gap the single-value rule could not see: a real reason, then
+    // "Something else", with nothing written after it.
+    const html = renderToStaticMarkup(
+      <IntentPicker value={['qa_weak', 'other']} note="" onChange={noop} />);
+    expect(html).toMatch(/required/i);
+    expect(intentIsComplete(['qa_weak', 'other'], '')).toBe(false);
+    expect(intentIsComplete(['qa_weak', 'other'], 'abc')).toBe(true);
+  });
+
   it('completeness mirrors the server rule exactly', () => {
-    expect(intentIsComplete(null, '')).toBe(false);
-    expect(intentIsComplete('other', '')).toBe(false);
-    expect(intentIsComplete('other', 'ab')).toBe(false);
-    expect(intentIsComplete('other', 'abc')).toBe(true);
-    expect(intentIsComplete('qa_weak', '')).toBe(true);
+    // The reason is MANDATORY — nothing picked means nothing to pay for yet.
+    expect(intentIsComplete([], '')).toBe(false);
+    expect(intentIsComplete(['other'], '')).toBe(false);
+    expect(intentIsComplete(['other'], 'ab')).toBe(false);
+    expect(intentIsComplete(['other'], 'abc')).toBe(true);
+    expect(intentIsComplete(['qa_weak'], '')).toBe(true);
+    expect(intentIsComplete(['qa_weak', 'dilr_weak', 'consistency'], '')).toBe(true);
+    // Over the cap is refused in the UI too, not only by the API and the DB.
+    expect(intentIsComplete(['qa_weak', 'dilr_weak', 'consistency', 'varc_weak'], '')).toBe(false);
   });
 
   it('marks the chosen option for assistive tech', () => {
     const html = renderToStaticMarkup(
-      <IntentPicker value="dilr_weak" note="" onChange={noop} />);
+      <IntentPicker value={['dilr_weak']} note="" onChange={noop} />);
     expect(html).toMatch(/aria-pressed="true"/);
+  });
+
+  it('shows WHICH pick is primary, because it decides the buddy', () => {
+    const html = renderToStaticMarkup(
+      <IntentPicker value={['dilr_weak', 'qa_weak']} note="" onChange={noop} />);
+    expect(html).toContain('1st');
+    expect(html).toMatch(/first pick decides which buddy/i);
+    // Exactly one chip carries the badge — two "1st" markers would be a lie
+    // about which reason is driving the match.
+    expect(html.split('1st').length - 1).toBe(1);
+  });
+
+  it('at the cap, unpicked chips are disabled but picked ones stay tappable', () => {
+    // Otherwise a student who picks three can never change their mind.
+    const html = renderToStaticMarkup(
+      <IntentPicker value={['qa_weak', 'dilr_weak', 'consistency']} note="" onChange={noop} />);
+    expect(html).toMatch(/tap one again to swap it out/i);
+    // Split into whole <button> tags and read the real attribute. Matching
+    // /disabled/ anywhere in a tag is a trap: the className carries the
+    // Tailwind variant `disabled:opacity-40`, so a substring search reports
+    // every chip as disabled and the test passes or fails for the wrong
+    // reason. (It failed for exactly that reason on the first run.)
+    const buttons = html.match(/<button[^>]*>/g) ?? [];
+    const chips = buttons.filter((b) => b.includes('aria-pressed'));
+    expect(chips.length).toBe(SESSION_INTENTS.length);
+    const pickedChips = chips.filter((b) => b.includes('aria-pressed="true"'));
+    const unpickedChips = chips.filter((b) => b.includes('aria-pressed="false"'));
+    expect(pickedChips).toHaveLength(3);
+    expect(pickedChips.filter((b) => / disabled=""/.test(b)),
+      'a picked chip must stay tappable at the cap').toHaveLength(0);
+    expect(unpickedChips.every((b) => / disabled=""/.test(b)),
+      'an unpickable chip must look unpickable').toBe(true);
   });
 });
 

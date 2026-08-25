@@ -63,6 +63,30 @@ export async function fetchOrderPayments(orderId: string): Promise<RazorpayPayme
  * subscription state only changes from a signature-verified webhook.
  * Signature = HMAC_SHA256(rawBody, webhookSecret), compared in constant time.
  */
+export function verifyCheckoutSignature(
+  orderId: string | null | undefined,
+  paymentId: string | null | undefined,
+  signature: string | null | undefined,
+  secret: string,
+): boolean {
+  if (!orderId || !paymentId || !signature || !secret) return false;
+  // Razorpay's checkout-callback signature is a DIFFERENT construction from
+  // the webhook's: HMAC_SHA256(order_id + "|" + payment_id) keyed on the API
+  // KEY SECRET, not on the webhook secret, and computed over those two fields
+  // rather than the raw body. Two verifiers, deliberately, because they verify
+  // two different things — collapsing them would mean one secret could forge
+  // the other's messages.
+  const expected = crypto.createHmac('sha256', secret)
+    .update(`${orderId}|${paymentId}`).digest('hex');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    // Length mismatch throws rather than returning false — a forged signature
+    // of the wrong length must not be an exception, it must be a rejection.
+    return false;
+  }
+}
+
 export function verifyRazorpayWebhook(rawBody: string, signature: string | null, secret: string): boolean {
   if (!signature || !secret) return false;
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');

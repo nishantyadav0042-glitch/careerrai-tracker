@@ -1,154 +1,190 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import {
-  paymentSurface, needsBrowserHandoff, usesRedirectCheckout,
-  type PaymentSurfaceSignals,
-} from './payment-surface';
-import { redirectCheckoutOptions } from './razorpay-checkout';
+import { execSync } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
+import { paymentSurface, usesRedirectCheckout } from '@/lib/payment-surface';
+import { PAYMENT_RETURNS, paymentReturnPath } from '@/lib/payment-return';
+import { verifyCheckoutSignature } from '@/lib/razorpay';
+import crypto from 'node:crypto';
 
-// ── Buying must be ONE tap on every surface ────────────────────────────────
+// ── ONE TAP MEANS ONE TAP ───────────────────────────────────────────────────
 //
-// 25 Aug, founder on an iPhone: tapping Pay produced a page saying "Open this
-// in Safari to pay — tap the share icon and choose Open in Safari", with a
-// "Copy my payment link" button. Three taps and a system menu to buy a ₹299
-// session.
+// Founder mandate, 25 Aug 2026. A student taps a price and the next thing they
+// see is Razorpay. No copy link, no /go, no "Continue to secure payment", no
+// second button, no dead-end modal.
 //
-// The cause was NOT a Razorpay limitation. paymentSurface returned the same
-// strategy for two iOS surfaces that behave differently: a WKWebView wrapper
-// honours a real anchor and escapes to Safari, an installed PWA does NOT — it
-// navigates inside the app, landing on our own /go page, which then asked the
-// student to escape by hand.
+// These guards are BEHAVIOURAL where behaviour is testable and DISCOVERY-BASED
+// where they must police the whole repo — they grep for their own scope at run
+// time, with a vacuity assertion, because a guard with a hardcoded file list
+// has silently missed a new writer four times in this repo's history.
 
-const sig = (o: Partial<PaymentSurfaceSignals> = {}): PaymentSurfaceSignals => ({
-  escapedTab: false, iosStoreBuild: false, androidStoreBuild: false,
-  ios: false, standalone: false, ...o,
+function code(file: string): string {
+  return readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+function grepFiles(pattern: string): string[] {
+  try {
+    return execSync(`grep -rl --include=*.ts --include=*.tsx -e ${JSON.stringify(pattern)} src/`, { encoding: 'utf8' })
+      .split('\n').map((s) => s.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+/** Every surface that opens Razorpay, discovered rather than listed. */
+function checkoutSurfaces(): string[] {
+  return grepFiles('new window.Razorpay(').filter((f) => !f.includes('.test.'));
+}
+
+const SIGNALS = {
+  desktop:     { escapedTab: false, iosStoreBuild: false, androidStoreBuild: false, ios: false, standalone: false },
+  iosSafari:   { escapedTab: false, iosStoreBuild: false, androidStoreBuild: false, ios: true,  standalone: false },
+  iosPwa:      { escapedTab: false, iosStoreBuild: false, androidStoreBuild: false, ios: true,  standalone: true  },
+  iosStore:    { escapedTab: false, iosStoreBuild: true,  androidStoreBuild: false, ios: true,  standalone: false },
+  androidStore:{ escapedTab: false, iosStoreBuild: false, androidStoreBuild: true,  ios: false, standalone: false },
+  androidPwa:  { escapedTab: false, iosStoreBuild: false, androidStoreBuild: false, ios: false, standalone: true  },
+};
+
+describe('every iOS surface goes STRAIGHT to Razorpay', () => {
+  it('iPhone Safari redirects — the tab is no longer left on the modal', () => {
+    // THE REGRESSION THIS EXISTS FOR. An installed PWA was switched to
+    // redirect while a plain Safari tab was left inline on the strength of a
+    // single completed payment.
+    expect(paymentSurface(SIGNALS.iosSafari)).toBe('redirect');
+    expect(usesRedirectCheckout(SIGNALS.iosSafari)).toBe(true);
+  });
+
+  it('iOS PWA and the iOS store wrapper redirect too', () => {
+    expect(paymentSurface(SIGNALS.iosPwa)).toBe('redirect');
+    expect(paymentSurface(SIGNALS.iosStore)).toBe('redirect');
+  });
+
+  it('the Android store wrapper redirects', () => {
+    expect(paymentSurface(SIGNALS.androidStore)).toBe('redirect');
+  });
+
+  it('desktop keeps the modal, which demonstrably works there', () => {
+    expect(paymentSurface(SIGNALS.desktop)).toBe('inline');
+  });
+
+  it('the installed Android PWA is deliberately unchanged', () => {
+    // It produced the only completed in-app payment ever recorded. Moving the
+    // one path with positive evidence, on no evidence, would be trading a fact
+    // for a hunch.
+    expect(paymentSurface(SIGNALS.androidPwa)).toBe('inline');
+  });
+
+  it('NO surface can resolve to anything but paying in place', () => {
+    // needsBrowserHandoff() used to be the guard here. It was deleted rather
+    // than kept as a named `false`, because a predicate nobody calls proves
+    // nothing — this asserts the surface VOCABULARY itself has no hand-off in
+    // it, so reintroducing one means adding a type member, in the open.
+    for (const [name, s] of Object.entries(SIGNALS)) {
+      expect(['inline', 'redirect'], `${name} resolved outside the vocabulary`)
+        .toContain(paymentSurface(s));
+    }
+  });
 });
 
-describe('the installed iOS PWA gets ONE tap', () => {
-  it('uses redirect, not the hand-off that cannot escape', () => {
-    const s = sig({ ios: true, standalone: true });
-    expect(paymentSurface(s)).toBe('redirect');
-    expect(usesRedirectCheckout(s)).toBe(true);
+describe('the legacy copy-paste UX cannot come back', () => {
+  it('finds the checkout surfaces at all — a guard that greps nothing proves nothing', () => {
+    expect(checkoutSurfaces().length).toBeGreaterThanOrEqual(3);
   });
 
-  it('is NOT treated as a browser hand-off', () => {
-    // Minting a /go link here is what resurrected the extra tap.
-    expect(needsBrowserHandoff(sig({ ios: true, standalone: true }))).toBe(false);
+  it('no checkout surface renders a manual payment link or a copy action', () => {
+    const offenders = checkoutSurfaces().filter((f) => {
+      const src = code(f);
+      return /Copy my payment link|navigator\.clipboard|paste it in|buildGoUrl\s*\(|useIosPayUrl\s*\(/.test(src);
+    });
+    expect(offenders, `these reintroduce a manual/copy payment path: ${offenders.join(', ')}`).toEqual([]);
   });
 
-  it('never lands on the copy-the-link screen again', () => {
-    // /go exists for the WKWebView wrapper, where an anchor genuinely escapes.
-    // It must not be reachable from a standalone PWA.
-    expect(paymentSurface(sig({ ios: true, standalone: true }))).not.toBe('ios_link_handoff');
+  it('no checkout surface mints a /go hand-off', () => {
+    const offenders = checkoutSurfaces().filter((f) => /escapeToBrowserForPayment\s*\(/.test(code(f)));
+    expect(offenders, `these escape to a browser instead of paying in place: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('the /go page is gone', () => {
+    // Its own measured result was 160 tokens minted, 7 consumed — a 96%
+    // drop-off before Razorpay was ever reached. Nothing routes to it now, and
+    // an orphaned payment path is a trap for whoever reads this next.
+    expect(existsSync('src/app/go/page.tsx'), '/go must not exist').toBe(false);
   });
 });
 
-describe('the surfaces that already worked are untouched', () => {
-  it.each([
-    ['iOS App Store wrapper', sig({ iosStoreBuild: true }), 'redirect'],
-    ['Android Play wrapper', sig({ androidStoreBuild: true }), 'redirect'],
-    ['installed iOS PWA', sig({ ios: true, standalone: true }), 'redirect'],
-    ['desktop / mobile browser', sig(), 'inline'],
-    ['installed Android PWA', sig({ standalone: true }), 'inline'],
-    ['iOS browser TAB (not installed)', sig({ ios: true }), 'inline'],
-    ['a tab that already escaped', sig({ escapedTab: true, ios: true, standalone: true }), 'inline'],
-  ])('%s resolves to %s', (_label, s, expected) => {
-    expect(paymentSurface(s)).toBe(expected);
+describe('the return leg is a POST handler, not a page', () => {
+  it('the callback route exists and handles POST', () => {
+    // THE ROOT CAUSE. callback_url pointed at /student/profile and
+    // /student/buddy — App Router PAGES, which answer GET only and return 405
+    // to Razorpay's POST. Every student who completed a redirect payment
+    // landed on a Method Not Allowed error the instant their money left.
+    const route = 'src/app/api/payments/callback/route.ts';
+    expect(existsSync(route)).toBe(true);
+    expect(code(route)).toMatch(/export async function POST/);
   });
 
-  it('NO surface hands off any more — every one pays in place', () => {
-    // The hand-off is gone entirely. /go's own measured result was 160 tokens
-    // minted against 7 consumed: a 96% drop-off before Razorpay was reached.
-    for (const s of [
-      sig(), sig({ ios: true }), sig({ standalone: true }),
-      sig({ ios: true, standalone: true }), sig({ iosStoreBuild: true }),
-      sig({ androidStoreBuild: true }), sig({ escapedTab: true }),
-    ]) {
-      expect(needsBrowserHandoff(s)).toBe(false);
-      expect(['inline', 'redirect']).toContain(paymentSurface(s));
+  it('no surface points callback_url at a page route', () => {
+    const offenders = checkoutSurfaces().filter((f) =>
+      /callbackUrl:\s*checkoutCallbackUrl\(\s*['"]\//.test(code(f)));
+    expect(offenders, `these point Razorpay's POST at a page, which returns 405: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('every callback destination is an allow-listed key, never a raw path', () => {
+    for (const [key, path] of Object.entries(PAYMENT_RETURNS)) {
+      expect(paymentReturnPath(key, 'paid')).toBe(`${path}?pay=paid`);
     }
   });
 
-  it('the Android installed PWA keeps the inline modal', () => {
-    // It produced the only completed in-app payment on record; moving it would
-    // break the one path that demonstrably works.
-    expect(usesRedirectCheckout(sig({ standalone: true }))).toBe(false);
+  it('an attacker-supplied destination cannot become an open redirect', () => {
+    // `dest` arrives in the query string of a URL anyone can craft, and the
+    // redirect would carry the payment flow's credibility to wherever it
+    // pointed. Anything unrecognised falls back to our own buddy screen.
+    for (const evil of ['//evil.com', 'https://evil.com', '/\\evil.com', '../../etc', 'javascript:alert(1)', null, 42]) {
+      const out = paymentReturnPath(evil, 'paid');
+      expect(out.startsWith('/student/'), `${String(evil)} escaped the allow-list as ${out}`).toBe(true);
+      expect(out).not.toContain('evil.com');
+    }
   });
 });
 
-describe('redirect mode keeps the money path identical', () => {
-  const opts = redirectCheckoutOptions({
-    keyId: 'rzp_test', orderId: 'order_ABC', amount: 29900, currency: 'INR',
-    name: 'CareerRai', description: '45-min session',
-    callbackUrl: 'https://careerrai.in/student/buddy?paid=1',
+describe('the payment is still proven, not trusted', () => {
+  const SECRET = 'test_secret_do_not_use';
+  const sign = (order: string, payment: string, secret = SECRET) =>
+    crypto.createHmac('sha256', secret).update(`${order}|${payment}`).digest('hex');
+
+  it('accepts a genuine Razorpay signature', () => {
+    expect(verifyCheckoutSignature('order_1', 'pay_1', sign('order_1', 'pay_1'), SECRET)).toBe(true);
   });
 
-  it('carries the SAME order id — reconciliation is unchanged', () => {
-    // The webhook finds student_payments by razorpay_order_id. A payment-link
-    // approach would have minted a different order and broken that lookup.
-    expect(opts.order_id).toBe('order_ABC');
+  it('refuses a forged one, a swapped order, and a wrong secret', () => {
+    expect(verifyCheckoutSignature('order_1', 'pay_1', 'deadbeef', SECRET)).toBe(false);
+    expect(verifyCheckoutSignature('order_2', 'pay_1', sign('order_1', 'pay_1'), SECRET)).toBe(false);
+    expect(verifyCheckoutSignature('order_1', 'pay_2', sign('order_1', 'pay_1'), SECRET)).toBe(false);
+    expect(verifyCheckoutSignature('order_1', 'pay_1', sign('order_1', 'pay_1', 'other'), SECRET)).toBe(false);
   });
 
-  it('sets the two flags that make it a navigation, not a modal', () => {
-    expect(opts.redirect).toBe(true);
-    expect(opts.callback_url).toBe('https://careerrai.in/student/buddy?paid=1');
+  it('refuses anything missing, including an absent secret', () => {
+    expect(verifyCheckoutSignature(null, 'pay_1', 'sig', SECRET)).toBe(false);
+    expect(verifyCheckoutSignature('order_1', null, 'sig', SECRET)).toBe(false);
+    expect(verifyCheckoutSignature('order_1', 'pay_1', null, SECRET)).toBe(false);
+    expect(verifyCheckoutSignature('order_1', 'pay_1', sign('order_1', 'pay_1'), '')).toBe(false);
   });
 
-  it('opens no modal config — there is no modal to dismiss', () => {
-    // A `handler` or `modal.ondismiss` here would be dead code: the page is
-    // gone before Razorpay could call either.
-    expect(opts.handler).toBeUndefined();
-    expect(opts.modal).toBeUndefined();
+  it('the callback never activates on an unverified return', () => {
+    const src = code('src/app/api/payments/callback/route.ts');
+    const verifyAt = src.indexOf('verifyCheckoutSignature(');
+    const activateAt = src.indexOf('activatePaidOrder(');
+    expect(verifyAt).toBeGreaterThan(-1);
+    expect(activateAt).toBeGreaterThan(-1);
+    expect(verifyAt, 'the signature must be checked BEFORE anything is activated')
+      .toBeLessThan(activateAt);
   });
 
-  it('still passes prefill so a signed-in student is not re-asked', () => {
-    const withPrefill = redirectCheckoutOptions({
-      keyId: 'k', orderId: 'o', amount: 1, currency: 'INR', name: 'n', description: 'd',
-      prefill: { contact: '919876543210' }, callbackUrl: 'https://x/y',
-    });
-    expect((withPrefill.prefill as Record<string, string>).contact).toBe('919876543210');
-  });
-});
-
-describe('every checkout surface takes the same one-tap path', () => {
-  const SURFACES = [
-    'src/components/buddy/book-session-card.tsx',
-    'src/components/membership-card.tsx',
-    'src/components/unlock-buddy-sheet.tsx',
-  ];
-
-  it.each(SURFACES)('%s uses redirect mode on the PWA', (file) => {
-    const src = readFileSync(file, 'utf8');
-    expect(src, `${file} would still open a modal on an installed iOS PWA`)
-      .toMatch(/usesRedirectCheckout\(/);
-    expect(src).toMatch(/redirectCheckoutOptions\(/);
-  });
-
-  it.each(SURFACES)('%s decides BEFORE building the modal', (file) => {
-    const src = readFileSync(file, 'utf8');
-    const redirectAt = src.indexOf('usesRedirectCheckout(');
-    const modalAt = src.indexOf('new window.Razorpay({');
-    expect(redirectAt).toBeGreaterThan(-1);
-    expect(redirectAt).toBeLessThan(modalAt);
-  });
-});
-
-describe('the ₹2,999 upsell points at something a student can buy', () => {
-  const SCREEN = readFileSync('src/components/buddy/buddy-conversion-screen.tsx', 'utf8');
-
-  it('no longer links to the closed Independence Day campaign', () => {
-    // /offer closes ITSELF after 15 Aug by design. Linking the main upsell at
-    // it meant every tap landed on "This offer has closed" with nothing to buy.
-    expect(SCREEN).not.toMatch(/href="\/offer"/);
-  });
-
-  it('opens the live paywall the other surfaces already use', () => {
-    expect(SCREEN).toMatch(/<UnlockBuddyButton/);
-  });
-
-  it('shows the price from the plan authority, not a hardcoded campaign one', () => {
-    // The card said ₹2,999 while the campaign page said ₹2,499. One authority.
-    expect(SCREEN).toMatch(/PLANS\.tillcat\.display/);
-    expect(SCREEN).not.toMatch(/₹2,999/);
+  it('the callback reuses the ONE activator rather than forking a second', () => {
+    const src = code('src/app/api/payments/callback/route.ts');
+    expect(src).toMatch(/activatePaidOrder\(/);
+    // No direct entitlement writes: no is_premium flip, no credit insert here.
+    expect(src).not.toMatch(/is_premium/);
+    expect(src).not.toMatch(/from\('session_credits'\)/);
+    expect(src).not.toMatch(/from\('profiles'\)[\s\S]{0,80}\.update\(/);
   });
 });

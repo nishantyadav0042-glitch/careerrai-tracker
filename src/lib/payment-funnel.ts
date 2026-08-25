@@ -22,6 +22,16 @@ export const PAYMENT_FUNNEL_EVENTS = [
   'payment_checkout_opened', // the Razorpay modal actually appeared
   'payment_checkout_dismissed', // they closed it without paying
   'payment_failed',        // Razorpay reported a failure
+  // ── The redirect leg, added 25 Aug after the 405 incident ────────────────
+  // Redirect checkout leaves our page entirely, so the modal-era events stop
+  // at the moment of departure and can never report what happened next. These
+  // two close that blind spot: one recorded immediately BEFORE the navigation,
+  // one recorded by the server when the student comes back. A gap between them
+  // is the signature of "left for Razorpay and never returned", which is
+  // precisely the failure nobody could see before.
+  'payment_checkout_navigating', // we are handing the page to Razorpay now
+  'payment_checkout_returned',   // Razorpay POSTed the student back to us
+  'payment_checkout_failed',     // returned carrying an error instead of a signature
 ] as const;
 export type PaymentFunnelEvent = (typeof PAYMENT_FUNNEL_EVENTS)[number];
 

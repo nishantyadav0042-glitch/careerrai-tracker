@@ -77,15 +77,63 @@ export function intentNeedsNote(intent: SessionIntent | null | undefined): boole
 /** Minimum characters that count as an explanation rather than a shrug. */
 export const MIN_NOTE_LENGTH = 3;
 
-export function validateIntent(intent: unknown, note: unknown):
-  | { ok: true; intent: SessionIntent; note: string | null }
+/**
+ * How many reasons one 45-minute session may carry.
+ *
+ * Founder's call, 25 Aug 2026, and a product limit rather than a guess dressed
+ * as one: a session that promises ten things delivers none. Enforced here, in
+ * the API, and by session_intent_multi_coherent() in the database — a cap that
+ * lives only in a form is a suggestion.
+ */
+export const MAX_INTENTS = 3;
+
+/**
+ * Validate the reasons a student stated. THE REASON IS STILL MANDATORY.
+ *
+ * What changed on 25 Aug 2026 is only the arity: a student may state up to
+ * MAX_INTENTS reasons, because "my QA is weak AND I've lost my routine" is the
+ * normal case and forcing one choice threw away the second half of it.
+ *
+ * ORDER IS MEANING. The first pick is the PRIMARY: it is what lands in
+ * `session_intent`, and it is the single key matchMentor() reads. The picker
+ * says so out loud, so the student — not an arbitrary sort — decides which of
+ * their problems chooses the buddy.
+ *
+ * Every rule here is mirrored by a database trigger rather than trusted to
+ * this function alone, because this is not the only writer that will ever
+ * exist. What the trigger cannot do is produce a sentence a student should
+ * read, which is why both exist.
+ */
+export function validateIntents(intents: unknown, note: unknown):
+  | { ok: true; intents: SessionIntent[]; primary: SessionIntent; note: string | null }
   | { ok: false; error: string } {
-  if (!isSessionIntent(intent)) {
+  // A bare string is still accepted: older clients (and any surface not yet
+  // migrated) send one reason, and one reason is a list of one.
+  const raw = typeof intents === 'string' ? [intents] : intents;
+  if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, error: 'Pick what you would like help with.' };
   }
+  if (raw.length > MAX_INTENTS) {
+    return { ok: false, error: `Pick up to ${MAX_INTENTS} — one session cannot fix more than that properly.` };
+  }
+  if (!raw.every(isSessionIntent)) {
+    return { ok: false, error: 'Pick what you would like help with.' };
+  }
+  const list = raw as SessionIntent[];
+  // Deduplicate WITHOUT reordering: the first occurrence wins, so the primary
+  // survives. A Set built from the array preserves insertion order.
+  const unique = [...new Set(list)];
+  if (unique.length !== list.length) {
+    return { ok: false, error: 'That reason is already on the list.' };
+  }
+
   const text = typeof note === 'string' ? note.trim() : '';
-  if (intentNeedsNote(intent) && text.length < MIN_NOTE_LENGTH) {
+  // 'other' ANYWHERE needs the note, not just as the primary — picking a real
+  // reason and then "Something else" with nothing written is the combination
+  // that carries no information, and the old single-value check could not see
+  // it.
+  if (unique.some((i) => intentNeedsNote(i)) && text.length < MIN_NOTE_LENGTH) {
     return { ok: false, error: 'Tell your buddy in a few words what you need — that is the whole point of this box.' };
   }
-  return { ok: true, intent, note: text.length > 0 ? text.slice(0, 500) : null };
+  return { ok: true, intents: unique, primary: unique[0], note: text.length > 0 ? text.slice(0, 500) : null };
 }

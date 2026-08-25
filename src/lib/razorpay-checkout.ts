@@ -1,3 +1,4 @@
+import type { PaymentReturnKey } from '@/lib/payment-return';
 // Client-side Razorpay loader, shared by every checkout surface so there is
 // exactly ONE place that pulls in the SDK.
 
@@ -93,10 +94,20 @@ export function redirectCheckoutOptions(o: RedirectCheckoutOptions): Record<stri
 }
 
 /** Absolute callback URL for a surface, preserving where the student was. */
-export function checkoutCallbackUrl(path: string): string {
-  if (typeof window === 'undefined') return path;
-  const url = new URL(path, window.location.origin);
-  // Marks the return leg so the landing page can confirm rather than re-offer.
-  url.searchParams.set('paid', '1');
-  return url.toString();
+/**
+ * Where Razorpay sends the student after a redirect checkout.
+ *
+ * THIS USED TO POINT AT A PAGE, AND THAT WAS THE BUG. Razorpay POSTs the
+ * result to callback_url; a Next.js App Router page answers GET only and
+ * returns 405 to everything else. Every student who completed a redirect
+ * payment landed on a Method Not Allowed error at the exact moment their money
+ * left. It is now an API route that accepts the POST, verifies the signature
+ * server-side, activates, and redirects the browser onward to `dest`.
+ *
+ * `dest` is a KEY, not a path — the callback allow-lists it (lib/payment-
+ * return.ts) rather than redirecting to whatever arrives in the query string.
+ */
+export function checkoutCallbackUrl(dest: PaymentReturnKey): string {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  return `${origin}/api/payments/callback?dest=${dest}`;
 }

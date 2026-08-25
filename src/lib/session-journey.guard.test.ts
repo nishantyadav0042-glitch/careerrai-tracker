@@ -38,14 +38,14 @@ describe('WHY is asked before the money — on EVERY payment path', () => {
   });
 
   it('and the SERVER refuses independently of the UI', () => {
-    const validateAt = ROUTE.indexOf('validateIntent(');
+    const validateAt = ROUTE.indexOf('validateIntents(');
     const orderAt = ROUTE.indexOf('createRazorpayOrder(');
     expect(validateAt).toBeGreaterThan(-1);
     expect(validateAt).toBeLessThan(orderAt);
   });
 
   it('the intent travels with the booking request', () => {
-    expect(BOOK).toMatch(/session_intent: intent/);
+    expect(BOOK).toMatch(/session_intents: intents/);
     expect(BOOK).toMatch(/session_intent_note/);
   });
 
@@ -53,7 +53,7 @@ describe('WHY is asked before the money — on EVERY payment path', () => {
     // Both are sent. Collapsing them would erase the most interesting case:
     // a student who says QA while the mocks say DILR.
     expect(BOOK).toMatch(/finding_kind: findingKind/);
-    expect(BOOK).toMatch(/session_intent: intent/);
+    expect(BOOK).toMatch(/session_intents: intents/);
   });
 });
 

@@ -9,7 +9,7 @@ import {
   SESSION_PLAN_ID, SESSION_PRICE_PAISE, SESSION_MINUTES,
   rosterCapacity, matchMentor, readMentorRoster, hasOpenSessionCredit,
 } from '@/lib/session-credit';
-import { validateIntent } from '@/lib/session-intent';
+import { validateIntents } from '@/lib/session-intent';
 
 // POST /api/sessions/book — buy ONE 1:1 session.
 //
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as {
     finding_kind?: string; finding_evidence?: string;
-    session_intent?: string; session_intent_note?: string;
+    session_intents?: unknown; session_intent?: string; session_intent_note?: string;
   };
   const admin = createAdminClient();
 
@@ -51,7 +51,10 @@ export async function POST(request: NextRequest) {
   // recorded at all: this route accepted finding_kind and matched a mentor
   // with it, but student_payments had no such column, so every credit was
   // minted with finding_kind = null.
-  const intent = validateIntent(body.session_intent, body.session_intent_note);
+  // `session_intents` is the list; `session_intent` is still read as a
+  // fallback so a client that has not been updated yet keeps working — one
+  // reason is a list of one, and validateIntents accepts a bare string.
+  const intent = validateIntents(body.session_intents ?? body.session_intent, body.session_intent_note);
   if (!intent.ok) return NextResponse.json({ error: intent.error }, { status: 400 });
 
   // 1. CAPACITY, before anything else — through the throwing primitives.
@@ -97,8 +100,10 @@ export async function POST(request: NextRequest) {
     // The student's own words outrank the product's diagnosis for MATCHING —
     // they are the one who has to feel understood in the first two minutes.
     // Both are still recorded; only the match preference is opinionated.
-    findingKind: intent.intent
-      ?? (typeof body.finding_kind === 'string' ? body.finding_kind : 'unreviewed'),
+    // The PRIMARY only — the student's first pick. matchMentor takes one key,
+    // and letting any of the three win would mean an arbitrary sort choosing
+    // the buddy instead of the student.
+    findingKind: intent.primary,
     studentWeakSection: (me?.self_reported_weakest_section as string | null) ?? null,
     studentIsRepeater: !!me?.is_repeater,
   });
@@ -147,7 +152,8 @@ export async function POST(request: NextRequest) {
     // Carried on the payment because the credit is minted later by the
     // verified webhook — the payment row is the only thing that survives the
     // round trip through Razorpay.
-    session_intent: intent.intent,
+    session_intent: intent.primary,
+    session_intent_all: intent.intents,
     session_intent_note: intent.note,
     finding_kind: typeof body.finding_kind === 'string' ? body.finding_kind : null,
     finding_evidence: typeof body.finding_evidence === 'string' ? body.finding_evidence : null,

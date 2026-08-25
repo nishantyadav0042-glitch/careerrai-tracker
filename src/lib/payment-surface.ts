@@ -76,48 +76,46 @@ export interface PaymentSurfaceSignals {
  * browser — an infinite loop with a Pay button at every step.
  */
 export function paymentSurface(s: PaymentSurfaceSignals): PaymentSurface {
+  // This tab IS the escaped browser — checkout must complete here.
   if (s.escapedTab) return 'inline';
 
-  // The WKWebView wrapper cannot open the modal (scripted popups are ignored
-  // and the wrapper paints a blank view over the app). It CAN navigate, which
-  // is all redirect mode needs.
-  if (s.iosStoreBuild) return 'redirect';
+  // ── EVERY iOS SURFACE AND EVERY STORE WRAPPER REDIRECTS ──────────────────
+  //
+  // Founder mandate, 25 Aug: "one tap means one tap" on iPhone, Safari
+  // included. The previous rule sent an installed iOS PWA to redirect but left
+  // an ordinary iPhone Safari TAB on the inline modal, on the strength of one
+  // completed payment (the table above: "iOS, browser tab — 1 opened, 1
+  // PAID"). One is not a sample; it is an anecdote that got filed as evidence.
+  //
+  // The mechanism that kills the modal is not unique to standalone mode.
+  // Razorpay's modal is a cross-origin IFRAME, and the moment a UPI app,
+  // netbanking window or 3-D Secure step needs to leave that iframe it has to
+  // open a new browsing context. Mobile Safari blocks cross-origin popups from
+  // an iframe whether or not the page was launched from the home screen — so
+  // that single success was most likely a card completing inside the frame,
+  // not proof the surface works. Redirect mode has no iframe, no popup and no
+  // new context to be denied: the page itself becomes Razorpay.
+  if (s.ios) return 'redirect';
 
-  // An installed iOS PWA has the same popup limits as the WKWebView wrapper,
-  // so the inline modal never worked here: 0 payments in 21 attempts.
-  //
-  // BUT IT IS NOT THE SAME AS THE WRAPPER, and treating it as such was its own
-  // bug. A WKWebView honours a real anchor and escapes to Safari; an installed
-  // PWA does NOT — target="_blank" navigates INSIDE the app. So the hand-off
-  // link landed on /go within the PWA, which then asked the student to tap
-  // share and choose "Open in Safari" by hand. Three taps and a system menu to
-  // buy a ₹299 session (founder, on an iPhone, 25 Aug).
-  //
-  // Redirect mode needs no popup and no escape: the page navigates to
-  // Razorpay's hosted checkout and returns through callback_url. One tap, and
-  // the SAME order id, so the webhook and activate-payment path do not change.
-  if (s.ios && s.standalone) return 'redirect';
+  // The WKWebView wrapper cannot open the modal (scripted popups are ignored
+  // and the wrapper paints a blank view over the app). Kept as its own branch
+  // even though an iOS wrapper also reports ios=true, so the rule survives any
+  // future change to how the UA is read.
+  if (s.iosStoreBuild) return 'redirect';
 
   // Android's TWA does honour window.open, but that only ever moved the
   // student to /go and the same hand-off drop-off. Navigating in place is one
   // tap and needs no popup permission at all.
   if (s.androidStoreBuild) return 'redirect';
 
-  // Desktop, mobile browser tabs, and installed Android PWAs. Android's
-  // installed PWA is deliberately NOT handed off: it produced the only
-  // completed in-app payment we have, so sending it to a browser would break
-  // the one path that demonstrably works.
+  // Desktop, Android browser tabs, and installed Android PWAs. Android's
+  // installed PWA is deliberately NOT switched: it produced the only completed
+  // in-app payment we have ever recorded, and moving the one path with
+  // positive evidence on no evidence would be trading a fact for a hunch.
   return 'inline';
 }
 
-/**
- * Kept as a named FALSE so any caller still asking the question gets the right
- * answer: nothing hands off any more. Every surface either opens the modal in
- * place or navigates to Razorpay in place.
- */
-export function needsBrowserHandoff(_s: PaymentSurfaceSignals): boolean {
-  return false;
-}
+
 
 /** True when Razorpay should navigate the page instead of opening a modal. */
 export function usesRedirectCheckout(s: PaymentSurfaceSignals): boolean {
@@ -158,15 +156,3 @@ export function handoffReachedBrowser(nav: unknown): boolean {
   return (nav as { standalone?: unknown }).standalone !== true;
 }
 
-/**
- * What the student reads while being sent to their browser.
- *
- * It must not read like a failure. Nothing has gone wrong from where they are
- * standing — they tapped Pay and are being taken somewhere to pay — and a
- * student who thinks the app is broken does not come back for the second tap.
- */
-export const HANDOFF_COPY = {
-  ready: 'One more tap — payment opens securely in your browser:',
-  noLink: 'To finish, open careerrai.in in your browser and tap Pay there:',
-  button: 'Continue to payment →',
-} as const;
