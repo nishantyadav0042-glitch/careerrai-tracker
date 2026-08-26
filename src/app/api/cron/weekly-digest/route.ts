@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dispatch } from '@/lib/notification-os';
 import { computeSummary } from '@/lib/analytics';
 import { sendBuddyWeeklyDigest } from '@/lib/email';
 import { authorizedCron } from '@/lib/cron-auth';
@@ -27,7 +28,7 @@ import { readRowsForIds } from '@/lib/truth/batch';
 //
 // for their entire roster. Named students, numeric scores, delivered outside
 // the product where it cannot be corrected — all from one dead query.
-type DigestBuddy = { id: string; full_name: string; email: string | null };
+type DigestBuddy = { id: string; full_name: string; email: string | null; notif_prefs?: unknown };
 type DigestStudent = { id: string; full_name: string; buddy_id: string | null };
 // Mirrors the SELECT. `DailyReport` carries columns this query does not ask
 // for, so naming it as the row type makes the generic disagree with what
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const [buddiesSource, studentsSource] = await Promise.all([
       readRows<DigestBuddy>('profiles(buddies)', () =>
-        admin.from('profiles').select('id, full_name, email').eq('role', 'buddy')),
+        admin.from('profiles').select('id, full_name, email, notif_prefs').eq('role', 'buddy')),
       readRows<DigestStudent>('profiles(students)', () =>
         admin.from('profiles').select('id, full_name, buddy_id').eq('role', 'student')),
     ]);
@@ -108,8 +109,26 @@ export async function POST(request: NextRequest) {
       reportsByStudent.get(rr.student_id)!.push(rr);
     }
 
+    // ── One digest per buddy per week ────────────────────────────────────
+    // Duplication sweep, 26 Aug: this job is scheduled TWICE at `0 4 * * 1` —
+    // once in vercel.json and once in the GitHub cron fallback — and it had
+    // NO dedup of any kind. weekly_digest is also absent from the
+    // notifications_once_per_day_per_type index, so nothing downstream caught
+    // it either: every mentor received two identical in-app rows and two
+    // identical emails, every Monday. The constitution's key for this event is
+    // (user, ISO week); a 6-day lookback is that key, expressed as a read the
+    // second scheduler will lose.
+    const weekAgo = new Date(Date.now() - 6 * 86_400_000).toISOString();
+    const { data: alreadyDigested } = await admin
+      .from('notifications')
+      .select('user_id')
+      .eq('type', 'weekly_digest')
+      .gte('created_at', weekAgo);
+    const digestedThisWeek = new Set((alreadyDigested ?? []).map((r) => r.user_id as string));
+
     // Process all buddies concurrently instead of sequentially
     const results = await Promise.all(buddies.map(async buddy => {
+      if (digestedThisWeek.has(buddy.id)) return false;
       const myStudents = studentsByBuddy.get(buddy.id) ?? [];
       if (!myStudents.length) return false;
 
@@ -120,20 +139,24 @@ export async function POST(request: NextRequest) {
       });
 
       const digestBody = summaries.map(s => `${s.name}: ${s.score}/100 (${s.band})`).join(' • ');
-      await Promise.all([
-        admin.from('notifications').insert({
-          user_id: buddy.id,
-          type: 'weekly_digest',
-          title: 'Weekly digest — your students',
-          body: digestBody,
-          data: { summaries },
-          read: false,
-          channel: 'in_app',
-        }),
-        buddy.email
-          ? sendBuddyWeeklyDigest(buddy.email, buddy.full_name.split(' ')[0], summaries)
-          : Promise.resolve(),
-      ]);
+      // ONE event, two channels. This used to be an in-app row AND a separate
+      // email with no shared identity — two records of one weekly digest, and
+      // no way to ask "did the digest reach this buddy?". dispatch() writes a
+      // single row and stamps emailed_at on it when the email leg succeeds.
+      await dispatch({
+        userId: buddy.id,
+        type: 'weekly_digest',
+        title: 'Weekly digest — your students',
+        body: digestBody,
+        url: '/buddy/home',
+        data: { summaries },
+        reason: 'Weekly roster digest — the buddy\'s one scheduled read of their students',
+        expectedAction: 'acknowledge',
+        prefs: (buddy.notif_prefs as Record<string, unknown>) ?? {},
+        email: buddy.email
+          ? { to: buddy.email, send: () => sendBuddyWeeklyDigest(buddy.email!, buddy.full_name.split(' ')[0], summaries) }
+          : null,
+      });
       return true;
     }));
 

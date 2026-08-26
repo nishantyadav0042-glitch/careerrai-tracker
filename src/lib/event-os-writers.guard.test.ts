@@ -19,34 +19,53 @@ import { join } from 'node:path';
 
 const SRC = 'src';
 
-/** Every file still allowed to insert into notifications directly, with the
- *  reason it has not been converted yet. Batch 2 of Phase 0 burns this down. */
+/** Every file allowed to write the notifications table directly, and why.
+ *  Batch 2 (26 Aug) emptied this of real notification writers: ten were
+ *  converted to dispatch(); the two that remain do not create notifications
+ *  at all — they write internal, already-read LEDGER rows whose only purpose
+ *  is cross-run deduplication. Forcing those through dispatch() would invent
+ *  a notification where the product has none, purely to make a list reach
+ *  zero. They are exempt BY BEHAVIOUR, and the exemption is enforced below:
+ *  they may only ever write channel:'internal'. */
 const DIRECT_WRITER_LEDGER: Record<string, string> = {
   'src/lib/notification-os.ts': 'THE authority — the one permanent entry.',
   'src/lib/push.ts': 'transport-internal bookkeeping row for the e2e push test path',
-  'src/lib/premium.ts': 'batch 2 — premium activation notice',
-  'src/app/api/admin/broadcast/route.ts': 'batch 2 — admin bulk insert; needs a bulk-aware dispatch path',
-  'src/app/api/admin/streak-restore-broadcast/route.ts': 'batch 2 — admin bulk insert',
-  'src/app/api/buddy/commitment/route.ts': 'batch 2 — commitment notice',
-  'src/app/api/cron/check-red-flags/route.ts': 'batch 2 — admin-facing alert rows',
-  'src/app/api/cron/expire-subscriptions/route.ts': 'batch 2 — expiry notice',
-  'src/app/api/cron/founder-alerts/route.ts': 'batch 2 — founder-facing alert rows',
-  'src/app/api/cron/push-recovery/route.ts': 'batch 2 — recovery bookkeeping rows',
-  'src/app/api/cron/renewal-reminders/route.ts': 'batch 2 — renewal notice',
-  'src/app/api/cron/weekly-digest/route.ts': 'batch 2 — buddy digest in-app rows',
-  'src/app/api/logging/log-daily/route.ts': 'batch 2 — four achievement rows on log submit',
-  'src/app/api/payments/request-refund/route.ts': 'batch 2 — refund acknowledgement',
+  'src/app/api/cron/founder-alerts/route.ts':
+    "EXEMPT: writes channel:'internal', read:true marker rows keyed on the alert id, so the next run does not re-page the same failure. The alert itself goes by email (sendAdminAlert). Not a notification.",
+  'src/app/api/cron/push-recovery/route.ts':
+    "EXEMPT: writes channel:'internal', read:true marker rows so tomorrow's digest does not re-list the same student. The digest itself goes by email (sendAdminAlert). Not a notification.",
 };
 
-/** The five session-lifecycle writers converted in batch 1. They must NEVER
- *  reappear in the ledger — a regression here recreates the exact P0 the
- *  audit found (session events invisible to every transport). */
+/** The two exempt files may write ONLY internal ledger rows. If either ever
+ *  writes a row a human is meant to read, the exemption is void and the
+ *  build fails — the exemption is behavioural, not a permanent licence. */
+const INTERNAL_ONLY_WRITERS = [
+  'src/app/api/cron/founder-alerts/route.ts',
+  'src/app/api/cron/push-recovery/route.ts',
+];
+
+/** Every writer converted to dispatch(). None may reappear in the ledger — a
+ *  regression recreates the exact P0 the audit found (events invisible to
+ *  every transport, budget and delivery stamp). */
 const CONVERTED_BATCH_1 = [
   'src/app/api/calendar/schedule-meeting/route.ts',
   'src/app/api/calendar/cancel-meeting/route.ts',
   'src/app/api/calendar/reschedule-meeting/route.ts',
   'src/app/api/calendar/complete-orientation/route.ts',
   'src/app/api/sessions/request/route.ts',
+];
+
+const CONVERTED_BATCH_2 = [
+  'src/lib/premium.ts',
+  'src/app/api/buddy/commitment/route.ts',
+  'src/app/api/payments/request-refund/route.ts',
+  'src/app/api/cron/expire-subscriptions/route.ts',
+  'src/app/api/cron/renewal-reminders/route.ts',
+  'src/app/api/cron/check-red-flags/route.ts',
+  'src/app/api/cron/weekly-digest/route.ts',
+  'src/app/api/logging/log-daily/route.ts',
+  'src/app/api/admin/broadcast/route.ts',
+  'src/app/api/admin/streak-restore-broadcast/route.ts',
 ];
 
 function stripComments(src: string): string {
@@ -76,9 +95,26 @@ describe('Event OS invariant 1 — no direct notification writers', () => {
     expect(unlisted, `Direct notifications insert outside the ledger. EVENT-OS.md invariant 1: only dispatch() may create notification rows. Route these through dispatch():\n  ${unlisted.join('\n  ')}`).toEqual([]);
   });
 
-  it('the converted session-lifecycle routes stay converted', () => {
-    const regressed = CONVERTED_BATCH_1.filter((f) => offenders.includes(f));
-    expect(regressed, 'A batch-1 conversion regressed to a direct insert — this recreates "24 session events, 0 pushes".').toEqual([]);
+  it('the converted routes stay converted', () => {
+    const regressed = [...CONVERTED_BATCH_1, ...CONVERTED_BATCH_2].filter((f) => offenders.includes(f));
+    expect(regressed, 'A converted writer regressed to a direct insert — this recreates "events invisible to every transport".').toEqual([]);
+  });
+
+  it("the exempt writers may only ever write internal ledger rows", () => {
+    for (const f of INTERNAL_ONLY_WRITERS) {
+      const code = stripComments(readFileSync(f, 'utf8'));
+      // Every insert in these files must carry channel: 'internal'. If one
+      // ever writes a row meant for a human, it is a notification and belongs
+      // in dispatch() — the exemption does not stretch to cover it.
+      const inserts = code.match(/\.insert\([\s\S]{0,600}?\)\s*[;,)]/g) ?? [];
+      for (const ins of inserts) {
+        if (!/notifications/.test(code)) continue;
+        expect(
+          /channel:\s*['"`]internal['"`]/.test(ins),
+          `${f} writes a notifications row that is not channel:'internal'. The dedup-ledger exemption covers internal rows only — a row a human reads must go through dispatch().`,
+        ).toBe(true);
+      }
+    }
   });
 
   it('the ledger never lists a file that no longer needs it (shrink discipline)', () => {
@@ -91,10 +127,10 @@ describe('Event OS invariant 1 — no direct notification writers', () => {
     expect(stale, `Converted or deleted, but still on the ledger — remove:\n  ${stale.join('\n  ')}`).toEqual([]);
   });
 
-  it('the five batch-1 routes actually call dispatch()', () => {
-    for (const f of CONVERTED_BATCH_1) {
+  it('every converted route actually calls dispatch()', () => {
+    for (const f of [...CONVERTED_BATCH_1, ...CONVERTED_BATCH_2]) {
       const code = stripComments(readFileSync(f, 'utf8'));
-      expect(code.includes('dispatch('), `${f} no longer calls dispatch() — its lifecycle event has gone silent.`).toBe(true);
+      expect(code.includes('dispatch('), `${f} no longer calls dispatch() — its event has gone silent.`).toBe(true);
     }
   });
 });

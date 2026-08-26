@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dispatch } from '@/lib/notification-os';
 import { computeSummary } from '@/lib/analytics';
 import { sendRedFlagAlert } from '@/lib/email';
 import { authorizedCron } from '@/lib/cron-auth';
@@ -116,11 +117,11 @@ export async function POST(request: NextRequest) {
     // `if (!buddy)`, so the job under-alerted silently and still reported
     // success. Now it is bounded, and unavailability stops the run.
     const buddyIdsNeeded = [...new Set(students.filter((s) => s.buddy_id).map((s) => s.buddy_id!))];
-    const buddyById = new Map<string, { full_name: string; email: string | null }>();
+    const buddyById = new Map<string, { full_name: string; email: string | null; notif_prefs: unknown }>();
     if (buddyIdsNeeded.length > 0) {
       const buddySource = await readRowsForIds<string, BuddyRow>(
         'profiles(buddies)', buddyIdsNeeded,
-        (chunk) => admin.from('profiles').select('id, full_name, email').in('id', chunk));
+        (chunk) => admin.from('profiles').select('id, full_name, email, notif_prefs').in('id', chunk));
       if (isUnavailable(buddySource)) {
         console.error('[check-red-flags] buddy profiles unavailable — no alert was raised',
           buddySource.reason);
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
           { status: 503 });
       }
       const buddyProfiles: BuddyRow[] = buddySource.state === 'value' ? buddySource.value : [];
-      for (const b of buddyProfiles) buddyById.set(b.id, { full_name: b.full_name, email: b.email });
+      for (const b of buddyProfiles) buddyById.set(b.id, { full_name: b.full_name, email: b.email, notif_prefs: (b as { notif_prefs?: unknown }).notif_prefs });
     }
 
     const yesterday = new Date();
@@ -167,14 +168,18 @@ export async function POST(request: NextRequest) {
       const buddy = buddyById.get(student.buddy_id);
       if (!buddy) return false;
 
-      await admin.from('notifications').insert({
-        user_id: student.buddy_id,
+      // Through dispatch(). The fail-closed dedup above is unchanged — it
+      // reads data->>student_id, which dispatch carries through as-is.
+      await dispatch({
+        userId: student.buddy_id,
         type: 'red_flag',
         title: `⚠️ Red flag: ${student.full_name}`,
         body: summary.redFlags[0],
+        url: `/buddy/students/${student.id}`,
         data: { student_id: student.id, flags: summary.redFlags },
-        read: false,
-        channel: 'in_app',
+        reason: 'A student is showing red flags their buddy has not been told about',
+        expectedAction: 'acknowledge',
+        prefs: (buddy.notif_prefs as Record<string, unknown>) ?? {},
       });
 
       if (buddy.email) {

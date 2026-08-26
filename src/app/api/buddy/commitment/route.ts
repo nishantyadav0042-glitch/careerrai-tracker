@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { emitTimeline } from '@/lib/os/timeline';
+import { dispatch } from '@/lib/notification-os';
 
 // Close out a call in one request: the mentor's read of the student + the ONE
 // thing the student committed to. Built to be ~15 seconds on a phone, because
@@ -89,15 +90,23 @@ export async function POST(request: NextRequest) {
 
   // Tell the student there is something waiting — a debrief nobody reads is
   // the same as no debrief.
-  await admin.from('notifications').insert({
-    user_id: studentId,
+  // Through dispatch() — a debrief nobody reads is the same as no debrief,
+  // and an in-app-only row is a debrief nobody reads.
+  const { data: debriefStudent } = await admin
+    .from('profiles').select('notif_prefs').eq('id', studentId).single();
+  await dispatch({
+    userId: studentId,
     type: 'session_debrief',
     title: 'Your buddy left notes from the call',
     body: tasks.length
       ? `${tasks.length} thing${tasks.length > 1 ? 's' : ''} to do before next time.`
       : 'Open your Buddy tab to see what went well and what to fix.',
+    url: '/student/buddy',
     data: { sessionId: sessionId ?? null },
-  }).then(({ error: e }) => { if (e) console.error('debrief notification failed:', e.message); });
+    reason: 'Buddy closed out the call and left notes the student has not seen',
+    expectedAction: 'open_buddy',
+    prefs: (debriefStudent?.notif_prefs as Record<string, unknown>) ?? {},
+  });
 
   // Mark the session done — the gap that made a 10/10 orientation invisible.
   //

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { dispatch } from '@/lib/notification-os';
 
 // Freemium upgrade/downgrade side-effects, shared by the Razorpay webhook (paid
 // path) and create-order (scholarship/coupon free path). The payment/subscription
@@ -44,14 +45,19 @@ export async function grantPremiumAndQueueBuddy(
     .update({ sales_ready: false })
     .eq('student_id', studentId);
 
-  await admin.from('notifications').insert({
-    user_id: studentId,
+  // Through dispatch() — the moment money changed hands is the moment trust
+  // is won or lost, so this must reach the phone, not wait in a bell.
+  const { data: unlocked } = await admin
+    .from('profiles').select('notif_prefs').eq('id', studentId).single();
+  await dispatch({
+    userId: studentId,
     type: 'membership',
     title: '🎉 Buddy unlocked!',
     body: "Your IIM senior is being assigned within 24 hours — they'll message you directly. In the meantime, log today's session. 💪",
-    data: { url: '/student/buddy' },
-    read: false,
-    channel: 'in_app',
+    url: '/student/buddy',
+    reason: 'Premium just granted — confirm the purchase landed, immediately',
+    expectedAction: 'open_buddy',
+    prefs: (unlocked?.notif_prefs as Record<string, unknown>) ?? {},
   });
 }
 

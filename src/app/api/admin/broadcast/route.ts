@@ -1,5 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dispatch } from '@/lib/notification-os';
+import { readRowsForIds } from '@/lib/truth/batch';
+import { isUnavailable } from '@/lib/truth/source';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -21,18 +24,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
 
-  const rows = recipientIds.map((uid: string) => ({
-    user_id: uid,
-    type: 'broadcast',
-    title,
-    body,
-    data: {},
-    read: false,
-    channel: 'in_app',
-  }));
+  // Through dispatch(), one recipient at a time. As a bulk in-app insert this
+  // reached only students who happened to open the bell; each now gets a real
+  // delivery attempt against their own preferences, and each is individually
+  // counted. One student's failure never stops the broadcast.
+  // Bounded, all-or-nothing (B3b gate 1): an unbounded .in() here is a
+  // population-scaled read on a path that mutates student state, and a
+  // partial read would broadcast against the WRONG preferences — silently
+  // pushing to students who turned push off. A read we cannot complete
+  // refuses the whole broadcast rather than half-honouring it.
+  const prefsSource = await readRowsForIds<string, { id: string; notif_prefs: unknown }>(
+    'profiles(broadcast recipients)', recipientIds as string[],
+    (chunk) => admin.from('profiles').select('id, notif_prefs').in('id', chunk),
+  );
+  if (isUnavailable(prefsSource)) {
+    return NextResponse.json(
+      { error: `Could not read recipient preferences (${prefsSource.reason}) — broadcast refused rather than sent against unknown settings.` },
+      { status: 503 },
+    );
+  }
+  const prefsById = new Map<string, Record<string, unknown>>(
+    (prefsSource.state === 'value' ? prefsSource.value : [])
+      .map((r) => [r.id, (r.notif_prefs as Record<string, unknown>) ?? {}]),
+  );
 
-  const { error } = await admin.from('notifications').insert(rows);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let sent = 0;
+  let failed = 0;
+  for (const uid of recipientIds as string[]) {
+    try {
+      const outcome = await dispatch({
+        userId: uid,
+        type: 'broadcast',
+        title,
+        body,
+        url: '/student/tracker',
+        reason: 'Admin broadcast',
+        expectedAction: 'acknowledge',
+        prefs: prefsById.get(uid) ?? {},
+      });
+      if (outcome === 'sent') sent++; else failed++;
+    } catch {
+      failed++;
+    }
+  }
 
-  return NextResponse.json({ sent: rows.length });
+  return NextResponse.json({ sent, failed, audience: recipientIds.length });
 }

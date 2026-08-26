@@ -11,7 +11,7 @@ import type { NextRequest } from 'next/server';
 // both ways and assert dispatch() fires exactly when this caller actually
 // changed the state — and never otherwise.
 
-const dispatch = vi.hoisted(() => vi.fn(async () => 'sent'));
+const dispatch = vi.hoisted(() => vi.fn(async (_opts: Record<string, unknown>) => 'sent'));
 
 // What the status-guarded UPDATE returns: rows when this caller cancelled,
 // empty when someone/something already settled the session.
@@ -73,7 +73,7 @@ describe('cancel-meeting × dispatch ownership (audit F1)', () => {
     const res = await callRoute();
     expect((await res.json()).success).toBe(true);
     expect(dispatch).toHaveBeenCalledTimes(1);
-    const opts = dispatch.mock.calls[0][0] as Record<string, unknown>;
+    const opts = dispatch.mock.calls[0]![0];
     expect(opts.type).toBe('session_cancelled');
     expect(opts.userId).toBe('stu-1');
     expect(typeof opts.url).toBe('string'); // P0 events always land somewhere actionable
