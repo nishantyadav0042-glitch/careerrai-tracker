@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // forensic checklist asks for — recipient, destination, preferences, and the
 // duplicate/retry behaviour of the two writers that carry their own dedup.
 
-const dispatch = vi.hoisted(() => vi.fn(async (_o: Record<string, unknown>) => 'sent'));
+const dispatch = vi.hoisted(() => vi.fn(async (o: Record<string, unknown>) => { void o; return 'sent'; }));
 vi.mock('@/lib/notification-os', () => ({ dispatch }));
 
 beforeEach(() => { vi.clearAllMocks(); vi.resetModules(); });

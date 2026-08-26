@@ -11,7 +11,7 @@ import type { NextRequest } from 'next/server';
 // both ways and assert dispatch() fires exactly when this caller actually
 // changed the state — and never otherwise.
 
-const dispatch = vi.hoisted(() => vi.fn(async (_opts: Record<string, unknown>) => 'sent'));
+const dispatch = vi.hoisted(() => vi.fn(async (o: Record<string, unknown>) => { void o; return 'sent'; }));
 
 // What the status-guarded UPDATE returns: rows when this caller cancelled,
 // empty when someone/something already settled the session.
