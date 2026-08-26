@@ -113,6 +113,13 @@ export async function POST(request: NextRequest) {
     // Through dispatch() — SESSION_CANCELLED is P0 must-reach: silence here
     // is the worst trust failure a session product can commit (3 cancellation
     // rows existed before this change; 0 had ever been pushed).
+    //
+    // Gated on the update actually cancelling a row (Phase 0 audit, F1): when
+    // alreadySettled is true this caller cancelled NOTHING — the session was
+    // already finished or already cancelled by a racing call — and telling
+    // the student "Session cancelled" about a session that COMPLETED would be
+    // worse than silence. Only the caller that owns the state change speaks.
+    if (!alreadySettled) {
     const { data: cancelledStudent } = await admin
       .from('profiles').select('notif_prefs').eq('id', session.student_id).single();
     await dispatch({
@@ -126,6 +133,7 @@ export async function POST(request: NextRequest) {
       expectedAction: 'view_session',
       prefs: (cancelledStudent?.notif_prefs as Record<string, unknown>) ?? {},
     });
+    }
 
     // The cancel succeeded. calendarError is reported, not thrown — the mentor
     // should know their calendar still shows it, without the cancel appearing
