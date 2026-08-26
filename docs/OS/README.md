@@ -16,6 +16,7 @@ ever-larger prompt re-typed each session.
 | OS | Owns | Constitution | Status |
 |---|---|---|---|
 | **Notification OS** | every reminder, push, in-app message, reliability, delivery, habit formation | [`NOTIFICATION-OS.md`](../NOTIFICATION-OS.md) + [Execution](../NOTIFICATION-OS-EXECUTION.md) | Full pair |
+| **Event OS** | multi-channel delivery (WhatsApp/email/calendar/push) + Google-first identity — the v1.1 architecture that extends Notification OS across channels | [`OS/EVENT-OS.md`](./EVENT-OS.md) | Constitution (binding, 26 Aug) |
 | **Growth OS** | acquisition, onboarding, install, referrals, experiments, funnels, attribution | [`OS/GROWTH-OS.md`](./GROWTH-OS.md) | Constitution |
 | **Learning OS** | study plans, adaptive schedules, revision, recommendations, tutoring | [`OS/LEARNING-OS.md`](./LEARNING-OS.md) | Constitution |
 | **Trust OS** | mentor quality, testimonials, moderation, payments, refunds, safety | [`OS/TRUST-OS.md`](./TRUST-OS.md) | Constitution |
