@@ -1335,3 +1335,78 @@ Both changes belong to the sales workstream with its own review.
 API endpoint until proven otherwise. The repo needs one test that enumerates
 them and fails on any that is callable by `anon` — a list, not a per-function
 assertion, so a new one cannot be added quietly.
+
+---
+
+## Incident #35 — the deploy that took the whole site down (2026-08-26)
+
+**Symptom.** Every request to careerrai.in returned **HTTP 500** — homepage,
+`/api/version`, `/api/events/track`, `/admin/log-breakers`, all of it. Not a
+route bug: the failure was in middleware, so nothing downstream ever ran.
+Runtime logs, one line repeated across every path:
+
+```
+Error running the exported Web Handler:
+  Error: Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL.
+```
+
+**Root cause.** `.github/workflows/vercel-deploy.yml` built the app **on the
+GitHub runner** and shipped the finished artifact with
+`vercel deploy --prebuilt --prod`. A runner build only knows the environment
+that `vercel pull` handed back, and `vercel pull` did not return
+`NEXT_PUBLIC_SUPABASE_URL`. `NEXT_PUBLIC_*` values are **inlined at build
+time**, so the empty string was baked into the middleware bundle permanently.
+Vercel's own builder never sees this failure mode — it builds with the
+project's real production environment — which is why the identical commit
+built by Vercel (`dpl_Br1rdR…`) served 44 requests, all 200, while the runner
+build of the same commit (`dpl_7nrA6n…`) 500'd everything.
+
+Nothing caught it. The build succeeded. The deploy succeeded. The workflow
+went green. **A green deploy is not a working site.**
+
+**Cost.** Full outage, 874 students, 12:18–12:27 IST (06:48–06:57 UTC), about nine
+minutes. The migrations applied
+just before it (`20260826b/c/h/i`) were not implicated and did not need
+reverting.
+
+**The second trap, found during recovery.** The first recovery attempt was an
+empty commit pushed to `main` to make the Git integration rebuild. Vercel
+**cancelled** it. The project has an *Ignored Build Step*:
+
+```sh
+main) git diff --quiet HEAD^ HEAD -- ':(exclude)docs' ':(exclude)*.md' \
+        ':(exclude)e2e' ':(exclude)*.test.ts' ':(exclude)*.test.tsx' || exit 1; exit 0;;
+```
+
+Commits touching only docs, markdown or tests are cancelled by design. This is
+also the real explanation for the long-held belief that "the Vercel webhook is
+dead for this repo" — it was never dead. Doc-only commits were being cancelled
+exactly as configured, and the fallback workflow was built to work around a
+problem that did not exist. Recovery only worked once the pushed commit
+touched real source.
+
+**Prevention (in the same commit as this entry).** Two guard steps now sit
+between `vercel pull` and `vercel deploy` in the fallback workflow:
+
+1. **Before the build** — assert `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` each appear
+   with a non-empty value in `.vercel/.env.production.local`. Vercel withholds
+   variables marked *Sensitive* from `vercel pull`, and a missing one must stop
+   the run, not silently produce a broken bundle.
+2. **After the build** — parse the Supabase host out of that file and `grep`
+   for it in `.vercel/output`. If the built artifact never mentions the host,
+   the URL was not inlined and the deploy is refused.
+
+Guard 2 was proven non-vacuous before shipping: with the host absent from the
+output it fails, with the host present it passes.
+
+**Standing rules.**
+- **The Git integration is the deploy path.** The runner workflow is a
+  fallback for when it genuinely cannot run, and it is now the only path with
+  guards precisely because it is the one that can lose the environment.
+- **A doc-only commit will never deploy.** That is configuration, not a fault.
+  Do not push empty commits expecting a build.
+- **Verify the site, not the pipeline.** After any production deploy, fetch a
+  real URL and read the status code. `careerrai.in` is unreachable from the
+  agent sandbox (network policy denies CONNECT), so use the Vercel MCP
+  `web_fetch_vercel_url` tool, or check runtime logs grouped by status code.
