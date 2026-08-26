@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { claimBuddyPitch } from '@/lib/promo-impression';
+import { claimBuddyPitch, settleBuddyPitch } from '@/lib/promo-impression';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
@@ -70,6 +70,8 @@ async function buddyEveningRun(): Promise<NextResponse> {
   const focusInputs = await fetchFocusInputsBulk(admin, eligibleIds);
 
   let sent = 0;
+
+  let released = 0;
   for (const s of students) {
     if (s.is_premium === true) continue;               // free only
     if (sentToday.has(s.id)) continue;                 // already nudged today
@@ -133,9 +135,12 @@ async function buddyEveningRun(): Promise<NextResponse> {
       dailyBudget: BUDGET_ACTIVE,
     });
     if (outcome === 'sent') sent++;
+    // A claim the send never honoured goes back, so the student can still be
+    // reached by another surface today instead of silently losing the day.
+    else if (await settleBuddyPitch(admin, s.id, 'buddy_evening', pitch, outcome) === 'released') released++;
   }
 
-  return NextResponse.json({ ok: true, sent });
+  return NextResponse.json({ ok: true, sent, released });
 }
 
 // Vercel Cron invokes endpoints via GET; every other cron route aliases POST

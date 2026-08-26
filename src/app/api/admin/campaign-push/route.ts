@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 import { dispatch } from '@/lib/notification-os';
 import { campaignState, CAMPAIGN, mayShowSeatsLeft } from '@/lib/campaign';
 import { campaignSeatsSold } from '@/lib/pricing';
-import { claimBuddyPitch } from '@/lib/promo-impression';
+import { claimBuddyPitch, settleBuddyPitch } from '@/lib/promo-impression';
 
 // ── Campaign push waves — the REACTIVATION layer, not the sales engine ──────
 //
@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
 
   let sent = 0;
   let alreadyPitched = 0;
+  let released = 0;
   for (const r of audience as { id: string; notif_prefs?: Record<string, unknown> | null }[]) {
     try {
       // ONE PITCH PER STUDY DAY, PER STUDENT — claimed individually, before
@@ -122,9 +123,11 @@ export async function POST(request: NextRequest) {
       // for any other reason also skips — fail closed, never fail loud into
       // a double pitch. The approval workflow above (dryRun default, live
       // window, seats) is unchanged; this is the last gate before the wire.
+      let pitch: { show: true; shownAt: string } | null = null;
       if (IS_BUDDY_CAMPAIGN) {
-        const pitch = await claimBuddyPitch(admin, r.id, 'approved_push');
-        if (!pitch.show) { alreadyPitched++; continue; }
+        const claim = await claimBuddyPitch(admin, r.id, 'approved_push');
+        if (!claim.show) { alreadyPitched++; continue; }
+        pitch = claim;
       }
       const outcome = await dispatch({
         userId: r.id, type: 'broadcast',
@@ -134,10 +137,12 @@ export async function POST(request: NextRequest) {
         prefs: r.notif_prefs ?? {},
       });
       if (outcome === 'sent') sent++;
+      // The wave must not cost a student their day when the send never landed.
+      else if (pitch && await settleBuddyPitch(admin, r.id, 'broadcast', pitch, outcome) === 'released') released++;
     } catch {
       // One student's dead subscription must never stop the wave.
     }
   }
 
-  return NextResponse.json({ dryRun: false, wave, sent, alreadyPitched, audience: audience.length, seatsLeft: state.seatsLeft });
+  return NextResponse.json({ dryRun: false, wave, sent, alreadyPitched, released, audience: audience.length, seatsLeft: state.seatsLeft });
 }

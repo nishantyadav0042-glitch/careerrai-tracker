@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isRequestAdmin } from '@/lib/require-admin';
 import { dispatch, type ExpectedAction } from '@/lib/notification-os';
-import { claimBuddyPitch } from '@/lib/promo-impression';
+import { claimBuddyPitch, settleBuddyPitch } from '@/lib/promo-impression';
 
 // The one action that actually lets a Brain-queued message reach a student.
 // Reject just closes it out; nothing is ever sent on rejection.
@@ -34,9 +34,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // the message MAY go, the promo authority decides whether TODAY may carry
   // it. If another surface already pitched today, the decision goes back to
   // pending so the founder can re-approve tomorrow instead of losing it.
+  let pitch: { show: true; shownAt: string } | null = null;
   if (decision.action_id === 'convert_now') {
-    const pitch = await claimBuddyPitch(admin, decision.student_id as string, 'approved_push');
-    if (!pitch.show) {
+    const claim = await claimBuddyPitch(admin, decision.student_id as string, 'approved_push');
+    pitch = claim.show ? claim : null;
+    if (!claim.show) {
       await admin.from('decision_log').update({ send_status: 'pending_approval' }).eq('id', id);
       return NextResponse.json(
         { ok: false, status: 'suppressed', reason: 'Student was already pitched Buddy today — try again tomorrow.' },
@@ -50,13 +52,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // EXPECTED map (api/cron/decision-engine/route.ts) already constrains every
   // DecisionEventType to a valid ExpectedAction — the cast is asserting a
   // relationship the pipeline already enforces upstream, not inventing one.
-  await dispatch({
+  const outcome = await dispatch({
     userId: decision.student_id as string, type: `brain_${decision.action_id}`,
     title: copy.title, body: copy.body, url: copy.url,
     reason: `Approved Brain recommendation: ${decision.action_id}`,
     expectedAction: decision.action_id as unknown as ExpectedAction,
     prefs: (studentProfile?.notif_prefs as Record<string, unknown>) ?? {},
   });
+
+  // An approval the send never honoured hands the day back, so the founder's
+  // re-approval tomorrow is a real second chance rather than a no-op.
+  if (pitch) await settleBuddyPitch(admin, decision.student_id as string, `brain_${decision.action_id}`, pitch, outcome);
 
   const { data: sentRow } = await admin
     .from('notifications').select('id')

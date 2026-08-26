@@ -7,6 +7,7 @@ import { audit } from '@/lib/integration-audit';
 import { constraintFailure } from '@/lib/booking-constraints';
 import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
 import { bookedNotificationBody, sessionNotificationUrl } from '@/lib/session-link';
+import { dispatch } from '@/lib/notification-os';
 
 const ALLOWED_DURATIONS = [20, 30, 45, 60];
 const ALLOWED_SESSION_TYPES = ['guidance', 'onboarding', 'review', 'doubt_solving', 'mock_review'] as const;
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     // ── Student must belong to this buddy ────────────────────────
     const { data: student } = await admin
       .from('profiles')
-      .select('full_name, buddy_id, free_onboarding_used, email')
+      .select('full_name, buddy_id, free_onboarding_used, email, notif_prefs')
       .eq('id', studentId)
       .single();
     if (!student) {
@@ -230,30 +231,28 @@ export async function POST(request: NextRequest) {
       minute: '2-digit',
       hour12: true,
     });
-    await admin
-      .from('notifications')
-      .insert({
-        user_id: studentId,
-        type: 'session_scheduled',
-        title: isOrientation
-          ? `🎯 Free Orientation with ${buddy.full_name.split(' ')[0]}`
-          : `📅 Session with ${buddy.full_name.split(' ')[0]}`,
-        // The LINK goes in the message, and the notification lands somewhere
-        // they can act. It shipped saying "join from your dashboard" with no
-        // `url` at all, so a tap opened whatever the app happened to show —
-        // and the student had to remember a place and a time instead of
-        // tapping a link. Both of the only two sessions ever booked expired.
-        body: bookedNotificationBody({ istTime, isOrientation, meetLink }),
-        data: {
-          sessionId: session.id,
-          meetLink,
-          sessionType: isOrientation ? 'onboarding' : 'guidance',
-          url: sessionNotificationUrl('student'),
-        },
-      })
-      .then(({ error: e }) => {
-        if (e) console.error('Notification insert failed:', e.message);
-      });
+    // Through dispatch() — Event OS invariant 1 (SESSION_BOOKED, P0
+    // transactional). The direct insert this replaces created rows that no
+    // transport ever saw: 19 session_scheduled rows, 0 pushes, ever. The
+    // student's phone now lights up when push is on; the in-app row (with the
+    // join link — the lesson from the two expired sessions) is unchanged.
+    await dispatch({
+      userId: studentId,
+      type: 'session_scheduled',
+      title: isOrientation
+        ? `🎯 Free Orientation with ${buddy.full_name.split(' ')[0]}`
+        : `📅 Session with ${buddy.full_name.split(' ')[0]}`,
+      body: bookedNotificationBody({ istTime, isOrientation, meetLink }),
+      url: sessionNotificationUrl('student'),
+      data: {
+        sessionId: session.id,
+        meetLink,
+        sessionType: isOrientation ? 'onboarding' : 'guidance',
+      },
+      reason: 'Session booked by the buddy — the student holds the join link from second one',
+      expectedAction: 'view_session',
+      prefs: (student.notif_prefs as Record<string, unknown>) ?? {},
+    });
 
     await audit({
       subjectId: user.id, action: 'booking.created',
