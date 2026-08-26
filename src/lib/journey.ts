@@ -203,6 +203,29 @@ export type EventName =
   // src/app/probe/*, once the answer is recorded.
   | 'probe_escape_origin' | 'probe_escape_landed'
   | 'app_open' | 'screen_view' | 'screen_exit' | 'tap'
+  // ── The signup + session funnel (26 Aug, Event OS Track B) ───────────────
+  // The forensic auth audit found this registry had NOT ONE signup, login,
+  // OTP or session event: `app_open` was the earliest thing measured, and it
+  // is post-auth. So every claim about onboarding friction — "the phone step
+  // costs us students", "OTP retries are hurting conversion" — was an
+  // opinion nobody could check, and the OTP retry rate (830 sends against
+  // 630 signups, 1.32x) was only visible as a bill.
+  //
+  // These name the steps a person actually walks. Deliberately NOT one
+  // 'signup' event: the whole value is knowing WHICH step loses them.
+  | 'auth_identity_started'      // tapped a sign-in door (which one, in props)
+  | 'auth_identity_completed'    // identity established
+  | 'auth_otp_requested'         // an OTP was asked for
+  | 'auth_otp_resent'            // ...and asked for again — the 1.32x, measured
+  | 'auth_otp_verified'          // the code worked
+  | 'auth_otp_failed'            // it did not (reason in props, never the code)
+  | 'auth_phone_step_shown'      // the phone/address step appeared
+  | 'auth_phone_step_completed'  // ...and was finished
+  | 'auth_phone_step_abandoned'  // ...or left behind: the founder's open question
+  | 'auth_account_linked'        // a second identity joined an existing account
+  | 'auth_link_refused'          // ...or was refused (duplicate-account defence)
+  | 'auth_session_lost'          // a live session vanished without a logout
+  | 'auth_logout'                // a deliberate logout (scope in props)
   | 'sample_insight_shown'
   | 'log_open' | 'log_blocked' | 'log_error' | 'log_dismissed' | 'daily_log'
   // G10B: the outcome of every complete-task call made by the INTEGRATED log

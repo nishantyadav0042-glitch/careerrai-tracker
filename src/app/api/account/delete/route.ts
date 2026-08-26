@@ -44,7 +44,10 @@ export async function POST() {
   const { error: authError } = await admin.auth.admin.deleteUser(user.id);
 
   // 3) Clear this browser's session cookie (best effort — the user is gone).
-  try { await supabase.auth.signOut(); } catch { /* noop */ }
+  // GLOBAL on purpose — the one place it is correct. The account is being
+  // destroyed, so every session on every device must die with it. Everywhere
+  // else, a logout is local (see api/auth/logout).
+  try { await supabase.auth.signOut({ scope: 'global' }); } catch { /* noop */ }
 
   return NextResponse.json({ ok: true, authRemoved: !authError });
 }

@@ -30,7 +30,8 @@ export default function BuddySettingsPage() {
             <h2 className="text-lg font-semibold text-stone-900 mb-4">Account</h2>
             <button
               onClick={async () => {
-                await supabase.auth.signOut();
+                // This device only — see api/auth/logout for why the global default is wrong.
+                await supabase.auth.signOut({ scope: 'local' });
                 window.location.href = '/';
               }}
               className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 font-medium transition-colors"

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { track } from '@/lib/journey';
 
 interface Props {
   isLoading: boolean;
@@ -35,6 +36,7 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
   const [progress, setProgress] = useState(0);
   const [checkedCount, setCheckedCount] = useState(0);
   const [done, setDone] = useState(false);
+  const otpAsks = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
@@ -45,6 +47,11 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
     if (name.trim().length < 2) { setError('Enter your name.'); return; }
     if (phone.length !== 10 || !/^[6-9]/.test(phone)) { setError('Enter a valid 10-digit mobile number.'); return; }
     setBusy(true);
+    // First ask vs resend, told apart. The signup funnel measured every step
+    // EXCEPT the three that create the account; this is the first of them.
+    otpAsks.current += 1;
+    track(otpAsks.current === 1 ? 'auth_otp_requested' : 'auth_otp_resent',
+      { surface: 'start', attempt: otpAsks.current });
     try {
       const res = await fetch('/api/auth/request-phone-otp', {
         method: 'POST',
@@ -87,7 +94,10 @@ export default function ScreenLoginBuild({ isLoading, onboarding }: Props) {
         body: JSON.stringify({ phone, token: otp, name: name.trim(), userType: 'student', onboarding }),
       });
       const json = await res.json();
+      if (!json.ok) track('auth_otp_failed', { surface: 'start', status: res.status });
       if (json.ok && json.dest) {
+        track('auth_otp_verified', { surface: 'start', asks: otpAsks.current });
+        track('auth_identity_completed', { surface: 'start', method: 'phone_otp' });
         setProgress(100);
         setCheckedCount(CHECKLIST.length);
         setDone(true);
