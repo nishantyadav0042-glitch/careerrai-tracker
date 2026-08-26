@@ -5,8 +5,18 @@ import { FINDING_TO_SPECIALITY } from './session-credit';
 import { SESSION_INTENTS } from './session-intent';
 
 const MIGRATION = readFileSync('supabase/migrations/20260824l_session_assignment.sql', 'utf8');
-const ROUTE = readFileSync('src/app/api/sessions/schedule/route.ts', 'utf8');
+const BOOKING = readFileSync('supabase/migrations/20260826c_book_session_credit.sql', 'utf8');
 const ACTIVATE = readFileSync('src/lib/activate-payment.ts', 'utf8');
+
+// COMMENTS ARE NOT EVIDENCE. This file asserts things about the route by
+// reading it, and a prose comment that happens to quote the old code satisfies
+// a regex just as well as the code did — which is exactly what happened when
+// the route moved to the booking RPC: a guard kept passing on a sentence in a
+// comment describing the bug that had just been removed. Four incidents in
+// this repo share that shape. The source is stripped before it is matched.
+const ROUTE = readFileSync('src/app/api/sessions/schedule/route.ts', 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
 
 // A faithful fake. readMentorRoster awaits TWO thenable query chains in a
 // Promise.all, so a fake whose chain is not thenable does not exercise the
@@ -171,11 +181,13 @@ describe('a student is never offered a slot nobody can hold', () => {
 
   it('the room is secured BEFORE the session row exists', () => {
     // A session with no link is the failure this product already lived through.
+    // The room is a network call to another provider and cannot be inside the
+    // booking transaction, so it has to succeed first or not at all.
     const roomAt = ROUTE.indexOf('ensureBuddyRoom(');
-    const insertAt = ROUTE.indexOf(".from('video_sessions')\n    .insert(");
+    const bookAt = ROUTE.indexOf("rpc('book_session_credit'");
     expect(roomAt).toBeGreaterThan(-1);
-    expect(insertAt).toBeGreaterThan(-1);
-    expect(roomAt).toBeLessThan(insertAt);
+    expect(bookAt).toBeGreaterThan(-1);
+    expect(roomAt).toBeLessThan(bookAt);
   });
 });
 
@@ -184,18 +196,58 @@ describe('booking is idempotent and loses races cleanly', () => {
     expect(ROUTE).toMatch(/if \(credit\.video_session_id\)[\s\S]{0,200}already: true/);
   });
 
-  it('the credit link is conditional on still being unlinked', () => {
-    expect(ROUTE).toMatch(/\.is\('video_session_id', null\)/);
+  it('the route writes NEITHER table — one transaction owns both', () => {
+    // This is the Phase 2C fix. The route used to insert the session and then
+    // update the credit in two separate round trips with nothing spanning
+    // them; a death in between left a session no credit knew about.
+    expect(ROUTE).not.toMatch(/\.from\('video_sessions'\)[\s\S]{0,40}\.insert\(/);
+    expect(ROUTE).not.toMatch(/\.from\('session_credits'\)[\s\S]{0,40}\.update\(/);
+    expect(ROUTE).toMatch(/rpc\('book_session_credit'/);
+  });
+
+  it('the RPC locks the credit before it decides anything', () => {
+    // Without the lock, two taps both read an unlinked credit and both insert.
+    const lockAt = BOOKING.indexOf('for update');
+    const insertAt = BOOKING.indexOf('insert into public.video_sessions');
+    expect(lockAt).toBeGreaterThan(-1);
+    expect(insertAt).toBeGreaterThan(-1);
+    expect(lockAt).toBeLessThan(insertAt);
+  });
+
+  it('the booking RPC is not callable by students or anonymous visitors', () => {
+    // `revoke ... from public` is NOT enough on Supabase: anon and
+    // authenticated hold EXPLICIT grants from ALTER DEFAULT PRIVILEGES, and an
+    // explicit grant survives a revoke from PUBLIC. The first version of the
+    // migration got this wrong and left the function open to every logged-in
+    // student. The roles must be named.
+    expect(BOOKING).toMatch(/revoke all on function[\s\S]{0,200}from public, anon, authenticated/);
+    expect(BOOKING).toMatch(/grant execute on function[\s\S]{0,200}to service_role/);
   });
 
   it('a taken slot is a clean 409, and the credit survives', () => {
-    expect(ROUTE).toMatch(/That time was just taken/);
-    const block = ROUTE.slice(ROUTE.indexOf('That time was just taken') - 400, ROUTE.indexOf('That time was just taken') + 200);
-    expect(block).not.toMatch(/session_credits/);
+    expect(ROUTE).toMatch(/outcome === 'slot_taken'/);
+    expect(ROUTE).toMatch(/status: 409/);
+    // In the RPC, a refused INSERT returns before the credit is ever written:
+    // the exception handler is closed by `return;` inside every branch.
+    const insertBlock = BOOKING.slice(
+      BOOKING.indexOf('insert into public.video_sessions'),
+      BOOKING.indexOf('update public.session_credits'),
+    );
+    expect(insertBlock).toMatch(/when exclusion_violation then[\s\S]{0,200}return;/);
+    expect(insertBlock).not.toMatch(/update public\.session_credits/);
   });
 
-  it('an orphaned session is cancelled rather than left unpaid-for', () => {
-    expect(ROUTE).toMatch(/session_status: 'cancelled'/);
+  it('there is no orphan to cancel: the two writes are ONE transaction', () => {
+    // The compensating UPDATE that used to cancel a stranded session is gone,
+    // and it SHOULD be. It existed only because the insert and the link were
+    // two round trips, and a best-effort cleanup that can itself fail is not a
+    // guarantee. Proved on careerrai-test with an injected link failure: the
+    // old two-step left sessions=1 orphaned, the RPC leaves sessions=0.
+    expect(ROUTE).not.toMatch(/session_status: 'cancelled'/);
+    // And the link step is deliberately NOT wrapped in a handler, so a
+    // coherence refusal takes the session down with it.
+    const linkOnwards = BOOKING.slice(BOOKING.indexOf('update public.session_credits'));
+    expect(linkOnwards).not.toMatch(/exception\s+when/);
   });
 
   it('the DATABASE validates the slot — the client list is never trusted', () => {

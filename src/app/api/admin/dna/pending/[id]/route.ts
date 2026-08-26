@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isRequestAdmin } from '@/lib/require-admin';
 import { dispatch, type ExpectedAction } from '@/lib/notification-os';
+import { claimBuddyPitch } from '@/lib/promo-impression';
 
 // The one action that actually lets a Brain-queued message reach a student.
 // Reject just closes it out; nothing is ever sent on rejection.
@@ -26,6 +27,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!copy) {
     await admin.from('decision_log').update({ send_status: 'rejected' }).eq('id', id);
     return NextResponse.json({ error: 'No content to send' }, { status: 400 });
+  }
+
+  // convert_now is a buddy sales pitch, and a human approving it does not
+  // exempt it from the one-pitch-per-study-day rule — approval decides that
+  // the message MAY go, the promo authority decides whether TODAY may carry
+  // it. If another surface already pitched today, the decision goes back to
+  // pending so the founder can re-approve tomorrow instead of losing it.
+  if (decision.action_id === 'convert_now') {
+    const pitch = await claimBuddyPitch(admin, decision.student_id as string, 'approved_push');
+    if (!pitch.show) {
+      await admin.from('decision_log').update({ send_status: 'pending_approval' }).eq('id', id);
+      return NextResponse.json(
+        { ok: false, status: 'suppressed', reason: 'Student was already pitched Buddy today — try again tomorrow.' },
+        { status: 409 },
+      );
+    }
   }
 
   const { data: studentProfile } = await admin.from('profiles').select('notif_prefs').eq('id', decision.student_id).single();

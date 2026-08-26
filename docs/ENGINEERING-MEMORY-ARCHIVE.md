@@ -1112,3 +1112,226 @@ route sends hours unrounded, the migration declares NUMERIC and DROPs the old
 integer overload (leaving both would let Postgres still pick the broken one),
 and it restores the grants the DROP removes. Verified in production: the RPC
 called with 4.6 stores 4.6, one function version present.
+
+---
+
+## Incident #31 — a paid ₹299 student fell out of the lifecycle and nothing was wrong (2026-08-24)
+
+**Symptom.** Dhruv Vakadia paid ₹299 at 18:34 IST on 24 Aug. The credit was
+minted 14 seconds later. Then nothing: no mentor, no session, no reminder, for
+**24 hours**. He was rescued ~5h later only because a human used `retry_unlock`
+— a manual admin tool — which unstuck him and granted `is_premium: true` as an
+undocumented side effect. Scheduling happened as *text in a chat* ("Scheduling
+for 8 pm"), so no session row existed, so no reminder fired, so he missed it
+and the conversation moved to WhatsApp.
+
+**Root cause — and it is not a bug.** Every row was valid. The ledger balanced.
+`session_credits.status = 'paid'` means BOTH "the money just arrived, all is
+well" and "the money arrived a day ago and nobody ever came." One state,
+two opposite realities, and no column anywhere that answered the only two
+questions that matter when a student is stuck: **who owns this, and what has to
+happen next.** The schema had no way to *say* a credit was in trouble, so the
+system could not report a failure it was structurally unable to name.
+
+**How it hid.** Perfectly. There was nothing to hide — no error, no exception,
+no failed job. The forensic pass found the deeper shape: in this database's
+entire life there had been **2 credits and 18 video_sessions, with 0 sessions
+ever linked to a credit and 0 ever completed.** `session_credits.video_session_id`
+had never once been non-null in production. Two partial indexes existed,
+purpose-built for the orphan query — with no reader. The machinery to notice
+had been built and never wired up.
+
+**What the investigation got wrong first, and what corrected it.** Phase 1
+inferred a missing-integrity gap from a nullable column *without first reading
+`session_credit_coherent_guard`*. About 80% of the integrity was already
+built. Probing the database — 14 adversarial writes against real fixtures —
+found **9 of 13 attacks already refused**. The planned migration shrank to
+roughly 40% of what the architecture phase implied. Reading a schema is not
+knowing what it enforces; only attacking it is.
+
+**The fix.** `20260826b_session_lifecycle_ownership.sql`. Two states the
+lifecycle could not express (`assignment_failed`, `booking_blocked`); five
+operational columns (`owner` as a four-value enum, `next_action` as deliberate
+free text, `failure_reason`, `failure_at`, `last_attempt_at`); four new rules
+**appended to** the existing coherence guard, which stays the authority; one
+CHECK making owner and next_action inseparable; the video-session FK hardened
+from SET NULL to RESTRICT. Preceded by `20260826a_session_credits_parity.sql`,
+because the test database was missing five of nine constraints and
+`student_payments` had **no primary key** — the seventh prod/test divergence
+this repo has logged, and one that would have let every probe "pass" against a
+schema physically incapable of refusing.
+
+**The fix NOT taken.** A new table, a new dashboard, or a second trigger for
+the credit↔session relationship. Two pointers that can disagree is worse than
+one pointer that can be null. The founder's constraint held the design down:
+*extend the guard, never replace it.*
+
+**Lessons.**
+1. A state machine that cannot NAME a failure will never REPORT one. "Paid" and
+   "paid, and abandoned" are different facts and need different names.
+2. Work that is visible and unowned is indistinguishable from work that is
+   done. `(owner IS NULL) = (next_action IS NULL)` is now a database
+   constraint, and probe #22 replays Dhruv's exact shape against it.
+3. Manual admin tools with side effects are how a boolean nobody can account
+   for ends up on a student's row. Recovery must be an operation, not a flip.
+4. An index with no reader is not preparation; it is a decision someone forgot
+   to finish.
+
+**Teeth.** `supabase/tests/session_credit_lifecycle_probes.sql` — 30 probes, 22
+attacks and 8 legal shapes, run against the real database and raising if any
+misbehaves. Every new rule was proved non-vacuous by removing it: with the
+guard disabled, probes 16/17/18/20/25/27/30 all become ACCEPTED; with the CHECK
+dropped, 21/22/23/28 become ACCEPTED; with the FK back to SET NULL *and* the
+guard disabled, deleting a linked session is ACCEPTED and silently orphans the
+credit. The verdict block was itself proved non-vacuous by feeding it a false
+expectation and confirming it raises.
+
+---
+
+## Incident #32 — the test database is a scaffold, not a replica (2026-08-26)
+
+**Symptom.** A Phase 2C probe asked whether a student with a live session can
+book a second one with the same mentor. Production says no — `one_live_session_
+per_pair` is a unique index, and Incident #21 is why it exists. The probe came
+back **`booked`, sessions=2**. The code was correct. The test database had no
+such index.
+
+**Root cause.** `careerrai-test` was stood up on 22 Aug to reproduce one React
+error and was never a copy of production. Counting constraints + indexes +
+triggers per table across both:
+
+| table | production | test (before) |
+|---|---|---|
+| `video_sessions` | 25 | 11 |
+| `student_payments` | 11 | 5 |
+| `profiles` | 36 | 2 |
+
+and 76 of production's 91 tables had **no** constraints on test at all. Phase 2A
+had already found this class once and fixed `session_credits` — including a
+`student_payments` table with no primary key — but fixed only the table it was
+looking at.
+
+**How it hid.** By passing. A probe fired at a schema that cannot refuse always
+returns "accepted", which reads identically to "the code allowed it". Every
+green probe on a divergent table is a certificate for a hole.
+
+**The fix.** `20260826d_booking_chain_parity.sql` restores video_sessions and
+student_payments verbatim from production's `pg_get_constraintdef()`/`indexdef`
+output, md5-verified byte-for-byte afterwards. `profiles` is left divergent and
+logged rather than silently skipped — 34 objects governing role, premium and
+allowlist deserve their own pass, not a footnote in a booking migration.
+
+**A detail worth keeping.** Two CHECKs and one index were semantically correct
+but rendered differently by `pg_get_constraintdef()` because the cast was
+written per-element instead of per-array. Byte-identity matters here: the whole
+point of a fingerprint comparison is that a future divergence stands out, and a
+permanent cosmetic difference trains you to ignore it. Written as
+`array[...]::character varying[]` so the two databases render identically.
+
+**Lessons.**
+1. Before probing a table, prove the table can refuse. Compare the schema
+   first; a probe suite's first assertion should be about the schema, not the
+   data.
+2. Parity is per-chain, not per-table. Phase 2A fixed the table it was staring
+   at and left the one next to it.
+3. "We have a test database" and "we have a replica" are different claims. Say
+   which one is true.
+
+**Teeth.** A per-table object count and an md5 fingerprint of every constraint,
+index and trigger, run against both databases. Any table can now be checked in
+one query instead of discovered by a failing probe.
+
+**The full inventory, taken 26 Aug** (`docs/SCHEMA-PARITY.md`): every one of
+production's 94 tables EXISTS on test — nothing is missing by name, which is
+why this hid so long. But 79 of them carry **zero** integrity objects, and 80
+of 95 tables on test have **no primary key**. 498 production objects absent.
+Nine tables are byte-identical; six are partially enforced. A test fired at one
+of the 79 cannot fail on an integrity rule, because there is none to fail.
+
+---
+
+## Incident #33 — `revoke from public` did not revoke it (2026-08-26)
+
+**Symptom.** The Phase 2C migration created `book_session_credit()` — a
+SECURITY-sensitive RPC that books a paid ₹299 session — and carefully revoked
+it: `revoke all on function ... from public`. The comment above that line
+explained, correctly, that PostgREST exposes every public function at
+`/rest/v1/rpc/` and that leaving it open would let any logged-in student book
+against a credit they did not pay for.
+
+Probe 13 then reported: **`anon=true authenticated=true`.**
+
+**Root cause.** Supabase ships `ALTER DEFAULT PRIVILEGES` that grant EXECUTE on
+new functions in `public` to `anon`, `authenticated` and `service_role`
+**explicitly**. An explicit grant to a role is not touched by a revoke from
+PUBLIC. The revoke succeeded and changed nothing.
+
+**How it hid.** It didn't — for one turn. The hole existed underneath a comment
+describing the hole. What caught it was that the probe tested the *actual
+privilege* with `has_function_privilege()` rather than asserting that the
+migration file contained the word `revoke`. A source-reading guard would have
+passed on the broken version.
+
+**The fix.** `revoke all on function ... from public, anon, authenticated;`
+then `grant execute ... to service_role;`. Verified with
+`has_function_privilege()` on all three roles, and pinned by a guard test that
+requires the roles to be named.
+
+**What the sweep found.** 206 of production's 224 public functions are
+executable by `authenticated`. Almost all are `btree_gist` internals or trigger
+functions, which PostgREST will not call. The real list of app-owned,
+student-callable, non-trigger functions is four — and one of them,
+**`claim_lead`, is SECURITY DEFINER and lets any caller reassign lead ownership
+for any student**. Reported to the founder; not fixed here, because it belongs
+to the sales CRM and not to a booking migration.
+
+**Lessons.**
+1. Test the privilege, not the DDL. `has_function_privilege()` is one line and
+   it is the only thing that knows the truth.
+2. On Supabase, a new function in `public` is world-callable until three roles
+   are named. `from public` is not one of them.
+3. Every SECURITY DEFINER function is an API endpoint. Count them deliberately.
+
+---
+
+## Incident #34 — `claim_lead` is SECURITY DEFINER and callable by anyone (2026-08-26, OPEN)
+
+**STATUS: OPEN. Reported, not fixed.** Found while sweeping function grants for
+Incident #33; deliberately NOT patched inside the booking migration, because a
+security fix smuggled into an unrelated change is a fix nobody reviewed.
+
+**What it is.** `public.claim_lead` is `SECURITY DEFINER` — it runs with the
+definer's rights, bypassing RLS — and both of its overloads are executable by
+`anon` and `authenticated`. PostgREST exposes it at `/rest/v1/rpc/claim_lead`.
+Anyone holding the public anon key can therefore reassign ownership of any
+student lead to any owner, by student id, without being logged in as anybody.
+
+**Two overloads, and the older one is the worse one:**
+- `claim_lead(p_student_id uuid, p_owner_id uuid)` validates that `p_owner_id`
+  is a `sales` or `admin` profile. It does not validate the CALLER.
+- `claim_lead(p_student_id uuid, p_owner text)` validates only that `p_owner`
+  is a non-empty string. Any text becomes an owner.
+
+**Blast radius.** `lead_outreach` is the sales CRM's ownership table. Rewriting
+it does not touch student data or money, but it can silently reassign the whole
+pipeline, misdirect follow-ups, and corrupt every ownership-based report. It is
+also a write path that leaves no trace of who called it.
+
+**Why it was invisible.** Nothing in the repo asserts who may execute a
+function. Guard tests read source; grants live in the database. The sweep that
+found it counted 206 of 224 public functions executable by `authenticated` —
+almost all `btree_gist` internals and trigger functions that PostgREST will not
+call. Filtering to app-owned, non-trigger, student-callable functions leaves
+four: `claim_lead`, `is_admin`, `refresh_buddy_demo_account`,
+`refresh_review_account_logs`. Only `claim_lead` both mutates business state
+and accepts caller-controlled targets.
+
+**The fix when it is scheduled** (not applied): revoke from `public, anon,
+authenticated` and grant to `service_role` only — naming the roles, per
+Incident #33 — then drop the `text` overload, which no current caller needs.
+Both changes belong to the sales workstream with its own review.
+
+**Lesson.** Every SECURITY DEFINER function in `public` is an unauthenticated
+API endpoint until proven otherwise. The repo needs one test that enumerates
+them and fails on any that is callable by `anon` — a list, not a per-function
+assertion, so a new one cannot be added quietly.

@@ -12,6 +12,7 @@ import { computeBlueprintConfidence } from '@/lib/prep-memory';
 import { isPremium } from '@/lib/access';
 import { TOPIC_METADATA } from '@/lib/topics-constants';
 import { selectBuddyBanner } from '@/lib/buddy-banner';
+import { buddyPitchedToday } from '@/lib/promo-impression';
 import { buildWeekPlan } from '@/lib/study-forecast';
 import { remainingSyllabusHours, remainingMockHours, computeRequiredPace, studentEffortMultiplier } from '@/lib/study-pace';
 import { isCovered } from '@/lib/coverage-status';
@@ -186,6 +187,10 @@ export async function GET() {
     biggestPriority = "You're covering new topics well. Focus on revision next.";
   }
 
+  // The banner goes quiet once today's ONE buddy pitch has happened —
+  // read-only against the same authority the modal and notification claim.
+  const pitchedToday = await buddyPitchedToday(admin, user.id);
+
   const buddyBanner = selectBuddyBanner({
     mocksCount: prepMemory.mockTrend.count,
     latestPercentile: prepMemory.mockTrend.latestPercentile,
@@ -307,6 +312,7 @@ export async function GET() {
     thisWeek,
     biggestPriority,
     buddyBanner,
+    pitchedToday,
   });
 }
 

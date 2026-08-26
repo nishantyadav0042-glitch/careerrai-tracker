@@ -43,6 +43,19 @@ interface MentorMatchState {
 // to three REAL mentors (same ranking engine as the paywall showcase) framed
 // as a pool, and the SLA line matches the one the product actually keeps.
 export default function ScreenMeetBuddy({ onNext, onBack, canGoBack, isLoading }: ScreenMeetBuddyProps) {
+  // This screen IS the day's buddy pitch (founder, 26 Aug): showing it
+  // consumes the one-pitch-per-study-day slot, so the evening notification
+  // and the home modal stand down on day 0 instead of making it a two-pitch
+  // day. Fire-and-forget — the pitch is already on screen; a failed claim
+  // only risks under-pitching, the safe direction. The API allow-lists this
+  // channel and cannot be used to impersonate 'notification'.
+  useEffect(() => {
+    void fetch('/api/promo/claim', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'onboarding' }),
+    }).catch(() => {});
+  }, []);
+
   const [state, setState] = useState<MentorMatchState | undefined>(undefined);
 
   useEffect(() => {

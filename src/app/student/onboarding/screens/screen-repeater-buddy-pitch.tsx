@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 // Repeater-only reassurance (founder, 23 Jul). Shown right after the
 // commitment screen (finish-date + hours) and before the general Meet-Buddy
 // screen — ONLY to students who marked themselves a repeater. Uses what they
@@ -20,6 +22,19 @@ interface Props {
 }
 
 export default function ScreenRepeaterBuddyPitch({ onNext, onBack, canGoBack, isLoading, lastYearPercentile, hadBuddyLastYear }: Props) {
+  // This screen IS the day's buddy pitch (founder, 26 Aug): showing it
+  // consumes the one-pitch-per-study-day slot, so the evening notification
+  // and the home modal stand down on day 0 instead of making it a two-pitch
+  // day. Fire-and-forget — the pitch is already on screen; a failed claim
+  // only risks under-pitching, the safe direction. The API allow-lists this
+  // channel and cannot be used to impersonate 'notification'.
+  useEffect(() => {
+    void fetch('/api/promo/claim', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'onboarding' }),
+    }).catch(() => {});
+  }, []);
+
   const alone = hadBuddyLastYear === false;
 
   return (

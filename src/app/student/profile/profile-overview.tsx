@@ -12,7 +12,6 @@ import { RefundCard } from './refund-card';
 import { paymentsEnabled } from '@/lib/feature-flags';
 import { pushHealth, daysSinceReminderStopped } from '@/lib/push-state';
 import { scholarshipDisplay } from '@/lib/pricing';
-import { RecommendedBuddies, type RecommendedBuddy } from '@/components/recommended-buddies';
 
 interface BuddyRow { full_name: string; college: string | null; cat_percentile: number | null; buddy_bio: string | null }
 
@@ -22,7 +21,7 @@ interface BuddyRow { full_name: string; college: string | null; cat_percentile: 
 export function ProfileOverview({
   displayName, email, examTarget, initials, profile, buddy, buddyInitials, buddyId,
   responseHours, daysLogged, bestStreak, latestPercentile, targetPercentile, progressPct,
-  recommendedBuddies, isInFirstMonth, refundDaysLogged, refundEligible, existingRefundReq, REFUND_DAYS_REQUIRED,
+  isInFirstMonth, refundDaysLogged, refundEligible, existingRefundReq, REFUND_DAYS_REQUIRED,
   scholarship, prefs, hasPushSubscription, pushDiedAt,
 }: {
   displayName: string;
@@ -39,7 +38,6 @@ export function ProfileOverview({
   latestPercentile: number | null;
   targetPercentile: number;
   progressPct: number;
-  recommendedBuddies: RecommendedBuddy[];
   isInFirstMonth: boolean;
   refundDaysLogged: number;
   refundEligible: boolean;
@@ -101,10 +99,12 @@ export function ProfileOverview({
         <ShareProgressButton daysLogged={daysLogged} bestStreak={bestStreak} percentile={latestPercentile} />
       </Card>
 
-      {/* Free students: browse real mentors — the product behind the paywall.
-          Placed right after the header, above everything else, so it's never
-          buried under progress stats / membership / refund cards. */}
-      {!buddyId && <RecommendedBuddies buddies={recommendedBuddies} studentName={displayName} />}
+      {/* The mentor storefront used to sit here, above the student's own
+          stats. Removed (founder, 26 Aug): a student opening My Profile is
+          looking at THEMSELVES — "that doesn't even make sense" was his exact
+          verdict on meeting a sales rack there. The repetition the
+          one-pitch-a-day rule exists to end. The buddy section remains the
+          storefront. */}
 
       <DreamCollegesCard initial={(profile.dream_colleges as string[] | null) ?? []} />
 

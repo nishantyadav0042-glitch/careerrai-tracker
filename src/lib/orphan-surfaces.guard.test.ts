@@ -50,6 +50,13 @@ const ROOT = process.cwd();
 // sample_debrief_viewed engagement event stays: it records history that really
 // happened.
 const KNOWN_ORPHANS: Record<string, string> = {
+  'src/components/recommended-buddies.tsx':
+    'PARKED 26 Aug when the profile storefront was removed (founder: My ' +
+    'Profile is not a sales surface, one buddy pitch per student per day). ' +
+    'This was its only mount. It stays parked, not retired, because ' +
+    'buddy-choice.guard.test.ts treats it as the encoded spec for how a ' +
+    'showcase must behave — one recommended profile first, alternatives as a ' +
+    'question — and that discipline is what any future mount inherits.',
   'src/components/buddy/buddy-intervention-card.tsx':
     'Built with its guard in d9044e6 and never mounted on any route. The copy ' +
     'discipline it encodes (no invented mentor speciality, diagnosis before ' +

@@ -83,6 +83,10 @@ export const WORKSPACES: AdminWorkspace[] = [
       // (10 Aug): pure duplicates of People filters — ?activity=today,
       // ?activity=going_cold, ?buddy=wants. Pages with bespoke ACTIONS stayed.
       { label: 'Streak breakers', href: '/admin/streak-breakers', status: 'moved' },
+      // The founder's retention-interview queue (26 Aug): everyone who logged
+      // at least once, bucketed by how far they got before stopping, with the
+      // WhatsApp draft ready. Lives beside the people it is about.
+      { label: 'Log breakers', href: '/admin/log-breakers', status: 'live' },
       { label: 'Momentum', href: '/admin/momentum', status: 'moved' },
     ],
   },

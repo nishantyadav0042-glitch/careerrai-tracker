@@ -73,7 +73,6 @@ function useBuddyCheckout() {
   // Set when the store-build escape couldn't open a tab. Rendered as a real
   // tappable link — a plain "go to careerrai.in yourself" sentence is a dead
   // end, and reads as broken functionality to anyone reviewing the app.
-  const [manualUrl, setManualUrl] = useState<string | null>(null);
 
   async function pay(planId: PlanId, fullName?: string) {
     // Intent captured first, in every path.
@@ -89,7 +88,6 @@ function useBuddyCheckout() {
     // result of falling through: 0 payments in 21 attempts.
     setBusy(planId);
     setMessage(null);
-    setManualUrl(null);
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
@@ -200,27 +198,9 @@ function useBuddyCheckout() {
   // funnel still shows the tap. `opened:true` because the browser really does
   // open here — unlike the old two-tap flow, which logged opened:false and
   // then waited for a second tap that never came.
-  return { pay, busy, message, callMe, setCallMe, manualUrl };
+  return { pay, busy, message, callMe, setCallMe };
 }
 
-// Shown only when the browser hand-off failed: a real link they can tap, so
-// the flow always has a way forward.
-function ManualPayLink({ url }: { url: string }) {
-  // A `/go` link carries a one-time signed-in hand-off, so it lands straight on
-  // checkout — worth saying, because "open careerrai.in" reads like extra work.
-  // The bare-domain fallback keeps the honest, plainer label.
-  const signedIn = url.includes('/go?');
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-2 block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-900"
-    >
-      {signedIn ? 'Continue to secure payment →' : 'Open careerrai.in to pay →'}
-    </a>
-  );
-}
 
 function CallMeModal({ onClose }: { onClose: () => void }) {
   return (
@@ -241,7 +221,7 @@ function CallMeModal({ onClose }: { onClose: () => void }) {
 
 // The price choice, rendered inline on the sales page. One tap → Razorpay.
 export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: string; sticky?: boolean }) {
-  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const { pay, busy, message, callMe, setCallMe } = useBuddyCheckout();
   const tap = (plan: PlanId) => pay(plan, fullName);
 
   if (sticky) {
@@ -258,7 +238,6 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
           </span>
         </PlanCta>
         {message && <p className="mt-2 text-center text-xs font-medium text-stone-700">{message}</p>}
-        {manualUrl && <ManualPayLink url={manualUrl} />}
         {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
       </>
     );
@@ -315,7 +294,6 @@ export function BuddyBuyButtons({ fullName, sticky = false }: { fullName?: strin
         Every buddy cleared CAT at 98+ percentile · no auto-debit, ever · full refund in your first month if you&apos;ve logged 20+ study days
       </p>
       {message && <p className="mt-2 text-center text-xs text-stone-600">{message}</p>}
-      {manualUrl && <ManualPayLink url={manualUrl} />}
       {callMe && <CallMeModal onClose={() => setCallMe(false)} />}
     </div>
   );
@@ -338,7 +316,7 @@ export function UnlockBuddyButton({
   fullName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { pay, busy, message, callMe, setCallMe, manualUrl } = useBuddyCheckout();
+  const { pay, busy, message, callMe, setCallMe } = useBuddyCheckout();
   const tap = (plan: PlanId) => pay(plan, fullName);
 
   function openSheet() {
@@ -431,7 +409,6 @@ export function UnlockBuddyButton({
             </p>
 
             {message && <p className="mt-3 text-center text-xs text-stone-600">{message}</p>}
-            {manualUrl && <ManualPayLink url={manualUrl} />}
 
             <button type="button" onClick={() => setOpen(false)} className="mt-2 w-full text-center text-xs text-stone-400 hover:text-stone-600">
               Not now

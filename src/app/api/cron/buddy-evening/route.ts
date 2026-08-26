@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { claimBuddyPitch } from '@/lib/promo-impression';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizedCron } from '@/lib/cron-auth';
 import { dispatch, BUDGET_ACTIVE } from '@/lib/notification-os';
@@ -109,6 +110,15 @@ async function buddyEveningRun(): Promise<NextResponse> {
       ? `${firstName} (${cred}) tells you exactly what to study, skip & fix — tap to see how.`
       : `${firstName} tells you exactly what to study, skip & fix — tap to see how.`;
     const url = '/student/buddy';
+
+    // ONE PITCH A DAY, ACROSS CHANNELS (founder, 26 Aug). This notification
+    // and the home-screen nudge sell the same thing, and they used to be
+    // governed by two mechanisms that could not see each other — so a student
+    // could get the evening push AND the modal in one day. Both now claim the
+    // same promo_impressions row; whichever fires first owns the study day,
+    // and the other stands down. A failed claim is a skip, not an error.
+    const pitch = await claimBuddyPitch(admin, s.id, 'notification');
+    if (!pitch.show) continue;
 
     // Through dispatch() (founder, 10 Aug): selling the mentor is sanctioned,
     // but it sells INSIDE the shared daily budget — counted, capped, and

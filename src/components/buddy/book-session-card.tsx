@@ -49,7 +49,6 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
   // Set when the store-build escape couldn't open a tab. A plain "go to
   // careerrai.in yourself" sentence is a dead end on a phone — always leave a
   // tappable link behind.
-  const [manualUrl, setManualUrl] = useState<string | null>(null);
   // WHY, captured before the money. The mentor opens the call already knowing
   // the problem, and the company can finally answer what students are actually
   // paying ₹299 to solve.
@@ -218,11 +217,6 @@ export function BookSessionCard({ findingKind, findingEvidence, mentorFirst, has
               </p>
             )}
             <p className="mt-2 text-center text-[10.5px] text-stone-400">One-time. Nothing renews.</p>
-            {manualUrl && (
-              <a href={manualUrl} className="mt-2 block text-center text-[12px] font-semibold text-orange-600 underline">
-                Continue to secure payment →
-              </a>
-            )}
           </>
         ) : (
           // Sold out is an honest, GOOD answer: it says we protect the sessions

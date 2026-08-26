@@ -40,6 +40,10 @@ export const TIMELINE_KINDS = {
   session_expired: 'mentor',
   ocr_failed: 'study',
   scholarship_granted: 'money',
+  // 26 Aug: the founder's retention interviews (Log Breakers). The contact
+  // and the student's answer are DATA — the intervention framework's rule
+  // that an intervention must leave a record, applied to the founder himself.
+  founder_contact: 'study',
 } as const;
 
 export type TimelineKind = keyof typeof TIMELINE_KINDS;
@@ -99,6 +103,20 @@ function mapRow(r: any): TimelineRow {
     actor: r.actor,
     createdAt: r.created_at,
   };
+}
+
+/** Every event of one kind, newest first — for worklists like Log Breakers
+ *  that need "who has been contacted" across all students. Reading lives here
+ *  for the same reason writing does: timeline.ts is the table's ONE module,
+ *  and a guard test fails any other file that touches it. */
+export async function getKindTimeline(admin: Admin, kind: TimelineKind, limit = 500): Promise<TimelineRow[]> {
+  const { data } = await admin
+    .from('timeline_events')
+    .select('*')
+    .eq('kind', kind)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return (data ?? []).map(mapRow);
 }
 
 /** One entity's story, newest first — for a 360 profile. */

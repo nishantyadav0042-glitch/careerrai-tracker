@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Pencil } from 'lucide-react';
-import { UnlockBuddyButton } from '@/components/unlock-buddy-sheet';
 import { TimetableUpload } from '@/components/timetable-upload';
 import { CoachingMirror } from '@/components/coaching-mirror';
 import { whenLabel, timeLabel, type TimetableBlock } from '@/lib/timetable';
@@ -23,7 +22,6 @@ export function TimetableCard() {
   // timetable for them to upload.
   const [hidden, setHidden] = useState(false);
   const [planSource, setPlanSource] = useState<string>('careerrai');
-  const [isPremium, setIsPremium] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -31,7 +29,6 @@ export function TimetableCard() {
       const json = await res.json();
       setBlocks(json.timetable?.blocks ?? null);
       setPlanSource(json.planSource ?? 'careerrai');
-      setIsPremium(json.isPremium === true);
       if (json.coachingEnrolled === false && !json.timetable) setHidden(true);
     } catch { /* leave as null — the upload path still works */ }
     setLoading(false);
@@ -91,15 +88,11 @@ export function TimetableCard() {
                 paid. Reading a sheet is automation and it's free; a person
                 sitting with you to correct it is worth money, and now the
                 student can see exactly what they'd be buying. */}
-            {isPremium === false && (
-              <div className="mt-4 border-t border-stone-100 pt-3">
-                <p className="mb-2 text-[13px] leading-relaxed text-stone-600">
-                  Scanned automatically — some rows may need a human eye. A mentor can sit with you,
-                  fix what the scanner mis-read and shape the plan around your batch.
-                </p>
-                <UnlockBuddyButton className="w-full">Curate this with a mentor</UnlockBuddyButton>
-              </div>
-            )}
+            {/* The "Curate this with a mentor" CTA stood here. Removed
+                (founder, 26 Aug): this card renders inside Profile → Settings,
+                and the profile is not a sales surface — the same rule that
+                removed the storefront and the evening pop. A student who wants
+                a mentor's eye on their timetable reaches Buddy themselves. */}
           </>
         ) : (
           <>
