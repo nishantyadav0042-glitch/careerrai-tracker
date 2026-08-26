@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { emitPaymentFunnel, isPaymentFunnelEvent } from '@/lib/payment-funnel';
@@ -9,11 +9,7 @@ import { emitPaymentFunnel, isPaymentFunnelEvent } from '@/lib/payment-funnel';
 // Authenticated, and the student_id comes from the SESSION — never from the
 // body. A funnel that anyone can write to is a funnel that tells you nothing.
 export async function POST(request: NextRequest) {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
-  );
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

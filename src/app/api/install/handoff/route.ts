@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'node:crypto';
@@ -9,12 +9,8 @@ import { encryptHandoff } from '@/lib/session-handoff-crypto';
 // otherwise logged out). Returns a URL the caller navigates to before "Add to
 // Home Screen"; only the installed (standalone) app consumes it. The session
 // tokens are encrypted at rest and the row is single-use.
-export async function POST(request: NextRequest) {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
-  );
+export async function POST(_request: NextRequest) {
+  const supabase = await createClient();
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token || !session?.refresh_token) {

@@ -16,8 +16,11 @@ let currentAdmin: any;
 let currentUser: { id: string } | null = { id: 'admin-1' };
 
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => currentAdmin }));
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: () => ({ auth: { getUser: async () => ({ data: { user: currentUser } }) } }),
+// The routes use the shared server client now (it persists rotated refresh
+// tokens), so mock that rather than the vendor module — the test stays
+// independent of Next's request-scoped cookie storage.
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: currentUser } }) } }),
 }));
 vi.mock('@/lib/sales-audit', () => ({ auditSales: vi.fn(async () => {}) }));
 

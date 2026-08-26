@@ -38,21 +38,44 @@ async function sessionTomorrowRun(): Promise<NextResponse> {
   if (!sessions?.length) return NextResponse.json({ notified: 0 });
 
   let notified = 0;
+  let dedupUnavailable = 0;
   for (const session of sessions) {
     // Both Vercel's cron and the GitHub Actions fallback are live and could
-    // both fire this route on the same day — dedup per session_id so a
-    // student never gets two "session tomorrow" pushes for the one session.
-    if (session.student_id) {
-      const { data: existing } = await admin
+    // both fire this route on the same day — dedup per session_id so nobody
+    // gets two "session tomorrow" pushes for the one session.
+    //
+    // Read PER RECIPIENT, not per session. The old check looked only at
+    // session.student_id and then the loop below reminded the student AND the
+    // buddy, so the mentor's reminder had no dedup at all: on any day both
+    // schedulers fired, every buddy was reminded twice. It also skipped the
+    // check entirely when student_id was null, which reminded the buddy twice
+    // for exactly the sessions nobody was checking.
+    //
+    // session_reminder is NOT in notifications_once_per_day_per_type, so this
+    // read is the only protection that exists — which is why it must also
+    // fail CLOSED: an unreadable answer means we cannot prove this session was
+    // not already reminded, and a second reminder is worse than a late one.
+    const recipients = ([
+      ['student', session.student_id],
+      ['buddy', session.buddy_id],
+    ] as const).filter((r): r is readonly ['student' | 'buddy', string] => Boolean(r[1]));
+
+    const alreadyReminded = new Set<string>();
+    let dedupFailed = false;
+    for (const [, userId] of recipients) {
+      const { data: existing, error } = await admin
         .from('notifications')
         .select('id')
-        .eq('user_id', session.student_id)
+        .eq('user_id', userId)
         .eq('type', 'session_reminder')
         .eq('data->>session_id', session.id)
         .limit(1)
         .maybeSingle();
-      if (existing) continue;
+      if (error) { dedupFailed = true; break; }
+      if (existing) alreadyReminded.add(userId);
     }
+    if (dedupFailed) { dedupUnavailable++; continue; }
+    if (alreadyReminded.size === recipients.length) continue;
 
     const time = new Date(session.scheduled_at).toLocaleTimeString('en-IN', {
       timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true,
@@ -64,11 +87,8 @@ async function sessionTomorrowRun(): Promise<NextResponse> {
     // BOTH sides get reminded. Only the student did, which is half a reminder
     // for a meeting that needs two people — and the mentor is the one being
     // paid to be there. Shreya's two sessions both expired with nobody joining.
-    for (const [role, userId] of [
-      ['student', session.student_id],
-      ['buddy', session.buddy_id],
-    ] as const) {
-      if (!userId) continue;
+    for (const [role, userId] of recipients) {
+      if (alreadyReminded.has(userId)) continue; // this side already has it
       const url = sessionNotificationUrl(role);
       const { data: p } = await admin.from('profiles').select('notif_prefs').eq('id', userId).single();
       await dispatch({
@@ -82,7 +102,7 @@ async function sessionTomorrowRun(): Promise<NextResponse> {
     notified++;
   }
 
-  return NextResponse.json({ notified });
+  return NextResponse.json({ notified, dedupUnavailable });
 }
 
 export { POST as GET };

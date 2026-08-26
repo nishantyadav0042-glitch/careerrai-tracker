@@ -118,13 +118,24 @@ export async function POST(request: NextRequest) {
     // identical emails, every Monday. The constitution's key for this event is
     // (user, ISO week); a 6-day lookback is that key, expressed as a read the
     // second scheduler will lose.
+    // FAIL CLOSED. A bare `const { data }` here would make an unreadable
+    // dedup query look like "nobody has been digested", which is precisely
+    // how the duplicate this guard exists to stop would come back — a
+    // transient Postgres hiccup on either scheduler's run, and every mentor
+    // gets two digests again. If we cannot prove who was already told, we
+    // send to nobody this run; the next run re-reads and catches up.
     const weekAgo = new Date(Date.now() - 6 * 86_400_000).toISOString();
-    const { data: alreadyDigested } = await admin
-      .from('notifications')
-      .select('user_id')
-      .eq('type', 'weekly_digest')
-      .gte('created_at', weekAgo);
-    const digestedThisWeek = new Set((alreadyDigested ?? []).map((r) => r.user_id as string));
+    const digestSource = await readRows<{ user_id: string }>('notifications(weekly dedup)', () =>
+      admin.from('notifications').select('user_id').eq('type', 'weekly_digest').gte('created_at', weekAgo));
+    if (isUnavailable(digestSource)) {
+      return NextResponse.json(
+        { ok: false, reason: 'dedup_unavailable', detail: digestSource.reason,
+          note: 'Refused rather than risk a second digest for every mentor.' },
+        { status: 503 },
+      );
+    }
+    const digestedThisWeek = new Set(
+      (digestSource.state === 'value' ? digestSource.value : []).map((r) => r.user_id));
 
     // Process all buddies concurrently instead of sequentially
     const results = await Promise.all(buddies.map(async buddy => {

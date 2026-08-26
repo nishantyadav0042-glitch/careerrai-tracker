@@ -22,7 +22,6 @@ on:
     - cron: '0 8 * * 0'    # nishant-weekly
     - cron: '0 4 * * 1'    # weekly-digest
     - cron: '0 15 * * *'   # check-red-flags
-    - cron: '0 2 1,11,21 * *' # cleanup-voice-notes
     - cron: '0 3 * * *'    # expire-subscriptions
     - cron: '0 4 * * *'    # renewal-reminders
     - cron: '30 9 * * *'   # sales-ready
@@ -82,8 +81,6 @@ jobs:
                 call "/api/cron/weekly-digest" ;;
               "0 15 * * *")
                 call "/api/cron/check-red-flags" ;;
-              "0 2 1,11,21 * *")
-                call "/api/admin/cleanup-voice-notes" ;;
               "0 3 * * *")
                 call "/api/cron/expire-subscriptions" ;;
               "0 4 * * *")
@@ -106,7 +103,6 @@ jobs:
               /api/cron/nishant-weekly \
               /api/cron/weekly-digest \
               /api/cron/check-red-flags \
-              /api/admin/cleanup-voice-notes \
               /api/cron/expire-subscriptions \
               /api/cron/renewal-reminders \
               /api/cron/sales-ready

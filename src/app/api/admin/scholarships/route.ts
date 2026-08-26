@@ -1,15 +1,11 @@
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logAdminAction } from '@/lib/audit';
 import { emitTimeline } from '@/lib/os/timeline';
 import { NextRequest, NextResponse } from 'next/server';
 
-function anonClient(request: NextRequest) {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
-  );
+async function anonClient() {
+  return createClient();
 }
 
 // Verify the caller is an authenticated admin. Returns the admin user id on
@@ -17,7 +13,7 @@ function anonClient(request: NextRequest) {
 async function requireAdmin(
   request: NextRequest
 ): Promise<{ userId: string } | { error: NextResponse }> {
-  const supabase = anonClient(request);
+  const supabase = await anonClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 

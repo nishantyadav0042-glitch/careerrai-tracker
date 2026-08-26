@@ -24,8 +24,8 @@ let premiumBefore: boolean;   // what the route reads BEFORE granting
 let premiumAfter: boolean;    // what it reads back afterwards
 let premiumReads: number;
 
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: () => ({ auth: { getUser } }),
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => ({ auth: { getUser } }),
 }));
 vi.mock('@/lib/premium', () => ({ grantPremiumAndQueueBuddy: grantPremium }));
 vi.mock('@/lib/audit', () => ({ logAdminAction: vi.fn() }));
