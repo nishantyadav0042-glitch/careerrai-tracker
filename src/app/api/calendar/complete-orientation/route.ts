@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dispatch } from '@/lib/notification-os';
 import { canTransition, transitionRefusal, type SessionStatus } from '@/lib/session-lifecycle';
 
 /**
@@ -71,14 +72,21 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    // In-app nudge to student: the retention bridge
-    await admin.from('notifications').insert({
-      user_id: session.student_id,
+    // Through dispatch() — the retention bridge should reach the student's
+    // phone at the exact moment motivation peaks, not wait in the bell.
+    const { data: orientStudent } = await admin
+      .from('profiles').select('notif_prefs').eq('id', session.student_id).single();
+    await dispatch({
+      userId: session.student_id,
       type: 'orientation_complete',
       title: '🎯 Orientation done — start your first week',
       body: "You've seen how it works. Log today and your first guidance session is when the real work begins.",
+      url: '/student/tracker',
       data: { sessionId },
-    }).then(({ error: e }) => { if (e) console.error('orientation notification failed:', e.message); });
+      reason: 'Orientation just completed — the first-log window is open right now',
+      expectedAction: 'log_today',
+      prefs: (orientStudent?.notif_prefs as Record<string, unknown>) ?? {},
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { updateGoogleMeet, statusFor } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
+import { dispatch } from '@/lib/notification-os';
+import { sessionNotificationUrl } from '@/lib/session-link';
 import { constraintFailure } from '@/lib/booking-constraints';
 import { idempotencyKey, replayIdempotent, rememberIdempotent } from '@/lib/idempotency';
 
@@ -146,21 +148,22 @@ export async function POST(request: NextRequest) {
       minute: '2-digit',
       hour12: true,
     });
-    await admin
-      .from('notifications')
-      .insert({
-        user_id: session.student_id,
-        type: 'session_rescheduled',
-        title: '📅 Your session moved',
-        // Say the link is unchanged — otherwise a student who saved the old one
-        // assumes it is dead and asks, which is the support ticket we are here
-        // to prevent.
-        body: `New time: ${istTime} IST. Same joining link — nothing else to do.`,
-        data: { sessionId: session.id, meetLink },
-      })
-      .then(({ error: e }) => {
-        if (e) console.error('Notification insert failed:', e.message);
-      });
+    // Through dispatch() — SESSION_RESCHEDULED, P0 must-reach. The copy still
+    // says the link is unchanged: a student who saved the old one assumes it
+    // is dead and asks, which is the support ticket this line prevents.
+    const { data: movedStudent } = await admin
+      .from('profiles').select('notif_prefs').eq('id', session.student_id).single();
+    await dispatch({
+      userId: session.student_id,
+      type: 'session_rescheduled',
+      title: '📅 Your session moved',
+      body: `New time: ${istTime} IST. Same joining link — nothing else to do.`,
+      url: sessionNotificationUrl('student'),
+      data: { sessionId: session.id, meetLink },
+      reason: 'Buddy moved a scheduled session — old time in the student\'s head is now wrong',
+      expectedAction: 'view_session',
+      prefs: (movedStudent?.notif_prefs as Record<string, unknown>) ?? {},
+    });
 
     await audit({
       subjectId: user.id, action: 'booking.rescheduled',

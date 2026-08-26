@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { deleteGoogleMeet } from '@/lib/google-meet';
 import { audit } from '@/lib/integration-audit';
+import { dispatch } from '@/lib/notification-os';
+import { sessionNotificationUrl } from '@/lib/session-link';
 
 /**
  * POST /api/calendar/cancel-meeting
@@ -108,18 +110,22 @@ export async function POST(request: NextRequest) {
     // — the caller's intent (this session should not go ahead) already holds.
     const alreadySettled = (cancelled?.length ?? 0) === 0;
 
-    await admin
-      .from('notifications')
-      .insert({
-        user_id: session.student_id,
-        type: 'session_cancelled',
-        title: 'Session cancelled',
-        body: `${session.title || 'Your upcoming session'} was cancelled by your buddy. They'll reschedule soon.`,
-        data: { sessionId: session.id },
-      })
-      .then(({ error: e }) => {
-        if (e) console.error('Notification insert failed:', e.message);
-      });
+    // Through dispatch() — SESSION_CANCELLED is P0 must-reach: silence here
+    // is the worst trust failure a session product can commit (3 cancellation
+    // rows existed before this change; 0 had ever been pushed).
+    const { data: cancelledStudent } = await admin
+      .from('profiles').select('notif_prefs').eq('id', session.student_id).single();
+    await dispatch({
+      userId: session.student_id,
+      type: 'session_cancelled',
+      title: 'Session cancelled',
+      body: `${session.title || 'Your upcoming session'} was cancelled by your buddy. They'll reschedule soon.`,
+      url: sessionNotificationUrl('student'),
+      data: { sessionId: session.id },
+      reason: 'Buddy cancelled a scheduled session — the student must never discover this by showing up',
+      expectedAction: 'view_session',
+      prefs: (cancelledStudent?.notif_prefs as Record<string, unknown>) ?? {},
+    });
 
     // The cancel succeeded. calendarError is reported, not thrown — the mentor
     // should know their calendar still shows it, without the cancel appearing

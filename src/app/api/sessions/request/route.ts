@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { dispatch } from '@/lib/notification-os';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,15 +51,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create request' }, { status: 500 });
     }
 
-    await admin.from('notifications').insert({
-      user_id: buddyId,
+    // Through dispatch() — an urgent request that only ever existed as an
+    // unread bell row defeated its own urgency. The buddy's phone is the point.
+    const { data: buddyProf } = await admin
+      .from('profiles').select('notif_prefs').eq('id', buddyId).single();
+    await dispatch({
+      userId: buddyId,
       type: 'session_request',
       title: '🚨 Urgent help needed',
       body: message?.trim()
         ? `${firstName} needs your help: "${message.trim().substring(0, 80)}"`
         : `${firstName} requested an urgent session.`,
-      data: { studentId: user.id, requestId: req.id, url: '/buddy/home' },
-      read: false,
+      url: '/buddy/home',
+      data: { studentId: user.id, requestId: req.id },
+      reason: 'Student explicitly asked for urgent help — the one ask that must never sit unseen',
+      expectedAction: 'view_session',
+      prefs: (buddyProf?.notif_prefs as Record<string, unknown>) ?? {},
     });
 
     return NextResponse.json({ success: true, requestId: req.id });
