@@ -1,10 +1,16 @@
 # Fallback production deploy — bypasses the GitHub→Vercel webhook entirely.
 #
-# Exists because the Vercel Git integration silently stopped delivering
-# push events for this repo (last auto-deploy: commit 6285afe); project
-# disconnect/reconnect did not restore it. This workflow builds on GitHub's
-# own runners and deploys straight to the existing Vercel project with the
-# Vercel CLI, so deploys work regardless of the webhook's health.
+# The Git integration IS live. What looks like a dead webhook is the
+# project's "Ignored Build Step": commits touching only docs/*.md/tests are
+# deliberately cancelled, so they never produce a deployment. A commit that
+# touches real source still auto-deploys, and that is the PREFERRED path.
+#
+# Use this workflow only when the Git integration genuinely cannot run.
+# It builds on GitHub's runners, which means the bundle is baked with
+# whatever `vercel pull` returned rather than the project's real production
+# environment — see the two guard steps below, added after a runner build
+# shipped without NEXT_PUBLIC_SUPABASE_URL and 500'd every request in
+# middleware ("Invalid supabaseUrl"). Do not remove them.
 #
 # Trigger: MANUAL ONLY (workflow_dispatch) — deliberately not on:push, so
 # the day the webhook heals there are no surprise double-deploys. Run it
@@ -50,8 +56,39 @@ jobs:
       - name: Pull Vercel project settings + production env
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
+      - name: Verify the production env actually came through
+        run: |
+          f=.vercel/.env.production.local
+          if [ ! -f "$f" ]; then
+            echo "::error::$f does not exist — vercel pull returned no production environment."
+            exit 1
+          fi
+          missing=
+          for v in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            grep -qE "^$v=.+" "$f" || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::vercel pull did not return:$missing (Vercel withholds env vars marked Sensitive). A runner build would bake in empty values and 500 every request. Deploy through the Git integration instead."
+            exit 1
+          fi
+
       - name: Build (locally on the runner, with production env)
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Refuse to ship a bundle that lost the Supabase URL
+        run: |
+          url=$(grep -m1 -E '^NEXT_PUBLIC_SUPABASE_URL=' .vercel/.env.production.local | cut -d= -f2- | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+          host=${url#*://}
+          host=${host%%/*}
+          if [ -z "$host" ]; then
+            echo "::error::NEXT_PUBLIC_SUPABASE_URL is empty after the build."
+            exit 1
+          fi
+          if ! grep -rqF "$host" .vercel/output; then
+            echo "::error::the built output never mentions $host — the Supabase URL was not inlined, so middleware will throw 'Invalid supabaseUrl' on every request. Refusing to deploy."
+            exit 1
+          fi
+          echo "Supabase host $host is present in the built output."
 
       - name: Deploy prebuilt output to production
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
