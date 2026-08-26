@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const { data: profile } = await admin.from('profiles').select('notif_prefs, push_subscribed_at').eq('id', user.id).single();
 
   // The one canonical definition of "a subscription was registered" — see
-  // lib/push-subscribe.ts. Also used by the pre-auth signup path, so
+  // the client-side subscribe helpers. Also used by the pre-auth signup path, so
   // push_subscribed_at can never again be skipped by one of the two callers.
   const update = registerSubscription(
     { notifPrefs: profile?.notif_prefs as Record<string, unknown> | null, pushSubscribedAt: profile?.push_subscribed_at as string | null },

@@ -180,11 +180,20 @@ export async function POST(request: NextRequest) {
         reason: 'A student is showing red flags their buddy has not been told about',
         expectedAction: 'acknowledge',
         prefs: (buddy.notif_prefs as Record<string, unknown>) ?? {},
+        // ONE event, two rails. The email used to fire separately, right
+        // here, with no shared identity — so a red flag produced an in-app
+        // row and an email that nothing could reconcile, and "was this
+        // mentor actually told?" had two different answers. Riding dispatch's
+        // email leg stamps emailed_at on the same row, and the fail-closed
+        // dedup above now covers BOTH rails instead of only the in-app one.
+        email: buddy.email
+          ? {
+              to: buddy.email,
+              send: () => sendRedFlagAlert(
+                buddy.email!, buddy.full_name.split(' ')[0], student.full_name, summary.redFlags),
+            }
+          : null,
       });
-
-      if (buddy.email) {
-        await sendRedFlagAlert(buddy.email, buddy.full_name.split(' ')[0], student.full_name, summary.redFlags);
-      }
 
       return true;
     }));

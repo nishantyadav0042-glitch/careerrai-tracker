@@ -401,7 +401,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Same canonical registration the authenticated toggle uses
-      // (lib/push-subscribe.ts). This is the exact write that used to skip
+      // (the shared client-side subscribe path). This is the exact write that used to skip
       // push_subscribed_at — the field the health engine's subscription-age
       // math depends on — because this branch hand-wrote `{ push: true }` as
       // the whole notif_prefs column instead of going through it. Fixed 15

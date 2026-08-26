@@ -22,7 +22,8 @@
 // because that difference is real and honest, not a duplicated definition.
 // What must never differ again is which fields get touched and how.
 //
-// Not named push-subscribe.ts: that file already exists and does a different
+// Deliberately not a 'subscribe' helper: this is the registry of live
+// subscriptions, a different
 // job — the CLIENT-SIDE "ask the browser for permission and subscribe" flow
 // (enablePush). This is the SERVER-SIDE "what do we write once we have one"
 // question. Same subject, two ends of one wire, kept apart on purpose.
