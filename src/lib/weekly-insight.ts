@@ -1,4 +1,5 @@
 import { clampSentence } from './daily-insight';
+import { studyDayString } from './study-day';
 
 // ── The Weekly Insight (founder, 27 Aug) ────────────────────────────────────
 //
@@ -104,7 +105,6 @@ const MAX_SECTION_CHARS = 150;
 const say = (t: string) => clampSentence(t, MAX_SECTION_CHARS);
 
 const IST = 'Asia/Kolkata';
-const istDate = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: IST });
 const addDays = (iso: string, n: number) => {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -120,7 +120,17 @@ const addDays = (iso: string, n: number) => {
  * whenever you look.
  */
 export function lastCompleteWeek(now: Date = new Date()): WeeklyWindow {
-  const today = istDate(now);
+  // studyDayString(), not an IST calendar date. The study day rolls at 05:30
+  // IST, so between midnight and 05:30 on a Monday the calendar says the new
+  // week has begun while Sunday's study day is STILL RUNNING — a student
+  // working at 3am is finishing Sunday. Anchoring on the calendar would have
+  // shown them a "finished" week whose last day was not finished, for five and
+  // a half hours every Monday, breaking the one promise this window makes.
+  //
+  // It also removes a second definition of "today" from a codebase whose
+  // study-day module exists because two of them once disagreed for 2.5 hours
+  // every morning and deleted the wrong day's plan row.
+  const today = studyDayString(now);
   // en-CA gives YYYY-MM-DD; derive the IST weekday from that date at UTC noon
   // so the local-timezone of the server can never shift it.
   const dow = new Date(`${today}T12:00:00Z`).getUTCDay(); // 0=Sun … 6=Sat

@@ -1,6 +1,7 @@
 import { TOPIC_METADATA, QA_GROUPS } from '@/lib/topics-constants';
 import { computeTopicMemory } from '@/lib/prep-memory-data';
 import { isCovered } from './coverage-status';
+import { studyDayString } from './study-day';
 
 // ── Daily one-liner insight (founder, 21 July) ──────────────────────────────
 // One specific, data-earned sentence per student per day — "this is the
@@ -80,9 +81,12 @@ export const INSIGHT_SUPPRESS_DAYS = 7;
  * what "daily" was always supposed to mean.
  */
 export async function loadSuppressedInsightKeys(admin: any, studentId: string): Promise<Set<string>> {
-  const cutoff = new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000)
-    .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // studyDayString(), not an IST calendar date: the study day rolls at 05:30
+  // IST, and the ledger's rows are keyed by study day everywhere else. A
+  // calendar "today" made this the second live definition of today in the
+  // codebase — the exact condition the study-day module was written to end.
+  const cutoff = studyDayString(new Date(Date.now() - INSIGHT_SUPPRESS_DAYS * 86_400_000));
+  const today = studyDayString();
   const { data } = await admin
     .from('daily_insight_shown')
     .select('insight_key, last_shown_on')
@@ -94,7 +98,8 @@ export async function loadSuppressedInsightKeys(admin: any, studentId: string): 
 
 /** Record a show (card rendered or push sent). Idempotent per day. */
 export async function recordInsightShown(admin: any, studentId: string, insight: DailyInsight): Promise<void> {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // Same authority as the read above — the two halves of one identity.
+  const today = studyDayString();
   await admin.from('daily_insight_shown').upsert({
     student_id: studentId,
     insight_key: insightKey(insight),

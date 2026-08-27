@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeWeeklyInsight, lastCompleteWeek, MIN_REAL_SECTIONS } from './weekly-insight';
+import { studyDayString } from './study-day';
 
 // ── A weekly review may not fill itself in ─────────────────────────────────
 //
@@ -69,8 +70,24 @@ describe('the week under review is finished, not in progress', () => {
 
   it('has already ENDED — a review that changes while you live it teaches distrust', () => {
     const w = lastCompleteWeek(NOW);
-    const todayIST = NOW.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    expect(w.end < todayIST).toBe(true);
+    expect(w.end < studyDayString(NOW)).toBe(true);
+  });
+
+  it('waits for the STUDY day to end, not the calendar day', () => {
+    // The study day rolls at 05:30 IST. At 02:00 IST on Monday a student is
+    // still finishing Sunday — the last day of the week the calendar has just
+    // ended. Reviewing it then would present an unfinished week as finished,
+    // every Monday, for five and a half hours.
+    const mondayLate = new Date('2026-08-23T20:30:00Z');  // 02:00 IST Mon 24th
+    const mondayMorning = new Date('2026-08-24T01:00:00Z'); // 06:30 IST Mon 24th
+    const before = lastCompleteWeek(mondayLate);
+    const after = lastCompleteWeek(mondayMorning);
+    expect(
+      before.end < after.end,
+      'The window advanced at IST midnight instead of at the 05:30 study-day rollover, so Sunday was reviewed while it was still being lived.',
+    ).toBe(true);
+    expect(after.end).toBe('2026-08-23'); // the Sunday that has now finished
+    expect(before.end).toBe('2026-08-16');
   });
 
   it('is the same window all week — Tuesday and Friday get the same answer', () => {
